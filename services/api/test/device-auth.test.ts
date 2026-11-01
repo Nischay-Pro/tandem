@@ -116,6 +116,7 @@ describe("device authorization", () => {
     });
 
     expect(pairing.code).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/);
+    expect(pairing.code).not.toMatch(/[ILO]/);
     expect(pairing.expiresAt.getTime()).toBe(
       now.getTime() + PAIRING_CODE_TTL_MS,
     );
@@ -166,6 +167,22 @@ describe("device authorization", () => {
       credentialHash: hashSecret(paired!.accessToken),
     });
     expect(paired?.accessToken).not.toBe(pairing.code);
+  });
+
+  it.each([
+    ["4DF7-JIM9", "4DF7-J1M9"],
+    ["4DF7-JLM9", "4DF7-J1M9"],
+    ["4DF7-JOM9", "4DF7-J0M9"],
+  ])("normalizes look-alike characters in %s", async (input, canonical) => {
+    const consumePairingCode = vi.fn(async () => undefined);
+    const { store } = createStore({ consumePairingCode });
+    const authorization = new DeviceAuthorization(store);
+
+    await authorization.pair({ code: input, deviceName: "Phone" });
+
+    expect(consumePairingCode).toHaveBeenCalledWith(
+      expect.objectContaining({ codeHash: hashSecret(canonical) }),
+    );
   });
 
   it("does not consume malformed or already unavailable pairing codes", async () => {
