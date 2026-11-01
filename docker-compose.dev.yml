@@ -47,6 +47,45 @@ services:
     networks:
       - companion-private
 
+  actual-compat-server:
+    profiles: ["actual-compat"]
+    image: actualbudget/actual-server:26.10.0
+    user: "${ACTUAL_COMPAT_UID:-1000}:${ACTUAL_COMPAT_GID:-1000}"
+    volumes:
+      - ./.dev-tmp/actual/compat-server:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:5006/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    networks:
+      - companion-private
+
+  actual-compat-tests:
+    profiles: ["actual-compat"]
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile.dev
+    user: "${ACTUAL_COMPAT_UID:-1000}:${ACTUAL_COMPAT_GID:-1000}"
+    command: ["pnpm", "--filter", "@actual-budget-companion/api", "test:actual"]
+    environment:
+      ACTUAL_SERVER_URL: http://actual-compat-server:5006
+      ACTUAL_SERVER_PASSWORD: compatibility-test-only-password
+      ACTUAL_API_DATA_DIR: /actual-api-data/device-one
+    volumes:
+      - ./.dev-tmp/actual/compat-client:/actual-api-data
+    depends_on:
+      actual-compat-server:
+        condition: service_healthy
+    networks:
+      - companion-private
+
 networks:
   companion-private:
     internal: true

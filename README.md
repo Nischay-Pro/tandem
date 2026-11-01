@@ -14,7 +14,7 @@ Early implementation. The initial wireframes are in [`actual-budget-companion-wi
 - Visual direction: original finance UI with customizable light/dark/system appearance, accent palettes, and restrained backgrounds inspired by Morphe Manager's theming approach. No Morphe source or assets are reused.
 - Companion API: TypeScript, Node.js, and Fastify; PostgreSQL stores Companion coordination state, not a second authoritative copy of the budget.
 - Actual integration: official `@actual-app/api` only. No direct edits to Actual server files or SQLite databases.
-- Compatibility baseline: Actual server `26.10.0` with `@actual-app/api` `26.10.0` is the initial candidate pair. It is not declared supported until disposable-server integration tests pass.
+- Verified compatibility baseline: Actual server `26.10.0` with `@actual-app/api` `26.10.0`. The Companion checks Actual's reported server version before opening a budget and rejects other versions until they pass the disposable compatibility gate.
 - License: GNU AGPL v3 or later.
 
 ## Development

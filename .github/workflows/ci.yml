@@ -25,6 +25,9 @@ jobs:
       - name: Run formatting, lint, typecheck, integration tests, and coverage
         run: docker compose -f docker-compose.dev.yml --profile test run --build --rm integration-tests
 
+      - name: Verify the pinned Actual API and server pair
+        run: ./scripts/test-actual-compatibility.sh
+
       - name: Validate Nginx configuration snippets
         shell: bash
         run: |
