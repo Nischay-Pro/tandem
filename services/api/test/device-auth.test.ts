@@ -416,17 +416,14 @@ describe("device authorization", () => {
     ).rejects.toThrow("deviceName must contain between 1 and 100 characters");
   });
 
-  it("rejects a broken cryptographic random source", async () => {
+  it("rejects a broken device-token random source", async () => {
     const { store } = createStore();
     const authorization = new DeviceAuthorization(store, undefined, () =>
       Buffer.alloc(16),
     );
 
     await expect(
-      authorization.createPairingCode({
-        principalId: "owner",
-        budgetIds: ["budget"],
-      }),
+      authorization.pair({ code: "4DF7-J1M9", deviceName: "Phone" }),
     ).rejects.toThrow("Secure token generator returned an invalid secret");
   });
 
