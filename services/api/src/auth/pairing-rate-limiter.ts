@@ -39,7 +39,8 @@ export class PairingRateLimiter {
     if (!window) {
       this.#removeExpiredClients(currentTime);
       if (this.#clients.size >= this.maxClients) {
-        return { allowed: false, retryAfterSeconds: 1 };
+        const oldestClient = this.#clients.keys().next().value!;
+        this.#clients.delete(oldestClient);
       }
       window = { count: 0, expiresAt: currentTime + this.windowMs };
       this.#clients.set(clientKey, window);

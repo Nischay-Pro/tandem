@@ -24,6 +24,7 @@ export async function startApiServer(
     app = await buildApiApp(database, {
       onClose: () => leaseReaper.stop(),
       deviceAuth: database.deviceAuth,
+      trustProxy: config.trustProxy,
     });
     await app.listen({ host: config.host, port: config.port });
   } catch (error) {

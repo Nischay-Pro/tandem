@@ -272,6 +272,64 @@ describe("health routes and OpenAPI", () => {
     await app.close();
   });
 
+  it("uses forwarded client addresses only when the socket peer is trusted", async () => {
+    const pair = vi.fn(async ({ code }: { code: string }) =>
+      code === testAccessToken
+        ? { ...createDevice(), accessToken: testAccessToken }
+        : undefined,
+    );
+    const trustedApp = await buildApiApp(
+      { ping: vi.fn(), close: vi.fn() },
+      {
+        deviceAuth: createDeviceAuth({ pair }),
+        trustProxy: ["127.0.0.1"],
+      },
+    );
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const response = await trustedApp.inject({
+        method: "POST",
+        url: "/api/v1/auth/pair",
+        headers: { "x-forwarded-for": "198.51.100.10" },
+        payload: { code: "G".repeat(43), deviceName: "Synthetic phone" },
+      });
+      expect(response.statusCode).toBe(401);
+    }
+    const secondClient = await trustedApp.inject({
+      method: "POST",
+      url: "/api/v1/auth/pair",
+      headers: { "x-forwarded-for": "203.0.113.20" },
+      payload: { code: testAccessToken, deviceName: "Synthetic phone" },
+    });
+    expect(secondClient.statusCode).toBe(201);
+    expect(pair).toHaveBeenCalledTimes(11);
+    await trustedApp.close();
+
+    const untrustedApp = await buildApiApp(
+      { ping: vi.fn(), close: vi.fn() },
+      {
+        deviceAuth: createDeviceAuth({ pair }),
+        trustProxy: ["192.0.2.10"],
+      },
+    );
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const response = await untrustedApp.inject({
+        method: "POST",
+        url: "/api/v1/auth/pair",
+        headers: { "x-forwarded-for": `198.51.100.${attempt + 1}` },
+        payload: { code: "G".repeat(43), deviceName: "Synthetic phone" },
+      });
+      expect(response.statusCode).toBe(401);
+    }
+    const spoofedClient = await untrustedApp.inject({
+      method: "POST",
+      url: "/api/v1/auth/pair",
+      headers: { "x-forwarded-for": "203.0.113.20" },
+      payload: { code: testAccessToken, deviceName: "Synthetic phone" },
+    });
+    expect(spoofedClient.statusCode).toBe(429);
+    await untrustedApp.close();
+  });
+
   it("authenticates, lists, and revokes only devices under the same principal", async () => {
     const device = createDevice({
       lastSeenAt: new Date("2026-11-01T01:00:00.000Z"),

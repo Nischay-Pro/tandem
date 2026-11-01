@@ -29,12 +29,14 @@ describe("pairing attempt rate limiter", () => {
     expect(limiter.consume("client-a").allowed).toBe(true);
   });
 
-  it("evicts expired clients before denying a new address at capacity", () => {
+  it("evicts expired clients and the oldest active client at capacity", () => {
     let now = 1_000;
     const limiter = new PairingRateLimiter(2, 1_000, 1, () => now);
 
     expect(limiter.consume("client-a").allowed).toBe(true);
-    expect(limiter.consume("client-b").allowed).toBe(false);
+    expect(limiter.consume("client-b").allowed).toBe(true);
+    expect(limiter.consume("client-a").allowed).toBe(true);
+    expect(limiter.consume("client-b").allowed).toBe(true);
     now = 2_000;
     expect(limiter.consume("client-b").allowed).toBe(true);
   });

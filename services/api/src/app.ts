@@ -40,6 +40,7 @@ export interface ApiAppOptions {
   readinessTimeoutMs?: number;
   onClose?: () => Promise<void>;
   deviceAuth?: DeviceAuthorization;
+  trustProxy?: false | string[];
 }
 
 export async function buildApiApp(
@@ -47,7 +48,10 @@ export async function buildApiApp(
   options: ApiAppOptions = {},
 ): Promise<FastifyInstance> {
   const readinessTimeoutMs = options.readinessTimeoutMs ?? READINESS_TIMEOUT_MS;
-  const app = Fastify({ logger: false });
+  const app = Fastify({
+    logger: false,
+    trustProxy: options.trustProxy ?? false,
+  });
 
   await app.register(swagger, {
     openapi: {

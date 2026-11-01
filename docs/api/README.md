@@ -37,9 +37,13 @@ as a secret and deliver it to the mobile device over a trusted channel.
 `POST /api/v1/auth/pair` accepts `{"code":"…","deviceName":"…"}` and returns
 the opaque bearer token once. The token has 256 bits of random entropy; only its
 SHA-256 hash is stored in PostgreSQL. Pairing attempts are limited to 10 per
-client address per minute per API process. The API does not trust forwarded IP
-headers by default, so deployments behind a reverse proxy should apply their
-own request limits as well.
+client address per minute per API process. Forwarded client addresses are
+ignored by default. For a reverse-proxy deployment, set `TRUST_PROXY` to the
+exact proxy IP addresses or narrow CIDRs, for example `172.30.0.2` or
+`172.30.0.0/24`. Do not use `0.0.0.0/0`, and make the API reachable only
+through the trusted proxy network. Fastify then keys the pairing limit on the
+forwarded client address. If `TRUST_PROXY` is unset, requests arriving from the
+same proxy socket share a rate-limit bucket.
 
 Invalid pairing input returns HTTP 400 with a structured `invalid_request`
 error. An unavailable, expired, or already-used pairing code returns HTTP 401.

@@ -1,5 +1,7 @@
 # Add these upstream declarations inside the nginx http {} context, outside any
 # server {} block. The API service name matches docker-compose.dev.yml.
+# Set the API's TRUST_PROXY value to the exact address or narrow CIDR Nginx uses
+# to reach it, and keep the API origin inaccessible to untrusted clients.
 
 upstream actual_companion_api {
     server api:19753;
