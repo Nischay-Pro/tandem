@@ -1,6 +1,6 @@
 import swagger from "@fastify/swagger";
 import Fastify, { type FastifyInstance, type FastifySchema } from "fastify";
-import type { Database } from "./database.js";
+import type { HealthDatabase } from "./database.js";
 
 const statusOk = {
   type: "object",
@@ -31,7 +31,7 @@ const readySchema: FastifySchema = {
 };
 
 export async function buildApiApp(
-  database: Database,
+  database: HealthDatabase,
 ): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
 

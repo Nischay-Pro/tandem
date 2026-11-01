@@ -29,3 +29,23 @@ Then fetch `http://localhost:19753/api/v1/openapi.json`.
 ## Code quality
 
 Run the Compose integration-test command above for the full gate. Running `pnpm check:all` directly also requires `DATABASE_URL` to point to a disposable PostgreSQL database.
+
+## Database migrations
+
+The current unreleased point release has one timestamped migration in
+`services/api/src/schema/migrations/`, listed in that directory's `ORDER`
+manifest. It has explicit `up` and `down` functions, runs transactionally at API
+startup, and the migrator rejects database history that does not match the
+manifest. Migration changes must include PostgreSQL integration coverage and
+keep the manifest and registered migration list in sync. The migration is
+copied into the compiled output by the API build so startup behavior is the same
+in development and production.
+
+## Journal data sensitivity
+
+The journal persists base snapshots, proposed patches, and Actual result IDs in
+PostgreSQL. These records can contain transaction amounts and notes, so protect
+the database volume and backups as financial data. This slice does not add
+application-level encryption or an API-blind end-to-end mode; the adapter must
+read budget data to compare and reconcile changes. Never put Actual passwords,
+budget encryption passwords, or device tokens into journal fields.

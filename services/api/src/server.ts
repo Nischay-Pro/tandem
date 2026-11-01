@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { buildApiApp } from "./app.js";
 import type { ApiConfig } from "./config.js";
-import type { Database } from "./database.js";
+import type { ServerDatabase } from "./database.js";
 
 export type ShutdownSignal = "SIGINT" | "SIGTERM";
 export type SignalRegistrar = (
@@ -11,21 +11,36 @@ export type SignalRegistrar = (
 
 export async function startApiServer(
   config: ApiConfig,
-  database: Database,
+  database: ServerDatabase,
   registerSignalHandler: SignalRegistrar,
 ): Promise<FastifyInstance> {
-  const app = await buildApiApp(database);
+  let app: FastifyInstance | undefined;
 
   try {
+    await database.migrate();
+    app = await buildApiApp(database);
     await app.listen({ host: config.host, port: config.port });
   } catch (error) {
-    await app.close();
+    try {
+      if (app) {
+        await app.close();
+      } else {
+        await database.close();
+      }
+    } catch (closeError) {
+      throw new AggregateError(
+        [error, closeError],
+        "API startup failed and dependencies did not close cleanly",
+        { cause: closeError },
+      );
+    }
     throw error;
   }
 
-  const shutdown = () => app.close();
+  const runningApp = app as FastifyInstance;
+  const shutdown = () => runningApp.close();
   registerSignalHandler("SIGTERM", shutdown);
   registerSignalHandler("SIGINT", shutdown);
 
-  return app;
+  return runningApp;
 }
