@@ -2,7 +2,10 @@ import swagger from "@fastify/swagger";
 import Fastify, { type FastifyInstance, type FastifySchema } from "fastify";
 import { READINESS_TIMEOUT_MS } from "./config.js";
 import type { HealthDatabase } from "./database.js";
-import type { DeviceAuthorization } from "./auth/device-auth.js";
+import {
+  DeviceAuthInputError,
+  type DeviceAuthorization,
+} from "./auth/device-auth.js";
 import { PairingRateLimiter } from "./auth/pairing-rate-limiter.js";
 
 const statusOk = {
@@ -190,46 +193,70 @@ function registerDeviceAuthorizationRoutes(
         additionalProperties: false,
       },
       401: errorSchema,
+      400: errorSchema,
       429: errorSchema,
     },
   };
   app.post<{
     Body: { code: string; deviceName: string };
-  }>("/api/v1/auth/pair", { schema: pairSchema }, async (request, reply) => {
-    const rateLimit = rateLimiter.consume(request.ip);
-    if (!rateLimit.allowed) {
-      return reply
-        .header("retry-after", String(rateLimit.retryAfterSeconds))
-        .code(429)
-        .send({
+  }>(
+    "/api/v1/auth/pair",
+    { schema: pairSchema, attachValidation: true },
+    async (request, reply) => {
+      if (request.validationError) {
+        return reply.code(400).send({
           error: {
-            code: "rate_limited",
-            message: "Too many pairing attempts",
+            code: "invalid_request",
+            message: "Pairing request is invalid",
           },
         });
-    }
+      }
 
-    const paired = await deviceAuth.pair(request.body);
-    if (!paired) {
-      return reply.code(401).send({
-        error: {
-          code: "invalid_pairing_code",
-          message: "Pairing code is invalid, expired, or already used",
-        },
+      const rateLimit = rateLimiter.consume(request.ip);
+      if (!rateLimit.allowed) {
+        return reply
+          .header("retry-after", String(rateLimit.retryAfterSeconds))
+          .code(429)
+          .send({
+            error: {
+              code: "rate_limited",
+              message: "Too many pairing attempts",
+            },
+          });
+      }
+
+      let paired;
+      try {
+        paired = await deviceAuth.pair(request.body);
+      } catch (error) {
+        if (!(error instanceof DeviceAuthInputError)) {
+          throw error;
+        }
+        return reply.code(400).send({
+          error: { code: "invalid_request", message: error.message },
+        });
+      }
+      if (!paired) {
+        return reply.code(401).send({
+          error: {
+            code: "invalid_pairing_code",
+            message: "Pairing code is invalid, expired, or already used",
+          },
+        });
+      }
+
+      reply.header("cache-control", "no-store");
+      return reply.code(201).send({
+        deviceId: paired.deviceId,
+        principalId: paired.principalId,
+        name: paired.name,
+        budgetIds: paired.budgetIds,
+        accessToken: paired.accessToken,
+        tokenType: "Bearer",
+        createdAt: paired.createdAt.toISOString(),
       });
-    }
-
-    reply.header("cache-control", "no-store");
-    return reply.code(201).send({
-      deviceId: paired.deviceId,
-      principalId: paired.principalId,
-      name: paired.name,
-      budgetIds: paired.budgetIds,
-      accessToken: paired.accessToken,
-      tokenType: "Bearer",
-      createdAt: paired.createdAt.toISOString(),
-    });
-  });
+    },
+  );
 
   app.get(
     "/api/v1/auth/me",

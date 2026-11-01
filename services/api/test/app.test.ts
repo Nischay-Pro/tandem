@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildApiApp } from "../src/app.js";
+import { DeviceAuthInputError } from "../src/auth/device-auth.js";
 import type {
   DeviceAuthorization,
   DeviceRecord,
@@ -204,6 +205,44 @@ describe("health routes and OpenAPI", () => {
       payload: { code: "short", deviceName: "Synthetic phone" },
     });
     expect(invalidBody.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("maps device authorization input errors to structured HTTP 400 responses", async () => {
+    const auth = createDeviceAuth({
+      pair: vi
+        .fn()
+        .mockRejectedValueOnce(
+          new DeviceAuthInputError(
+            "deviceName must contain between 1 and 100 characters",
+          ),
+        )
+        .mockRejectedValueOnce(new Error("synthetic store failure")),
+    });
+    const app = await buildApiApp(
+      { ping: vi.fn(), close: vi.fn() },
+      { deviceAuth: auth },
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/pair",
+      payload: { code: "F".repeat(43), deviceName: "Synthetic phone" },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: {
+        code: "invalid_request",
+        message: "deviceName must contain between 1 and 100 characters",
+      },
+    });
+    const storeFailure = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/pair",
+      payload: { code: "F".repeat(43), deviceName: "Synthetic phone" },
+    });
+    expect(storeFailure.statusCode).toBe(500);
     await app.close();
   });
 

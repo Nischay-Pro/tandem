@@ -41,6 +41,9 @@ client address per minute per API process. The API does not trust forwarded IP
 headers by default, so deployments behind a reverse proxy should apply their
 own request limits as well.
 
+Invalid pairing input returns HTTP 400 with a structured `invalid_request`
+error. An unavailable, expired, or already-used pairing code returns HTTP 401.
+
 Send the token as `Authorization: Bearer <token>`. `GET /api/v1/auth/me` returns
 the current device and its budget IDs. `GET /api/v1/devices` lists devices for
 the same principal. `DELETE /api/v1/devices/{deviceId}` revokes a device under

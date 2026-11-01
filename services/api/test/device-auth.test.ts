@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   DeviceAuthorization,
+  DeviceAuthInputError,
   PAIRING_CODE_TTL_MS,
   hashSecret,
   type DeviceAuthStore,
@@ -51,6 +52,44 @@ function createStore(overrides: Partial<DeviceAuthStore> = {}) {
 }
 
 describe("device authorization", () => {
+  it("counts Unicode code points at the principal, budget, and device-name limits", async () => {
+    const { store, pairingCodes } = createStore({
+      consumePairingCode: vi.fn(async ({ deviceName }) =>
+        createDevice({ name: deviceName }),
+      ),
+    });
+    const authorization = new DeviceAuthorization(store);
+    const principalId = "😀".repeat(200);
+    const budgetId = "💰".repeat(500);
+
+    const pairing = await authorization.createPairingCode({
+      principalId,
+      budgetIds: [budgetId],
+    });
+    expect(pairing.principalId).toBe(principalId);
+    expect(pairing.budgetIds).toEqual([budgetId]);
+    await expect(
+      authorization.createPairingCode({
+        principalId: `${principalId}😀`,
+        budgetIds: [budgetId],
+      }),
+    ).rejects.toBeInstanceOf(DeviceAuthInputError);
+    await expect(
+      authorization.createPairingCode({
+        principalId,
+        budgetIds: [`${budgetId}💰`],
+      }),
+    ).rejects.toBeInstanceOf(DeviceAuthInputError);
+
+    const paired = await authorization.pair({
+      code: pairing.code,
+      deviceName: "📱".repeat(100),
+    });
+    expect(paired?.name).toBe("📱".repeat(100));
+    expect(pairingCodes[0]?.principalId).toBe(principalId);
+    expect(pairingCodes[0]?.budgetIds).toEqual([budgetId]);
+  });
+
   it("creates short-lived pairing codes and persists only their hashes", async () => {
     const { store, pairingCodes } = createStore();
     const now = new Date("2026-11-01T10:00:00.000Z");

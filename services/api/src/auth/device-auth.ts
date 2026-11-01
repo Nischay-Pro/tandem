@@ -33,6 +33,13 @@ export interface DeviceAuthStore {
   revokeDevice(principalId: string, deviceId: string): Promise<boolean>;
 }
 
+export class DeviceAuthInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DeviceAuthInputError";
+  }
+}
+
 export interface PairingCode {
   code: string;
   expiresAt: Date;
@@ -136,28 +143,34 @@ function isWellFormedCredential(value: string): boolean {
 }
 
 function validatePrincipalId(value: string): string {
+  const length = typeof value === "string" ? codePointLength(value) : 0;
   if (
     typeof value !== "string" ||
-    value.length < 1 ||
-    value.length > 200 ||
+    length < 1 ||
+    length > 200 ||
     value.trim() !== value ||
     hasControlCharacters(value)
   ) {
-    throw new Error("principalId must be a valid non-empty identifier");
+    throw new DeviceAuthInputError(
+      "principalId must be a valid non-empty identifier",
+    );
   }
   return value;
 }
 
 function validateDeviceName(value: string): string {
+  const normalized = typeof value === "string" ? value.trim() : "";
   if (
     typeof value !== "string" ||
-    value.trim().length < 1 ||
-    value.trim().length > 100 ||
+    codePointLength(normalized) < 1 ||
+    codePointLength(normalized) > 100 ||
     hasControlCharacters(value)
   ) {
-    throw new Error("deviceName must contain between 1 and 100 characters");
+    throw new DeviceAuthInputError(
+      "deviceName must contain between 1 and 100 characters",
+    );
   }
-  return value.trim();
+  return normalized;
 }
 
 function validateDeviceId(value: string): string {
@@ -167,33 +180,37 @@ function validateDeviceId(value: string): string {
       value,
     )
   ) {
-    throw new Error("deviceId must be a UUID");
+    throw new DeviceAuthInputError("deviceId must be a UUID");
   }
   return value;
 }
 
 function validateBudgetIds(value: string[]): string[] {
   if (!Array.isArray(value) || value.length === 0 || value.length > 100) {
-    throw new Error("budgetIds must contain between 1 and 100 values");
+    throw new DeviceAuthInputError(
+      "budgetIds must contain between 1 and 100 values",
+    );
   }
   if (value.includes("*") && value.length !== 1) {
-    throw new Error(
+    throw new DeviceAuthInputError(
       "Wildcard budget access cannot be combined with specific IDs",
     );
   }
   for (const budgetId of value) {
     if (
       typeof budgetId !== "string" ||
-      budgetId.length < 1 ||
-      budgetId.length > 500 ||
+      codePointLength(budgetId) < 1 ||
+      codePointLength(budgetId) > 500 ||
       budgetId.trim() !== budgetId ||
       hasControlCharacters(budgetId)
     ) {
-      throw new Error("budgetIds must contain valid non-empty identifiers");
+      throw new DeviceAuthInputError(
+        "budgetIds must contain valid non-empty identifiers",
+      );
     }
   }
   if (new Set(value).size !== value.length) {
-    throw new Error("budgetIds must not contain duplicates");
+    throw new DeviceAuthInputError("budgetIds must not contain duplicates");
   }
   return [...value];
 }
@@ -206,4 +223,8 @@ function hasControlCharacters(value: string): boolean {
     }
   }
   return false;
+}
+
+function codePointLength(value: string): number {
+  return [...value].length;
 }

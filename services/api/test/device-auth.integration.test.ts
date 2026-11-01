@@ -196,6 +196,35 @@ describe("PostgreSQL device authorization integration", () => {
     }
   });
 
+  it("pairs a device name with 60 non-BMP characters through Fastify and PostgreSQL", async () => {
+    const pairing = await authorization.createPairingCode({
+      principalId: `emoji-owner-${randomUUID()}`,
+      budgetIds: ["synthetic-budget"],
+    });
+    const app = await buildApiApp(
+      { ping: async () => undefined, close: async () => undefined },
+      { deviceAuth: authorization },
+    );
+    const deviceName = "😀".repeat(60);
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/pair",
+        payload: { code: pairing.code, deviceName },
+      });
+      expect(response.statusCode).toBe(201);
+      expect(response.json()).toMatchObject({ name: deviceName });
+      const stored = await pool!.query<{ device_name: string }>(
+        "SELECT device_name FROM companion_devices WHERE device_id = $1",
+        [(response.json() as { deviceId: string }).deviceId],
+      );
+      expect(stored.rows[0]?.device_name).toBe(deviceName);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("rejects expired pairing codes and purges them when a new code is issued", async () => {
     const expired = await authorization.createPairingCode({
       principalId: "owner",
