@@ -36,6 +36,20 @@ export interface ActualSecondaryFailure {
   secondaryError: unknown;
 }
 
+export class ActualPostWriteSyncError<T = unknown> extends Error {
+  readonly kind = "post-write-sync-failed";
+
+  constructor(
+    readonly operationResult: T,
+    readonly syncError: unknown,
+  ) {
+    super(
+      "Actual operation returned a result, but budget synchronization failed",
+    );
+    this.name = "ActualPostWriteSyncError";
+  }
+}
+
 export type ActualSecondaryFailureHandler = (
   failure: ActualSecondaryFailure,
 ) => void;
@@ -261,7 +275,7 @@ export class ActualSession {
         await this.client.sync();
       } catch (syncError) {
         if (!operationFailed) {
-          throw syncError;
+          throw new ActualPostWriteSyncError(result!, syncError);
         }
         this.#reportSecondaryFailure({
           phase: "post-write-sync",

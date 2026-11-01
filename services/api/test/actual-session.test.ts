@@ -436,13 +436,21 @@ describe("ActualSession", () => {
   it("continues serial processing after a sync failure", async () => {
     const fake = createFakeClient();
     const session = new ActualSession(fake.api, config);
-    fake.failSync(new Error("sync outcome uncertain"));
+    const syncError = new Error("sync outcome uncertain");
+    fake.failSync(syncError);
 
     await expect(
       session.execute(async () => "local-write", {
         synchronizeAfterWrite: true,
       }),
-    ).rejects.toThrow("sync outcome uncertain");
+    ).rejects.toMatchObject({
+      name: "ActualPostWriteSyncError",
+      message:
+        "Actual operation returned a result, but budget synchronization failed",
+      kind: "post-write-sync-failed",
+      operationResult: "local-write",
+      syncError,
+    });
     fake.failSync(new Error("sync outcome uncertain"));
     await expect(session.execute(async () => "read")).resolves.toBe("read");
     await session.close();

@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { BudgetOperationOptions } from "../src/actual/actual-session.js";
+import {
+  ActualPostWriteSyncError,
+  type BudgetOperationOptions,
+} from "../src/actual/actual-session.js";
 import {
   TransactionReconciler,
   type ActualBudgetSessionPort,
@@ -744,7 +747,14 @@ describe("Actual transaction reconciliation", () => {
   it("marks a write uncertain when Actual fails after mutation starts", async () => {
     const request = createRequest();
     const harness = createHarness(request);
-    harness.setSessionErrorAt(1, new Error("post-write sync failed"), true);
+    harness.setSessionErrorAt(
+      1,
+      new ActualPostWriteSyncError(
+        "local-write-result",
+        new Error("sync failed"),
+      ),
+      true,
+    );
 
     const result = await harness.reconciler.submit(request);
 
