@@ -1,7 +1,33 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createServer } from "node:net";
+import { randomUUID } from "node:crypto";
+import { Pool } from "pg";
 import { reportProcessFailure, runProductionApi } from "../src/main.js";
 import type { ShutdownSignal } from "../src/server.js";
+
+let adminPool: Pool;
+let testSchema: string;
+let isolatedDatabaseUrl: string;
+
+beforeAll(async () => {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error(
+      "DATABASE_URL is required; run this test with docker compose",
+    );
+  }
+  testSchema = `main_integration_${randomUUID().replaceAll("-", "")}`;
+  adminPool = new Pool({ connectionString, max: 2 });
+  await adminPool.query(`CREATE SCHEMA ${testSchema}`);
+  const connection = new URL(connectionString);
+  connection.searchParams.set("options", `-c search_path=${testSchema}`);
+  isolatedDatabaseUrl = connection.toString();
+});
+
+afterAll(async () => {
+  await adminPool?.query(`DROP SCHEMA ${testSchema} CASCADE`);
+  await adminPool?.end();
+});
 
 async function findAvailablePort(): Promise<number> {
   const probe = createServer();
@@ -50,7 +76,7 @@ describe("API bootstrap integration", () => {
   it("validates configuration and starts against the disposable PostgreSQL service", async () => {
     const port = await findAvailablePort();
     const environment = {
-      DATABASE_URL: process.env.DATABASE_URL,
+      DATABASE_URL: isolatedDatabaseUrl,
       HOST: "127.0.0.1",
       PORT: String(port),
     };
@@ -81,7 +107,7 @@ describe("API bootstrap integration", () => {
   it("handles shutdown failures from process signal callbacks", async () => {
     const port = await findAvailablePort();
     const environment = {
-      DATABASE_URL: process.env.DATABASE_URL,
+      DATABASE_URL: isolatedDatabaseUrl,
       HOST: "127.0.0.1",
       PORT: String(port),
     };
