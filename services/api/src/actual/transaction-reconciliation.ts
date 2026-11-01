@@ -199,7 +199,7 @@ export function parseTransactionPatch(value: JsonValue): TransactionPatch {
     const valueForField = record[field];
     switch (field) {
       case "account":
-        patch.account = requiredString(valueForField, field);
+        patch.account = patchText(requiredString(valueForField, field), field);
         break;
       case "amount":
         patch.amount = requiredInteger(valueForField, field);
@@ -208,16 +208,16 @@ export function parseTransactionPatch(value: JsonValue): TransactionPatch {
         patch.date = requiredDate(valueForField);
         break;
       case "payee":
-        patch.payee = nullableString(valueForField, field);
+        patch.payee = nullablePatchString(valueForField, field);
         break;
       case "category":
-        patch.category = nullableString(valueForField, field);
+        patch.category = nullablePatchString(valueForField, field);
         break;
       case "notes":
         if (typeof valueForField !== "string") {
           throw new Error("notes must be a string");
         }
-        patch.notes = valueForField;
+        patch.notes = patchText(valueForField, field);
         break;
       case "cleared":
         patch.cleared = requiredBoolean(valueForField, field);
@@ -228,6 +228,19 @@ export function parseTransactionPatch(value: JsonValue): TransactionPatch {
     }
   }
   return patch;
+}
+
+function nullablePatchString(value: unknown, name: string): string | null {
+  const text = nullableString(value, name);
+  return text === null ? null : patchText(text, name);
+}
+
+function patchText(value: string, name: string): string {
+  // eslint-disable-next-line no-control-regex -- Reject unsafe C0 and DEL characters in financial text.
+  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value)) {
+    throw new Error(`${name} must not contain control characters`);
+  }
+  return value;
 }
 
 export function createTransactionRevision(

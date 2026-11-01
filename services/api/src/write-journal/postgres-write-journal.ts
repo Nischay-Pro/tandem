@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import {
   IdempotencyKeyReuseError,
+  IDEMPOTENCY_KEY_MAX_LENGTH,
+  InvalidOperationInputError,
   InvalidOperationTransitionError,
   OperationIdReuseError,
   OperationNotFoundError,
@@ -580,20 +582,33 @@ function mapConflict(row: ConflictRow): OperationConflict {
 }
 
 function validateOperationInput(input: WriteOperationInput): void {
-  validateUuid("operationId", input.operationId);
-  validateRequiredText("principalId", input.principalId, 200);
-  validateRequiredText("budgetId", input.budgetId, 500);
-  validateRequiredText("idempotencyKey", input.idempotencyKey, 200);
-  validateRequiredText("entityType", input.entityType, 100);
-  validateRequiredText("action", input.action, 100);
-  if (input.entityId !== null) {
-    validateRequiredText("entityId", input.entityId, 500);
+  try {
+    validateUuid("operationId", input.operationId);
+    validateRequiredText("principalId", input.principalId, 200);
+    validateRequiredText("budgetId", input.budgetId, 500);
+    validateRequiredText(
+      "idempotencyKey",
+      input.idempotencyKey,
+      IDEMPOTENCY_KEY_MAX_LENGTH,
+    );
+    validateRequiredText("entityType", input.entityType, 100);
+    validateRequiredText("action", input.action, 100);
+    if (input.entityId !== null) {
+      validateRequiredText("entityId", input.entityId, 500);
+    }
+    if (input.baseRevision !== null) {
+      validateRequiredText("baseRevision", input.baseRevision, 500);
+    }
+    assertJsonValue(input.baseSnapshot);
+    validateJsonObject("patch", input.patch);
+  } catch (error) {
+    throw new InvalidOperationInputError(
+      error instanceof Error
+        ? error.message
+        : "Write operation input is invalid",
+      { cause: error },
+    );
   }
-  if (input.baseRevision !== null) {
-    validateRequiredText("baseRevision", input.baseRevision, 500);
-  }
-  assertJsonValue(input.baseSnapshot);
-  validateJsonObject("patch", input.patch);
 }
 
 function validateConflictInput(conflict: ConflictInput): void {
@@ -618,7 +633,7 @@ function validateRequiredText(
   if (value.includes("\u0000")) {
     throw new Error(`${name} must not contain NUL characters`);
   }
-  if (value.trim().length === 0 || value.length > maxLength) {
+  if (value.trim().length === 0 || [...value].length > maxLength) {
     throw new Error(
       `${name} must contain between 1 and ${maxLength} characters`,
     );

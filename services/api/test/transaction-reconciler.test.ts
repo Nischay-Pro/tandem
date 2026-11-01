@@ -27,6 +27,7 @@ import type {
   WriteOperation,
   WriteOperationInput,
 } from "../src/write-journal/contracts.js";
+import { InvalidOperationInputError } from "../src/write-journal/contracts.js";
 import { WRITE_OPERATION_LEASE_RENEWAL_INTERVAL_MS } from "../src/write-journal/contracts.js";
 
 const USE_CURRENT = Symbol("use-current-actual-transaction");
@@ -519,6 +520,58 @@ describe("Actual transaction reconciliation", () => {
       message: "Transaction request is invalid",
       cause: "synthetic invalid input",
     });
+  });
+
+  it("maps typed journal input failures to transaction validation errors", async () => {
+    const request = createRequest();
+    const harness = createHarness(request);
+    harness.journal.failures.set(
+      "enqueue",
+      new InvalidOperationInputError("idempotencyKey is invalid"),
+    );
+
+    await expect(harness.reconciler.submit(request)).rejects.toMatchObject({
+      name: "TransactionRequestValidationError",
+      message: "idempotencyKey is invalid",
+    });
+    expect(harness.journal.operation).toBeUndefined();
+  });
+
+  it("preserves non-validation journal failures from enqueue", async () => {
+    const request = createRequest();
+    const harness = createHarness(request);
+    const storageFailure = new Error("synthetic database failure");
+    harness.journal.failures.set("enqueue", storageFailure);
+
+    await expect(harness.reconciler.submit(request)).rejects.toBe(
+      storageFailure,
+    );
+  });
+
+  it.each(["   ", "x".repeat(201), 123 as unknown as string])(
+    "rejects invalid idempotency key %j before journal insertion",
+    async (idempotencyKey) => {
+      const request = createRequest({ idempotencyKey });
+      const harness = createHarness(request);
+
+      await expect(harness.reconciler.submit(request)).rejects.toMatchObject({
+        name: "TransactionRequestValidationError",
+        message: "idempotencyKey must contain between 1 and 200 characters",
+      });
+      expect(harness.journal.operation).toBeUndefined();
+    },
+  );
+
+  it("accepts an idempotency key at the 200-character limit", async () => {
+    const idempotencyKey = "x".repeat(200);
+    const request = createRequest({ idempotencyKey });
+    const harness = createHarness(request);
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation.idempotencyKey).toBe(idempotencyKey);
+    expect(result.operation.entityType).toBe("transaction");
+    expect(result.operation.status).toBe("committed");
   });
 
   it("renews a claimed operation while Actual work runs and stops after completion", async () => {

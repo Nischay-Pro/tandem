@@ -24,6 +24,10 @@ import type {
   WriteOperation,
   WriteOperationInput,
 } from "../write-journal/contracts.js";
+import {
+  IDEMPOTENCY_KEY_MAX_LENGTH,
+  InvalidOperationInputError,
+} from "../write-journal/contracts.js";
 import { WRITE_OPERATION_LEASE_RENEWAL_INTERVAL_MS } from "../write-journal/contracts.js";
 
 export interface TransactionReconciliationRequest {
@@ -98,7 +102,17 @@ export class TransactionReconciler {
     request: TransactionReconciliationRequest,
   ): Promise<TransactionReconciliationResult> {
     const prepared = prepareRequest(request);
-    const { operation } = await this.journal.enqueue(prepared.operationInput);
+    let operation: WriteOperation;
+    try {
+      ({ operation } = await this.journal.enqueue(prepared.operationInput));
+    } catch (error) {
+      if (error instanceof InvalidOperationInputError) {
+        throw new TransactionRequestValidationError(error.message, {
+          cause: error,
+        });
+      }
+      throw error;
+    }
 
     if (operation.status === "uncertain") {
       return this.locks.withBudgetLock(operation.budgetId, () =>
@@ -500,6 +514,15 @@ function prepareRequest(
 function prepareValidatedRequest(
   request: TransactionReconciliationRequest,
 ): PreparedRequest {
+  if (
+    typeof request.idempotencyKey !== "string" ||
+    request.idempotencyKey.trim().length === 0 ||
+    [...request.idempotencyKey].length > IDEMPOTENCY_KEY_MAX_LENGTH
+  ) {
+    throw new Error(
+      `idempotencyKey must contain between 1 and ${IDEMPOTENCY_KEY_MAX_LENGTH} characters`,
+    );
+  }
   if (request.action !== "update" && request.action !== "delete") {
     throw new Error("Transaction action must be update or delete");
   }

@@ -486,6 +486,24 @@ describe("transaction snapshots and merge planning", () => {
     expect(() => parseTransactionPatch({ category: false })).toThrow(
       "category must be a non-empty string",
     );
+    expect(() => parseTransactionPatch({ account: "account\u0001" })).toThrow(
+      "account must not contain control characters",
+    );
+    expect(() => parseTransactionPatch({ payee: "payee\u0001" })).toThrow(
+      "payee must not contain control characters",
+    );
+    expect(() => parseTransactionPatch({ category: "category\u0001" })).toThrow(
+      "category must not contain control characters",
+    );
+    expect(() => parseTransactionPatch({ notes: "note\u0000" })).toThrow(
+      "notes must not contain control characters",
+    );
+    expect(() => parseTransactionPatch({ notes: "note\u0001" })).toThrow(
+      "notes must not contain control characters",
+    );
+    expect(parseTransactionPatch({ notes: "line 1\nline 2\tend" })).toEqual({
+      notes: "line 1\nline 2\tend",
+    });
     expect(parseTransactionPatch({ notes: "" })).toEqual({ notes: "" });
     expect(() => parseTransactionPatch({ notes: 1 })).toThrow(
       "notes must be a string",

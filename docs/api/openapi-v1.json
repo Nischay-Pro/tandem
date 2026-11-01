@@ -737,7 +737,12 @@
             "required": false
           },
           {
-            "schema": { "type": "string", "minLength": 1, "maxLength": 500 },
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "\\S"
+            },
             "in": "header",
             "name": "idempotency-key",
             "required": true

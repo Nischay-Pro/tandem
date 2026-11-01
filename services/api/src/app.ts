@@ -9,6 +9,7 @@ import {
 import { PairingRateLimiter } from "./auth/pairing-rate-limiter.js";
 import type { TransactionApiPort } from "./actual/transaction-api.js";
 import {
+  IDEMPOTENCY_KEY_MAX_LENGTH,
   IdempotencyKeyReuseError,
   OperationIdReuseError,
   type JsonValue,
@@ -673,7 +674,12 @@ function registerTransactionRoutes(
           ...budgetEncryptionHeaderSchema,
           properties: {
             ...budgetEncryptionHeaderSchema.properties,
-            "idempotency-key": { type: "string", minLength: 1, maxLength: 500 },
+            "idempotency-key": {
+              type: "string",
+              minLength: 1,
+              maxLength: IDEMPOTENCY_KEY_MAX_LENGTH,
+              pattern: "\\S",
+            },
           },
           required: ["idempotency-key"],
         },

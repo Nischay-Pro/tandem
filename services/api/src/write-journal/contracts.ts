@@ -1,6 +1,8 @@
 export type JsonValue =
   null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
+export const IDEMPOTENCY_KEY_MAX_LENGTH = 200;
+
 export interface WriteOperationInput {
   operationId: string;
   principalId: string;
@@ -120,5 +122,12 @@ export class InvalidOperationTransitionError extends Error {
       `Operation ${operationId} cannot transition from ${status} to ${target}`,
     );
     this.name = "InvalidOperationTransitionError";
+  }
+}
+
+export class InvalidOperationInputError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "InvalidOperationInputError";
   }
 }

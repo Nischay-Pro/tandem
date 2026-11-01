@@ -1077,6 +1077,38 @@ describe("durable write journal integration", () => {
     ).rejects.toThrow("operationId must be a UUID");
   });
 
+  it("wraps unexpected non-Error values from journal input validation", async () => {
+    const input = createOperation();
+    Object.defineProperty(input, "operationId", {
+      get() {
+        throw "synthetic non-Error validation failure";
+      },
+    });
+
+    await expect(database.journal.enqueue(input)).rejects.toMatchObject({
+      name: "InvalidOperationInputError",
+      message: "Write operation input is invalid",
+      cause: "synthetic non-Error validation failure",
+    });
+  });
+
+  it("applies the idempotency-key limit in Unicode code points", async () => {
+    await expect(
+      database.journal.enqueue({
+        ...createOperation(),
+        idempotencyKey: "😀".repeat(200),
+      }),
+    ).resolves.toMatchObject({ replayed: false });
+    await expect(
+      database.journal.enqueue({
+        ...createOperation(),
+        idempotencyKey: "😀".repeat(201),
+      }),
+    ).rejects.toThrow(
+      "idempotencyKey must contain between 1 and 200 characters",
+    );
+  });
+
   it("rejects PostgreSQL-incompatible NUL characters before writing", async () => {
     const input = createOperation();
 
