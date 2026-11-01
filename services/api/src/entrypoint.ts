@@ -1,4 +1,7 @@
 import process from "node:process";
-import { runProductionApi } from "./main.js";
+import { reportProcessFailure, runProductionApi } from "./main.js";
 
-void runProductionApi(process.env, process);
+void runProductionApi(process.env, process).catch((error: unknown) => {
+  reportProcessFailure("API startup failed", error);
+  process.exitCode = 1;
+});

@@ -19,6 +19,27 @@ export function runProductionApi(
   signals: NodeJS.Process,
 ): Promise<FastifyInstance> {
   return runApi(environment, createPostgresDatabase, (signal, handler) => {
-    signals.once(signal, handler);
+    signals.once(signal, async () => {
+      try {
+        await handler();
+        signals.exitCode ??= 0;
+      } catch (error) {
+        reportProcessFailure("API shutdown failed", error);
+        signals.exitCode = 1;
+      }
+    });
   });
+}
+
+export function reportProcessFailure(
+  context: "API startup failed" | "API shutdown failed",
+  error: unknown,
+): void {
+  try {
+    console.error(context, {
+      errorType: error instanceof Error ? error.name : typeof error,
+    });
+  } catch {
+    // Process failure reporting must not create another unhandled rejection.
+  }
 }
