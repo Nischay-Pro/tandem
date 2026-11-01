@@ -41,6 +41,34 @@ describe("pairing attempt rate limiter", () => {
     expect(limiter.consume("client-b").allowed).toBe(true);
   });
 
+  it("evicts the oldest active client when the tracker reaches its bound", () => {
+    const limiter = new PairingRateLimiter(1, 10_000, 2, () => 1_000);
+
+    expect(limiter.consume("client-a").allowed).toBe(true);
+    expect(limiter.consume("client-b").allowed).toBe(true);
+    expect(limiter.consume("client-c").allowed).toBe(true);
+    expect(limiter.consume("client-b").allowed).toBe(false);
+    expect(limiter.consume("client-a").allowed).toBe(true);
+  });
+
+  it("removes expired entries before evicting an active client's window", () => {
+    let now = 0;
+    const limiter = new PairingRateLimiter(2, 100, 4, () => now);
+
+    expect(limiter.consume("client-a").allowed).toBe(true);
+    now = 50;
+    expect(limiter.consume("client-b").allowed).toBe(true);
+    now = 60;
+    expect(limiter.consume("client-c").allowed).toBe(true);
+    now = 100;
+    expect(limiter.consume("client-a").allowed).toBe(true);
+    now = 150;
+    expect(limiter.consume("client-d").allowed).toBe(true);
+    expect(limiter.consume("client-e").allowed).toBe(true);
+    expect(limiter.consume("client-a").allowed).toBe(true);
+    expect(limiter.consume("client-a").allowed).toBe(false);
+  });
+
   it.each([
     [0, 1, 1],
     [1, 0, 1],
