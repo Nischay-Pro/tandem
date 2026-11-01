@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { READINESS_TIMEOUT_MS } from "./config.js";
 import { withBudgetLock } from "./database/budget-lock.js";
 import { applyMigrations } from "./schema/migrator.js";
 import type { DurableWriteJournal } from "./write-journal/contracts.js";
@@ -25,15 +26,31 @@ export function createPostgresDatabase(connectionString: string): Database {
     connectionTimeoutMillis: 5_000,
     idleTimeoutMillis: 30_000,
   });
+  const readinessPool = new Pool({
+    connectionString,
+    max: 1,
+    connectionTimeoutMillis: READINESS_TIMEOUT_MS,
+    idleTimeoutMillis: 30_000,
+    query_timeout: READINESS_TIMEOUT_MS,
+  });
 
   const journal = new PostgresWriteJournal(pool);
+  let readinessCheck: Promise<void> | undefined;
 
   return {
-    async ping() {
-      await pool.query("SELECT 1");
+    ping() {
+      if (!readinessCheck) {
+        readinessCheck = readinessPool
+          .query("SELECT 1")
+          .then(() => undefined)
+          .finally(() => {
+            readinessCheck = undefined;
+          });
+      }
+      return readinessCheck;
     },
     async close() {
-      await pool.end();
+      await Promise.all([pool.end(), readinessPool.end()]);
     },
     async migrate() {
       await applyMigrations(pool);

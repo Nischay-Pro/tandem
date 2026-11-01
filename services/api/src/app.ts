@@ -1,5 +1,6 @@
 import swagger from "@fastify/swagger";
 import Fastify, { type FastifyInstance, type FastifySchema } from "fastify";
+import { READINESS_TIMEOUT_MS } from "./config.js";
 import type { HealthDatabase } from "./database.js";
 
 const statusOk = {
@@ -32,6 +33,7 @@ const readySchema: FastifySchema = {
 
 export async function buildApiApp(
   database: HealthDatabase,
+  readinessTimeoutMs = READINESS_TIMEOUT_MS,
 ): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
 
@@ -60,7 +62,7 @@ export async function buildApiApp(
     { schema: readySchema },
     async (_request, reply) => {
       try {
-        await database.ping();
+        await pingWithTimeout(() => database.ping(), readinessTimeoutMs);
         return reply.code(200).send({ status: "ok" });
       } catch {
         return reply.code(503).send({ status: "not_ready" });
@@ -73,4 +75,23 @@ export async function buildApiApp(
   app.addHook("onClose", async () => database.close());
   await app.ready();
   return app;
+}
+
+async function pingWithTimeout(
+  ping: () => Promise<void>,
+  timeoutMs: number,
+): Promise<void> {
+  let timer!: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () => reject(new Error("Database readiness probe timed out")),
+      timeoutMs,
+    );
+  });
+
+  try {
+    await Promise.race([Promise.resolve().then(ping), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }

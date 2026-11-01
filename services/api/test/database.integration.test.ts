@@ -40,7 +40,9 @@ describe("PostgreSQL connection integration", () => {
     }
 
     const database = createPostgresDatabase(connectionString);
-    await expect(database.ping()).resolves.toBeUndefined();
+    await expect(
+      Promise.all([database.ping(), database.ping()]),
+    ).resolves.toEqual([undefined, undefined]);
     await expect(database.close()).resolves.toBeUndefined();
   });
 

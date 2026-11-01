@@ -58,6 +58,34 @@ describe("health routes and OpenAPI", () => {
     await app.close();
   });
 
+  it("returns unavailable when the PostgreSQL readiness probe stalls", async () => {
+    let resolvePing: () => void = () => {};
+    const ping = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolvePing = resolve;
+        }),
+    );
+    const app = await buildApiApp(
+      {
+        ping,
+        close: vi.fn<() => Promise<void>>(),
+      },
+      20,
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/health/ready",
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ status: "not_ready" });
+    expect(ping).toHaveBeenCalledOnce();
+    resolvePing();
+    await app.close();
+  });
+
   it("serves the generated OpenAPI 3.1 document as JSON", async () => {
     const app = await buildApiApp({
       ping: vi.fn<() => Promise<void>>(),

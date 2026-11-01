@@ -6,6 +6,8 @@ export interface ApiConfig {
 
 export type Environment = Record<string, string | undefined>;
 
+export const READINESS_TIMEOUT_MS = 2_000;
+
 export function parseApiConfig(environment: Environment): ApiConfig {
   const databaseUrl = environment.DATABASE_URL?.trim();
   if (!databaseUrl) {
