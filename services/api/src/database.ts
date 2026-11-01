@@ -6,6 +6,8 @@ import { withBudgetLock } from "./database/budget-lock.js";
 import { applyMigrations } from "./schema/migrator.js";
 import type { DurableWriteJournal } from "./write-journal/contracts.js";
 import { PostgresWriteJournal } from "./write-journal/postgres-write-journal.js";
+import { createPostgresBudgetProjectionStore } from "./budget-projection/postgres-budget-projection-store.js";
+import type { BudgetProjectionStore } from "./budget-projection/contracts.js";
 
 export interface HealthDatabase {
   ping(): Promise<void>;
@@ -20,6 +22,7 @@ export interface ServerDatabase extends HealthDatabase {
 
 export interface Database extends ServerDatabase {
   readonly journal: DurableWriteJournal;
+  readonly budgetProjection: BudgetProjectionStore;
   withBudgetLock<T>(budgetId: string, work: () => Promise<T>): Promise<T>;
 }
 
@@ -39,6 +42,7 @@ export function createPostgresDatabase(connectionString: string): Database {
   });
 
   const journal = new PostgresWriteJournal(pool);
+  const budgetProjection = createPostgresBudgetProjectionStore(pool);
   const deviceAuth = new DeviceAuthorization(new PostgresDeviceAuthStore(pool));
   let readinessCheck: Promise<void> | undefined;
 
@@ -61,6 +65,7 @@ export function createPostgresDatabase(connectionString: string): Database {
       await applyMigrations(pool);
     },
     journal,
+    budgetProjection,
     deviceAuth,
     async withBudgetLock<T>(budgetId: string, work: () => Promise<T>) {
       return withBudgetLock(pool, budgetId, work);

@@ -8,6 +8,8 @@ import {
 } from "./auth/device-auth.js";
 import { PairingRateLimiter } from "./auth/pairing-rate-limiter.js";
 import type { TransactionApiPort } from "./actual/transaction-api.js";
+import type { BudgetReadApiPort } from "./budget-projection/budget-read-api.js";
+import { BudgetProjectionInputError } from "./budget-projection/contracts.js";
 import {
   IDEMPOTENCY_KEY_MAX_LENGTH,
   IdempotencyKeyReuseError,
@@ -51,6 +53,7 @@ export interface ApiAppOptions {
   onClose?: () => Promise<void>;
   deviceAuth?: DeviceAuthorization;
   transactionApi?: TransactionApiPort;
+  budgetReadApi?: BudgetReadApiPort;
   trustProxy?: false | string[];
 }
 
@@ -76,6 +79,7 @@ export async function buildApiApp(
       tags: [
         { name: "Health" },
         { name: "Authentication" },
+        { name: "Budgets" },
         { name: "Transactions" },
       ],
       components: {
@@ -115,6 +119,7 @@ export async function buildApiApp(
   if (options.deviceAuth) {
     registerDeviceAuthorizationRoutes(app, options.deviceAuth);
     registerTransactionRoutes(app, options.deviceAuth, options.transactionApi);
+    registerBudgetReadRoutes(app, options.deviceAuth, options.budgetReadApi);
   }
 
   app.addHook("onClose", async () => {
@@ -839,6 +844,299 @@ function registerTransactionRoutes(
       }
     },
   );
+}
+
+interface BudgetRouteParams {
+  budgetId: string;
+}
+
+interface BudgetChangeQuery {
+  generation: string;
+  cursor: string;
+  throughCursor?: string;
+  limit?: number;
+}
+
+interface BudgetReadHeaders {
+  "x-budget-encryption-password"?: string;
+}
+
+function registerBudgetReadRoutes(
+  app: FastifyInstance,
+  deviceAuth: DeviceAuthorization,
+  budgetReadApi: BudgetReadApiPort | undefined,
+): void {
+  const errorSchema = {
+    type: "object",
+    properties: {
+      error: {
+        type: "object",
+        properties: {
+          code: { type: "string" },
+          message: { type: "string" },
+        },
+        required: ["code", "message"],
+        additionalProperties: false,
+      },
+    },
+    required: ["error"],
+    additionalProperties: false,
+  };
+  const budgetParamsSchema = {
+    type: "object",
+    properties: {
+      budgetId: {
+        type: "string",
+        minLength: 1,
+        maxLength: 500,
+        pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+      },
+    },
+    required: ["budgetId"],
+    additionalProperties: false,
+  };
+  const encryptionHeadersSchema = {
+    type: "object",
+    properties: {
+      "x-budget-encryption-password": {
+        type: "string",
+        minLength: 1,
+        maxLength: 1_024,
+      },
+    },
+    additionalProperties: true,
+  };
+  const recordSchema = {
+    type: "object",
+    properties: {
+      type: {
+        type: "string",
+        enum: [
+          "account",
+          "account-group",
+          "category",
+          "category-group",
+          "payee",
+          "transaction",
+          "budget-month",
+        ],
+      },
+      id: { type: "string" },
+      revision: { type: "string", pattern: "^[a-f0-9]{64}$" },
+      body: { type: "object", additionalProperties: true },
+    },
+    required: ["type", "id", "revision", "body"],
+    additionalProperties: false,
+  };
+  const snapshotSchema = {
+    type: "object",
+    properties: {
+      budgetId: { type: "string" },
+      generation: { type: "string", format: "uuid" },
+      cursor: { type: "string", pattern: "^(0|[1-9][0-9]*)$" },
+      records: { type: "array", items: recordSchema },
+    },
+    required: ["budgetId", "generation", "cursor", "records"],
+    additionalProperties: false,
+  };
+  const changeSchema = {
+    type: "object",
+    properties: {
+      cursor: { type: "string", pattern: "^[1-9][0-9]*$" },
+      type: recordSchema.properties.type,
+      id: { type: "string" },
+      operation: { type: "string", enum: ["upsert", "delete"] },
+      revision: { type: "string", pattern: "^[a-f0-9]{64}$" },
+      body: {
+        anyOf: [
+          { type: "object", additionalProperties: true },
+          { type: "null" },
+        ],
+      },
+    },
+    required: ["cursor", "type", "id", "operation", "revision", "body"],
+    additionalProperties: false,
+  };
+  const changePageSchema = {
+    type: "object",
+    properties: {
+      budgetId: { type: "string" },
+      generation: { type: "string", format: "uuid" },
+      currentCursor: { type: "string", pattern: "^(0|[1-9][0-9]*)$" },
+      throughCursor: { type: "string", pattern: "^(0|[1-9][0-9]*)$" },
+      nextCursor: { type: "string", pattern: "^(0|[1-9][0-9]*)$" },
+      hasMore: { type: "boolean" },
+      resetRequired: { type: "boolean" },
+      changes: { type: "array", items: changeSchema },
+    },
+    required: [
+      "budgetId",
+      "generation",
+      "currentCursor",
+      "throughCursor",
+      "nextCursor",
+      "hasMore",
+      "resetRequired",
+      "changes",
+    ],
+    additionalProperties: false,
+  };
+
+  app.get<{
+    Params: BudgetRouteParams;
+    Headers: BudgetReadHeaders;
+  }>(
+    "/api/v1/budgets/:budgetId/snapshot",
+    {
+      schema: {
+        tags: ["Budgets"],
+        operationId: "getBudgetSnapshot",
+        summary: "Refresh and read the complete budget projection",
+        security: [{ bearerAuth: [] }],
+        params: budgetParamsSchema,
+        headers: encryptionHeadersSchema,
+        response: {
+          200: snapshotSchema,
+          400: errorSchema,
+          401: errorSchema,
+          404: errorSchema,
+          502: errorSchema,
+          503: errorSchema,
+        },
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(
+        deviceAuth,
+        request.headers.authorization,
+        reply,
+      );
+      if (!device) return reply;
+      if (request.validationError) return invalidBudgetRequest(reply);
+      if (
+        !DeviceAuthorization.canAccessBudget(device, request.params.budgetId)
+      ) {
+        return transactionNotFound(reply);
+      }
+      if (!budgetReadApi) return actualNotConfigured(reply);
+
+      try {
+        const snapshot = await budgetReadApi.getSnapshot(
+          request.params.budgetId,
+          request.headers["x-budget-encryption-password"],
+        );
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send(snapshot);
+      } catch (error) {
+        if (error instanceof BudgetProjectionInputError) {
+          return invalidBudgetRequest(reply);
+        }
+        reportTransactionFailure("Budget snapshot read failed", error);
+        return budgetReadFailed(reply);
+      }
+    },
+  );
+
+  app.get<{
+    Params: BudgetRouteParams;
+    Querystring: BudgetChangeQuery;
+    Headers: BudgetReadHeaders;
+  }>(
+    "/api/v1/budgets/:budgetId/changes",
+    {
+      schema: {
+        tags: ["Budgets"],
+        operationId: "getBudgetChanges",
+        summary: "Read a bounded, generation-aware budget change page",
+        security: [{ bearerAuth: [] }],
+        params: budgetParamsSchema,
+        headers: encryptionHeadersSchema,
+        querystring: {
+          type: "object",
+          properties: {
+            generation: { type: "string", minLength: 36, maxLength: 36 },
+            cursor: { type: "string", pattern: "^(0|[1-9][0-9]*)$" },
+            throughCursor: {
+              type: "string",
+              pattern: "^(0|[1-9][0-9]*)$",
+            },
+            limit: { type: "integer", minimum: 1, maximum: 500 },
+          },
+          required: ["generation", "cursor"],
+          additionalProperties: false,
+        },
+        response: {
+          200: changePageSchema,
+          400: errorSchema,
+          401: errorSchema,
+          404: errorSchema,
+          502: errorSchema,
+          503: errorSchema,
+        },
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(
+        deviceAuth,
+        request.headers.authorization,
+        reply,
+      );
+      if (!device) return reply;
+      if (request.validationError) return invalidBudgetRequest(reply);
+      if (
+        !DeviceAuthorization.canAccessBudget(device, request.params.budgetId)
+      ) {
+        return transactionNotFound(reply);
+      }
+      if (!budgetReadApi) return actualNotConfigured(reply);
+
+      try {
+        const page = await budgetReadApi.getChanges({
+          budgetId: request.params.budgetId,
+          generation: request.query.generation,
+          cursor: request.query.cursor,
+          ...(request.query.throughCursor === undefined
+            ? {}
+            : { throughCursor: request.query.throughCursor }),
+          limit: request.query.limit ?? 100,
+          ...(request.headers["x-budget-encryption-password"] === undefined
+            ? {}
+            : {
+                encryptionPassword:
+                  request.headers["x-budget-encryption-password"],
+              }),
+        });
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send(page);
+      } catch (error) {
+        if (error instanceof BudgetProjectionInputError) {
+          return invalidBudgetRequest(reply);
+        }
+        reportTransactionFailure("Budget change feed read failed", error);
+        return budgetReadFailed(reply);
+      }
+    },
+  );
+}
+
+function invalidBudgetRequest(reply: import("fastify").FastifyReply) {
+  return reply.code(400).send({
+    error: {
+      code: "invalid_request",
+      message: "Budget read request is invalid",
+    },
+  });
+}
+
+function budgetReadFailed(reply: import("fastify").FastifyReply) {
+  return reply.code(502).send({
+    error: {
+      code: "budget_sync_failed",
+      message: "The budget projection could not be refreshed",
+    },
+  });
 }
 
 function invalidTransactionRequest(reply: import("fastify").FastifyReply) {

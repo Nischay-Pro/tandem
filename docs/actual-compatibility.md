@@ -30,6 +30,25 @@ request an explicit `sync()` after the operation. A failed sync is surfaced as
 an uncertain outcome; the adapter does not retry it. The durable operation
 journal and write recovery policy are separate work in ABC-004 and ABC-005.
 
+## Budget read projection
+
+The pinned API exposes `getAccounts`, `getAccountBalance`, account and category
+group reads, `getCategories`, `getPayees`, `getBudgetMonths`, and
+`getBudgetMonth`. Transactions use the package's public `q()`/`aqlQuery()`
+methods with `splits: "grouped"`, ordered by stable ID and paged with AQL's
+`limit`/`offset`. The projection does not open Actual's SQLite database. Its
+compatibility test exercises the complete snapshot and change-feed routes with
+synthetic accounts, visible and hidden categories, budget months, transactions,
+split children, and transfer legs.
+
+Actual does not expose an incremental change feed through this API. Companion
+refreshes and diffs a supported-API snapshot into PostgreSQL. Each successful
+refresh stores current records, emits entity changes and deletion tombstones,
+and advances the per-budget cursor in one PostgreSQL transaction. The change
+feed is therefore a Companion projection, not Actual's synchronization
+protocol; refresh sees the copy downloaded for that request, with external
+edits appearing on a subsequent refresh.
+
 For an end-to-end encrypted budget, callers pass its encryption password only
 to the specific `runBudget()` call. It is separate from the Actual server login
 credential. The adapter does not persist that password. Encrypted-budget

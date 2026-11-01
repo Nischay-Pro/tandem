@@ -3,6 +3,7 @@ import { buildApiApp } from "./app.js";
 import type { ApiConfig } from "./config.js";
 import type { ServerDatabase } from "./database.js";
 import type { TransactionApiPort } from "./actual/transaction-api.js";
+import type { BudgetReadApiPort } from "./budget-projection/budget-read-api.js";
 import { WriteLeaseReaper } from "./write-journal/lease-reaper.js";
 
 export type ShutdownSignal = "SIGINT" | "SIGTERM";
@@ -13,6 +14,7 @@ export type SignalRegistrar = (
 
 export interface ApiRuntime {
   transactionApi?: TransactionApiPort;
+  budgetReadApi?: BudgetReadApiPort;
   start?(): Promise<void>;
   close?(): Promise<void>;
 }
@@ -42,6 +44,9 @@ export async function startApiServer(
       ...(runtime.transactionApi === undefined
         ? {}
         : { transactionApi: runtime.transactionApi }),
+      ...(runtime.budgetReadApi === undefined
+        ? {}
+        : { budgetReadApi: runtime.budgetReadApi }),
       trustProxy: config.trustProxy,
     });
     await app.listen({ host: config.host, port: config.port });

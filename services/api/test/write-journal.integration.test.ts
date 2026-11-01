@@ -379,14 +379,19 @@ describe("durable write journal integration", () => {
       throw new Error("DATABASE_URL is required to simulate a restart");
     }
     const input = createOperation();
-    const beforeRestart = createPostgresDatabase(connectionString);
+    const isolatedConnection = new URL(connectionString);
+    isolatedConnection.searchParams.set(
+      "options",
+      `-c search_path=${writeJournalSchema}`,
+    );
+    const beforeRestart = createPostgresDatabase(isolatedConnection.toString());
     try {
       await beforeRestart.journal.enqueue(input);
     } finally {
       await beforeRestart.close();
     }
 
-    const afterRestart = createPostgresDatabase(connectionString);
+    const afterRestart = createPostgresDatabase(isolatedConnection.toString());
     try {
       await expect(
         afterRestart.journal.get(input.operationId),

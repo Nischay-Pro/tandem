@@ -137,6 +137,8 @@ describe.skipIf(!compatibilityTestEnabled)(
       const transactionNotes = "Synthetic compatibility transaction";
       const transactionDate = "2026-10-31";
       const transactionStore = createActualTransactionStore();
+      let categoryId = "";
+      let hiddenCategoryId = "";
       let transferAccountId = "";
 
       try {
@@ -174,6 +176,25 @@ describe.skipIf(!compatibilityTestEnabled)(
           throw new Error("Actual did not publish the synthetic test budget");
         }
 
+        await firstDevice.runBudget(
+          budget.groupId,
+          async () => {
+            const categoryGroupId = await Actual.createCategoryGroup({
+              name: "ABC synthetic category group",
+            });
+            categoryId = await Actual.createCategory({
+              name: "ABC synthetic category",
+              group_id: categoryGroupId,
+            });
+            hiddenCategoryId = await Actual.createCategory({
+              name: "ABC synthetic hidden category",
+              group_id: categoryGroupId,
+              hidden: true,
+            });
+          },
+          { synchronizeAfterWrite: true },
+        );
+
         const initialData = await firstDevice.runBudget(
           budget.groupId,
           async () => {
@@ -202,6 +223,13 @@ describe.skipIf(!compatibilityTestEnabled)(
         if (!transaction) {
           throw new Error("Actual did not return the synthetic transaction");
         }
+
+        await firstDevice.runBudget(
+          budget.groupId,
+          () =>
+            Actual.updateTransaction(transaction.id, { category: categoryId }),
+          { synchronizeAfterWrite: true },
+        );
 
         const transactionByAql = await firstDevice.runBudget(
           budget.groupId,
@@ -504,6 +532,72 @@ describe.skipIf(!compatibilityTestEnabled)(
           amount: -1200,
           notes: "Updated through Actual web interface",
         });
+        const runtimeSnapshotResponse = await productionApp.inject({
+          method: "GET",
+          url: `/api/v1/budgets/${budget.groupId}/snapshot`,
+          headers: runtimeAuthorizationHeaders,
+        });
+        expect(runtimeSnapshotResponse.statusCode).toBe(200);
+        const runtimeSnapshot = runtimeSnapshotResponse.json() as {
+          generation: string;
+          cursor: string;
+          records: Array<{
+            type: string;
+            id: string;
+            body: Record<string, unknown>;
+          }>;
+        };
+        expect(runtimeSnapshot.generation).toMatch(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+        );
+        const findRuntimeRecord = (type: string, id?: string) =>
+          runtimeSnapshot.records.find(
+            (record) =>
+              record.type === type && (id === undefined || record.id === id),
+          );
+        const runtimeAccount = findRuntimeRecord(
+          "account",
+          initialData.accountId,
+        );
+        expect(typeof runtimeAccount?.body.balance_current).toBe("number");
+        expect(findRuntimeRecord("category", categoryId)).toBeDefined();
+        expect(findRuntimeRecord("category", hiddenCategoryId)).toBeDefined();
+        expect(findRuntimeRecord("category-group")).toBeDefined();
+        expect(findRuntimeRecord("payee", transferPayeeId)).toBeDefined();
+        expect(typeof findRuntimeRecord("budget-month")?.body.month).toBe(
+          "string",
+        );
+        expect(findRuntimeRecord("transaction", transaction.id)).toBeDefined();
+        expect(findRuntimeRecord("transaction", splitChild.id)).toBeDefined();
+        expect(
+          findRuntimeRecord("transaction", transferLegs.outgoing?.id),
+        ).toBeDefined();
+        const firstChangePageResponse = await productionApp.inject({
+          method: "GET",
+          url: `/api/v1/budgets/${budget.groupId}/changes?generation=${runtimeSnapshot.generation}&cursor=0&limit=2`,
+          headers: runtimeAuthorizationHeaders,
+        });
+        expect(firstChangePageResponse.statusCode).toBe(200);
+        const firstChangePage = firstChangePageResponse.json() as {
+          throughCursor: string;
+          nextCursor: string;
+          hasMore: boolean;
+          resetRequired: boolean;
+          changes: unknown[];
+        };
+        expect(firstChangePage).toMatchObject({
+          throughCursor: runtimeSnapshot.cursor,
+          hasMore: true,
+          resetRequired: false,
+        });
+        expect(firstChangePage.changes).toHaveLength(2);
+        const nextChangePageResponse = await productionApp.inject({
+          method: "GET",
+          url: `/api/v1/budgets/${budget.groupId}/changes?generation=${runtimeSnapshot.generation}&cursor=${firstChangePage.nextCursor}&throughCursor=${firstChangePage.throughCursor}&limit=2`,
+          headers: runtimeAuthorizationHeaders,
+        });
+        expect(nextChangePageResponse.statusCode).toBe(200);
+        expect(nextChangePageResponse.json().resetRequired).toBe(false);
         await signalHandlers.get("SIGTERM")?.();
 
         const secondDataDir = path.join(firstDataDir, "device-two");

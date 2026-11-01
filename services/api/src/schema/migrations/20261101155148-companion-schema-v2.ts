@@ -64,9 +64,52 @@ export async function up(client: PoolClient): Promise<void> {
     CHECK ((resolution_state = 'unresolved' AND resolution IS NULL AND resolved_at IS NULL)
       OR (resolution_state = 'resolved' AND resolution IS NOT NULL AND resolved_at IS NOT NULL))
   )`);
+  await client.query(`CREATE TABLE companion_budget_sync_state (
+    budget_id text PRIMARY KEY CHECK (length(budget_id) BETWEEN 1 AND 500),
+    generation uuid NOT NULL,
+    feed_epoch text NOT NULL CHECK (length(feed_epoch) BETWEEN 1 AND 100),
+    cursor bigint NOT NULL DEFAULT 0 CHECK (cursor >= 0),
+    refreshed_at timestamptz NOT NULL DEFAULT clock_timestamp()
+  )`);
+  await client.query(`CREATE TABLE companion_budget_records (
+    budget_id text NOT NULL REFERENCES companion_budget_sync_state(budget_id) ON DELETE CASCADE,
+    entity_type text NOT NULL CHECK (entity_type IN (
+      'account', 'account-group', 'category', 'category-group',
+      'payee', 'transaction', 'budget-month'
+    )),
+    entity_id text NOT NULL CHECK (length(entity_id) BETWEEN 1 AND 500),
+    revision char(64) NOT NULL CHECK (revision ~ '^[a-f0-9]{64}$'),
+    body jsonb,
+    is_deleted boolean NOT NULL DEFAULT false,
+    updated_cursor bigint NOT NULL CHECK (updated_cursor >= 0),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    PRIMARY KEY (budget_id, entity_type, entity_id),
+    CHECK ((is_deleted AND body IS NULL)
+      OR (NOT is_deleted AND body IS NOT NULL AND jsonb_typeof(body) = 'object'))
+  )`);
+  await client.query(`CREATE TABLE companion_budget_changes (
+    budget_id text NOT NULL REFERENCES companion_budget_sync_state(budget_id) ON DELETE CASCADE,
+    cursor bigint NOT NULL CHECK (cursor > 0),
+    entity_type text NOT NULL CHECK (entity_type IN (
+      'account', 'account-group', 'category', 'category-group',
+      'payee', 'transaction', 'budget-month'
+    )),
+    entity_id text NOT NULL CHECK (length(entity_id) BETWEEN 1 AND 500),
+    operation text NOT NULL CHECK (operation IN ('upsert', 'delete')),
+    revision char(64) NOT NULL CHECK (revision ~ '^[a-f0-9]{64}$'),
+    body jsonb,
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    PRIMARY KEY (budget_id, cursor),
+    CHECK ((operation = 'delete' AND body IS NULL)
+      OR (operation = 'upsert' AND body IS NOT NULL AND jsonb_typeof(body) = 'object'))
+  )`);
 }
 
 export async function down(client: PoolClient): Promise<void> {
+  await client.query("DROP TABLE companion_budget_changes");
+  await client.query("DROP TABLE companion_budget_records");
+  await client.query("DROP TABLE companion_budget_sync_state");
   await client.query("DROP TABLE companion_operation_conflicts");
   await client.query("DROP TABLE companion_operations");
   await client.query("DROP TABLE companion_devices");

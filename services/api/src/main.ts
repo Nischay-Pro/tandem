@@ -8,6 +8,8 @@ import { ActualSession } from "./actual/actual-session.js";
 import { createTransactionApi } from "./actual/transaction-api.js";
 import { TransactionReconciler } from "./actual/transaction-reconciler.js";
 import { createActualTransactionStore } from "./actual/transaction-store.js";
+import { ActualBudgetSnapshotReader } from "./actual/budget-snapshot-reader.js";
+import { BudgetReadApi } from "./budget-projection/budget-read-api.js";
 
 export async function runApi(
   environment: Environment,
@@ -16,19 +18,30 @@ export async function runApi(
 ) {
   const config = parseApiConfig(environment);
   const database = createDatabase(config.databaseUrl);
-  const runtime = createActualRuntime(config.actual, database);
+  const runtime = createActualRuntime(
+    config.actual,
+    database,
+    config.changeFeedEpoch,
+  );
   return startApiServer(config, database, registerSignalHandler, runtime);
 }
 
 function createActualRuntime(
   actualConfig: ApiConfig["actual"],
   database: Database,
+  changeFeedEpoch: string,
 ): ApiRuntime {
   if (!actualConfig) {
     return {};
   }
   const session = new ActualSession(actualApi, actualConfig);
   const transactions = createActualTransactionStore();
+  const budgetReadApi = new BudgetReadApi(
+    database,
+    new ActualBudgetSnapshotReader(session),
+    database.budgetProjection,
+    changeFeedEpoch,
+  );
   const reconciler = new TransactionReconciler(
     database,
     database.journal,
@@ -42,6 +55,7 @@ function createActualRuntime(
       reconciler,
       database.journal,
     ),
+    budgetReadApi,
     start: () => session.start(),
     close: () => session.close(),
   };

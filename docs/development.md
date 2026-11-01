@@ -40,6 +40,10 @@ data. The server password stays in the API container. Encrypted budgets may
 send their separate budget password per request in
 `X-Budget-Encryption-Password`; that value is never written to PostgreSQL.
 Treat the workspace, PostgreSQL data, and their backups as financial data.
+Keep `CHANGE_FEED_EPOCH` stable during normal restarts. After restoring an older
+PostgreSQL backup, change it to a new value before starting the API. This
+invalidates prior mobile cursors and makes devices download a fresh server
+snapshot; the epoch must be backed up separately from PostgreSQL.
 
 ## Code quality
 

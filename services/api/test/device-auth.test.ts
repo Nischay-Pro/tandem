@@ -52,6 +52,12 @@ function createStore(overrides: Partial<DeviceAuthStore> = {}) {
 }
 
 describe("device authorization", () => {
+  it("keeps a stable name on authorization input errors", () => {
+    expect(new DeviceAuthInputError("synthetic invalid input").name).toBe(
+      "DeviceAuthInputError",
+    );
+  });
+
   it("counts Unicode code points at the principal, budget, and device-name limits", async () => {
     const { store, pairingCodes } = createStore({
       consumePairingCode: vi.fn(async ({ deviceName }) =>

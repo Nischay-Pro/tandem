@@ -22,6 +22,8 @@ definitions and is part of `pnpm check:all`.
 | `GET`    | `/api/v1/auth/me`                                                    | Return the authenticated device and its budget scope.          |
 | `GET`    | `/api/v1/devices`                                                    | List devices paired to the same principal.                     |
 | `DELETE` | `/api/v1/devices/{deviceId}`                                         | Revoke a paired device token.                                  |
+| `GET`    | `/api/v1/budgets/{budgetId}/snapshot`                                | Refresh and read a complete budget snapshot.                   |
+| `GET`    | `/api/v1/budgets/{budgetId}/changes`                                 | Read generation-aware pages of budget changes.                 |
 | `GET`    | `/api/v1/budgets/{budgetId}/transactions/{transactionId}`            | Read a transaction snapshot and revision.                      |
 | `POST`   | `/api/v1/budgets/{budgetId}/transactions/{transactionId}/operations` | Submit an idempotent update or deletion.                       |
 | `GET`    | `/api/v1/operations/{operationId}`                                   | Read operation status and conflict details.                    |
@@ -75,6 +77,54 @@ on persistent storage. This workspace belongs to the official Node.js API and
 can contain decrypted budget data; protect it and its backups as financial data.
 The server password authenticates the Companion service to Actual. It is never
 sent to mobile devices.
+
+The budget snapshot and change endpoints use the same device scope and may also
+receive `X-Budget-Encryption-Password` for an encrypted budget. Actual's public
+API has no incremental change feed, so each complete snapshot and each new
+changes poll asks the pinned Actual API to download the budget, reads supported
+Actual API entities, and diffs them into PostgreSQL. A request that continues a
+page with `throughCursor` reads the already-materialized change rows and does
+not start another Actual download.
+
+`GET /api/v1/budgets/{budgetId}/snapshot` returns a complete set of records with
+their type, stable Actual ID (or month string), JSON body, and SHA-256 revision,
+along with a generation and decimal-string cursor. It includes accounts and
+current balances, account groups, hidden and visible categories and category
+groups, payees, budget-month totals and category allocations, and transactions
+including split children and transfer links. Internal raw bank-import payloads
+are omitted from transaction records. The response is `Cache-Control: no-store`.
+
+Start a change poll with
+`GET /api/v1/budgets/{budgetId}/changes?generation=<generation>&cursor=<cursor>`.
+The default page size is 100; `limit` accepts 1 through 500. The response gives
+`throughCursor`, a high-water mark fixed for that pagination run, `nextCursor`,
+and `hasMore`. While `hasMore` is true, request the next page with the same
+generation and `throughCursor`, and set `cursor` to `nextCursor`. Once the page
+is complete, omit `throughCursor` on the next poll so the API refreshes Actual
+again. Upserts carry the full current record body; deletions carry a tombstone
+with a null body.
+
+If `resetRequired` is true, or the returned generation differs from the local
+generation, discard the local remote-data baseline and fetch a complete
+snapshot. This also applies when the requested cursor is ahead of the server or
+its change history has expired. The server retains the newest 100,000 change
+events per budget; older mobile cursors get a reset instead of a partial feed.
+Local pending mobile operations must remain in the outbox while a remote
+snapshot is replaced.
+
+Set `CHANGE_FEED_EPOCH` to a stable installation value. When restoring an older
+PostgreSQL backup, rotate this value before starting the restored service; the
+next refresh creates new generations and forces clients to fetch snapshots.
+Keep the epoch outside the PostgreSQL backup. A restored database cannot infer
+that it has been rewound if both its records and change history are restored to
+an earlier point and the configured epoch is left unchanged.
+
+These endpoints return the state in the Actual copy downloaded for that
+request. Actual offers no public revision-conditional reads or incremental
+feed, so a change made through another Actual client after the download is
+visible on the next refresh. Refresh failures return a structured `502` and do
+not advance the Companion cursor. PostgreSQL stores a plaintext projection of
+budget data; protect its volume and backups as financial data.
 
 Use `GET /api/v1/budgets/{budgetId}/transactions/{transactionId}` to obtain the
 canonical transaction snapshot and its SHA-256 `revision`. Include

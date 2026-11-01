@@ -7,6 +7,7 @@ export interface ApiConfig {
   host: string;
   port: number;
   trustProxy: false | string[];
+  changeFeedEpoch: string;
   actual?: Extract<ActualConnectionConfig, { password: string }>;
 }
 
@@ -44,6 +45,10 @@ export function parseApiConfig(environment: Environment): ApiConfig {
   const trustedProxyAddresses = parseTrustedProxyAddresses(
     environment.TRUST_PROXY,
   );
+  const changeFeedEpoch = environment.CHANGE_FEED_EPOCH?.trim() || "default";
+  if (!/^[A-Za-z0-9._:-]{1,100}$/.test(changeFeedEpoch)) {
+    throw new Error("CHANGE_FEED_EPOCH must contain 1 to 100 safe characters");
+  }
   const actual = parseActualConnection(environment);
 
   return {
@@ -51,6 +56,7 @@ export function parseApiConfig(environment: Environment): ApiConfig {
     host,
     port,
     trustProxy: trustedProxyAddresses,
+    changeFeedEpoch,
     ...(actual === undefined ? {} : { actual }),
   };
 }
