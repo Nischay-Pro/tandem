@@ -6,6 +6,11 @@ The generated OpenAPI 3.1 document is served from the running API at:
 
 - `GET /api/v1/openapi.json` — generated OpenAPI document.
 
+The canonical versioned contract is checked in at `docs/api/openapi-v1.json`.
+After changing route schemas, regenerate it with `pnpm api:openapi:generate`;
+`pnpm api:openapi:check` compares the checked-in file with the running route
+definitions and is part of `pnpm check:all`.
+
 ## Implemented endpoints
 
 | Method   | Path                                                                 | Purpose                                                        |
