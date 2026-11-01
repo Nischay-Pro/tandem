@@ -1,0 +1,38 @@
+# JavaScript / TypeScript
+node_modules/
+.pnpm-store/
+dist/
+coverage/
+.turbo/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Deliberately local-only scratch space for development and disposable data
+/.dev-tmp/
+/WORKTRACK.md
+/docs/architecture/decisions.md
+
+# Kotlin / Android / Gradle
+.gradle/
+.kotlin/
+**/build/
+local.properties
+*.iml
+.idea/
+
+# Apple builds
+DerivedData/
+**/Pods/
+*.xcuserstate
+xcuserdata/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
