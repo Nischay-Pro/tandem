@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 rootProject.name = "actual-budget-companion-mobile"
 
 include(":api-client")
+include(":data")

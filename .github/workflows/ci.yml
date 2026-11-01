@@ -41,7 +41,7 @@ jobs:
           accept-android-sdk-licenses: true
           log-accepted-android-sdk-licenses: false
 
-      - name: Compile Android, JVM, and iOS targets; run client tests and lint
+      - name: Compile and test Android, JVM, and iOS data and client targets
         working-directory: mobile
         run: >-
           ./gradlew --no-daemon
@@ -52,6 +52,26 @@ jobs:
           :api-client:jvmTest
           :api-client:koverVerify
           :api-client:ktlintCheck
+          :data:compileAndroidMain
+          :data:compileAndroidDeviceTest
+          :data:compileCommonMainKotlinMetadata
+          :data:compileKotlinJvm
+          :data:compileKotlinIosArm64
+          :data:compileKotlinIosSimulatorArm64
+          :data:jvmTest
+          :data:testAndroidHostTest
+          :data:iosSimulatorArm64Test
+          :data:koverVerify
+          :data:ktlintCheck
+
+      - name: Run Android database persistence test on emulator
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          working-directory: mobile
+          script: ./gradlew --no-daemon :data:connectedAndroidDeviceTest
 
   quality:
     name: API quality gate

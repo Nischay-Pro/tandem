@@ -1,0 +1,102 @@
+import org.gradle.api.tasks.testing.Test
+
+plugins {
+  alias(libs.plugins.kotlinMultiplatform)
+  alias(libs.plugins.androidKmpLibrary)
+  alias(libs.plugins.ksp)
+  alias(libs.plugins.room3)
+  alias(libs.plugins.ktlint)
+  alias(libs.plugins.kover)
+}
+
+kotlin {
+  jvm()
+  android {
+    namespace = "org.actualbudget.companion.data"
+    compileSdk = 36
+    minSdk = 26
+
+    withHostTest {
+      isIncludeAndroidResources = true
+    }
+    withDeviceTest {
+      instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+      execution = "HOST"
+    }
+  }
+  iosArm64()
+  iosSimulatorArm64()
+
+  sourceSets {
+    commonMain.dependencies {
+      implementation(libs.room3Runtime)
+      implementation(libs.sqliteBundled)
+      implementation(libs.coroutinesCore)
+      implementation(libs.serializationJson)
+    }
+    commonTest.dependencies {
+      implementation(kotlin("test"))
+    }
+    getByName("androidHostTest") {
+      dependencies {
+        implementation(kotlin("test"))
+        implementation(libs.robolectric)
+      }
+    }
+    getByName("androidDeviceTest") {
+      dependencies {
+        implementation(kotlin("test"))
+        implementation(libs.androidxTestRunner)
+        implementation(libs.androidxTestExtJunit)
+      }
+    }
+    getByName("iosSimulatorArm64Test") {
+      dependencies {
+        implementation(kotlin("test"))
+      }
+    }
+    jvmTest.dependencies {
+      implementation(kotlin("test"))
+    }
+  }
+}
+
+dependencies {
+  add("kspAndroid", libs.room3Compiler)
+  add("kspJvm", libs.room3Compiler)
+  add("kspIosArm64", libs.room3Compiler)
+  add("kspIosSimulatorArm64", libs.room3Compiler)
+}
+
+room3 {
+  schemaDirectory("$projectDir/schemas")
+}
+
+ktlint {
+  filter {
+    exclude { element -> element.file.path.contains("/build/generated/") }
+  }
+}
+
+kover {
+  reports {
+    filters {
+      excludes {
+        classes(
+          "org.actualbudget.companion.data.database.*_Impl*",
+          "org.actualbudget.companion.data.database.CompanionDatabaseConstructor*",
+          "org.actualbudget.companion.data.store.LocalBudgetRepository$*",
+        )
+      }
+    }
+    verify {
+      rule {
+        minBound(100)
+      }
+    }
+  }
+}
+
+tasks.withType<Test>().configureEach {
+  jvmArgs("--add-opens=java.base/jdk.internal.access=ALL-UNNAMED")
+}

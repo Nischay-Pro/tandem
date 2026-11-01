@@ -1,0 +1,370 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "113529a6d41fd2cc3cd77aa681e2e8a9",
+    "entities": [
+      {
+        "tableName": "budget_records",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`budgetId` TEXT NOT NULL, `recordType` TEXT NOT NULL, `recordId` TEXT NOT NULL, `remoteJson` TEXT, `remoteRevision` TEXT, `localJson` TEXT, `localDeleted` INTEGER NOT NULL, `remoteDeleted` INTEGER NOT NULL, `syncGeneration` TEXT NOT NULL, `recordDate` TEXT, `accountId` TEXT, `categoryId` TEXT, `payeeId` TEXT, `amountMinor` INTEGER, `budgetMonth` TEXT, PRIMARY KEY(`budgetId`, `recordType`, `recordId`))",
+        "fields": [
+          {
+            "fieldPath": "budgetId",
+            "columnName": "budgetId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordType",
+            "columnName": "recordType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordId",
+            "columnName": "recordId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "remoteJson",
+            "columnName": "remoteJson",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "remoteRevision",
+            "columnName": "remoteRevision",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "localJson",
+            "columnName": "localJson",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "localDeleted",
+            "columnName": "localDeleted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "remoteDeleted",
+            "columnName": "remoteDeleted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncGeneration",
+            "columnName": "syncGeneration",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordDate",
+            "columnName": "recordDate",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "accountId",
+            "columnName": "accountId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "categoryId",
+            "columnName": "categoryId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "payeeId",
+            "columnName": "payeeId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "amountMinor",
+            "columnName": "amountMinor",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "budgetMonth",
+            "columnName": "budgetMonth",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "budgetId",
+            "recordType",
+            "recordId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_budget_records_budgetId_recordType_accountId_recordDate",
+            "unique": false,
+            "columnNames": [
+              "budgetId",
+              "recordType",
+              "accountId",
+              "recordDate"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_budget_records_budgetId_recordType_accountId_recordDate` ON `${TABLE_NAME}` (`budgetId`, `recordType`, `accountId`, `recordDate`)"
+          },
+          {
+            "name": "index_budget_records_budgetId_recordType_categoryId_recordDate",
+            "unique": false,
+            "columnNames": [
+              "budgetId",
+              "recordType",
+              "categoryId",
+              "recordDate"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_budget_records_budgetId_recordType_categoryId_recordDate` ON `${TABLE_NAME}` (`budgetId`, `recordType`, `categoryId`, `recordDate`)"
+          },
+          {
+            "name": "index_budget_records_budgetId_syncGeneration",
+            "unique": false,
+            "columnNames": [
+              "budgetId",
+              "syncGeneration"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_budget_records_budgetId_syncGeneration` ON `${TABLE_NAME}` (`budgetId`, `syncGeneration`)"
+          }
+        ]
+      },
+      {
+        "tableName": "budget_sync_state",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`budgetId` TEXT NOT NULL, `generation` TEXT NOT NULL, `cursor` TEXT, `status` TEXT NOT NULL, `lastAttemptAtEpochMs` INTEGER, `lastSyncedAtEpochMs` INTEGER, `lastErrorCode` TEXT, PRIMARY KEY(`budgetId`))",
+        "fields": [
+          {
+            "fieldPath": "budgetId",
+            "columnName": "budgetId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "generation",
+            "columnName": "generation",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cursor",
+            "columnName": "cursor",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastAttemptAtEpochMs",
+            "columnName": "lastAttemptAtEpochMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastSyncedAtEpochMs",
+            "columnName": "lastSyncedAtEpochMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastErrorCode",
+            "columnName": "lastErrorCode",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "budgetId"
+          ]
+        }
+      },
+      {
+        "tableName": "sync_outbox",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`operationId` TEXT NOT NULL, `idempotencyKey` TEXT NOT NULL, `budgetId` TEXT NOT NULL, `recordType` TEXT NOT NULL, `recordId` TEXT NOT NULL, `action` TEXT NOT NULL, `baseRevision` TEXT, `baseSnapshotJson` TEXT, `patchJson` TEXT NOT NULL, `optimisticJson` TEXT, `optimisticRecordDate` TEXT, `optimisticAccountId` TEXT, `optimisticCategoryId` TEXT, `optimisticPayeeId` TEXT, `optimisticAmountMinor` INTEGER, `optimisticBudgetMonth` TEXT, `status` TEXT NOT NULL, `attemptCount` INTEGER NOT NULL, `serverOperationId` TEXT, `lastErrorCode` TEXT, `createdAtEpochMs` INTEGER NOT NULL, `updatedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`operationId`))",
+        "fields": [
+          {
+            "fieldPath": "operationId",
+            "columnName": "operationId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "idempotencyKey",
+            "columnName": "idempotencyKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "budgetId",
+            "columnName": "budgetId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordType",
+            "columnName": "recordType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordId",
+            "columnName": "recordId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "action",
+            "columnName": "action",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "baseRevision",
+            "columnName": "baseRevision",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "baseSnapshotJson",
+            "columnName": "baseSnapshotJson",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "patchJson",
+            "columnName": "patchJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "optimisticJson",
+            "columnName": "optimisticJson",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "optimisticRecordDate",
+            "columnName": "optimisticRecordDate",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "optimisticAccountId",
+            "columnName": "optimisticAccountId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "optimisticCategoryId",
+            "columnName": "optimisticCategoryId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "optimisticPayeeId",
+            "columnName": "optimisticPayeeId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "optimisticAmountMinor",
+            "columnName": "optimisticAmountMinor",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "optimisticBudgetMonth",
+            "columnName": "optimisticBudgetMonth",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attemptCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "serverOperationId",
+            "columnName": "serverOperationId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastErrorCode",
+            "columnName": "lastErrorCode",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAtEpochMs",
+            "columnName": "createdAtEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtEpochMs",
+            "columnName": "updatedAtEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "operationId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_sync_outbox_idempotencyKey",
+            "unique": true,
+            "columnNames": [
+              "idempotencyKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_sync_outbox_idempotencyKey` ON `${TABLE_NAME}` (`idempotencyKey`)"
+          },
+          {
+            "name": "index_sync_outbox_budgetId_status_createdAtEpochMs",
+            "unique": false,
+            "columnNames": [
+              "budgetId",
+              "status",
+              "createdAtEpochMs"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_sync_outbox_budgetId_status_createdAtEpochMs` ON `${TABLE_NAME}` (`budgetId`, `status`, `createdAtEpochMs`)"
+          },
+          {
+            "name": "index_sync_outbox_budgetId_recordType_recordId_status",
+            "unique": false,
+            "columnNames": [
+              "budgetId",
+              "recordType",
+              "recordId",
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_sync_outbox_budgetId_recordType_recordId_status` ON `${TABLE_NAME}` (`budgetId`, `recordType`, `recordId`, `status`)"
+          },
+          {
+            "name": "index_sync_outbox_serverOperationId",
+            "unique": true,
+            "columnNames": [
+              "serverOperationId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_sync_outbox_serverOperationId` ON `${TABLE_NAME}` (`serverOperationId`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '113529a6d41fd2cc3cd77aa681e2e8a9')"
+    ]
+  }
+}
