@@ -36,3 +36,7 @@ xcuserdata/
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Process core dumps can contain credentials and financial data
+core
+core.*

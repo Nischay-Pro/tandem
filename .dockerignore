@@ -1,5 +1,7 @@
 .git
 .dev-tmp
+core
+core.*
 /WORKTRACK.md
 /docs/architecture/decisions.md
 node_modules
