@@ -6,6 +6,12 @@ as part of Gradle compilation; generated sources stay under `mobile/api-client/b
 and are not committed. The OpenAPI drift check remains the source-of-truth gate
 for route changes.
 
+The module also contains `GeneratedBudgetSyncRemote`, the handwritten adapter
+between generated endpoint calls and the shared data module's sync protocol.
+The persistence and sync lifecycle are documented in
+[`docs/mobile-sync.md`](mobile-sync.md). This module is a client library; it
+does not yet contain an Android application or user interface.
+
 The module targets Android (minSdk 26, compileSdk 36) and iOS (device ARM64 and
 Apple Silicon simulator). The pinned generator's stable companion artifact does
 not publish an Intel iOS simulator variant, so the client does not declare that
@@ -36,7 +42,9 @@ them as one tested toolchain change, and keep release candidates out of CI.
 From `mobile/`:
 
 ```sh
-./gradlew :api-client:compileAndroidMain :api-client:compileCommonMainKotlinMetadata :api-client:jvmTest :api-client:koverVerify :api-client:ktlintCheck
+./gradlew :data:jvmTest :data:koverVerify :data:ktlintCheck \
+  :api-client:compileAndroidMain :api-client:compileCommonMainKotlinMetadata \
+  :api-client:jvmTest :api-client:koverVerify :api-client:ktlintCheck
 ```
 
 This verifies parsing the OpenAPI 3.1 contract, generated client code, Android,

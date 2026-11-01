@@ -1,0 +1,91 @@
+package org.actualbudget.companion.data.store
+
+import org.actualbudget.companion.data.database.OutboxOperationEntity
+
+data class RemoteBudgetSnapshot(
+    val budgetId: String,
+    val generation: String,
+    val cursor: String,
+    val records: List<RemoteBudgetRecord>,
+)
+
+data class RemoteBudgetChangePage(
+    val budgetId: String,
+    val generation: String,
+    val currentCursor: String,
+    val throughCursor: String,
+    val nextCursor: String,
+    val hasMore: Boolean,
+    val resetRequired: Boolean,
+    val changes: List<BudgetChange>,
+)
+
+data class RemoteTransactionRecord(
+    val transactionId: String,
+    val revision: String,
+    val bodyJson: String,
+    val projection: LocalRecordProjection,
+)
+
+enum class RemoteOperationStatus {
+    QUEUED,
+    APPLYING,
+    COMMITTED,
+    CONFLICT,
+    UNCERTAIN,
+    REJECTED,
+}
+
+data class RemoteOperationResult(
+    val operationId: String,
+    val budgetId: String,
+    val transactionId: String,
+    val status: RemoteOperationStatus,
+    val errorCode: String?,
+)
+
+interface BudgetSyncRemote {
+    suspend fun readSnapshot(
+        budgetId: String,
+        encryptionPassword: String?,
+    ): RemoteBudgetSnapshot
+
+    suspend fun readChanges(
+        budgetId: String,
+        generation: String,
+        cursor: String,
+        throughCursor: String?,
+        encryptionPassword: String?,
+    ): RemoteBudgetChangePage
+
+    suspend fun submitOperation(
+        operation: OutboxOperationEntity,
+        encryptionPassword: String?,
+    ): RemoteOperationResult
+
+    suspend fun readOperation(operationId: String): RemoteOperationResult
+
+    /** Returns null only for an authoritative HTTP 404 response. */
+    suspend fun readTransaction(
+        budgetId: String,
+        transactionId: String,
+        encryptionPassword: String?,
+    ): RemoteTransactionRecord?
+}
+
+class BudgetSyncRemoteException(
+    val errorCode: String,
+    val httpStatus: Int? = null,
+    cause: Throwable? = null,
+) : Exception(errorCode, cause) {
+    val isDefinitiveClientError: Boolean
+        get() = httpStatus != null && httpStatus in setOf(400, 409, 422)
+
+    val isRetryableBeforeSubmission: Boolean
+        get() = httpStatus != null && httpStatus in setOf(401, 403, 404)
+}
+
+class BudgetSyncProtocolException(
+    message: String,
+    cause: Throwable? = null,
+) : Exception(message, cause)

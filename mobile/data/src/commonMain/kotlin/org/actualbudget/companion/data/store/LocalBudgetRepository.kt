@@ -5,7 +5,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.longOrNull
 import org.actualbudget.companion.data.database.BudgetRecordEntity
 import org.actualbudget.companion.data.database.BudgetSyncStateEntity
 import org.actualbudget.companion.data.database.CompanionDatabase
@@ -24,6 +26,8 @@ enum class LocalWriteStatus {
     CONFLICT,
     COMMITTED,
     REJECTED,
+    SUPERSEDED,
+    DISCARDED,
 }
 
 enum class BudgetSyncStatus {
@@ -332,7 +336,13 @@ class LocalBudgetRepository(
             validateWriteBase(request, current)
             val unsent = outbox.findUnsentForRecord(request.budgetId, request.recordType, request.recordId)
             val blocker = outbox.findBlockingForRecord(request.budgetId, request.recordType, request.recordId)
-            if (blocker != null && blocker.operationId != unsent?.operationId) {
+            val resolvedConflict =
+                blocker?.takeIf {
+                    it.status == LocalWriteStatus.CONFLICT.name.lowercase() &&
+                        it.operationId != unsent?.operationId &&
+                        request.action != LocalWriteAction.CREATE
+                }
+            if (blocker != null && blocker.operationId != unsent?.operationId && resolvedConflict == null) {
                 throw LocalOperationConflictException()
             }
             if (unsent != null && !sameBase(unsent, request)) {
@@ -343,26 +353,95 @@ class LocalBudgetRepository(
             if (unsent != null) {
                 outbox.deleteUnsent(unsent.operationId)
             }
+            resolvedConflict?.let {
+                outbox.put(
+                    it.copy(
+                        status = LocalWriteStatus.SUPERSEDED.name.lowercase(),
+                        lastErrorCode = "superseded-by-resolution",
+                        updatedAtEpochMs = now(),
+                    ),
+                )
+            }
             outbox.insert(operation)
             applyLocalOverlay(records, current, request)
             EnqueuedLocalWrite(operation, replayed = false, replacedUnsent = unsent != null)
         }
     }
 
-    suspend fun claimNextWrite(): OutboxOperationEntity? =
-        database.withWriteTransaction {
+    suspend fun claimNextWrite(budgetId: String): OutboxOperationEntity? {
+        requireIdentifier(budgetId, "budgetId")
+        return database.withWriteTransaction {
             val outbox = database.outboxDao()
-            val next = outbox.findNextQueued() ?: return@withWriteTransaction null
+            val next = outbox.findNextQueued(budgetId) ?: return@withWriteTransaction null
             val claimTime = now()
             if (outbox.markSending(next.operationId, claimTime) != 1) {
                 return@withWriteTransaction null
             }
             outbox.find(next.operationId)
         }
+    }
 
     suspend fun recoverInterruptedWrites(): Int =
         database.withWriteTransaction {
             database.outboxDao().markInterruptedSendsUncertain(now())
+        }
+
+    suspend fun returnWriteToQueue(
+        operationId: String,
+        errorCode: String,
+    ): OutboxOperationEntity =
+        database.withWriteTransaction {
+            requireIdentifier(errorCode, "errorCode")
+            val outbox = database.outboxDao()
+            val operation = outbox.find(operationId) ?: throw NoSuchElementException("Local write not found")
+            if (operation.status != LocalWriteStatus.SENDING.name.lowercase()) {
+                throw InvalidLocalWriteException("Only a sending write can be returned to the queue")
+            }
+            val queued =
+                operation.copy(
+                    status = LocalWriteStatus.QUEUED.name.lowercase(),
+                    lastErrorCode = errorCode,
+                    updatedAtEpochMs = now(),
+                )
+            outbox.put(queued)
+            queued
+        }
+
+    suspend fun retryUncertainWrite(operationId: String): OutboxOperationEntity =
+        database.withWriteTransaction {
+            val outbox = database.outboxDao()
+            val operation = outbox.find(operationId) ?: throw NoSuchElementException("Local write not found")
+            if (operation.status != LocalWriteStatus.UNCERTAIN.name.lowercase()) {
+                throw InvalidLocalWriteException("Only an uncertain write can be explicitly retried")
+            }
+            val queued =
+                operation.copy(
+                    status = LocalWriteStatus.QUEUED.name.lowercase(),
+                    lastErrorCode = null,
+                    updatedAtEpochMs = now(),
+                )
+            outbox.put(queued)
+            queued
+        }
+
+    suspend fun discardWrite(operationId: String): OutboxOperationEntity =
+        database.withWriteTransaction {
+            val outbox = database.outboxDao()
+            val operation = outbox.find(operationId) ?: throw NoSuchElementException("Local write not found")
+            if (operation.status !in setOf("queued", "uncertain", "conflict", "rejected")) {
+                throw InvalidLocalWriteException("This write is not in a discardable state")
+            }
+            val discarded =
+                operation.copy(
+                    status = LocalWriteStatus.DISCARDED.name.lowercase(),
+                    lastErrorCode = "discarded-by-user",
+                    updatedAtEpochMs = now(),
+                )
+            outbox.put(discarded)
+            if (outbox.findBlockingForRecord(operation.budgetId, operation.recordType, operation.recordId) == null) {
+                restoreRemoteOverlay(operation)
+            }
+            discarded
         }
 
     suspend fun markWriteUncertain(
@@ -373,7 +452,22 @@ class LocalBudgetRepository(
     suspend fun markWriteRejected(
         operationId: String,
         errorCode: String,
-    ): OutboxOperationEntity = updateOperationStatus(operationId, LocalWriteStatus.REJECTED, errorCode)
+    ): OutboxOperationEntity =
+        database.withWriteTransaction {
+            requireIdentifier(errorCode, "errorCode")
+            val outbox = database.outboxDao()
+            val operation = outbox.find(operationId) ?: throw NoSuchElementException("Local write not found")
+            requireInFlight(operation)
+            val rejected =
+                operation.copy(
+                    status = LocalWriteStatus.REJECTED.name.lowercase(),
+                    lastErrorCode = errorCode,
+                    updatedAtEpochMs = now(),
+                )
+            outbox.put(rejected)
+            restoreRemoteOverlay(operation)
+            rejected
+        }
 
     suspend fun markWriteConflict(
         operationId: String,
@@ -485,6 +579,49 @@ class LocalBudgetRepository(
                 )
             outbox.put(updated)
             updated
+        }
+
+    private suspend fun restoreRemoteOverlay(operation: OutboxOperationEntity) {
+        val records = database.budgetRecordDao()
+        val current = records.find(operation.budgetId, operation.recordType, operation.recordId) ?: return
+        val projection =
+            if (current.remoteDeleted) {
+                null
+            } else {
+                current.remoteJson?.let { Json.parseToJsonElement(it).jsonObject.toProjection() }
+            }
+        records.put(
+            current.copy(
+                localJson = null,
+                localDeleted = false,
+                recordDate = projection?.recordDate,
+                accountId = projection?.accountId,
+                categoryId = projection?.categoryId,
+                payeeId = projection?.payeeId,
+                amountMinor = projection?.amountMinor,
+                budgetMonth = projection?.budgetMonth,
+            ),
+        )
+    }
+
+    private fun JsonObject.toProjection(): LocalRecordProjection =
+        LocalRecordProjection(
+            recordDate = firstString("date", "recordDate"),
+            accountId = firstString("account", "accountId"),
+            categoryId = firstString("category", "categoryId"),
+            payeeId = firstString("payee", "payeeId"),
+            amountMinor = firstLong("amount", "amountMinor"),
+            budgetMonth = firstString("month", "budgetMonth"),
+        )
+
+    private fun JsonObject.firstString(vararg names: String): String? =
+        names.firstNotNullOfOrNull { name ->
+            (this[name] as? JsonPrimitive)?.takeIf { it.isString }?.content
+        }
+
+    private fun JsonObject.firstLong(vararg names: String): Long? =
+        names.firstNotNullOfOrNull { name ->
+            (this[name] as? JsonPrimitive)?.takeUnless { it.isString }?.longOrNull
         }
 
     private fun requireInFlight(operation: OutboxOperationEntity) {

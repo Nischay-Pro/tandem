@@ -74,7 +74,9 @@ room3 {
 
 ktlint {
   filter {
-    exclude { element -> element.file.path.contains("/build/generated/") }
+    include("**/src/**/*.kt", "**/*.kts")
+    // Source-root-relative filters cannot see KSP's generated directory prefix.
+    exclude("**/*_Impl.kt", "**/CompanionDatabaseConstructor.kt")
   }
 }
 

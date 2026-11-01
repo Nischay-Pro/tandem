@@ -117,7 +117,8 @@ interface OutboxDao {
     @Query(
         """
     SELECT queued.* FROM sync_outbox AS queued
-    WHERE queued.status = 'queued'
+    WHERE queued.budgetId = :budgetId
+      AND queued.status = 'queued'
       AND NOT EXISTS (
         SELECT 1 FROM sync_outbox AS blocking
         WHERE blocking.budgetId = queued.budgetId
@@ -134,10 +135,10 @@ interface OutboxDao {
     LIMIT 1
     """,
     )
-    suspend fun findNextQueued(): OutboxOperationEntity?
+    suspend fun findNextQueued(budgetId: String): OutboxOperationEntity?
 
     @Query(
-        "SELECT * FROM sync_outbox WHERE budgetId = :budgetId AND status IN ('queued', 'sending', 'uncertain', 'conflict', 'rejected') ORDER BY createdAtEpochMs ASC, operationId ASC",
+        "SELECT * FROM sync_outbox WHERE budgetId = :budgetId AND status IN ('queued', 'sending', 'uncertain', 'conflict', 'rejected', 'superseded', 'discarded') ORDER BY createdAtEpochMs ASC, operationId ASC",
     )
     suspend fun findPending(budgetId: String): List<OutboxOperationEntity>
 

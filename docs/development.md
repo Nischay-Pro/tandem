@@ -28,7 +28,16 @@ report and temporary worktree stay under `.dev-tmp/`.
 The generated KMP API client and its pinned Gradle toolchain are documented in
 [`docs/mobile-api-client.md`](mobile-api-client.md). Android and JVM compilation
 and tests run in the mobile CI job. iOS device and Apple Silicon simulator
-compilation run on the macOS CI runner with Xcode.
+compilation run on the macOS CI runner with Xcode. The local-first repository,
+sync coordinator, and sync triggers are described in
+[`docs/mobile-sync.md`](mobile-sync.md). The Android emulator configuration is
+under `.dev-tmp/android-avd/` as `abc-data-api36` (Android 36, Google APIs,
+x86_64); the SDK and system image are under `.dev-tmp/android-sdk/`. The AVD
+was created for the Docker mount path `/workspace`, so its metadata must be
+relocated or regenerated before running it directly from a differently rooted
+host checkout. The previous Linux/Docker emulator test attempt did not leave a
+connected device. There is not yet an Android app module or UI to install and
+capture; screenshots become possible with ABC-009.
 
 `services/api/Dockerfile.dev` is only for development and tests; it includes the full toolchain. The production image will be separate and contain runtime dependencies only.
 

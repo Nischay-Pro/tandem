@@ -170,3 +170,9 @@ through reconciliation until their mutation semantics are verified.
 
 These endpoints are described by the generated OpenAPI document. Validate each
 response against the contract served by the running version.
+
+The shared mobile client applies snapshots and paged changes to a local SQLite
+database and polls durable operation status after uncertain writes. Its lifecycle
+and recovery behavior are documented in
+[`docs/mobile-sync.md`](../mobile-sync.md). The current transaction operation
+endpoint supports updates and deletions; it does not create transactions.

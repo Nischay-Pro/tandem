@@ -18,6 +18,9 @@ kotlin {
   iosSimulatorArm64()
 
   sourceSets {
+    commonMain.dependencies {
+      implementation(project(":data"))
+    }
     jvmTest.dependencies {
       implementation(kotlin("test"))
       implementation(libs.ktorClientMock)
@@ -33,7 +36,14 @@ kmpgen {
 
 ktlint {
   filter {
-    exclude { element -> element.file.path.contains("/build/generated/kmpgen/") }
+    include("**/src/**/*.kt", "**/*.kts")
+    exclude(
+      "**/org/actualbudget/companion/api/generated/**",
+      "**/Api.kt",
+      "**/Auth.kt",
+      "**/Services.kt",
+      "**/Models.kt",
+    )
   }
 }
 
