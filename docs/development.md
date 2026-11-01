@@ -36,8 +36,33 @@ x86_64); the SDK and system image are under `.dev-tmp/android-sdk/`. The AVD
 was created for the Docker mount path `/workspace`, so its metadata must be
 relocated or regenerated before running it directly from a differently rooted
 host checkout. The previous Linux/Docker emulator test attempt did not leave a
-connected device. There is not yet an Android app module or UI to install and
-capture; screenshots become possible with ABC-009.
+connected emulator. A USB-authorized Pixel 10a is available for local app
+debugging when attached. The shared Compose UI is sample-only and does not
+connect to a server or live budget.
+
+### Android preview and screenshots
+
+Build and install the debug app from the `mobile/` directory:
+
+```sh
+export PATH="$PWD/../.dev-tmp/android-sdk/platform-tools:$PATH"
+./gradlew :androidApp:assembleDebug
+adb devices -l
+adb install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk
+adb shell am start -n org.actualbudget.companion.android/.MainActivity --ez preview true
+```
+
+The project uses the pinned Gradle 9.8.2 / Java 27 toolchain documented in
+[`docs/mobile-api-client.md`](mobile-api-client.md). In this workspace, Gradle
+and the Android SDK run in the configured Docker environment. Use normal ADB
+touch, swipe, and Back inputs to inspect flows on the connected Pixel. Save
+temporary screenshots under `.dev-tmp/android-screenshots/`; the repository
+ignores the whole `.dev-tmp/` directory. The `preview` launch extra opens the
+synthetic budget overview; without it the app opens its welcome screen.
+The ignored SDK copy currently contains Platform Tools 37.0.1, verified against
+Google's SDK repository metadata; the host's default ADB may be older. See the
+[Platform Tools release notes](https://developer.android.com/tools/releases/platform-tools)
+when refreshing that local copy.
 
 `services/api/Dockerfile.dev` is only for development and tests; it includes the full toolchain. The production image will be separate and contain runtime dependencies only.
 

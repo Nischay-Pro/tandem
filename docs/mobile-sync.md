@@ -1,9 +1,15 @@
 # Mobile synchronization
 
-The mobile modules currently provide local persistence and synchronization
-libraries; the Android/iOS application UI and its screenshot workflow are the
-next slice (ABC-009). Android and iOS clients will share the same coordinator,
-repository, and generated API adapter.
+The mobile project includes the shared Room-backed local-first data and sync
+libraries, a Compose Multiplatform presentation module, and an installable
+Android host app. Android and iOS use the same Companion design system and
+screens; the iOS host is `MainViewController()` in `mobile/composeApp`.
+
+The current UI is a sample-data preview. It does not yet load credentials,
+connect a budget, instantiate the sync coordinator, or persist settings. The
+preview clearly labels synthetic data, and actions do not write to Actual. The
+screens and current Pixel captures are listed in the ignored
+`.dev-tmp/mobile-wireframes/README.md` and `.dev-tmp/android-screenshots/`.
 
 ## Components and entry point
 
@@ -12,11 +18,19 @@ repository, and generated API adapter.
 - `mobile/api-client` contains the generated OpenAPI client and the handwritten
   `GeneratedBudgetSyncRemote` adapter that implements the data module's remote
   protocol.
-- The app owns authentication, its database location, connectivity/lifecycle
-  triggers, and presentation of sync/conflict state. Create one coordinator for
-  a repository and call `synchronize(budgetId)` when the app starts, returns to
-  the foreground, or reconnects. Calls through that coordinator are serialized.
-  A caller can set `sendQueuedWrites = false` for a pull-only refresh.
+- For live integration, the app must own authentication, its database location,
+  connectivity/lifecycle triggers, and presentation of sync/conflict state.
+  Create one coordinator for a repository and call `synchronize(budgetId)` when
+  the app starts, returns to the foreground, or reconnects. Calls through that
+  coordinator are serialized. A caller can set `sendQueuedWrites = false` for a
+  pull-only refresh. These triggers are not wired into the current preview UI.
+
+The Android host handles system Back through the shared route stack and uses
+safe drawing insets for the status and navigation bars. Pixel 10a review
+confirmed that headers clear the status bar and that system-bar icon contrast
+tracks the selected light or dark theme. Screenshots are disposable review
+artifacts under `.dev-tmp/android-screenshots/`; the [capture index](../.dev-tmp/android-screenshots/README.md)
+lists their screens. Git ignores the captures.
 
 Pass an encrypted budget's password to `synchronize` when needed. It is sent
 only on the relevant budget requests and is not stored in the database or
@@ -93,5 +107,7 @@ coordinator, and generated-client adapter:
 ```
 
 Android and iOS target compilation is covered by the mobile CI job; iOS
-simulator runtime tests require macOS. The local Android emulator configuration
-is documented in the development setup, but screenshots require the ABC-009 UI.
+simulator runtime tests require macOS. The current Android build can be
+installed on an authorized device and started in sample preview mode as
+documented in the development setup. Do not treat the preview screens or their
+synthetic balances as live budget state.
