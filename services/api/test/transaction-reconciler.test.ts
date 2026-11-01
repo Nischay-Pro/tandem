@@ -837,16 +837,76 @@ describe("Actual transaction reconciliation", () => {
     });
   });
 
+  it.each([
+    {
+      label: "an untyped failure that imitates a write receipt",
+      error: Object.assign(new Error("sync failed"), {
+        operationResult: {
+          kind: "write-update",
+          patch: { amount: 1200 },
+        },
+      }),
+    },
+    {
+      label: "a typed failure without a result object",
+      error: new ActualPostWriteSyncError(null, new Error("sync failed")),
+    },
+    {
+      label: "an unrecognized write result",
+      error: new ActualPostWriteSyncError(
+        { kind: "unrecognized-write", patch: { amount: 1200 } },
+        new Error("sync failed"),
+      ),
+    },
+    {
+      label: "an invalid returned patch",
+      error: new ActualPostWriteSyncError(
+        { kind: "write-update", patch: { unsupported: true } },
+        new Error("sync failed"),
+      ),
+    },
+  ])("does not create write evidence for $label", async ({ error }) => {
+    const request = createRequest();
+    const harness = createHarness(request);
+    harness.setSessionErrorAt(1, error, true);
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      status: "uncertain",
+      writeEvidence: null,
+    });
+  });
+
   it("marks a delete uncertain when Actual fails after deletion starts", async () => {
     const request = createRequest({ action: "delete", patch: {} });
     const harness = createHarness(request);
-    harness.setSessionErrorAt(1, new Error("post-delete sync failed"), true);
+    harness.setSessionErrorAt(
+      1,
+      new ActualPostWriteSyncError(
+        { kind: "write-delete" },
+        new Error("post-delete sync failed"),
+      ),
+      true,
+    );
 
     const result = await harness.reconciler.submit(request);
 
     expect(result.operation).toMatchObject({
       status: "uncertain",
       errorCode: "actual-outcome-uncertain",
+      writeEvidence: deleteEvidence,
+    });
+
+    const recovered = await harness.reconciler.submit(request);
+
+    expect(recovered.operation).toMatchObject({
+      status: "committed",
+      actualResult: {
+        transactionId: request.transactionId,
+        recoveredByReadback: true,
+      },
+      writeEvidence: null,
     });
   });
 
@@ -1126,6 +1186,48 @@ describe("Actual transaction reconciliation", () => {
     const result = await harness.reconciler.submit(request);
 
     expect(result.operation.status).toBe("uncertain");
+  });
+
+  it("recovers a write when a no-op requested field changed remotely", async () => {
+    const base = createSnapshot({ notes: null });
+    const request = createRequest({
+      baseSnapshot: base as unknown as JsonValue,
+      baseRevision: createTransactionRevision(base),
+      patch: { amount: 1200, notes: "" },
+    });
+    const harness = createHarness(request);
+    harness.actual = actualFrom(createSnapshot({ notes: "Remote note" }));
+    harness.setSessionErrorAt(
+      1,
+      new ActualPostWriteSyncError(
+        { kind: "write-update", patch: { amount: 1200 } },
+        new Error("sync failed"),
+      ),
+      true,
+    );
+
+    const first = await harness.reconciler.submit(request);
+    expect(first.operation).toMatchObject({
+      status: "uncertain",
+      writeEvidence: {
+        kind: "transaction-update-returned",
+        appliedPatch: { amount: 1200 },
+      },
+    });
+
+    const recovered = await harness.reconciler.submit(request);
+
+    expect(recovered.operation).toMatchObject({
+      status: "committed",
+      actualResult: {
+        transactionId: request.transactionId,
+        recoveredByReadback: true,
+      },
+    });
+    expect(harness.actual).toMatchObject({
+      amount: 1200,
+      notes: "Remote note",
+    });
   });
 
   it("does not recover an uncertain update when Actual deleted the row", async () => {

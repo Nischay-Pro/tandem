@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
-import type { BudgetOperationOptions } from "./actual-session.js";
+import {
+  ActualPostWriteSyncError,
+  type BudgetOperationOptions,
+} from "./actual-session.js";
 import type { ActualTransactionStore } from "./transaction-store.js";
 import {
   createTransactionRevision,
@@ -188,7 +191,12 @@ export class TransactionReconciler {
         runOptions(prepared.request.encryptionPassword, SYNC_OPTIONS),
       );
     } catch (error) {
-      return this.#handleActualFailure(operation, mutationStarted, error);
+      return this.#handleActualFailure(
+        operation,
+        mutationStarted,
+        error,
+        mutationStarted ? writeEvidenceFromPostWriteError(error) : undefined,
+      );
     }
 
     if (plan.kind === "conflict") {
@@ -390,6 +398,7 @@ export class TransactionReconciler {
     operation: WriteOperation,
     mutationStarted: boolean,
     error: unknown,
+    writeEvidence?: ActualWriteEvidence,
   ): Promise<TransactionReconciliationResult> {
     try {
       if (mutationStarted) {
@@ -397,6 +406,7 @@ export class TransactionReconciler {
           await this.journal.markUncertain(
             operation.operationId,
             "actual-outcome-uncertain",
+            writeEvidence,
           ),
         );
       }
@@ -568,6 +578,33 @@ function runOptions(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && !Array.isArray(value) && typeof value === "object";
+}
+
+function writeEvidenceFromPostWriteError(
+  error: unknown,
+): ActualWriteEvidence | undefined {
+  if (!(error instanceof ActualPostWriteSyncError)) {
+    return undefined;
+  }
+  const result = error.operationResult;
+  if (!isRecord(result)) {
+    return undefined;
+  }
+  if (result.kind === "write-delete") {
+    return { kind: "transaction-delete-returned" };
+  }
+  if (result.kind !== "write-update") {
+    return undefined;
+  }
+  try {
+    const appliedPatch = parseTransactionPatch(result.patch as JsonValue);
+    return {
+      kind: "transaction-update-returned",
+      appliedPatch: toJsonValue(appliedPatch) as { [key: string]: JsonValue },
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 function toJsonValue(value: TransactionSnapshot | TransactionPatch): JsonValue {
