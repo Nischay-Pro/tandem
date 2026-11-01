@@ -843,4 +843,36 @@ describe("durable write journal integration", () => {
       database.journal.resolveUncertainAsCommitted("invalid-id", null),
     ).rejects.toThrow("operationId must be a UUID");
   });
+
+  it("rejects PostgreSQL-incompatible NUL characters before writing", async () => {
+    const input = createOperation();
+
+    await expect(
+      database.journal.enqueue({ ...input, principalId: "device\u0000id" }),
+    ).rejects.toThrow("principalId must not contain NUL characters");
+    await expect(
+      database.journal.enqueue({
+        ...input,
+        idempotencyKey: "request\u0000key",
+      }),
+    ).rejects.toThrow("idempotencyKey must not contain NUL characters");
+    await expect(
+      database.journal.enqueue({
+        ...input,
+        baseSnapshot: { notes: "\u0000" },
+      }),
+    ).rejects.toThrow("JSON strings and object keys must not contain NUL");
+    await expect(
+      database.journal.enqueue({
+        ...input,
+        patch: { notes: "\u0000" },
+      }),
+    ).rejects.toThrow("JSON strings and object keys must not contain NUL");
+    await expect(
+      database.journal.enqueue({
+        ...input,
+        patch: { ["notes\u0000"]: "text" },
+      }),
+    ).rejects.toThrow("JSON strings and object keys must not contain NUL");
+  });
 });

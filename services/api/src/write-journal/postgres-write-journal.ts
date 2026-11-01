@@ -539,6 +539,9 @@ function validateRequiredText(
   value: string,
   maxLength: number,
 ): void {
+  if (value.includes("\u0000")) {
+    throw new Error(`${name} must not contain NUL characters`);
+  }
   if (value.trim().length === 0 || value.length > maxLength) {
     throw new Error(
       `${name} must contain between 1 and ${maxLength} characters`,
@@ -586,6 +589,11 @@ function canonicalJson(value: JsonValue): string {
     typeof value === "boolean" ||
     typeof value === "string"
   ) {
+    if (typeof value === "string" && value.includes("\u0000")) {
+      throw new Error(
+        "JSON strings and object keys must not contain NUL characters",
+      );
+    }
     return JSON.stringify(value);
   }
   if (typeof value === "number") {
@@ -600,7 +608,14 @@ function canonicalJson(value: JsonValue): string {
   if (typeof value === "object") {
     const entries = Object.keys(value)
       .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key]!)}`);
+      .map((key) => {
+        if (key.includes("\u0000")) {
+          throw new Error(
+            "JSON strings and object keys must not contain NUL characters",
+          );
+        }
+        return `${JSON.stringify(key)}:${canonicalJson(value[key]!)}`;
+      });
     return `{${entries.join(",")}}`;
   }
   throw new Error("Value is not valid JSON");
