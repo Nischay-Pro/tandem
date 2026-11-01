@@ -52,12 +52,20 @@ export async function applyMigrations(
     }>("SELECT position, name FROM companion_migrations ORDER BY position");
     const applied = appliedResult.rows;
     for (const [index, migration] of applied.entries()) {
-      if (
-        migration.position !== index + 1 ||
-        migrationOrder[index] !== migration.name
-      ) {
+      if (migration.position !== index + 1) {
         throw new Error(
           `Corrupted migrations: expected migration ${migrationOrder[index] ?? "<end>"} at position ${index + 1}, found ${migration.name}`,
+        );
+      }
+      const expectedName = migrationOrder[index];
+      if (expectedName === undefined) {
+        throw new Error(
+          "Companion database has migrations newer than this API version; upgrade the API or restore a database backup from a compatible version",
+        );
+      }
+      if (expectedName !== migration.name) {
+        throw new Error(
+          `Corrupted migrations: expected migration ${expectedName} at position ${index + 1}, found ${migration.name}`,
         );
       }
     }

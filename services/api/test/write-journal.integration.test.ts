@@ -253,6 +253,15 @@ describe("durable write journal integration", () => {
       );
       await expect(
         applyMigrations(isolatedPool, [migration], [migration.name]),
+      ).rejects.toThrow(
+        "Companion database has migrations newer than this API",
+      );
+
+      await isolatedPool.query(
+        "UPDATE companion_migrations SET position = 3 WHERE name = 'stale-migration'",
+      );
+      await expect(
+        applyMigrations(isolatedPool, [migration], [migration.name]),
       ).rejects.toThrow("expected migration <end>");
     } finally {
       await isolatedPool.end();

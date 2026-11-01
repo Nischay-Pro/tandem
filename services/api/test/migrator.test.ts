@@ -40,6 +40,39 @@ const migration: Migration = {
 };
 
 describe("migration lock cleanup reporting", () => {
+  it("explains when the database has migrations newer than this API", async () => {
+    const query = vi.fn().mockImplementation(async (sql: string) => {
+      if (sql.includes("pg_advisory_lock")) {
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.includes("CREATE TABLE IF NOT EXISTS companion_migrations")) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (sql.includes("SELECT position, name FROM companion_migrations")) {
+        return {
+          rows: [
+            { position: 1, name: migration.name },
+            { position: 2, name: "20261031120001-newer-migration" },
+          ],
+          rowCount: 2,
+        };
+      }
+      if (sql.includes("pg_advisory_unlock")) {
+        return { rows: [{ unlocked: true }], rowCount: 1 };
+      }
+      throw new Error(`Unexpected migration query: ${sql}`);
+    });
+    const pool = {
+      async connect() {
+        return { query, release: vi.fn() };
+      },
+    } as unknown as Pool;
+
+    await expect(
+      applyMigrations(pool, [migration], [migration.name]),
+    ).rejects.toThrow(/database has migrations newer than this API/i);
+  });
+
   it.each([
     {
       label: "Error instances",
