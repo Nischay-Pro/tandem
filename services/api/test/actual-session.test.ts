@@ -147,6 +147,93 @@ describe("ActualSession", () => {
     await session.close();
   });
 
+  it("synchronizes only when the successful result says a write occurred", async () => {
+    const fake = createFakeClient();
+    const session = new ActualSession(fake.api, config);
+    const shouldSynchronize = vi.fn((result: unknown) => result === "written");
+
+    await expect(
+      session.execute(async () => "written", {
+        synchronizeAfterWrite: shouldSynchronize,
+      }),
+    ).resolves.toBe("written");
+    await expect(
+      session.execute(async () => "unchanged", {
+        synchronizeAfterWrite: shouldSynchronize,
+      }),
+    ).resolves.toBe("unchanged");
+
+    expect(shouldSynchronize).toHaveBeenNthCalledWith(1, "written");
+    expect(shouldSynchronize).toHaveBeenNthCalledWith(2, "unchanged");
+    expect(fake.calls.filter((call) => call === "sync")).toHaveLength(1);
+    await session.close();
+  });
+
+  it("syncs after a synchronization-policy failure because the operation may have written", async () => {
+    const fake = createFakeClient();
+    const session = new ActualSession(fake.api, config);
+    const policyError = new Error("sync policy failed");
+
+    await expect(
+      session.execute(async () => "possibly-written", {
+        synchronizeAfterWrite: () => {
+          throw policyError;
+        },
+      }),
+    ).rejects.toBe(policyError);
+
+    expect(fake.calls).toContain("sync");
+    await session.close();
+  });
+
+  it("syncs after an operation failure with conditional synchronization enabled", async () => {
+    const fake = createFakeClient();
+    const session = new ActualSession(fake.api, config);
+    const operationError = new Error("write may have partially succeeded");
+    const policy = vi.fn(() => false);
+
+    await expect(
+      session.execute(
+        async () => {
+          throw operationError;
+        },
+        { synchronizeAfterWrite: policy },
+      ),
+    ).rejects.toBe(operationError);
+
+    expect(policy).not.toHaveBeenCalled();
+    expect(fake.calls).toContain("sync");
+    await session.close();
+  });
+
+  it("preserves a synchronization-policy failure if the follow-up sync also fails", async () => {
+    const fake = createFakeClient();
+    const policyError = new Error("sync policy failed");
+    const syncError = new Error("Actual sync failed");
+    const secondaryFailures: ActualSecondaryFailure[] = [];
+    const session = new ActualSession(fake.api, config, undefined, (failure) =>
+      secondaryFailures.push(failure),
+    );
+    fake.failSync(syncError);
+
+    await expect(
+      session.execute(async () => "possibly-written", {
+        synchronizeAfterWrite: () => {
+          throw policyError;
+        },
+      }),
+    ).rejects.toBe(policyError);
+
+    expect(secondaryFailures).toEqual([
+      {
+        phase: "post-write-sync",
+        primaryError: policyError,
+        secondaryError: syncError,
+      },
+    ]);
+    await session.close();
+  });
+
   it("rejects blank budget IDs asynchronously before touching the Actual client", async () => {
     const fake = createFakeClient();
     const session = new ActualSession(fake.api, config);

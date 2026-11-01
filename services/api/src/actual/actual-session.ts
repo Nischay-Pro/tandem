@@ -27,7 +27,7 @@ export interface ActualApiPort {
 
 export interface BudgetOperationOptions {
   encryptionPassword?: string;
-  synchronizeAfterWrite?: boolean;
+  synchronizeAfterWrite?: boolean | ((result: unknown) => boolean);
 }
 
 export interface ActualSecondaryFailure {
@@ -226,7 +226,7 @@ export class ActualSession {
 
   async #executeOperation<T>(
     operation: () => Promise<T>,
-    synchronizeAfterWrite = false,
+    synchronizeAfterWrite: BudgetOperationOptions["synchronizeAfterWrite"] = false,
   ): Promise<T> {
     let result: T;
     let operationFailed = false;
@@ -238,7 +238,25 @@ export class ActualSession {
       operationError = error;
     }
 
-    if (synchronizeAfterWrite) {
+    let shouldSynchronize = synchronizeAfterWrite === true;
+    if (operationFailed && typeof synchronizeAfterWrite === "function") {
+      // The operation may have applied part of a write before throwing.
+      shouldSynchronize = true;
+    } else if (
+      !operationFailed &&
+      typeof synchronizeAfterWrite === "function"
+    ) {
+      try {
+        shouldSynchronize = synchronizeAfterWrite(result!);
+      } catch (error) {
+        operationFailed = true;
+        operationError = error;
+        // A policy callback can fail after the operation mutated local state.
+        shouldSynchronize = true;
+      }
+    }
+
+    if (shouldSynchronize) {
       try {
         await this.client.sync();
       } catch (syncError) {
