@@ -45,13 +45,13 @@ describe("migration lock cleanup reporting", () => {
       label: "Error instances",
       primaryError: new Error("migration failed"),
       unlockError: new Error("unlock failed"),
-      expectedLog: { primaryError: "Error", releaseError: "Error" },
+      expectedLog: { primaryError: "Error", cleanupError: "Error" },
     },
     {
       label: "non-Error rejection values",
       primaryError: "migration failed",
       unlockError: "unlock failed",
-      expectedLog: { primaryError: "string", releaseError: "string" },
+      expectedLog: { primaryError: "string", cleanupError: "string" },
     },
   ])("preserves the primary error for $label", async (scenario) => {
     const { pool, release } = createFailingMigrationPool(
@@ -68,9 +68,76 @@ describe("migration lock cleanup reporting", () => {
 
     expect(release).toHaveBeenCalledWith(true);
     expect(consoleError).toHaveBeenCalledWith(
-      "Migration lock cleanup also failed",
+      "Migration cleanup also failed",
       scenario.expectedLog,
     );
+    vi.restoreAllMocks();
+  });
+
+  it("preserves a migration error and discards a client when rollback fails", async () => {
+    const migrationError = new Error("synthetic migration failure");
+    const rollbackError = new Error("synthetic rollback failure");
+    const query = vi.fn().mockImplementation(async (sql: string) => {
+      if (sql.includes("pg_advisory_unlock")) {
+        return { rows: [{ unlocked: true }], rowCount: 1 };
+      }
+      if (sql.includes("pg_advisory_lock")) {
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.includes("CREATE TABLE IF NOT EXISTS companion_migrations")) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (sql.includes("SELECT position, name FROM companion_migrations")) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (sql === "BEGIN") {
+        return { rows: [], rowCount: 0 };
+      }
+      if (sql === "ROLLBACK") {
+        throw rollbackError;
+      }
+      throw new Error(`Unexpected migration query: ${sql}`);
+    });
+    const release = vi.fn();
+    const pool = {
+      async connect() {
+        return { query, release };
+      },
+    } as unknown as Pool;
+    const brokenMigration: Migration = {
+      name: "20261031120001-synthetic-rollback-failure",
+      async up() {
+        throw migrationError;
+      },
+      async down() {},
+    };
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await expect(
+      applyMigrations(pool, [brokenMigration], [brokenMigration.name]),
+    ).rejects.toBe(migrationError);
+    expect(query).toHaveBeenCalledWith("ROLLBACK");
+    expect(release).toHaveBeenCalledWith(true);
+    expect(consoleError).toHaveBeenCalledWith("Migration cleanup also failed", {
+      primaryError: "Error",
+      cleanupError: "Error",
+    });
+    vi.restoreAllMocks();
+  });
+
+  it("keeps the migration error when cleanup logging fails", async () => {
+    const migrationError = new Error("synthetic migration failure");
+    const unlockError = new Error("synthetic unlock failure");
+    const { pool } = createFailingMigrationPool(migrationError, unlockError);
+    vi.spyOn(console, "error").mockImplementation(() => {
+      throw new Error("logger unavailable");
+    });
+
+    await expect(
+      applyMigrations(pool, [migration], [migration.name]),
+    ).rejects.toBe(migrationError);
     vi.restoreAllMocks();
   });
 });

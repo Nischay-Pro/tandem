@@ -327,10 +327,10 @@ describe("PostgreSQL connection integration", () => {
     } as unknown as Pool;
 
     await expect(applyMigrations(pool, [], [])).rejects.toBe(primaryError);
-    expect(consoleError).toHaveBeenCalledWith(
-      "Migration lock cleanup also failed",
-      { primaryError: "Error", releaseError: "Error" },
-    );
+    expect(consoleError).toHaveBeenCalledWith("Migration cleanup also failed", {
+      primaryError: "Error",
+      cleanupError: "Error",
+    });
     expect(release).toHaveBeenCalledWith(true);
     consoleError.mockRestore();
   });

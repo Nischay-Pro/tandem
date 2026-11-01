@@ -67,7 +67,15 @@ export async function applyMigrations(
     );
     for (const name of migrationOrder.slice(applied.length)) {
       const migration = migrationByName.get(name)!;
-      await applyOneMigration(client, migration, applied.length + 1);
+      await applyOneMigration(
+        client,
+        migration,
+        applied.length + 1,
+        (migrationError, rollbackError) => {
+          clientMustBeDestroyed = true;
+          reportSecondaryMigrationFailure(migrationError, rollbackError);
+        },
+      );
       applied.push({ position: applied.length + 1, name });
     }
   } catch (error) {
@@ -111,14 +119,18 @@ export async function applyMigrations(
 
 function reportSecondaryMigrationFailure(
   primaryError: unknown,
-  releaseError: unknown,
+  cleanupError: unknown,
 ): void {
-  console.error("Migration lock cleanup also failed", {
-    primaryError:
-      primaryError instanceof Error ? primaryError.name : typeof primaryError,
-    releaseError:
-      releaseError instanceof Error ? releaseError.name : typeof releaseError,
-  });
+  try {
+    console.error("Migration cleanup also failed", {
+      primaryError:
+        primaryError instanceof Error ? primaryError.name : typeof primaryError,
+      cleanupError:
+        cleanupError instanceof Error ? cleanupError.name : typeof cleanupError,
+    });
+  } catch {
+    // Cleanup logging must not replace the migration error.
+  }
 }
 
 export async function readMigrationOrder(): Promise<string[]> {
@@ -160,6 +172,7 @@ async function applyOneMigration(
   client: PoolClient,
   migration: Migration,
   position: number,
+  onRollbackFailure: (migrationError: unknown, rollbackError: unknown) => void,
 ): Promise<void> {
   await client.query("BEGIN");
   try {
@@ -169,8 +182,12 @@ async function applyOneMigration(
       [position, migration.name],
     );
     await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
+  } catch (migrationError) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackError) {
+      onRollbackFailure(migrationError, rollbackError);
+    }
+    throw migrationError;
   }
 }

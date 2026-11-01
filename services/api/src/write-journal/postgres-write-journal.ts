@@ -423,16 +423,33 @@ async function withTransaction<T>(
   work: (client: PoolClient) => Promise<T>,
 ): Promise<T> {
   const client = await pool.connect();
+  let clientReleaseError: Error | true | undefined;
   try {
     await client.query("BEGIN");
     const result = await work(client);
     await client.query("COMMIT");
     return result;
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
+  } catch (primaryError) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackError) {
+      clientReleaseError =
+        rollbackError instanceof Error ? rollbackError : true;
+      reportRollbackFailure(rollbackError);
+    }
+    throw primaryError;
   } finally {
-    client.release();
+    client.release(clientReleaseError);
+  }
+}
+
+function reportRollbackFailure(error: unknown): void {
+  try {
+    console.error("PostgreSQL transaction rollback failed; client discarded", {
+      errorType: error instanceof Error ? error.name : typeof error,
+    });
+  } catch {
+    // Reporting a cleanup failure must not replace the transaction error.
   }
 }
 
