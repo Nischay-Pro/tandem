@@ -209,27 +209,38 @@ export class TransactionReconciler {
       );
     }
 
-    if (plan.kind === "conflict") {
-      return this.#recordConflict(operation, plan);
-    }
-    if (plan.kind === "already-absent") {
-      const committed = await this.#markVerifiedCommitted(operation, {
-        transactionId: prepared.request.transactionId,
-        deleted: true,
-        alreadyAbsent: true,
-      });
-      return { operation: committed, conflict: null };
-    }
-    if (plan.kind === "unchanged") {
-      const committed = await this.#markVerifiedCommitted(operation, {
-        transactionId: prepared.request.transactionId,
-        unchanged: true,
-        remoteRevision: createTransactionRevision(plan.remoteSnapshot),
-      });
-      return { operation: committed, conflict: null };
-    }
+    try {
+      if (plan.kind === "conflict") {
+        return await this.#recordConflict(operation, plan);
+      }
+      if (plan.kind === "already-absent") {
+        const committed = await this.#markVerifiedCommitted(operation, {
+          transactionId: prepared.request.transactionId,
+          deleted: true,
+          alreadyAbsent: true,
+        });
+        return { operation: committed, conflict: null };
+      }
+      if (plan.kind === "unchanged") {
+        const committed = await this.#markVerifiedCommitted(operation, {
+          transactionId: prepared.request.transactionId,
+          unchanged: true,
+          remoteRevision: createTransactionRevision(plan.remoteSnapshot),
+        });
+        return { operation: committed, conflict: null };
+      }
 
-    return this.#verifyWrite(operation, prepared, plan);
+      return await this.#verifyWrite(operation, prepared, plan);
+    } catch (error) {
+      const writeEvidence = writeEvidenceFromPlan(plan);
+      return this.#handleActualFailure(
+        operation,
+        mutationStarted,
+        error,
+        mutationStarted ? writeEvidence : undefined,
+        "operation-finalization-failed",
+      );
+    }
   }
 
   async #verifyWrite(
@@ -237,16 +248,11 @@ export class TransactionReconciler {
     prepared: PreparedRequest,
     plan: Extract<InitialPlan, { kind: "write-update" | "write-delete" }>,
   ): Promise<TransactionReconciliationResult> {
-    let latestRaw: unknown | undefined;
-    try {
-      latestRaw = await this.session.runBudget(
-        operation.budgetId,
-        () => this.transactions.read(prepared.request.transactionId),
-        runOptions(prepared.request.encryptionPassword),
-      );
-    } catch {
-      return this.#markUncertain(operation);
-    }
+    const latestRaw = await this.session.runBudget(
+      operation.budgetId,
+      () => this.transactions.read(prepared.request.transactionId),
+      runOptions(prepared.request.encryptionPassword),
+    );
 
     if (plan.kind === "write-delete") {
       if (latestRaw === undefined) {
@@ -409,6 +415,7 @@ export class TransactionReconciler {
     mutationStarted: boolean,
     error: unknown,
     writeEvidence?: ActualWriteEvidence,
+    preWriteErrorCode = "actual-read-failed",
   ): Promise<TransactionReconciliationResult> {
     try {
       if (mutationStarted) {
@@ -420,30 +427,11 @@ export class TransactionReconciler {
           ),
         );
       }
-      await this.journal.releaseClaim(
-        operation.operationId,
-        "actual-read-failed",
-      );
+      await this.journal.releaseClaim(operation.operationId, preWriteErrorCode);
     } catch (journalError) {
       reportJournalFailure(journalError);
     }
     throw error;
-  }
-
-  async #markUncertain(
-    operation: WriteOperation,
-  ): Promise<TransactionReconciliationResult> {
-    try {
-      return this.#resultForOperation(
-        await this.journal.markUncertain(
-          operation.operationId,
-          "actual-outcome-uncertain",
-        ),
-      );
-    } catch (error) {
-      reportJournalFailure(error);
-      throw error;
-    }
   }
 
   async #recordConflict(
@@ -615,6 +603,21 @@ function writeEvidenceFromPostWriteError(
   } catch {
     return undefined;
   }
+}
+
+function writeEvidenceFromPlan(
+  plan: InitialPlan,
+): ActualWriteEvidence | undefined {
+  if (plan.kind === "write-delete") {
+    return { kind: "transaction-delete-returned" };
+  }
+  if (plan.kind === "write-update") {
+    return {
+      kind: "transaction-update-returned",
+      appliedPatch: toJsonValue(plan.patch) as { [key: string]: JsonValue },
+    };
+  }
+  return undefined;
 }
 
 async function withLeaseRenewal<T>(

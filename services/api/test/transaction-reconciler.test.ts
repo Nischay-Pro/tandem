@@ -231,6 +231,9 @@ class MemoryWriteJournal implements DurableWriteJournal {
     writeEvidence?: ActualWriteEvidence,
   ): Promise<WriteOperation> {
     this.#throwIfFailed("markUncertain");
+    if (this.missingOnGet) {
+      throw new Error("Operation is missing");
+    }
     const operation = this.#requireOperation();
     if (operation.status !== "applying") {
       throw new Error(`Cannot mark uncertain from ${operation.status}`);
@@ -920,20 +923,90 @@ describe("Actual transaction reconciliation", () => {
     expect(result.operation).toMatchObject({
       status: "uncertain",
       errorCode: "actual-outcome-uncertain",
+      writeEvidence: updateEvidence,
+    });
+  });
+
+  it("does not leave a successful Actual write applying when read-back is malformed", async () => {
+    const request = createRequest();
+    const harness = createHarness(request);
+    harness.setReadResults([
+      USE_CURRENT,
+      {
+        id: request.transactionId,
+        account: "",
+        amount: 1200,
+        date: "2026-11-01",
+      },
+    ]);
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      status: "uncertain",
+      writeEvidence: updateEvidence,
+    });
+  });
+
+  it("marks a successful Actual write uncertain when its commit transition fails", async () => {
+    const request = createRequest();
+    const harness = createHarness(request);
+    vi.spyOn(harness.journal, "markCommitted").mockRejectedValueOnce(
+      new Error("journal transition failed"),
+    );
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      status: "uncertain",
+      writeEvidence: updateEvidence,
+    });
+  });
+
+  it("marks a successful Actual deletion uncertain when its commit transition fails", async () => {
+    const request = createRequest({ action: "delete", patch: {} });
+    const harness = createHarness(request);
+    vi.spyOn(harness.journal, "markCommitted").mockRejectedValueOnce(
+      new Error("journal transition failed"),
+    );
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      status: "uncertain",
+      writeEvidence: deleteEvidence,
+    });
+  });
+
+  it("releases a no-op claim without creating write evidence when finalization fails", async () => {
+    const request = createRequest({ action: "delete", patch: {} });
+    const harness = createHarness(request);
+    harness.actual = undefined;
+    const commitError = new Error("journal transition failed");
+    vi.spyOn(harness.journal, "markCommitted").mockRejectedValueOnce(
+      commitError,
+    );
+
+    await expect(harness.reconciler.submit(request)).rejects.toBe(commitError);
+    expect(harness.journal.operation).toMatchObject({
+      status: "queued",
+      errorCode: "operation-finalization-failed",
+      writeEvidence: null,
     });
   });
 
   it("preserves a journal error when marking the write uncertain fails", async () => {
     const request = createRequest();
     const harness = createHarness(request);
+    const actualError = new Error("read-back unavailable");
     const journalError = new Error("journal unavailable");
     const consoleError = vi
       .spyOn(console, "error")
       .mockImplementation(() => {});
-    harness.setReadErrorAt(2, new Error("read-back unavailable"));
+    harness.setReadErrorAt(2, actualError);
     harness.journal.failures.set("markUncertain", journalError);
 
-    await expect(harness.reconciler.submit(request)).rejects.toBe(journalError);
+    await expect(harness.reconciler.submit(request)).rejects.toBe(actualError);
     expect(consoleError).toHaveBeenCalledWith(
       "Transaction journal transition failed",
       { errorType: "Error" },
@@ -1411,7 +1484,7 @@ describe("Actual transaction reconciliation", () => {
     expect(result.operation.status).toBe("uncertain");
   });
 
-  it("preserves the mark-commit error if reading journal state fails", async () => {
+  it("marks the operation uncertain if journal state cannot be read after a write", async () => {
     const request = createRequest();
     const harness = createHarness(request);
     const commitError = new Error("transition rejected");
@@ -1420,7 +1493,12 @@ describe("Actual transaction reconciliation", () => {
     );
     harness.journal.getError = new Error("journal unavailable");
 
-    await expect(harness.reconciler.submit(request)).rejects.toBe(commitError);
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      status: "uncertain",
+      writeEvidence: updateEvidence,
+    });
   });
 
   it("preserves the mark-commit error if the operation is missing", async () => {
