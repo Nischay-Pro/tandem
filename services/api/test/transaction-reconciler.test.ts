@@ -436,6 +436,38 @@ describe("Actual transaction reconciliation", () => {
     });
   });
 
+  it("commits a cleared note normalized to null alongside another field", async () => {
+    const base = createSnapshot({ notes: "Prior note" });
+    const request = createRequest({
+      baseSnapshot: base as unknown as JsonValue,
+      baseRevision: createTransactionRevision(base),
+      patch: { amount: 1200, notes: "" },
+    });
+    const harness = createHarness(request);
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      status: "committed",
+      actualResult: { appliedPatch: { amount: 1200, notes: "" } },
+    });
+    expect(result.conflict).toBeNull();
+    expect(harness.actual).toMatchObject({ amount: 1200, notes: "" });
+  });
+
+  it("commits a non-empty note patch without normalizing it", async () => {
+    const request = createRequest({ patch: { notes: "Updated note" } });
+    const harness = createHarness(request);
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      status: "committed",
+      actualResult: { appliedPatch: { notes: "Updated note" } },
+    });
+    expect(harness.actual).toMatchObject({ notes: "Updated note" });
+  });
+
   it("records an update conflict when Actual deleted the transaction", async () => {
     const request = createRequest();
     const harness = createHarness(request);

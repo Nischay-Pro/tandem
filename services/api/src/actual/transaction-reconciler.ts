@@ -501,13 +501,13 @@ function mismatchedPatchFields(
   snapshot: TransactionSnapshot,
   patch: TransactionPatch,
 ): string[] {
-  return Object.keys(patch).filter(
-    (field) =>
-      !Object.is(
-        snapshot[field as keyof TransactionSnapshot],
-        patch[field as keyof TransactionPatch],
-      ),
-  );
+  return Object.keys(patch).filter((field) => {
+    const patchValue =
+      field === "notes" && patch.notes === ""
+        ? null
+        : patch[field as keyof TransactionPatch];
+    return !Object.is(snapshot[field as keyof TransactionSnapshot], patchValue);
+  });
 }
 
 function structuredFields(
