@@ -193,20 +193,47 @@ describe("device authorization", () => {
     expect(authenticate).toHaveBeenCalledWith(hashSecret(validToken));
   });
 
-  it("lists devices and scopes revocation to the validated principal", async () => {
-    const listDevices = vi.fn(async () => [createDevice()]);
-    const revokeDevice = vi.fn(async () => false);
+  it("limits device listing and revocation to the caller's access scope", async () => {
+    const limitedDevice = createDevice();
+    const otherDevice = createDevice({
+      deviceId: "c2d791c1-d2bc-4e94-9f39-2d28d45e7c11",
+      name: "Owner phone",
+      budgetIds: ["*"],
+    });
+    const listDevices = vi.fn(async () => [limitedDevice, otherDevice]);
+    const revokeDevice = vi.fn(async () => true);
     const { store } = createStore({ listDevices, revokeDevice });
     const authorization = new DeviceAuthorization(store);
 
-    await expect(authorization.listDevices("owner")).resolves.toHaveLength(1);
-    await expect(authorization.revokeDevice("owner", validUuid)).resolves.toBe(
-      false,
-    );
-    expect(listDevices).toHaveBeenCalledWith("owner");
-    expect(revokeDevice).toHaveBeenCalledWith("owner", validUuid);
     await expect(
-      authorization.revokeDevice("owner", "not-a-uuid"),
+      authorization.listDevicesForDevice(limitedDevice),
+    ).resolves.toEqual([limitedDevice]);
+    await expect(
+      authorization.revokeDeviceForDevice(limitedDevice, otherDevice.deviceId),
+    ).resolves.toBe(false);
+    expect(revokeDevice).not.toHaveBeenCalled();
+    await expect(
+      authorization.revokeDeviceForDevice(
+        limitedDevice,
+        limitedDevice.deviceId,
+      ),
+    ).resolves.toBe(true);
+    await expect(
+      authorization.listDevicesForDevice(otherDevice),
+    ).resolves.toEqual([limitedDevice, otherDevice]);
+    await expect(
+      authorization.revokeDeviceForDevice(otherDevice, limitedDevice.deviceId),
+    ).resolves.toBe(true);
+    expect(listDevices).toHaveBeenCalledWith("owner");
+    expect(revokeDevice).toHaveBeenCalledTimes(2);
+    expect(revokeDevice).toHaveBeenNthCalledWith(1, "owner", validUuid);
+    expect(revokeDevice).toHaveBeenNthCalledWith(
+      2,
+      "owner",
+      limitedDevice.deviceId,
+    );
+    await expect(
+      authorization.revokeDeviceForDevice(limitedDevice, "not-a-uuid"),
     ).rejects.toThrow("deviceId must be a UUID");
     for (const deviceId of [
       `x${validUuid}`,
@@ -215,7 +242,10 @@ describe("device authorization", () => {
       { toString: () => validUuid },
     ]) {
       await expect(
-        authorization.revokeDevice("owner", deviceId as unknown as string),
+        authorization.revokeDeviceForDevice(
+          limitedDevice,
+          deviceId as unknown as string,
+        ),
       ).rejects.toThrow("deviceId must be a UUID");
     }
   });

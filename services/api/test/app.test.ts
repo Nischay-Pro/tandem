@@ -27,8 +27,8 @@ function createDeviceAuth(overrides: Record<string, unknown> = {}) {
     createPairingCode: vi.fn(),
     pair: vi.fn(async () => undefined),
     authenticate: vi.fn(async () => undefined),
-    listDevices: vi.fn(async () => []),
-    revokeDevice: vi.fn(async () => false),
+    listDevicesForDevice: vi.fn(async () => []),
+    revokeDeviceForDevice: vi.fn(async () => false),
     ...overrides,
   } as unknown as DeviceAuthorization;
 }
@@ -330,23 +330,22 @@ describe("health routes and OpenAPI", () => {
     await untrustedApp.close();
   });
 
-  it("authenticates, lists, and revokes only devices under the same principal", async () => {
+  it("authenticates, scopes device listing, and returns 404 for invisible revocations", async () => {
     const device = createDevice({
       lastSeenAt: new Date("2026-11-01T01:00:00.000Z"),
     });
+    const neverSeenDevice = createDevice({
+      deviceId: "d2d791c1-d2bc-4e94-9f39-2d28d45e7c10",
+    });
     const auth = createDeviceAuth({
-      authenticate: vi.fn(async (token?: string) =>
-        token === testAccessToken ? device : undefined,
-      ),
-      listDevices: vi.fn(async () => [
-        device,
-        createDevice({
-          deviceId: "c2d791c1-d2bc-4e94-9f39-2d28d45e7c11",
-          revokedAt: new Date("2026-11-01T02:00:00.000Z"),
-        }),
-      ]),
-      revokeDevice: vi.fn(
-        async (_principalId: string, id: string) => id === testDeviceId,
+      authenticate: vi.fn(async (token?: string) => {
+        if (token === testAccessToken) return device;
+        if (token === "B".repeat(43)) return neverSeenDevice;
+        return undefined;
+      }),
+      listDevicesForDevice: vi.fn(async () => [device]),
+      revokeDeviceForDevice: vi.fn(
+        async (_device: DeviceRecord, id: string) => id === testDeviceId,
       ),
     });
     const app = await buildApiApp(
@@ -391,6 +390,14 @@ describe("health routes and OpenAPI", () => {
       budgetIds: ["synthetic-budget"],
     });
 
+    const neverSeen = await app.inject({
+      method: "GET",
+      url: "/api/v1/auth/me",
+      headers: { authorization: `Bearer ${"B".repeat(43)}` },
+    });
+    expect(neverSeen.statusCode).toBe(200);
+    expect(neverSeen.json().lastSeenAt).toBeNull();
+
     const listed = await app.inject({
       method: "GET",
       url: "/api/v1/devices",
@@ -404,13 +411,15 @@ describe("health routes and OpenAPI", () => {
           lastSeenAt: "2026-11-01T01:00:00.000Z",
           revokedAt: null,
         },
-        {
-          deviceId: "c2d791c1-d2bc-4e94-9f39-2d28d45e7c11",
-          lastSeenAt: null,
-          revokedAt: "2026-11-01T02:00:00.000Z",
-        },
       ],
     });
+
+    const invisibleRevoke = await app.inject({
+      method: "DELETE",
+      url: "/api/v1/devices/c2d791c1-d2bc-4e94-9f39-2d28d45e7c11",
+      headers: { authorization: `Bearer ${testAccessToken}` },
+    });
+    expect(invisibleRevoke.statusCode).toBe(404);
 
     const revoked = await app.inject({
       method: "DELETE",

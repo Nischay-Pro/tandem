@@ -292,7 +292,7 @@ function registerDeviceAuthorizationRoutes(
       schema: {
         tags: ["Authentication"],
         operationId: "listDevices",
-        summary: "List devices paired to the authenticated principal",
+        summary: "List devices visible to the authenticated device",
         security: [{ bearerAuth: [] }],
         response: {
           200: {
@@ -316,7 +316,7 @@ function registerDeviceAuthorizationRoutes(
       if (!device) {
         return reply;
       }
-      const devices = await deviceAuth.listDevices(device.principalId);
+      const devices = await deviceAuth.listDevicesForDevice(device);
       return { devices: devices.map(toDeviceResponse) };
     },
   );
@@ -329,7 +329,8 @@ function registerDeviceAuthorizationRoutes(
       schema: {
         tags: ["Authentication"],
         operationId: "revokeDevice",
-        summary: "Revoke a paired device credential",
+        summary:
+          "Revoke this device or a device visible to a full-access device",
         security: [{ bearerAuth: [] }],
         params: {
           type: "object",
@@ -355,8 +356,8 @@ function registerDeviceAuthorizationRoutes(
       if (!device) {
         return reply;
       }
-      const revoked = await deviceAuth.revokeDevice(
-        device.principalId,
+      const revoked = await deviceAuth.revokeDeviceForDevice(
+        device,
         request.params.deviceId,
       );
       if (!revoked) {

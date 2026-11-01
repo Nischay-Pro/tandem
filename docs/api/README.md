@@ -29,7 +29,8 @@ docker compose -f docker-compose.dev.yml exec api \
 ```
 
 Use `--budget-id` more than once to scope the new device to selected budgets, or
-use `--all-budgets` to grant all budgets to that principal. The principal ID
+use `--all-budgets` to grant all budgets to that principal; a device with this
+scope can also manage other devices for that principal. The principal ID
 defaults to `owner`; `--principal-id <id>` selects another principal. The CLI
 prints a JSON object containing a 5-minute, single-use code. Treat that output
 as a secret and deliver it to the mobile device over a trusted channel.
@@ -49,10 +50,12 @@ Invalid pairing input returns HTTP 400 with a structured `invalid_request`
 error. An unavailable, expired, or already-used pairing code returns HTTP 401.
 
 Send the token as `Authorization: Bearer <token>`. `GET /api/v1/auth/me` returns
-the current device and its budget IDs. `GET /api/v1/devices` lists devices for
-the same principal. `DELETE /api/v1/devices/{deviceId}` revokes a device under
-that principal; revoked tokens stop authenticating immediately. The pairing
-response uses `Cache-Control: no-store` because it contains the new credential.
+the current device and its budget IDs. A budget-scoped device can list and
+revoke itself only. A device paired with `--all-budgets` has full device
+management within its principal and can list or revoke the principal's other
+devices. Attempts to manage an invisible device return 404. Revoked tokens stop
+authenticating immediately. The pairing response uses `Cache-Control: no-store`
+because it contains the new credential.
 
 These endpoints are described by the generated OpenAPI document. Validate each
 response against the contract served by the running version; planned endpoints

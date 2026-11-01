@@ -118,26 +118,35 @@ describe("PostgreSQL device authorization integration", () => {
       DeviceAuthorization.canAccessBudget(authenticated!, "other-budget"),
     ).toBe(false);
 
-    const listed = await authorization.listDevices(principalId);
+    const listed = await authorization.listDevicesForDevice(authenticated!);
     expect(listed).toHaveLength(1);
     expect(listed[0]).toMatchObject({
       deviceId: device.deviceId,
       revokedAt: null,
     });
     expect(
-      await authorization.revokeDevice("other-principal", device.deviceId),
+      await authorization.revokeDeviceForDevice(
+        { ...authenticated!, principalId: "other-principal" },
+        device.deviceId,
+      ),
     ).toBe(false);
-    expect(await authorization.revokeDevice(principalId, device.deviceId)).toBe(
-      true,
-    );
-    expect(await authorization.revokeDevice(principalId, device.deviceId)).toBe(
-      false,
-    );
+    expect(
+      await authorization.revokeDeviceForDevice(
+        authenticated!,
+        device.deviceId,
+      ),
+    ).toBe(true);
+    expect(
+      await authorization.revokeDeviceForDevice(
+        authenticated!,
+        device.deviceId,
+      ),
+    ).toBe(false);
     await expect(
       authorization.authenticate(device.accessToken),
     ).resolves.toBeUndefined();
     expect(
-      (await authorization.listDevices(principalId))[0]?.revokedAt,
+      (await authorization.listDevicesForDevice(authenticated!))[0]?.revokedAt,
     ).toBeInstanceOf(Date);
   });
 
@@ -191,6 +200,76 @@ describe("PostgreSQL device authorization integration", () => {
         headers: { authorization: `Bearer ${paired.accessToken}` },
       });
       expect(afterRevocation.statusCode).toBe(401);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("limits device management to self unless a device has wildcard budget scope", async () => {
+    const principalId = `scope-owner-${randomUUID()}`;
+    const limitedPairing = await authorization.createPairingCode({
+      principalId,
+      budgetIds: ["synthetic-budget-A"],
+    });
+    const fullPairing = await authorization.createPairingCode({
+      principalId,
+      budgetIds: ["*"],
+    });
+    const limitedDevice = await authorization.pair({
+      code: limitedPairing.code,
+      deviceName: "Limited phone",
+    });
+    const fullDevice = await authorization.pair({
+      code: fullPairing.code,
+      deviceName: "Owner phone",
+    });
+    if (!limitedDevice || !fullDevice) {
+      throw new Error("Synthetic device pairing did not succeed");
+    }
+
+    const app = await buildApiApp(
+      { ping: async () => undefined, close: async () => undefined },
+      { deviceAuth: authorization },
+    );
+    try {
+      const limitedList = await app.inject({
+        method: "GET",
+        url: "/api/v1/devices",
+        headers: { authorization: `Bearer ${limitedDevice.accessToken}` },
+      });
+      expect(limitedList.statusCode).toBe(200);
+      expect(limitedList.json().devices).toHaveLength(1);
+      expect(limitedList.json().devices[0].deviceId).toBe(
+        limitedDevice.deviceId,
+      );
+
+      const forbiddenRevoke = await app.inject({
+        method: "DELETE",
+        url: `/api/v1/devices/${fullDevice.deviceId}`,
+        headers: { authorization: `Bearer ${limitedDevice.accessToken}` },
+      });
+      expect(forbiddenRevoke.statusCode).toBe(404);
+      expect(
+        await authorization.authenticate(fullDevice.accessToken),
+      ).toBeDefined();
+
+      const fullList = await app.inject({
+        method: "GET",
+        url: "/api/v1/devices",
+        headers: { authorization: `Bearer ${fullDevice.accessToken}` },
+      });
+      expect(fullList.statusCode).toBe(200);
+      expect(fullList.json().devices).toHaveLength(2);
+
+      const authorizedRevoke = await app.inject({
+        method: "DELETE",
+        url: `/api/v1/devices/${limitedDevice.deviceId}`,
+        headers: { authorization: `Bearer ${fullDevice.accessToken}` },
+      });
+      expect(authorizedRevoke.statusCode).toBe(204);
+      expect(
+        await authorization.authenticate(limitedDevice.accessToken),
+      ).toBeUndefined();
     } finally {
       await app.close();
     }

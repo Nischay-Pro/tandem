@@ -107,15 +107,28 @@ export class DeviceAuthorization {
     return this.store.authenticate(hashSecret(accessToken));
   }
 
-  async listDevices(principalId: string): Promise<DeviceRecord[]> {
-    return this.store.listDevices(validatePrincipalId(principalId));
+  async listDevicesForDevice(device: DeviceRecord): Promise<DeviceRecord[]> {
+    const devices = await this.store.listDevices(
+      validatePrincipalId(device.principalId),
+    );
+    if (device.budgetIds.includes("*")) {
+      return devices;
+    }
+    return devices.filter(
+      (candidate) => candidate.deviceId === device.deviceId,
+    );
   }
 
-  async revokeDevice(principalId: string, deviceId: string): Promise<boolean> {
-    return this.store.revokeDevice(
-      validatePrincipalId(principalId),
-      validateDeviceId(deviceId),
-    );
+  async revokeDeviceForDevice(
+    device: DeviceRecord,
+    deviceId: string,
+  ): Promise<boolean> {
+    const principalId = validatePrincipalId(device.principalId);
+    const targetDeviceId = validateDeviceId(deviceId);
+    if (!device.budgetIds.includes("*") && device.deviceId !== targetDeviceId) {
+      return false;
+    }
+    return this.store.revokeDevice(principalId, targetDeviceId);
   }
 
   static canAccessBudget(device: DeviceRecord, budgetId: string): boolean {
