@@ -24,6 +24,7 @@ import type {
   WriteOperation,
   WriteOperationInput,
 } from "../write-journal/contracts.js";
+import { WRITE_OPERATION_LEASE_RENEWAL_INTERVAL_MS } from "../write-journal/contracts.js";
 
 export interface TransactionReconciliationRequest {
   operationId: string;
@@ -111,6 +112,15 @@ export class TransactionReconciler {
   }
 
   async #applyClaimed(
+    operation: WriteOperation,
+    prepared: PreparedRequest,
+  ): Promise<TransactionReconciliationResult> {
+    return withLeaseRenewal(this.journal, operation.operationId, () =>
+      this.#applyClaimedOperation(operation, prepared),
+    );
+  }
+
+  async #applyClaimedOperation(
     operation: WriteOperation,
     prepared: PreparedRequest,
   ): Promise<TransactionReconciliationResult> {
@@ -607,12 +617,49 @@ function writeEvidenceFromPostWriteError(
   }
 }
 
+async function withLeaseRenewal<T>(
+  journal: Pick<DurableWriteJournal, "renewLease">,
+  operationId: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  let renewal: Promise<void> | undefined;
+  const timer = setInterval(() => {
+    if (renewal) {
+      return;
+    }
+
+    renewal = Promise.resolve()
+      .then(() => journal.renewLease(operationId))
+      .then((renewed) => {
+        if (!renewed) {
+          clearInterval(timer);
+        }
+      })
+      .catch(reportJournalFailure)
+      .finally(() => {
+        renewal = undefined;
+      });
+  }, WRITE_OPERATION_LEASE_RENEWAL_INTERVAL_MS);
+  timer.unref?.();
+
+  try {
+    return await operation();
+  } finally {
+    clearInterval(timer);
+    await renewal;
+  }
+}
+
 function toJsonValue(value: TransactionSnapshot | TransactionPatch): JsonValue {
   return value as unknown as JsonValue;
 }
 
 function reportJournalFailure(error: unknown): void {
-  console.error("Transaction journal transition failed", {
-    errorType: error instanceof Error ? error.name : typeof error,
-  });
+  try {
+    console.error("Transaction journal transition failed", {
+      errorType: error instanceof Error ? error.name : typeof error,
+    });
+  } catch {
+    // The primary Actual operation remains authoritative if logging fails.
+  }
 }

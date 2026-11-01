@@ -25,6 +25,7 @@ import type {
   JsonValue,
   WriteOperationInput,
 } from "../src/write-journal/contracts.js";
+import { WriteLeaseReaper } from "../src/write-journal/lease-reaper.js";
 import { PostgresWriteJournal } from "../src/write-journal/postgres-write-journal.js";
 
 let database: Database;
@@ -770,6 +771,38 @@ describe("durable write journal integration", () => {
       claimed: false,
       operation: { status: "uncertain" },
     });
+  });
+
+  it("recovers an expired lease during startup without replaying its write", async () => {
+    const input = createOperation();
+    await database.journal.enqueue(input);
+    await database.journal.claim(input.operationId);
+    await inspectionPool.query(
+      `UPDATE companion_operations
+      SET lease_expires_at = clock_timestamp() - interval '1 second'
+      WHERE operation_id = $1`,
+      [input.operationId],
+    );
+    const reaper = new WriteLeaseReaper(database.journal);
+
+    await reaper.start();
+    try {
+      await expect(
+        database.journal.get(input.operationId),
+      ).resolves.toMatchObject({
+        status: "uncertain",
+        errorCode: "claim-lease-expired",
+        writeEvidence: null,
+      });
+      await expect(
+        database.journal.claim(input.operationId),
+      ).resolves.toMatchObject({
+        claimed: false,
+        operation: { status: "uncertain" },
+      });
+    } finally {
+      await reaper.stop();
+    }
   });
 
   it("commits a late Actual success after read-back confirms the expired write", async () => {

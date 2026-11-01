@@ -31,10 +31,16 @@ const readySchema: FastifySchema = {
   response: { 200: statusOk, 503: statusNotReady },
 };
 
+export interface ApiAppOptions {
+  readinessTimeoutMs?: number;
+  onClose?: () => Promise<void>;
+}
+
 export async function buildApiApp(
   database: HealthDatabase,
-  readinessTimeoutMs = READINESS_TIMEOUT_MS,
+  options: ApiAppOptions = {},
 ): Promise<FastifyInstance> {
+  const readinessTimeoutMs = options.readinessTimeoutMs ?? READINESS_TIMEOUT_MS;
   const app = Fastify({ logger: false });
 
   await app.register(swagger, {
@@ -72,7 +78,13 @@ export async function buildApiApp(
 
   app.get("/api/v1/openapi.json", async () => app.swagger());
 
-  app.addHook("onClose", async () => database.close());
+  app.addHook("onClose", async () => {
+    try {
+      await options.onClose?.();
+    } finally {
+      await database.close();
+    }
+  });
   await app.ready();
   return app;
 }

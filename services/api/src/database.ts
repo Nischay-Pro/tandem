@@ -11,6 +11,7 @@ export interface HealthDatabase {
 }
 
 export interface ServerDatabase extends HealthDatabase {
+  readonly journal: Pick<DurableWriteJournal, "expireLeases">;
   migrate(): Promise<void>;
 }
 

@@ -71,7 +71,7 @@ describe("health routes and OpenAPI", () => {
         ping,
         close: vi.fn<() => Promise<void>>(),
       },
-      20,
+      { readinessTimeoutMs: 20 },
     );
 
     const response = await app.inject({

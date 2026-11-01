@@ -17,6 +17,9 @@ export interface WriteOperationInput {
 export type OperationStatus =
   "queued" | "applying" | "committed" | "conflict" | "uncertain" | "rejected";
 
+export const WRITE_OPERATION_LEASE_DURATION_SECONDS = 120;
+export const WRITE_OPERATION_LEASE_RENEWAL_INTERVAL_MS = 40_000;
+
 export type ActualWriteEvidence =
   | {
       kind: "transaction-update-returned";

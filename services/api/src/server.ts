@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { buildApiApp } from "./app.js";
 import type { ApiConfig } from "./config.js";
 import type { ServerDatabase } from "./database.js";
+import { WriteLeaseReaper } from "./write-journal/lease-reaper.js";
 
 export type ShutdownSignal = "SIGINT" | "SIGTERM";
 export type SignalRegistrar = (
@@ -15,23 +16,36 @@ export async function startApiServer(
   registerSignalHandler: SignalRegistrar,
 ): Promise<FastifyInstance> {
   let app: FastifyInstance | undefined;
+  const leaseReaper = new WriteLeaseReaper(database.journal);
 
   try {
     await database.migrate();
-    app = await buildApiApp(database);
+    await leaseReaper.start();
+    app = await buildApiApp(database, {
+      onClose: () => leaseReaper.stop(),
+    });
     await app.listen({ host: config.host, port: config.port });
   } catch (error) {
-    try {
-      if (app) {
+    const cleanupErrors: unknown[] = [];
+    if (app) {
+      try {
         await app.close();
-      } else {
-        await database.close();
+      } catch (closeError) {
+        cleanupErrors.push(closeError);
       }
-    } catch (closeError) {
+    } else {
+      await leaseReaper.stop();
+      try {
+        await database.close();
+      } catch (closeError) {
+        cleanupErrors.push(closeError);
+      }
+    }
+    if (cleanupErrors.length > 0) {
       throw new AggregateError(
-        [error, closeError],
+        [error, ...cleanupErrors],
         "API startup failed and dependencies did not close cleanly",
-        { cause: closeError },
+        { cause: error },
       );
     }
     throw error;

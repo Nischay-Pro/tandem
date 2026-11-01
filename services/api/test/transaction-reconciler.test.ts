@@ -26,6 +26,7 @@ import type {
   WriteOperation,
   WriteOperationInput,
 } from "../src/write-journal/contracts.js";
+import { WRITE_OPERATION_LEASE_RENEWAL_INTERVAL_MS } from "../src/write-journal/contracts.js";
 
 const USE_CURRENT = Symbol("use-current-actual-transaction");
 const updateEvidence: ActualWriteEvidence = {
@@ -35,6 +36,14 @@ const updateEvidence: ActualWriteEvidence = {
 const deleteEvidence: ActualWriteEvidence = {
   kind: "transaction-delete-returned",
 };
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((accept) => {
+    resolve = accept;
+  });
+  return { promise, resolve };
+}
 
 function createSnapshot(
   overrides: Partial<TransactionSnapshot> = {},
@@ -321,6 +330,11 @@ interface Harness {
     error: unknown,
     afterOperation?: boolean,
   ): void;
+  pauseSessionAt(
+    call: number,
+    onEntered: () => void,
+    wait: Promise<void>,
+  ): void;
   setPredicateInputs(values: unknown[]): void;
   syncPredicateResults: boolean[];
 }
@@ -344,6 +358,10 @@ function createHarness(
   const sessionErrors = new Map<
     number,
     { error: unknown; afterOperation: boolean }
+  >();
+  const sessionPauses = new Map<
+    number,
+    { onEntered: () => void; wait: Promise<void> }
   >();
   let readCount = 0;
   const sessionCalls: Harness["sessionCalls"] = [];
@@ -396,6 +414,11 @@ function createHarness(
         syncId,
         ...(runOptions === undefined ? {} : { options: runOptions }),
       });
+      const pause = sessionPauses.get(call);
+      if (pause) {
+        pause.onEntered();
+        await pause.wait;
+      }
       const failure = sessionErrors.get(call);
       if (failure && !failure.afterOperation) {
         throw failure.error;
@@ -445,6 +468,9 @@ function createHarness(
     setSessionErrorAt(call, error, afterOperation = false) {
       sessionErrors.set(call, { error, afterOperation });
     },
+    pauseSessionAt(call, onEntered, wait) {
+      sessionPauses.set(call, { onEntered, wait });
+    },
     setPredicateInputs(values) {
       invokePredicateWith = [...values];
     },
@@ -453,7 +479,104 @@ function createHarness(
 }
 
 describe("Actual transaction reconciliation", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("renews a claimed operation while Actual work runs and stops after completion", async () => {
+    vi.useFakeTimers();
+    const request = createRequest();
+    const harness = createHarness(request);
+    const entered = deferred<void>();
+    const gate = deferred<void>();
+    const pendingRenewal = deferred<boolean>();
+    harness.pauseSessionAt(1, () => entered.resolve(), gate.promise);
+    const renewLease = vi
+      .spyOn(harness.journal, "renewLease")
+      .mockReturnValueOnce(pendingRenewal.promise);
+
+    const submitting = harness.reconciler.submit(request);
+    await entered.promise;
+    await vi.advanceTimersByTimeAsync(
+      WRITE_OPERATION_LEASE_RENEWAL_INTERVAL_MS,
+    );
+    await vi.advanceTimersByTimeAsync(
+      WRITE_OPERATION_LEASE_RENEWAL_INTERVAL_MS,
+    );
+    expect(renewLease).toHaveBeenCalledOnce();
+
+    pendingRenewal.resolve(true);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(
+      WRITE_OPERATION_LEASE_RENEWAL_INTERVAL_MS,
+    );
+    expect(renewLease).toHaveBeenCalledTimes(2);
+
+    gate.resolve();
+    const result = await submitting;
+    expect(result.operation.status).toBe("committed");
+    await vi.advanceTimersByTimeAsync(
+      WRITE_OPERATION_LEASE_RENEWAL_INTERVAL_MS,
+    );
+    expect(renewLease).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops renewing when the journal reports that the lease was lost", async () => {
+    vi.useFakeTimers();
+    const request = createRequest();
+    const harness = createHarness(request);
+    const entered = deferred<void>();
+    const gate = deferred<void>();
+    harness.pauseSessionAt(1, () => entered.resolve(), gate.promise);
+    const renewLease = vi
+      .spyOn(harness.journal, "renewLease")
+      .mockResolvedValue(false);
+
+    const submitting = harness.reconciler.submit(request);
+    await entered.promise;
+    await vi.advanceTimersByTimeAsync(
+      WRITE_OPERATION_LEASE_RENEWAL_INTERVAL_MS,
+    );
+    await vi.advanceTimersByTimeAsync(
+      WRITE_OPERATION_LEASE_RENEWAL_INTERVAL_MS,
+    );
+    expect(renewLease).toHaveBeenCalledOnce();
+
+    gate.resolve();
+    await submitting;
+  });
+
+  it("reports renewal failures without losing the Actual operation result", async () => {
+    vi.useFakeTimers();
+    const request = createRequest();
+    const harness = createHarness(request);
+    const entered = deferred<void>();
+    const gate = deferred<void>();
+    harness.pauseSessionAt(1, () => entered.resolve(), gate.promise);
+    const renewalError = new Error("database unavailable");
+    const renewLease = vi
+      .spyOn(harness.journal, "renewLease")
+      .mockRejectedValueOnce(renewalError);
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const submitting = harness.reconciler.submit(request);
+    await entered.promise;
+    await vi.advanceTimersByTimeAsync(
+      WRITE_OPERATION_LEASE_RENEWAL_INTERVAL_MS,
+    );
+    expect(renewLease).toHaveBeenCalledOnce();
+    expect(consoleError).toHaveBeenCalledWith(
+      "Transaction journal transition failed",
+      { errorType: "Error" },
+    );
+
+    gate.resolve();
+    const result = await submitting;
+    expect(result.operation.status).toBe("committed");
+  });
 
   it("applies and verifies an update with encryption and sync intent", async () => {
     const request = createRequest({ encryptionPassword: "budget-secret" });
@@ -1186,6 +1309,20 @@ describe("Actual transaction reconciliation", () => {
     const result = await harness.reconciler.submit(request);
 
     expect(result.operation.status).toBe("uncertain");
+  });
+
+  it("does not replay lease-expired work without a confirmed Actual write receipt", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    harness.actual = actualFrom(createSnapshot({ amount: 1200 }));
+    const read = vi.spyOn(harness.store, "read");
+    const update = vi.spyOn(harness.store, "update");
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation.status).toBe("uncertain");
+    expect(read).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
   });
 
   it("recovers a write when a no-op requested field changed remotely", async () => {

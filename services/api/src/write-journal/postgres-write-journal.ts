@@ -5,6 +5,7 @@ import {
   InvalidOperationTransitionError,
   OperationIdReuseError,
   OperationNotFoundError,
+  WRITE_OPERATION_LEASE_DURATION_SECONDS,
 } from "./contracts.js";
 import type {
   ActualWriteEvidence,
@@ -52,8 +53,6 @@ interface ConflictRow {
   conflicting_fields: string[];
   created_at: Date;
 }
-
-const LEASE_DURATION_SECONDS = 120;
 
 export class PostgresWriteJournal implements DurableWriteJournal {
   constructor(private readonly pool: Pool) {}
@@ -175,7 +174,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
             updated_at = clock_timestamp()
         WHERE operation_id = $1 AND status = 'queued'
         RETURNING *`,
-        [operationId, LEASE_DURATION_SECONDS],
+        [operationId, WRITE_OPERATION_LEASE_DURATION_SECONDS],
       );
       const claimed = result.rows[0];
       if (claimed) {
@@ -198,7 +197,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
           updated_at = clock_timestamp()
       WHERE operation_id = $1 AND status = 'applying'
         AND lease_expires_at > clock_timestamp()`,
-      [operationId, LEASE_DURATION_SECONDS],
+      [operationId, WRITE_OPERATION_LEASE_DURATION_SECONDS],
     );
     return result.rowCount === 1;
   }
