@@ -149,6 +149,18 @@ export class PostgresWriteJournal implements DurableWriteJournal {
     return row ? mapOperation(row) : undefined;
   }
 
+  async getConflict(
+    operationId: string,
+  ): Promise<OperationConflict | undefined> {
+    validateUuid("operationId", operationId);
+    const result = await this.pool.query<ConflictRow>(
+      "SELECT * FROM companion_operation_conflicts WHERE operation_id = $1",
+      [operationId],
+    );
+    const row = result.rows[0];
+    return row ? mapConflict(row) : undefined;
+  }
+
   async claim(operationId: string): Promise<ClaimResult> {
     validateUuid("operationId", operationId);
     return withTransaction(this.pool, async (client) => {
@@ -156,6 +168,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
         `UPDATE companion_operations
         SET status = 'applying',
             attempt_count = attempt_count + 1,
+            error_code = NULL,
             started_at = clock_timestamp(),
             lease_expires_at = clock_timestamp() + ($2 * interval '1 second'),
             updated_at = clock_timestamp()
@@ -187,6 +200,42 @@ export class PostgresWriteJournal implements DurableWriteJournal {
       [operationId, LEASE_DURATION_SECONDS],
     );
     return result.rowCount === 1;
+  }
+
+  async releaseClaim(
+    operationId: string,
+    errorCode: string,
+  ): Promise<WriteOperation> {
+    validateUuid("operationId", operationId);
+    validateErrorCode(errorCode);
+    return withTransaction(this.pool, async (client) => {
+      const result = await client.query<OperationRow>(
+        `UPDATE companion_operations
+        SET status = 'queued', error_code = $2, completed_at = NULL,
+            lease_expires_at = NULL, updated_at = clock_timestamp()
+        WHERE operation_id = $1 AND status = 'applying'
+        RETURNING *`,
+        [operationId, errorCode],
+      );
+      const released = result.rows[0];
+      if (released) {
+        return mapOperation(released);
+      }
+
+      const existing = await selectOperation(client, operationId);
+      if (!existing) {
+        throw new OperationNotFoundError(operationId);
+      }
+      const operation = mapOperation(existing);
+      if (operation.status === "queued" && operation.errorCode === errorCode) {
+        return operation;
+      }
+      throw new InvalidOperationTransitionError(
+        operationId,
+        operation.status,
+        "queued",
+      );
+    });
   }
 
   async markCommitted(
@@ -236,6 +285,31 @@ export class PostgresWriteJournal implements DurableWriteJournal {
         return result.rows[0];
       },
       (operation) => operation.errorCode === errorCode,
+    );
+  }
+
+  async resolveUncertainAsCommitted(
+    operationId: string,
+    actualResult: JsonValue,
+  ): Promise<WriteOperation> {
+    validateUuid("operationId", operationId);
+    const serializedResult = canonicalJson(actualResult);
+    return this.#finish(
+      operationId,
+      "committed",
+      async (client) => {
+        const result = await client.query<OperationRow>(
+          `UPDATE companion_operations
+          SET status = 'committed', actual_result = $2::jsonb,
+              error_code = NULL, completed_at = clock_timestamp(),
+              updated_at = clock_timestamp(), lease_expires_at = NULL
+          WHERE operation_id = $1 AND status = 'uncertain'
+          RETURNING *`,
+          [operationId, serializedResult],
+        );
+        return result.rows[0];
+      },
+      (operation) => canonicalJson(operation.actualResult) === serializedResult,
     );
   }
 

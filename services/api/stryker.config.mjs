@@ -6,6 +6,7 @@ export default {
   mutate: [
     "src/actual/actual-session.ts",
     "src/actual/transaction-reconciliation.ts",
+    "src/actual/transaction-reconciler.ts",
     "src/actual/transaction-store.ts",
     "src/database/budget-lock.ts",
   ],

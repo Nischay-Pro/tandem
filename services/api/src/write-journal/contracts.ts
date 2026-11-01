@@ -57,8 +57,10 @@ export interface OperationConflict extends ConflictInput {
 export interface DurableWriteJournal {
   enqueue(input: WriteOperationInput): Promise<EnqueueResult>;
   get(operationId: string): Promise<WriteOperation | undefined>;
+  getConflict(operationId: string): Promise<OperationConflict | undefined>;
   claim(operationId: string): Promise<ClaimResult>;
   renewLease(operationId: string): Promise<boolean>;
+  releaseClaim(operationId: string, errorCode: string): Promise<WriteOperation>;
   markCommitted(
     operationId: string,
     actualResult: JsonValue,
@@ -66,6 +68,10 @@ export interface DurableWriteJournal {
   markUncertain(
     operationId: string,
     errorCode: string,
+  ): Promise<WriteOperation>;
+  resolveUncertainAsCommitted(
+    operationId: string,
+    actualResult: JsonValue,
   ): Promise<WriteOperation>;
   recordConflict(
     operationId: string,

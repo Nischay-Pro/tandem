@@ -2,6 +2,15 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { Pool } from "pg";
 import type { Pool as PoolType } from "pg";
+import {
+  TransactionReconciler,
+  type ActualBudgetSessionPort,
+} from "../src/actual/transaction-reconciler.js";
+import {
+  createTransactionRevision,
+  type TransactionSnapshot,
+} from "../src/actual/transaction-reconciliation.js";
+import type { ActualTransactionStore } from "../src/actual/transaction-store.js";
 import { createPostgresDatabase, type Database } from "../src/database.js";
 import {
   MIGRATIONS,
@@ -12,6 +21,7 @@ import {
 } from "../src/schema/migrator.js";
 import type {
   ConflictInput,
+  JsonValue,
   WriteOperationInput,
 } from "../src/write-journal/contracts.js";
 import { PostgresWriteJournal } from "../src/write-journal/postgres-write-journal.js";
@@ -399,6 +409,49 @@ describe("durable write journal integration", () => {
     await expect(
       database.journal.markUncertain(input.operationId, "actual-timeout"),
     ).rejects.toThrow("cannot transition from committed to uncertain");
+    await expect(
+      database.journal.resolveUncertainAsCommitted(input.operationId, {
+        actualTransactionId: "actual-synthetic-id",
+      }),
+    ).resolves.toMatchObject({ status: "committed" });
+  });
+
+  it("releases only pre-write claims back to the durable queue", async () => {
+    const input = createOperation();
+    await database.journal.enqueue(input);
+    await database.journal.claim(input.operationId);
+
+    const released = await database.journal.releaseClaim(
+      input.operationId,
+      "actual-read-failed",
+    );
+    const repeated = await database.journal.releaseClaim(
+      input.operationId,
+      "actual-read-failed",
+    );
+    expect(released).toMatchObject({
+      status: "queued",
+      errorCode: "actual-read-failed",
+      leaseExpiresAt: null,
+      completedAt: null,
+    });
+    expect(repeated.status).toBe("queued");
+    await expect(
+      database.journal.releaseClaim(input.operationId, "different-error"),
+    ).rejects.toThrow("cannot transition from queued to queued");
+
+    const retriedClaim = await database.journal.claim(input.operationId);
+    expect(retriedClaim).toMatchObject({
+      claimed: true,
+      operation: {
+        status: "applying",
+        attemptCount: 2,
+        errorCode: null,
+      },
+    });
+    await expect(
+      database.journal.releaseClaim(input.operationId, "actual-read-failed"),
+    ).resolves.toMatchObject({ status: "queued" });
   });
 
   it("never automatically reclaims an uncertain write", async () => {
@@ -424,6 +477,34 @@ describe("durable write journal integration", () => {
     expect(claim.operation.status).toBe("uncertain");
   });
 
+  it("resolves an uncertain operation only when verification confirms convergence", async () => {
+    const input = createOperation();
+    const result = { transactionId: input.entityId, amount: 1200 };
+    await database.journal.enqueue(input);
+    await database.journal.claim(input.operationId);
+    await database.journal.markUncertain(input.operationId, "actual-timeout");
+
+    const committed = await database.journal.resolveUncertainAsCommitted(
+      input.operationId,
+      result,
+    );
+    const repeated = await database.journal.resolveUncertainAsCommitted(
+      input.operationId,
+      result,
+    );
+    expect(committed).toMatchObject({
+      status: "committed",
+      actualResult: result,
+    });
+    expect(repeated.status).toBe("committed");
+    await expect(
+      database.journal.resolveUncertainAsCommitted(input.operationId, {
+        ...result,
+        amount: 1500,
+      }),
+    ).rejects.toThrow("cannot transition from committed to committed");
+  });
+
   it("stores a conflict and treats a matching conflict retry as idempotent", async () => {
     const input = createOperation();
     await database.journal.enqueue(input);
@@ -440,6 +521,12 @@ describe("durable write journal integration", () => {
     });
     expect(first.conflictId).toBe(conflict.conflictId);
     expect(retry.conflictId).toBe(conflict.conflictId);
+    await expect(
+      database.journal.getConflict(input.operationId),
+    ).resolves.toMatchObject({
+      conflictId: conflict.conflictId,
+      operationId: input.operationId,
+    });
     await expect(
       database.journal.get(input.operationId),
     ).resolves.toMatchObject({
@@ -518,6 +605,15 @@ describe("durable write journal integration", () => {
     await expect(
       database.journal.recordConflict(missingId, createConflict()),
     ).rejects.toThrow("does not exist");
+    await expect(
+      database.journal.releaseClaim(missingId, "safe-to-retry"),
+    ).rejects.toThrow("does not exist");
+    await expect(
+      database.journal.resolveUncertainAsCommitted(missingId, null),
+    ).rejects.toThrow("does not exist");
+    await expect(
+      database.journal.getConflict(missingId),
+    ).resolves.toBeUndefined();
   });
 
   it("expires an interrupted applying lease to uncertain instead of replaying it", async () => {
@@ -549,6 +645,94 @@ describe("durable write journal integration", () => {
       claimed: false,
       operation: { status: "uncertain" },
     });
+  });
+
+  it("commits a late Actual success after read-back confirms the expired write", async () => {
+    const base: TransactionSnapshot = {
+      id: "transaction-late-success",
+      account: "checking-account",
+      amount: 1500,
+      date: "2026-11-01",
+      payee: null,
+      category: null,
+      notes: null,
+      cleared: null,
+      reconciled: null,
+      importedId: null,
+      importedPayee: null,
+      startingBalance: null,
+      schedule: null,
+      transferId: null,
+      isParent: false,
+      isChild: false,
+      parentId: null,
+      subtransactions: [],
+    };
+    const request = {
+      operationId: randomUUID(),
+      principalId: `device-${randomUUID()}`,
+      budgetId: `sync-${randomUUID()}`,
+      idempotencyKey: `late-success-${randomUUID()}`,
+      transactionId: base.id,
+      baseRevision: createTransactionRevision(base),
+      baseSnapshot: base as unknown as JsonValue,
+      action: "update" as const,
+      patch: { amount: 1200 },
+    };
+
+    let actual: Record<string, unknown> = {
+      id: base.id,
+      account: base.account,
+      amount: base.amount,
+      date: base.date,
+    };
+    let actualWrites = 0;
+    const transactions: ActualTransactionStore = {
+      async read() {
+        return actual;
+      },
+      async update(_id, fields) {
+        actualWrites += 1;
+        actual = { ...actual, ...fields };
+        await inspectionPool.query(
+          `UPDATE companion_operations
+          SET lease_expires_at = clock_timestamp() - interval '1 second'
+          WHERE operation_id = $1`,
+          [request.operationId],
+        );
+        await database.journal.expireLeases();
+        return actual;
+      },
+      async delete() {
+        actualWrites += 1;
+        return undefined;
+      },
+    };
+    const session: ActualBudgetSessionPort = {
+      async runBudget<T>(_syncId: string, operation: () => Promise<T>) {
+        return operation();
+      },
+    };
+    const reconciler = new TransactionReconciler(
+      database,
+      database.journal,
+      session,
+      transactions,
+    );
+
+    const first = await reconciler.submit(request);
+    const retry = await reconciler.submit(request);
+
+    expect(first.operation).toMatchObject({
+      status: "committed",
+      actualResult: {
+        transactionId: base.id,
+        appliedPatch: { amount: 1200 },
+      },
+    });
+    expect(retry.operation.status).toBe("committed");
+    expect(actualWrites).toBe(1);
+    expect(actual.amount).toBe(1200);
   });
 
   it("serializes the same budget across PostgreSQL connections and releases locks after failure", async () => {
@@ -646,5 +830,17 @@ describe("durable write journal integration", () => {
         "not safe!",
       ),
     ).rejects.toThrow("errorCode must be a lowercase identifier");
+    await expect(
+      database.journal.releaseClaim(conflictOperation.operationId, "bad code"),
+    ).rejects.toThrow("errorCode must be a lowercase identifier");
+    await expect(database.journal.getConflict("invalid-id")).rejects.toThrow(
+      "operationId must be a UUID",
+    );
+    await expect(
+      database.journal.releaseClaim("invalid-id", "safe-to-retry"),
+    ).rejects.toThrow("operationId must be a UUID");
+    await expect(
+      database.journal.resolveUncertainAsCommitted("invalid-id", null),
+    ).rejects.toThrow("operationId must be a UUID");
   });
 });
