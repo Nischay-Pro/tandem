@@ -13,6 +13,7 @@ import {
   type TransactionSnapshot,
 } from "./transaction-reconciliation.js";
 import type {
+  ActualWriteEvidence,
   ConflictInput,
   DurableWriteJournal,
   JsonValue,
@@ -231,10 +232,14 @@ export class TransactionReconciler {
 
     if (plan.kind === "write-delete") {
       if (latestRaw === undefined) {
-        const committed = await this.#markVerifiedCommitted(operation, {
-          transactionId: prepared.request.transactionId,
-          deleted: true,
-        });
+        const committed = await this.#markVerifiedCommitted(
+          operation,
+          {
+            transactionId: prepared.request.transactionId,
+            deleted: true,
+          },
+          { kind: "transaction-delete-returned" },
+        );
         return { operation: committed, conflict: null };
       }
       const latest = snapshotActualTransaction(latestRaw);
@@ -274,17 +279,25 @@ export class TransactionReconciler {
       });
     }
 
-    const committed = await this.#markVerifiedCommitted(operation, {
-      transactionId: prepared.request.transactionId,
-      appliedPatch: toJsonValue(plan.patch),
-      verifiedRevision: createTransactionRevision(latest),
-    });
+    const committed = await this.#markVerifiedCommitted(
+      operation,
+      {
+        transactionId: prepared.request.transactionId,
+        appliedPatch: toJsonValue(plan.patch),
+        verifiedRevision: createTransactionRevision(latest),
+      },
+      {
+        kind: "transaction-update-returned",
+        appliedPatch: toJsonValue(plan.patch) as { [key: string]: JsonValue },
+      },
+    );
     return { operation: committed, conflict: null };
   }
 
   async #markVerifiedCommitted(
     operation: WriteOperation,
     actualResult: JsonValue,
+    writeEvidence?: ActualWriteEvidence,
   ): Promise<WriteOperation> {
     try {
       return await this.journal.markCommitted(
@@ -309,6 +322,7 @@ export class TransactionReconciler {
         return this.journal.resolveUncertainAsCommitted(
           operation.operationId,
           actualResult,
+          writeEvidence,
         );
       }
       throw commitError;
@@ -319,6 +333,11 @@ export class TransactionReconciler {
     operation: WriteOperation,
     prepared: PreparedRequest,
   ): Promise<TransactionReconciliationResult> {
+    const evidence = operation.writeEvidence;
+    if (!evidence) {
+      return this.#existingResult(operation);
+    }
+
     let current: unknown | undefined;
     try {
       current = await this.session.runBudget(
@@ -330,20 +349,23 @@ export class TransactionReconciler {
       return this.#existingResult(operation);
     }
 
-    if (operation.action === "delete") {
-      if (current !== undefined) {
+    if (evidence.kind === "transaction-delete-returned") {
+      if (operation.action !== "delete" || current !== undefined) {
         return this.#existingResult(operation);
       }
     } else {
-      if (current === undefined) {
+      if (operation.action !== "update" || current === undefined) {
         return this.#existingResult(operation);
       }
-      if (
-        mismatchedPatchFields(
-          snapshotActualTransaction(current),
-          prepared.patch,
-        ).length > 0
-      ) {
+      let recoveredPatch: TransactionPatch;
+      let recoveredSnapshot: TransactionSnapshot;
+      try {
+        recoveredPatch = parseTransactionPatch(evidence.appliedPatch);
+        recoveredSnapshot = snapshotActualTransaction(current);
+      } catch {
+        return this.#existingResult(operation);
+      }
+      if (mismatchedPatchFields(recoveredSnapshot, recoveredPatch).length > 0) {
         return this.#existingResult(operation);
       }
     }
@@ -355,6 +377,7 @@ export class TransactionReconciler {
           transactionId: prepared.request.transactionId,
           recoveredByReadback: true,
         },
+        evidence,
       );
       return { operation: committed, conflict: null };
     } catch {

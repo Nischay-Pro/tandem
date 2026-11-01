@@ -17,12 +17,20 @@ export interface WriteOperationInput {
 export type OperationStatus =
   "queued" | "applying" | "committed" | "conflict" | "uncertain" | "rejected";
 
+export type ActualWriteEvidence =
+  | {
+      kind: "transaction-update-returned";
+      appliedPatch: { [key: string]: JsonValue };
+    }
+  | { kind: "transaction-delete-returned" };
+
 export interface WriteOperation extends WriteOperationInput {
   requestHash: string;
   status: OperationStatus;
   attemptCount: number;
   errorCode: string | null;
   actualResult: JsonValue | null;
+  writeEvidence: ActualWriteEvidence | null;
   createdAt: Date;
   updatedAt: Date;
   startedAt: Date | null;
@@ -68,10 +76,12 @@ export interface DurableWriteJournal {
   markUncertain(
     operationId: string,
     errorCode: string,
+    writeEvidence?: ActualWriteEvidence,
   ): Promise<WriteOperation>;
   resolveUncertainAsCommitted(
     operationId: string,
     actualResult: JsonValue,
+    writeEvidence?: ActualWriteEvidence,
   ): Promise<WriteOperation>;
   recordConflict(
     operationId: string,

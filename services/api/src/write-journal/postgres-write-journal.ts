@@ -7,6 +7,7 @@ import {
   OperationNotFoundError,
 } from "./contracts.js";
 import type {
+  ActualWriteEvidence,
   ClaimResult,
   ConflictInput,
   DurableWriteJournal,
@@ -266,9 +267,12 @@ export class PostgresWriteJournal implements DurableWriteJournal {
   async markUncertain(
     operationId: string,
     errorCode: string,
+    writeEvidence?: ActualWriteEvidence,
   ): Promise<WriteOperation> {
     validateUuid("operationId", operationId);
     validateErrorCode(errorCode);
+    const serializedEvidence =
+      writeEvidence === undefined ? null : canonicalJson(writeEvidence);
     return this.#finish(
       operationId,
       "uncertain",
@@ -276,21 +280,26 @@ export class PostgresWriteJournal implements DurableWriteJournal {
         const result = await client.query<OperationRow>(
           `UPDATE companion_operations
         SET status = 'uncertain', error_code = $2,
+            actual_result = COALESCE($3::jsonb, actual_result),
             completed_at = clock_timestamp(), updated_at = clock_timestamp(),
             lease_expires_at = NULL
         WHERE operation_id = $1 AND status = 'applying'
         RETURNING *`,
-          [operationId, errorCode],
+          [operationId, errorCode, serializedEvidence],
         );
         return result.rows[0];
       },
-      (operation) => operation.errorCode === errorCode,
+      (operation) =>
+        operation.errorCode === errorCode &&
+        (writeEvidence === undefined ||
+          canonicalJson(operation.writeEvidence) === serializedEvidence),
     );
   }
 
   async resolveUncertainAsCommitted(
     operationId: string,
     actualResult: JsonValue,
+    writeEvidence?: ActualWriteEvidence,
   ): Promise<WriteOperation> {
     validateUuid("operationId", operationId);
     const serializedResult = canonicalJson(actualResult);
@@ -298,6 +307,34 @@ export class PostgresWriteJournal implements DurableWriteJournal {
       operationId,
       "committed",
       async (client) => {
+        const existing = await selectOperation(client, operationId, true);
+        if (!existing) {
+          return undefined;
+        }
+        const operation = mapOperation(existing);
+        if (operation.status === "uncertain") {
+          const evidence = operation.writeEvidence ?? writeEvidence;
+          if (!evidence) {
+            throw new Error(
+              "Cannot resolve uncertain operation without Actual write evidence",
+            );
+          }
+          if (!writeEvidenceMatchesAction(operation.action, evidence)) {
+            throw new Error(
+              "Actual write evidence does not match the operation action",
+            );
+          }
+          if (
+            operation.writeEvidence &&
+            writeEvidence &&
+            canonicalJson(operation.writeEvidence) !==
+              canonicalJson(writeEvidence)
+          ) {
+            throw new Error(
+              "Actual write evidence does not match stored evidence",
+            );
+          }
+        }
         const result = await client.query<OperationRow>(
           `UPDATE companion_operations
           SET status = 'committed', actual_result = $2::jsonb,
@@ -466,6 +503,10 @@ async function selectOperation(
 }
 
 function mapOperation(row: OperationRow): WriteOperation {
+  // For uncertain rows, actual_result stores the tagged write receipt in the
+  // existing JSON column so this point release does not add a migration.
+  const writeEvidence =
+    row.status === "uncertain" ? parseWriteEvidence(row.actual_result) : null;
   return {
     operationId: row.operation_id,
     principalId: row.principal_id,
@@ -481,13 +522,49 @@ function mapOperation(row: OperationRow): WriteOperation {
     status: row.status,
     attemptCount: row.attempt_count,
     errorCode: row.error_code,
-    actualResult: row.actual_result,
+    actualResult: writeEvidence ? null : row.actual_result,
+    writeEvidence,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     startedAt: row.started_at,
     leaseExpiresAt: row.lease_expires_at,
     completedAt: row.completed_at,
   };
+}
+
+function writeEvidenceMatchesAction(
+  action: string,
+  evidence: ActualWriteEvidence,
+): boolean {
+  return (
+    (action === "update" && evidence.kind === "transaction-update-returned") ||
+    (action === "delete" && evidence.kind === "transaction-delete-returned")
+  );
+}
+
+function parseWriteEvidence(
+  value: JsonValue | null,
+): ActualWriteEvidence | null {
+  if (value === null || Array.isArray(value) || typeof value !== "object") {
+    return null;
+  }
+  const record = value as { [key: string]: JsonValue };
+  if (record.kind === "transaction-delete-returned") {
+    return { kind: "transaction-delete-returned" };
+  }
+  const appliedPatch = record.appliedPatch;
+  if (
+    record.kind === "transaction-update-returned" &&
+    appliedPatch !== null &&
+    !Array.isArray(appliedPatch) &&
+    typeof appliedPatch === "object"
+  ) {
+    return {
+      kind: "transaction-update-returned",
+      appliedPatch: appliedPatch as { [key: string]: JsonValue },
+    };
+  }
+  return null;
 }
 
 function mapConflict(row: ConflictRow): OperationConflict {

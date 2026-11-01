@@ -20,6 +20,7 @@ import {
   type Migration,
 } from "../src/schema/migrator.js";
 import type {
+  ActualWriteEvidence,
   ConflictInput,
   JsonValue,
   WriteOperationInput,
@@ -486,12 +487,88 @@ describe("durable write journal integration", () => {
     expect(claim.operation.status).toBe("uncertain");
   });
 
-  it("resolves an uncertain operation only when verification confirms convergence", async () => {
+  it("rejects uncertain resolution when write completion was never acknowledged", async () => {
     const input = createOperation();
     const result = { transactionId: input.entityId, amount: 1200 };
     await database.journal.enqueue(input);
     await database.journal.claim(input.operationId);
     await database.journal.markUncertain(input.operationId, "actual-timeout");
+
+    await expect(
+      database.journal.resolveUncertainAsCommitted(input.operationId, result),
+    ).rejects.toThrow("without Actual write evidence");
+    await expect(
+      database.journal.get(input.operationId),
+    ).resolves.toMatchObject({
+      status: "uncertain",
+      actualResult: null,
+      writeEvidence: null,
+    });
+  });
+
+  it("does not treat an unknown stored result as write evidence", async () => {
+    const input = createOperation();
+    const unknownResult = { kind: "future-result-format", succeeded: true };
+    await database.journal.enqueue(input);
+    await database.journal.claim(input.operationId);
+    await database.journal.markUncertain(input.operationId, "actual-timeout");
+    await inspectionPool.query(
+      "UPDATE companion_operations SET actual_result = $2::jsonb WHERE operation_id = $1",
+      [input.operationId, JSON.stringify(unknownResult)],
+    );
+
+    await expect(
+      database.journal.get(input.operationId),
+    ).resolves.toMatchObject({
+      status: "uncertain",
+      actualResult: unknownResult,
+      writeEvidence: null,
+    });
+  });
+
+  it("persists write evidence before allowing uncertain resolution", async () => {
+    const input = createOperation();
+    const result = { transactionId: input.entityId, amount: 1200 };
+    const evidence: ActualWriteEvidence = {
+      kind: "transaction-update-returned",
+      appliedPatch: { amount: 1200 },
+    };
+    await database.journal.enqueue(input);
+    await database.journal.claim(input.operationId);
+    const uncertain = await database.journal.markUncertain(
+      input.operationId,
+      "actual-timeout",
+      evidence,
+    );
+    const repeatedUncertain = await database.journal.markUncertain(
+      input.operationId,
+      "actual-timeout",
+      evidence,
+    );
+
+    expect(uncertain).toMatchObject({
+      status: "uncertain",
+      actualResult: null,
+      writeEvidence: evidence,
+    });
+    expect(repeatedUncertain.writeEvidence).toEqual(evidence);
+    await expect(
+      database.journal.get(input.operationId),
+    ).resolves.toMatchObject({ status: "uncertain", writeEvidence: evidence });
+
+    await expect(
+      database.journal.resolveUncertainAsCommitted(input.operationId, result, {
+        kind: "transaction-update-returned",
+        appliedPatch: { amount: 1500 },
+      }),
+    ).rejects.toThrow("does not match stored evidence");
+
+    await expect(
+      database.journal.markUncertain(input.operationId, "actual-timeout", {
+        kind: "transaction-update-returned",
+        appliedPatch: { amount: 1500 },
+      }),
+    ).rejects.toThrow("cannot transition from uncertain to uncertain");
 
     const committed = await database.journal.resolveUncertainAsCommitted(
       input.operationId,
@@ -504,6 +581,7 @@ describe("durable write journal integration", () => {
     expect(committed).toMatchObject({
       status: "committed",
       actualResult: result,
+      writeEvidence: null,
     });
     expect(repeated.status).toBe("committed");
     await expect(
@@ -512,6 +590,44 @@ describe("durable write journal integration", () => {
         amount: 1500,
       }),
     ).rejects.toThrow("cannot transition from committed to committed");
+  });
+
+  it("rejects write evidence for a different transaction action", async () => {
+    const input = createOperation({ action: "delete", patch: {} });
+    await database.journal.enqueue(input);
+    await database.journal.claim(input.operationId);
+    await database.journal.markUncertain(input.operationId, "actual-timeout");
+
+    await expect(
+      database.journal.resolveUncertainAsCommitted(input.operationId, null, {
+        kind: "transaction-update-returned",
+        appliedPatch: { amount: 1200 },
+      }),
+    ).rejects.toThrow("does not match the operation action");
+  });
+
+  it("accepts returned delete evidence for an uncertain delete", async () => {
+    const input = createOperation({ action: "delete", patch: {} });
+    const evidence: ActualWriteEvidence = {
+      kind: "transaction-delete-returned",
+    };
+    await database.journal.enqueue(input);
+    await database.journal.claim(input.operationId);
+    await database.journal.markUncertain(
+      input.operationId,
+      "actual-timeout",
+      evidence,
+    );
+
+    const committed = await database.journal.resolveUncertainAsCommitted(
+      input.operationId,
+      { transactionId: input.entityId, recoveredByReadback: true },
+    );
+
+    expect(committed).toMatchObject({
+      status: "committed",
+      writeEvidence: null,
+    });
   });
 
   it("stores a conflict and treats a matching conflict retry as idempotent", async () => {

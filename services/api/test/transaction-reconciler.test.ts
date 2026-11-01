@@ -15,6 +15,7 @@ import {
 } from "../src/actual/transaction-reconciliation.js";
 import type { ActualTransactionStore } from "../src/actual/transaction-store.js";
 import type {
+  ActualWriteEvidence,
   ClaimResult,
   ConflictInput,
   DurableWriteJournal,
@@ -27,6 +28,13 @@ import type {
 } from "../src/write-journal/contracts.js";
 
 const USE_CURRENT = Symbol("use-current-actual-transaction");
+const updateEvidence: ActualWriteEvidence = {
+  kind: "transaction-update-returned",
+  appliedPatch: { amount: 1200 },
+};
+const deleteEvidence: ActualWriteEvidence = {
+  kind: "transaction-delete-returned",
+};
 
 function createSnapshot(
   overrides: Partial<TransactionSnapshot> = {},
@@ -98,6 +106,7 @@ function createRequest(
 function createOperation(
   input: WriteOperationInput,
   status: OperationStatus,
+  writeEvidence: ActualWriteEvidence | null = null,
 ): WriteOperation {
   const timestamp = new Date("2026-11-01T12:00:00.000Z");
   return {
@@ -107,6 +116,7 @@ function createOperation(
     attemptCount: 0,
     errorCode: status === "uncertain" ? "actual-outcome-uncertain" : null,
     actualResult: null,
+    writeEvidence,
     createdAt: timestamp,
     updatedAt: timestamp,
     startedAt: null,
@@ -119,6 +129,7 @@ class MemoryWriteJournal implements DurableWriteJournal {
   operation: WriteOperation | undefined;
   conflict: OperationConflict | undefined;
   initialStatus: OperationStatus = "queued";
+  initialWriteEvidence: ActualWriteEvidence | null = null;
   claimAllowed = true;
   missingOnGet = false;
   getError: unknown;
@@ -126,7 +137,11 @@ class MemoryWriteJournal implements DurableWriteJournal {
 
   async enqueue(input: WriteOperationInput): Promise<EnqueueResult> {
     this.#throwIfFailed("enqueue");
-    this.operation ??= createOperation(input, this.initialStatus);
+    this.operation ??= createOperation(
+      input,
+      this.initialStatus,
+      this.initialWriteEvidence,
+    );
     return { operation: this.operation, replayed: false };
   }
 
@@ -204,30 +219,51 @@ class MemoryWriteJournal implements DurableWriteJournal {
   async markUncertain(
     _operationId: string,
     errorCode: string,
+    writeEvidence?: ActualWriteEvidence,
   ): Promise<WriteOperation> {
     this.#throwIfFailed("markUncertain");
     const operation = this.#requireOperation();
     if (operation.status !== "applying") {
       throw new Error(`Cannot mark uncertain from ${operation.status}`);
     }
-    this.operation = { ...operation, status: "uncertain", errorCode };
+    this.operation = {
+      ...operation,
+      status: "uncertain",
+      errorCode,
+      writeEvidence: writeEvidence ?? operation.writeEvidence,
+    };
     return this.operation;
   }
 
   async resolveUncertainAsCommitted(
     _operationId: string,
     actualResult: JsonValue,
+    writeEvidence?: ActualWriteEvidence,
   ): Promise<WriteOperation> {
     this.#throwIfFailed("resolveUncertainAsCommitted");
     const operation = this.#requireOperation();
     if (operation.status !== "uncertain") {
       throw new Error(`Cannot resolve from ${operation.status}`);
     }
+    const evidence = operation.writeEvidence ?? writeEvidence;
+    if (!evidence) {
+      throw new Error(
+        "Cannot resolve uncertain operation without Actual write evidence",
+      );
+    }
+    if (
+      operation.writeEvidence &&
+      writeEvidence &&
+      JSON.stringify(operation.writeEvidence) !== JSON.stringify(writeEvidence)
+    ) {
+      throw new Error("Actual write evidence does not match stored evidence");
+    }
     this.operation = {
       ...operation,
       status: "committed",
       actualResult,
       errorCode: null,
+      writeEvidence: null,
     };
     return this.operation;
   }
@@ -291,10 +327,15 @@ interface Harness {
 
 function createHarness(
   request = createRequest(),
-  options: { initialStatus?: OperationStatus; claimAllowed?: boolean } = {},
+  options: {
+    initialStatus?: OperationStatus;
+    initialWriteEvidence?: ActualWriteEvidence;
+    claimAllowed?: boolean;
+  } = {},
 ): Harness {
   const journal = new MemoryWriteJournal();
   journal.initialStatus = options.initialStatus ?? "queued";
+  journal.initialWriteEvidence = options.initialWriteEvidence ?? null;
   journal.claimAllowed = options.claimAllowed ?? true;
   const base = request.baseSnapshot as unknown as TransactionSnapshot;
   let actual: unknown | undefined = actualFrom(base);
@@ -941,9 +982,36 @@ describe("Actual transaction reconciliation", () => {
     expect(harness.sessionCalls).toHaveLength(0);
   });
 
-  it("recovers a converged uncertain update without replaying its write", async () => {
+  it("does not call a matching uncertain update committed without write evidence", async () => {
     const request = createRequest();
     const harness = createHarness(request, { initialStatus: "uncertain" });
+    harness.actual = actualFrom(createSnapshot({ amount: 1200 }));
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation.status).toBe("uncertain");
+    expect(result.operation.actualResult).toBeNull();
+    expect(harness.sessionCalls).toHaveLength(0);
+  });
+
+  it("does not call an absent uncertain deletion committed without write evidence", async () => {
+    const request = createRequest({ action: "delete", patch: {} });
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    harness.actual = undefined;
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation.status).toBe("uncertain");
+    expect(result.operation.actualResult).toBeNull();
+    expect(harness.sessionCalls).toHaveLength(0);
+  });
+
+  it("recovers a matching uncertain update with Actual write evidence", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: updateEvidence,
+    });
     harness.actual = actualFrom(createSnapshot({ amount: 1200 }));
 
     const result = await harness.reconciler.submit(request);
@@ -954,23 +1022,81 @@ describe("Actual transaction reconciliation", () => {
         transactionId: request.transactionId,
         recoveredByReadback: true,
       },
+      writeEvidence: null,
     });
     expect(harness.sessionCalls).toHaveLength(1);
   });
 
-  it("recovers a converged uncertain deletion", async () => {
+  it("recovers an absent uncertain deletion with Actual write evidence", async () => {
     const request = createRequest({ action: "delete", patch: {} });
-    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: deleteEvidence,
+    });
     harness.actual = undefined;
 
     const result = await harness.reconciler.submit(request);
 
-    expect(result.operation.status).toBe("committed");
+    expect(result.operation).toMatchObject({
+      status: "committed",
+      actualResult: {
+        transactionId: request.transactionId,
+        recoveredByReadback: true,
+      },
+      writeEvidence: null,
+    });
+  });
+
+  it("does not recover an update with delete write evidence", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: deleteEvidence,
+    });
+    harness.actual = undefined;
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation.status).toBe("uncertain");
+    expect(harness.sessionCalls).toHaveLength(1);
+  });
+
+  it("does not recover a deletion with update write evidence", async () => {
+    const request = createRequest({ action: "delete", patch: {} });
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: updateEvidence,
+    });
+    harness.actual = actualFrom(createSnapshot({ amount: 1200 }));
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation.status).toBe("uncertain");
+    expect(harness.sessionCalls).toHaveLength(1);
+  });
+
+  it("keeps uncertainty when stored update evidence has an invalid patch", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: {
+        kind: "transaction-update-returned",
+        appliedPatch: { unsupported: true },
+      },
+    });
+    harness.actual = actualFrom(createSnapshot({ amount: 1200 }));
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation.status).toBe("uncertain");
   });
 
   it("does not recover an uncertain deletion when Actual still has the row", async () => {
     const request = createRequest({ action: "delete", patch: {} });
-    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: deleteEvidence,
+    });
 
     const result = await harness.reconciler.submit(request);
 
@@ -979,7 +1105,10 @@ describe("Actual transaction reconciliation", () => {
 
   it("does not resolve an uncertain deletion when Actual cannot be read", async () => {
     const request = createRequest({ action: "delete", patch: {} });
-    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: deleteEvidence,
+    });
     harness.setSessionErrorAt(1, new Error("Actual unavailable"));
 
     const result = await harness.reconciler.submit(request);
@@ -989,7 +1118,10 @@ describe("Actual transaction reconciliation", () => {
 
   it("leaves a divergent uncertain operation unresolved", async () => {
     const request = createRequest();
-    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: updateEvidence,
+    });
 
     const result = await harness.reconciler.submit(request);
 
@@ -998,7 +1130,10 @@ describe("Actual transaction reconciliation", () => {
 
   it("does not recover an uncertain update when Actual deleted the row", async () => {
     const request = createRequest();
-    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: updateEvidence,
+    });
     harness.actual = undefined;
 
     const result = await harness.reconciler.submit(request);
@@ -1008,7 +1143,10 @@ describe("Actual transaction reconciliation", () => {
 
   it("keeps uncertainty when read-back or journal recovery fails", async () => {
     const request = createRequest();
-    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: updateEvidence,
+    });
     harness.actual = actualFrom(createSnapshot({ amount: 1200 }));
     harness.setSessionErrorAt(1, new Error("Actual unavailable"));
 
@@ -1019,7 +1157,10 @@ describe("Actual transaction reconciliation", () => {
 
   it("keeps uncertainty when verified read-back cannot be journaled", async () => {
     const request = createRequest();
-    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: updateEvidence,
+    });
     harness.actual = actualFrom(createSnapshot({ amount: 1200 }));
     harness.journal.failures.set(
       "resolveUncertainAsCommitted",
