@@ -29,7 +29,7 @@ describe("PostgreSQL connection integration", () => {
       withBudgetLock(pool, "synthetic-budget", async () => "unreachable"),
     ).rejects.toBe(lockError);
     expect(query).toHaveBeenCalledOnce();
-    expect(release).toHaveBeenCalledWith(undefined);
+    expect(release).toHaveBeenCalledWith(true);
   });
 
   it("evicts a connection when releasing the budget lock fails", async () => {
@@ -49,7 +49,7 @@ describe("PostgreSQL connection integration", () => {
       withBudgetLock(pool, "synthetic-budget", async () => "completed"),
     ).rejects.toBe(unlockError);
     expect(query).toHaveBeenCalledTimes(2);
-    expect(release).toHaveBeenCalledWith(unlockError);
+    expect(release).toHaveBeenCalledWith(true);
   });
 
   it("preserves non-Error values thrown while releasing the budget lock", async () => {
@@ -67,7 +67,7 @@ describe("PostgreSQL connection integration", () => {
     await expect(
       withBudgetLock(pool, "synthetic-budget", async () => "completed"),
     ).rejects.toBeNull();
-    expect(release).toHaveBeenCalledWith(undefined);
+    expect(release).toHaveBeenCalledWith(true);
   });
 
   it("preserves both the operation error and unlock error", async () => {
@@ -90,7 +90,26 @@ describe("PostgreSQL connection integration", () => {
     await expect(result).rejects.toMatchObject({
       errors: [operationError, unlockError],
     });
-    expect(release).toHaveBeenCalledWith(unlockError);
+    expect(release).toHaveBeenCalledWith(true);
+  });
+
+  it("destroys a connection when PostgreSQL says the budget lock was not held", async () => {
+    const query = vi
+      .fn()
+      .mockImplementation(async (sql: string) =>
+        sql.includes("pg_advisory_unlock")
+          ? { rows: [{ unlocked: false }], rowCount: 1 }
+          : { rows: [], rowCount: 1 },
+      );
+    const release = vi.fn();
+    const pool = {
+      connect: vi.fn().mockResolvedValue({ query, release }),
+    } as unknown as Pool;
+
+    await expect(
+      withBudgetLock(pool, "synthetic-budget", async () => "completed"),
+    ).rejects.toThrow("Could not confirm release of the budget advisory lock");
+    expect(release).toHaveBeenCalledWith(true);
   });
 
   it("releases the migration connection when the advisory lock cannot be acquired", async () => {
@@ -109,6 +128,55 @@ describe("PostgreSQL connection integration", () => {
       applyMigrations(pool, MIGRATIONS, [migrationName]),
     ).rejects.toBe(lockError);
     expect(query).toHaveBeenCalledOnce();
-    expect(release).toHaveBeenCalledOnce();
+    expect(release).toHaveBeenCalledWith(true);
+  });
+
+  it("destroys the migration connection when lock release is not confirmed", async () => {
+    const query = vi.fn().mockImplementation(async (sql: string) => {
+      if (sql.includes("pg_advisory_unlock")) {
+        return { rows: [{ unlocked: false }], rowCount: 1 };
+      }
+      if (sql.includes("SELECT position")) {
+        return { rows: [], rowCount: 0 };
+      }
+      return { rows: [], rowCount: 1 };
+    });
+    const release = vi.fn();
+    const pool = {
+      connect: vi.fn().mockResolvedValue({ query, release }),
+    } as unknown as Pool;
+
+    await expect(applyMigrations(pool, [], [])).rejects.toThrow(
+      "Could not confirm release of the migration advisory lock",
+    );
+    expect(release).toHaveBeenCalledWith(true);
+  });
+
+  it("preserves a migration error and reports lock cleanup failure separately", async () => {
+    const primaryError = new Error("migration inspection failed");
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const query = vi.fn().mockImplementation(async (sql: string) => {
+      if (sql.includes("SELECT position")) {
+        throw primaryError;
+      }
+      if (sql.includes("pg_advisory_unlock")) {
+        return { rows: [{ unlocked: false }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 1 };
+    });
+    const release = vi.fn();
+    const pool = {
+      connect: vi.fn().mockResolvedValue({ query, release }),
+    } as unknown as Pool;
+
+    await expect(applyMigrations(pool, [], [])).rejects.toBe(primaryError);
+    expect(consoleError).toHaveBeenCalledWith(
+      "Migration lock cleanup also failed",
+      { primaryError: "Error", releaseError: "Error" },
+    );
+    expect(release).toHaveBeenCalledWith(true);
+    consoleError.mockRestore();
   });
 });

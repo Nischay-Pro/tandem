@@ -55,13 +55,16 @@ export async function withBudgetLock<T>(
   }
 
   const client = await pool.connect();
+  let lockAttempted = false;
   let lockAcquired = false;
   let workFailed = false;
   let workError: unknown;
   let result: T | undefined;
   let unlockFailed = false;
   let unlockError: unknown;
+  let clientMustBeDestroyed = false;
   try {
+    lockAttempted = true;
     await client.query("SELECT pg_advisory_lock(hashtextextended($1, 19753))", [
       `actual-budget-companion:${budgetId}`,
     ]);
@@ -70,20 +73,30 @@ export async function withBudgetLock<T>(
   } catch (error) {
     workFailed = true;
     workError = error;
+    if (lockAttempted && !lockAcquired) {
+      // The server may have granted the session lock before the connection failed.
+      clientMustBeDestroyed = true;
+    }
   }
 
   try {
     if (lockAcquired) {
-      await client.query(
-        "SELECT pg_advisory_unlock(hashtextextended($1, 19753))",
+      const unlock = await client.query<{ unlocked: boolean }>(
+        "SELECT pg_advisory_unlock(hashtextextended($1, 19753)) AS unlocked",
         [`actual-budget-companion:${budgetId}`],
       );
+      if (unlock.rows[0]?.unlocked !== true) {
+        throw new Error(
+          "Could not confirm release of the budget advisory lock",
+        );
+      }
     }
   } catch (error) {
     unlockFailed = true;
     unlockError = error;
+    clientMustBeDestroyed = true;
   } finally {
-    client.release(unlockError instanceof Error ? unlockError : undefined);
+    client.release(clientMustBeDestroyed ? true : undefined);
   }
 
   if (workFailed && unlockFailed) {

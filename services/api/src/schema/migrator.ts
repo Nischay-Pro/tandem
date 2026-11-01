@@ -26,9 +26,16 @@ export async function applyMigrations(
   const migrationOrder = order ?? (await readMigrationOrder());
   validateMigrationOrder(migrations, migrationOrder);
   const client = await pool.connect();
+  let lockAttempted = false;
   let lockAcquired = false;
+  let primaryFailed = false;
+  let primaryError: unknown;
+  let releaseFailed = false;
+  let releaseError: unknown;
+  let clientMustBeDestroyed = false;
 
   try {
+    lockAttempted = true;
     await client.query("SELECT pg_advisory_lock($1::bigint)", [
       MIGRATION_LOCK_ID,
     ]);
@@ -63,17 +70,55 @@ export async function applyMigrations(
       await applyOneMigration(client, migration, applied.length + 1);
       applied.push({ position: applied.length + 1, name });
     }
-  } finally {
-    try {
-      if (lockAcquired) {
-        await client.query("SELECT pg_advisory_unlock($1::bigint)", [
-          MIGRATION_LOCK_ID,
-        ]);
-      }
-    } finally {
-      client.release();
+  } catch (error) {
+    primaryFailed = true;
+    primaryError = error;
+    if (lockAttempted && !lockAcquired) {
+      clientMustBeDestroyed = true;
     }
   }
+
+  try {
+    if (lockAcquired) {
+      const unlock = await client.query<{ unlocked: boolean }>(
+        "SELECT pg_advisory_unlock($1::bigint) AS unlocked",
+        [MIGRATION_LOCK_ID],
+      );
+      if (unlock.rows[0]?.unlocked !== true) {
+        throw new Error(
+          "Could not confirm release of the migration advisory lock",
+        );
+      }
+    }
+  } catch (error) {
+    releaseFailed = true;
+    releaseError = error;
+    clientMustBeDestroyed = true;
+  } finally {
+    client.release(clientMustBeDestroyed ? true : undefined);
+  }
+
+  if (primaryFailed) {
+    if (releaseFailed) {
+      reportSecondaryMigrationFailure(primaryError, releaseError);
+    }
+    throw primaryError;
+  }
+  if (releaseFailed) {
+    throw releaseError;
+  }
+}
+
+function reportSecondaryMigrationFailure(
+  primaryError: unknown,
+  releaseError: unknown,
+): void {
+  console.error("Migration lock cleanup also failed", {
+    primaryError:
+      primaryError instanceof Error ? primaryError.name : typeof primaryError,
+    releaseError:
+      releaseError instanceof Error ? releaseError.name : typeof releaseError,
+  });
 }
 
 export async function readMigrationOrder(): Promise<string[]> {
