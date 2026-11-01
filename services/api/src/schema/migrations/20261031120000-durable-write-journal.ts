@@ -1,6 +1,29 @@
 import type { PoolClient } from "pg";
 
 export async function up(client: PoolClient): Promise<void> {
+  await client.query(`CREATE TABLE companion_pairing_codes (
+    code_hash char(64) PRIMARY KEY CHECK (code_hash ~ '^[a-f0-9]{64}$'),
+    principal_id text NOT NULL CHECK (length(principal_id) BETWEEN 1 AND 200),
+    budget_ids text[] NOT NULL CHECK (cardinality(budget_ids) BETWEEN 1 AND 100),
+    expires_at timestamptz NOT NULL,
+    consumed_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    CHECK (expires_at > created_at)
+  )`);
+  await client.query(`CREATE INDEX companion_pairing_codes_expiration
+    ON companion_pairing_codes (expires_at) WHERE consumed_at IS NULL`);
+  await client.query(`CREATE TABLE companion_devices (
+    device_id uuid PRIMARY KEY,
+    principal_id text NOT NULL CHECK (length(principal_id) BETWEEN 1 AND 200),
+    device_name text NOT NULL CHECK (length(device_name) BETWEEN 1 AND 100),
+    credential_hash char(64) NOT NULL UNIQUE CHECK (credential_hash ~ '^[a-f0-9]{64}$'),
+    budget_ids text[] NOT NULL CHECK (cardinality(budget_ids) BETWEEN 1 AND 100),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    last_seen_at timestamptz,
+    revoked_at timestamptz
+  )`);
+  await client.query(`CREATE INDEX companion_devices_principal_created
+    ON companion_devices (principal_id, created_at, device_id)`);
   await client.query(`CREATE TABLE companion_operations (
     operation_id uuid PRIMARY KEY,
     principal_id text NOT NULL CHECK (length(principal_id) BETWEEN 1 AND 200),
@@ -46,4 +69,6 @@ export async function up(client: PoolClient): Promise<void> {
 export async function down(client: PoolClient): Promise<void> {
   await client.query("DROP TABLE companion_operation_conflicts");
   await client.query("DROP TABLE companion_operations");
+  await client.query("DROP TABLE companion_devices");
+  await client.query("DROP TABLE companion_pairing_codes");
 }

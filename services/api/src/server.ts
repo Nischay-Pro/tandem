@@ -23,6 +23,7 @@ export async function startApiServer(
     await leaseReaper.start();
     app = await buildApiApp(database, {
       onClose: () => leaseReaper.stop(),
+      deviceAuth: database.deviceAuth,
     });
     await app.listen({ host: config.host, port: config.port });
   } catch (error) {

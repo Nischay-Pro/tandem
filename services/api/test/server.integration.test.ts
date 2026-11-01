@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseApiConfig } from "../src/config.js";
 import type { ServerDatabase } from "../src/database.js";
+import type { DeviceAuthorization } from "../src/auth/device-auth.js";
 import { startApiServer } from "../src/server.js";
 import { WRITE_LEASE_SWEEP_INTERVAL_MS } from "../src/write-journal/lease-reaper.js";
+
+const deviceAuth = {} as DeviceAuthorization;
 
 describe("API server lifecycle integration", () => {
   afterEach(() => {
@@ -25,6 +28,7 @@ describe("API server lifecycle integration", () => {
       close,
       migrate: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
       journal: { expireLeases },
+      deviceAuth,
     };
     const config = {
       ...parseApiConfig({ DATABASE_URL: "postgres://local/test" }),
@@ -53,6 +57,7 @@ describe("API server lifecycle integration", () => {
       close: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
       migrate: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
       journal: { expireLeases },
+      deviceAuth,
     };
     const config = {
       ...parseApiConfig({ DATABASE_URL: "postgres://local/test" }),
@@ -82,6 +87,7 @@ describe("API server lifecycle integration", () => {
       close,
       migrate: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
       journal: { expireLeases },
+      deviceAuth,
     };
     const config = {
       ...parseApiConfig({ DATABASE_URL: "postgres://local/test" }),
@@ -105,6 +111,7 @@ describe("API server lifecycle integration", () => {
       journal: {
         expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
       },
+      deviceAuth,
     };
     const config = {
       ...parseApiConfig({ DATABASE_URL: "postgres://local/test" }),
@@ -125,6 +132,7 @@ describe("API server lifecycle integration", () => {
       journal: {
         expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
       },
+      deviceAuth,
     };
     const config = {
       ...parseApiConfig({ DATABASE_URL: "postgres://local/test" }),
@@ -149,6 +157,7 @@ describe("API server lifecycle integration", () => {
       journal: {
         expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
       },
+      deviceAuth,
     };
     const config = {
       ...parseApiConfig({ DATABASE_URL: "postgres://local/test" }),
@@ -172,6 +181,7 @@ describe("API server lifecycle integration", () => {
       journal: {
         expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
       },
+      deviceAuth,
     };
     const config = {
       ...parseApiConfig({ DATABASE_URL: "postgres://local/test" }),

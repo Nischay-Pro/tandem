@@ -1,4 +1,6 @@
 import { Pool } from "pg";
+import { DeviceAuthorization } from "./auth/device-auth.js";
+import { PostgresDeviceAuthStore } from "./auth/postgres-device-auth-store.js";
 import { READINESS_TIMEOUT_MS } from "./config.js";
 import { withBudgetLock } from "./database/budget-lock.js";
 import { applyMigrations } from "./schema/migrator.js";
@@ -12,6 +14,7 @@ export interface HealthDatabase {
 
 export interface ServerDatabase extends HealthDatabase {
   readonly journal: Pick<DurableWriteJournal, "expireLeases">;
+  readonly deviceAuth: DeviceAuthorization;
   migrate(): Promise<void>;
 }
 
@@ -36,6 +39,7 @@ export function createPostgresDatabase(connectionString: string): Database {
   });
 
   const journal = new PostgresWriteJournal(pool);
+  const deviceAuth = new DeviceAuthorization(new PostgresDeviceAuthStore(pool));
   let readinessCheck: Promise<void> | undefined;
 
   return {
@@ -57,6 +61,7 @@ export function createPostgresDatabase(connectionString: string): Database {
       await applyMigrations(pool);
     },
     journal,
+    deviceAuth,
     async withBudgetLock<T>(budgetId: string, work: () => Promise<T>) {
       return withBudgetLock(pool, budgetId, work);
     },

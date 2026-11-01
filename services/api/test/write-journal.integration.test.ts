@@ -187,6 +187,14 @@ describe("durable write journal integration", () => {
         "SELECT to_regclass('companion_operations') AS relation",
       );
       expect(before.rows[0]?.relation).toBe("companion_operations");
+      const deviceTable = await isolatedPool.query<{
+        relation: string | null;
+      }>("SELECT to_regclass('companion_devices') AS relation");
+      const pairingTable = await isolatedPool.query<{
+        relation: string | null;
+      }>("SELECT to_regclass('companion_pairing_codes') AS relation");
+      expect(deviceTable.rows[0]?.relation).toBe("companion_devices");
+      expect(pairingTable.rows[0]?.relation).toBe("companion_pairing_codes");
 
       const client = await isolatedPool.connect();
       try {
@@ -207,6 +215,14 @@ describe("durable write journal integration", () => {
         "SELECT to_regclass('companion_operations') AS relation",
       );
       expect(after.rows[0]?.relation).toBeNull();
+      const afterDevice = await isolatedPool.query<{
+        relation: string | null;
+      }>("SELECT to_regclass('companion_devices') AS relation");
+      const afterPairing = await isolatedPool.query<{
+        relation: string | null;
+      }>("SELECT to_regclass('companion_pairing_codes') AS relation");
+      expect(afterDevice.rows[0]?.relation).toBeNull();
+      expect(afterPairing.rows[0]?.relation).toBeNull();
       await applyMigrations(isolatedPool, [migration], [migration.name]);
       const reapplied = await isolatedPool.query<{ relation: string | null }>(
         "SELECT to_regclass('companion_operations') AS relation",

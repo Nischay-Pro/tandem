@@ -9,6 +9,11 @@ export default {
     "src/actual/transaction-reconciler.ts",
     "src/actual/transaction-store.ts",
     "src/database/budget-lock.ts",
+    "src/auth/device-auth.ts",
+    "src/auth/pairing-rate-limiter.ts",
+    "src/auth/pairing-cli.ts",
+    "src/auth/pairing-cli-entrypoint.ts",
+    "src/auth/postgres-device-auth-store.ts",
   ],
   testRunner: "vitest",
   vitest: {
