@@ -6,7 +6,7 @@ import {
 } from "../src/auth/pairing-cli-entrypoint.js";
 
 const pairing = {
-  code: "A".repeat(43),
+  code: "A7D2-X9P4",
   expiresAt: new Date("2026-11-01T10:05:00.000Z"),
   principalId: "owner",
   budgetIds: ["budget-one"],

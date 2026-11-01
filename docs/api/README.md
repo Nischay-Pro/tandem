@@ -30,7 +30,7 @@ definitions and is part of `pnpm check:all`.
 
 ## Device pairing and authentication
 
-Create a one-time code from an API container with database access:
+Create a one-time pairing code from an API container with database access:
 
 ```sh
 docker compose -f docker-compose.dev.yml exec api \
@@ -42,19 +42,30 @@ Use `--budget-id` more than once to scope the new device to selected budgets, or
 use `--all-budgets` to grant all budgets to that principal; a device with this
 scope can also manage other devices for that principal. The principal ID
 defaults to `owner`; `--principal-id <id>` selects another principal. The CLI
-prints a JSON object containing a 5-minute, single-use code. Treat that output
-as a secret and deliver it to the mobile device over a trusted channel.
+prints a JSON object containing a five-minute, single-use code in the
+`XXXX-XXXX` format, such as `4DF7-J1M9`. The code uses eight random characters
+from a 33-symbol uppercase-letter-and-digit alphabet (about 40.36 bits of
+entropy); generators omit the look-alike
+letters `I`, `L`, and `O`, while pairing accepts lowercase input, surrounding
+whitespace, an omitted hyphen, and `I`/`L`/`O` as aliases for `1`/`1`/`0`.
+Treat the CLI output as a secret and deliver it to the mobile device over a
+trusted channel.
 
 `POST /api/v1/auth/pair` accepts `{"code":"…","deviceName":"…"}` and returns
-the opaque bearer token once. The token has 256 bits of random entropy; only its
-SHA-256 hash is stored in PostgreSQL. Pairing attempts are limited to 10 per
-client address per minute per API process. Forwarded client addresses are
-ignored by default. For a reverse-proxy deployment, set `TRUST_PROXY` to the
-exact proxy IP addresses or narrow CIDRs, for example `172.30.0.2` or
-`172.30.0.0/24`. Do not use `0.0.0.0/0`, and make the API reachable only
-through the trusted proxy network. Fastify then keys the pairing limit on the
-forwarded client address. If `TRUST_PROXY` is unset, requests arriving from the
-same proxy socket share a rate-limit bucket.
+the opaque bearer token once. The short code is only a bootstrap credential;
+the resulting device token has 256 bits of random
+entropy; only its SHA-256 hash is stored in PostgreSQL. Pairing code hashes use
+HMAC with SHA-256 and the `DATABASE_URL` value as the key, so the CLI and API
+must use the same value. Pairing attempts are limited to 10 per client address
+per minute, with an aggregate cap of 100 attempts per API process per minute.
+These in-memory limits apply separately to each process. Forwarded client
+addresses are ignored by default. For a
+reverse-proxy deployment, set `TRUST_PROXY` to the exact proxy IP addresses or
+narrow CIDRs, for example `172.30.0.2` or `172.30.0.0/24`. Do not use
+`0.0.0.0/0`, and make the API reachable only through the trusted proxy network.
+Fastify then keys the pairing limit on the forwarded client address. If
+`TRUST_PROXY` is unset, requests arriving from the same proxy socket share a
+rate-limit bucket.
 
 Invalid pairing input returns HTTP 400 with a structured `invalid_request`
 error. An unavailable, expired, or already-used pairing code returns HTTP 401.

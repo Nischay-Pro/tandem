@@ -156,7 +156,7 @@ describe("health routes and OpenAPI", () => {
     const device = createDevice();
     const auth = createDeviceAuth({
       pair: vi.fn(async ({ code }: { code: string }) =>
-        code === "B".repeat(43)
+        code === " b7m2q3x9 \n"
           ? { ...device, accessToken: testAccessToken }
           : undefined,
       ),
@@ -169,7 +169,7 @@ describe("health routes and OpenAPI", () => {
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/auth/pair",
-      payload: { code: "B".repeat(43), deviceName: "Synthetic phone" },
+      payload: { code: " b7m2q3x9 \n", deviceName: "Synthetic phone" },
     });
 
     expect(response.statusCode).toBe(201);
@@ -182,14 +182,14 @@ describe("health routes and OpenAPI", () => {
       tokenType: "Bearer",
     });
     expect(auth.pair).toHaveBeenCalledWith({
-      code: "B".repeat(43),
+      code: " b7m2q3x9 \n",
       deviceName: "Synthetic phone",
     });
 
     const invalid = await app.inject({
       method: "POST",
       url: "/api/v1/auth/pair",
-      payload: { code: "C".repeat(43), deviceName: "Synthetic phone" },
+      payload: { code: "C7M2-Q3X9", deviceName: "Synthetic phone" },
     });
     expect(invalid.statusCode).toBe(401);
     expect(invalid.json()).toEqual({
@@ -227,7 +227,7 @@ describe("health routes and OpenAPI", () => {
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/auth/pair",
-      payload: { code: "F".repeat(43), deviceName: "Synthetic phone" },
+      payload: { code: "F7M2-Q3X9", deviceName: "Synthetic phone" },
     });
 
     expect(response.statusCode).toBe(400);
@@ -240,7 +240,7 @@ describe("health routes and OpenAPI", () => {
     const storeFailure = await app.inject({
       method: "POST",
       url: "/api/v1/auth/pair",
-      payload: { code: "F".repeat(43), deviceName: "Synthetic phone" },
+      payload: { code: "F7M2-Q3X9", deviceName: "Synthetic phone" },
     });
     expect(storeFailure.statusCode).toBe(500);
     await app.close();
@@ -256,7 +256,7 @@ describe("health routes and OpenAPI", () => {
       app.inject({
         method: "POST",
         url: "/api/v1/auth/pair",
-        payload: { code: "D".repeat(43), deviceName: "Synthetic phone" },
+        payload: { code: "D7M2-Q3X9", deviceName: "Synthetic phone" },
       });
 
     for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -274,7 +274,7 @@ describe("health routes and OpenAPI", () => {
 
   it("uses forwarded client addresses only when the socket peer is trusted", async () => {
     const pair = vi.fn(async ({ code }: { code: string }) =>
-      code === testAccessToken
+      code === "P7R2-A9C4"
         ? { ...createDevice(), accessToken: testAccessToken }
         : undefined,
     );
@@ -290,7 +290,7 @@ describe("health routes and OpenAPI", () => {
         method: "POST",
         url: "/api/v1/auth/pair",
         headers: { "x-forwarded-for": "198.51.100.10" },
-        payload: { code: "G".repeat(43), deviceName: "Synthetic phone" },
+        payload: { code: "G7G7-G7G7", deviceName: "Synthetic phone" },
       });
       expect(response.statusCode).toBe(401);
     }
@@ -298,7 +298,7 @@ describe("health routes and OpenAPI", () => {
       method: "POST",
       url: "/api/v1/auth/pair",
       headers: { "x-forwarded-for": "203.0.113.20" },
-      payload: { code: testAccessToken, deviceName: "Synthetic phone" },
+      payload: { code: "P7R2-A9C4", deviceName: "Synthetic phone" },
     });
     expect(secondClient.statusCode).toBe(201);
     expect(pair).toHaveBeenCalledTimes(11);
@@ -316,7 +316,7 @@ describe("health routes and OpenAPI", () => {
         method: "POST",
         url: "/api/v1/auth/pair",
         headers: { "x-forwarded-for": `198.51.100.${attempt + 1}` },
-        payload: { code: "G".repeat(43), deviceName: "Synthetic phone" },
+        payload: { code: "G7G7-G7G7", deviceName: "Synthetic phone" },
       });
       expect(response.statusCode).toBe(401);
     }
@@ -324,7 +324,7 @@ describe("health routes and OpenAPI", () => {
       method: "POST",
       url: "/api/v1/auth/pair",
       headers: { "x-forwarded-for": "203.0.113.20" },
-      payload: { code: testAccessToken, deviceName: "Synthetic phone" },
+      payload: { code: "P7R2-A9C4", deviceName: "Synthetic phone" },
     });
     expect(spoofedClient.statusCode).toBe(429);
     await untrustedApp.close();

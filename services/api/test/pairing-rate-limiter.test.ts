@@ -29,6 +29,21 @@ describe("pairing attempt rate limiter", () => {
     expect(limiter.consume("client-a").allowed).toBe(true);
   });
 
+  it("caps aggregate attempts across client addresses", () => {
+    let now = 1_000;
+    const limiter = new PairingRateLimiter(10, 5_000, 10, () => now, 2);
+
+    expect(limiter.consume("client-a").allowed).toBe(true);
+    expect(limiter.consume("client-b").allowed).toBe(true);
+    expect(limiter.consume("client-c")).toEqual({
+      allowed: false,
+      retryAfterSeconds: 5,
+    });
+
+    now = 6_000;
+    expect(limiter.consume("client-c").allowed).toBe(true);
+  });
+
   it("evicts expired clients and the oldest active client at capacity", () => {
     let now = 1_000;
     const limiter = new PairingRateLimiter(2, 1_000, 1, () => now);
@@ -76,6 +91,12 @@ describe("pairing attempt rate limiter", () => {
     [1.5, 1, 1],
   ])("rejects invalid bounds (%s, %s, %s)", (max, window, clients) => {
     expect(() => new PairingRateLimiter(max, window, clients)).toThrow(
+      "Pairing rate limit configuration must be positive",
+    );
+  });
+
+  it("rejects an invalid process-wide limit", () => {
+    expect(() => new PairingRateLimiter(1, 1, 1, Date.now, 0)).toThrow(
       "Pairing rate limit configuration must be positive",
     );
   });

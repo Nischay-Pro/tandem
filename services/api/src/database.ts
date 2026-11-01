@@ -43,7 +43,13 @@ export function createPostgresDatabase(connectionString: string): Database {
 
   const journal = new PostgresWriteJournal(pool);
   const budgetProjection = createPostgresBudgetProjectionStore(pool);
-  const deviceAuth = new DeviceAuthorization(new PostgresDeviceAuthStore(pool));
+  const deviceAuth = new DeviceAuthorization(
+    new PostgresDeviceAuthStore(pool),
+    undefined,
+    undefined,
+    undefined,
+    { pairingCodeHashKey: connectionString },
+  );
   let readinessCheck: Promise<void> | undefined;
 
   return {

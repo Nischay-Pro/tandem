@@ -183,7 +183,12 @@ function registerDeviceAuthorizationRoutes(
     body: {
       type: "object",
       properties: {
-        code: { type: "string", minLength: 43, maxLength: 43 },
+        code: {
+          type: "string",
+          minLength: 8,
+          maxLength: 16,
+          pattern: "^\\s*[A-Za-z0-9]{4}-?[A-Za-z0-9]{4}\\s*$",
+        },
         deviceName: {
           type: "string",
           minLength: 1,

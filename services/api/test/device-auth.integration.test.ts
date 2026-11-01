@@ -3,7 +3,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import type { Pool as PoolType } from "pg";
 import { buildApiApp } from "../src/app.js";
-import { DeviceAuthorization, hashSecret } from "../src/auth/device-auth.js";
+import {
+  DeviceAuthorization,
+  hashPairingCode,
+  hashSecret,
+} from "../src/auth/device-auth.js";
 import { PostgresDeviceAuthStore } from "../src/auth/postgres-device-auth-store.js";
 import { MIGRATIONS, applyMigrations } from "../src/schema/migrator.js";
 
@@ -11,6 +15,7 @@ let pool: PoolType | undefined;
 let adminPool: PoolType | undefined;
 let schemaName: string | undefined;
 let authorization: DeviceAuthorization;
+let pairingCodeHashKey: string;
 
 describe("PostgreSQL device authorization integration", () => {
   beforeAll(async () => {
@@ -20,6 +25,7 @@ describe("PostgreSQL device authorization integration", () => {
         "DATABASE_URL is required; run this test with docker compose",
       );
     }
+    pairingCodeHashKey = connectionString;
     schemaName = `device_auth_${randomUUID().replaceAll("-", "")}`;
     adminPool = new Pool({ connectionString, max: 2 });
     await adminPool.query(`CREATE SCHEMA ${schemaName}`);
@@ -29,7 +35,13 @@ describe("PostgreSQL device authorization integration", () => {
       options: `-c search_path=${schemaName}`,
     });
     await applyMigrations(pool, MIGRATIONS);
-    authorization = new DeviceAuthorization(new PostgresDeviceAuthStore(pool));
+    authorization = new DeviceAuthorization(
+      new PostgresDeviceAuthStore(pool),
+      undefined,
+      undefined,
+      undefined,
+      { pairingCodeHashKey },
+    );
   }, 30_000);
 
   afterAll(async () => {
@@ -81,10 +93,10 @@ describe("PostgreSQL device authorization integration", () => {
       consumed_at: Date | null;
     }>(
       "SELECT code_hash, consumed_at FROM companion_pairing_codes WHERE code_hash = $1",
-      [hashSecret(pairing.code)],
+      [hashPairingCode(pairing.code, pairingCodeHashKey)],
     );
     expect(pairingRows.rows[0]).toMatchObject({
-      code_hash: hashSecret(pairing.code),
+      code_hash: hashPairingCode(pairing.code, pairingCodeHashKey),
     });
     expect(pairingRows.rows[0]?.consumed_at).toBeInstanceOf(Date);
   });
@@ -314,7 +326,7 @@ describe("PostgreSQL device authorization integration", () => {
       SET created_at = clock_timestamp() - interval '2 days',
         expires_at = clock_timestamp() - interval '1 day'
       WHERE code_hash = $1`,
-      [hashSecret(expired.code)],
+      [hashPairingCode(expired.code, pairingCodeHashKey)],
     );
 
     await expect(
@@ -327,7 +339,7 @@ describe("PostgreSQL device authorization integration", () => {
 
     const expiredRows = await pool!.query(
       "SELECT code_hash FROM companion_pairing_codes WHERE code_hash = $1",
-      [hashSecret(expired.code)],
+      [hashPairingCode(expired.code, pairingCodeHashKey)],
     );
     expect(expiredRows.rowCount).toBe(0);
     expect(replacement.code).not.toBe(expired.code);

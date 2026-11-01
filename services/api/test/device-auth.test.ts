@@ -3,6 +3,7 @@ import {
   DeviceAuthorization,
   DeviceAuthInputError,
   PAIRING_CODE_TTL_MS,
+  hashPairingCode,
   hashSecret,
   type DeviceAuthStore,
   type DeviceRecord,
@@ -99,7 +100,14 @@ describe("device authorization", () => {
   it("creates short-lived pairing codes and persists only their hashes", async () => {
     const { store, pairingCodes } = createStore();
     const now = new Date("2026-11-01T10:00:00.000Z");
-    const authorization = new DeviceAuthorization(store, () => now);
+    const pairingCodeHashKey = "synthetic-server-key-for-test";
+    const authorization = new DeviceAuthorization(
+      store,
+      () => now,
+      undefined,
+      undefined,
+      { pairingCodeHashKey },
+    );
     expect(PAIRING_CODE_TTL_MS).toBe(300_000);
 
     const pairing = await authorization.createPairingCode({
@@ -107,7 +115,7 @@ describe("device authorization", () => {
       budgetIds: ["budget-one", "budget-two"],
     });
 
-    expect(pairing.code).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(pairing.code).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/);
     expect(pairing.expiresAt.getTime()).toBe(
       now.getTime() + PAIRING_CODE_TTL_MS,
     );
@@ -117,7 +125,7 @@ describe("device authorization", () => {
     });
     expect(pairingCodes).toEqual([
       {
-        codeHash: hashSecret(pairing.code),
+        codeHash: hashPairingCode(pairing.code, pairingCodeHashKey),
         principalId: "owner",
         budgetIds: ["budget-one", "budget-two"],
         expiresAt: pairing.expiresAt,
@@ -143,13 +151,13 @@ describe("device authorization", () => {
     });
 
     const paired = await authorization.pair({
-      code: pairing.code,
+      code: pairing.code.toLowerCase().replace("-", ""),
       deviceName: "  Tablet  ",
     });
 
     expect(paired).toEqual({
       ...device,
-      accessToken: Buffer.alloc(32, 2).toString("base64url"),
+      accessToken: Buffer.alloc(32, 1).toString("base64url"),
     });
     expect(consumePairingCode).toHaveBeenCalledWith({
       codeHash: hashSecret(pairing.code),
@@ -165,13 +173,13 @@ describe("device authorization", () => {
     const { store } = createStore({ consumePairingCode });
     const authorization = new DeviceAuthorization(store);
 
-    for (const code of ["short", `x${validToken}`, `${validToken}x`]) {
+    for (const code of ["short", "ABCD--EFGH", `x${validToken}`]) {
       await expect(
         authorization.pair({ code, deviceName: "Phone" }),
       ).resolves.toBeUndefined();
     }
     await expect(
-      authorization.pair({ code: validToken, deviceName: "Phone" }),
+      authorization.pair({ code: "4DF7-J1M9", deviceName: "Phone" }),
     ).resolves.toBeUndefined();
     expect(consumePairingCode).toHaveBeenCalledOnce();
   });
