@@ -12,9 +12,18 @@ The API checks run inside Docker because the development environment may not hav
 docker compose -f docker-compose.dev.yml --profile test run --build --rm integration-tests
 ```
 
-The integration-test profile runs formatting, lint, typecheck, API tests against PostgreSQL, and StrykerJS mutation tests for Actual integration, reconciliation, device authorization, and budget locks. Coverage enforces 100% lines, statements, functions, and branches for API source. Mutation tests check whether behavioral regressions cause tests to fail; their HTML report and temporary worktree are written under `.dev-tmp/`. The development database is stored under `.dev-tmp/` and must contain synthetic data only.
+The integration-test profile runs formatting, lint, typecheck, and API tests against PostgreSQL. Coverage enforces 100% lines, statements, functions, and branches for API source. The development database is stored under `.dev-tmp/` and must contain synthetic data only.
 
 GitHub Actions runs the same Compose quality gate for pushes and pull requests with read-only repository permissions.
+
+StrykerJS mutation testing is kept out of the per-change gate because a full
+run evaluates more than 1,600 mutants. `pnpm test:mutation` uses Stryker's
+incremental results file under ignored `.dev-tmp/stryker/`; the first run
+without a prior result still evaluates the full configured scope. Use
+`pnpm test:mutation:full` to force every mutant to run after changes to the
+mutation configuration, test environment, or dependencies. GitHub Actions
+runs the forced full mutation suite weekly and on manual dispatch. Its HTML
+report and temporary worktree stay under `.dev-tmp/`.
 
 The generated KMP API client and its pinned Gradle toolchain are documented in
 [`docs/mobile-api-client.md`](mobile-api-client.md). Android and JVM compilation
@@ -47,7 +56,7 @@ snapshot; the epoch must be backed up separately from PostgreSQL.
 
 ## Code quality
 
-Run the Compose integration-test command above for the full gate. Running `pnpm check:all` directly also requires `DATABASE_URL` to point to a disposable PostgreSQL database. Run `pnpm test:mutation` from the repository root to rerun mutation testing independently.
+Run the Compose integration-test command above for the per-change gate. Running `pnpm check:all` directly also requires `DATABASE_URL` to point to a disposable PostgreSQL database. Run `pnpm test:mutation` for incremental mutation testing or `pnpm test:mutation:full` to force the full configured set.
 
 ## Database migrations
 

@@ -19,8 +19,9 @@
     "test": "pnpm --recursive --if-present test",
     "test:coverage": "pnpm --recursive --if-present test:coverage",
     "test:mutation": "pnpm --filter @actual-budget-companion/api test:mutation",
+    "test:mutation:full": "pnpm --filter @actual-budget-companion/api test:mutation:full",
     "test:integration": "docker compose -f docker-compose.dev.yml --profile test run --build --rm integration-tests",
-    "check:all": "pnpm api:openapi:check && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm test:mutation"
+    "check:all": "pnpm api:openapi:check && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:coverage"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

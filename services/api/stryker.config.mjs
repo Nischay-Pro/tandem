@@ -23,6 +23,8 @@ export default {
   checkers: ["typescript"],
   tsconfigFile: "tsconfig.json",
   coverageAnalysis: "perTest",
+  incremental: true,
+  incrementalFile: "../../.dev-tmp/stryker/incremental.json",
   reporters: ["clear-text", "html"],
   htmlReporter: {
     fileName: "../../.dev-tmp/stryker/critical-finance-boundaries.html",
