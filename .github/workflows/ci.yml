@@ -12,6 +12,47 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  mobile:
+    name: Android, iOS, and generated client gate
+    runs-on: macos-26
+    timeout-minutes: 35
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "26"
+          cache: gradle
+          cache-dependency-path: |
+            mobile/gradle/libs.versions.toml
+            mobile/gradle/wrapper/gradle-wrapper.properties
+            mobile/**/*.gradle.kts
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          cmdline-tools-version: 16111833
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+
+      - name: Compile Android, JVM, and iOS targets; run client tests and lint
+        working-directory: mobile
+        run: >-
+          ./gradlew --no-daemon
+          :api-client:compileAndroidMain
+          :api-client:compileCommonMainKotlinMetadata
+          :api-client:compileKotlinIosArm64
+          :api-client:compileKotlinIosSimulatorArm64
+          :api-client:jvmTest
+          :api-client:koverVerify
+          :api-client:ktlintCheck
+
   quality:
     name: API quality gate
     runs-on: ubuntu-26.04

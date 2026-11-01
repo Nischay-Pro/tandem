@@ -16,6 +16,11 @@ The integration-test profile runs formatting, lint, typecheck, API tests against
 
 GitHub Actions runs the same Compose quality gate for pushes and pull requests with read-only repository permissions.
 
+The generated KMP API client and its pinned Gradle toolchain are documented in
+[`docs/mobile-api-client.md`](mobile-api-client.md). Android and JVM compilation
+and tests run in the mobile CI job. iOS device and Apple Silicon simulator
+compilation run on the macOS CI runner with Xcode.
+
 `services/api/Dockerfile.dev` is only for development and tests; it includes the full toolchain. The production image will be separate and contain runtime dependencies only.
 
 Start the API with:
