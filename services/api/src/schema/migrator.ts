@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { Pool, PoolClient } from "pg";
-import { down, up } from "./migrations/20261031120000-durable-write-journal.js";
+import { down, up } from "./migrations/20261031120000-companion-schema-v1.js";
 
 export interface Migration {
   name: string;
@@ -10,7 +10,7 @@ export interface Migration {
 
 export const MIGRATIONS: readonly Migration[] = [
   {
-    name: "20261031120000-durable-write-journal",
+    name: "20261031120000-companion-schema-v1",
     up,
     down,
   },
@@ -65,7 +65,7 @@ export async function applyMigrations(
       }
       if (expectedName !== migration.name) {
         throw new Error(
-          `Corrupted migrations: expected migration ${expectedName} at position ${index + 1}, found ${migration.name}`,
+          `Companion migration history mismatch at position ${index + 1}: expected ${expectedName}, found ${migration.name}. This unreleased build cannot upgrade that earlier schema; use a compatible database or recreate the pre-release Companion database.`,
         );
       }
     }

@@ -39,7 +39,12 @@ startup, and the migrator rejects database history that does not match the
 manifest. Migration changes must include PostgreSQL integration coverage and
 keep the manifest and registered migration list in sync. The migration is
 copied into the compiled output by the API build so startup behavior is the same
-in development and production.
+in development and production. Because this release is still unreleased, the
+current migration identity was changed when its schema expanded. A database
+from the earlier pre-release identity now fails startup with an explicit history
+mismatch; use a compatible build or recreate that pre-release Companion
+database. The service never silently treats changed migration contents as
+already applied.
 
 ## Journal data sensitivity
 

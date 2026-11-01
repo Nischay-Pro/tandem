@@ -30,6 +30,8 @@ import { PostgresWriteJournal } from "../src/write-journal/postgres-write-journa
 
 let database: Database;
 let inspectionPool: Pool;
+let adminPool: Pool;
+let writeJournalSchema: string;
 
 function createOperation(
   overrides: Partial<WriteOperationInput> = {},
@@ -77,14 +79,26 @@ describe("durable write journal integration", () => {
         "DATABASE_URL is required; run this test with docker compose",
       );
     }
-    database = createPostgresDatabase(connectionString);
-    inspectionPool = new Pool({ connectionString, max: 3 });
+    writeJournalSchema = `write_journal_${randomUUID().replaceAll("-", "")}`;
+    adminPool = new Pool({ connectionString, max: 2 });
+    await adminPool.query(`CREATE SCHEMA ${writeJournalSchema}`);
+    const searchPath = `-c search_path=${writeJournalSchema}`;
+    const isolatedConnection = new URL(connectionString);
+    isolatedConnection.searchParams.set("options", searchPath);
+    database = createPostgresDatabase(isolatedConnection.toString());
+    inspectionPool = new Pool({
+      connectionString,
+      max: 3,
+      options: searchPath,
+    });
     await database.migrate();
   }, 30_000);
 
   afterAll(async () => {
     await inspectionPool?.end();
     await database?.close();
+    await adminPool?.query(`DROP SCHEMA ${writeJournalSchema} CASCADE`);
+    await adminPool?.end();
   });
 
   it("keeps one current schema migration and applies it idempotently", async () => {
@@ -96,6 +110,51 @@ describe("durable write journal integration", () => {
     expect(order).toHaveLength(1);
     expect(order).toEqual(MIGRATIONS.map(({ name }) => name));
     expect(result.rows[0]?.count).toBe("1");
+  });
+
+  it("rejects an earlier pre-release identity without skipping the expanded schema", async () => {
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error("Migration test configuration is incomplete");
+    }
+    const schemaName = `migration_pre_release_${randomUUID().replaceAll("-", "")}`;
+    await inspectionPool.query(`CREATE SCHEMA ${schemaName}`);
+    const isolatedPool = new Pool({
+      connectionString,
+      max: 2,
+      options: `-c search_path=${schemaName}`,
+    });
+
+    try {
+      await isolatedPool.query(`CREATE TABLE companion_migrations (
+        position integer PRIMARY KEY CHECK (position > 0),
+        name text NOT NULL UNIQUE,
+        applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
+      )`);
+      await isolatedPool.query(
+        "INSERT INTO companion_migrations (position, name) VALUES (1, $1)",
+        ["20261031120000-durable-write-journal"],
+      );
+
+      await expect(applyMigrations(isolatedPool)).rejects.toThrow(
+        /pre-release Companion database/i,
+      );
+      const tables = await isolatedPool.query<{
+        devices: string | null;
+        codes: string | null;
+        operations: string | null;
+      }>(`SELECT to_regclass('companion_devices') AS devices,
+        to_regclass('companion_pairing_codes') AS codes,
+        to_regclass('companion_operations') AS operations`);
+      expect(tables.rows[0]).toEqual({
+        devices: null,
+        codes: null,
+        operations: null,
+      });
+    } finally {
+      await isolatedPool.end();
+      await inspectionPool.query(`DROP SCHEMA ${schemaName} CASCADE`);
+    }
   });
 
   it("validates a single ordered migration manifest", async () => {
@@ -255,7 +314,7 @@ describe("durable write journal integration", () => {
       );
       await expect(
         applyMigrations(isolatedPool, [migration], [migration.name]),
-      ).rejects.toThrow("Corrupted migrations");
+      ).rejects.toThrow("Companion migration history mismatch");
 
       await isolatedPool.query(
         "UPDATE companion_migrations SET name = $1, position = 2",
