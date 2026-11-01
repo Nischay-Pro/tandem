@@ -1,0 +1,7 @@
+.dev-tmp/
+node_modules/
+dist/
+coverage/
+pnpm-lock.yaml
+/WORKTRACK.md
+/docs/architecture/decisions.md

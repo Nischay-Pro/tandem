@@ -1,0 +1,10 @@
+.git
+.dev-tmp
+/WORKTRACK.md
+/docs/architecture/decisions.md
+node_modules
+**/node_modules
+**/dist
+**/coverage
+DerivedData
+**/Pods

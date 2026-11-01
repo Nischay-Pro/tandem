@@ -1,0 +1,10 @@
+# Add these upstream declarations inside the nginx http {} context, outside any
+# server {} block. The API service name matches docker-compose.dev.yml.
+
+upstream actual_companion_api {
+    server api:8080;
+}
+
+upstream actual_budget_server {
+    server actual-server:5006;
+}

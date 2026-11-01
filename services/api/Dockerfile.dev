@@ -1,0 +1,16 @@
+FROM node:26.13.0-trixie-slim
+
+WORKDIR /workspace
+
+RUN npm install --global --allow-scripts=pnpm pnpm@12.16.1 \
+    && chown node:node /workspace
+
+COPY --chown=node:node package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
+COPY --chown=node:node services/api/package.json services/api/package.json
+
+USER node
+RUN pnpm install --frozen-lockfile
+
+COPY --chown=node:node . .
+EXPOSE 8080
+CMD ["pnpm", "--filter", "@actual-budget-companion/api", "dev"]

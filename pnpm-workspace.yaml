@@ -1,0 +1,7 @@
+packages:
+  - "services/*"
+  - "packages/*"
+allowBuilds:
+  esbuild: true
+overrides:
+  minimatch: 11.0.3

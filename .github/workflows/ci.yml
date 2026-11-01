@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: API quality gate
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run formatting, lint, typecheck, integration tests, and coverage
+        run: docker compose -f docker-compose.dev.yml --profile test run --build --rm integration-tests
+
+      - name: Validate Nginx configuration snippets
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/abc-nginx-validation"
+          cat > "$RUNNER_TEMP/abc-nginx-validation/nginx.conf" <<'EOF'
+          events {}
+          http {
+              include /validation/actual-companion-upstreams.conf.example;
+              server {
+                  listen 8080;
+                  server_name budget.example.com;
+                  include /validation/actual-companion-locations.conf.example;
+              }
+          }
+          EOF
+          docker run --rm \
+            --add-host api:127.0.0.1 \
+            --add-host actual-server:127.0.0.1 \
+            -v "$GITHUB_WORKSPACE/deploy/nginx:/validation:ro" \
+            -v "$RUNNER_TEMP/abc-nginx-validation/nginx.conf:/tmp/nginx.conf:ro" \
+            nginx:1.30.6-alpine3.24 nginx -t -c /tmp/nginx.conf
+
+      - name: Stop test services
+        if: always()
+        run: docker compose -f docker-compose.dev.yml down --volumes --remove-orphans

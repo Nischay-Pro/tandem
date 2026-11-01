@@ -1,0 +1,28 @@
+{
+  "name": "actual-budget-companion",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "packageManager": "pnpm@12.16.1",
+  "engines": {
+    "node": ">=26.13.0 <27"
+  },
+  "scripts": {
+    "api:dev": "pnpm --filter @actual-budget-companion/api dev",
+    "dev:up": "docker compose -f docker-compose.dev.yml up --build",
+    "dev:down": "docker compose -f docker-compose.dev.yml down",
+    "lint": "eslint .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm --recursive --if-present typecheck",
+    "test": "pnpm --recursive --if-present test",
+    "test:coverage": "pnpm --recursive --if-present test:coverage",
+    "test:integration": "docker compose -f docker-compose.dev.yml --profile test run --build --rm integration-tests",
+    "check:all": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:coverage"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.14.0",
+    "prettier": "3.9.10",
+    "typescript-eslint": "8.72.1"
+  }
+}
