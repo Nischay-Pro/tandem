@@ -12,7 +12,7 @@ The API checks run inside Docker because the development environment may not hav
 docker compose -f docker-compose.dev.yml --profile test run --build --rm integration-tests
 ```
 
-The integration-test profile runs formatting, lint, typecheck, API tests against PostgreSQL, and StrykerJS mutation tests for the Actual API session lifecycle. Coverage enforces 100% lines, statements, functions, and branches for API source. Mutation tests check whether behavioral regressions cause tests to fail; their HTML report and temporary worktree are written under `.dev-tmp/`. The development database is stored under `.dev-tmp/` and must contain synthetic data only.
+The integration-test profile runs formatting, lint, typecheck, API tests against PostgreSQL, and StrykerJS mutation tests for Actual integration, reconciliation, device authorization, and budget locks. Coverage enforces 100% lines, statements, functions, and branches for API source. Mutation tests check whether behavioral regressions cause tests to fail; their HTML report and temporary worktree are written under `.dev-tmp/`. The development database is stored under `.dev-tmp/` and must contain synthetic data only.
 
 GitHub Actions runs the same Compose quality gate for pushes and pull requests with read-only repository permissions.
 
@@ -25,6 +25,16 @@ docker compose -f docker-compose.dev.yml up --build api
 ```
 
 Then fetch `http://localhost:19753/api/v1/openapi.json`.
+
+To enable the Actual-backed budget routes, provide `ACTUAL_SERVER_URL` and
+`ACTUAL_SERVER_PASSWORD` to Compose, for example in an ignored local `.env`
+file. The API accepts only the server release pinned in
+`services/api/src/actual/actual-session.ts`. The API's local Actual workspace is
+persisted under `.dev-tmp/actual/api-workspace`; it may hold decrypted budget
+data. The server password stays in the API container. Encrypted budgets may
+send their separate budget password per request in
+`X-Budget-Encryption-Password`; that value is never written to PostgreSQL.
+Treat the workspace, PostgreSQL data, and their backups as financial data.
 
 ## Code quality
 

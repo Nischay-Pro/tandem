@@ -2,8 +2,19 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createServer } from "node:net";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { reportProcessFailure, runProductionApi } from "../src/main.js";
+import { reportProcessFailure, runApi, runProductionApi } from "../src/main.js";
+import type { Database } from "../src/database.js";
 import type { ShutdownSignal } from "../src/server.js";
+
+const actualApi = vi.hoisted(() => ({
+  init: vi.fn(async () => undefined),
+  getServerVersion: vi.fn(async () => ({ version: "26.10.0" })),
+  downloadBudget: vi.fn(async () => undefined),
+  sync: vi.fn(async () => undefined),
+  shutdown: vi.fn(async () => undefined),
+}));
+
+vi.mock("@actual-app/api", () => actualApi);
 
 let adminPool: Pool;
 let testSchema: string;
@@ -102,6 +113,55 @@ describe("API bootstrap integration", () => {
     expect(handlers.has("SIGTERM")).toBe(true);
     expect(handlers.has("SIGINT")).toBe(true);
     await handlers.get("SIGTERM")?.();
+  });
+
+  it("starts and closes the configured Actual runtime and exposes transaction routes", async () => {
+    actualApi.init.mockClear();
+    actualApi.getServerVersion.mockClear();
+    actualApi.shutdown.mockClear();
+
+    const database = {
+      ping: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      close: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      migrate: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      journal: {
+        expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
+      },
+      deviceAuth: {},
+    } as unknown as Database;
+    const port = await findAvailablePort();
+    const app = await runApi(
+      {
+        DATABASE_URL: "postgres://local/test",
+        HOST: "127.0.0.1",
+        PORT: String(port),
+        ACTUAL_SERVER_URL: "http://127.0.0.1:5006",
+        ACTUAL_SERVER_PASSWORD: "synthetic-server-password",
+        ACTUAL_API_DATA_DIR: "/tmp/actual-companion-runtime-test",
+      },
+      () => database,
+      vi.fn(),
+    );
+
+    expect(actualApi.init).toHaveBeenCalledWith({
+      serverURL: "http://127.0.0.1:5006",
+      password: "synthetic-server-password",
+      dataDir: "/tmp/actual-companion-runtime-test",
+    });
+    expect(actualApi.getServerVersion).toHaveBeenCalledOnce();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/openapi.json",
+    });
+    expect(
+      response.json().paths[
+        "/api/v1/budgets/{budgetId}/transactions/{transactionId}"
+      ].get,
+    ).toBeDefined();
+
+    await app.close();
+    expect(actualApi.shutdown).toHaveBeenCalledOnce();
+    expect(database.close).toHaveBeenCalledOnce();
   });
 
   it("handles shutdown failures from process signal callbacks", async () => {

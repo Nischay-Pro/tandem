@@ -4,6 +4,7 @@ import type { ServerDatabase } from "../src/database.js";
 import type { DeviceAuthorization } from "../src/auth/device-auth.js";
 import { startApiServer } from "../src/server.js";
 import { WRITE_LEASE_SWEEP_INTERVAL_MS } from "../src/write-journal/lease-reaper.js";
+import { ActualCompatibilityError } from "../src/actual/actual-session.js";
 
 const deviceAuth = {} as DeviceAuthorization;
 
@@ -47,6 +48,38 @@ describe("API server lifecycle integration", () => {
 
     await handlers.get("SIGTERM")?.();
     expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("starts the configured runtime before listening and closes it on shutdown", async () => {
+    const runtimeStart = vi
+      .fn<() => Promise<void>>()
+      .mockResolvedValue(undefined);
+    const runtimeClose = vi
+      .fn<() => Promise<void>>()
+      .mockResolvedValue(undefined);
+    const database: ServerDatabase = {
+      ping: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      close: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      migrate: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      journal: {
+        expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
+      },
+      deviceAuth,
+    };
+    const config = {
+      ...parseApiConfig({ DATABASE_URL: "postgres://local/test" }),
+      port: 0,
+      host: "127.0.0.1",
+    };
+
+    const app = await startApiServer(config, database, vi.fn(), {
+      start: runtimeStart,
+      close: runtimeClose,
+    });
+    expect(runtimeStart).toHaveBeenCalledOnce();
+
+    await app.close();
+    expect(runtimeClose).toHaveBeenCalledOnce();
   });
 
   it("reaps leases periodically and stops its timer when the server closes", async () => {
@@ -122,7 +155,7 @@ describe("API server lifecycle integration", () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
-  it("preserves listener and cleanup errors when both fail", async () => {
+  it("preserves listener errors and reports cleanup failures", async () => {
     const closeError = new Error("synthetic database close failure");
     const close = vi.fn<() => Promise<void>>().mockRejectedValue(closeError);
     const database: ServerDatabase = {
@@ -139,10 +172,16 @@ describe("API server lifecycle integration", () => {
       port: 70000,
     };
 
-    await expect(
-      startApiServer(config, database, vi.fn()),
-    ).rejects.toMatchObject({
-      errors: [expect.any(Error), closeError],
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const startupError = await startApiServer(config, database, vi.fn()).catch(
+      (error: unknown) => error,
+    );
+    expect(startupError).toBeInstanceOf(Error);
+    expect(startupError).not.toBe(closeError);
+    expect(consoleError).toHaveBeenCalledWith("API startup cleanup failed", {
+      errorType: "Error",
     });
     expect(close).toHaveBeenCalledOnce();
   });
@@ -171,13 +210,17 @@ describe("API server lifecycle integration", () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
-  it("preserves startup and cleanup errors when both fail", async () => {
-    const migrationError = new Error("synthetic migration failure");
-    const closeError = new Error("synthetic database close failure");
+  it("preserves the Actual startup error when runtime cleanup and logging fail", async () => {
+    const startupError = new ActualCompatibilityError(
+      "server-version-mismatch",
+      "26.10.0",
+      "27.0.0",
+    );
+    const closeError = new Error("synthetic runtime close failure");
     const database: ServerDatabase = {
       ping: vi.fn<() => Promise<void>>(),
-      close: vi.fn<() => Promise<void>>().mockRejectedValue(closeError),
-      migrate: vi.fn<() => Promise<void>>().mockRejectedValue(migrationError),
+      close: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      migrate: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
       journal: {
         expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
       },
@@ -188,9 +231,54 @@ describe("API server lifecycle integration", () => {
       port: 0,
       host: "127.0.0.1",
     };
+    const runtimeClose = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValue(closeError);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {
+      throw new Error("synthetic logger failure");
+    });
 
     await expect(
-      startApiServer(config, database, vi.fn()),
-    ).rejects.toMatchObject({ errors: [migrationError, closeError] });
+      startApiServer(config, database, vi.fn(), {
+        start: () => Promise.reject(startupError),
+        close: runtimeClose,
+      }),
+    ).rejects.toBe(startupError);
+    expect(runtimeClose).toHaveBeenCalledOnce();
+    expect(consoleError).toHaveBeenCalledWith("API startup cleanup failed", {
+      errorType: "Error",
+    });
+  });
+
+  it("preserves startup errors when database cleanup rejects with a non-Error", async () => {
+    const startupError = new Error("synthetic runtime startup failure");
+    const database: ServerDatabase = {
+      ping: vi.fn<() => Promise<void>>(),
+      close: vi
+        .fn<() => Promise<void>>()
+        .mockRejectedValue("synthetic database close failure"),
+      migrate: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      journal: {
+        expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
+      },
+      deviceAuth,
+    };
+    const config = {
+      ...parseApiConfig({ DATABASE_URL: "postgres://local/test" }),
+      port: 0,
+      host: "127.0.0.1",
+    };
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await expect(
+      startApiServer(config, database, vi.fn(), {
+        start: () => Promise.reject(startupError),
+      }),
+    ).rejects.toBe(startupError);
+    expect(consoleError).toHaveBeenCalledWith("API startup cleanup failed", {
+      errorType: "string",
+    });
   });
 });

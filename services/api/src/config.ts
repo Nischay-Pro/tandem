@@ -1,10 +1,13 @@
+import { isAbsolute } from "node:path";
 import { isIP } from "node:net";
+import type { ActualConnectionConfig } from "./actual/actual-session.js";
 
 export interface ApiConfig {
   databaseUrl: string;
   host: string;
   port: number;
   trustProxy: false | string[];
+  actual?: Extract<ActualConnectionConfig, { password: string }>;
 }
 
 export type Environment = Record<string, string | undefined>;
@@ -41,12 +44,64 @@ export function parseApiConfig(environment: Environment): ApiConfig {
   const trustedProxyAddresses = parseTrustedProxyAddresses(
     environment.TRUST_PROXY,
   );
+  const actual = parseActualConnection(environment);
 
   return {
     databaseUrl,
     host,
     port,
     trustProxy: trustedProxyAddresses,
+    ...(actual === undefined ? {} : { actual }),
+  };
+}
+
+function parseActualConnection(
+  environment: Environment,
+): Extract<ActualConnectionConfig, { password: string }> | undefined {
+  const serverUrl = environment.ACTUAL_SERVER_URL?.trim();
+  const password = environment.ACTUAL_SERVER_PASSWORD;
+  const configuredDataDirectory = environment.ACTUAL_API_DATA_DIR?.trim();
+
+  if (
+    serverUrl === undefined &&
+    (password === undefined || password.length === 0)
+  ) {
+    return undefined;
+  }
+  if (
+    serverUrl === undefined ||
+    password === undefined ||
+    password.length === 0
+  ) {
+    throw new Error(
+      "ACTUAL_SERVER_URL and a non-empty ACTUAL_SERVER_PASSWORD must be configured together",
+    );
+  }
+
+  let parsedServerUrl: URL;
+  try {
+    parsedServerUrl = new URL(serverUrl);
+  } catch {
+    throw new Error("ACTUAL_SERVER_URL must be a valid HTTP(S) URL");
+  }
+  if (
+    (parsedServerUrl.protocol !== "http:" &&
+      parsedServerUrl.protocol !== "https:") ||
+    parsedServerUrl.username.length > 0 ||
+    parsedServerUrl.password.length > 0
+  ) {
+    throw new Error("ACTUAL_SERVER_URL must be a valid HTTP(S) URL");
+  }
+
+  const dataDir = configuredDataDirectory || "/data/actual-api";
+  if (!isAbsolute(dataDir)) {
+    throw new Error("ACTUAL_API_DATA_DIR must be an absolute path");
+  }
+
+  return {
+    serverURL: parsedServerUrl.toString().replace(/\/$/, ""),
+    password,
+    dataDir,
   };
 }
 

@@ -6,6 +6,7 @@ import {
 } from "../src/actual/actual-session.js";
 import {
   TransactionReconciler,
+  TransactionRequestValidationError,
   type ActualBudgetSessionPort,
   type TransactionReconciliationRequest,
 } from "../src/actual/transaction-reconciler.js";
@@ -485,6 +486,39 @@ describe("Actual transaction reconciliation", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it("preserves an existing transaction validation error from malformed input", async () => {
+    const request = createRequest();
+    const validationError = new TransactionRequestValidationError(
+      "prevalidated failure",
+    );
+    Object.defineProperty(request, "action", {
+      get() {
+        throw validationError;
+      },
+    });
+    const harness = createHarness(request);
+
+    await expect(harness.reconciler.submit(request)).rejects.toBe(
+      validationError,
+    );
+  });
+
+  it("wraps non-Error values thrown while reading malformed input", async () => {
+    const request = createRequest();
+    Object.defineProperty(request, "action", {
+      get() {
+        throw "synthetic invalid input";
+      },
+    });
+    const harness = createHarness(request);
+
+    await expect(harness.reconciler.submit(request)).rejects.toMatchObject({
+      name: "TransactionRequestValidationError",
+      message: "Transaction request is invalid",
+      cause: "synthetic invalid input",
+    });
   });
 
   it("renews a claimed operation while Actual work runs and stops after completion", async () => {

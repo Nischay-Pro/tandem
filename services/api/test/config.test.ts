@@ -14,6 +14,78 @@ describe("parseApiConfig", () => {
     });
   });
 
+  it("keeps Actual integration disabled when credentials are omitted", () => {
+    expect(
+      parseApiConfig({ DATABASE_URL: databaseUrl }).actual,
+    ).toBeUndefined();
+    expect(
+      parseApiConfig({
+        DATABASE_URL: databaseUrl,
+        ACTUAL_API_DATA_DIR: "/srv/actual-api",
+      }).actual,
+    ).toBeUndefined();
+  });
+
+  it("parses a pinned Actual connection and persistent API workspace", () => {
+    expect(
+      parseApiConfig({
+        DATABASE_URL: databaseUrl,
+        ACTUAL_SERVER_URL: " https://budget.example.com/ ",
+        ACTUAL_SERVER_PASSWORD: " server secret ",
+        ACTUAL_API_DATA_DIR: " /srv/actual-api ",
+      }).actual,
+    ).toEqual({
+      serverURL: "https://budget.example.com",
+      password: " server secret ",
+      dataDir: "/srv/actual-api",
+    });
+    expect(
+      parseApiConfig({
+        DATABASE_URL: databaseUrl,
+        ACTUAL_SERVER_URL: "http://actual:5006",
+        ACTUAL_SERVER_PASSWORD: "server-secret",
+      }).actual?.dataDir,
+    ).toBe("/data/actual-api");
+  });
+
+  it.each([
+    { ACTUAL_SERVER_URL: "https://actual.example.com" },
+    { ACTUAL_SERVER_PASSWORD: "server-secret" },
+    {
+      ACTUAL_SERVER_URL: "https://actual.example.com",
+      ACTUAL_SERVER_PASSWORD: "",
+    },
+  ])("rejects incomplete Actual connection settings", (actual) => {
+    expect(() =>
+      parseApiConfig({ DATABASE_URL: databaseUrl, ...actual }),
+    ).toThrow(/ACTUAL_SERVER_URL and/);
+  });
+
+  it.each([
+    "not-a-url",
+    "ftp://actual.example.com",
+    "https://user:secret@actual.example.com",
+  ])("rejects unsafe Actual server URL %s", (serverUrl) => {
+    expect(() =>
+      parseApiConfig({
+        DATABASE_URL: databaseUrl,
+        ACTUAL_SERVER_URL: serverUrl,
+        ACTUAL_SERVER_PASSWORD: "server-secret",
+      }),
+    ).toThrow("ACTUAL_SERVER_URL must be a valid HTTP(S) URL");
+  });
+
+  it("rejects a relative Actual API workspace path", () => {
+    expect(() =>
+      parseApiConfig({
+        DATABASE_URL: databaseUrl,
+        ACTUAL_SERVER_URL: "http://actual:5006",
+        ACTUAL_SERVER_PASSWORD: "server-secret",
+        ACTUAL_API_DATA_DIR: "actual-api",
+      }),
+    ).toThrow("ACTUAL_API_DATA_DIR must be an absolute path");
+  });
+
   it("accepts explicit host and port", () => {
     expect(
       parseApiConfig({

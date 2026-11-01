@@ -25,11 +25,16 @@ services:
       DATABASE_URL: postgresql://companion:${POSTGRES_PASSWORD:-development-only-password}@postgres:5432/companion
       HOST: 0.0.0.0
       PORT: 19753
+      ACTUAL_SERVER_URL: ${ACTUAL_SERVER_URL:-}
+      ACTUAL_SERVER_PASSWORD: ${ACTUAL_SERVER_PASSWORD:-}
+      ACTUAL_API_DATA_DIR: /data/actual-api
     depends_on:
       postgres:
         condition: service_healthy
     ports:
       - "127.0.0.1:19753:19753"
+    volumes:
+      - ./.dev-tmp/actual/api-workspace:/data/actual-api
     networks:
       - companion-private
 
@@ -77,6 +82,7 @@ services:
     user: "${ACTUAL_COMPAT_UID:-1000}:${ACTUAL_COMPAT_GID:-1000}"
     command: ["pnpm", "--filter", "@actual-budget-companion/api", "test:actual"]
     environment:
+      DATABASE_URL: postgresql://companion:${POSTGRES_PASSWORD:-development-only-password}@postgres:5432/companion
       ACTUAL_SERVER_URL: http://actual-compat-server:5006
       ACTUAL_SERVER_PASSWORD: compatibility-test-only-password
       ACTUAL_API_DATA_DIR: /actual-api-data/device-one
@@ -84,6 +90,8 @@ services:
       - ./.dev-tmp/actual/compat-client:/actual-api-data
     depends_on:
       actual-compat-server:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     networks:
       - companion-private

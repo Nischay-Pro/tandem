@@ -1,21 +1,57 @@
 import * as Actual from "@actual-app/api";
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
+import { createServer } from "node:net";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { Pool } from "pg";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { buildApiApp } from "../src/app.js";
+import type { Database } from "../src/database.js";
+import type {
+  DeviceAuthorization,
+  DeviceRecord,
+} from "../src/auth/device-auth.js";
 import { createActualSession } from "../src/actual/actual-session.js";
+import { createTransactionApi } from "../src/actual/transaction-api.js";
+import { TransactionReconciler } from "../src/actual/transaction-reconciler.js";
 import {
   createTransactionRevision,
   snapshotActualTransaction,
+  type TransactionSnapshot,
 } from "../src/actual/transaction-reconciliation.js";
 import { createActualTransactionStore } from "../src/actual/transaction-store.js";
+import { createPostgresDatabase } from "../src/database.js";
+import { runApi } from "../src/main.js";
+import type { ShutdownSignal } from "../src/server.js";
 
 const serverURL = process.env.ACTUAL_SERVER_URL;
 const serverPassword = process.env.ACTUAL_SERVER_PASSWORD;
 const firstDataDir = process.env.ACTUAL_API_DATA_DIR;
+const databaseUrl = process.env.DATABASE_URL;
 const compatibilityTestEnabled = Boolean(
-  serverURL && serverPassword && firstDataDir,
+  serverURL && serverPassword && firstDataDir && databaseUrl,
 );
+
+let database: Database | undefined;
+let adminPool: Pool | undefined;
+let compatibilitySchema: string | undefined;
+let compatibilityDatabaseUrl: string | undefined;
+
+async function findAvailablePort(): Promise<number> {
+  const probe = createServer();
+  await new Promise<void>((resolve, reject) => {
+    probe.once("error", reject);
+    probe.listen(0, "127.0.0.1", resolve);
+  });
+  const address = probe.address();
+  if (!address || typeof address === "string") {
+    throw new Error("Could not determine an available TCP port");
+  }
+  await new Promise<void>((resolve, reject) => {
+    probe.close((error) => (error ? reject(error) : resolve()));
+  });
+  return address.port;
+}
 
 interface BootstrapResponse {
   status?: string;
@@ -54,6 +90,33 @@ async function bootstrapDisposableServer(
 describe.skipIf(!compatibilityTestEnabled)(
   "Actual Budget 26.10.0 compatibility",
   () => {
+    beforeAll(async () => {
+      if (!databaseUrl) {
+        throw new Error(
+          "Actual compatibility database configuration is missing",
+        );
+      }
+      compatibilitySchema = `actual_compat_${randomUUID().replaceAll("-", "")}`;
+      adminPool = new Pool({ connectionString: databaseUrl, max: 2 });
+      await adminPool.query(`CREATE SCHEMA ${compatibilitySchema}`);
+      const isolatedUrl = new URL(databaseUrl);
+      isolatedUrl.searchParams.set(
+        "options",
+        `-c search_path=${compatibilitySchema}`,
+      );
+      compatibilityDatabaseUrl = isolatedUrl.toString();
+      database = createPostgresDatabase(isolatedUrl.toString());
+      await database.migrate();
+    }, 30_000);
+
+    afterAll(async () => {
+      await database?.close();
+      if (compatibilitySchema) {
+        await adminPool?.query(`DROP SCHEMA ${compatibilitySchema} CASCADE`);
+      }
+      await adminPool?.end();
+    });
+
     it("creates, synchronizes, and independently downloads synthetic budget data", async () => {
       if (!serverURL || !serverPassword || !firstDataDir) {
         throw new Error("Actual compatibility test configuration is missing");
@@ -150,6 +213,128 @@ describe.skipIf(!compatibilityTestEnabled)(
           amount: -1500,
           date: transactionDate,
         });
+
+        if (!database) {
+          throw new Error("Actual compatibility database was not initialized");
+        }
+        const compatibilityToken = "R".repeat(43);
+        const compatibilityDevice: DeviceRecord = {
+          deviceId: randomUUID(),
+          principalId: "actual-compatibility-owner",
+          name: "Synthetic compatibility client",
+          budgetIds: [budget.groupId],
+          createdAt: new Date(),
+          lastSeenAt: null,
+          revokedAt: null,
+        };
+        const deviceAuth = {
+          authenticate: vi.fn(async (token?: string) =>
+            token === compatibilityToken ? compatibilityDevice : undefined,
+          ),
+        } as unknown as DeviceAuthorization;
+        const reconciler = new TransactionReconciler(
+          database,
+          database.journal,
+          firstDevice,
+          transactionStore,
+        );
+        const transactionApi = createTransactionApi(
+          firstDevice,
+          transactionStore,
+          reconciler,
+          database.journal,
+        );
+        const reconciliationApp = await buildApiApp(
+          { ping: () => database!.ping(), close: async () => undefined },
+          { deviceAuth, transactionApi },
+        );
+        const transactionPath = `/api/v1/budgets/${budget.groupId}/transactions/${transaction.id}`;
+        const authorizationHeaders = {
+          authorization: `Bearer ${compatibilityToken}`,
+        };
+        const firstRead = await reconciliationApp.inject({
+          method: "GET",
+          url: transactionPath,
+          headers: authorizationHeaders,
+        });
+        expect(firstRead.statusCode).toBe(200);
+        const base = firstRead.json() as {
+          transaction: TransactionSnapshot;
+          revision: string;
+        };
+
+        await firstDevice.runBudget(
+          budget.groupId,
+          () =>
+            Actual.updateTransaction(transaction.id, {
+              amount: -1300,
+              notes: "Updated through Actual web interface",
+            }),
+          { synchronizeAfterWrite: true },
+        );
+
+        const staleOperationId = randomUUID();
+        const staleWrite = await reconciliationApp.inject({
+          method: "POST",
+          url: `${transactionPath}/operations`,
+          headers: {
+            ...authorizationHeaders,
+            "idempotency-key": `compat-stale-${staleOperationId}`,
+          },
+          payload: {
+            operationId: staleOperationId,
+            action: "update",
+            baseRevision: base.revision,
+            baseSnapshot: base.transaction,
+            patch: { amount: -1200 },
+          },
+        });
+        expect(staleWrite.statusCode).toBe(200);
+        expect(staleWrite.json().operation.status).toBe("conflict");
+        expect(staleWrite.json().conflict).toMatchObject({
+          conflictType: "same-field-edit",
+          conflictingFields: ["amount"],
+          remoteSnapshot: {
+            amount: -1300,
+            notes: "Updated through Actual web interface",
+          },
+        });
+
+        const latestRead = await reconciliationApp.inject({
+          method: "GET",
+          url: transactionPath,
+          headers: authorizationHeaders,
+        });
+        const latest = latestRead.json() as {
+          transaction: TransactionSnapshot;
+          revision: string;
+        };
+        const resolutionOperationId = randomUUID();
+        const resolution = await reconciliationApp.inject({
+          method: "POST",
+          url: `${transactionPath}/operations`,
+          headers: {
+            ...authorizationHeaders,
+            "idempotency-key": `compat-resolution-${resolutionOperationId}`,
+          },
+          payload: {
+            operationId: resolutionOperationId,
+            action: "update",
+            baseRevision: latest.revision,
+            baseSnapshot: latest.transaction,
+            patch: { amount: -1200 },
+          },
+        });
+        expect(resolution.statusCode).toBe(200);
+        expect(resolution.json().operation.status).toBe("committed");
+        const operationStatus = await reconciliationApp.inject({
+          method: "GET",
+          url: `/api/v1/operations/${resolutionOperationId}`,
+          headers: authorizationHeaders,
+        });
+        expect(operationStatus.statusCode).toBe(200);
+        expect(operationStatus.json().operation.status).toBe("committed");
+        await reconciliationApp.close();
 
         await firstDevice.runBudget(
           budget.groupId,
@@ -275,16 +460,51 @@ describe.skipIf(!compatibilityTestEnabled)(
         );
         expect(transferSnapshot.transferId).toBe(transferLegs.incoming?.id);
 
-        await firstDevice.runBudget(
-          budget.groupId,
-          async () =>
-            transactionStore.update(transaction.id, {
-              amount: -1200,
-              notes: "Updated synthetic compatibility transaction",
-            }),
-          { synchronizeAfterWrite: true },
-        );
         await firstDevice.close();
+
+        if (!compatibilityDatabaseUrl) {
+          throw new Error("Isolated database URL was not initialized");
+        }
+        const runtimePairing = await database.deviceAuth.createPairingCode({
+          principalId: "actual-production-runtime-owner",
+          budgetIds: [budget.groupId],
+        });
+        const runtimeDevice = await database.deviceAuth.pair({
+          code: runtimePairing.code,
+          deviceName: "Synthetic runtime client",
+        });
+        if (!runtimeDevice) {
+          throw new Error("Could not pair the production runtime test device");
+        }
+        const runtimeAuthorizationHeaders = {
+          authorization: `Bearer ${runtimeDevice.accessToken}`,
+        };
+        const runtimeDataDir = path.join(firstDataDir, "api-runtime");
+        await mkdir(runtimeDataDir, { recursive: true });
+        const signalHandlers = new Map<ShutdownSignal, () => Promise<void>>();
+        const productionApp = await runApi(
+          {
+            DATABASE_URL: compatibilityDatabaseUrl,
+            ACTUAL_SERVER_URL: serverURL,
+            ACTUAL_SERVER_PASSWORD: serverPassword,
+            ACTUAL_API_DATA_DIR: runtimeDataDir,
+            HOST: "127.0.0.1",
+            PORT: String(await findAvailablePort()),
+          },
+          createPostgresDatabase,
+          (signal, handler) => signalHandlers.set(signal, handler),
+        );
+        const runtimeRead = await productionApp.inject({
+          method: "GET",
+          url: `/api/v1/budgets/${budget.groupId}/transactions/${transaction.id}`,
+          headers: runtimeAuthorizationHeaders,
+        });
+        expect(runtimeRead.statusCode).toBe(200);
+        expect(runtimeRead.json().transaction).toMatchObject({
+          amount: -1200,
+          notes: "Updated through Actual web interface",
+        });
+        await signalHandlers.get("SIGTERM")?.();
 
         const secondDataDir = path.join(firstDataDir, "device-two");
         await mkdir(secondDataDir, { recursive: true });
@@ -311,7 +531,7 @@ describe.skipIf(!compatibilityTestEnabled)(
           expect(downloadedTransaction).toMatchObject({
             id: transaction.id,
             amount: -1200,
-            notes: "Updated synthetic compatibility transaction",
+            notes: "Updated through Actual web interface",
           });
           const downloadedSplit = downloadedTransactions.find(
             (item) => item.id === splitParent?.id,

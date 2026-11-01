@@ -56,6 +56,13 @@ export interface TransactionReconciliationResult {
   conflict: OperationConflict | null;
 }
 
+export class TransactionRequestValidationError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "TransactionRequestValidationError";
+  }
+}
+
 interface PreparedRequest {
   request: TransactionReconciliationRequest;
   base: TransactionSnapshot;
@@ -475,6 +482,22 @@ export class TransactionReconciler {
 }
 
 function prepareRequest(
+  request: TransactionReconciliationRequest,
+): PreparedRequest {
+  try {
+    return prepareValidatedRequest(request);
+  } catch (error) {
+    if (error instanceof TransactionRequestValidationError) {
+      throw error;
+    }
+    throw new TransactionRequestValidationError(
+      error instanceof Error ? error.message : "Transaction request is invalid",
+      { cause: error },
+    );
+  }
+}
+
+function prepareValidatedRequest(
   request: TransactionReconciliationRequest,
 ): PreparedRequest {
   if (request.action !== "update" && request.action !== "delete") {
