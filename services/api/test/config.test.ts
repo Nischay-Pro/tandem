@@ -9,7 +9,7 @@ describe("parseApiConfig", () => {
     expect(parseApiConfig({ DATABASE_URL: databaseUrl })).toEqual({
       databaseUrl,
       host: "0.0.0.0",
-      port: 8080,
+      port: 19753,
     });
   });
 

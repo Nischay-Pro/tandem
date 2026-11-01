@@ -2,7 +2,7 @@
 # server {} block. The API service name matches docker-compose.dev.yml.
 
 upstream actual_companion_api {
-    server api:8080;
+    server api:19753;
 }
 
 upstream actual_budget_server {

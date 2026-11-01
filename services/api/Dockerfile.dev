@@ -12,5 +12,5 @@ USER node
 RUN pnpm install --frozen-lockfile
 
 COPY --chown=node:node . .
-EXPOSE 8080
+EXPOSE 19753
 CMD ["pnpm", "--filter", "@actual-budget-companion/api", "dev"]

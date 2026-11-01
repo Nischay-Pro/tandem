@@ -24,12 +24,12 @@ services:
     environment:
       DATABASE_URL: postgresql://companion:${POSTGRES_PASSWORD:-development-only-password}@postgres:5432/companion
       HOST: 0.0.0.0
-      PORT: 8080
+      PORT: 19753
     depends_on:
       postgres:
         condition: service_healthy
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:19753:19753"
     networks:
       - companion-private
 

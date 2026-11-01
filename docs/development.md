@@ -24,7 +24,7 @@ Start the API with:
 docker compose -f docker-compose.dev.yml up --build api
 ```
 
-Then fetch `http://localhost:8080/api/v1/openapi.json`.
+Then fetch `http://localhost:19753/api/v1/openapi.json`.
 
 ## Code quality
 
