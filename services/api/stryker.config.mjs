@@ -3,7 +3,7 @@ export default {
     "@stryker-mutator/vitest-runner",
     "@stryker-mutator/typescript-checker",
   ],
-  mutate: ["src/actual/actual-session.ts"],
+  mutate: ["src/actual/actual-session.ts", "src/database/budget-lock.ts"],
   testRunner: "vitest",
   vitest: {
     configFile: "vitest.config.ts",
@@ -14,7 +14,7 @@ export default {
   coverageAnalysis: "perTest",
   reporters: ["clear-text", "html"],
   htmlReporter: {
-    fileName: "../../.dev-tmp/stryker/actual-session.html",
+    fileName: "../../.dev-tmp/stryker/critical-finance-boundaries.html",
   },
   tempDirName: "../../.dev-tmp/stryker/temp",
   thresholds: {
