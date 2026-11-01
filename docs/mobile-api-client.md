@@ -16,12 +16,17 @@ build cannot validate Apple toolchains.
 
 - Kotlin Multiplatform Gradle plugin: 2.4.21 (stable)
 - Android Gradle plugin: 9.3.1 (latest version fully supported by Kotlin 2.4.21)
-- Gradle wrapper: 9.7.0 (the latest version fully supported by Kotlin 2.4.21)
+- Gradle wrapper: 9.8.2 (current stable release; Kotlin 2.4.21's documented fully
+  supported Gradle range ends at 9.7.0, so CI validates this newer combination)
 - OpenAPI KMP Gen: 1.5.0 (latest stable release; 1.6 is a release candidate)
 - ktlint Gradle plugin: 14.2.0
 - Kover: 0.9.11
-- JVM runtime: Java 26 (latest stable runtime supported by Gradle 9.7.0)
+- JVM runtime: Java 27 (current stable runtime; Gradle 9.8.2 supports running on it)
 - Android compile SDK: 36, minSdk: 26
+
+Kotlin 2.4.21 currently warns that JVM target 27 is unsupported and falls back
+to JVM 26 bytecode while the build runs on Java 27. Revisit that target when a
+Kotlin release adds JVM 27 target support.
 
 Versions are exact in `gradle/libs.versions.toml` and the Gradle wrapper. Update
 them as one tested toolchain change, and keep release candidates out of CI.
