@@ -5,9 +5,10 @@ current compatibility baseline: **Actual server 26.10.0 + `@actual-app/api`
 26.10.0**. Both are pinned in the compatibility test setup and API dependency
 manifest. A server with another release is rejected before the adapter can
 open a budget. The integration test establishes login, version check, synthetic
-budget/account/transaction creation, a transaction update, server sync, and
-read-back through a separate local workspace. Other operations and encrypted
-budget behavior require their own tests before being declared supported.
+budget/account/transaction creation, ordinary transaction update and deletion,
+transfer creation, split creation and readback, server sync, and readback through
+independent local workspaces. Encrypted budget behavior and transfer
+mutation/deletion require their own tests before being declared supported.
 
 The version gate calls the official package's `getServerVersion()` method. In
 the pinned source, that method reads the server build version, is available
@@ -54,10 +55,18 @@ by Actual's UI, and runs against synthetic budget data. It uses only
 those paths and stops its isolated Compose project. It never connects to the
 Companion's configured production Actual server or uses a real budget.
 
-The test creates and updates a synthetic transaction through
-`@actual-app/api`, syncs it, shuts down that local client, and downloads the
-result into an independent second local data directory. The updated amount and
-notes must be present there.
+The test creates, updates, and deletes a synthetic ordinary transaction
+through `@actual-app/api`. It syncs the update and verifies it from a second
+local data directory, deletes it from that second client, syncs again, then
+verifies its absence from a third independent local data directory.
+
+The test also creates a synthetic transfer payee, sets its `transfer_acct`
+through `updatePayee`, and adds a transaction with `runTransfers: true`. Actual
+creates the paired transaction and each leg points to the other leg's ID; the
+outgoing leg keeps that link after download into the second workspace. Split
+creation is verified through Actual's grouped transaction result and public AQL
+read. The reconciler treats both transfers and splits as structured records
+that need review rather than editing one leg or child independently.
 
 ## Verified upstream evidence
 

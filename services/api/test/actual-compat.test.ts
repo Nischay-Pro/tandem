@@ -70,9 +70,11 @@ describe.skipIf(!compatibilityTestEnabled)(
 
       const budgetName = `ABC synthetic compatibility budget ${randomUUID()}`;
       const accountName = "ABC synthetic checking";
+      const transferAccountName = "ABC synthetic savings";
       const transactionNotes = "Synthetic compatibility transaction";
       const transactionDate = "2026-10-31";
       const transactionStore = createActualTransactionStore();
+      let transferAccountId = "";
 
       try {
         await firstDevice.execute(
@@ -80,6 +82,10 @@ describe.skipIf(!compatibilityTestEnabled)(
             await Actual.runImport(budgetName, async () => {
               const accountId = await Actual.createAccount(
                 { name: accountName, offbudget: false },
+                0,
+              );
+              transferAccountId = await Actual.createAccount(
+                { name: transferAccountName, offbudget: false },
                 0,
               );
               await Actual.addTransactions(accountId, [
@@ -96,15 +102,6 @@ describe.skipIf(!compatibilityTestEnabled)(
 
         const budgetFiles = await firstDevice.execute(() =>
           Actual.getBudgets(),
-        );
-        console.info(
-          "Synthetic Actual files:",
-          budgetFiles.map(({ id, name, groupId, cloudFileId }) => ({
-            id,
-            name,
-            groupId,
-            cloudFileId,
-          })),
         );
         const budget = budgetFiles.find(
           (file) => file.name === budgetName && file.groupId,
@@ -212,6 +209,72 @@ describe.skipIf(!compatibilityTestEnabled)(
           amount: -200,
         });
 
+        const transferPayeeId = await firstDevice.runBudget(
+          budget.groupId,
+          () =>
+            Actual.createPayee({
+              name: `Transfer: ${transferAccountName}`,
+            }),
+        );
+        await firstDevice.runBudget(budget.groupId, () =>
+          Actual.updatePayee(transferPayeeId, {
+            transfer_acct: transferAccountId,
+          }),
+        );
+        await firstDevice.runBudget(
+          budget.groupId,
+          () =>
+            Actual.addTransactions(
+              initialData.accountId,
+              [
+                {
+                  date: transactionDate,
+                  amount: -425,
+                  notes: "Synthetic transfer",
+                  payee: transferPayeeId,
+                },
+              ],
+              { runTransfers: true },
+            ),
+          { synchronizeAfterWrite: true },
+        );
+
+        const transferLegs = await firstDevice.runBudget(
+          budget.groupId,
+          async () => {
+            const outgoing = await Actual.getTransactions(
+              initialData.accountId,
+              transactionDate,
+              transactionDate,
+            );
+            const incoming = await Actual.getTransactions(
+              transferAccountId,
+              transactionDate,
+              transactionDate,
+            );
+            return {
+              outgoing: outgoing.find(
+                (item) => item.notes === "Synthetic transfer",
+              ),
+              incoming: incoming.find(
+                (item) => item.transfer_id !== null && item.amount === 425,
+              ),
+            };
+          },
+        );
+        expect(transferLegs.outgoing).toMatchObject({
+          amount: -425,
+          transfer_id: transferLegs.incoming?.id,
+        });
+        expect(transferLegs.incoming).toMatchObject({
+          amount: 425,
+          transfer_id: transferLegs.outgoing?.id,
+        });
+        const transferSnapshot = snapshotActualTransaction(
+          transferLegs.outgoing,
+        );
+        expect(transferSnapshot.transferId).toBe(transferLegs.incoming?.id);
+
         await firstDevice.runBudget(
           budget.groupId,
           async () =>
@@ -256,8 +319,37 @@ describe.skipIf(!compatibilityTestEnabled)(
           expect(downloadedSplit?.subtransactions?.map(({ id }) => id)).toEqual(
             splitParent?.subtransactions?.map(({ id }) => id),
           );
+          const downloadedTransfer = downloadedTransactions.find(
+            (item) => item.id === transferLegs.outgoing?.id,
+          );
+          expect(downloadedTransfer?.transfer_id).toBe(
+            transferLegs.incoming?.id,
+          );
+
+          await secondDevice.runBudget(
+            budget.groupId,
+            () => transactionStore.delete(transaction.id),
+            { synchronizeAfterWrite: true },
+          );
         } finally {
           await secondDevice.close();
+        }
+
+        const thirdDataDir = path.join(firstDataDir, "device-three");
+        await mkdir(thirdDataDir, { recursive: true });
+        const thirdDevice = createActualSession({
+          serverURL,
+          dataDir: thirdDataDir,
+          password: serverPassword,
+        });
+        try {
+          await expect(
+            thirdDevice.runBudget(budget.groupId, () =>
+              transactionStore.read(transaction.id),
+            ),
+          ).resolves.toBeUndefined();
+        } finally {
+          await thirdDevice.close();
         }
       } finally {
         await firstDevice.close();
