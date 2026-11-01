@@ -1,8 +1,14 @@
 import * as Actual from "@actual-app/api";
+import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createActualSession } from "../src/actual/actual-session.js";
+import {
+  createTransactionRevision,
+  snapshotActualTransaction,
+} from "../src/actual/transaction-reconciliation.js";
+import { createActualTransactionStore } from "../src/actual/transaction-store.js";
 
 const serverURL = process.env.ACTUAL_SERVER_URL;
 const serverPassword = process.env.ACTUAL_SERVER_PASSWORD;
@@ -62,10 +68,11 @@ describe.skipIf(!compatibilityTestEnabled)(
         password: serverPassword,
       });
 
-      const budgetName = "ABC synthetic compatibility budget";
+      const budgetName = `ABC synthetic compatibility budget ${randomUUID()}`;
       const accountName = "ABC synthetic checking";
       const transactionNotes = "Synthetic compatibility transaction";
       const transactionDate = "2026-10-31";
+      const transactionStore = createActualTransactionStore();
 
       try {
         await firstDevice.execute(
@@ -136,10 +143,79 @@ describe.skipIf(!compatibilityTestEnabled)(
           throw new Error("Actual did not return the synthetic transaction");
         }
 
+        const transactionByAql = await firstDevice.runBudget(
+          budget.groupId,
+          () => transactionStore.read(transaction.id),
+        );
+        expect(transactionByAql).toMatchObject({
+          id: transaction.id,
+          account: initialData.accountId,
+          amount: -1500,
+          date: transactionDate,
+        });
+
+        await firstDevice.runBudget(
+          budget.groupId,
+          async () => {
+            await Actual.addTransactions(initialData.accountId, [
+              {
+                date: transactionDate,
+                amount: -500,
+                notes: "Synthetic split parent",
+                subtransactions: [
+                  { amount: -200, notes: "Synthetic split child one" },
+                  { amount: -300, notes: "Synthetic split child two" },
+                ],
+              },
+            ]);
+          },
+          { synchronizeAfterWrite: true },
+        );
+
+        const splitTransactions = await firstDevice.runBudget(
+          budget.groupId,
+          () =>
+            Actual.getTransactions(
+              initialData.accountId,
+              transactionDate,
+              transactionDate,
+            ),
+        );
+        const splitParent = splitTransactions.find(
+          (item) => item.notes === "Synthetic split parent",
+        );
+        expect(splitParent?.is_parent).toBe(true);
+        expect(splitParent?.subtransactions).toHaveLength(2);
+        const splitParentSnapshot = snapshotActualTransaction(splitParent);
+        expect(splitParentSnapshot.subtransactions).toHaveLength(2);
+        expect(
+          createTransactionRevision({
+            ...splitParentSnapshot,
+            subtransactions: splitParentSnapshot.subtransactions.map(
+              (child, index) =>
+                index === 0 ? { ...child, amount: child.amount - 1 } : child,
+            ),
+          }),
+        ).not.toBe(createTransactionRevision(splitParentSnapshot));
+        const splitChild = splitParent?.subtransactions?.[0];
+        if (!splitChild) {
+          throw new Error("Actual did not return the synthetic split child");
+        }
+
+        const childByAql = await firstDevice.runBudget(budget.groupId, () =>
+          transactionStore.read(splitChild.id),
+        );
+        expect(childByAql).toMatchObject({
+          id: splitChild.id,
+          is_child: true,
+          parent_id: splitParent.id,
+          amount: -200,
+        });
+
         await firstDevice.runBudget(
           budget.groupId,
           async () =>
-            Actual.updateTransaction(transaction.id, {
+            transactionStore.update(transaction.id, {
               amount: -1200,
               notes: "Updated synthetic compatibility transaction",
             }),
@@ -166,13 +242,20 @@ describe.skipIf(!compatibilityTestEnabled)(
               ),
           );
 
-          expect(downloadedTransactions).toEqual([
-            expect.objectContaining({
-              id: transaction.id,
-              amount: -1200,
-              notes: "Updated synthetic compatibility transaction",
-            }),
-          ]);
+          const downloadedTransaction = downloadedTransactions.find(
+            (item) => item.id === transaction.id,
+          );
+          expect(downloadedTransaction).toMatchObject({
+            id: transaction.id,
+            amount: -1200,
+            notes: "Updated synthetic compatibility transaction",
+          });
+          const downloadedSplit = downloadedTransactions.find(
+            (item) => item.id === splitParent?.id,
+          );
+          expect(downloadedSplit?.subtransactions?.map(({ id }) => id)).toEqual(
+            splitParent?.subtransactions?.map(({ id }) => id),
+          );
         } finally {
           await secondDevice.close();
         }

@@ -3,7 +3,12 @@ export default {
     "@stryker-mutator/vitest-runner",
     "@stryker-mutator/typescript-checker",
   ],
-  mutate: ["src/actual/actual-session.ts", "src/database/budget-lock.ts"],
+  mutate: [
+    "src/actual/actual-session.ts",
+    "src/actual/transaction-reconciliation.ts",
+    "src/actual/transaction-store.ts",
+    "src/database/budget-lock.ts",
+  ],
   testRunner: "vitest",
   vitest: {
     configFile: "vitest.config.ts",
