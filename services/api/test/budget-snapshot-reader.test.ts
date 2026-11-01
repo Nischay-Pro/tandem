@@ -6,6 +6,10 @@ import {
   createBudgetRecordRevision,
   type ActualBudgetReadApi,
 } from "../src/actual/budget-snapshot-reader.js";
+import {
+  createTransactionRevision,
+  snapshotActualTransaction,
+} from "../src/actual/transaction-reconciliation.js";
 import type { ActualBudgetSessionPort } from "../src/actual/transaction-reconciler.js";
 
 function createQueryBuilder() {
@@ -74,6 +78,19 @@ function createApi(overrides: Record<string, unknown> = {}) {
   );
   const session = { runBudget } as ActualBudgetSessionPort;
   return { actual, queries, runBudget, session };
+}
+
+function transactionRow(
+  id: string,
+  fields: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id,
+    account: "account-1",
+    amount: 100,
+    date: "2026-11-01",
+    ...fields,
+  };
 }
 
 describe("Actual budget snapshot reader", () => {
@@ -148,13 +165,29 @@ describe("Actual budget snapshot reader", () => {
     const splitParent = records.find(
       ({ type, id }) => type === "transaction" && id === "split-parent",
     );
+    const splitParentInput = firstPage[0] as Record<string, unknown>;
+    const splitChildInput = (
+      splitParentInput.subtransactions as Record<string, unknown>[]
+    )[0];
     expect(splitParent?.body).not.toHaveProperty("raw_synced_data");
+    expect(splitParent?.body).toEqual(
+      snapshotActualTransaction(splitParentInput),
+    );
+    expect(splitParent?.revision).toBe(
+      createTransactionRevision(snapshotActualTransaction(splitParentInput)),
+    );
     expect(records).toContainEqual(
       expect.objectContaining({
         type: "transaction",
         id: "split-child",
-        body: expect.objectContaining({ parent_id: "split-parent" }),
+        body: expect.objectContaining({ parentId: "split-parent" }),
       }),
+    );
+    const splitChild = records.find(
+      ({ type, id }) => type === "transaction" && id === "split-child",
+    );
+    expect(splitChild?.revision).toBe(
+      createTransactionRevision(snapshotActualTransaction(splitChildInput)),
     );
     expect(fake.queries).toHaveLength(2);
     for (const [index, query] of fake.queries.entries()) {
@@ -332,11 +365,15 @@ describe("Actual budget snapshot reader", () => {
       message: "Actual returned an invalid transaction",
     },
     {
-      result: { data: [{ id: "parent", subtransactions: "invalid" }] },
+      result: {
+        data: [transactionRow("parent", { subtransactions: "invalid" })],
+      },
       message: "Actual returned invalid transaction splits",
     },
     {
-      result: { data: [{ id: "parent", subtransactions: [null] }] },
+      result: {
+        data: [transactionRow("parent", { subtransactions: [null] })],
+      },
       message: "Actual returned an invalid split transaction",
     },
   ])("rejects malformed AQL transaction data", async ({ result, message }) => {
@@ -363,8 +400,8 @@ describe("Actual budget snapshot reader", () => {
     const overflow = createApi({
       aqlQuery: vi
         .fn()
-        .mockResolvedValueOnce({ data: [{ id: "1" }] })
-        .mockResolvedValueOnce({ data: [{ id: "2" }] }),
+        .mockResolvedValueOnce({ data: [transactionRow("1")] })
+        .mockResolvedValueOnce({ data: [transactionRow("2")] }),
     });
     await expect(
       new ActualBudgetSnapshotReader(
@@ -382,8 +419,12 @@ describe("Actual budget snapshot reader", () => {
     const fake = createApi({
       aqlQuery: vi
         .fn()
-        .mockResolvedValueOnce({ data: [{ id: "same", amount: 1 }] })
-        .mockResolvedValueOnce({ data: [{ id: "same", amount: 2 }] })
+        .mockResolvedValueOnce({
+          data: [transactionRow("same", { amount: 1 })],
+        })
+        .mockResolvedValueOnce({
+          data: [transactionRow("same", { amount: 2 })],
+        })
         .mockResolvedValueOnce({ data: [] }),
     });
     await expect(

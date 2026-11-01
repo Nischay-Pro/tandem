@@ -91,8 +91,11 @@ their type, stable Actual ID (or month string), JSON body, and SHA-256 revision,
 along with a generation and decimal-string cursor. It includes accounts and
 current balances, account groups, hidden and visible categories and category
 groups, payees, budget-month totals and category allocations, and transactions
-including split children and transfer links. Internal raw bank-import payloads
-are omitted from transaction records. The response is `Cache-Control: no-store`.
+including split children and transfer links. Transaction bodies use the same
+normalized fields as the transaction read endpoint, and their revisions match
+that endpoint so an offline client can safely use a downloaded record as its
+write base. Internal raw bank-import payloads are omitted from transaction
+records. The response is `Cache-Control: no-store`.
 
 Start a change poll with
 `GET /api/v1/budgets/{budgetId}/changes?generation=<generation>&cursor=<cursor>`.

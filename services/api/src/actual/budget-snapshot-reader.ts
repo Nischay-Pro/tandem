@@ -8,6 +8,10 @@ import type {
   JsonObject,
 } from "../budget-projection/contracts.js";
 import type { JsonValue } from "../write-journal/contracts.js";
+import {
+  createTransactionRevision,
+  snapshotActualTransaction,
+} from "./transaction-reconciliation.js";
 
 export const ACTUAL_TRANSACTION_PAGE_SIZE = 500;
 export const ACTUAL_TRANSACTION_MAX_ROWS = 1_000_000;
@@ -25,29 +29,6 @@ export type ActualBudgetReadApi = Pick<
   | "q"
   | "aqlQuery"
 >;
-
-const TRANSACTION_FIELDS = [
-  "id",
-  "is_parent",
-  "is_child",
-  "parent_id",
-  "account",
-  "category",
-  "amount",
-  "payee",
-  "notes",
-  "date",
-  "imported_id",
-  "imported_payee",
-  "starting_balance_flag",
-  "transfer_id",
-  "sort_order",
-  "cleared",
-  "reconciled",
-  "forceUpcoming",
-  "schedule",
-  "error",
-] as const;
 
 export class ActualBudgetSnapshotReader implements BudgetSnapshotReader {
   constructor(
@@ -183,21 +164,35 @@ export class ActualBudgetSnapshotReader implements BudgetSnapshotReader {
 
       for (const value of result.data) {
         const row = requireRecord(value, "transaction");
-        const parent = projectTransaction(row);
-        records.push(this.record("transaction", parent));
         const children = row.subtransactions;
-        if (children !== undefined) {
-          if (!Array.isArray(children)) {
-            throw new Error("Actual returned invalid transaction splits");
-          }
-          for (const child of children) {
-            records.push(
-              this.record(
-                "transaction",
-                projectTransaction(requireRecord(child, "split transaction")),
-              ),
-            );
-          }
+        if (children !== undefined && !Array.isArray(children)) {
+          throw new Error("Actual returned invalid transaction splits");
+        }
+        const splitRows =
+          children?.map((child) => requireRecord(child, "split transaction")) ??
+          [];
+        const parent = snapshotActualTransaction({
+          ...row,
+          subtransactions: splitRows,
+        });
+        records.push(
+          this.record(
+            "transaction",
+            parent,
+            parent.id,
+            createTransactionRevision(parent),
+          ),
+        );
+        for (const splitRow of splitRows) {
+          const split = snapshotActualTransaction(splitRow);
+          records.push(
+            this.record(
+              "transaction",
+              split,
+              split.id,
+              createTransactionRevision(split),
+            ),
+          );
         }
       }
 
@@ -218,6 +213,7 @@ export class ActualBudgetSnapshotReader implements BudgetSnapshotReader {
     type: BudgetEntityType,
     value: unknown,
     idOverride?: string,
+    revisionOverride?: string,
   ): BudgetProjectionRecord {
     const input = requireRecord(value, type);
     const id = idOverride ?? requireId(input.id, type);
@@ -232,25 +228,13 @@ export class ActualBudgetSnapshotReader implements BudgetSnapshotReader {
       type,
       id,
       body,
-      revision: createBudgetRecordRevision(body),
+      revision: revisionOverride ?? createBudgetRecordRevision(body),
     };
   }
 }
 
 export function createBudgetRecordRevision(body: JsonObject): string {
   return createHash("sha256").update(canonicalJson(body)).digest("hex");
-}
-
-function projectTransaction(
-  row: Record<string, unknown>,
-): Record<string, unknown> {
-  const projected: Record<string, unknown> = {};
-  for (const field of TRANSACTION_FIELDS) {
-    if (Object.hasOwn(row, field)) {
-      projected[field] = row[field];
-    }
-  }
-  return projected;
 }
 
 function requireArray(value: unknown, description: string): unknown[] {

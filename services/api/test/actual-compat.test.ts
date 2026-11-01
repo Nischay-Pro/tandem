@@ -528,7 +528,11 @@ describe.skipIf(!compatibilityTestEnabled)(
           headers: runtimeAuthorizationHeaders,
         });
         expect(runtimeRead.statusCode).toBe(200);
-        expect(runtimeRead.json().transaction).toMatchObject({
+        const runtimeTransaction = runtimeRead.json() as {
+          transaction: Record<string, unknown>;
+          revision: string;
+        };
+        expect(runtimeTransaction.transaction).toMatchObject({
           amount: -1200,
           notes: "Updated through Actual web interface",
         });
@@ -544,6 +548,7 @@ describe.skipIf(!compatibilityTestEnabled)(
           records: Array<{
             type: string;
             id: string;
+            revision: string;
             body: Record<string, unknown>;
           }>;
         };
@@ -559,6 +564,12 @@ describe.skipIf(!compatibilityTestEnabled)(
           "account",
           initialData.accountId,
         );
+        const feedTransaction = findRuntimeRecord(
+          "transaction",
+          transaction.id,
+        );
+        expect(feedTransaction?.body).toEqual(runtimeTransaction.transaction);
+        expect(feedTransaction?.revision).toBe(runtimeTransaction.revision);
         expect(typeof runtimeAccount?.body.balance_current).toBe("number");
         expect(findRuntimeRecord("category", categoryId)).toBeDefined();
         expect(findRuntimeRecord("category", hiddenCategoryId)).toBeDefined();
