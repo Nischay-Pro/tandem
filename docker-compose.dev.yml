@@ -41,6 +41,8 @@ services:
     command: ["pnpm", "check:all"]
     environment:
       DATABASE_URL: postgresql://companion:${POSTGRES_PASSWORD:-development-only-password}@postgres:5432/companion
+    volumes:
+      - ./.dev-tmp/stryker:/workspace/.dev-tmp/stryker
     depends_on:
       postgres:
         condition: service_healthy

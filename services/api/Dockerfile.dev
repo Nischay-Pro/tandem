@@ -2,6 +2,10 @@ FROM node:26.13.0-trixie-slim
 
 WORKDIR /workspace
 
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y procps \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN npm install --global --allow-scripts=pnpm pnpm@12.16.1 \
     && chown node:node /workspace
 

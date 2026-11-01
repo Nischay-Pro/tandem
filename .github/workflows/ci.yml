@@ -22,7 +22,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Run formatting, lint, typecheck, integration tests, and coverage
+      - name: Run formatting, lint, typecheck, integration tests, coverage, and mutation tests
         run: docker compose -f docker-compose.dev.yml --profile test run --build --rm integration-tests
 
       - name: Verify the pinned Actual API and server pair

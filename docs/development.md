@@ -12,7 +12,7 @@ The API checks run inside Docker because the development environment may not hav
 docker compose -f docker-compose.dev.yml --profile test run --build --rm integration-tests
 ```
 
-The integration-test profile runs formatting, lint, typecheck, and the API test suite against PostgreSQL. Coverage enforces 100% lines, statements, functions, and branches for API source. The development database is stored under `.dev-tmp/` and must contain synthetic data only.
+The integration-test profile runs formatting, lint, typecheck, API tests against PostgreSQL, and StrykerJS mutation tests for the Actual API session lifecycle. Coverage enforces 100% lines, statements, functions, and branches for API source. Mutation tests check whether behavioral regressions cause tests to fail; their HTML report and temporary worktree are written under `.dev-tmp/`. The development database is stored under `.dev-tmp/` and must contain synthetic data only.
 
 GitHub Actions runs the same Compose quality gate for pushes and pull requests with read-only repository permissions.
 
@@ -28,7 +28,7 @@ Then fetch `http://localhost:19753/api/v1/openapi.json`.
 
 ## Code quality
 
-Run the Compose integration-test command above for the full gate. Running `pnpm check:all` directly also requires `DATABASE_URL` to point to a disposable PostgreSQL database.
+Run the Compose integration-test command above for the full gate. Running `pnpm check:all` directly also requires `DATABASE_URL` to point to a disposable PostgreSQL database. Run `pnpm test:mutation` from the repository root to rerun mutation testing independently.
 
 ## Database migrations
 
