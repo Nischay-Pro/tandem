@@ -33,6 +33,15 @@ describe("parseApiConfig", () => {
     );
   });
 
+  it.each(["", "  "])(
+    "uses the default port when supplied port is blank",
+    (port) => {
+      expect(
+        parseApiConfig({ DATABASE_URL: databaseUrl, PORT: port }).port,
+      ).toBe(19753);
+    },
+  );
+
   it("rejects a missing database URL", () => {
     expect(() => parseApiConfig({})).toThrow("DATABASE_URL is required");
   });

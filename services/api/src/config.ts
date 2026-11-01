@@ -27,7 +27,7 @@ export function parseApiConfig(environment: Environment): ApiConfig {
   }
 
   const host = environment.HOST?.trim() || "0.0.0.0";
-  const rawPort = environment.PORT ?? "19753";
+  const rawPort = environment.PORT?.trim() || "19753";
   const port = Number(rawPort);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error("PORT must be an integer between 1 and 65535");
