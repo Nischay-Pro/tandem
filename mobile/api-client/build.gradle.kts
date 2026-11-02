@@ -20,6 +20,7 @@ kotlin {
   sourceSets {
     commonMain.dependencies {
       implementation(project(":data"))
+      implementation(libs.ktorClientCore)
     }
     jvmTest.dependencies {
       implementation(kotlin("test"))
