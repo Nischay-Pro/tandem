@@ -1,7 +1,10 @@
 import * as actualApi from "@actual-app/api";
 import { describe, expect, it, vi } from "vitest";
 import { createActualTransactionStore } from "../src/actual/transaction-store.js";
-import type { TransactionPatch } from "../src/actual/transaction-reconciliation.js";
+import type {
+  TransactionCreateInput,
+  TransactionPatch,
+} from "../src/actual/transaction-reconciliation.js";
 
 function createClient(result: unknown) {
   const queries: unknown[] = [];
@@ -11,6 +14,7 @@ function createClient(result: unknown) {
       queries.push(query.serialize());
       return result;
     }),
+    addTransactions: vi.fn(async () => "ok" as const),
     updateTransaction: vi.fn(async () => []),
     deleteTransaction: vi.fn(async () => []),
   };
@@ -140,5 +144,127 @@ describe("Actual transaction store", () => {
       patch,
     );
     expect(fake.client.deleteTransaction).toHaveBeenCalledWith("transaction-1");
+  });
+
+  it("creates with a stable imported ID through Actual's public API", async () => {
+    const id = "tandem:8c88495a-65d9-4531-8392-93bff2c65374";
+    const input: TransactionCreateInput = {
+      account: "account-1",
+      amount: -1250,
+      date: "2026-11-01",
+      payee: "payee-1",
+      category: "category-1",
+      notes: "Lunch",
+      cleared: false,
+    };
+    const queries: unknown[] = [];
+    let transaction: Record<string, unknown> | undefined;
+    const client = {
+      q: actualApi.q,
+      aqlQuery: vi.fn(async (query: ReturnType<typeof actualApi.q>) => {
+        queries.push(query.serialize());
+        return { data: transaction ? [transaction] : [] };
+      }),
+      addTransactions: vi.fn(
+        async (
+          accountId: string,
+          rows: Array<{
+            date: string;
+            amount?: number;
+            payee?: string | null;
+            category?: string;
+            notes?: string;
+            cleared?: boolean;
+            imported_id?: string;
+          }>,
+        ) => {
+          transaction = {
+            id: "actual-generated-id",
+            account: accountId,
+            ...rows[0],
+          };
+          return "ok" as const;
+        },
+      ),
+      updateTransaction: vi.fn(async () => []),
+      deleteTransaction: vi.fn(async () => []),
+    };
+    const store = createActualTransactionStore(client);
+
+    await expect(store.create(id, input)).resolves.toEqual(transaction);
+    expect(client.addTransactions).toHaveBeenCalledWith(
+      "account-1",
+      [
+        {
+          date: "2026-11-01",
+          amount: -1250,
+          payee: "payee-1",
+          category: "category-1",
+          notes: "Lunch",
+          cleared: false,
+          imported_id: id,
+        },
+      ],
+      { runTransfers: false, learnCategories: false },
+    );
+    expect(queries[0]).toMatchObject({
+      filterExpressions: [{ imported_id: id }],
+      tableOptions: { splits: "grouped" },
+    });
+  });
+
+  it("rejects transaction creation without a stable ID or Actual read-back", async () => {
+    const id = "tandem:8c88495a-65d9-4531-8392-93bff2c65374";
+    const input: TransactionCreateInput = {
+      account: "account-1",
+      amount: -1250,
+      date: "2026-11-01",
+      payee: null,
+      category: null,
+      notes: "",
+      cleared: false,
+    };
+    const missingReadBack = createActualTransactionStore(
+      createClient({ data: [] }).client,
+    );
+
+    await expect(missingReadBack.create(id, input)).rejects.toThrow(
+      "Actual did not return the created transaction",
+    );
+    await expect(missingReadBack.create("unstable-id", input)).rejects.toThrow(
+      "New transactions require a Companion transaction ID",
+    );
+  });
+
+  it("rejects writes when a stable imported ID no longer resolves", async () => {
+    const id = "tandem:8c88495a-65d9-4531-8392-93bff2c65374";
+    const store = createActualTransactionStore(
+      createClient({ data: [] }).client,
+    );
+
+    await expect(store.update(id, { amount: -1200 })).rejects.toThrow(
+      "Actual transaction no longer exists",
+    );
+    await expect(store.delete(id)).rejects.toThrow(
+      "Actual transaction no longer exists",
+    );
+  });
+
+  it("resolves stable Companion IDs to Actual IDs before update or delete", async () => {
+    const id = "tandem:8c88495a-65d9-4531-8392-93bff2c65374";
+    const actual = { id: "actual-generated-id", imported_id: id };
+    const fake = createClient({ data: [actual] });
+    const store = createActualTransactionStore(fake.client);
+
+    await store.update(id, { amount: -1200 });
+    await store.delete(id);
+
+    expect(fake.client.updateTransaction).toHaveBeenCalledWith(
+      "actual-generated-id",
+      { amount: -1200 },
+    );
+    expect(fake.client.deleteTransaction).toHaveBeenCalledWith(
+      "actual-generated-id",
+    );
   });
 });

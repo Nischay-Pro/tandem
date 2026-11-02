@@ -228,6 +228,11 @@ class LocalBudgetRepository(
 
     suspend fun readPendingWrites(budgetId: String): List<OutboxOperationEntity> = database.outboxDao().findPending(budgetId)
 
+    suspend fun findWrite(operationId: String): OutboxOperationEntity? {
+        requireIdentifier(operationId, "operationId")
+        return database.outboxDao().find(operationId)
+    }
+
     suspend fun markSyncStarted(budgetId: String) {
         requireIdentifier(budgetId, "budgetId")
         database.withWriteTransaction {

@@ -716,6 +716,36 @@ describe("durable write journal integration", () => {
     });
   });
 
+  it("accepts returned create evidence for an uncertain create", async () => {
+    const input = createOperation({
+      action: "create",
+      entityId: "tandem:8c88495a-65d9-4531-8392-93bff2c65374",
+      baseRevision: null,
+      baseSnapshot: {},
+    });
+    const evidence: ActualWriteEvidence = {
+      kind: "transaction-create-returned",
+    };
+    await database.journal.enqueue(input);
+    await database.journal.claim(input.operationId);
+    await database.journal.markUncertain(
+      input.operationId,
+      "actual-timeout",
+      evidence,
+    );
+
+    const committed = await database.journal.resolveUncertainAsCommitted(
+      input.operationId,
+      { transactionId: input.entityId, recoveredByReadback: true },
+    );
+
+    expect(committed).toMatchObject({
+      action: "create",
+      status: "committed",
+      writeEvidence: null,
+    });
+  });
+
   it("stores a conflict and treats a matching conflict retry as idempotent", async () => {
     const input = createOperation();
     await database.journal.enqueue(input);
@@ -933,6 +963,9 @@ describe("durable write journal integration", () => {
     const transactions: ActualTransactionStore = {
       async read() {
         return actual;
+      },
+      async create() {
+        throw new Error("This test does not create transactions");
       },
       async update(_id, fields) {
         actualWrites += 1;

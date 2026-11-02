@@ -22,11 +22,15 @@ import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.put
 import kotlin.uuid.Uuid
 
 /** In-memory connection state. Device credentials and budget passwords are never saved here. */
@@ -293,6 +297,139 @@ internal class TandemMobileSession(
         }
     }
 
+    suspend fun createTransaction(
+        budgetId: String,
+        accountId: String,
+        payeeId: String?,
+        categoryId: String?,
+        amountText: String,
+        dateText: String,
+        notes: String,
+        encryptionPassword: String?,
+        displaySettings: BudgetDisplaySettings? = null,
+    ): Boolean {
+        transactionWriteMessage = null
+        val amount = parseAmountMinorUnits(amountText, displaySettings)
+        if (amount == null || amount == 0L) {
+            transactionWriteMessage = "Enter a non-zero amount. Use a minus sign for spending; positive amounts are income."
+            return false
+        }
+        val date = normalizeTransactionDate(dateText)
+        if (date == null) {
+            transactionWriteMessage = "Enter the date as YYYY-MM-DD."
+            return false
+        }
+        val localRepository = repository
+        val coordinator = syncCoordinator
+        if (localRepository == null || coordinator == null || !isAuthenticated) {
+            transactionWriteMessage = "Pair this device and open a budget before adding a transaction."
+            return false
+        }
+        val account = accountRecords.firstOrNull { it.recordId == accountId }
+        if (account == null) {
+            transactionWriteMessage = "Choose an account from this budget before saving."
+            return false
+        }
+        val accountBody = account.recordBody()
+        if (accountBody?.booleanValue("offbudget") == true || accountBody?.booleanValue("offBudget") == true) {
+            transactionWriteMessage = "Choose an on-budget account for this transaction."
+            return false
+        }
+        if (payeeId != null && payeeRecords.none { it.recordId == payeeId }) {
+            transactionWriteMessage = "Choose an existing payee or clear the payee field."
+            return false
+        }
+        if (categoryId != null && categoryRecords.none { it.recordId == categoryId }) {
+            transactionWriteMessage = "Choose a category from this budget before saving."
+            return false
+        }
+        val transactionId = "tandem:${Uuid.random()}"
+        val operationId = Uuid.random().toString()
+        val patch =
+            buildJsonObject {
+                put("account", account.recordId)
+                put("amount", amount)
+                put("date", date)
+                put("payee", payeeId?.let(::JsonPrimitive) ?: JsonNull)
+                put("category", categoryId?.let(::JsonPrimitive) ?: JsonNull)
+                put("notes", notes)
+                put("cleared", false)
+            }
+        val optimistic =
+            buildJsonObject {
+                put("id", transactionId)
+                put("account", account.recordId)
+                put("amount", amount)
+                put("date", date)
+                put("payee", payeeId?.let(::JsonPrimitive) ?: JsonNull)
+                put("category", categoryId?.let(::JsonPrimitive) ?: JsonNull)
+                put("notes", notes)
+                put("cleared", false)
+                put("reconciled", JsonNull)
+                put("importedId", JsonNull)
+                put("importedPayee", JsonNull)
+                put("startingBalance", JsonNull)
+                put("schedule", JsonNull)
+                put("transferId", JsonNull)
+                put("isParent", false)
+                put("isChild", false)
+                put("parentId", JsonNull)
+                put("subtransactions", JsonArray(emptyList()))
+            }
+        isSavingTransaction = true
+        try {
+            localRepository.enqueueWrite(
+                LocalWriteRequest(
+                    operationId = operationId,
+                    idempotencyKey = operationId,
+                    budgetId = budgetId,
+                    recordType = "transaction",
+                    recordId = transactionId,
+                    action = LocalWriteAction.CREATE,
+                    baseRevision = null,
+                    baseSnapshotJson = null,
+                    patchJson = patch.toString(),
+                    optimisticJson = optimistic.toString(),
+                    createdAtEpochMs = nowEpochMillis(),
+                    optimisticProjection =
+                        LocalRecordProjection(
+                            recordDate = date,
+                            accountId = account.recordId,
+                            categoryId = categoryId,
+                            payeeId = payeeId,
+                            amountMinor = amount,
+                            budgetMonth = date.take(7),
+                        ),
+                ),
+            )
+            val summary = synchronize(budgetId, encryptionPassword)
+            val savedWrite = localRepository.findWrite(operationId)
+            transactionWriteMessage =
+                when (savedWrite?.status) {
+                    "committed" -> "Transaction added to Actual."
+                    "conflict" -> "This transaction ID already exists. Sync and try again."
+                    "uncertain", "sending" -> "Actual has not confirmed this transaction yet. Check its status before retrying."
+                    "rejected" -> "Actual did not add this transaction. Your previous budget data was kept."
+                    else ->
+                        if (summary == null) {
+                            "Saved on this device. The server has not confirmed it; check sync status before retrying."
+                        } else {
+                            "The transaction is saved on this device and is waiting to sync."
+                        }
+                }
+            loadLocalRecords(budgetId)
+            return savedWrite?.status == "committed"
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            transactionWriteMessage = "The transaction remains on this device. Check sync status before retrying."
+            loadLocalRecords(budgetId)
+            return false
+        } finally {
+            isSavingTransaction = false
+        }
+    }
+
     suspend fun resolveConflict(
         budgetId: String,
         operationId: String,
@@ -423,3 +560,20 @@ private fun JsonObject.toProjection(): LocalRecordProjection =
         amountMinor = longValue("amount"),
         budgetMonth = stringValue("month"),
     )
+
+private fun normalizeTransactionDate(value: String): String? {
+    val text = value.trim()
+    if (!Regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}$").matches(text)) return null
+    val year = text.substring(0, 4).toIntOrNull() ?: return null
+    val month = text.substring(5, 7).toIntOrNull() ?: return null
+    val day = text.substring(8, 10).toIntOrNull() ?: return null
+    if (year == 0 || month !in 1..12) return null
+    val leapYear = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+    val daysInMonth =
+        when (month) {
+            2 -> if (leapYear) 29 else 28
+            4, 6, 9, 11 -> 30
+            else -> 31
+        }
+    return text.takeIf { day in 1..daysInMonth }
+}

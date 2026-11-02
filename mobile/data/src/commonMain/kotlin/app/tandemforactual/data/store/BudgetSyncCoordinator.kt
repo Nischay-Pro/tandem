@@ -213,10 +213,6 @@ class BudgetSyncCoordinator(
         generation: String,
         encryptionPassword: String?,
     ): WriteOutcome {
-        if (operation.action == "CREATE") {
-            repository.markWriteRejected(operation.operationId, "create-not-supported")
-            return WriteOutcome.REJECTED
-        }
         val submitted =
             try {
                 remote.submitOperation(operation, encryptionPassword)

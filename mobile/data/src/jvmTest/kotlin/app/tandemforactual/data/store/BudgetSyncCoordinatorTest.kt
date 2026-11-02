@@ -324,7 +324,7 @@ class BudgetSyncCoordinatorTest {
         }
 
     @Test
-    fun duplicateLocalCreateIsNeverSubmittedToTheUpdateDeleteApi() =
+    fun duplicateLocalCreateUsesTheDurableCreateEndpointOnce() =
         runBlocking {
             val database = newDatabase()
             try {
@@ -336,24 +336,41 @@ class BudgetSyncCoordinatorTest {
                     updateRequest(
                         operationId = CREATE_OPERATION,
                         idempotencyKey = "create-key",
-                        recordId = "txn-new",
+                        recordId = "tandem:8c88495a-65d9-4531-8392-93bff2c65374",
                         action = LocalWriteAction.CREATE,
                         baseRevision = null,
                         baseSnapshot = null,
-                        patch = "{\"amount\":1000}",
-                        optimistic = "{\"id\":\"txn-new\",\"amount\":1000}",
+                        patch =
+                            "{\"account\":\"checking\",\"amount\":1200,\"date\":\"2026-10-01\",\"payee\":null,\"category\":null,\"notes\":\"\",\"cleared\":false}",
+                        optimistic =
+                            "{\"id\":\"tandem:8c88495a-65d9-4531-8392-93bff2c65374\",\"amount\":1200}",
                     )
                 val first = repository.enqueueWrite(request)
                 val duplicate = repository.enqueueWrite(request)
                 assertFalse(first.replayed)
                 assertTrue(duplicate.replayed)
+                remote.submitHandler = { operation ->
+                    RemoteOperationResult(
+                        operation.operationId,
+                        BUDGET,
+                        operation.recordId,
+                        RemoteOperationStatus.COMMITTED,
+                        null,
+                    )
+                }
+                remote.transactionHandler = { _, transactionId, _ ->
+                    remoteTransaction(transactionId, "revision-2", 1200L)
+                }
 
                 val result = coordinator.synchronize(BUDGET)
 
-                assertEquals(1, result.writesRejected)
-                assertEquals(0, remote.submitCount)
-                assertEquals("rejected", database.outboxDao().find(CREATE_OPERATION)?.status)
-                assertEquals("create-not-supported", database.outboxDao().find(CREATE_OPERATION)?.lastErrorCode)
+                assertEquals(1, result.writesCommitted)
+                assertEquals(1, remote.submitCount)
+                assertEquals("committed", database.outboxDao().find(CREATE_OPERATION)?.status)
+                assertEquals(
+                    "tandem:8c88495a-65d9-4531-8392-93bff2c65374",
+                    repository.findRecord(BUDGET, "transaction", request.recordId)?.recordId,
+                )
             } finally {
                 database.close()
             }

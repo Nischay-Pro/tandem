@@ -83,6 +83,7 @@ class LocalBudgetRepositoryTest {
                 assertFalse(first.replayed)
                 assertFalse(first.replacedUnsent)
                 assertEquals("queued", first.operation.status)
+                assertEquals(first.operation, repository.findWrite(request.operationId))
                 assertEquals(1, repository.readPendingWrites(BUDGET).size)
                 assertEquals("food", first.operation.optimisticCategoryId)
                 assertEquals(
@@ -723,7 +724,7 @@ class LocalBudgetRepositoryTest {
                     )
                 repository.enqueueWrite(create)
                 repository.claimNextWrite(BUDGET)
-                repository.markWriteRejected(create.operationId, "create-not-supported")
+                repository.markWriteRejected(create.operationId, "validation-rejected")
 
                 assertEquals(listOf("txn-1"), repository.findRecords(BUDGET, "transaction").map { it.recordId })
                 assertNull(repository.findRecord(BUDGET, "transaction", "txn-local")?.localJson)

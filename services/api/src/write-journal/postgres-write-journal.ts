@@ -538,6 +538,7 @@ function writeEvidenceMatchesAction(
   evidence: ActualWriteEvidence,
 ): boolean {
   return (
+    (action === "create" && evidence.kind === "transaction-create-returned") ||
     (action === "update" && evidence.kind === "transaction-update-returned") ||
     (action === "delete" && evidence.kind === "transaction-delete-returned")
   );
@@ -550,6 +551,9 @@ function parseWriteEvidence(
     return null;
   }
   const record = value as { [key: string]: JsonValue };
+  if (record.kind === "transaction-create-returned") {
+    return { kind: "transaction-create-returned" };
+  }
   if (record.kind === "transaction-delete-returned") {
     return { kind: "transaction-delete-returned" };
   }

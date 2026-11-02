@@ -190,7 +190,7 @@ private fun liveTransactionItems(session: TandemMobileSession): List<Transaction
     }
 }
 
-private fun BudgetRecordEntity.recordBody(): JsonObject? {
+internal fun BudgetRecordEntity.recordBody(): JsonObject? {
     val json = localJson ?: remoteJson ?: return null
     return try {
         Json.parseToJsonElement(json).jsonObject
@@ -231,6 +231,11 @@ private data class LiveBudgetMonthSummary(
     val totalBudgetedMinor: Long?,
     val totalSpentMinor: Long?,
     val groups: List<LiveCategoryGroupSummary>,
+)
+
+private data class SelectorItem(
+    val id: String,
+    val label: String,
 )
 
 private fun liveAccountSummaries(session: TandemMobileSession): List<LiveAccountSummary> =
@@ -299,7 +304,7 @@ private fun JsonObject.stringValue(name: String): String? = (this[name] as? Json
 private fun JsonObject.longValue(name: String): Long? =
     (this[name] as? JsonPrimitive)?.let { it.longOrNull ?: it.contentOrNull?.toLongOrNull() }
 
-private fun JsonObject.booleanValue(name: String): Boolean? = (this[name] as? JsonPrimitive)?.booleanOrNull
+internal fun JsonObject.booleanValue(name: String): Boolean? = (this[name] as? JsonPrimitive)?.booleanOrNull
 
 private fun formatLiveDate(value: String?): String {
     val parts = value?.split('-')
@@ -335,8 +340,11 @@ private class AppState {
     var encryptedPassword by mutableStateOf("")
     var transactionAmount by mutableStateOf(formatAmount(4_218))
     var transactionAccount by mutableStateOf("Checking")
+    var newTransactionAccountId by mutableStateOf("")
     var transactionPayee by mutableStateOf("Corner Market")
+    var newTransactionPayeeId by mutableStateOf("")
     var transactionCategory by mutableStateOf("Groceries")
+    var newTransactionCategoryId by mutableStateOf("")
     var transactionDate by mutableStateOf(formatDate(SampleDate(2026, 5, 14)))
     var transactionNotes by mutableStateOf("")
     var selectedTransactionAmountMinor by mutableStateOf<Long?>(null)
@@ -372,8 +380,11 @@ private class AppState {
                         "serverUrl" to state.serverUrl,
                         "transactionAmount" to state.transactionAmount,
                         "transactionAccount" to state.transactionAccount,
+                        "newTransactionAccountId" to state.newTransactionAccountId,
                         "transactionPayee" to state.transactionPayee,
+                        "newTransactionPayeeId" to state.newTransactionPayeeId,
                         "transactionCategory" to state.transactionCategory,
+                        "newTransactionCategoryId" to state.newTransactionCategoryId,
                         "transactionDate" to state.transactionDate,
                         "transactionNotes" to state.transactionNotes,
                         "selectedTransactionAmountMinor" to state.selectedTransactionAmountMinor,
@@ -406,8 +417,11 @@ private class AppState {
                         serverUrl = saved["serverUrl"] as? String ?: serverUrl
                         transactionAmount = saved["transactionAmount"] as? String ?: transactionAmount
                         transactionAccount = saved["transactionAccount"] as? String ?: transactionAccount
+                        newTransactionAccountId = saved["newTransactionAccountId"] as? String ?: newTransactionAccountId
                         transactionPayee = saved["transactionPayee"] as? String ?: transactionPayee
+                        newTransactionPayeeId = saved["newTransactionPayeeId"] as? String ?: newTransactionPayeeId
                         transactionCategory = saved["transactionCategory"] as? String ?: transactionCategory
+                        newTransactionCategoryId = saved["newTransactionCategoryId"] as? String ?: newTransactionCategoryId
                         transactionDate = saved["transactionDate"] as? String ?: transactionDate
                         transactionNotes = saved["transactionNotes"] as? String ?: transactionNotes
                         selectedTransactionAmountMinor = saved["selectedTransactionAmountMinor"] as? Long
@@ -463,7 +477,21 @@ fun TandemApp(
         }
     val navigation =
         AppNavigation(
-            open = { backStack.add(it) },
+            open = { next ->
+                if (next == AppRoute.NEW_TRANSACTION) {
+                    state.transactionAmount = ""
+                    val defaultAccount = liveAccountSummaries(mobileSession).firstOrNull { !it.offBudget }
+                    state.transactionAccount = defaultAccount?.name.orEmpty()
+                    state.newTransactionAccountId = defaultAccount?.id.orEmpty()
+                    state.transactionPayee = ""
+                    state.newTransactionPayeeId = ""
+                    state.transactionCategory = ""
+                    state.newTransactionCategoryId = ""
+                    state.transactionDate = platformTodayIsoDate()
+                    state.transactionNotes = ""
+                }
+                backStack.add(next)
+            },
             selectTab = {
                 backStack.clear()
                 backStack.add(it)
@@ -631,6 +659,25 @@ fun TandemApp(
             }
         }
     }
+    val createTransaction: () -> Unit = {
+        if (!mobileSession.isSavingTransaction) {
+            coroutineScope.launch {
+                val created =
+                    mobileSession.createTransaction(
+                        budgetId = state.selectedBudgetId,
+                        accountId = state.newTransactionAccountId,
+                        payeeId = state.newTransactionPayeeId.takeIf { it.isNotBlank() },
+                        categoryId = state.newTransactionCategoryId.takeIf { it.isNotBlank() },
+                        amountText = state.transactionAmount,
+                        dateText = state.transactionDate,
+                        notes = state.transactionNotes,
+                        encryptionPassword = state.encryptedPassword.takeIf { it.isNotBlank() },
+                        displaySettings = state.budgetDisplaySettings,
+                    )
+                if (created) navigation.back()
+            }
+        }
+    }
     val resolveConflict: (String, Boolean) -> Unit = { operationId, keepDeviceVersion ->
         if (!mobileSession.isSavingTransaction) {
             coroutineScope.launch {
@@ -696,6 +743,7 @@ fun TandemApp(
                     liveBudgetMonth = liveBudgetMonth,
                     onSyncNow = syncNow,
                     onSaveTransaction = saveTransaction,
+                    onCreateTransaction = createTransaction,
                     onResolveConflict = resolveConflict,
                     onDiscardWrite = discardWrite,
                     onRetryUncertainWrite = retryUncertainWrite,
@@ -975,6 +1023,7 @@ private fun ScreenContent(
     liveBudgetMonth: LiveBudgetMonthSummary?,
     onSyncNow: () -> Unit,
     onSaveTransaction: () -> Unit,
+    onCreateTransaction: () -> Unit,
     onResolveConflict: (String, Boolean) -> Unit,
     onDiscardWrite: (String) -> Unit,
     onRetryUncertainWrite: (String) -> Unit,
@@ -1003,31 +1052,70 @@ private fun ScreenContent(
         AppRoute.ACTIVITY_FILTER -> ActivityFilterScreen()
         AppRoute.TRANSACTION_DETAIL -> TransactionDetailScreen(state, navigation)
         AppRoute.NEW_TRANSACTION, AppRoute.EDIT_TRANSACTION ->
-            TransactionFormScreen(route, state, navigation, mobileSession, onSaveTransaction)
-        AppRoute.CHOOSE_ACCOUNT ->
-            SelectorScreen(listOf("Checking", "Savings", "Credit Card", "Cash"), state.transactionAccount) {
-                state.transactionAccount =
-                    it
-                ; navigation.back()
-            }
-        AppRoute.CHOOSE_PAYEE ->
+            TransactionFormScreen(route, state, navigation, mobileSession, onSaveTransaction, onCreateTransaction)
+        AppRoute.CHOOSE_ACCOUNT -> {
+            val values =
+                if (state.selectedBudgetId.isBlank()) {
+                    listOf("Checking", "Savings", "Credit Card", "Cash").map { SelectorItem(it, it) }
+                } else {
+                    liveAccountSummaries(mobileSession)
+                        .filterNot { it.offBudget }
+                        .map { SelectorItem(it.id, it.name) }
+                }
             SelectorScreen(
-                listOf("Corner Market", "Electric Company", "Acme Corp", "Riverside Cafe", "City Transit"),
-                state.transactionPayee,
-            ) {
-                state.transactionPayee =
-                    it
-                ; navigation.back()
+                values,
+                if (state.selectedBudgetId.isBlank()) state.transactionAccount else state.newTransactionAccountId,
+                live = state.selectedBudgetId.isNotBlank(),
+            ) { item ->
+                state.transactionAccount = item.label
+                state.newTransactionAccountId = if (state.selectedBudgetId.isBlank()) "" else item.id
+                navigation.back()
             }
-        AppRoute.CHOOSE_CATEGORY ->
+        }
+        AppRoute.CHOOSE_PAYEE -> {
+            val values =
+                if (state.selectedBudgetId.isBlank()) {
+                    listOf("Corner Market", "Electric Company", "Acme Corp", "Riverside Cafe", "City Transit")
+                        .map { SelectorItem(it, it) }
+                } else {
+                    listOf(SelectorItem("", "No payee")) +
+                        mobileSession.payeeRecords
+                            .mapNotNull { record ->
+                                record.recordName()?.let { SelectorItem(record.recordId, it) }
+                            }.distinctBy { it.id }
+                }
             SelectorScreen(
-                listOf("Groceries", "Utilities", "Dining", "Rent", "Transport", "Personal"),
-                state.transactionCategory,
-            ) {
-                state.transactionCategory =
-                    it
-                ; navigation.back()
+                values,
+                if (state.selectedBudgetId.isBlank()) state.transactionPayee else state.newTransactionPayeeId,
+                live = state.selectedBudgetId.isNotBlank(),
+            ) { item ->
+                state.transactionPayee = if (item.label == "No payee") "" else item.label
+                state.newTransactionPayeeId = if (state.selectedBudgetId.isBlank()) "" else item.id
+                navigation.back()
             }
+        }
+        AppRoute.CHOOSE_CATEGORY -> {
+            val values =
+                if (state.selectedBudgetId.isBlank()) {
+                    listOf("Groceries", "Utilities", "Dining", "Rent", "Transport", "Personal")
+                        .map { SelectorItem(it, it) }
+                } else {
+                    listOf(SelectorItem("", "Uncategorized")) +
+                        mobileSession.categoryRecords
+                            .mapNotNull { record ->
+                                record.recordName()?.let { SelectorItem(record.recordId, it) }
+                            }.distinctBy { it.id }
+                }
+            SelectorScreen(
+                values,
+                if (state.selectedBudgetId.isBlank()) state.transactionCategory else state.newTransactionCategoryId,
+                live = state.selectedBudgetId.isNotBlank(),
+            ) { item ->
+                state.transactionCategory = if (item.label == "Uncategorized") "" else item.label
+                state.newTransactionCategoryId = if (state.selectedBudgetId.isBlank()) "" else item.id
+                navigation.back()
+            }
+        }
         AppRoute.CHOOSE_DATE -> DatePickerScreen(state, navigation)
         AppRoute.SAVE_RESULT -> SaveResultScreen(state, navigation)
         AppRoute.SYNC_CENTER -> SyncCenterScreen(state, mobileSession, navigation, onSyncNow)
@@ -2642,7 +2730,7 @@ private fun TransactionDetailScreen(
     val isLive = state.selectedTransactionIsLive
     val amount = state.selectedTransactionAmountMinor ?: -4_218L
     PageColumn {
-        if (!isLive) SampleBanner() else Badge("Actual · read only", tandemPalette.positive)
+        if (!isLive) SampleBanner() else Badge("Actual · synced", tandemPalette.positive)
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth(),
@@ -2681,17 +2769,34 @@ private fun TransactionFormScreen(
     navigation: AppNavigation,
     mobileSession: TandemMobileSession,
     onSaveTransaction: () -> Unit,
+    onCreateTransaction: () -> Unit,
 ) {
     val isNew = route == AppRoute.NEW_TRANSACTION
     if (state.selectedBudgetId.isNotBlank()) {
         if (isNew) {
             PageColumn {
-                Badge("Unavailable", tandemPalette.warning)
-                Heading("New transactions are not available", "This server supports updating existing transactions only.")
-                PreviewNote(
-                    "A stable caller-supplied transaction ID is required for safe retries. This device will not create a placeholder transaction or send a new transaction to Actual.",
+                Badge("Actual · saved locally first", tandemPalette.positive)
+                Heading("Add transaction", "New entries sync safely with the current Actual budget.")
+                TextFieldCard(
+                    "Amount",
+                    state.transactionAmount,
+                    { state.transactionAmount = it },
+                    "For example, -42.18 for spending or 2500 for income",
                 )
-                PrimaryButton("Return to activity") { navigation.back() }
+                ReadOnlyField("Account", state.transactionAccount, "A") { navigation.open(AppRoute.CHOOSE_ACCOUNT) }
+                ReadOnlyField("Payee", state.transactionPayee.ifBlank { "No payee" }, "P") { navigation.open(AppRoute.CHOOSE_PAYEE) }
+                ReadOnlyField("Category", state.transactionCategory.ifBlank { "Uncategorized" }, "C") {
+                    navigation.open(AppRoute.CHOOSE_CATEGORY)
+                }
+                TextFieldCard("Date · YYYY-MM-DD", state.transactionDate, { state.transactionDate = it }, "${platformTodayIsoDate()}")
+                TextFieldCard("Notes", state.transactionNotes, { state.transactionNotes = it }, "Add a note (optional)", singleLine = false)
+                mobileSession.transactionWriteMessage?.let { message ->
+                    SurfaceCard {
+                        Column(Modifier.padding(14.dp)) { BodyText(message) }
+                    }
+                }
+                PrimaryButton("Save transaction", enabled = !mobileSession.isSavingTransaction) { onCreateTransaction() }
+                SecondaryButton("Cancel") { navigation.back() }
             }
             return
         }
@@ -2740,18 +2845,31 @@ private fun TransactionFormScreen(
 
 @Composable
 private fun SelectorScreen(
-    values: List<String>,
+    values: List<SelectorItem>,
     selected: String,
-    onSelect: (String) -> Unit,
+    live: Boolean = false,
+    onSelect: (SelectorItem) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
     PageColumn {
-        BodyText("Choose an item for the sample transaction.")
+        BodyText(if (live) "Choose an item from the open Actual budget." else "Choose an item for the sample transaction.")
         TextFieldCard("Search", query, { query = it }, "Start typing")
-        values.filter { it.contains(query, ignoreCase = true) }.forEach { value ->
-            ChoiceRow(value, selected = selected == value, onClick = { onSelect(value) })
+        val filtered = values.filter { it.label.contains(query, ignoreCase = true) }
+        if (filtered.isEmpty()) {
+            SurfaceCard {
+                Column(Modifier.padding(14.dp)) {
+                    BodyText(if (live) "No matching items are available in this budget." else "No sample items match your search.")
+                }
+            }
         }
-        PreviewNote("Selections update only this sample form.")
+        filtered.forEach { item ->
+            ChoiceRow(
+                item.label,
+                selected = selected == if (live) item.id else item.label,
+                onClick = { onSelect(item) },
+            )
+        }
+        if (!live) PreviewNote("Selections update only this sample form.")
     }
 }
 

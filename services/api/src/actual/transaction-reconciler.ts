@@ -6,13 +6,16 @@ import {
 import type { ActualTransactionStore } from "./transaction-store.js";
 import {
   createTransactionRevision,
+  isCompanionTransactionId,
   isStructuredTransaction,
+  parseTransactionCreateInput,
   parseTransactionPatch,
   parseTransactionSnapshot,
   planTransactionDeletion,
   planTransactionUpdate,
   snapshotActualTransaction,
   type TransactionPatch,
+  type TransactionCreateInput,
   type TransactionSnapshot,
 } from "./transaction-reconciliation.js";
 import type {
@@ -30,18 +33,28 @@ import {
 } from "../write-journal/contracts.js";
 import { WRITE_OPERATION_LEASE_RENEWAL_INTERVAL_MS } from "../write-journal/contracts.js";
 
-export interface TransactionReconciliationRequest {
+interface TransactionRequestBase {
   operationId: string;
   principalId: string;
   budgetId: string;
   idempotencyKey: string;
   transactionId: string;
-  baseRevision: string;
-  baseSnapshot: JsonValue;
-  action: "update" | "delete";
   patch: JsonValue;
   encryptionPassword?: string;
 }
+
+export interface TransactionCreateRequest extends TransactionRequestBase {
+  action: "create";
+}
+
+export interface TransactionUpdateRequest extends TransactionRequestBase {
+  action: "update" | "delete";
+  baseRevision: string;
+  baseSnapshot: JsonValue;
+}
+
+export type TransactionReconciliationRequest =
+  TransactionCreateRequest | TransactionUpdateRequest;
 
 export interface BudgetLockPort {
   withBudgetLock<T>(budgetId: string, work: () => Promise<T>): Promise<T>;
@@ -68,9 +81,15 @@ export class TransactionRequestValidationError extends Error {
 }
 
 interface PreparedRequest {
-  request: TransactionReconciliationRequest;
+  request: TransactionUpdateRequest;
   base: TransactionSnapshot;
   patch: TransactionPatch;
+  operationInput: WriteOperationInput;
+}
+
+interface PreparedCreateRequest {
+  request: TransactionCreateRequest;
+  input: TransactionCreateInput;
   operationInput: WriteOperationInput;
 }
 
@@ -88,7 +107,9 @@ type InitialPlan =
 
 const SYNC_OPTIONS = (result: unknown): boolean =>
   isRecord(result) &&
-  (result.kind === "write-update" || result.kind === "write-delete");
+  (result.kind === "write-update" ||
+    result.kind === "write-delete" ||
+    result.kind === "write-create");
 
 export class TransactionReconciler {
   constructor(
@@ -101,7 +122,24 @@ export class TransactionReconciler {
   async submit(
     request: TransactionReconciliationRequest,
   ): Promise<TransactionReconciliationResult> {
-    const prepared = prepareRequest(request);
+    let action: TransactionReconciliationRequest["action"];
+    try {
+      action = request.action;
+    } catch (error) {
+      if (error instanceof TransactionRequestValidationError) {
+        throw error;
+      }
+      throw new TransactionRequestValidationError(
+        error instanceof Error
+          ? error.message
+          : "Transaction request is invalid",
+        { cause: error },
+      );
+    }
+    if (action === "create") {
+      return this.#submitCreate(request as TransactionCreateRequest);
+    }
+    const prepared = prepareRequest(request as TransactionUpdateRequest);
     let operation: WriteOperation;
     try {
       ({ operation } = await this.journal.enqueue(prepared.operationInput));
@@ -130,6 +168,132 @@ export class TransactionReconciler {
       }
       return this.#applyClaimed(claim.operation, prepared);
     });
+  }
+
+  async #submitCreate(
+    request: TransactionCreateRequest,
+  ): Promise<TransactionReconciliationResult> {
+    const prepared = prepareCreateRequest(request);
+    let operation: WriteOperation;
+    try {
+      ({ operation } = await this.journal.enqueue(prepared.operationInput));
+    } catch (error) {
+      if (error instanceof InvalidOperationInputError) {
+        throw new TransactionRequestValidationError(error.message, {
+          cause: error,
+        });
+      }
+      throw error;
+    }
+
+    if (operation.status === "uncertain") {
+      return this.locks.withBudgetLock(operation.budgetId, () =>
+        this.#recoverUncertainCreate(operation, prepared),
+      );
+    }
+    if (operation.status !== "queued") {
+      return this.#existingResult(operation);
+    }
+
+    return this.locks.withBudgetLock(operation.budgetId, async () => {
+      const claim = await this.journal.claim(operation.operationId);
+      if (!claim.claimed) {
+        return this.#existingResult(claim.operation);
+      }
+      return withLeaseRenewal(this.journal, operation.operationId, () =>
+        this.#applyClaimedCreate(claim.operation, prepared),
+      );
+    });
+  }
+
+  async #applyClaimedCreate(
+    operation: WriteOperation,
+    prepared: PreparedCreateRequest,
+  ): Promise<TransactionReconciliationResult> {
+    let mutationStarted = false;
+    let actualWriteReturned = false;
+    let result:
+      | {
+          kind: "write-create";
+          snapshot: TransactionSnapshot;
+        }
+      | {
+          kind: "create-id-exists";
+          snapshot: TransactionSnapshot;
+        };
+    try {
+      result = await this.session.runBudget(
+        operation.budgetId,
+        async () => {
+          const existing = await this.transactions.read(
+            prepared.request.transactionId,
+          );
+          if (existing !== undefined) {
+            return {
+              kind: "create-id-exists",
+              snapshot: snapshotActualTransaction(existing),
+            };
+          }
+
+          mutationStarted = true;
+          const created = await this.transactions.create(
+            prepared.request.transactionId,
+            prepared.input,
+          );
+          actualWriteReturned = true;
+          const snapshot = snapshotActualTransaction(created);
+          if (snapshot.id !== prepared.request.transactionId) {
+            throw new Error("Actual returned a different transaction ID");
+          }
+          return { kind: "write-create", snapshot };
+        },
+        runOptions(prepared.request.encryptionPassword, SYNC_OPTIONS),
+      );
+    } catch (error) {
+      return this.#handleActualFailure(
+        operation,
+        mutationStarted,
+        error,
+        writeEvidenceFromPostWriteError(error) ??
+          (actualWriteReturned
+            ? { kind: "transaction-create-returned" }
+            : undefined),
+      );
+    }
+
+    if (result.kind === "create-id-exists") {
+      try {
+        return await this.#recordConflict(operation, {
+          kind: "conflict",
+          conflictType: "transaction-id-already-exists",
+          remoteSnapshot: toJsonValue(result.snapshot),
+          conflictingFields: ["$entity"],
+        });
+      } catch (error) {
+        return this.#handleActualFailure(operation, false, error);
+      }
+    }
+
+    try {
+      const committed = await this.#markVerifiedCommitted(
+        operation,
+        {
+          transactionId: prepared.request.transactionId,
+          created: true,
+          verifiedRevision: createTransactionRevision(result.snapshot),
+        },
+        { kind: "transaction-create-returned" },
+      );
+      return { operation: committed, conflict: null };
+    } catch (error) {
+      return this.#handleActualFailure(
+        operation,
+        true,
+        error,
+        { kind: "transaction-create-returned" },
+        "operation-finalization-failed",
+      );
+    }
   }
 
   async #applyClaimed(
@@ -379,7 +543,7 @@ export class TransactionReconciler {
     prepared: PreparedRequest,
   ): Promise<TransactionReconciliationResult> {
     const evidence = operation.writeEvidence;
-    if (!evidence) {
+    if (!evidence || evidence.kind === "transaction-create-returned") {
       return this.#existingResult(operation);
     }
 
@@ -423,6 +587,57 @@ export class TransactionReconciler {
           recoveredByReadback: true,
         },
         evidence,
+      );
+      return { operation: committed, conflict: null };
+    } catch {
+      // Keep the durable state uncertain whenever the journal cannot record recovery.
+    }
+    return this.#existingResult(operation);
+  }
+
+  async #recoverUncertainCreate(
+    operation: WriteOperation,
+    prepared: PreparedCreateRequest,
+  ): Promise<TransactionReconciliationResult> {
+    let current: unknown | undefined;
+    try {
+      current = await this.session.runBudget(
+        operation.budgetId,
+        () => this.transactions.read(prepared.request.transactionId),
+        runOptions(prepared.request.encryptionPassword),
+      );
+    } catch {
+      return this.#existingResult(operation);
+    }
+    if (current === undefined) {
+      return this.#existingResult(operation);
+    }
+
+    let snapshot: TransactionSnapshot;
+    try {
+      snapshot = snapshotActualTransaction(current);
+    } catch {
+      return this.#existingResult(operation);
+    }
+    if (
+      snapshot.id !== prepared.request.transactionId ||
+      snapshot.account !== prepared.input.account ||
+      snapshot.amount !== prepared.input.amount ||
+      snapshot.date !== prepared.input.date
+    ) {
+      return this.#existingResult(operation);
+    }
+
+    try {
+      const committed = await this.journal.resolveUncertainAsCommitted(
+        operation.operationId,
+        {
+          transactionId: prepared.request.transactionId,
+          created: true,
+          recoveredByReadback: true,
+          verifiedRevision: createTransactionRevision(snapshot),
+        },
+        { kind: "transaction-create-returned" },
       );
       return { operation: committed, conflict: null };
     } catch {
@@ -495,9 +710,7 @@ export class TransactionReconciler {
   }
 }
 
-function prepareRequest(
-  request: TransactionReconciliationRequest,
-): PreparedRequest {
+function prepareRequest(request: TransactionUpdateRequest): PreparedRequest {
   try {
     return prepareValidatedRequest(request);
   } catch (error) {
@@ -511,8 +724,51 @@ function prepareRequest(
   }
 }
 
+function prepareCreateRequest(
+  request: TransactionCreateRequest,
+): PreparedCreateRequest {
+  try {
+    if (
+      typeof request.idempotencyKey !== "string" ||
+      request.idempotencyKey.trim().length === 0 ||
+      [...request.idempotencyKey].length > IDEMPOTENCY_KEY_MAX_LENGTH
+    ) {
+      throw new Error(
+        `idempotencyKey must contain between 1 and ${IDEMPOTENCY_KEY_MAX_LENGTH} characters`,
+      );
+    }
+    if (!isCompanionTransactionId(request.transactionId)) {
+      throw new Error(
+        "transactionId must be a stable Companion transaction ID",
+      );
+    }
+    const input = parseTransactionCreateInput(request.patch);
+    const operationInput: WriteOperationInput = {
+      operationId: request.operationId,
+      principalId: request.principalId,
+      budgetId: request.budgetId,
+      idempotencyKey: request.idempotencyKey,
+      entityType: "transaction",
+      action: "create",
+      entityId: request.transactionId,
+      baseRevision: null,
+      baseSnapshot: {},
+      patch: toJsonValue(input) as { [key: string]: JsonValue },
+    };
+    return { request, input, operationInput };
+  } catch (error) {
+    if (error instanceof TransactionRequestValidationError) {
+      throw error;
+    }
+    throw new TransactionRequestValidationError(
+      error instanceof Error ? error.message : "Transaction request is invalid",
+      { cause: error },
+    );
+  }
+}
+
 function prepareValidatedRequest(
-  request: TransactionReconciliationRequest,
+  request: TransactionUpdateRequest,
 ): PreparedRequest {
   if (
     typeof request.idempotencyKey !== "string" ||
@@ -634,6 +890,9 @@ function writeEvidenceFromPostWriteError(
   if (!isRecord(result)) {
     return undefined;
   }
+  if (result.kind === "write-create") {
+    return { kind: "transaction-create-returned" };
+  }
   if (result.kind === "write-delete") {
     return { kind: "transaction-delete-returned" };
   }
@@ -699,7 +958,9 @@ async function withLeaseRenewal<T>(
   }
 }
 
-function toJsonValue(value: TransactionSnapshot | TransactionPatch): JsonValue {
+function toJsonValue(
+  value: TransactionSnapshot | TransactionPatch | TransactionCreateInput,
+): JsonValue {
   return value as unknown as JsonValue;
 }
 

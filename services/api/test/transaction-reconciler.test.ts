@@ -8,7 +8,9 @@ import {
   TransactionReconciler,
   TransactionRequestValidationError,
   type ActualBudgetSessionPort,
+  type TransactionCreateRequest,
   type TransactionReconciliationRequest,
+  type TransactionUpdateRequest,
 } from "../src/actual/transaction-reconciler.js";
 import {
   createTransactionRevision,
@@ -97,8 +99,8 @@ function actualFrom(snapshot: TransactionSnapshot): Record<string, unknown> {
 }
 
 function createRequest(
-  overrides: Partial<TransactionReconciliationRequest> = {},
-): TransactionReconciliationRequest {
+  overrides: Partial<TransactionUpdateRequest> = {},
+): TransactionUpdateRequest {
   const base = createSnapshot();
   return {
     operationId: randomUUID(),
@@ -110,6 +112,29 @@ function createRequest(
     baseSnapshot: base as unknown as JsonValue,
     action: "update",
     patch: { amount: 1200 },
+    ...overrides,
+  };
+}
+
+function createCreateRequest(
+  overrides: Partial<TransactionCreateRequest> = {},
+): TransactionCreateRequest {
+  return {
+    operationId: randomUUID(),
+    principalId: `device-${randomUUID()}`,
+    budgetId: `budget-${randomUUID()}`,
+    idempotencyKey: `request-${randomUUID()}`,
+    transactionId: `tandem:${randomUUID()}`,
+    action: "create",
+    patch: {
+      account: "account-1",
+      amount: -1250,
+      date: "2026-11-01",
+      payee: "payee-1",
+      category: "category-1",
+      notes: "Created from Companion",
+      cleared: false,
+    },
     ...overrides,
   };
 }
@@ -144,6 +169,7 @@ class MemoryWriteJournal implements DurableWriteJournal {
   claimAllowed = true;
   missingOnGet = false;
   getError: unknown;
+  resolveCalls = 0;
   readonly failures = new Map<string, unknown>();
 
   async enqueue(input: WriteOperationInput): Promise<EnqueueResult> {
@@ -254,6 +280,7 @@ class MemoryWriteJournal implements DurableWriteJournal {
     actualResult: JsonValue,
     writeEvidence?: ActualWriteEvidence,
   ): Promise<WriteOperation> {
+    this.resolveCalls += 1;
     this.#throwIfFailed("resolveUncertainAsCommitted");
     const operation = this.#requireOperation();
     if (operation.status !== "uncertain") {
@@ -345,7 +372,7 @@ interface Harness {
 }
 
 function createHarness(
-  request = createRequest(),
+  request: TransactionReconciliationRequest = createRequest(),
   options: {
     initialStatus?: OperationStatus;
     initialWriteEvidence?: ActualWriteEvidence;
@@ -356,8 +383,12 @@ function createHarness(
   journal.initialStatus = options.initialStatus ?? "queued";
   journal.initialWriteEvidence = options.initialWriteEvidence ?? null;
   journal.claimAllowed = options.claimAllowed ?? true;
-  const base = request.baseSnapshot as unknown as TransactionSnapshot;
-  let actual: unknown | undefined = actualFrom(base);
+  const base =
+    request.action === "create"
+      ? null
+      : (request.baseSnapshot as unknown as TransactionSnapshot);
+  let actual: unknown | undefined =
+    base === null ? undefined : actualFrom(base);
   let readResults: Array<unknown | undefined | Error> = [];
   const readErrors = new Map<number, unknown>();
   const sessionErrors = new Map<
@@ -390,6 +421,20 @@ function createHarness(
         actual = next;
         return next;
       }
+      return actual;
+    },
+    async create(id, input) {
+      actual = {
+        id: randomUUID(),
+        account: input.account,
+        amount: input.amount,
+        date: input.date,
+        payee: input.payee,
+        category: input.category,
+        notes: input.notes,
+        cleared: input.cleared,
+        imported_id: id,
+      };
       return actual;
     },
     async update(_transactionId, patch) {
@@ -489,31 +534,439 @@ describe("Actual transaction reconciliation", () => {
     vi.restoreAllMocks();
   });
 
-  it("preserves an existing transaction validation error from malformed input", async () => {
-    const request = createRequest();
-    const validationError = new TransactionRequestValidationError(
-      "prevalidated failure",
+  it("creates a transaction once using its stable Companion ID", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request);
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      action: "create",
+      entityId: request.transactionId,
+      baseRevision: null,
+      status: "committed",
+      actualResult: {
+        transactionId: request.transactionId,
+        created: true,
+      },
+    });
+    expect(harness.actual).toMatchObject({
+      imported_id: request.transactionId,
+      amount: -1250,
+      account: "account-1",
+    });
+    expect(harness.syncPredicateResults).toEqual([true]);
+  });
+
+  it("returns a previously committed create without applying it again", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request, { initialStatus: "committed" });
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation.status).toBe("committed");
+    expect(harness.actual).toBeUndefined();
+    expect(harness.sessionCalls).toHaveLength(0);
+  });
+
+  it("returns a queued create when another worker already claimed it", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request, { claimAllowed: false });
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation.status).toBe("queued");
+    expect(harness.actual).toBeUndefined();
+    expect(harness.sessionCalls).toHaveLength(0);
+  });
+
+  it("records a conflict instead of replacing an existing stable transaction", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request);
+    harness.actual = {
+      id: "actual-existing-id",
+      account: "account-1",
+      amount: -1250,
+      date: "2026-11-01",
+      imported_id: request.transactionId,
+    };
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      action: "create",
+      status: "conflict",
+    });
+    expect(result.conflict).toMatchObject({
+      conflictType: "transaction-id-already-exists",
+      conflictingFields: ["$entity"],
+    });
+    expect(harness.actual).toMatchObject({ id: "actual-existing-id" });
+  });
+
+  it("preserves a conflict journal error when a create ID already exists", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request);
+    const conflictError = new Error("conflict journal failed");
+    harness.actual = {
+      id: "actual-existing-id",
+      account: "account-1",
+      amount: -1250,
+      date: "2026-11-01",
+      imported_id: request.transactionId,
+    };
+    harness.journal.failures.set("recordConflict", conflictError);
+
+    await expect(harness.reconciler.submit(request)).rejects.toBe(
+      conflictError,
     );
-    Object.defineProperty(request, "action", {
+    expect(harness.journal.operation).toMatchObject({ status: "queued" });
+  });
+
+  it("keeps a create uncertain when Actual returns a different transaction ID", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request);
+    vi.spyOn(harness.store, "create").mockResolvedValue({
+      id: "actual-unexpected-id",
+      account: "account-1",
+      amount: -1250,
+      date: "2026-11-01",
+    });
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      action: "create",
+      status: "uncertain",
+      writeEvidence: { kind: "transaction-create-returned" },
+    });
+  });
+
+  it("marks a completed create uncertain when its final journal commit fails", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request);
+    vi.spyOn(harness.journal, "markCommitted").mockRejectedValueOnce(
+      new Error("commit response was lost"),
+    );
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      action: "create",
+      status: "uncertain",
+      writeEvidence: { kind: "transaction-create-returned" },
+    });
+  });
+
+  it("recovers an uncertain create by reading its stable imported ID", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: { kind: "transaction-create-returned" },
+    });
+    harness.actual = {
+      id: "actual-random-id",
+      account: "account-1",
+      amount: -1250,
+      date: "2026-11-01",
+      imported_id: request.transactionId,
+    };
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      status: "committed",
+      actualResult: {
+        transactionId: request.transactionId,
+        recoveredByReadback: true,
+      },
+    });
+    expect(harness.journal.resolveCalls).toBe(1);
+  });
+
+  it("does not replay an uncertain create without read-back evidence", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation.status).toBe("uncertain");
+    expect(harness.actual).toBeUndefined();
+    expect(harness.journal.resolveCalls).toBe(0);
+  });
+
+  it("keeps an uncertain create unresolved when Actual read-back fails", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: { kind: "transaction-create-returned" },
+    });
+    harness.setReadErrorAt(1, new Error("Actual is temporarily unavailable"));
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation.status).toBe("uncertain");
+    expect(harness.journal.resolveCalls).toBe(0);
+  });
+
+  it("leaves an uncertain create unresolved when Actual read-back is malformed", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: { kind: "transaction-create-returned" },
+    });
+    harness.actual = { id: request.transactionId };
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation.status).toBe("uncertain");
+    expect(harness.journal.resolveCalls).toBe(0);
+  });
+
+  it.each(["id", "account", "amount", "date"] as const)(
+    "does not recover an uncertain create when Actual read-back %s differs",
+    async (field) => {
+      const request = createCreateRequest();
+      const harness = createHarness(request, {
+        initialStatus: "uncertain",
+        initialWriteEvidence: { kind: "transaction-create-returned" },
+      });
+      const actual: Record<string, unknown> = {
+        id: "actual-random-id",
+        account: "account-1",
+        amount: -1250,
+        date: "2026-11-01",
+        imported_id: request.transactionId,
+      };
+      if (field === "id")
+        actual.imported_id = "tandem:00000000-0000-4000-8000-000000000000";
+      if (field === "account") actual.account = "different-account";
+      if (field === "amount") actual.amount = -1300;
+      if (field === "date") actual.date = "2026-10-31";
+      harness.actual = actual;
+
+      const result = await harness.reconciler.submit(request);
+
+      expect(result.operation.status).toBe("uncertain");
+      expect(harness.journal.resolveCalls).toBe(0);
+    },
+  );
+
+  it("keeps an uncertain create when the journal cannot record read-back", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: { kind: "transaction-create-returned" },
+    });
+    harness.actual = {
+      id: "actual-random-id",
+      account: "account-1",
+      amount: -1250,
+      date: "2026-11-01",
+      imported_id: request.transactionId,
+    };
+    harness.journal.failures.set(
+      "resolveUncertainAsCommitted",
+      new Error("synthetic journal failure"),
+    );
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation.status).toBe("uncertain");
+    expect(harness.journal.resolveCalls).toBe(1);
+  });
+
+  it("marks create as uncertain after Actual writes but sync fails", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request);
+    harness.setSessionErrorAt(
+      1,
+      new ActualPostWriteSyncError(
+        { kind: "write-create" },
+        new Error("post-create sync failed"),
+      ),
+      true,
+    );
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      action: "create",
+      status: "uncertain",
+      writeEvidence: { kind: "transaction-create-returned" },
+    });
+  });
+
+  it("does not claim a create write receipt when Actual creation throws", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request);
+    vi.spyOn(harness.store, "create").mockRejectedValue(
+      new Error("Actual create timed out"),
+    );
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      action: "create",
+      status: "uncertain",
+      writeEvidence: null,
+    });
+  });
+
+  it("validates create idempotency keys before enqueue", async () => {
+    for (const idempotencyKey of [" ", 42, "x".repeat(201)]) {
+      const request = createCreateRequest({ idempotencyKey } as never);
+      const harness = createHarness(request);
+
+      await expect(harness.reconciler.submit(request)).rejects.toMatchObject({
+        name: "TransactionRequestValidationError",
+      });
+      expect(harness.journal.operation).toBeUndefined();
+    }
+  });
+
+  it("maps typed create journal input errors to transaction validation errors", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request);
+    harness.journal.failures.set(
+      "enqueue",
+      new InvalidOperationInputError("create operation input is invalid"),
+    );
+
+    await expect(harness.reconciler.submit(request)).rejects.toMatchObject({
+      name: "TransactionRequestValidationError",
+      message: "create operation input is invalid",
+    });
+    expect(harness.journal.operation).toBeUndefined();
+  });
+
+  it("preserves non-validation journal errors from create enqueue", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request);
+    const error = new Error("create journal unavailable");
+    harness.journal.failures.set("enqueue", error);
+
+    await expect(harness.reconciler.submit(request)).rejects.toBe(error);
+    expect(harness.journal.operation).toBeUndefined();
+  });
+
+  it("preserves an existing validation error while preparing a create", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request);
+    const validationError = new TransactionRequestValidationError(
+      "prevalidated create failure",
+    );
+    Object.defineProperty(request, "transactionId", {
       get() {
         throw validationError;
       },
     });
-    const harness = createHarness(request);
 
     await expect(harness.reconciler.submit(request)).rejects.toBe(
       validationError,
     );
   });
 
+  it("rejects create requests without a stable Companion transaction ID", async () => {
+    const request = createCreateRequest({ transactionId: "unstable-id" });
+    const harness = createHarness(request);
+
+    await expect(harness.reconciler.submit(request)).rejects.toMatchObject({
+      name: "TransactionRequestValidationError",
+      message: "transactionId must be a stable Companion transaction ID",
+    });
+    expect(harness.journal.operation).toBeUndefined();
+  });
+
+  it("preserves an existing transaction validation error from malformed input", async () => {
+    const request = createRequest();
+    const harness = createHarness(request);
+    const validationError = new TransactionRequestValidationError(
+      "prevalidated failure",
+    );
+    Object.defineProperty(request, "idempotencyKey", {
+      get() {
+        throw validationError;
+      },
+    });
+
+    await expect(harness.reconciler.submit(request)).rejects.toBe(
+      validationError,
+    );
+  });
+
+  it("preserves a typed action error during request dispatch", async () => {
+    const request = createRequest();
+    const harness = createHarness(request);
+    const validationError = new TransactionRequestValidationError(
+      "action could not be read",
+    );
+    Object.defineProperty(request, "action", {
+      get() {
+        throw validationError;
+      },
+    });
+
+    await expect(harness.reconciler.submit(request)).rejects.toBe(
+      validationError,
+    );
+  });
+
+  it("uses the Error message when reading the request action fails", async () => {
+    const request = createRequest();
+    const harness = createHarness(request);
+    Object.defineProperty(request, "action", {
+      get() {
+        throw new Error("action getter failed");
+      },
+    });
+
+    await expect(harness.reconciler.submit(request)).rejects.toMatchObject({
+      name: "TransactionRequestValidationError",
+      message: "action getter failed",
+    });
+  });
+
+  it("wraps primitive errors while preparing an update request", async () => {
+    const request = createRequest();
+    const harness = createHarness(request);
+    Object.defineProperty(request, "idempotencyKey", {
+      get() {
+        throw "synthetic invalid update input";
+      },
+    });
+
+    await expect(harness.reconciler.submit(request)).rejects.toMatchObject({
+      name: "TransactionRequestValidationError",
+      message: "Transaction request is invalid",
+      cause: "synthetic invalid update input",
+    });
+  });
+
+  it("wraps primitive errors while preparing a create request", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request);
+    Object.defineProperty(request, "idempotencyKey", {
+      get() {
+        throw "synthetic invalid create input";
+      },
+    });
+
+    await expect(harness.reconciler.submit(request)).rejects.toMatchObject({
+      name: "TransactionRequestValidationError",
+      message: "Transaction request is invalid",
+      cause: "synthetic invalid create input",
+    });
+  });
+
   it("wraps non-Error values thrown while reading malformed input", async () => {
     const request = createRequest();
+    const harness = createHarness(request);
     Object.defineProperty(request, "action", {
       get() {
         throw "synthetic invalid input";
       },
     });
-    const harness = createHarness(request);
 
     await expect(harness.reconciler.submit(request)).rejects.toMatchObject({
       name: "TransactionRequestValidationError",
@@ -1666,7 +2119,7 @@ describe("Actual transaction reconciliation", () => {
   it.each([
     {
       label: "invalid action",
-      overrides: { action: "create" },
+      overrides: { action: "archive" },
       message: "Transaction action must be update or delete",
     },
     {

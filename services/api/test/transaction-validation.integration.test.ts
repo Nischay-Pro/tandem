@@ -77,6 +77,9 @@ describe("transaction request validation integration", () => {
         actualReads += 1;
         return currentTransaction;
       },
+      async create() {
+        throw new Error("Invalid requests must not create in Actual");
+      },
       async update() {
         throw new Error("Invalid requests must not update Actual");
       },

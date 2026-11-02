@@ -48,9 +48,13 @@ then restored to -$95.58 and confirmed again. Conflict review was also tested:
 the official Actual client changed that same row by one cent while the Pixel
 held the prior revision; the stale device edit produced a conflict showing
 both versions. Keeping Actual discarded the local draft, and the original
--$95.58 value was restored through the app and confirmed. Creating transactions
-remains unavailable because the API lacks a caller-supplied stable ID for safe
-retries. Sync preferences now trigger the real coordinator for manual refreshes
+-$95.58 value was restored through the app and confirmed. New transactions use
+a caller-generated `tandem:<uuid>` ID persisted as Actual's `imported_id`. The
+projection and follow-up reads translate Actual's internal random ID back to
+this stable ID, so the local optimistic record, outbox, snapshot, change feed,
+reads, updates, and deletes all refer to one key. The server checks the ID is
+unused and reads the created transaction back from Actual before committing the
+journal entry. Sync preferences now trigger the real coordinator for manual refreshes
 and, when enabled, on returns to a budget. The local-data page reads the full
 transaction count, cached account count, sync state, and queued/conflicted
 outbox rows from Room. Refresh uses the same sync action; clearing local data
@@ -88,10 +92,12 @@ under ignored `.dev-tmp/` paths and must not be committed.
 - The budget, account, and Activity screens read local Room records. Cached
   budget months supply the available-to-budget, category-group, and category
   values; account snapshots supply current balances; transaction records supply
-  recent activity and account filtering. Transaction details are read-only.
-  Editing an existing transaction's amount or notes and resolving conflicts
-  submit through the durable local outbox and sync coordinator. Creation is
-  disabled pending stable caller-supplied IDs in the write API.
+  recent activity and account filtering. Transaction details show the cached
+  record and expose the supported amount/notes editor. New transaction forms
+  choose accounts, payees, and categories from the selected Actual budget,
+  accept signed amounts and ISO dates, save optimistically to Room, and submit
+  through the durable outbox. Conflict resolution and uncertain/rejected write
+  review use the same coordinator.
 
 The Android host handles system Back through the shared route stack and uses
 safe drawing insets for the status and navigation bars. Pixel 10a review
@@ -128,12 +134,17 @@ resets, is described in [the API contract guide](api/README.md#transaction-reads
 
 Local edits are stored optimistically with their base revision, base snapshot,
 patch, operation UUID, and idempotency key. Unsent edits to one record can be
-coalesced while they share the same base. The current Tandem write endpoint
-supports transaction updates and deletions only. Local creates are marked
-`rejected` with `create-not-supported`; the coordinator does not send them.
+coalesced while they share the same base. The Tandem write endpoint supports
+stable-ID creates and revision-based updates and deletions. A create carries its
+complete input in `patch`, has no remote base, and uses a `tandem:<uuid>` record
+ID. The server passes this identifier as Actual's `imported_id` through the
+official `addTransactions` API. The projection continues exposing that same ID
+even though Actual assigns a separate internal UUID. Room, the outbox, retries,
+and change-feed reconciliation therefore use the caller-generated key without
+writing to Actual's database directly.
 
 After posting, the coordinator reads the authoritative transaction before
-marking an update committed. A conflict keeps the local draft and stores the
+marking a create or update committed. A conflict keeps the local draft and stores the
 latest remote transaction for review. Resolving a conflict means enqueueing a
 new edit with the latest remote revision and snapshot; this atomically marks
 the previous conflict `superseded` and queues the new edit. If the remote

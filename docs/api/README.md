@@ -26,7 +26,7 @@ definitions and is part of `pnpm check:all`.
 | `GET`    | `/api/v1/budgets/{budgetId}/snapshot`                                | Refresh and read a complete budget snapshot.                   |
 | `GET`    | `/api/v1/budgets/{budgetId}/changes`                                 | Read generation-aware pages of budget changes.                 |
 | `GET`    | `/api/v1/budgets/{budgetId}/transactions/{transactionId}`            | Read a transaction snapshot and revision.                      |
-| `POST`   | `/api/v1/budgets/{budgetId}/transactions/{transactionId}/operations` | Submit an idempotent update or deletion.                       |
+| `POST`   | `/api/v1/budgets/{budgetId}/transactions/{transactionId}/operations` | Create, update, or delete a transaction idempotently.          |
 | `GET`    | `/api/v1/operations/{operationId}`                                   | Read operation status and conflict details.                    |
 
 ## Device pairing and authentication
@@ -162,10 +162,15 @@ Submit a write to
 an `Idempotency-Key` header and a JSON body containing:
 
 - A client-generated UUID `operationId`.
-- `action`: `update` or `delete`.
-- The `baseRevision` and complete `baseSnapshot` returned by the transaction
-  read endpoint.
-- A field patch for updates, or an empty patch for deletion.
+- For `action: "create"`, use `transactionId: "tandem:<uuid>"` in the path,
+  omit `baseRevision` and `baseSnapshot`, and supply the complete account,
+  amount, date, payee, category, notes, and cleared values in `patch`. The
+  server uses this caller-owned ID as Actual's `imported_id`, then exposes that
+  same ID in snapshots, change pages, reads, updates, and deletes. Actual still
+  assigns its internal database ID.
+- For `action: "update"` or `"delete"`, include the `baseRevision` and complete
+  `baseSnapshot` returned by the transaction read endpoint. Supply a field
+  patch for updates or an empty patch for deletion.
 
 Keep the same operation ID, idempotency key, base snapshot, and patch when
 retrying an uncertain HTTP request. The durable journal prevents repeated
@@ -186,8 +191,10 @@ operations return HTTP 404.
 The public Actual transaction update/delete API has no revision precondition.
 The Tandem detects changes visible before a write and records them as
 conflicts, but cannot prevent an Actual edit racing between its last read and
-write. Transfers and split transactions are readable but remain non-editable
-through reconciliation until their mutation semantics are verified.
+write. Stable create IDs are reserved to the `tandem:<uuid>` namespace;
+collisions are reported as conflicts. Transfers and split transactions are
+readable but remain non-editable through reconciliation until their mutation
+semantics are verified.
 
 These endpoints are described by the generated OpenAPI document. Validate each
 response against the contract served by the running version.
@@ -196,4 +203,4 @@ The shared mobile client applies snapshots and paged changes to a local SQLite
 database and polls durable operation status after uncertain writes. Its lifecycle
 and recovery behavior are documented in
 [`docs/mobile-sync.md`](../mobile-sync.md). The current transaction operation
-endpoint supports updates and deletions; it does not create transactions.
+endpoint supports stable-ID transaction creation, updates, and deletions.

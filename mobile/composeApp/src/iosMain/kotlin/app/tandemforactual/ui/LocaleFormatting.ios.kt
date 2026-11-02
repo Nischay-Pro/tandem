@@ -117,6 +117,13 @@ internal actual fun platformFormatDate(
             dateStyle = if (includeYear) NSDateFormatterMediumStyle else NSDateFormatterShortStyle
         }.stringFromDate(calendarDate(year, month, day))
 
+internal actual fun platformTodayIsoDate(): String =
+    NSDateFormatter()
+        .apply {
+            locale = NSLocale(localeIdentifier = "en_US_POSIX")
+            dateFormat = "yyyy-MM-dd"
+        }.stringFromDate(NSDate())
+
 internal actual fun platformFormatMonth(
     year: Int,
     month: Int,

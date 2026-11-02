@@ -120,6 +120,8 @@ internal actual fun platformFormatDate(
             Locale.getDefault(),
         ).format(calendarDate(year, month, day))
 
+internal actual fun platformTodayIsoDate(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+
 internal actual fun platformFormatMonth(
     year: Int,
     month: Int,

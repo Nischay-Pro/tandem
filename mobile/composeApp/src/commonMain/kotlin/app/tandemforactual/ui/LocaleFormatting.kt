@@ -30,6 +30,8 @@ internal expect fun platformFormatDate(
     includeYear: Boolean,
 ): String
 
+internal expect fun platformTodayIsoDate(): String
+
 internal expect fun platformFormatMonth(
     year: Int,
     month: Int,

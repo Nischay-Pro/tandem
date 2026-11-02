@@ -23,6 +23,7 @@ export const WRITE_OPERATION_LEASE_DURATION_SECONDS = 120;
 export const WRITE_OPERATION_LEASE_RENEWAL_INTERVAL_MS = 40_000;
 
 export type ActualWriteEvidence =
+  | { kind: "transaction-create-returned" }
   | {
       kind: "transaction-update-returned";
       appliedPatch: { [key: string]: JsonValue };

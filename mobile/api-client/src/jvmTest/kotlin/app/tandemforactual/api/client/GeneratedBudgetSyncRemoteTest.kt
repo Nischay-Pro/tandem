@@ -19,6 +19,7 @@ import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
+import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
 import io.ktor.http.takeFrom
 import io.ktor.serialization.kotlinx.json.json
@@ -70,8 +71,21 @@ class GeneratedBudgetSyncRemoteTest {
 
                 val update = remote.submitOperation(outboxOperation("UPDATE"), "encrypted-budget")
                 val delete = remote.submitOperation(outboxOperation("DELETE").copy(patchJson = "{}"), null)
+                val stableTransactionId = "tandem:8c88495a-65d9-4531-8392-93bff2c65374"
+                val create =
+                    remote.submitOperation(
+                        outboxOperation("CREATE").copy(
+                            recordId = stableTransactionId,
+                            baseRevision = null,
+                            baseSnapshotJson = null,
+                            patchJson =
+                                "{\"account\":\"checking\",\"amount\":-1200,\"date\":\"2026-10-01\",\"payee\":null,\"category\":null,\"notes\":\"\",\"cleared\":false}",
+                        ),
+                        null,
+                    )
                 assertEquals(RemoteOperationStatus.QUEUED, update.status)
                 assertEquals(RemoteOperationStatus.QUEUED, delete.status)
+                assertEquals(RemoteOperationStatus.QUEUED, create.status)
 
                 val status = remote.readOperation(OPERATION_ID)
                 assertEquals(RemoteOperationStatus.COMMITTED, status.status)
@@ -87,6 +101,16 @@ class GeneratedBudgetSyncRemoteTest {
                 assertEquals("encrypted-budget", requests[2].headers["x-budget-encryption-password"])
                 assertEquals("stable-key", requests[3].headers["idempotency-key"])
                 assertNull(requests[3].headers["x-budget-encryption-password"])
+                assertEquals("stable-key", requests[4].headers["idempotency-key"])
+                assertNull(requests[4].headers["x-budget-encryption-password"])
+                val createBody =
+                    Json
+                        .parseToJsonElement(
+                            (requests[4].body as OutgoingContent.ByteArrayContent).bytes().decodeToString(),
+                        ).jsonObject
+                assertEquals("create", createBody["action"]?.toString()?.trim('"'))
+                assertNull(createBody["baseRevision"])
+                assertNull(createBody["baseSnapshot"])
                 assertEquals("Bearer sync-test-token", requests[0].headers[HttpHeaders.Authorization])
                 assertTrue(requests[2].body.toString().isNotBlank())
 
@@ -129,8 +153,6 @@ class GeneratedBudgetSyncRemoteTest {
                 assertNull(transactionTransportError.httpStatus)
 
                 mode = "ok"
-                val unsupported = captureProtocolException { remote.submitOperation(outboxOperation("CREATE"), null) }
-                assertTrue(unsupported.message.orEmpty().contains("not supported"))
                 val invalidOperationId = captureProtocolException { remote.readOperation("not-a-uuid") }
                 assertTrue(invalidOperationId.message.orEmpty().contains("UUID"))
                 val invalidBase =
@@ -148,6 +170,11 @@ class GeneratedBudgetSyncRemoteTest {
                         remote.submitOperation(outboxOperation("UPDATE").copy(patchJson = "[]"), null)
                     }
                 assertTrue(invalidPatch.message.orEmpty().contains("JSON object"))
+                val unsupportedAction =
+                    captureProtocolException {
+                        remote.submitOperation(outboxOperation("TRANSFER"), null)
+                    }
+                assertTrue(unsupportedAction.message.orEmpty().contains("not supported"))
             } finally {
                 cleanup()
             }

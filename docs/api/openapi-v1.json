@@ -669,7 +669,7 @@
     "/api/v1/budgets/{budgetId}/transactions/{transactionId}/operations": {
       "post": {
         "operationId": "submitTransactionOperation",
-        "summary": "Submit an idempotent, revision-checked transaction update or deletion",
+        "summary": "Submit an idempotent stable-ID transaction create, update, or deletion",
         "tags": ["Transactions"],
         "requestBody": {
           "required": true,
@@ -679,7 +679,10 @@
                 "type": "object",
                 "properties": {
                   "operationId": { "type": "string", "format": "uuid" },
-                  "action": { "type": "string", "enum": ["update", "delete"] },
+                  "action": {
+                    "type": "string",
+                    "enum": ["create", "update", "delete"]
+                  },
                   "baseRevision": {
                     "type": "string",
                     "minLength": 1,
@@ -696,13 +699,7 @@
                     "maxProperties": 8
                   }
                 },
-                "required": [
-                  "operationId",
-                  "action",
-                  "baseRevision",
-                  "baseSnapshot",
-                  "patch"
-                ],
+                "required": ["operationId", "action", "patch"],
                 "additionalProperties": false
               }
             }

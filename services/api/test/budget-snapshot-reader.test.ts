@@ -212,6 +212,29 @@ describe("Actual budget snapshot reader", () => {
     expect(ACTUAL_TRANSACTION_MAX_ROWS).toBe(1_000_000);
   });
 
+  it("publishes Companion-created rows with their stable ID, not Actual's random ID", async () => {
+    const stableId = "tandem:8c88495a-65d9-4531-8392-93bff2c65374";
+    const fake = createApi({
+      aqlQuery: vi.fn(async () => ({
+        data: [
+          transactionRow("actual-random-id", {
+            imported_id: stableId,
+            payee: "payee-1",
+          }),
+        ],
+      })),
+    });
+    const reader = new ActualBudgetSnapshotReader(fake.session, fake.actual);
+
+    const records = await reader.read("budget-1");
+    const created = records.find(
+      ({ type, id }) => type === "transaction" && id === stableId,
+    );
+
+    expect(created?.body).toMatchObject({ id: stableId, importedId: null });
+    expect(created?.body).not.toHaveProperty("id", "actual-random-id");
+  });
+
   it("returns Actual currency metadata and supported display preferences", async () => {
     const fake = createApi({
       getPreferences: vi.fn(async () => ({

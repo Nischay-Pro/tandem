@@ -3,6 +3,7 @@ import type { JsonValue } from "../src/write-journal/contracts.js";
 import {
   createTransactionRevision,
   isStructuredTransaction,
+  parseTransactionCreateInput,
   parseTransactionPatch,
   parseTransactionSnapshot,
   planTransactionDeletion,
@@ -126,6 +127,72 @@ describe("transaction snapshots and merge planning", () => {
       schedule: null,
       transferId: null,
     });
+  });
+
+  it("exposes Companion-created transactions by their stable imported ID", () => {
+    const stableId = "tandem:8c88495a-65d9-4531-8392-93bff2c65374";
+    expect(
+      snapshotActualTransaction({
+        id: "actual-random-id",
+        imported_id: stableId,
+        account: "account-1",
+        amount: -100,
+        date: "2026-10-31",
+      }),
+    ).toMatchObject({ id: stableId, importedId: null });
+  });
+
+  it("parses an exact transaction create payload", () => {
+    expect(
+      parseTransactionCreateInput({
+        account: "account-1",
+        amount: -100,
+        date: "2026-10-31",
+        payee: null,
+        category: "category-1",
+        notes: "",
+        cleared: false,
+      }),
+    ).toEqual({
+      account: "account-1",
+      amount: -100,
+      date: "2026-10-31",
+      payee: null,
+      category: "category-1",
+      notes: "",
+      cleared: false,
+    });
+    expect(() =>
+      parseTransactionCreateInput({
+        account: "account-1",
+        amount: -100,
+        date: "2026-10-31",
+        payee: null,
+        category: null,
+        notes: "",
+        cleared: false,
+        importedId: "caller-controlled",
+      }),
+    ).toThrow(
+      "transaction create input contains unsupported fields: importedId",
+    );
+  });
+
+  it("rejects transaction create payloads with missing fields", () => {
+    const input = {
+      account: "account-1",
+      amount: -100,
+      date: "2026-10-31",
+      payee: null,
+      category: null,
+      notes: "",
+      cleared: false,
+    };
+    delete (input as Partial<typeof input>).notes;
+
+    expect(() => parseTransactionCreateInput(input as never)).toThrow(
+      "transaction create input is missing notes",
+    );
   });
 
   it("preserves nulls in optional Actual boolean fields", () => {

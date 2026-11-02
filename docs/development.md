@@ -44,10 +44,9 @@ connected emulator. A USB-authorized Pixel 10a is available for local app
 debugging when attached. The shared Compose app can pair through Tandem, load
 the authorized budget catalog, and sync budget data locally. Budget, account,
 category, and activity views read that local copy. Editing an existing
-transaction and reviewing sync conflicts use the durable local write queue;
-creating transactions remains unavailable until the API supports a
-caller-supplied stable ID. For phone-to-host debug pairing, use `adb reverse`
-to forward the app's loopback port to the local API.
+transaction, creating transactions with stable caller-owned IDs, and reviewing
+sync conflicts use the durable local write queue. For phone-to-host debug
+pairing, use `adb reverse` to forward the app's loopback port to the local API.
 
 ### Android preview and Pixel debugging
 

@@ -61,22 +61,25 @@ class GeneratedBudgetSyncRemote : BudgetSyncRemote {
     ): RemoteOperationResult {
         val action =
             when (operation.action) {
+                "CREATE" -> "create"
                 "UPDATE" -> "update"
                 "DELETE" -> "delete"
                 else -> throw BudgetSyncProtocolException("This write action is not supported by the remote API")
             }
-        val baseRevision =
-            operation.baseRevision
-                ?: throw BudgetSyncProtocolException("Outbox write is missing its base revision")
-        val baseSnapshot =
-            operation.baseSnapshotJson
-                ?: throw BudgetSyncProtocolException("Outbox write is missing its base snapshot")
         val payload =
             buildJsonObject {
                 put("operationId", operation.operationId)
                 put("action", action)
-                put("baseRevision", baseRevision)
-                put("baseSnapshot", BudgetSyncJson.parseJsonObject(baseSnapshot))
+                if (action != "create") {
+                    val baseRevision =
+                        operation.baseRevision
+                            ?: throw BudgetSyncProtocolException("Outbox write is missing its base revision")
+                    val baseSnapshot =
+                        operation.baseSnapshotJson
+                            ?: throw BudgetSyncProtocolException("Outbox write is missing its base snapshot")
+                    put("baseRevision", baseRevision)
+                    put("baseSnapshot", BudgetSyncJson.parseJsonObject(baseSnapshot))
+                }
                 put("patch", BudgetSyncJson.parseJsonObject(operation.patchJson))
             }
         return BudgetSyncJson.parseOperation(

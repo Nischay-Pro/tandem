@@ -406,9 +406,9 @@ interface OperationRouteParams {
 
 interface SubmitTransactionBody {
   operationId: string;
-  action: "update" | "delete";
-  baseRevision: string;
-  baseSnapshot: JsonValue;
+  action: "create" | "update" | "delete";
+  baseRevision?: string;
+  baseSnapshot?: JsonValue;
   patch: { [key: string]: JsonValue };
 }
 
@@ -676,7 +676,7 @@ function registerTransactionRoutes(
         tags: ["Transactions"],
         operationId: "submitTransactionOperation",
         summary:
-          "Submit an idempotent, revision-checked transaction update or deletion",
+          "Submit an idempotent stable-ID transaction create, update, or deletion",
         security: [{ bearerAuth: [] }],
         params: transactionParamsSchema,
         headers: {
@@ -696,7 +696,7 @@ function registerTransactionRoutes(
           type: "object",
           properties: {
             operationId: { type: "string", format: "uuid" },
-            action: { type: "string", enum: ["update", "delete"] },
+            action: { type: "string", enum: ["create", "update", "delete"] },
             baseRevision: { type: "string", minLength: 1, maxLength: 500 },
             baseSnapshot: {
               type: "object",
@@ -709,13 +709,7 @@ function registerTransactionRoutes(
               maxProperties: 8,
             },
           },
-          required: [
-            "operationId",
-            "action",
-            "baseRevision",
-            "baseSnapshot",
-            "patch",
-          ],
+          required: ["operationId", "action", "patch"],
           additionalProperties: false,
         },
         response: {
@@ -747,22 +741,58 @@ function registerTransactionRoutes(
 
       const idempotencyKey = request.headers["idempotency-key"];
       try {
-        const result = await transactionApi.submit({
-          operationId: request.body.operationId,
-          principalId: device.principalId,
-          budgetId: request.params.budgetId,
-          idempotencyKey,
-          transactionId: request.params.transactionId,
-          baseRevision: request.body.baseRevision,
-          baseSnapshot: request.body.baseSnapshot,
-          action: request.body.action,
-          patch: request.body.patch,
-          ...(request.headers["x-budget-encryption-password"] === undefined
-            ? {}
+        if (
+          request.body.action === "create" &&
+          (request.body.baseRevision !== undefined ||
+            request.body.baseSnapshot !== undefined)
+        ) {
+          return invalidTransactionRequest(reply);
+        }
+        if (
+          request.body.action !== "create" &&
+          (request.body.baseRevision === undefined ||
+            request.body.baseSnapshot === undefined)
+        ) {
+          return invalidTransactionRequest(reply);
+        }
+        const transactionRequest =
+          request.body.action === "create"
+            ? {
+                operationId: request.body.operationId,
+                principalId: device.principalId,
+                budgetId: request.params.budgetId,
+                idempotencyKey,
+                transactionId: request.params.transactionId,
+                action: "create" as const,
+                patch: request.body.patch,
+                ...(request.headers["x-budget-encryption-password"] ===
+                undefined
+                  ? {}
+                  : {
+                      encryptionPassword:
+                        request.headers["x-budget-encryption-password"],
+                    }),
+              }
             : {
-                encryptionPassword:
-                  request.headers["x-budget-encryption-password"],
-              }),
+                operationId: request.body.operationId,
+                principalId: device.principalId,
+                budgetId: request.params.budgetId,
+                idempotencyKey,
+                transactionId: request.params.transactionId,
+                baseRevision: request.body.baseRevision!,
+                baseSnapshot: request.body.baseSnapshot!,
+                action: request.body.action,
+                patch: request.body.patch,
+                ...(request.headers["x-budget-encryption-password"] ===
+                undefined
+                  ? {}
+                  : {
+                      encryptionPassword:
+                        request.headers["x-budget-encryption-password"],
+                    }),
+              };
+        const result = await transactionApi.submit({
+          ...transactionRequest,
         });
         reply.header("cache-control", "no-store");
         return reply.code(200).send(toOperationResultResponse(result));

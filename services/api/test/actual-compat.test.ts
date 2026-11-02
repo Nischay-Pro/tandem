@@ -12,6 +12,7 @@ import type {
   DeviceRecord,
 } from "../src/auth/device-auth.js";
 import { createActualSession } from "../src/actual/actual-session.js";
+import { ActualBudgetSnapshotReader } from "../src/actual/budget-snapshot-reader.js";
 import { createTransactionApi } from "../src/actual/transaction-api.js";
 import { TransactionReconciler } from "../src/actual/transaction-reconciler.js";
 import {
@@ -21,6 +22,7 @@ import {
 } from "../src/actual/transaction-reconciliation.js";
 import { createActualTransactionStore } from "../src/actual/transaction-store.js";
 import { createPostgresDatabase } from "../src/database.js";
+import { BudgetReadApi } from "../src/budget-projection/budget-read-api.js";
 import { runApi } from "../src/main.js";
 import type { ShutdownSignal } from "../src/server.js";
 
@@ -272,14 +274,100 @@ describe.skipIf(!compatibilityTestEnabled)(
           reconciler,
           database.journal,
         );
+        const budgetReadApi = new BudgetReadApi(
+          database,
+          new ActualBudgetSnapshotReader(firstDevice),
+          database.budgetProjection,
+          "actual-compatibility",
+        );
         const reconciliationApp = await buildApiApp(
           { ping: () => database!.ping(), close: async () => undefined },
-          { deviceAuth, transactionApi },
+          { deviceAuth, transactionApi, budgetReadApi },
         );
-        const transactionPath = `/api/v1/budgets/${budget.groupId}/transactions/${transaction.id}`;
         const authorizationHeaders = {
           authorization: `Bearer ${compatibilityToken}`,
         };
+        const companionTransactionId = `tandem:${randomUUID()}`;
+        const createOperationId = randomUUID();
+        const companionTransactionPath = `/api/v1/budgets/${budget.groupId}/transactions/${encodeURIComponent(companionTransactionId)}`;
+        try {
+          const createResponse = await reconciliationApp.inject({
+            method: "POST",
+            url: `${companionTransactionPath}/operations`,
+            headers: {
+              authorization: `Bearer ${compatibilityToken}`,
+              "idempotency-key": `compat-create-${createOperationId}`,
+            },
+            payload: {
+              operationId: createOperationId,
+              action: "create",
+              patch: {
+                account: initialData.accountId,
+                amount: -777,
+                date: transactionDate,
+                payee: null,
+                category: categoryId,
+                notes: "Created through Companion",
+                cleared: false,
+              },
+            },
+          });
+          expect(createResponse.statusCode).toBe(200);
+          expect(createResponse.json().operation).toMatchObject({
+            action: "create",
+            transactionId: companionTransactionId,
+            status: "committed",
+          });
+
+          const companionRead = await reconciliationApp.inject({
+            method: "GET",
+            url: companionTransactionPath,
+            headers: authorizationHeaders,
+          });
+          expect(companionRead.statusCode).toBe(200);
+          expect(companionRead.json().transaction).toMatchObject({
+            id: companionTransactionId,
+            account: initialData.accountId,
+            amount: -777,
+            date: transactionDate,
+            category: categoryId,
+            notes: "Created through Companion",
+            importedId: null,
+          });
+
+          const createdSnapshot = await reconciliationApp.inject({
+            method: "GET",
+            url: `/api/v1/budgets/${budget.groupId}/snapshot`,
+            headers: authorizationHeaders,
+          });
+          expect(createdSnapshot.statusCode).toBe(200);
+          expect(
+            createdSnapshot
+              .json()
+              .records.find(
+                (record: { type: string; id: string }) =>
+                  record.type === "transaction" &&
+                  record.id === companionTransactionId,
+              ),
+          ).toMatchObject({
+            type: "transaction",
+            id: companionTransactionId,
+            body: { id: companionTransactionId, importedId: null },
+          });
+        } finally {
+          await firstDevice
+            .runBudget(
+              budget.groupId,
+              async () => {
+                if (await transactionStore.read(companionTransactionId)) {
+                  await transactionStore.delete(companionTransactionId);
+                }
+              },
+              { synchronizeAfterWrite: true },
+            )
+            .catch(() => undefined);
+        }
+        const transactionPath = `/api/v1/budgets/${budget.groupId}/transactions/${transaction.id}`;
         const firstRead = await reconciliationApp.inject({
           method: "GET",
           url: transactionPath,

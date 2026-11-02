@@ -92,6 +92,7 @@ function createApi(
   const session: ActualBudgetSessionPort = { runBudget };
   const transactions: ActualTransactionStore = {
     read,
+    create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
   };

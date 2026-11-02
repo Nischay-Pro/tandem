@@ -373,6 +373,92 @@ describe("transaction REST routes", () => {
     await app.close();
   });
 
+  it("accepts create operations without a remote base and keeps their stable ID", async () => {
+    const fake = createApi();
+    const app = await fake.buildApp();
+    const stableId = `tandem:${operationId}`;
+    const patch = {
+      account: "checking-account",
+      amount: -2500,
+      date: "2026-11-01",
+      payee: "market-payee",
+      category: "groceries-category",
+      notes: "Household supplies",
+      cleared: false,
+    };
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/transactions/${encodeURIComponent(stableId)}/operations`,
+      headers: { ...authHeaders, "idempotency-key": "create-request-1" },
+      payload: { operationId, action: "create", patch },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(fake.submit).toHaveBeenCalledWith({
+      operationId,
+      principalId: device.principalId,
+      budgetId,
+      idempotencyKey: "create-request-1",
+      transactionId: stableId,
+      action: "create",
+      patch,
+    });
+    await app.close();
+  });
+
+  it("passes a create operation's encryption secret through for this write only", async () => {
+    const fake = createApi();
+    const app = await fake.buildApp();
+    const stableId = `tandem:${operationId}`;
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/transactions/${encodeURIComponent(stableId)}/operations`,
+      headers: {
+        ...authHeaders,
+        "idempotency-key": "create-request-with-password",
+        "x-budget-encryption-password": "budget-secret",
+      },
+      payload: {
+        operationId,
+        action: "create",
+        patch: {
+          account: "checking-account",
+          amount: -2500,
+          date: "2026-11-01",
+          payee: null,
+          category: null,
+          notes: "",
+          cleared: false,
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(fake.submit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "create",
+        transactionId: stableId,
+        encryptionPassword: "budget-secret",
+      }),
+    );
+    await app.close();
+  });
+
+  it("requires a revision and base snapshot for non-create operations", async () => {
+    const fake = createApi();
+    const app = await fake.buildApp();
+    const response = await app.inject({
+      method: "POST",
+      url: `${transactionUrl}/operations`,
+      headers: { ...authHeaders, "idempotency-key": "update-request-1" },
+      payload: { operationId, action: "update", patch: { amount: -1200 } },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(fake.submit).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("returns 400 for invalid bodies and missing idempotency keys", async () => {
     const fake = createApi();
     const app = await fake.buildApp();

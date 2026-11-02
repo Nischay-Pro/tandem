@@ -22,6 +22,24 @@ export interface TransactionSnapshot {
   subtransactions: TransactionSnapshot[];
 }
 
+export interface TransactionCreateInput {
+  account: string;
+  amount: number;
+  date: string;
+  payee: string | null;
+  category: string | null;
+  notes: string;
+  cleared: boolean;
+}
+
+export const COMPANION_TRANSACTION_ID_PREFIX = "tandem:";
+
+export function isCompanionTransactionId(value: string): boolean {
+  return /^tandem:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(
+    value,
+  );
+}
+
 export type TransactionEditField =
   | "account"
   | "amount"
@@ -99,8 +117,11 @@ const DELETION_COMPARISON_FIELDS: readonly (keyof TransactionSnapshot)[] = [
 
 export function snapshotActualTransaction(value: unknown): TransactionSnapshot {
   const record = asRecord(value, "Actual transaction");
+  const importedId = optionalString(record.imported_id, "imported_id");
+  const companionId =
+    importedId && isCompanionTransactionId(importedId) ? importedId : null;
   return {
-    id: requiredString(record.id, "id"),
+    id: companionId ?? requiredString(record.id, "id"),
     account: requiredString(record.account, "account"),
     amount: requiredInteger(record.amount, "amount"),
     date: requiredDate(record.date),
@@ -109,7 +130,7 @@ export function snapshotActualTransaction(value: unknown): TransactionSnapshot {
     notes: normalizeEmptyNote(optionalText(record.notes, "notes")),
     cleared: optionalBoolean(record.cleared, "cleared"),
     reconciled: optionalBoolean(record.reconciled, "reconciled"),
-    importedId: optionalString(record.imported_id, "imported_id"),
+    importedId: companionId === null ? importedId : null,
     importedPayee: optionalText(record.imported_payee, "imported_payee"),
     startingBalance: optionalBoolean(
       record.starting_balance_flag,
@@ -228,6 +249,44 @@ export function parseTransactionPatch(value: JsonValue): TransactionPatch {
     }
   }
   return patch;
+}
+
+export function parseTransactionCreateInput(
+  value: JsonValue,
+): TransactionCreateInput {
+  const record = asRecord(value, "transaction create input");
+  const allowed = new Set([
+    "account",
+    "amount",
+    "date",
+    "payee",
+    "category",
+    "notes",
+    "cleared",
+  ]);
+  const unsupported = Object.keys(record).filter(
+    (field) => !allowed.has(field),
+  );
+  if (unsupported.length > 0) {
+    throw new Error(
+      `transaction create input contains unsupported fields: ${unsupported.join(", ")}`,
+    );
+  }
+  for (const field of allowed) {
+    if (!Object.hasOwn(record, field)) {
+      throw new Error(`transaction create input is missing ${field}`);
+    }
+  }
+
+  return {
+    account: patchText(requiredString(record.account, "account"), "account"),
+    amount: requiredInteger(record.amount, "amount"),
+    date: requiredDate(record.date),
+    payee: nullablePatchString(record.payee, "payee"),
+    category: nullablePatchString(record.category, "category"),
+    notes: patchText(requiredText(record.notes, "notes"), "notes"),
+    cleared: requiredBoolean(record.cleared, "cleared"),
+  };
 }
 
 function nullablePatchString(value: unknown, name: string): string | null {
