@@ -14,6 +14,10 @@ cleanup() {
   "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
   docker network rm "$edge_network" >/dev/null 2>&1 || true
   rm -f "$env_file"
+  rm -f \
+    "$scratch_root/tandem-backup.postgres.dump" \
+    "$scratch_root/tandem-backup.actual-workspace.tar.gz" \
+    "$scratch_root"/corrupt-restore-*
 }
 trap cleanup EXIT
 
@@ -36,7 +40,8 @@ docker network create "$edge_network" >/dev/null
 "${compose[@]}" up --build --detach
 
 wait_for_api() {
-  for _ in $(seq 1 60); do
+  local attempts="${1:-60}"
+  for _ in $(seq 1 "$attempts"); do
     if curl --silent --fail http://127.0.0.1:19754/api/v1/health/ready >/dev/null; then
       return 0
     fi
@@ -133,44 +138,91 @@ if [[ -z "$restored_api_id" ]]; then
 fi
 assert_corrupt_restore_is_rejected() {
   local kind="$1"
-  local corrupt_prefix="$scratch_root/corrupt-restore-$kind"
+  local truncation="$2"
+  local corrupt_prefix="$scratch_root/corrupt-restore-$kind-$truncation"
   cp "${scratch_root}/tandem-backup.postgres.dump" "${corrupt_prefix}.postgres.dump"
   cp "${scratch_root}/tandem-backup.actual-workspace.tar.gz" "${corrupt_prefix}.actual-workspace.tar.gz"
   if [[ "$kind" == postgres ]]; then
-    truncate -s 64 "${corrupt_prefix}.postgres.dump"
+    if [[ "$truncation" == mid-file ]]; then
+      local dump_size truncated_size low high candidate_size checked_candidates candidate_dump
+      dump_size="$(wc -c < "${corrupt_prefix}.postgres.dump")"
+      candidate_dump="${corrupt_prefix}.candidate.dump"
+      low=1
+      high=$((dump_size - 1))
+      truncated_size=0
+      checked_candidates=0
+      while (( low <= high )); do
+        candidate_size=$(((low + high) / 2))
+        checked_candidates=$((checked_candidates + 1))
+        head -c "$candidate_size" "${scratch_root}/tandem-backup.postgres.dump" > "$candidate_dump"
+        if "${compose[@]}" exec -T postgres pg_restore --list \
+          < "$candidate_dump" >/dev/null 2>&1; then
+          truncated_size="$candidate_size"
+          high=$((candidate_size - 1))
+        else
+          low=$((candidate_size + 1))
+        fi
+      done
+      if (( truncated_size <= 64 || truncated_size >= dump_size )); then
+        rm -f "$candidate_dump"
+        echo "Could not find a truncated PostgreSQL archive that passes the list preflight after checking $checked_candidates prefixes (dump size $dump_size)." >&2
+        exit 1
+      fi
+      head -c "$truncated_size" "${scratch_root}/tandem-backup.postgres.dump" > "${corrupt_prefix}.postgres.dump"
+      rm -f "$candidate_dump"
+      if ! "${compose[@]}" exec -T postgres pg_restore --list \
+        < "${corrupt_prefix}.postgres.dump" >/dev/null 2>&1; then
+        echo "The PostgreSQL archive cutoff did not survive the list preflight." >&2
+        exit 1
+      fi
+      echo "Testing transactional restore with a ${truncated_size}-byte PostgreSQL archive cutoff."
+    else
+      truncate -s 64 "${corrupt_prefix}.postgres.dump"
+    fi
   else
     truncate -s 64 "${corrupt_prefix}.actual-workspace.tar.gz"
   fi
 
   if TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" \
-    "$project_root/deploy/restore.sh" "$corrupt_prefix" "$test_epoch-corrupt-$kind"; then
-    echo "Production restore accepted a truncated $kind backup." >&2
+    "$project_root/deploy/restore.sh" "$corrupt_prefix" "$test_epoch-corrupt-$kind-$truncation"; then
+    echo "Production restore accepted a truncated $kind backup ($truncation)." >&2
     exit 1
   fi
 
   local running_api_id devices workspace
+  if [[ "$kind" == postgres && "$truncation" == mid-file ]]; then
+    local api_state
+    api_state="$(docker inspect --format '{{.State.Status}}' "$restored_api_id")"
+    if [[ "$api_state" != exited ]]; then
+      echo "The mid-file corruption check did not reach PostgreSQL restore after API shutdown." >&2
+      exit 1
+    fi
+    "${compose[@]}" up --detach api
+    wait_for_api 15
+  fi
   running_api_id="$("${compose[@]}" ps --status running -q api)"
   if [[ "$running_api_id" != "$restored_api_id" ]]; then
-    echo "A rejected $kind backup stopped or replaced the running API." >&2
+    echo "A rejected $kind backup stopped or replaced the running API ($truncation)." >&2
     exit 1
   fi
   devices="$(curl --silent --show-error --fail http://127.0.0.1:19754/api/v1/devices \
     --header "Authorization: Bearer $phone_token")"
   if [[ "$devices" != *'Release check phone'* || "$devices" != *'Release check tablet'* || "$devices" == *'Post-backup tablet'* ]]; then
-    echo "A rejected $kind backup changed the live PostgreSQL device records." >&2
+    echo "A rejected $kind backup changed the live PostgreSQL device records ($truncation)." >&2
     exit 1
   fi
   workspace="$("${compose[@]}" exec -T api node --input-type=module -e \
     "import { readFileSync } from 'node:fs'; process.stdout.write(readFileSync('/data/actual-api/release-check.txt', 'utf8'));")"
   if [[ "$workspace" != "node writable after restore" ]]; then
-    echo "A rejected $kind backup changed the live Actual workspace." >&2
+    echo "A rejected $kind backup changed the live Actual workspace ($truncation)." >&2
     exit 1
   fi
   rm -f "${corrupt_prefix}.postgres.dump" "${corrupt_prefix}.actual-workspace.tar.gz"
 }
 
-assert_corrupt_restore_is_rejected postgres
-assert_corrupt_restore_is_rejected workspace
+assert_corrupt_restore_is_rejected postgres header
+assert_corrupt_restore_is_rejected postgres mid-file
+assert_corrupt_restore_is_rejected workspace header
 
 # Simulate an in-container process crash after both credentials are durably stored.
 api_id="$("${compose[@]}" ps -q api)"
