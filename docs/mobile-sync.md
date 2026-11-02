@@ -28,11 +28,14 @@ keep Actual's copy or rebase and submit the device edit; uncertain and rejected
 writes have explicit review, retry, and discard controls. These UI write flows
 are wired to the API and local outbox. On the Pixel, an existing synthetic
 Safeway transaction was changed from -$95.58 to -$100.00, confirmed by Actual,
-then restored to -$95.58 and confirmed again. Conflict review has not yet been
-exercised on the Pixel. Creating transactions remains unavailable because the
-API lacks a caller-supplied stable ID for safe retries. Settings pages are
-present, but several controls remain previews or are not persisted and do not
-modify Actual.
+then restored to -$95.58 and confirmed again. Conflict review was also tested:
+the official Actual client changed that same row by one cent while the Pixel
+held the prior revision; the stale device edit produced a conflict showing
+both versions. Keeping Actual discarded the local draft, and the original
+-$95.58 value was restored through the app and confirmed. Creating transactions
+remains unavailable because the API lacks a caller-supplied stable ID for safe
+retries. Settings pages are present, but several controls remain previews or
+are not persisted and do not modify Actual.
 
 The eight-character pairing code is shown as readable text and left-aligned in
 the entry field. It accepts the server's `XXXX-XXXX` format, with or without
