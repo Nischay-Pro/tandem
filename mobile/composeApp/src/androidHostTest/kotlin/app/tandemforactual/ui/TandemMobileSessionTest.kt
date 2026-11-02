@@ -1,0 +1,49 @@
+package app.tandemforactual.ui
+
+import app.tandemforactual.api.client.TandemApiClient
+import kotlinx.coroutines.runBlocking
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+class TandemMobileSessionTest {
+    @Test
+    fun transientCredentialReadFailureKeepsStoredCredentialAndCanBeRetried() =
+        runBlocking {
+            var readAttempts = 0
+            var clearCalls = 0
+            val credentialStore =
+                object : DeviceCredentialStore {
+                    override fun read(): String? {
+                        readAttempts += 1
+                        if (readAttempts == 1) error("Keychain is temporarily unavailable")
+                        return null
+                    }
+
+                    override fun write(value: String) = Unit
+
+                    override fun clear() {
+                        clearCalls += 1
+                    }
+                }
+            val session =
+                TandemMobileSession(
+                    apiClient = TandemApiClient(),
+                    database = null,
+                    nowEpochMillis = { 0L },
+                    credentialStore = credentialStore,
+                )
+
+            assertNull(session.restoreStoredSession())
+            assertEquals(0, clearCalls)
+            assertFalse(session.isCredentialStored)
+            assertTrue(session.credentialStorageError.orEmpty().contains("Retry"))
+
+            assertNull(session.restoreStoredSession())
+            assertEquals(2, readAttempts)
+            assertEquals(0, clearCalls)
+            assertNull(session.credentialStorageError)
+        }
+}

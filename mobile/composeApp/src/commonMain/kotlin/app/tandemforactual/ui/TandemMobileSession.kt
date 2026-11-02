@@ -70,6 +70,9 @@ internal class TandemMobileSession(
     var isCredentialStored by mutableStateOf(false)
         private set
 
+    var isRestoringStoredSession by mutableStateOf(false)
+        private set
+
     var isLoadingBudgets by mutableStateOf(false)
         private set
 
@@ -133,31 +136,38 @@ internal class TandemMobileSession(
 
     suspend fun restoreStoredSession(): String? {
         val store = credentialStore ?: return null
-        val storedSession =
-            try {
-                withContext(Dispatchers.Default) { store.read() }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                credentialStorageError = "The saved device credential could not be read. Pair this device again."
-                clearStoredCredential()
-                return null
-            } ?: return null
+        if (isRestoringStoredSession) return null
+        isRestoringStoredSession = true
+        try {
+            credentialStorageError = null
+            val storedSession =
+                try {
+                    withContext(Dispatchers.Default) { store.read() }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    credentialStorageError = "Secure storage is temporarily unavailable. Retry, or pair this device again."
+                    return null
+                } ?: return null
 
-        return try {
-            pairedDevice = apiClient.restoreStoredSession(storedSession)
+            pairedDevice =
+                try {
+                    apiClient.restoreStoredSession(storedSession)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    apiClient.forgetSession()
+                    pairedDevice = null
+                    budgets = emptyList()
+                    credentialStorageError = "The saved device credential is invalid. Pair this device again."
+                    clearStoredCredential()
+                    return null
+                }
             isCredentialStored = true
             loadBudgets()
-            apiClient.currentServerUrl.takeIf { apiClient.isAuthenticated }
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Exception) {
-            apiClient.forgetSession()
-            pairedDevice = null
-            budgets = emptyList()
-            credentialStorageError = "The saved device credential is invalid. Pair this device again."
-            clearStoredCredential()
-            null
+            return apiClient.currentServerUrl.takeIf { apiClient.isAuthenticated }
+        } finally {
+            isRestoringStoredSession = false
         }
     }
 
@@ -202,10 +212,11 @@ internal class TandemMobileSession(
             throw error
         } catch (error: TandemApiException) {
             budgetError = error.message ?: "Could not load budgets from this server."
-            if (error.httpStatus == 401) {
+            if (error.errorCode == "invalid_device_credential") {
                 apiClient.forgetSession()
                 pairedDevice = null
                 budgets = emptyList()
+                credentialStorageError = "This device pairing is no longer valid. Pair this device again."
                 clearStoredCredential()
             }
         } catch (error: Exception) {

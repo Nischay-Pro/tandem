@@ -1414,7 +1414,7 @@ async function requireDevice(
   reply.header("www-authenticate", 'Bearer realm="tandem-for-actual"');
   await reply.code(401).send({
     error: {
-      code: "unauthorized",
+      code: "invalid_device_credential",
       message: "Valid device credentials required",
     },
   });

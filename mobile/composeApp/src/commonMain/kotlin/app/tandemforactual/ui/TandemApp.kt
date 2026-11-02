@@ -618,6 +618,16 @@ fun TandemApp(
             }
         }
     }
+    val retryStoredSession: () -> Unit = {
+        coroutineScope.launch {
+            val storedServerUrl = mobileSession.restoreStoredSession()
+            if (storedServerUrl != null) {
+                state.serverUrl = storedServerUrl
+                backStack.clear()
+                backStack.add(AppRoute.BUDGET_CHOOSER)
+            }
+        }
+    }
     val selectBudget: (BudgetCatalogItem) -> Unit = { budget ->
         if (state.selectedBudgetId != budget.budgetId) state.encryptedPassword = ""
         if (state.selectedBudgetId != budget.budgetId) state.budgetDisplaySettings = null
@@ -748,6 +758,7 @@ fun TandemApp(
                     navigation = navigation,
                     mobileSession = mobileSession,
                     onPairDevice = pairDevice,
+                    onRetryStoredSession = retryStoredSession,
                     onSelectBudget = selectBudget,
                     onRefreshBudgets = refreshBudgets,
                     onOpenSelectedBudget = openSelectedBudget,
@@ -1029,6 +1040,7 @@ private fun ScreenContent(
     navigation: AppNavigation,
     mobileSession: TandemMobileSession,
     onPairDevice: () -> Unit,
+    onRetryStoredSession: () -> Unit,
     onSelectBudget: (BudgetCatalogItem) -> Unit,
     onRefreshBudgets: () -> Unit,
     onOpenSelectedBudget: () -> Unit,
@@ -1049,7 +1061,7 @@ private fun ScreenContent(
         AppRoute.SERVER_ADDRESS -> ServerAddressScreen(state, navigation)
         AppRoute.PAIRING_OPTIONS -> PairingOptionsScreen(navigation)
         AppRoute.SCAN_QR -> ScanQrScreen(navigation)
-        AppRoute.PAIRING_CODE -> PairingCodeScreen(state, mobileSession, navigation, onPairDevice)
+        AppRoute.PAIRING_CODE -> PairingCodeScreen(state, mobileSession, navigation, onPairDevice, onRetryStoredSession)
         AppRoute.PAIRING_RESULT -> PairingResultScreen(mobileSession, navigation)
         AppRoute.BUDGET_CHOOSER ->
             BudgetChooserScreen(state, mobileSession, navigation, onSelectBudget, onRefreshBudgets, onOpenSelectedBudget)
@@ -1706,6 +1718,7 @@ private fun PairingCodeScreen(
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
     onPairDevice: () -> Unit,
+    onRetryStoredSession: () -> Unit,
 ) {
     PageColumn {
         Heading("Enter the code", "Use the 8-character pairing code shown in server setup.")
@@ -1725,6 +1738,14 @@ private fun PairingCodeScreen(
         BodyText("The code works once and expires after five minutes. It is sent securely to the server only when you pair.")
         mobileSession.pairingError?.let { error ->
             Text(error, color = tandemPalette.warning, fontSize = 13.sp, lineHeight = 19.sp)
+        }
+        mobileSession.credentialStorageError?.let { error ->
+            Text(error, color = tandemPalette.warning, fontSize = 13.sp, lineHeight = 19.sp)
+            SecondaryButton(
+                if (mobileSession.isRestoringStoredSession) "Checking secure storage…" else "Retry saved pairing",
+                enabled = !mobileSession.isRestoringStoredSession,
+                onClick = onRetryStoredSession,
+            )
         }
         PrimaryButton(
             if (mobileSession.isPairing) "Pairing securely…" else "Pair this device",

@@ -9,7 +9,9 @@ import com.kroegerama.openapi.kmp.gen.companion.AuthItem
 import com.kroegerama.openapi.kmp.gen.companion.CallException
 import com.kroegerama.openapi.kmp.gen.companion.HttpCallException
 import com.kroegerama.openapi.kmp.gen.companion.HttpCallResponse
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.Url
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -42,7 +44,9 @@ class TandemApiException(
         safeMessageOverride ?: when {
             errorCode == "not-paired" -> "Pair this device before loading its budgets."
             httpStatus == 400 -> "Check the pairing code and try again."
-            httpStatus == 401 -> "The pairing code is invalid, expired, or already used."
+            errorCode == "invalid_pairing_code" -> "The pairing code is invalid, expired, or already used."
+            errorCode == "invalid_device_credential" -> "This device needs to be paired again."
+            httpStatus == 401 -> "The server could not verify this request. Check server access and try again."
             httpStatus == 403 -> "This device is not allowed to access that budget."
             httpStatus in 500..599 -> "The Tandem server could not read Actual. Try again later."
             else -> "Could not connect to the Tandem server. Check the address and connection."
@@ -161,8 +165,10 @@ class TandemApiClient(
         return parseBudgetCatalog(BudgetsApi.listBudgets())
     }
 
-    private fun parseBudgetCatalog(response: Either<CallException, HttpCallResponse<Map<String, JsonElement>>>): List<BudgetCatalogItem> {
-        val payload = unwrap(response, unauthorizedMessage = "This device needs to be paired again.")
+    private suspend fun parseBudgetCatalog(
+        response: Either<CallException, HttpCallResponse<Map<String, JsonElement>>>,
+    ): List<BudgetCatalogItem> {
+        val payload = unwrap(response)
         val budgets =
             payload["budgets"] as? JsonArray
                 ?: throw TandemApiProtocolException("Budget catalog response is missing its budgets")
@@ -196,19 +202,30 @@ class TandemApiClient(
         Api.setAuthProvider(bearerAuth)
     }
 
-    private fun unwrap(
-        result: Either<CallException, HttpCallResponse<Map<String, JsonElement>>>,
-        unauthorizedMessage: String? = null,
-    ): JsonObject =
+    private suspend fun unwrap(result: Either<CallException, HttpCallResponse<Map<String, JsonElement>>>): JsonObject =
         result.fold(
-            { error -> throw error.toTandemApiException(unauthorizedMessage) },
+            { error -> throw error.toTandemApiException() },
             { response -> JsonObject(response.data) },
         )
 
-    private fun CallException.toTandemApiException(unauthorizedMessage: String?): TandemApiException =
+    private suspend fun CallException.toTandemApiException(): TandemApiException =
         when (this) {
-            is HttpCallException -> TandemApiException("http-$code", code, this, unauthorizedMessage.takeIf { code == 401 })
+            is HttpCallException -> {
+                val errorCode = if (code == 401) apiErrorCode() else null
+                TandemApiException(errorCode ?: "http-$code", code, this)
+            }
             else -> TandemApiException("network-error", cause = this)
+        }
+
+    private suspend fun HttpCallException.apiErrorCode(): String? =
+        try {
+            val root = Json.parseToJsonElement(raw.bodyAsText()) as? JsonObject
+            val error = root?.get("error") as? JsonObject
+            (error?.get("code") as? JsonPrimitive)?.contentOrNull
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
         }
 }
 

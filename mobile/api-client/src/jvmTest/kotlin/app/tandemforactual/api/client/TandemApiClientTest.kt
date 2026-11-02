@@ -97,7 +97,7 @@ class TandemApiClientTest {
             val engine =
                 MockEngine { request ->
                     assertEquals("/api/v1/auth/pair", request.url.encodedPath)
-                    respond("""{"error":"pairing-code-invalid","private":"host detail"}""", status, jsonHeaders())
+                    respond("""{"error":{"code":"invalid_pairing_code","message":"private server detail"}}""", status, jsonHeaders())
                 }
             val previousClient = Api.client
             val previousBaseUrl = Api.baseUrl
@@ -114,7 +114,7 @@ class TandemApiClientTest {
                 assertEquals("invalid-server-url", blankHostUrl.errorCode)
 
                 val unauthorized = captureApiException { client.pair("https://tandem.example", "4DF7-J1M9", "Phone") }
-                assertEquals("http-401", unauthorized.errorCode)
+                assertEquals("invalid_pairing_code", unauthorized.errorCode)
                 assertEquals(401, unauthorized.httpStatus)
                 assertEquals("The pairing code is invalid, expired, or already used.", unauthorized.message)
 
@@ -169,10 +169,11 @@ class TandemApiClientTest {
     fun rejectedBudgetCatalogRequestsExplainRePairingOrAccessScope() =
         runBlocking {
             var status = HttpStatusCode.Unauthorized
+            var responseBody = """{"error":{"message":"private server detail"}}"""
             val engine =
                 MockEngine {
                     delay(1)
-                    respond("""{"error":"private server detail"}""", status, jsonHeaders())
+                    respond(responseBody, status, jsonHeaders())
                 }
             val previousClient = Api.client
             val previousBaseUrl = Api.baseUrl
@@ -184,8 +185,15 @@ class TandemApiClientTest {
                 val unauthorized = captureApiException { client.listBudgets() }
                 assertEquals("http-401", unauthorized.errorCode)
                 assertEquals(401, unauthorized.httpStatus)
-                assertEquals("This device needs to be paired again.", unauthorized.message)
+                assertEquals("The server could not verify this request. Check server access and try again.", unauthorized.message)
                 assertFalse(unauthorized.message.orEmpty().contains("private server detail"))
+
+                responseBody = """{"error":{"code":"invalid_device_credential","message":"private server detail"}}"""
+                val invalidCredential = captureApiException { client.listBudgets() }
+                assertEquals("invalid_device_credential", invalidCredential.errorCode)
+                assertEquals(401, invalidCredential.httpStatus)
+                assertEquals("This device needs to be paired again.", invalidCredential.message)
+                assertFalse(invalidCredential.message.orEmpty().contains("private server detail"))
 
                 status = HttpStatusCode.Forbidden
                 val forbidden = captureApiException { client.listBudgets() }

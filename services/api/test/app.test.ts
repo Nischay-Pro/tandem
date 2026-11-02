@@ -366,6 +366,7 @@ describe("health routes and OpenAPI", () => {
       headers: { authorization: "Bearer not-valid" },
     });
     expect(invalidToken.statusCode).toBe(401);
+    expect(invalidToken.json().error.code).toBe("invalid_device_credential");
 
     const unauthorizedList = await app.inject({
       method: "GET",
