@@ -21,9 +21,10 @@ first-sync verification confirmed both budgets reached the `READY` state and
 the records were stored locally. One first attempt for USD hit a transient
 connection error; retry completed successfully. This test data and its seed
 script live only under ignored `.dev-tmp/` paths.
-The compatibility server also retains a separate older synthetic fixture, so
-the all-budgets pairing used for this review lists three catalog entries; only
-the CAD and USD entries belong to the seven-year household scenario.
+The compatibility server also retains a separate older synthetic fixture. The
+Pixel's current device credential is scoped only to the CAD and USD household
+budget IDs, so the budget chooser shows exactly those two; the compatibility
+fixture is outside its authorized scope.
 
 Editing the amount and notes of an existing transaction enqueues an optimistic
 local update and sends it through the sync coordinator. Conflict review can
