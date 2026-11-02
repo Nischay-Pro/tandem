@@ -62,9 +62,9 @@ remains disabled to protect queued and uncertain writes. Background scheduling,
 Wi-Fi-only behavior, durable settings, and most other settings controls still
 need implementation.
 
-The eight-character pairing code is shown as readable text and left-aligned in
-the entry field. It accepts the server's `XXXX-XXXX` format, with or without
-the hyphen. The code and device bearer credential are not saved in route state;
+The eight-character pairing code is shown as readable, centered text in the
+entry field. It accepts the server's `XXXX-XXXX` format, with or without the
+hyphen. The code and device bearer credential are not saved in route state;
 the bearer credential is held in memory and requires re-pairing after process
 restart. Temporary wireframes, test data, and device review artifacts belong
 under ignored `.dev-tmp/` paths and must not be committed.

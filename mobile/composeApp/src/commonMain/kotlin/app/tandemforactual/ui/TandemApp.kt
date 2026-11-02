@@ -1308,7 +1308,13 @@ private fun TextFieldCard(
                 decorationBox = { innerTextField ->
                     Box {
                         if (value.isEmpty() && placeholder.isNotEmpty()) {
-                            Text(placeholder, color = palette.muted, fontSize = 14.sp)
+                            Text(
+                                placeholder,
+                                modifier = Modifier.fillMaxWidth(),
+                                color = palette.muted,
+                                fontSize = 14.sp,
+                                textAlign = textAlign,
+                            )
                         }
                         innerTextField()
                     }
@@ -1697,7 +1703,7 @@ private fun PairingCodeScreen(
                     autoCorrectEnabled = false,
                     keyboardType = KeyboardType.Ascii,
                 ),
-            textAlign = TextAlign.Start,
+            textAlign = TextAlign.Center,
         )
         BodyText("The code works once and expires after five minutes. It is sent securely to the server only when you pair.")
         mobileSession.pairingError?.let { error ->
