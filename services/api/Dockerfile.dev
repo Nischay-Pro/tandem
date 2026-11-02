@@ -17,4 +17,4 @@ RUN pnpm install --frozen-lockfile
 
 COPY --chown=node:node . .
 EXPOSE 19753
-CMD ["pnpm", "--filter", "@actual-budget-companion/api", "dev"]
+CMD ["pnpm", "--filter", "@tandem-for-actual/api", "dev"]

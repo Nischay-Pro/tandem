@@ -61,12 +61,12 @@ export async function applyMigrations(
       const expectedName = migrationOrder[index];
       if (expectedName === undefined) {
         throw new OperatorMessageError(
-          "Companion database has migrations newer than this API version; upgrade the API or restore a database backup from a compatible version",
+          "Tandem database has migrations newer than this API version; upgrade the API or restore a database backup from a compatible version",
         );
       }
       if (expectedName !== migration.name) {
         throw new OperatorMessageError(
-          `Companion migration history mismatch at position ${index + 1}: expected ${safeMigrationName(expectedName)}, found ${safeMigrationName(migration.name)}. This unreleased build cannot upgrade that earlier schema; use a compatible database or recreate the pre-release Companion database.`,
+          `Tandem migration history mismatch at position ${index + 1}: expected ${safeMigrationName(expectedName)}, found ${safeMigrationName(migration.name)}. This unreleased build cannot upgrade that earlier schema; use a compatible database or recreate the pre-release Tandem database.`,
         );
       }
     }

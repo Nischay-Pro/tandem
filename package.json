@@ -1,5 +1,5 @@
 {
-  "name": "actual-budget-companion",
+  "name": "tandem-for-actual",
   "version": "0.1.0",
   "private": true,
   "license": "AGPL-3.0-or-later",
@@ -8,18 +8,18 @@
     "node": ">=26.13.0 <27"
   },
   "scripts": {
-    "api:dev": "pnpm --filter @actual-budget-companion/api dev",
+    "api:dev": "pnpm --filter @tandem-for-actual/api dev",
     "dev:up": "docker compose -f docker-compose.dev.yml up --build",
     "dev:down": "docker compose -f docker-compose.dev.yml down",
-    "api:openapi:generate": "pnpm --filter @actual-budget-companion/api openapi:generate",
-    "api:openapi:check": "pnpm --filter @actual-budget-companion/api openapi:check",
+    "api:openapi:generate": "pnpm --filter @tandem-for-actual/api openapi:generate",
+    "api:openapi:check": "pnpm --filter @tandem-for-actual/api openapi:check",
     "lint": "eslint .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm --recursive --if-present typecheck",
     "test": "pnpm --recursive --if-present test",
     "test:coverage": "pnpm --recursive --if-present test:coverage",
-    "test:mutation": "pnpm --filter @actual-budget-companion/api test:mutation",
-    "test:mutation:full": "pnpm --filter @actual-budget-companion/api test:mutation:full",
+    "test:mutation": "pnpm --filter @tandem-for-actual/api test:mutation",
+    "test:mutation:full": "pnpm --filter @tandem-for-actual/api test:mutation:full",
     "test:integration": "docker compose -f docker-compose.dev.yml --profile test run --build --rm integration-tests",
     "check:all": "pnpm api:openapi:check && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:coverage"
   },

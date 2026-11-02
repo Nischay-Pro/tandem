@@ -137,7 +137,7 @@ describe("durable write journal integration", () => {
       );
 
       await expect(applyMigrations(isolatedPool)).rejects.toThrow(
-        /pre-release Companion database/i,
+        /pre-release Tandem database/i,
       );
       const tables = await isolatedPool.query<{
         devices: string | null;
@@ -314,7 +314,7 @@ describe("durable write journal integration", () => {
       );
       await expect(
         applyMigrations(isolatedPool, [migration], [migration.name]),
-      ).rejects.toThrow("Companion migration history mismatch");
+      ).rejects.toThrow("Tandem migration history mismatch");
 
       await isolatedPool.query("UPDATE companion_migrations SET name = $1", [
         "sensitive migration name",
@@ -337,9 +337,7 @@ describe("durable write journal integration", () => {
       );
       await expect(
         applyMigrations(isolatedPool, [migration], [migration.name]),
-      ).rejects.toThrow(
-        "Companion database has migrations newer than this API",
-      );
+      ).rejects.toThrow("Tandem database has migrations newer than this API");
 
       await isolatedPool.query(
         "UPDATE companion_migrations SET position = 3 WHERE name = 'stale-migration'",

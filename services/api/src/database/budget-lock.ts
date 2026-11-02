@@ -25,7 +25,7 @@ export async function withBudgetLock<T>(
       try {
         await client.query(
           "SELECT pg_advisory_lock(hashtextextended($1, 19753))",
-          [`actual-budget-companion:${budgetId}`],
+          [`tandem-for-actual:${budgetId}`],
         );
         lockAcquired = true;
         result = await work();
@@ -42,7 +42,7 @@ export async function withBudgetLock<T>(
         if (lockAcquired) {
           const unlock = await client.query<{ unlocked: boolean }>(
             "SELECT pg_advisory_unlock(hashtextextended($1, 19753)) AS unlocked",
-            [`actual-budget-companion:${budgetId}`],
+            [`tandem-for-actual:${budgetId}`],
           );
           if (unlock.rows[0]?.unlocked !== true) {
             throw new Error(

@@ -5,7 +5,7 @@ const { runProductionApi, reportProcessFailure, processLike } = vi.hoisted(
     runProductionApi: vi.fn(),
     reportProcessFailure: vi.fn(),
     processLike: {
-      env: { DATABASE_URL: "postgres://test/companion" },
+      env: { DATABASE_URL: "postgres://test/tandem" },
       exitCode: undefined as number | undefined,
     },
   }),

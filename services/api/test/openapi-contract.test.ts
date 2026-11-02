@@ -18,9 +18,7 @@ afterEach(async () => {
 });
 
 async function createTemporaryContractPath(): Promise<string> {
-  temporaryDirectory = await mkdtemp(
-    join(tmpdir(), "actual-companion-openapi-"),
-  );
+  temporaryDirectory = await mkdtemp(join(tmpdir(), "tandem-openapi-"));
   return join(temporaryDirectory, "openapi-v1.json");
 }
 

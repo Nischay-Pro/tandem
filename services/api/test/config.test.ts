@@ -5,6 +5,16 @@ const databaseUrl =
   "postgresql://companion:local-test@localhost:5432/companion";
 
 describe("parseApiConfig", () => {
+  it("treats empty optional Actual settings as unconfigured", () => {
+    expect(
+      parseApiConfig({
+        DATABASE_URL: databaseUrl,
+        ACTUAL_SERVER_URL: "  ",
+        ACTUAL_SERVER_PASSWORD: "",
+      }).actual,
+    ).toBeUndefined();
+  });
+
   it("uses safe development defaults", () => {
     expect(parseApiConfig({ DATABASE_URL: databaseUrl })).toEqual({
       databaseUrl,

@@ -1,5 +1,5 @@
 {
-  "name": "@actual-budget-companion/api",
+  "name": "@tandem-for-actual/api",
   "version": "0.1.0",
   "private": true,
   "license": "AGPL-3.0-or-later",
@@ -7,9 +7,10 @@
   "scripts": {
     "dev": "tsx watch src/entrypoint.ts",
     "pair": "tsx bin/pairing-cli.ts",
+    "pair:production": "node dist-cli/bin/pairing-cli.js",
     "openapi:generate": "tsx --eval 'import { syncOpenApiContract } from \"./src/openapi/contract.ts\"; syncOpenApiContract(\"../../docs/api/openapi-v1.json\").catch((error) => { console.error(error); process.exitCode = 1; });'",
     "openapi:check": "tsx --eval 'import { syncOpenApiContract } from \"./src/openapi/contract.ts\"; syncOpenApiContract(\"../../docs/api/openapi-v1.json\", true).catch((error) => { console.error(error); process.exitCode = 1; });'",
-    "build": "tsc -p tsconfig.json && cp src/schema/migrations/ORDER dist/schema/migrations/ORDER",
+    "build": "tsc -p tsconfig.json && cp src/schema/migrations/ORDER dist/schema/migrations/ORDER && tsc -p tsconfig.cli.json && cp src/schema/migrations/ORDER dist-cli/src/schema/migrations/ORDER",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
     "test:actual": "vitest run test/actual-compat.test.ts",

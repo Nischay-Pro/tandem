@@ -73,21 +73,14 @@ export function parseApiConfig(environment: Environment): ApiConfig {
 function parseActualConnection(
   environment: Environment,
 ): Extract<ActualConnectionConfig, { password: string }> | undefined {
-  const serverUrl = environment.ACTUAL_SERVER_URL?.trim();
+  const serverUrl = environment.ACTUAL_SERVER_URL?.trim() || undefined;
   const password = environment.ACTUAL_SERVER_PASSWORD;
   const configuredDataDirectory = environment.ACTUAL_API_DATA_DIR?.trim();
 
-  if (
-    serverUrl === undefined &&
-    (password === undefined || password.length === 0)
-  ) {
+  if (!serverUrl && !password) {
     return undefined;
   }
-  if (
-    serverUrl === undefined ||
-    password === undefined ||
-    password.length === 0
-  ) {
+  if (!serverUrl || !password) {
     throw new OperatorMessageError(
       "ACTUAL_SERVER_URL and a non-empty ACTUAL_SERVER_PASSWORD must be configured together",
     );
