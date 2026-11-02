@@ -102,7 +102,10 @@ class TandemApiClient(
         return PairedDevice(deviceId, principalId, budgetIds)
     }
 
-    suspend fun listBudgets(): List<BudgetCatalogItem> = requireAuthenticated().let { parseBudgetCatalog(BudgetsApi.listBudgets()) }
+    suspend fun listBudgets(): List<BudgetCatalogItem> {
+        requireAuthenticated()
+        return parseBudgetCatalog(BudgetsApi.listBudgets())
+    }
 
     private fun parseBudgetCatalog(response: Either<CallException, HttpCallResponse<Map<String, JsonElement>>>): List<BudgetCatalogItem> {
         val payload = unwrap(response, unauthorizedMessage = "This device needs to be paired again.")
@@ -146,7 +149,7 @@ class TandemApiClient(
             { response -> JsonObject(response.data) },
         )
 
-    private fun CallException.toTandemApiException(unauthorizedMessage: String? = null): TandemApiException =
+    private fun CallException.toTandemApiException(unauthorizedMessage: String?): TandemApiException =
         when (this) {
             is HttpCallException -> TandemApiException("http-$code", code, this, unauthorizedMessage.takeIf { code == 401 })
             else -> TandemApiException("network-error", cause = this)
@@ -158,6 +161,13 @@ private fun parseServerUrl(
     allowInsecureLoopback: Boolean,
 ): Url {
     val address = value.trim().trimEnd('/')
+    val hasExplicitHost =
+        address
+            .substringAfter("://", missingDelimiterValue = "")
+            .substringBefore('/')
+            .substringBefore('?')
+            .substringBefore('#')
+            .isNotBlank()
     val url =
         try {
             Url(address)
@@ -169,7 +179,7 @@ private fun parseServerUrl(
         allowInsecureLoopback &&
             url.protocol.name == "http" &&
             url.host.lowercase() in setOf("localhost", "127.0.0.1")
-    if (url.host.isBlank() || (!secure && !allowedLoopback) || url.user != null || url.password != null) {
+    if (!hasExplicitHost || url.host.isBlank() || (!secure && !allowedLoopback) || url.user != null || url.password != null) {
         throw TandemApiException("invalid-server-url")
     }
     return url

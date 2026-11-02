@@ -16,6 +16,7 @@ import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import io.ktor.http.takeFrom
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -99,6 +100,8 @@ class TandemApiClientTest {
                 assertEquals("invalid-server-url", insecureLoopbackUrl.errorCode)
                 val malformedUrl = captureApiException { client.pair("https://tandem.example:invalid", "4DF7-J1M9", "Phone") }
                 assertEquals("invalid-server-url", malformedUrl.errorCode)
+                val blankHostUrl = captureApiException { client.pair("https://?budget=1", "4DF7-J1M9", "Phone") }
+                assertEquals("invalid-server-url", blankHostUrl.errorCode)
 
                 val unauthorized = captureApiException { client.pair("https://tandem.example", "4DF7-J1M9", "Phone") }
                 assertEquals("http-401", unauthorized.errorCode)
@@ -158,6 +161,7 @@ class TandemApiClientTest {
             var status = HttpStatusCode.Unauthorized
             val engine =
                 MockEngine {
+                    delay(1)
                     respond("""{"error":"private server detail"}""", status, jsonHeaders())
                 }
             val previousClient = Api.client
