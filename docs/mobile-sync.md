@@ -38,8 +38,13 @@ held the prior revision; the stale device edit produced a conflict showing
 both versions. Keeping Actual discarded the local draft, and the original
 -$95.58 value was restored through the app and confirmed. Creating transactions
 remains unavailable because the API lacks a caller-supplied stable ID for safe
-retries. Settings pages are present, but several controls remain previews or
-are not persisted and do not modify Actual.
+retries. Sync preferences now trigger the real coordinator for manual refreshes
+and, when enabled, on returns to a budget. The local-data page reads the full
+transaction count, cached account count, sync state, and queued/conflicted
+outbox rows from Room. Refresh uses the same sync action; clearing local data
+remains disabled to protect queued and uncertain writes. Background scheduling,
+Wi-Fi-only behavior, durable settings, and most other settings controls still
+need implementation.
 
 The eight-character pairing code is shown as readable text and left-aligned in
 the entry field. It accepts the server's `XXXX-XXXX` format, with or without

@@ -8,6 +8,7 @@ import app.tandemforactual.api.client.PairedDevice
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.data.database.BudgetRecordEntity
+import app.tandemforactual.data.database.BudgetSyncStateEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.store.BudgetSyncCoordinator
@@ -84,6 +85,9 @@ internal class TandemMobileSession(
         private set
 
     var lastSyncSummary by mutableStateOf<BudgetSyncSummary?>(null)
+        private set
+
+    var localSyncState by mutableStateOf<BudgetSyncStateEntity?>(null)
         private set
 
     var transactionRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
@@ -382,6 +386,7 @@ internal class TandemMobileSession(
 
     suspend fun loadLocalRecords(budgetId: String) {
         val localRepository = repository ?: return
+        localSyncState = localRepository.readSyncState(budgetId)
         transactionRecords = localRepository.findRecentRecords(budgetId, "transaction", limit = 50)
         cachedTransactionCount =
             localRepository.countVisibleRecords(budgetId, "transaction").coerceAtMost(Int.MAX_VALUE.toLong()).toInt()

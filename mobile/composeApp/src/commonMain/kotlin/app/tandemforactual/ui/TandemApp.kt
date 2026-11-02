@@ -461,6 +461,7 @@ fun TandemApp(
             },
         )
     val route = backStack.last()
+    var previousRoute by remember { mutableStateOf(route) }
 
     LaunchedEffect(route, mobileSession.pairedDevice?.deviceId) {
         if (route == AppRoute.BUDGET_CHOOSER && mobileSession.isAuthenticated && mobileSession.budgets.isEmpty()) {
@@ -498,11 +499,27 @@ fun TandemApp(
                 AppRoute.CONFLICT_REVIEW,
                 AppRoute.UNCERTAIN_WRITE,
                 AppRoute.REJECTED_WRITE,
+                AppRoute.LOCAL_DATA,
             ) &&
             state.selectedBudgetId.isNotBlank()
         ) {
             mobileSession.loadLocalRecords(state.selectedBudgetId)
         }
+    }
+    LaunchedEffect(route, state.selectedBudgetId, state.syncOnOpen) {
+        if (
+            route == AppRoute.BUDGET &&
+            previousRoute != AppRoute.FIRST_SYNC &&
+            state.syncOnOpen &&
+            state.selectedBudgetId.isNotBlank() &&
+            (!state.selectedBudgetEncrypted || state.encryptedPassword.isNotBlank())
+        ) {
+            mobileSession.synchronize(
+                state.selectedBudgetId,
+                state.encryptedPassword.takeIf { it.isNotBlank() },
+            )
+        }
+        previousRoute = route
     }
     val liveTransactions =
         remember(
@@ -999,11 +1016,11 @@ private fun ScreenContent(
         AppRoute.BACKGROUND_MOTION -> BackgroundScreen(state)
         AppRoute.HOME_LAYOUT -> HomeLayoutScreen(state)
         AppRoute.BUDGET_PREFERENCES -> BudgetPreferencesScreen()
-        AppRoute.SYNC_PREFERENCES -> SyncPreferencesScreen(state)
+        AppRoute.SYNC_PREFERENCES -> SyncPreferencesScreen(state, mobileSession, onSyncNow)
         AppRoute.SERVER_DEVICE -> ServerDeviceScreen(state, mobileSession, navigation)
         AppRoute.SECURITY_PRIVACY -> SecurityScreen(state, mobileSession)
         AppRoute.NOTIFICATIONS -> NotificationsScreen(state)
-        AppRoute.LOCAL_DATA -> LocalDataScreen()
+        AppRoute.LOCAL_DATA -> LocalDataScreen(state, mobileSession, onSyncNow)
         AppRoute.ABOUT -> AboutScreen()
     }
 }
@@ -3378,23 +3395,57 @@ private fun BudgetPreferencesScreen() {
 }
 
 @Composable
-private fun SyncPreferencesScreen(state: AppState) {
+private fun SyncPreferencesScreen(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    onSyncNow: () -> Unit,
+) {
+    val hasSelectedBudget = state.selectedBudgetId.isNotBlank()
+    val syncState = mobileSession.localSyncState
+    val syncStatus =
+        when {
+            !hasSelectedBudget -> "No budget selected"
+            mobileSession.isSyncing -> "Syncing"
+            mobileSession.syncError != null -> "Needs attention"
+            syncState?.lastSyncedAtEpochMs != null -> "Ready"
+            else -> "Never synced"
+        }
+    val syncDescription =
+        when {
+            !hasSelectedBudget -> "Pair this device and choose an Actual budget to sync"
+            mobileSession.isSyncing -> "Reading changes from Actual"
+            mobileSession.syncError != null -> mobileSession.syncError ?: "Could not sync this budget"
+            syncState?.lastSyncedAtEpochMs != null -> "Last successful sync for ${state.selectedBudget}"
+            else -> "Open a budget and sync it to start keeping a local copy"
+        }
     PageColumn {
-        Heading("Automatic refresh", "Choose when the app should refresh.")
-        SectionCard("Automatic refresh", "Local changes stay available offline") {
+        Heading("Sync preferences", "Choose when this device checks Actual for changes.")
+        SectionCard("When to sync", "Local data stays available offline") {
             ToggleRow("Sync when opening a budget", "Check for server changes when returning to a budget", state.syncOnOpen) {
                 state.syncOnOpen =
                     it
             }
-            DividerLine()
-            ToggleRow("Sync only on Wi-Fi", "Avoid cellular data for automatic refreshes", state.syncOnWifi) { state.syncOnWifi = it }
+            BodyText(
+                "Background scheduling and Wi-Fi-only rules are not available yet. " +
+                    "Sync on open and manual sync use the current connection.",
+            )
         }
-        SectionCard("Manual controls", "Always available") {
-            ListRow("↻", "Sync now", "Read changes and check pending edits", "Sample")
+        SectionCard("Current budget", if (hasSelectedBudget) state.selectedBudget else "Choose an Actual budget") {
+            ListRow(
+                "↻",
+                "Sync now",
+                "Read changes and check pending edits",
+                when {
+                    mobileSession.isSyncing -> "Syncing"
+                    hasSelectedBudget -> "Sync"
+                    else -> "Unavailable"
+                },
+                onClick = onSyncNow.takeIf { hasSelectedBudget && !mobileSession.isSyncing },
+            )
             DividerLine()
-            ListRow("◷", "Last sync", "No real sync has run", "Never")
+            ListRow("◷", "Sync status", syncDescription, syncStatus)
         }
-        PreviewNote("These settings are not saved yet. The app checks pending changes before retrying them.")
+        if (mobileSession.syncError != null) PreviewNote(mobileSession.syncError ?: "Sync failed")
     }
 }
 
@@ -3499,23 +3550,84 @@ private fun NotificationsScreen(state: AppState) {
 }
 
 @Composable
-private fun LocalDataScreen() {
+private fun LocalDataScreen(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    onSyncNow: () -> Unit,
+) {
+    val hasSelectedBudget = state.selectedBudgetId.isNotBlank()
+    val recordCount =
+        mobileSession.cachedTransactionCount +
+            mobileSession.accountRecords.size +
+            mobileSession.payeeRecords.size +
+            mobileSession.categoryRecords.size +
+            mobileSession.categoryGroupRecords.size +
+            mobileSession.budgetMonthRecords.size
+    val queuedCount = mobileSession.pendingWrites.count { it.status == "queued" || it.status == "sending" }
+    val conflictCount = mobileSession.pendingWrites.count { it.status == "conflict" }
+    val attentionCount = mobileSession.pendingWrites.count { it.status == "uncertain" || it.status == "rejected" }
+    val syncStatus =
+        when {
+            !hasSelectedBudget -> "No budget selected"
+            mobileSession.isSyncing -> "Syncing"
+            mobileSession.syncError != null -> "Needs attention"
+            mobileSession.localSyncState?.lastSyncedAtEpochMs != null -> "Ready"
+            else -> "Not synced"
+        }
     PageColumn {
-        Heading("Stored data", "See what is cached on this device.")
-        AmountHero("Sample storage", "${formatInteger(18)} MB", "Estimated from sample budget data")
-        SectionCard("On this device", "No real budget is cached") {
-            ListRow("▤", "Budget records", "Sample data only", "0")
+        Heading(
+            "Stored data",
+            if (hasSelectedBudget) {
+                "Review the local copy and queued changes for ${state.selectedBudget}."
+            } else {
+                "Pair this device and select an Actual budget to view its cached data."
+            },
+        )
+        AmountHero(
+            "Cached records",
+            formatInteger(recordCount),
+            "${formatInteger(mobileSession.cachedTransactionCount)} transactions in the selected budget",
+        )
+        SectionCard("On this device", syncStatus) {
+            ListRow(
+                "▤",
+                "Transactions",
+                "Full local record count",
+                formatInteger(mobileSession.cachedTransactionCount),
+            )
             DividerLine()
-            ListRow("↑", "Queued changes", "No changes are queued", "0")
+            ListRow("▣", "Accounts", "Cached account records", formatInteger(mobileSession.accountRecords.size))
             DividerLine()
-            ListRow("!", "Conflicts to review", "No live conflict data", "0")
+            ListRow("↑", "Queued changes", "Waiting to sync", formatInteger(queuedCount))
+            DividerLine()
+            ListRow("!", "Conflicts to review", "Changes with a newer server version", formatInteger(conflictCount))
+            if (attentionCount > 0) {
+                DividerLine()
+                ListRow("⚠", "Other changes needing attention", "Uncertain or rejected", formatInteger(attentionCount))
+            }
         }
         SectionCard("Storage actions", "") {
-            ListRow("↻", "Refresh local budget", "Pull a fresh snapshot", "Unavailable")
+            ListRow(
+                "↻",
+                "Refresh local budget",
+                "Sync the selected budget with Actual",
+                when {
+                    mobileSession.isSyncing -> "Syncing"
+                    hasSelectedBudget -> "Refresh"
+                    else -> "Unavailable"
+                },
+                onClick = onSyncNow.takeIf { hasSelectedBudget && !mobileSession.isSyncing },
+            )
             DividerLine()
-            ListRow("×", "Clear local data", "Removes cached data from this device", "Unavailable")
+            ListRow("×", "Clear local data", "Not available while local-first sync is active", "Unavailable")
         }
-        PreviewNote("Never clear pending or uncertain edits without explaining the effect and asking the user to confirm.")
+        if (mobileSession.syncError != null) {
+            PreviewNote(mobileSession.syncError ?: "Sync failed. Local data remains available.")
+        }
+        BodyText(
+            "Cached data belongs to this budget on this device. Clearing it is disabled so queued, " +
+                "conflicted, or uncertain edits cannot be lost.",
+        )
     }
 }
 
