@@ -93,8 +93,10 @@ ignored `.dev-tmp/` paths and must not be committed.
 - Device bearer credentials are restored from platform secure storage when the
   app launches. Android stores AES-GCM ciphertext in app-private preferences
   with its encryption key in Android Keystore; iOS stores the serialized
-  session as a device-only Keychain generic-password item. A 401 clears the
-  local session.
+  session as a device-only Keychain generic-password item. A credential is
+  cleared only when the API response explicitly identifies an invalid device
+  credential. Other 401 responses and temporary secure-store read failures
+  preserve the saved credential and can be retried.
   Forgetting the device clears its credential from this phone but does not
   revoke the server-side device token. Pairing codes and encrypted-budget
   passwords are never persisted; the budget password is cleared after a
