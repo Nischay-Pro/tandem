@@ -75,13 +75,13 @@ private enum class AppRoute(
 ) {
     WELCOME("Actual Companion"),
     SERVER_ADDRESS("Server address"),
-    PAIRING_OPTIONS("Connect a device"),
+    PAIRING_OPTIONS("Pair a device"),
     SCAN_QR("Scan pairing QR"),
-    PAIRING_CODE("Enter pairing code"),
+    PAIRING_CODE("Pairing code"),
     PAIRING_RESULT("Device pairing"),
-    BUDGET_CHOOSER("Your budgets"),
+    BUDGET_CHOOSER("Budgets"),
     UNLOCK_BUDGET("Unlock budget"),
-    FIRST_SYNC("Preparing your budget"),
+    FIRST_SYNC("Preparing budget"),
     BUDGET("Budget"),
     MONTH_PICKER("Choose month"),
     CATEGORY_GROUP("Essentials"),
@@ -102,10 +102,10 @@ private enum class AppRoute(
     CHOOSE_DATE("Choose date"),
     SAVE_RESULT("Transaction status"),
     SYNC_CENTER("Sync center"),
-    CONFLICT_INBOX("Needs your review"),
+    CONFLICT_INBOX("Review changes"),
     CONFLICT_REVIEW("Review conflict"),
-    UNCERTAIN_WRITE("Check write status"),
-    REJECTED_WRITE("Edit not applied"),
+    UNCERTAIN_WRITE("Status unknown"),
+    REJECTED_WRITE("Not applied"),
     SETTINGS("Settings"),
     APPEARANCE("Appearance"),
     THEME_MODE("Theme mode"),
@@ -124,34 +124,34 @@ private enum class AppRoute(
 private data class TransactionItem(
     val payee: String,
     val category: String,
-    val date: String,
-    val amount: String,
+    val date: SampleDate,
+    val amountMinorUnits: Long,
     val icon: String,
 )
 
 private val previewTransactions =
     listOf(
-        TransactionItem("Corner Market", "Groceries", "May 14", "−$42.18", "G"),
-        TransactionItem("Electric Company", "Utilities", "May 12", "−$120.00", "E"),
-        TransactionItem("Acme Corp", "Paycheck", "May 10", "+$2,500.00", "A"),
-        TransactionItem("Riverside Cafe", "Dining", "May 8", "−$28.40", "R"),
-        TransactionItem("City Transit", "Transport", "May 6", "−$16.50", "C"),
-        TransactionItem("Book Nook", "Personal", "May 4", "−$23.99", "B"),
+        TransactionItem("Corner Market", "Groceries", SampleDate(2026, 5, 14), -4_218, "G"),
+        TransactionItem("Electric Company", "Utilities", SampleDate(2026, 5, 12), -12_000, "E"),
+        TransactionItem("Acme Corp", "Paycheck", SampleDate(2026, 5, 10), 250_000, "A"),
+        TransactionItem("Riverside Cafe", "Dining", SampleDate(2026, 5, 8), -2_840, "R"),
+        TransactionItem("City Transit", "Transport", SampleDate(2026, 5, 6), -1_650, "C"),
+        TransactionItem("Book Nook", "Personal", SampleDate(2026, 5, 4), -2_399, "B"),
     )
 
 private class AppState {
     var theme by mutableStateOf(ThemeMode.DARK)
     var accent by mutableStateOf(AccentChoice.TEAL)
     var selectedBudget by mutableStateOf("Household")
-    var selectedMonth by mutableStateOf("May 2026")
+    var selectedMonth by mutableStateOf(formatMonth(2026, 5))
     var serverUrl by mutableStateOf("https://budget.example.com")
     var pairingCode by mutableStateOf("")
     var encryptedPassword by mutableStateOf("")
-    var transactionAmount by mutableStateOf("42.18")
+    var transactionAmount by mutableStateOf(formatAmount(4_218))
     var transactionAccount by mutableStateOf("Checking")
     var transactionPayee by mutableStateOf("Corner Market")
     var transactionCategory by mutableStateOf("Groceries")
-    var transactionDate by mutableStateOf("May 14, 2026")
+    var transactionDate by mutableStateOf(formatDate(SampleDate(2026, 5, 14)))
     var transactionNotes by mutableStateOf("")
     var conflictChoice by mutableStateOf("")
     var backgroundStyle by mutableStateOf("Soft gradient")
@@ -344,7 +344,7 @@ private fun AppHeader(
         }
         if (route.isTab()) {
             Text(
-                text = "SYNC  ·",
+                text = "Sync",
                 modifier =
                     Modifier
                         .clip(
@@ -356,8 +356,8 @@ private fun AppHeader(
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
             )
-        } else if (route in listOf(AppRoute.BUDGET_CHOOSER, AppRoute.SERVER_ADDRESS, AppRoute.SYNC_CENTER)) {
-            Text("PREVIEW", color = palette.muted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        } else if (route in listOf(AppRoute.BUDGET_CHOOSER, AppRoute.SERVER_ADDRESS)) {
+            Text("Sample data", color = palette.muted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -527,20 +527,19 @@ private fun ScreenContent(
         AppRoute.ACCOUNT_DETAIL -> AccountDetailScreen(navigation)
         AppRoute.ACCOUNT_OPTIONS -> AccountOptionsScreen(navigation)
         AppRoute.RECONCILIATION -> ReconciliationScreen()
-        AppRoute.ACTIVITY -> ActivityScreen(navigation)
+        AppRoute.ACTIVITY -> ActivityScreen(state, navigation)
         AppRoute.ACTIVITY_SEARCH -> ActivitySearchScreen(navigation)
         AppRoute.ACTIVITY_FILTER -> ActivityFilterScreen()
         AppRoute.TRANSACTION_DETAIL -> TransactionDetailScreen(navigation)
         AppRoute.NEW_TRANSACTION, AppRoute.EDIT_TRANSACTION -> TransactionFormScreen(route, state, navigation)
         AppRoute.CHOOSE_ACCOUNT ->
-            SelectorScreen("Choose account", listOf("Checking", "Savings", "Credit Card", "Cash"), state.transactionAccount) {
+            SelectorScreen(listOf("Checking", "Savings", "Credit Card", "Cash"), state.transactionAccount) {
                 state.transactionAccount =
                     it
                 ; navigation.back()
             }
         AppRoute.CHOOSE_PAYEE ->
             SelectorScreen(
-                "Choose payee",
                 listOf("Corner Market", "Electric Company", "Acme Corp", "Riverside Cafe", "City Transit"),
                 state.transactionPayee,
             ) {
@@ -550,7 +549,6 @@ private fun ScreenContent(
             }
         AppRoute.CHOOSE_CATEGORY ->
             SelectorScreen(
-                "Choose category",
                 listOf("Groceries", "Utilities", "Dining", "Rent", "Transport", "Personal"),
                 state.transactionCategory,
             ) {
@@ -605,7 +603,7 @@ private fun SampleBanner() {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text("●", color = palette.accent, fontSize = 9.sp)
-        Text("SAMPLE PREVIEW", color = palette.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+        Text("Sample data", color = palette.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         Text("No live budget is connected", color = palette.muted, fontSize = 11.sp)
     }
 }
@@ -629,7 +627,7 @@ private fun BodyText(text: String) {
 
 @Composable
 private fun LabelText(text: String) {
-    Text(text.uppercase(), color = companionPalette.muted, fontSize = 10.sp, letterSpacing = 0.9.sp, fontWeight = FontWeight.SemiBold)
+    Text(text, color = companionPalette.muted, fontSize = 11.sp, letterSpacing = 0.2.sp, fontWeight = FontWeight.SemiBold)
 }
 
 @Composable
@@ -656,12 +654,13 @@ private fun SurfaceCard(
 private fun PrimaryButton(
     label: String,
     enabled: Boolean = true,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val palette = companionPalette
     Box(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .heightIn(min = 52.dp)
                 .clip(RoundedCornerShape(15.dp))
@@ -677,12 +676,13 @@ private fun PrimaryButton(
 @Composable
 private fun SecondaryButton(
     label: String,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val palette = companionPalette
     Box(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .heightIn(min = 50.dp)
                 .clip(RoundedCornerShape(15.dp))
@@ -1019,30 +1019,30 @@ private fun WelcomeScreen(navigation: AppNavigation) {
         Box(Modifier.size(58.dp).clip(RoundedCornerShape(19.dp)).background(palette.accentSurface), contentAlignment = Alignment.Center) {
             Text("A", color = palette.accent, fontSize = 27.sp, fontWeight = FontWeight.Bold)
         }
-        Heading("Your budget,\nclose at hand", "A thoughtful mobile companion for your Actual Budget.")
+        Heading("Budget and account overview", "Plan spending, review accounts, and follow recent changes.")
         SurfaceCard {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Badge("PRIVATE BY DESIGN")
-                    Text("Your server stays in control", color = palette.muted, fontSize = 11.sp)
+                    Badge("Private by design")
+                    Text("Actual Budget remains the source of truth", color = palette.muted, fontSize = 11.sp)
                 }
                 Text(
-                    "A clear view of every plan, account, and change you make.",
+                    "Review plans, account balances, and recent activity.",
                     color = palette.text,
                     fontSize = 15.sp,
                     lineHeight = 22.sp,
                     fontWeight = FontWeight.Medium,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Badge("OFFLINE READY", palette.positive)
-                    Badge("CONFLICT REVIEW", palette.warning)
+                    Badge("Offline ready", palette.positive)
+                    Badge("Conflict review", palette.warning)
                 }
             }
         }
         Spacer(Modifier.weight(1f, fill = false))
-        PrimaryButton("Connect to your server") { navigation.open(AppRoute.SERVER_ADDRESS) }
-        SecondaryButton("Explore sample budget") { navigation.selectTab(AppRoute.BUDGET) }
-        PreviewNote("Sample preview uses fictional amounts. No server request is sent until connection is implemented.")
+        PrimaryButton("Get started") { navigation.open(AppRoute.SERVER_ADDRESS) }
+        SecondaryButton("View sample budget") { navigation.selectTab(AppRoute.BUDGET) }
+        PreviewNote("Names and amounts are sample data. This screen does not contact a server.")
     }
 }
 
@@ -1052,17 +1052,17 @@ private fun ServerAddressScreen(
     navigation: AppNavigation,
 ) {
     PageColumn {
-        Heading("Connect your server", "Enter the Companion server address used for secure device pairing.")
+        Heading("Connect to server", "Enter the server address used to pair this device.")
         TextFieldCard("Server URL", state.serverUrl, { state.serverUrl = it }, "https://budget.example.com")
         SurfaceCard {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 LabelText("Before you continue")
                 BodyText(
-                    "Use the HTTPS address provided by your server administrator. The budget password is only used to unlock an encrypted budget; it is never used to pair this device.",
+                    "Use the HTTPS address provided by the server administrator. The budget password only unlocks an encrypted budget; it is never used to pair this device.",
                 )
             }
         }
-        PreviewNote("Connection setup is a visual preview. This build does not send your server address anywhere.")
+        PreviewNote("No connection is made here. The server address is not sent.")
         PrimaryButton("Continue") { navigation.open(AppRoute.PAIRING_OPTIONS) }
     }
 }
@@ -1070,8 +1070,8 @@ private fun ServerAddressScreen(
 @Composable
 private fun PairingOptionsScreen(navigation: AppNavigation) {
     PageColumn {
-        Heading("Pair this device", "Choose a one-time pairing code from the Companion server setup.")
-        SettingRow("▦", "Scan pairing QR", "Fastest and easiest", onClick = { navigation.open(AppRoute.SCAN_QR) })
+        Heading("Choose a pairing method", "Use the pairing code shown in server setup.")
+        SettingRow("▦", "Scan pairing QR", "Scan the code shown on the server", onClick = { navigation.open(AppRoute.SCAN_QR) })
             .let { }
         SettingRow(
             "⌗",
@@ -1087,7 +1087,7 @@ private fun PairingOptionsScreen(navigation: AppNavigation) {
 private fun ScanQrScreen(navigation: AppNavigation) {
     val palette = companionPalette
     PageColumn {
-        Heading("Scan the QR code", "Point your camera at the one-time pairing code on the Companion server.")
+        Heading("Align the camera", "Point it at the pairing QR code shown on the server.")
         SurfaceCard {
             Box(
                 Modifier
@@ -1100,9 +1100,9 @@ private fun ScanQrScreen(navigation: AppNavigation) {
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("⌗", color = palette.accent, fontSize = 62.sp)
-                    Text("Camera preview", color = palette.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Camera view", color = palette.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "QR scanning will start after camera access is connected.",
+                        "Camera scanning is not available here yet.",
                         color = palette.muted,
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center,
@@ -1111,7 +1111,7 @@ private fun ScanQrScreen(navigation: AppNavigation) {
             }
         }
         PrimaryButton("Enter code instead") { navigation.open(AppRoute.PAIRING_CODE) }
-        PreviewNote("Camera permission is not requested by this visual prototype.")
+        PreviewNote("Camera access is not requested on this screen.")
     }
 }
 
@@ -1121,17 +1121,16 @@ private fun PairingCodeScreen(
     navigation: AppNavigation,
 ) {
     PageColumn {
-        Heading("Enter pairing code", "Enter the 8-character one-time pairing code from your server setup.")
+        Heading("Enter the code", "Use the 8-character pairing code shown in server setup.")
         TextFieldCard(
             "Pairing code",
             state.pairingCode,
             { state.pairingCode = it },
             "For example, 4DF7-J1M9",
-            singleLine = false,
             isSecret = true,
-            secretKeyboardType = KeyboardType.Ascii,
+            secretKeyboardType = KeyboardType.Password,
         )
-        PreviewNote("Pairing codes work once and expire after five minutes. This preview does not submit it.")
+        PreviewNote("This code expires after five minutes and works once. It is not submitted from this screen.")
         PrimaryButton("Pair this device") { navigation.open(AppRoute.PAIRING_RESULT) }
     }
 }
@@ -1144,8 +1143,8 @@ private fun PairingResultScreen(navigation: AppNavigation) {
         Box(Modifier.size(60.dp).clip(CircleShape).background(palette.accentSurface), contentAlignment = Alignment.Center) {
             Text("✓", color = palette.accent, fontSize = 28.sp, fontWeight = FontWeight.Bold)
         }
-        Heading("Pairing preview", "Your device is ready to choose a budget.")
-        PreviewNote("This prototype has not contacted your server or stored a device credential.")
+        Heading("Sample pairing", "Choose a budget to continue.")
+        PreviewNote("This is sample data. The server was not contacted and no device credential was stored.")
         PrimaryButton("Choose a budget") { navigation.open(AppRoute.BUDGET_CHOOSER) }
     }
 }
@@ -1156,13 +1155,13 @@ private fun BudgetChooserScreen(
     navigation: AppNavigation,
 ) {
     PageColumn {
-        Heading("Your budgets", "Choose a budget to open on this device.")
+        Heading("Select a budget", "Choose a budget to open on this device.")
         listOf("Household" to "Synced just now", "Travel" to "Synced 2 hours ago").forEach { (name, detail) ->
             ChoiceRow(name, detail, selected = state.selectedBudget == name) { state.selectedBudget = name }
         }
-        PreviewNote("Budgets shown here are sample data. Selecting one does not download or unlock a real budget.")
+        PreviewNote("This budget list uses sample data. Selecting a budget does not connect to a server.")
         PrimaryButton("Open budget") { navigation.open(AppRoute.FIRST_SYNC) }
-        SecondaryButton("Encrypted budget preview") { navigation.open(AppRoute.UNLOCK_BUDGET) }
+        SecondaryButton("Try encrypted budget example") { navigation.open(AppRoute.UNLOCK_BUDGET) }
     }
 }
 
@@ -1172,7 +1171,7 @@ private fun UnlockBudgetScreen(
     navigation: AppNavigation,
 ) {
     PageColumn {
-        Heading("Unlock your budget", "This budget is encrypted. Enter the budget password to open it.")
+        Heading("Encrypted budget", "Enter its password to continue.")
         TextFieldCard(
             "Budget password",
             state.encryptedPassword,
@@ -1180,8 +1179,8 @@ private fun UnlockBudgetScreen(
             "Enter to unlock this encrypted budget",
             isSecret = true,
         )
-        PreviewNote("A real password must be held only for the encrypted-budget request. This preview never sends or saves it.")
-        PrimaryButton("Unlock and continue") { navigation.open(AppRoute.FIRST_SYNC) }
+        PreviewNote("This screen does not send or save the password.")
+        PrimaryButton("Unlock budget") { navigation.open(AppRoute.FIRST_SYNC) }
     }
 }
 
@@ -1189,10 +1188,10 @@ private fun UnlockBudgetScreen(
 private fun FirstSyncScreen(navigation: AppNavigation) {
     val palette = companionPalette
     PageColumn {
-        Heading("Getting your budget ready", "A local copy keeps your budget available when you are offline.")
+        Heading("Initial setup", "A local copy keeps budget data available offline.")
         SurfaceCard {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(15.dp)) {
-                listOf("Connecting to Companion", "Reading budget snapshot", "Preparing your device database").forEachIndexed {
+                listOf("Connecting to server", "Reading budget data", "Preparing local storage").forEachIndexed {
                     index,
                     title,
                     ->
@@ -1203,8 +1202,8 @@ private fun FirstSyncScreen(navigation: AppNavigation) {
                 }
             }
         }
-        PreviewNote("No synchronization is running. The steps above are illustrative and use no budget data.")
-        PrimaryButton("Continue to sample budget") { navigation.selectTab(AppRoute.BUDGET) }
+        PreviewNote("These steps use sample data. No sync has run.")
+        PrimaryButton("Done") { navigation.selectTab(AppRoute.BUDGET) }
     }
 }
 
@@ -1217,8 +1216,8 @@ private fun BudgetScreen(
     PageColumn {
         SampleBanner()
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Good morning, Nischay", color = palette.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Text("A steady plan makes room for what matters.", color = palette.muted, fontSize = 13.sp)
+            Text("Budget overview", color = palette.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text("Review category balances and spending for the selected month.", color = palette.muted, fontSize = 13.sp)
         }
         SurfaceCard(onClick = { navigation.open(AppRoute.MONTH_PICKER) }) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1236,26 +1235,41 @@ private fun BudgetScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 LabelText("Ready to assign")
-                Text("$1,240.00", color = palette.text, fontSize = 34.sp, lineHeight = 39.sp, fontWeight = FontWeight.Bold)
+                Text(formatCurrency(124_000), color = palette.text, fontSize = 34.sp, lineHeight = 39.sp, fontWeight = FontWeight.Bold)
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("Available this month", color = palette.muted, fontSize = 12.sp)
-                    Badge("ON TRACK", palette.positive)
+                    Badge("On track", palette.positive)
                 }
             }
         }
-        SectionCard("Essentials", "$2,320 assigned · 3 categories", "$2,320", onClick = { navigation.open(AppRoute.CATEGORY_GROUP) }) {
-            ListRow("H", "Rent", "Due May 1", "$1,500", palette.positive) { navigation.open(AppRoute.CATEGORY_DETAIL) }
+        SectionCard("Essentials", "${formatCurrency(232_000)} assigned · 3 categories", formatCurrency(232_000), onClick = {
+            navigation.open(AppRoute.CATEGORY_GROUP)
+        }) {
+            ListRow("H", "Rent", "Due ${formatShortDate(SampleDate(2026, 5, 1))}", formatCurrency(150_000), palette.positive) {
+                navigation.open(AppRoute.CATEGORY_DETAIL)
+            }
             DividerLine()
-            ListRow("G", "Groceries", "Spent $184 this month", "$500", palette.positive) { navigation.open(AppRoute.CATEGORY_DETAIL) }
+            ListRow("G", "Groceries", "Spent ${formatCurrency(18_400)} this month", formatCurrency(50_000), palette.positive) {
+                navigation.open(AppRoute.CATEGORY_DETAIL)
+            }
             DividerLine()
-            ListRow("U", "Utilities", "Spent $112 this month", "$320", palette.positive) { navigation.open(AppRoute.CATEGORY_DETAIL) }
+            ListRow("U", "Utilities", "Spent ${formatCurrency(11_200)} this month", formatCurrency(32_000), palette.positive) {
+                navigation.open(AppRoute.CATEGORY_DETAIL)
+            }
         }
-        SectionCard("Everyday", "Flexible spending", "$180 left", onClick = { navigation.open(AppRoute.CATEGORY_GROUP) }) {
-            ListRow("D", "Dining", "Spent $170 this month", "$180", palette.positive) { navigation.open(AppRoute.CATEGORY_DETAIL) }
+        SectionCard(
+            "Everyday",
+            "Flexible spending",
+            "${formatCurrency(18_000)} left",
+            onClick = { navigation.open(AppRoute.CATEGORY_GROUP) },
+        ) {
+            ListRow("D", "Dining", "Spent ${formatCurrency(17_000)} this month", formatCurrency(18_000), palette.positive) {
+                navigation.open(AppRoute.CATEGORY_DETAIL)
+            }
         }
         SectionCard(
             "Upcoming",
@@ -1263,11 +1277,17 @@ private fun BudgetScreen(
             "View all",
             onClick = { navigation.open(AppRoute.CATEGORY_GROUP) },
         ) {
-            ListRow("↗", "Electric Company", "Utilities · due May 18", "$120", palette.text)
+            ListRow(
+                "↗",
+                "Electric Company",
+                "Utilities · due ${formatShortDate(SampleDate(2026, 5, 18))}",
+                formatCurrency(12_000),
+                palette.text,
+            )
             DividerLine()
-            ListRow("H", "Rent", "Essentials · due Jun 1", "$1,500", palette.text)
+            ListRow("H", "Rent", "Essentials · due ${formatShortDate(SampleDate(2026, 6, 1))}", formatCurrency(150_000), palette.text)
         }
-        SectionCard("Recent activity", "Your latest budget changes", "See all", onClick = { navigation.selectTab(AppRoute.ACTIVITY) }) {
+        SectionCard("Recent activity", "Latest budget changes", "See all", onClick = { navigation.selectTab(AppRoute.ACTIVITY) }) {
             previewTransactions.take(2).forEachIndexed { index, item ->
                 if (index > 0) DividerLine()
                 TransactionRow(item) { navigation.open(AppRoute.TRANSACTION_DETAIL) }
@@ -1282,7 +1302,7 @@ private fun BudgetScreen(
                 Badge("✓", palette.positive)
                 Column(modifier = Modifier.weight(1f)) {
                     Text("All changes accounted for", color = palette.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    Text("Sample preview · nothing has synced", color = palette.muted, fontSize = 11.sp)
+                    Text("Sample data · nothing has synced", color = palette.muted, fontSize = 11.sp)
                 }
                 Text("›", color = palette.muted, fontSize = 20.sp)
             }
@@ -1297,13 +1317,18 @@ private fun TransactionRow(
 ) {
     val palette = companionPalette
     Column {
-        Text(transaction.date, modifier = Modifier.padding(start = 14.dp, top = 11.dp), color = palette.muted, fontSize = 10.sp)
+        Text(
+            formatShortDate(transaction.date),
+            modifier = Modifier.padding(start = 14.dp, top = 11.dp),
+            color = palette.muted,
+            fontSize = 10.sp,
+        )
         ListRow(
             transaction.icon,
             transaction.payee,
             transaction.category,
-            transaction.amount,
-            if (transaction.amount.startsWith("+")) palette.positive else palette.text,
+            formatSignedCurrency(transaction.amountMinorUnits),
+            if (transaction.amountMinorUnits > 0) palette.positive else palette.text,
             onClick,
         )
     }
@@ -1315,8 +1340,8 @@ private fun MonthPickerScreen(
     navigation: AppNavigation,
 ) {
     PageColumn {
-        Heading("Choose a month", "Review your plan by month.")
-        var selectedYear by remember { mutableStateOf("2026") }
+        Heading("Select a month", "Choose which month to review.")
+        var selectedYear by remember { mutableStateOf(2026) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "‹",
@@ -1324,29 +1349,29 @@ private fun MonthPickerScreen(
                     Modifier
                         .semantics { contentDescription = "Previous year" }
                         .clickable(role = Role.Button, onClickLabel = "Previous year") {
-                            selectedYear = (selectedYear.toInt() - 1).toString()
+                            selectedYear -= 1
                         }.padding(10.dp),
                 color = companionPalette.text,
                 fontSize = 24.sp,
             )
-            Text(selectedYear, color = companionPalette.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Text(formatInteger(selectedYear), color = companionPalette.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             Text(
                 "›",
                 modifier =
                     Modifier
                         .semantics { contentDescription = "Next year" }
                         .clickable(role = Role.Button, onClickLabel = "Next year") {
-                            selectedYear = (selectedYear.toInt() + 1).toString()
+                            selectedYear += 1
                         }.padding(10.dp),
                 color = companionPalette.text,
                 fontSize = 24.sp,
             )
         }
-        val months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+        val months = (1..12).map { month -> month to formatShortMonth(selectedYear, month) }
         months.chunked(3).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                row.forEach { month ->
-                    val full = "$month $selectedYear"
+                row.forEach { (monthNumber, monthLabel) ->
+                    val full = formatMonth(selectedYear, monthNumber)
                     val chosen = state.selectedMonth == full
                     Box(
                         modifier =
@@ -1368,7 +1393,7 @@ private fun MonthPickerScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            month,
+                            monthLabel,
                             color = if (chosen) companionPalette.accent else companionPalette.text,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 14.sp,
@@ -1386,34 +1411,34 @@ private fun CategoryGroupScreen(navigation: AppNavigation) {
     val palette = companionPalette
     PageColumn {
         SampleBanner()
-        Heading("Essentials", "The bills and needs you plan around first.")
-        AmountHero("Assigned this month", "$2,320.00", "$2,320.00 available across 3 categories")
+        Heading("Group overview", "Review the bills and needs planned first.")
+        AmountHero("Assigned this month", formatCurrency(232_000), "${formatCurrency(232_000)} available across 3 categories")
         SectionCard("Categories", "3 plans", "Edit group") {
             ListRow(
                 "H",
                 "Rent",
-                "Assigned $1,500 · Available $1,500",
-                "$1,500",
+                "Assigned ${formatCurrency(150_000)} · Available ${formatCurrency(150_000)}",
+                formatCurrency(150_000),
                 palette.positive,
             ) { navigation.open(AppRoute.CATEGORY_DETAIL) }
             DividerLine()
             ListRow(
                 "G",
                 "Groceries",
-                "Assigned $500 · Available $500",
-                "$500",
+                "Assigned ${formatCurrency(50_000)} · Available ${formatCurrency(50_000)}",
+                formatCurrency(50_000),
                 palette.positive,
             ) { navigation.open(AppRoute.CATEGORY_DETAIL) }
             DividerLine()
             ListRow(
                 "U",
                 "Utilities",
-                "Assigned $320 · Available $320",
-                "$320",
+                "Assigned ${formatCurrency(32_000)} · Available ${formatCurrency(32_000)}",
+                formatCurrency(32_000),
                 palette.positive,
             ) { navigation.open(AppRoute.CATEGORY_DETAIL) }
         }
-        PreviewNote("Category balances and activity here are sample preview data.")
+        PreviewNote("Category balances and activity use sample data.")
     }
 }
 
@@ -1421,15 +1446,15 @@ private fun CategoryGroupScreen(navigation: AppNavigation) {
 private fun CategoryDetailScreen(navigation: AppNavigation) {
     PageColumn {
         SampleBanner()
-        Heading("Rent", "Essentials · monthly plan")
-        AmountHero("Available", "$1,500.00", "Fully funded for May")
-        SectionCard("This month", "Assigned $1,500 · Spent $0") {
-            ListRow("↗", "Planned amount", "Monthly target", "$1,500")
+        Heading("Category details", "Essentials · monthly plan")
+        AmountHero("Available", formatCurrency(150_000), "Fully funded for ${formatMonth(2026, 5)}")
+        SectionCard("This month", "Assigned ${formatCurrency(150_000)} · Spent ${formatCurrency(0)}") {
+            ListRow("↗", "Planned amount", "Monthly target", formatCurrency(150_000))
             DividerLine()
-            ListRow("◷", "Next due date", "Scheduled payment", "Jun 1")
+            ListRow("◷", "Next due date", "Scheduled payment", formatShortDate(SampleDate(2026, 6, 1)))
         }
         PrimaryButton("View related activity") { navigation.selectTab(AppRoute.ACTIVITY) }
-        PreviewNote("Category detail is a read-only sample. The connected app will use the selected budget’s local projection.")
+        PreviewNote("This category uses sample data and is read-only. The app keeps a local budget copy for offline use.")
     }
 }
 
@@ -1437,24 +1462,42 @@ private fun CategoryDetailScreen(navigation: AppNavigation) {
 private fun AccountsScreen(navigation: AppNavigation) {
     PageColumn {
         SampleBanner()
-        Heading("Accounts", "A clear picture of where your money lives.")
-        AmountHero("Total on budget", "$3,482.16", "Across 4 sample accounts")
+        Heading("Balances", "Review account balances and recent activity.")
+        AmountHero("Total on budget", formatCurrency(348_216), "Across 4 sample accounts")
         SectionCard("Cash accounts", "2 accounts", "") {
-            ListRow("C", "Checking", "Everyday spending", "$3,482.16", companionPalette.text) { navigation.open(AppRoute.ACCOUNT_DETAIL) }
+            ListRow(
+                "C",
+                "Checking",
+                "Everyday spending",
+                formatCurrency(348_216),
+                companionPalette.text,
+            ) { navigation.open(AppRoute.ACCOUNT_DETAIL) }
             DividerLine()
-            ListRow("S", "Savings", "Emergency fund", "$8,200.00", companionPalette.text) { navigation.open(AppRoute.ACCOUNT_DETAIL) }
+            ListRow(
+                "S",
+                "Savings",
+                "Emergency fund",
+                formatCurrency(820_000),
+                companionPalette.text,
+            ) { navigation.open(AppRoute.ACCOUNT_DETAIL) }
         }
         SectionCard("Credit", "1 account", "") {
             ListRow(
                 "V",
                 "Travel card",
-                "Statement closes May 22",
-                "−$642.80",
+                "Statement closes ${formatShortDate(SampleDate(2026, 5, 22))}",
+                formatCurrency(-64_280),
                 companionPalette.text,
             ) { navigation.open(AppRoute.ACCOUNT_DETAIL) }
         }
         SectionCard("Tracking", "1 account", "") {
-            ListRow("H", "Car loan", "Off budget", "−$8,300.00", companionPalette.muted) { navigation.open(AppRoute.ACCOUNT_DETAIL) }
+            ListRow(
+                "H",
+                "Car loan",
+                "Off budget",
+                formatCurrency(-830_000),
+                companionPalette.muted,
+            ) { navigation.open(AppRoute.ACCOUNT_DETAIL) }
         }
         SecondaryButton("Account options") { navigation.open(AppRoute.ACCOUNT_OPTIONS) }
     }
@@ -1464,10 +1507,10 @@ private fun AccountsScreen(navigation: AppNavigation) {
 private fun AccountDetailScreen(navigation: AppNavigation) {
     PageColumn {
         SampleBanner()
-        AmountHero("Available balance", "$3,482.16", "Checking · Updated May 14")
+        AmountHero("Available balance", formatCurrency(348_216), "Checking · Updated ${formatShortDate(SampleDate(2026, 5, 14))}")
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            PrimaryButton("Add transaction") { navigation.open(AppRoute.NEW_TRANSACTION) }
-            SecondaryButton("Reconcile") { navigation.open(AppRoute.RECONCILIATION) }
+            PrimaryButton("Add transaction", modifier = Modifier.weight(1f)) { navigation.open(AppRoute.NEW_TRANSACTION) }
+            SecondaryButton("Reconcile", modifier = Modifier.weight(1f)) { navigation.open(AppRoute.RECONCILIATION) }
         }
         SectionCard("Recent activity", "Checking", "See all", onClick = { navigation.selectTab(AppRoute.ACTIVITY) }) {
             previewTransactions.take(4).forEachIndexed { index, item ->
@@ -1487,12 +1530,12 @@ private fun AccountOptionsScreen(navigation: AppNavigation) {
         SettingRow(
             "◷",
             "Reconcile balance",
-            "Compare the account with your statement",
+            "Compare the account against a statement",
             onClick = { navigation.open(AppRoute.RECONCILIATION) },
         )
         SettingRow("⊖", "Hide from budget", "Keep historical activity available", onClick = { })
         PreviewNote(
-            "Account changes are not connected in this preview. Reconciliation remains unavailable until the server API supports it.",
+            "Account changes are not available here. This screen cannot compare a balance with a statement.",
         )
     }
 }
@@ -1500,12 +1543,12 @@ private fun AccountOptionsScreen(navigation: AppNavigation) {
 @Composable
 private fun ReconciliationScreen() {
     PageColumn {
-        Heading("Reconcile Checking", "Compare your cleared balance with a statement.")
-        TextFieldCard("Statement balance", "3,482.16", {}, "$0.00")
+        Heading("Compare balances", "Compare cleared transactions with a statement.")
+        TextFieldCard("Statement balance", formatAmount(348_216), {}, formatAmount(0))
         SectionCard("Difference", "Sample calculation") {
-            ListRow("=", "Account balance", "Current sample balance", "$3,482.16")
+            ListRow("=", "Account balance", "Current sample balance", formatCurrency(348_216))
             DividerLine()
-            ListRow("Δ", "Out of balance", "No cleared transactions compared", "$0.00", companionPalette.positive)
+            ListRow("Δ", "Out of balance", "No cleared transactions compared", formatCurrency(0), companionPalette.positive)
         }
         PreviewNote(
             "Reconciliation is display-only. Do not treat the sample balance as verified, and no statement or transaction will be changed.",
@@ -1515,10 +1558,13 @@ private fun ReconciliationScreen() {
 }
 
 @Composable
-private fun ActivityScreen(navigation: AppNavigation) {
+private fun ActivityScreen(
+    state: AppState,
+    navigation: AppNavigation,
+) {
     PageColumn {
         SampleBanner()
-        Heading("Activity", "Every change in one searchable timeline.")
+        Heading("Recent transactions", "Search activity and filter by type or date.")
         SurfaceCard(onClick = { navigation.open(AppRoute.ACTIVITY_SEARCH) }) {
             Row(
                 Modifier.fillMaxWidth().padding(13.dp),
@@ -1536,13 +1582,13 @@ private fun ActivityScreen(navigation: AppNavigation) {
             }
             Badge("Filter · 2", companionPalette.accent)
         }
-        SectionCard("May 2026", "6 sample transactions", "Filter", onClick = { navigation.open(AppRoute.ACTIVITY_FILTER) }) {
+        SectionCard(state.selectedMonth, "6 sample transactions", "Filter", onClick = { navigation.open(AppRoute.ACTIVITY_FILTER) }) {
             previewTransactions.forEachIndexed { index, item ->
                 if (index > 0) DividerLine()
                 TransactionRow(item) { navigation.open(AppRoute.TRANSACTION_DETAIL) }
             }
         }
-        PreviewNote("Activity is sample content. Search and filters illustrate the intended page behavior.")
+        PreviewNote("Transactions use sample data. Search and filters do not change a live budget.")
         PrimaryButton("Add transaction") { navigation.open(AppRoute.NEW_TRANSACTION) }
     }
 }
@@ -1551,8 +1597,8 @@ private fun ActivityScreen(navigation: AppNavigation) {
 private fun ActivitySearchScreen(navigation: AppNavigation) {
     var search by remember { mutableStateOf("") }
     PageColumn {
-        Heading("Search activity", "Find a payee, note, amount, or category.")
-        TextFieldCard("Search", search, { search = it }, "Try “groceries” or “$42”")
+        Heading("Find transactions", "Search by payee, note, amount, or category.")
+        TextFieldCard("Search", search, { search = it }, "Try “groceries” or “${formatCurrency(4_200)}”")
         SectionCard("Suggested", "Recent sample searches", "") {
             listOf("Groceries", "Electric Company", "Paycheck").forEachIndexed { index, value ->
                 if (index > 0) DividerLine()
@@ -1576,20 +1622,23 @@ private fun ActivitySearchScreen(navigation: AppNavigation) {
 @Composable
 private fun ActivityFilterScreen() {
     PageColumn {
-        Heading("Filter activity", "Narrow the timeline to what you want to review.")
+        Heading("Filter results", "Narrow the activity list by type, date, or amount.")
         SectionCard("Transaction type", "Choose one or more") {
             listOf("Income", "Spending", "Transfers").forEachIndexed { index, item -> ToggleRow(item, checked = index != 1, onChange = {}) }
         }
-        SectionCard("Date range", "May 1–31, 2026") {
-            ListRow("▣", "Start date", "May 1, 2026", onClick = {})
+        SectionCard(
+            "Date range",
+            "${formatDate(SampleDate(2026, 5, 1))} – ${formatDate(SampleDate(2026, 5, 31))}",
+        ) {
+            ListRow("▣", "Start date", formatDate(SampleDate(2026, 5, 1)), onClick = {})
             DividerLine()
-            ListRow("▣", "End date", "May 31, 2026", onClick = {})
+            ListRow("▣", "End date", formatDate(SampleDate(2026, 5, 31)), onClick = {})
         }
         SectionCard("Sort order", "Most recent first") {
             ChoiceRow("Newest first", selected = true, onClick = {})
             ChoiceRow("Oldest first", selected = false, onClick = {})
         }
-        PreviewNote("Filter state is illustrative and is not saved to a live activity query.")
+        PreviewNote("Filters are not saved or applied to a live activity list.")
     }
 }
 
@@ -1602,20 +1651,20 @@ private fun TransactionDetailScreen(navigation: AppNavigation) {
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            Text("−$42.18", color = companionPalette.text, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+            Text(formatCurrency(-4_218), color = companionPalette.text, fontSize = 32.sp, fontWeight = FontWeight.Bold)
             Text("Corner Market", color = companionPalette.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            Text("May 14, 2026 · Checking", color = companionPalette.muted, fontSize = 12.sp)
+            Text("${formatDate(SampleDate(2026, 5, 14))} · Checking", color = companionPalette.muted, fontSize = 12.sp)
         }
         SectionCard("Transaction", "Sample details") {
             ListRow("C", "Account", "Where money moved", "Checking")
             DividerLine()
             ListRow("G", "Category", "Essentials", "Groceries")
             DividerLine()
-            ListRow("◷", "Date", "Posted", "May 14, 2026")
+            ListRow("◷", "Date", "Posted", formatDate(SampleDate(2026, 5, 14)))
             DividerLine()
             ListRow("▤", "Notes", "Optional", "Weekly shop")
         }
-        PreviewNote("This is a read-only sample transaction. Editing it here will not change Actual Budget.")
+        PreviewNote("This sample transaction is read-only. Editing it will not change Actual Budget.")
         PrimaryButton("Edit transaction") { navigation.open(AppRoute.EDIT_TRANSACTION) }
         SecondaryButton("Review sync status") { navigation.open(AppRoute.SYNC_CENTER) }
     }
@@ -1630,8 +1679,8 @@ private fun TransactionFormScreen(
     val isNew = route == AppRoute.NEW_TRANSACTION
     PageColumn {
         SampleBanner()
-        Heading(if (isNew) "Add transaction" else "Edit transaction", "Record a change to your budget.")
-        TextFieldCard("Amount", state.transactionAmount, { state.transactionAmount = it }, "For example, 12.50")
+        Heading("Transaction details", "Record a change to the budget.")
+        TextFieldCard("Amount", state.transactionAmount, { state.transactionAmount = it }, "For example, ${formatAmount(1_250)}")
         ReadOnlyField("Account", state.transactionAccount, "A") { navigation.open(AppRoute.CHOOSE_ACCOUNT) }
         ReadOnlyField("Payee", state.transactionPayee, "P") { navigation.open(AppRoute.CHOOSE_PAYEE) }
         ReadOnlyField("Category", state.transactionCategory, "C") { navigation.open(AppRoute.CHOOSE_CATEGORY) }
@@ -1639,9 +1688,9 @@ private fun TransactionFormScreen(
         TextFieldCard("Notes", state.transactionNotes, { state.transactionNotes = it }, "Add a note (optional)", singleLine = false)
         PreviewNote(
             if (isNew) {
-                "Transaction creation is not supported by the current server API. Saving is disabled from the live budget; this preview will not create or sync a transaction."
+                "New transactions are not available here yet. This sample form does not save or sync changes."
             } else {
-                "The current server supports transaction updates, but this visual preview has no connected budget and cannot save edits."
+                "This sample form is not connected. Changes will not be saved or synced."
             },
         )
         PrimaryButton("Review save status") { navigation.open(AppRoute.SAVE_RESULT) }
@@ -1650,19 +1699,18 @@ private fun TransactionFormScreen(
 
 @Composable
 private fun SelectorScreen(
-    title: String,
     values: List<String>,
     selected: String,
     onSelect: (String) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
     PageColumn {
-        Heading(title, "Choose an item for this sample transaction.")
+        BodyText("Choose an item for the sample transaction.")
         TextFieldCard("Search", query, { query = it }, "Start typing")
         values.filter { it.contains(query, ignoreCase = true) }.forEach { value ->
             ChoiceRow(value, selected = selected == value, onClick = { onSelect(value) })
         }
-        PreviewNote("Selections update only the form shown in this prototype.")
+        PreviewNote("Selections update only this sample form.")
     }
 }
 
@@ -1671,46 +1719,61 @@ private fun DatePickerScreen(
     state: AppState,
     navigation: AppNavigation,
 ) {
-    val days = (1..31).toList()
+    val year = 2026
+    val month = 5
+    val firstWeekday = platformFirstWeekday()
+    val firstDayOffset = (platformWeekday(year, month, 1) - firstWeekday + 7) % 7
+    val dayCells = List<Int?>(firstDayOffset) { null } + (1..31).map { it }
     PageColumn {
-        Heading("Choose date", "May 2026")
+        Heading("Select a day", formatMonth(year, month))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            listOf("M", "T", "W", "T", "F", "S", "S").forEach {
-                Text(it, modifier = Modifier.weight(1f), color = companionPalette.muted, textAlign = TextAlign.Center, fontSize = 11.sp)
+            (0..6).forEach { column ->
+                val representativeDay = 1 + ((column - firstDayOffset + 7) % 7)
+                Text(
+                    formatWeekday(year, month, representativeDay),
+                    modifier = Modifier.weight(1f),
+                    color = companionPalette.muted,
+                    textAlign = TextAlign.Center,
+                    fontSize = 11.sp,
+                )
             }
         }
-        days.chunked(7).forEach { week ->
+        dayCells.chunked(7).forEach { week ->
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 week.forEach { day ->
-                    val label = "May $day, 2026"
-                    val selected = state.transactionDate == label
-                    Box(
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .height(44.dp)
-                                .clip(CircleShape)
-                                .background(if (selected) companionPalette.accentSurface else Color.Transparent)
-                                .semantics { contentDescription = label }
-                                .selectable(
-                                    selected = selected,
-                                    role = Role.RadioButton,
-                                    onClick = {
-                                        state.transactionDate = label
-                                        navigation.back()
-                                    },
-                                ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            day.toString(),
-                            color = if (selected) companionPalette.accent else companionPalette.text,
-                            fontSize = 12.sp,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                        )
+                    if (day == null) {
+                        Spacer(Modifier.weight(1f).height(44.dp))
+                    } else {
+                        val label = formatDate(SampleDate(year, month, day))
+                        val selected = state.transactionDate == label
+                        Box(
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .height(44.dp)
+                                    .clip(CircleShape)
+                                    .background(if (selected) companionPalette.accentSurface else Color.Transparent)
+                                    .semantics { contentDescription = label }
+                                    .selectable(
+                                        selected = selected,
+                                        role = Role.RadioButton,
+                                        onClick = {
+                                            state.transactionDate = label
+                                            navigation.back()
+                                        },
+                                    ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                formatInteger(day),
+                                color = if (selected) companionPalette.accent else companionPalette.text,
+                                fontSize = 12.sp,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                            )
+                        }
                     }
                 }
-                repeat(7 - week.size) { Spacer(Modifier.weight(1f)) }
+                repeat(7 - week.size) { Spacer(Modifier.weight(1f).height(44.dp)) }
             }
         }
         PreviewNote("The date selector uses sample local dates.")
@@ -1722,15 +1785,15 @@ private fun SaveResultScreen(navigation: AppNavigation) {
     val palette = companionPalette
     PageColumn {
         Spacer(Modifier.height(16.dp))
-        Badge("NOT SAVED", palette.warning)
-        Heading("No change was made", "The sample form is ready for a future connected save flow.")
-        SectionCard("Transaction draft", "Preview only") {
-            ListRow("$", "Amount", "Corner Market", "−$42.18")
+        Badge("Not saved", palette.warning)
+        Heading("No change was made", "This sample form cannot save a transaction yet.")
+        SectionCard("Transaction draft", "Sample data") {
+            ListRow("¤", "Amount", "Corner Market", formatCurrency(-4_218))
             DividerLine()
             ListRow("C", "Account and category", "Checking · Groceries")
         }
         PreviewNote(
-            "Actual Budget remains unchanged. The live transaction create endpoint is not supported yet, and this build has not connected to a server.",
+            "Actual Budget is unchanged. New transactions are not available here yet, and this screen does not send changes.",
         )
         PrimaryButton("Return to activity") { navigation.selectTab(AppRoute.ACTIVITY) }
         SecondaryButton("Open sync center") { navigation.open(AppRoute.SYNC_CENTER) }
@@ -1740,26 +1803,25 @@ private fun SaveResultScreen(navigation: AppNavigation) {
 @Composable
 private fun SyncCenterScreen(navigation: AppNavigation) {
     PageColumn {
-        SampleBanner()
-        Heading("Sync center", "Understand exactly what is on this device and on the server.")
+        Heading("Connection status", "Review device data, pending edits, and server activity.")
         SurfaceCard {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Badge("PREVIEW")
+                    Badge("Sample data")
                     Text("No server connection", color = companionPalette.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
                 Text("Last sync · sample only", color = companionPalette.muted, fontSize = 12.sp)
                 PreviewNote("No data has been uploaded or downloaded.")
             }
         }
-        SectionCard("Attention needed", "Example recovery states") {
+        SectionCard("Attention needed", "Sample recovery states") {
             ListRow("!", "Conflict to review", "Corner Market · two versions", "1", companionPalette.warning) {
                 navigation.open(AppRoute.CONFLICT_INBOX)
             }
             DividerLine()
             ListRow(
                 "?",
-                "Write status unknown",
+                "Status unknown",
                 "Check before retrying",
                 "1",
                 companionPalette.warning,
@@ -1767,16 +1829,16 @@ private fun SyncCenterScreen(navigation: AppNavigation) {
             DividerLine()
             ListRow(
                 "×",
-                "Edit was rejected",
-                "Unsupported action example",
+                "Not applied",
+                "New transactions are not available yet",
                 "1",
                 companionPalette.negative,
             ) { navigation.open(AppRoute.REJECTED_WRITE) }
         }
-        SectionCard("Recent sync activity", "Preview events", "") {
+        SectionCard("Recent sync activity", "Sample events", "") {
             ListRow("↓", "Budget snapshot", "Ready for initial download", "Pending")
             DividerLine()
-            ListRow("↑", "Local edits", "None in this preview", "0")
+            ListRow("↑", "Local edits", "None in sample data", "0")
         }
         SecondaryButton("Review all conflicts") { navigation.open(AppRoute.CONFLICT_INBOX) }
     }
@@ -1786,17 +1848,17 @@ private fun SyncCenterScreen(navigation: AppNavigation) {
 private fun ConflictInboxScreen(navigation: AppNavigation) {
     PageColumn {
         SampleBanner()
-        Heading("Needs your review", "Choose which version should remain before a change is sent.")
+        Heading("Changes to review", "Choose which version to keep before a change is sent.")
         SurfaceCard(onClick = { navigation.open(AppRoute.CONFLICT_REVIEW) }) {
             Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Badge("1 CONFLICT", companionPalette.warning)
+                    Badge("1 conflict", companionPalette.warning)
                     Text("Corner Market", color = companionPalette.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
-                Text("May 14, 2026 · Groceries · Checking", color = companionPalette.muted, fontSize = 11.sp)
+                Text("${formatDate(SampleDate(2026, 5, 14))} · Groceries · Checking", color = companionPalette.muted, fontSize = 11.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ConflictValueCard("On this device", "$12.00", Modifier.weight(1f))
-                    ConflictValueCard("In Actual", "$15.00", Modifier.weight(1f))
+                    ConflictValueCard("On this device", formatCurrency(1_200), Modifier.weight(1f))
+                    ConflictValueCard("In Actual", formatCurrency(1_500), Modifier.weight(1f))
                 }
                 Text("Review both versions ›", color = companionPalette.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             }
@@ -1823,26 +1885,26 @@ private fun ConflictValueCard(
 @Composable
 private fun ConflictReviewScreen(state: AppState) {
     PageColumn {
-        Badge("CONFLICT · PREVIEW", companionPalette.warning)
-        Heading("Two versions differ", "Corner Market · May 14, 2026 · Groceries")
+        Badge("Conflict · sample data", companionPalette.warning)
+        Heading("Two versions differ", "Review the two sample amounts for Corner Market.")
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            ConflictValueCard("On this device", "$12.00", Modifier.weight(1f))
-            ConflictValueCard("In Actual", "$15.00", Modifier.weight(1f))
+            ConflictValueCard("On this device", formatCurrency(1_200), Modifier.weight(1f))
+            ConflictValueCard("In Actual", formatCurrency(1_500), Modifier.weight(1f))
         }
         SectionCard("Other details", "Review before choosing") {
             ListRow("C", "Account", "Same on both versions", "Checking")
             DividerLine()
             ListRow("G", "Category", "Same on both versions", "Groceries")
             DividerLine()
-            ListRow("◷", "Date", "Same on both versions", "May 14")
+            ListRow("◷", "Date", "Same on both versions", formatShortDate(SampleDate(2026, 5, 14)))
         }
         if (state.conflictChoice.isNotEmpty()) {
-            PreviewNote("Preview choice selected: ${state.conflictChoice}. No server update has been sent.")
+            PreviewNote("Sample choice selected: ${state.conflictChoice}. No server update has been sent.")
         }
-        PrimaryButton("Keep $12.00 on this device") { state.conflictChoice = "device value $12.00" }
-        SecondaryButton("Keep $15.00 from Actual") { state.conflictChoice = "Actual value $15.00" }
+        PrimaryButton("Keep ${formatCurrency(1_200)} on this device") { state.conflictChoice = "device value ${formatCurrency(1_200)}" }
+        SecondaryButton("Keep ${formatCurrency(1_500)} from Actual") { state.conflictChoice = "Actual value ${formatCurrency(1_500)}" }
         PreviewNote(
-            "A real choice creates a new edit against the latest server revision. Nothing changes until that operation is confirmed.",
+            "The app would compare that choice with the latest server copy before saving. Nothing changes until the server confirms it.",
         )
     }
 }
@@ -1850,32 +1912,32 @@ private fun ConflictReviewScreen(state: AppState) {
 @Composable
 private fun UncertainWriteScreen() {
     PageColumn {
-        Badge("STATUS UNKNOWN", companionPalette.warning)
+        Badge("Status unknown", companionPalette.warning)
         Heading("Check before retrying", "The connection ended before this change could be confirmed.")
-        SectionCard("Corner Market", "May 14 · Groceries") {
-            ListRow("$", "Requested amount", "Local change", "$12.00")
+        SectionCard("Corner Market", "${formatShortDate(SampleDate(2026, 5, 14))} · Groceries") {
+            ListRow("¤", "Requested amount", "Local change", formatCurrency(1_200))
             DividerLine()
-            ListRow("?", "Server result", "Needs an operation status check", "Unknown", companionPalette.warning)
+            ListRow("?", "Server result", "The change has not been confirmed", "Unknown", companionPalette.warning)
         }
         PreviewNote(
-            "Never resend an uncertain write blindly. The live client first checks its operation ID; retry and discard controls will appear only when the server response is safe to act on.",
+            "Do not send the change again yet. Check its status first. Retry or discard options appear after the server confirms what happened.",
         )
-        PrimaryButton("Check operation status", enabled = false) {}
+        PrimaryButton("Check status", enabled = false) {}
     }
 }
 
 @Composable
 private fun RejectedWriteScreen() {
     PageColumn {
-        Badge("NOT APPLIED", companionPalette.negative)
-        Heading("This edit was not applied", "The latest Actual value remains the source of truth.")
-        SectionCard("Sample edit", "Corner Market · May 14") {
-            ListRow("$", "Requested amount", "Device draft", "$12.00")
+        Badge("Not applied", companionPalette.negative)
+        Heading("Previous value kept", "This change was not applied in Actual Budget.")
+        SectionCard("Sample edit", "Corner Market · ${formatShortDate(SampleDate(2026, 5, 14))}") {
+            ListRow("¤", "Requested amount", "Device draft", formatCurrency(1_200))
             DividerLine()
-            ListRow("!", "Reason", "Creation is not supported by the API", "Unsupported", companionPalette.warning)
+            ListRow("!", "Reason", "New transactions are not available yet", "Unavailable", companionPalette.warning)
         }
         PreviewNote(
-            "A rejected edit does not stay over the remote record. The live app will preserve the reason and offer a safe discard action.",
+            "The change was not saved. The app keeps the reason and will offer a way to dismiss it.",
         )
         PrimaryButton("Close details") {}
     }
@@ -1888,13 +1950,13 @@ private fun SettingsScreen(
 ) {
     PageColumn {
         SampleBanner()
-        Heading("Settings", "Make the Companion feel right for you.")
+        Heading("Preferences", "Adjust appearance, sync, privacy, and app behavior.")
         SectionCard("Personalize", "Appearance and budget") {
             ListRow("◐", "Appearance", "Theme, accent, and background", state.theme.label) { navigation.open(AppRoute.APPEARANCE) }
             DividerLine()
-            ListRow("⌂", "Home screen layout", "Choose your information density", "Comfortable") { navigation.open(AppRoute.HOME_LAYOUT) }
+            ListRow("⌂", "Home screen layout", "Choose how much detail to show", "Comfortable") { navigation.open(AppRoute.HOME_LAYOUT) }
             DividerLine()
-            ListRow("$", "Budget preferences", "Currency and planning choices") { navigation.open(AppRoute.BUDGET_PREFERENCES) }
+            ListRow("¤", "Budget preferences", "Currency and planning choices") { navigation.open(AppRoute.BUDGET_PREFERENCES) }
         }
         SectionCard("Connection", "Sync and paired device") {
             ListRow("↻", "Sync preferences", "Refresh and network behavior", onClick = { navigation.open(AppRoute.SYNC_PREFERENCES) })
@@ -1926,10 +1988,10 @@ private fun AppearanceScreen(
 ) {
     val palette = companionPalette
     PageColumn {
-        Heading("Your appearance", "One Companion design across your devices.")
+        Heading("Visual settings", "The same appearance choices work on Android and iOS.")
         SurfaceCard {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                LabelText("LIVE PREVIEW")
+                LabelText("Live preview")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(
                         Modifier
@@ -1962,7 +2024,7 @@ private fun AppearanceScreen(
                             .border(1.dp, palette.accent, RoundedCornerShape(13.dp)),
                     )
                 }
-                Text("$1,240.00", color = palette.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text(formatCurrency(124_000), color = palette.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 Text("Available to assign · ${state.selectedMonth}", color = palette.muted, fontSize = 11.sp)
             }
         }
@@ -1972,7 +2034,7 @@ private fun AppearanceScreen(
         SectionCard("Color", "${state.accent.label} accent", "") {
             ListRow("●", "Accent color", "Selected across every app page", state.accent.label) { navigation.open(AppRoute.ACCENT_COLOR) }
         }
-        SectionCard("Atmosphere", state.backgroundStyle, "") {
+        SectionCard("Background", state.backgroundStyle, "") {
             ListRow(
                 "✦",
                 "Background and motion",
@@ -1989,7 +2051,7 @@ private fun AppearanceScreen(
 @Composable
 private fun ThemeModeScreen(state: AppState) {
     PageColumn {
-        Heading("Theme mode", "Choose how the Companion looks everywhere.")
+        Heading("Color mode", "Choose the colors used across the app.")
         ThemeMode.entries.forEach { mode ->
             ChoiceRow(
                 mode.label,
@@ -2003,14 +2065,14 @@ private fun ThemeModeScreen(state: AppState) {
                 onClick = { state.theme = mode },
             )
         }
-        PreviewNote("The same selected mode and color tokens are used on Android and iOS. No separate Glass or Material theme is applied.")
+        PreviewNote("Theme choices and colors stay consistent across Android and iOS.")
     }
 }
 
 @Composable
 private fun AccentColorScreen(state: AppState) {
     PageColumn {
-        Heading("Accent color", "Choose one highlight color for actions and selected items.")
+        Heading("Accent choices", "Choose a highlight color for actions and selected items.")
         AccentChoice.entries.forEach { accent ->
             val palette = companionPalette
             SurfaceCard(onClick = { state.accent = accent }) {
@@ -2035,8 +2097,8 @@ private fun AccentColorScreen(state: AppState) {
 @Composable
 private fun BackgroundScreen(state: AppState) {
     PageColumn {
-        Heading("Background and motion", "Choose a calm backdrop that keeps money easy to read.")
-        SectionCard("Background style", "Preview only") {
+        Heading("Motion settings", "Choose a background style and reduce animation.")
+        SectionCard("Background style", "Sample controls") {
             listOf("Soft gradient", "Solid surface", "Low-motion glow").forEach { style ->
                 ChoiceRow(style, selected = state.backgroundStyle == style, onClick = { state.backgroundStyle = style })
             }
@@ -2054,7 +2116,7 @@ private fun BackgroundScreen(state: AppState) {
 @Composable
 private fun HomeLayoutScreen(state: AppState) {
     PageColumn {
-        Heading("Home screen layout", "Set the amount of detail shown on the budget page.")
+        Heading("Budget layout", "Set the amount of detail shown on the budget page.")
         listOf(
             "Comfortable" to "Roomy cards and extra context",
             "Compact" to "More categories visible at once",
@@ -2064,10 +2126,10 @@ private fun HomeLayoutScreen(state: AppState) {
         }
         SurfaceCard {
             Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                LabelText("LAYOUT PREVIEW")
-                ListRow("H", "Essentials", "3 categories", "$2,320")
+                LabelText("Layout preview")
+                ListRow("H", "Essentials", "3 categories", formatCurrency(232_000))
                 DividerLine()
-                ListRow("G", "Groceries", "Available this month", "$500")
+                ListRow("G", "Groceries", "Available this month", formatCurrency(50_000))
             }
         }
     }
@@ -2075,12 +2137,13 @@ private fun HomeLayoutScreen(state: AppState) {
 
 @Composable
 private fun BudgetPreferencesScreen() {
+    val currencyCode = platformCurrencyCode()
     PageColumn {
-        Heading("Budget preferences", "Choose how amounts and plans are presented.")
-        SectionCard("Number format", "Sample budget uses USD") {
-            ListRow("$", "Currency", "United States dollar", "USD")
+        Heading("Amount and planning", "Choose how amounts and plans are presented.")
+        SectionCard("Number format", "Sample values use $currencyCode") {
+            ListRow("¤", "Currency", "Follows the device locale", currencyCode)
             DividerLine()
-            ListRow("◷", "Start of week", "Monday")
+            ListRow("◷", "Start of week", "Follows the device locale", formatFirstWeekday())
         }
         SectionCard("Planning", "Budget overview") {
             ToggleRow("Show available category amounts", "Keep remaining-to-spend visible on the overview", true, {})
@@ -2096,7 +2159,7 @@ private fun BudgetPreferencesScreen() {
 @Composable
 private fun SyncPreferencesScreen(state: AppState) {
     PageColumn {
-        Heading("Sync preferences", "Choose when the connected app should refresh.")
+        Heading("Automatic refresh", "Choose when the app should refresh.")
         SectionCard("Automatic refresh", "Local changes stay available offline") {
             ToggleRow("Sync when opening a budget", "Check for server changes when returning to a budget", state.syncOnOpen) {
                 state.syncOnOpen =
@@ -2106,11 +2169,11 @@ private fun SyncPreferencesScreen(state: AppState) {
             ToggleRow("Sync only on Wi-Fi", "Avoid cellular data for automatic refreshes", state.syncOnWifi) { state.syncOnWifi = it }
         }
         SectionCard("Manual controls", "Always available") {
-            ListRow("↻", "Sync now", "Read changes and reconcile queued edits", "Preview")
+            ListRow("↻", "Sync now", "Read changes and check pending edits", "Sample")
             DividerLine()
             ListRow("◷", "Last sync", "No real sync has run", "Never")
         }
-        PreviewNote("These settings are not saved yet. Uncertain financial writes are checked before any retry.")
+        PreviewNote("These settings are not saved yet. The app checks pending changes before retrying them.")
     }
 }
 
@@ -2120,27 +2183,27 @@ private fun ServerDeviceScreen(
     navigation: AppNavigation,
 ) {
     PageColumn {
-        Heading("Server and paired device", "Review where this device would connect.")
-        SectionCard("Companion server", "Not connected") {
-            ListRow("◎", "Server URL", state.serverUrl, "Preview") { navigation.open(AppRoute.SERVER_ADDRESS) }
+        Heading("Connection details", "Review the server address and device pairing.")
+        SectionCard("Server", "Not connected") {
+            ListRow("◎", "Server URL", state.serverUrl, "Sample") { navigation.open(AppRoute.SERVER_ADDRESS) }
             DividerLine()
-            ListRow("↻", "Connection status", "Sample only", "Offline", companionPalette.warning)
+            ListRow("↻", "Connection status", "Sample data", "Offline", companionPalette.warning)
         }
         SectionCard("This device", "Pairing is not active") {
             ListRow("▣", "Device name", "Actual Companion on this device")
             DividerLine()
             ListRow("⌑", "Access scope", "No credential stored")
             DividerLine()
-            ListRow("×", "Disconnect device", "Revoke local access", onClick = { navigation.open(AppRoute.SECURITY_PRIVACY) })
+            ListRow("⌑", "Device pairing", "Not active")
         }
-        PreviewNote("Server address and pairing code are not saved or sent from this preview.")
+        PreviewNote("The server address is not sent, and no pairing code or device credential is stored.")
     }
 }
 
 @Composable
 private fun SecurityScreen(state: AppState) {
     PageColumn {
-        Heading("Security and privacy", "Protect your budget and keep credentials in your control.")
+        Heading("Device protection", "Protect financial data and manage device access.")
         SectionCard("Device unlock", "Credentials belong in secure platform storage") {
             ToggleRow("Use biometric unlock", "Require this device’s biometrics to reopen a budget", state.faceUnlock) {
                 state.faceUnlock =
@@ -2156,23 +2219,23 @@ private fun SecurityScreen(state: AppState) {
                     it
             }
         }
-        SectionCard("Data handling", "Companion API") {
+        SectionCard("Data handling", "Server connection") {
             ListRow("⌑", "Device credentials", "Stored in platform secure storage", "Not paired")
             DividerLine()
-            ListRow("◉", "Budget password", "Used only for the encrypted budget request", "Not stored")
+            ListRow("◉", "Budget password", "Used only to open an encrypted budget", "Not stored")
         }
-        PreviewNote("This preview stores no server credential, budget password, or transaction change.")
+        PreviewNote("No server credential, budget password, or transaction change is stored here.")
     }
 }
 
 @Composable
 private fun NotificationsScreen(state: AppState) {
     PageColumn {
-        Heading("Notifications", "Choose when the Companion should ask for your attention.")
-        SectionCard("Budget activity", "You can change these at any time") {
+        Heading("Alert preferences", "Choose which changes should trigger alerts.")
+        SectionCard("Budget activity", "Change these settings at any time") {
             ToggleRow("Sync reminders", "Let you know when this device has been offline", state.notifications) { state.notifications = it }
             DividerLine()
-            ToggleRow("Conflict review alerts", "Show a reminder when an edit needs your decision", state.notifications) {
+            ToggleRow("Conflict review alerts", "Show a reminder when an edit needs review", state.notifications) {
                 state.notifications =
                     it
             }
@@ -2183,17 +2246,17 @@ private fun NotificationsScreen(state: AppState) {
                 state.notifications,
             ) { state.notifications = it }
         }
-        PreviewNote("System notification permission will only be requested when notification settings are connected.")
+        PreviewNote("These sample controls do not request notification permission.")
     }
 }
 
 @Composable
 private fun LocalDataScreen() {
     PageColumn {
-        Heading("Local data and storage", "See what is cached on this device.")
-        AmountHero("Sample storage", "18.4 MB", "Estimated from fictional budget data")
+        Heading("Stored data", "See what is cached on this device.")
+        AmountHero("Sample storage", "${formatInteger(18)} MB", "Estimated from sample budget data")
         SectionCard("On this device", "No real budget is cached") {
-            ListRow("▤", "Budget records", "Sample preview only", "0")
+            ListRow("▤", "Budget records", "Sample data only", "0")
             DividerLine()
             ListRow("↑", "Queued changes", "No changes are queued", "0")
             DividerLine()
@@ -2224,7 +2287,7 @@ private fun AboutScreen() {
                 ) {
                     Text("A", color = companionPalette.accent, fontSize = 25.sp, fontWeight = FontWeight.Bold)
                 }
-                Text("Version 0.1.0 · UI preview", color = companionPalette.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text("Version 0.1.0 · Sample interface", color = companionPalette.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Text(
                     "Not affiliated with, endorsed by, or supported by Actual Budget.",
                     color = companionPalette.muted,
@@ -2234,12 +2297,12 @@ private fun AboutScreen() {
             }
         }
         SectionCard("Help and project", "") {
-            ListRow("?", "Connection setup", "Pair a device with your server")
+            ListRow("?", "Connection setup", "Pair this device with the server")
             DividerLine()
             ListRow("▣", "Open-source licenses", "AGPL-3.0-or-later")
             DividerLine()
-            ListRow("↗", "Companion API version", "Compatibility is checked before a budget opens", "26.10.0")
+            ListRow("↗", "Server version", "The app checks that this version is supported", "26.10.0")
         }
-        PreviewNote("The finished app will include complete license notices, supported-version details, and help links.")
+        PreviewNote("License notices, supported-version details, and help links will appear here.")
     }
 }

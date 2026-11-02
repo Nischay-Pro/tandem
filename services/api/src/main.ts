@@ -10,6 +10,7 @@ import { TransactionReconciler } from "./actual/transaction-reconciler.js";
 import { createActualTransactionStore } from "./actual/transaction-store.js";
 import { ActualBudgetSnapshotReader } from "./actual/budget-snapshot-reader.js";
 import { BudgetReadApi } from "./budget-projection/budget-read-api.js";
+import { OperatorMessageError } from "./operator-message-error.js";
 
 export async function runApi(
   environment: Environment,
@@ -83,9 +84,13 @@ export function reportProcessFailure(
   error: unknown,
 ): void {
   try {
-    console.error(context, {
-      errorType: error instanceof Error ? error.name : typeof error,
-    });
+    if (error instanceof OperatorMessageError) {
+      console.error(context, { message: error.message });
+    } else {
+      console.error(context, {
+        errorType: error instanceof Error ? error.name : typeof error,
+      });
+    }
   } catch {
     // Process failure reporting must not create another unhandled rejection.
   }

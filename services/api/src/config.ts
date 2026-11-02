@@ -1,6 +1,7 @@
 import { isAbsolute } from "node:path";
 import { isIP } from "node:net";
 import type { ActualConnectionConfig } from "./actual/actual-session.js";
+import { OperatorMessageError } from "./operator-message-error.js";
 
 export interface ApiConfig {
   databaseUrl: string;
@@ -18,28 +19,34 @@ export const READINESS_TIMEOUT_MS = 2_000;
 export function parseApiConfig(environment: Environment): ApiConfig {
   const databaseUrl = environment.DATABASE_URL?.trim();
   if (!databaseUrl) {
-    throw new Error("DATABASE_URL is required");
+    throw new OperatorMessageError("DATABASE_URL is required");
   }
 
   let parsedDatabaseUrl: URL;
   try {
     parsedDatabaseUrl = new URL(databaseUrl);
   } catch {
-    throw new Error("DATABASE_URL must be a valid PostgreSQL URL");
+    throw new OperatorMessageError(
+      "DATABASE_URL must be a valid PostgreSQL URL",
+    );
   }
 
   if (
     parsedDatabaseUrl.protocol !== "postgres:" &&
     parsedDatabaseUrl.protocol !== "postgresql:"
   ) {
-    throw new Error("DATABASE_URL must use postgres:// or postgresql://");
+    throw new OperatorMessageError(
+      "DATABASE_URL must use postgres:// or postgresql://",
+    );
   }
 
   const host = environment.HOST?.trim() || "0.0.0.0";
   const rawPort = environment.PORT?.trim() || "19753";
   const port = Number(rawPort);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error("PORT must be an integer between 1 and 65535");
+    throw new OperatorMessageError(
+      "PORT must be an integer between 1 and 65535",
+    );
   }
 
   const trustedProxyAddresses = parseTrustedProxyAddresses(
@@ -47,7 +54,9 @@ export function parseApiConfig(environment: Environment): ApiConfig {
   );
   const changeFeedEpoch = environment.CHANGE_FEED_EPOCH?.trim() || "default";
   if (!/^[A-Za-z0-9._:-]{1,100}$/.test(changeFeedEpoch)) {
-    throw new Error("CHANGE_FEED_EPOCH must contain 1 to 100 safe characters");
+    throw new OperatorMessageError(
+      "CHANGE_FEED_EPOCH must contain 1 to 100 safe characters",
+    );
   }
   const actual = parseActualConnection(environment);
 
@@ -79,7 +88,7 @@ function parseActualConnection(
     password === undefined ||
     password.length === 0
   ) {
-    throw new Error(
+    throw new OperatorMessageError(
       "ACTUAL_SERVER_URL and a non-empty ACTUAL_SERVER_PASSWORD must be configured together",
     );
   }
@@ -88,7 +97,9 @@ function parseActualConnection(
   try {
     parsedServerUrl = new URL(serverUrl);
   } catch {
-    throw new Error("ACTUAL_SERVER_URL must be a valid HTTP(S) URL");
+    throw new OperatorMessageError(
+      "ACTUAL_SERVER_URL must be a valid HTTP(S) URL",
+    );
   }
   if (
     (parsedServerUrl.protocol !== "http:" &&
@@ -96,12 +107,16 @@ function parseActualConnection(
     parsedServerUrl.username.length > 0 ||
     parsedServerUrl.password.length > 0
   ) {
-    throw new Error("ACTUAL_SERVER_URL must be a valid HTTP(S) URL");
+    throw new OperatorMessageError(
+      "ACTUAL_SERVER_URL must be a valid HTTP(S) URL",
+    );
   }
 
   const dataDir = configuredDataDirectory || "/data/actual-api";
   if (!isAbsolute(dataDir)) {
-    throw new Error("ACTUAL_API_DATA_DIR must be an absolute path");
+    throw new OperatorMessageError(
+      "ACTUAL_API_DATA_DIR must be an absolute path",
+    );
   }
 
   return {
@@ -121,7 +136,7 @@ function parseTrustedProxyAddresses(
 
   const addresses = normalized.split(",").map((address) => address.trim());
   if (addresses.some((address) => !isIpOrCidr(address))) {
-    throw new Error(
+    throw new OperatorMessageError(
       "TRUST_PROXY must be a comma-separated list of proxy IP addresses or CIDRs",
     );
   }

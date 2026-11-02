@@ -5,6 +5,7 @@ import { Pool } from "pg";
 import { reportProcessFailure, runApi, runProductionApi } from "../src/main.js";
 import type { Database } from "../src/database.js";
 import type { ShutdownSignal } from "../src/server.js";
+import { OperatorMessageError } from "../src/operator-message-error.js";
 
 const actualApi = vi.hoisted(() => ({
   init: vi.fn(async () => undefined),
@@ -73,6 +74,22 @@ describe("API bootstrap integration", () => {
     vi.restoreAllMocks();
   });
 
+  it("reports operator-safe diagnostics without exposing arbitrary error messages", () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const error = new OperatorMessageError(
+      "PORT must be an integer between 1 and 65535",
+    );
+
+    reportProcessFailure("API startup failed", error);
+
+    expect(consoleError).toHaveBeenCalledWith("API startup failed", {
+      message: "PORT must be an integer between 1 and 65535",
+    });
+    vi.restoreAllMocks();
+  });
+
   it("does not throw when runtime failure logging fails", () => {
     vi.spyOn(console, "error").mockImplementation(() => {
       throw new Error("synthetic logger failure");
@@ -113,6 +130,63 @@ describe("API bootstrap integration", () => {
     expect(handlers.has("SIGTERM")).toBe(true);
     expect(handlers.has("SIGINT")).toBe(true);
     await handlers.get("SIGTERM")?.();
+  });
+
+  it("logs the safe migration-history diagnostic from a production startup failure", async () => {
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error(
+        "DATABASE_URL is required; run this test with docker compose",
+      );
+    }
+    const schemaName = `main_migration_failure_${randomUUID().replaceAll("-", "")}`;
+    await adminPool.query(`CREATE SCHEMA ${schemaName}`);
+    const isolatedUrl = new URL(connectionString);
+    isolatedUrl.searchParams.set("options", `-c search_path=${schemaName}`);
+    const isolatedPool = new Pool({
+      connectionString: isolatedUrl.toString(),
+      max: 1,
+    });
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    try {
+      await isolatedPool.query(`CREATE TABLE companion_migrations (
+        position integer PRIMARY KEY CHECK (position > 0),
+        name text NOT NULL UNIQUE,
+        applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
+      )`);
+      await isolatedPool.query(
+        "INSERT INTO companion_migrations (position, name) VALUES (1, $1)",
+        ["20261101000000-older-schema"],
+      );
+
+      const port = await findAvailablePort();
+      const startup = runProductionApi(
+        {
+          DATABASE_URL: isolatedUrl.toString(),
+          HOST: "127.0.0.1",
+          PORT: String(port),
+        },
+        { once: vi.fn() } as unknown as NodeJS.Process,
+      );
+      const error = await startup.catch((startupError: unknown) => {
+        reportProcessFailure("API startup failed", startupError);
+        return startupError;
+      });
+
+      expect(error).toBeInstanceOf(OperatorMessageError);
+      expect(consoleError).toHaveBeenCalledWith("API startup failed", {
+        message: expect.stringContaining(
+          "Companion migration history mismatch at position 1: expected 20261101155148-companion-schema-v2, found 20261101000000-older-schema",
+        ),
+      });
+    } finally {
+      vi.restoreAllMocks();
+      await isolatedPool.end();
+      await adminPool.query(`DROP SCHEMA ${schemaName} CASCADE`);
+    }
   });
 
   it("starts and closes the configured Actual runtime and exposes transaction routes", async () => {

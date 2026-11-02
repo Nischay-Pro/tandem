@@ -89,6 +89,10 @@ can contain decrypted budget data; protect it and its backups as financial data.
 The server password authenticates the Companion service to Actual. It is never
 sent to mobile devices.
 
+Startup logs include application-controlled configuration and migration-history
+messages. PostgreSQL driver errors and other unexpected failures log only their
+error type, so connection strings and credentials are not copied into logs.
+
 The budget snapshot and change endpoints use the same device scope and may also
 receive `X-Budget-Encryption-Password` for an encrypted budget. Actual's public
 API has no incremental change feed, so each complete snapshot and each new

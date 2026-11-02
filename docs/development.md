@@ -14,6 +14,10 @@ docker compose -f docker-compose.dev.yml --profile test run --build --rm integra
 
 The integration-test profile runs formatting, lint, typecheck, and API tests against PostgreSQL. Coverage enforces 100% lines, statements, functions, and branches for API source. The development database is stored under `.dev-tmp/` and must contain synthetic data only.
 
+Startup diagnostics include application-controlled configuration and migration
+history messages. PostgreSQL driver failures and other unknown errors log only
+their error type so connection details and credentials are not copied into logs.
+
 GitHub Actions runs the same Compose quality gate for pushes and pull requests with read-only repository permissions.
 
 StrykerJS mutation testing is kept out of the per-change gate because a full

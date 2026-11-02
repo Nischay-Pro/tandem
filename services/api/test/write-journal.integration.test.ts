@@ -316,6 +316,13 @@ describe("durable write journal integration", () => {
         applyMigrations(isolatedPool, [migration], [migration.name]),
       ).rejects.toThrow("Companion migration history mismatch");
 
+      await isolatedPool.query("UPDATE companion_migrations SET name = $1", [
+        "sensitive migration name",
+      ]);
+      await expect(
+        applyMigrations(isolatedPool, [migration], [migration.name]),
+      ).rejects.toThrow("found [invalid migration name]");
+
       await isolatedPool.query(
         "UPDATE companion_migrations SET name = $1, position = 2",
         [migration.name],

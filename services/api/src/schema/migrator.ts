@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import type { Pool, PoolClient } from "pg";
 import { down, up } from "./migrations/20261101155148-companion-schema-v2.js";
+import { OperatorMessageError } from "../operator-message-error.js";
 
 export interface Migration {
   name: string;
@@ -53,19 +54,19 @@ export async function applyMigrations(
     const applied = appliedResult.rows;
     for (const [index, migration] of applied.entries()) {
       if (migration.position !== index + 1) {
-        throw new Error(
-          `Corrupted migrations: expected migration ${migrationOrder[index] ?? "<end>"} at position ${index + 1}, found ${migration.name}`,
+        throw new OperatorMessageError(
+          `Corrupted migrations: expected migration ${safeMigrationName(migrationOrder[index] ?? "<end>")} at position ${index + 1}, found ${safeMigrationName(migration.name)}`,
         );
       }
       const expectedName = migrationOrder[index];
       if (expectedName === undefined) {
-        throw new Error(
+        throw new OperatorMessageError(
           "Companion database has migrations newer than this API version; upgrade the API or restore a database backup from a compatible version",
         );
       }
       if (expectedName !== migration.name) {
-        throw new Error(
-          `Companion migration history mismatch at position ${index + 1}: expected ${expectedName}, found ${migration.name}. This unreleased build cannot upgrade that earlier schema; use a compatible database or recreate the pre-release Companion database.`,
+        throw new OperatorMessageError(
+          `Companion migration history mismatch at position ${index + 1}: expected ${safeMigrationName(expectedName)}, found ${safeMigrationName(migration.name)}. This unreleased build cannot upgrade that earlier schema; use a compatible database or recreate the pre-release Companion database.`,
         );
       }
     }
@@ -158,22 +159,35 @@ export function validateMigrationOrder(
 ): void {
   const names = migrations.map(({ name }) => name);
   if (new Set(names).size !== names.length) {
-    throw new Error("Migration registry contains duplicate names");
+    throw new OperatorMessageError(
+      "Migration registry contains duplicate names",
+    );
   }
   if (new Set(order).size !== order.length) {
-    throw new Error("Migration ORDER contains duplicate names");
+    throw new OperatorMessageError("Migration ORDER contains duplicate names");
   }
   if (order.length !== names.length) {
-    throw new Error("Migration ORDER and registered migrations do not match");
+    throw new OperatorMessageError(
+      "Migration ORDER and registered migrations do not match",
+    );
   }
   for (const [index, name] of order.entries()) {
     const expectedName = names[index]!;
     if (expectedName !== name) {
-      throw new Error(
-        `Migration ORDER mismatch at position ${index + 1}: expected ${expectedName}, found ${name}`,
+      throw new OperatorMessageError(
+        `Migration ORDER mismatch at position ${index + 1}: expected ${safeMigrationName(expectedName)}, found ${safeMigrationName(name)}`,
       );
     }
   }
+}
+
+function safeMigrationName(name: string): string {
+  if (name === "<end>") {
+    return name;
+  }
+  return /^[A-Za-z0-9._-]{1,128}$/.test(name)
+    ? name
+    : "[invalid migration name]";
 }
 
 async function applyOneMigration(

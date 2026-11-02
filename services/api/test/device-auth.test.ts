@@ -196,6 +196,12 @@ describe("device authorization", () => {
       ).resolves.toBeUndefined();
     }
     await expect(
+      authorization.pair({
+        code: 42 as unknown as string,
+        deviceName: "Phone",
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
       authorization.pair({ code: "4DF7-J1M9", deviceName: "Phone" }),
     ).resolves.toBeUndefined();
     expect(consumePairingCode).toHaveBeenCalledOnce();
