@@ -15,10 +15,17 @@ android {
     versionCode = 1
     versionName = "0.1.0"
   }
+
+  compileOptions {
+    isCoreLibraryDesugaringEnabled = true
+  }
 }
 
 dependencies {
+  coreLibraryDesugaring(libs.desugarJdkLibs)
   implementation(project(":composeApp"))
+  implementation(project(":data"))
+  implementation(libs.room3Runtime)
   implementation(libs.activityCompose)
   implementation(libs.composeRuntimeAndroid)
   implementation(libs.composeUiAndroid)
