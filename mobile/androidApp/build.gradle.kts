@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-  namespace = "org.actualbudget.companion.android"
+  namespace = "app.tandemforactual.android"
   compileSdk = 37
 
   defaultConfig {
-    applicationId = "org.actualbudget.companion.android"
+    applicationId = "app.tandemforactual.android"
     minSdk = 26
     targetSdk = 36
     versionCode = 1

@@ -1,6 +1,6 @@
 @file:Suppress("ktlint:standard:function-naming")
 
-package org.actualbudget.companion.ui
+package app.tandemforactual.ui
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.MaterialTheme
@@ -29,7 +29,7 @@ internal enum class AccentChoice(
     ROSE("Rose", Color(0xFFFF91A9)),
 }
 
-internal data class CompanionPalette(
+internal data class TandemPalette(
     val background: Color,
     val surface: Color,
     val raised: Color,
@@ -43,9 +43,9 @@ internal data class CompanionPalette(
     val negative: Color,
 )
 
-private val LocalCompanionPalette =
+private val LocalTandemPalette =
     staticCompositionLocalOf {
-        CompanionPalette(
+        TandemPalette(
             background = Color(0xFF10131A),
             surface = Color(0xFF191E28),
             raised = Color(0xFF222A36),
@@ -61,7 +61,7 @@ private val LocalCompanionPalette =
     }
 
 @Composable
-internal fun CompanionTheme(
+internal fun TandemTheme(
     mode: ThemeMode,
     accent: AccentChoice,
     content: @Composable () -> Unit,
@@ -70,7 +70,7 @@ internal fun CompanionTheme(
     val black = mode == ThemeMode.PURE_BLACK
     val palette =
         if (dark) {
-            CompanionPalette(
+            TandemPalette(
                 background = if (black) Color.Black else Color(0xFF10131A),
                 surface = if (black) Color(0xFF101216) else Color(0xFF191E28),
                 raised = if (black) Color(0xFF1B1F25) else Color(0xFF222A36),
@@ -84,7 +84,7 @@ internal fun CompanionTheme(
                 negative = Color(0xFFFF8C98),
             )
         } else {
-            CompanionPalette(
+            TandemPalette(
                 background = Color(0xFFF7F8FA),
                 surface = Color.White,
                 raised = Color(0xFFF0F3F7),
@@ -99,21 +99,21 @@ internal fun CompanionTheme(
             )
         }
 
-    CompositionLocalProvider(LocalCompanionPalette provides palette) {
+    CompositionLocalProvider(LocalTandemPalette provides palette) {
         MaterialTheme(content = content)
     }
 }
 
-internal val companionPalette: CompanionPalette
-    @Composable get() = LocalCompanionPalette.current
+internal val tandemPalette: TandemPalette
+    @Composable get() = LocalTandemPalette.current
 
 @Composable
 @Suppress("ktlint:standard:function-naming")
-internal expect fun CompanionSystemBars(isDark: Boolean)
+internal expect fun TandemSystemBars(isDark: Boolean)
 
 @Composable
 @Suppress("ktlint:standard:function-naming")
-internal expect fun CompanionBackHandler(
+internal expect fun TandemBackHandler(
     enabled: Boolean,
     onBack: () -> Unit,
 )

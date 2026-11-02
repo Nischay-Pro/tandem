@@ -1,6 +1,6 @@
 @file:Suppress("ktlint:standard:function-naming")
 
-package org.actualbudget.companion.ui
+package app.tandemforactual.ui
 
 import android.app.Activity
 import android.os.Build
@@ -13,7 +13,7 @@ import androidx.compose.ui.platform.LocalView
 
 @Composable
 @Suppress("ktlint:standard:function-naming")
-internal actual fun CompanionSystemBars(isDark: Boolean) {
+internal actual fun TandemSystemBars(isDark: Boolean) {
     val view = LocalView.current
     val window = (view.context as? Activity)?.window
     if (window != null) {
@@ -40,7 +40,7 @@ internal actual fun CompanionSystemBars(isDark: Boolean) {
 
 @Composable
 @Suppress("ktlint:standard:function-naming")
-internal actual fun CompanionBackHandler(
+internal actual fun TandemBackHandler(
     enabled: Boolean,
     onBack: () -> Unit,
 ) {

@@ -1,4 +1,4 @@
-package org.actualbudget.companion.ui
+package app.tandemforactual.ui
 
 internal data class SampleDate(
     val year: Int,

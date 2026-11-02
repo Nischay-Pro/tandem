@@ -1,4 +1,4 @@
-package org.actualbudget.companion.ui
+package app.tandemforactual.ui
 
 import java.math.BigDecimal
 import java.text.DateFormat

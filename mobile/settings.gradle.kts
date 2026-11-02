@@ -14,7 +14,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "actual-budget-companion-mobile"
+rootProject.name = "tandem-for-actual-mobile"
 
 include(":api-client")
 include(":data")

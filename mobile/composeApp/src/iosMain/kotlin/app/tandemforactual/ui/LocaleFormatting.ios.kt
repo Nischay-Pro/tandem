@@ -1,4 +1,4 @@
-package org.actualbudget.companion.ui
+package app.tandemforactual.ui
 
 import platform.Foundation.NSCalendar
 import platform.Foundation.NSCalendarUnitWeekday
