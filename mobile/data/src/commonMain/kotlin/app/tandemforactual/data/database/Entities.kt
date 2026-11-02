@@ -42,6 +42,12 @@ data class BudgetSyncStateEntity(
     val lastErrorCode: String?,
 )
 
+@Entity(tableName = "app_preferences")
+data class AppPreferenceEntity(
+    @PrimaryKey val name: String,
+    val value: String,
+)
+
 @Entity(
     tableName = "sync_outbox",
     indices = [

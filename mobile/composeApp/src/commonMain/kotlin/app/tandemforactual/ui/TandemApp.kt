@@ -45,6 +45,7 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.mapSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,7 +76,11 @@ import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.TandemDatabase
+import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetDisplaySettings
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -321,7 +326,7 @@ private fun formatLiveDate(value: String?): String {
 private fun sanitizePairingCodeInput(value: String): String =
     value.uppercase().filter { it in 'A'..'Z' || it in '0'..'9' || it == '-' }.take(9)
 
-private class AppState {
+internal class AppState {
     var theme by mutableStateOf(ThemeMode.DARK)
     var accent by mutableStateOf(AccentChoice.TEAL)
     var selectedBudget by mutableStateOf("Household")
@@ -355,9 +360,47 @@ private class AppState {
     var reduceMotion by mutableStateOf(false)
     var syncOnOpen by mutableStateOf(true)
     var syncOnWifi by mutableStateOf(false)
-    var notifications by mutableStateOf(true)
+    var syncReminders by mutableStateOf(true)
+    var conflictReviewAlerts by mutableStateOf(true)
+    var rejectedEditAlerts by mutableStateOf(true)
     var faceUnlock by mutableStateOf(false)
     var confirmBeforeDelete by mutableStateOf(true)
+    var settingsStorageError by mutableStateOf<String?>(null)
+    var settingsStorageRetry by mutableStateOf(0)
+
+    fun persistentSettings(): Map<String, String> =
+        mapOf(
+            "theme" to theme.name,
+            "accent" to accent.name,
+            "backgroundStyle" to backgroundStyle,
+            "homeLayout" to homeLayout,
+            "reduceMotion" to reduceMotion.toString(),
+            "syncOnOpen" to syncOnOpen.toString(),
+            "syncOnWifi" to syncOnWifi.toString(),
+            "syncReminders" to syncReminders.toString(),
+            "conflictReviewAlerts" to conflictReviewAlerts.toString(),
+            "rejectedEditAlerts" to rejectedEditAlerts.toString(),
+            "faceUnlock" to faceUnlock.toString(),
+            "confirmBeforeDelete" to confirmBeforeDelete.toString(),
+        )
+
+    fun restorePersistentSettings(saved: Map<String, String>) {
+        theme = ThemeMode.entries.firstOrNull { it.name == saved["theme"] } ?: theme
+        accent = AccentChoice.entries.firstOrNull { it.name == saved["accent"] } ?: accent
+        backgroundStyle = saved["backgroundStyle"] ?: backgroundStyle
+        homeLayout = saved["homeLayout"] ?: homeLayout
+        reduceMotion = saved["reduceMotion"]?.toBooleanStrictOrNull() ?: reduceMotion
+        syncOnOpen = saved["syncOnOpen"]?.toBooleanStrictOrNull() ?: syncOnOpen
+        syncOnWifi = saved["syncOnWifi"]?.toBooleanStrictOrNull() ?: syncOnWifi
+        val legacyNotifications = saved["notifications"]?.toBooleanStrictOrNull()
+        syncReminders = saved["syncReminders"]?.toBooleanStrictOrNull() ?: legacyNotifications ?: syncReminders
+        conflictReviewAlerts =
+            saved["conflictReviewAlerts"]?.toBooleanStrictOrNull() ?: legacyNotifications ?: conflictReviewAlerts
+        rejectedEditAlerts =
+            saved["rejectedEditAlerts"]?.toBooleanStrictOrNull() ?: legacyNotifications ?: rejectedEditAlerts
+        faceUnlock = saved["faceUnlock"]?.toBooleanStrictOrNull() ?: faceUnlock
+        confirmBeforeDelete = saved["confirmBeforeDelete"]?.toBooleanStrictOrNull() ?: confirmBeforeDelete
+    }
 
     companion object {
         val Saver =
@@ -395,7 +438,9 @@ private class AppState {
                         "reduceMotion" to state.reduceMotion,
                         "syncOnOpen" to state.syncOnOpen,
                         "syncOnWifi" to state.syncOnWifi,
-                        "notifications" to state.notifications,
+                        "syncReminders" to state.syncReminders,
+                        "conflictReviewAlerts" to state.conflictReviewAlerts,
+                        "rejectedEditAlerts" to state.rejectedEditAlerts,
                         "faceUnlock" to state.faceUnlock,
                         "confirmBeforeDelete" to state.confirmBeforeDelete,
                     )
@@ -432,7 +477,12 @@ private class AppState {
                         reduceMotion = saved["reduceMotion"] as? Boolean ?: reduceMotion
                         syncOnOpen = saved["syncOnOpen"] as? Boolean ?: syncOnOpen
                         syncOnWifi = saved["syncOnWifi"] as? Boolean ?: syncOnWifi
-                        notifications = saved["notifications"] as? Boolean ?: notifications
+                        val legacyNotifications = saved["notifications"] as? Boolean
+                        syncReminders = saved["syncReminders"] as? Boolean ?: legacyNotifications ?: syncReminders
+                        conflictReviewAlerts =
+                            saved["conflictReviewAlerts"] as? Boolean ?: legacyNotifications ?: conflictReviewAlerts
+                        rejectedEditAlerts =
+                            saved["rejectedEditAlerts"] as? Boolean ?: legacyNotifications ?: rejectedEditAlerts
                         faceUnlock = saved["faceUnlock"] as? Boolean ?: faceUnlock
                         confirmBeforeDelete = saved["confirmBeforeDelete"] as? Boolean ?: confirmBeforeDelete
                     }
@@ -473,6 +523,7 @@ fun TandemApp(
         remember(apiClient, database, deviceCredentialStore) {
             TandemMobileSession(apiClient, database, nowEpochMillis, deviceCredentialStore)
         }
+    val appPreferencesStore = remember(database) { database?.let(::AppPreferencesStore) }
     val coroutineScope = rememberCoroutineScope()
     var syncRetryCounter by remember { mutableStateOf(0) }
     val backStack =
@@ -488,6 +539,60 @@ fun TandemApp(
                 backStack.add(AppRoute.BUDGET_CHOOSER)
             }
         }
+    }
+    LaunchedEffect(appPreferencesStore) {
+        val store = appPreferencesStore ?: return@LaunchedEffect
+        val initialSettings = state.persistentSettings()
+        val localChanges = mutableMapOf<String, String>()
+        val localSettingsObserver =
+            launch {
+                snapshotFlow { state.persistentSettings() }
+                    .collect { currentSettings ->
+                        currentSettings
+                            .filter { (name, value) -> initialSettings[name] != value }
+                            .forEach { (name, value) -> localChanges[name] = value }
+                    }
+            }
+        var storedPreferences: Map<String, String>? = null
+        while (storedPreferences == null) {
+            val retryAtRead = state.settingsStorageRetry
+            try {
+                storedPreferences = store.read()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                state.settingsStorageError = "App settings could not be loaded. Retry to load saved preferences."
+                snapshotFlow { state.settingsStorageRetry }.first { it != retryAtRead }
+            }
+        }
+        state
+            .persistentSettings()
+            .filter { (name, value) -> initialSettings[name] != value }
+            .forEach { (name, value) -> localChanges[name] = value }
+        localSettingsObserver.cancel()
+        state.restorePersistentSettings(storedPreferences + localChanges)
+        var lastSavedPreferences = if (localChanges.isEmpty()) state.persistentSettings() else emptyMap()
+        var lastAttemptedRetry = state.settingsStorageRetry
+        snapshotFlow { state.persistentSettings() to state.settingsStorageRetry }
+            .collect { (updatedPreferences, retryCount) ->
+                if (updatedPreferences == lastSavedPreferences && retryCount == lastAttemptedRetry) return@collect
+                val retryRequested = retryCount != lastAttemptedRetry
+                lastAttemptedRetry = retryCount
+                try {
+                    store.save(updatedPreferences)
+                    lastSavedPreferences = updatedPreferences
+                    state.settingsStorageError = null
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    state.settingsStorageError =
+                        if (retryRequested) {
+                            "App settings still could not be saved. Check local storage and retry."
+                        } else {
+                            "App settings could not be saved. Retry to save your changes."
+                        }
+                }
+            }
     }
     val navigation =
         AppNavigation(
@@ -3405,10 +3510,14 @@ private fun SettingsScreen(
 ) {
     PageColumn {
         Heading("Preferences", "Adjust appearance, sync, privacy, and app behavior.")
+        state.settingsStorageError?.let {
+            PreviewNote(it)
+            SecondaryButton("Retry settings storage") { state.settingsStorageRetry += 1 }
+        }
         SectionCard("Personalize", "Appearance and budget") {
             ListRow("◐", "Appearance", "Theme, accent, and background", state.theme.label) { navigation.open(AppRoute.APPEARANCE) }
             DividerLine()
-            ListRow("⌂", "Home screen layout", "Choose how much detail to show", "Comfortable") { navigation.open(AppRoute.HOME_LAYOUT) }
+            ListRow("⌂", "Home screen layout", "Choose how much detail to show", state.homeLayout) { navigation.open(AppRoute.HOME_LAYOUT) }
             DividerLine()
             ListRow("¤", "Budget preferences", "Currency and planning choices") { navigation.open(AppRoute.BUDGET_PREFERENCES) }
         }
@@ -3802,18 +3911,18 @@ private fun NotificationsScreen(state: AppState) {
     PageColumn {
         Heading("Alert preferences", "Choose which changes should trigger alerts.")
         SectionCard("Budget activity", "Change these settings at any time") {
-            ToggleRow("Sync reminders", "Let you know when this device has been offline", state.notifications) { state.notifications = it }
+            ToggleRow("Sync reminders", "Let you know when this device has been offline", state.syncReminders) { state.syncReminders = it }
             DividerLine()
-            ToggleRow("Conflict review alerts", "Show a reminder when an edit needs review", state.notifications) {
-                state.notifications =
+            ToggleRow("Conflict review alerts", "Show a reminder when an edit needs review", state.conflictReviewAlerts) {
+                state.conflictReviewAlerts =
                     it
             }
             DividerLine()
             ToggleRow(
                 "Rejected edit alerts",
                 "Explain when a server change could not be applied",
-                state.notifications,
-            ) { state.notifications = it }
+                state.rejectedEditAlerts,
+            ) { state.rejectedEditAlerts = it }
         }
         PreviewNote("These sample controls do not request notification permission.")
     }

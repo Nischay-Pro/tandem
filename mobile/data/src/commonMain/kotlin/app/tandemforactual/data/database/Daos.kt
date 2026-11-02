@@ -219,3 +219,15 @@ interface BudgetSyncStateDao {
     @Upsert
     suspend fun put(state: BudgetSyncStateEntity)
 }
+
+@Dao
+interface AppPreferenceDao {
+    @Query("SELECT * FROM app_preferences")
+    suspend fun readAll(): List<AppPreferenceEntity>
+
+    @Query("DELETE FROM app_preferences")
+    suspend fun clearAll()
+
+    @Upsert
+    suspend fun putAll(preferences: List<AppPreferenceEntity>)
+}
