@@ -20,7 +20,7 @@ inspect Actual's private SQLite files.
 
 `@actual-app/api` is a Node.js library, not an HTTP REST API. Its documented
 model runs Actual's budget engine against a local SQLite working copy and uses
-Actual's sync server to exchange changes. The Companion adapter therefore calls
+Actual's sync server to exchange changes. The Tandem adapter therefore calls
 the package rather than editing Actual's server files or internal database.
 
 The package exposes a process-global API session. `ActualSession` serializes
@@ -41,11 +41,11 @@ compatibility test exercises the complete snapshot and change-feed routes with
 synthetic accounts, visible and hidden categories, budget months, transactions,
 split children, and transfer legs.
 
-Actual does not expose an incremental change feed through this API. Companion
+Actual does not expose an incremental change feed through this API. Tandem
 refreshes and diffs a supported-API snapshot into PostgreSQL. Each successful
 refresh stores current records, emits entity changes and deletion tombstones,
 and advances the per-budget cursor in one PostgreSQL transaction. The change
-feed is therefore a Companion projection, not Actual's synchronization
+feed is therefore a Tandem projection, not Actual's synchronization
 protocol; refresh sees the copy downloaded for that request, with external
 edits appearing on a subsequent refresh.
 
@@ -55,7 +55,7 @@ credential. The adapter does not persist that password. Encrypted-budget
 compatibility remains unverified until its dedicated test is added.
 
 The adapter must be the only owner of the package singleton in its Node.js
-process. This queue coordinates one Companion API process. Cross-process and
+process. This queue coordinates one Tandem API process. Cross-process and
 multi-replica serialization will use the PostgreSQL coordination layer; it is
 not claimed by this in-process session.
 
@@ -72,7 +72,7 @@ network, initializes a test-only password through the same bootstrap route used
 by Actual's UI, and runs against synthetic budget data. It uses only
 `.dev-tmp/actual/compat-server` and `.dev-tmp/actual/compat-client`, then clears
 those paths and stops its isolated Compose project. It never connects to the
-Companion's configured production Actual server or uses a real budget.
+Tandem's configured production Actual server or uses a real budget.
 
 The test creates, updates, and deletes a synthetic ordinary transaction
 through `@actual-app/api`. It syncs the update and verifies it from a second
@@ -96,4 +96,4 @@ that need review rather than editing one leg or child independently.
 - The official Docker image repositories and version tags are documented at
   <https://actualbudget.org/docs/install/docker/>.
 - The package manifest declares version 26.10.0, Node `>=22`, and MIT license.
-  The companion pins it exactly and does not copy Actual source code.
+  Tandem pins it exactly and does not copy Actual source code.

@@ -6,14 +6,16 @@ as part of Gradle compilation; generated sources stay under `mobile/api-client/b
 and are not committed. The OpenAPI drift check remains the source-of-truth gate
 for route changes.
 
-The module also contains `GeneratedBudgetSyncRemote`, the handwritten adapter
-between generated endpoint calls and the shared data module's sync protocol.
-The persistence and sync lifecycle are documented in
-[`docs/mobile-sync.md`](mobile-sync.md). This module is a client library; it
-does not yet contain an Android application or user interface.
+The module also contains `TandemApiClient` for one-time device pairing and the
+authorized Actual budget catalog, plus `GeneratedBudgetSyncRemote`, the
+handwritten adapter between generated endpoint calls and the shared data
+module's sync protocol. The Compose app calls these APIs to pair a device, list
+its authorized budgets, perform the initial local sync, and display recent
+transactions from the local database. The persistence and sync lifecycle are
+documented in [`docs/mobile-sync.md`](mobile-sync.md).
 
 The module targets Android (minSdk 26, compileSdk 36) and iOS (device ARM64 and
-Apple Silicon simulator). The pinned generator's stable companion artifact does
+Apple Silicon simulator). The pinned generator's stable release does
 not publish an Intel iOS simulator variant, so the client does not declare that
 target. iOS framework compilation and Xcode integration run on macOS; a Linux
 build cannot validate Apple toolchains.
@@ -48,8 +50,14 @@ From `mobile/`:
 ```
 
 This verifies parsing the OpenAPI 3.1 contract, generated client code, Android,
-JVM behavior, and lint. CI also compiles both iOS ARM64 targets on macOS with
-Xcode installed. To run those tasks locally, use:
+JVM behavior, and lint. The app targets and Android host can be compiled with:
+
+```sh
+./gradlew :composeApp:compileAndroidMain :composeApp:ktlintCheck :androidApp:assembleDebug
+```
+
+CI also compiles both iOS ARM64 targets on macOS with Xcode installed. To run
+those tasks locally, use:
 
 ```sh
 ./gradlew :api-client:compileKotlinIosArm64 :api-client:compileKotlinIosSimulatorArm64

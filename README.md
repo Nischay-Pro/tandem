@@ -1,20 +1,20 @@
-# Actual Budget Companion
+# Tandem for Actual Budget
 
-An unofficial, open-source Android and iOS companion for Actual Budget. The mobile app is intended to provide a budget-first, envelope-style workflow while Actual remains the authoritative budget engine and data store.
+An unofficial, offline-first mobile client for Actual Budget. Tandem provides an open-source Android and iOS envelope-budget experience while Actual remains the authoritative budget engine and data store.
 
 **This project is not affiliated with, endorsed by, or supported by Actual Budget.** Actual Budget is a trademark of its respective owners.
 
 ## Project status
 
-Early implementation. The initial wireframes are in [`actual-budget-companion-wireframes.png`](./actual-budget-companion-wireframes.png).
+Early implementation. Wireframes and device screenshots are temporary review artifacts under the ignored `.dev-tmp/` directory and are not part of the source distribution.
 
 ## Current architectural direction
 
 - Android and iOS: Kotlin Multiplatform shared domain/sync code, with native-facing UI built from a shared Compose Multiplatform design system.
 - Visual direction: original finance UI with customizable light/dark/system appearance, accent palettes, and restrained backgrounds inspired by Morphe Manager's theming approach. No Morphe source or assets are reused.
-- Companion API: TypeScript, Node.js, and Fastify; PostgreSQL stores Companion coordination state, not a second authoritative copy of the budget.
+- Tandem API: TypeScript, Node.js, and Fastify; PostgreSQL stores Tandem coordination state, not a second authoritative copy of the budget.
 - Actual integration: official `@actual-app/api` only. No direct edits to Actual server files or SQLite databases.
-- Verified compatibility baseline: Actual server `26.10.0` with `@actual-app/api` `26.10.0`. The Companion checks Actual's reported server version before opening a budget and rejects other versions until they pass the disposable compatibility gate.
+- Verified compatibility baseline: Actual server `26.10.0` with `@actual-app/api` `26.10.0`. The Tandem checks Actual's reported server version before opening a budget and rejects other versions until they pass the disposable compatibility gate.
 - License: GNU AGPL v3 or later.
 
 ## Development

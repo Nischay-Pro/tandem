@@ -2,13 +2,16 @@
 
 The mobile project includes the shared Room-backed local-first data and sync
 libraries, a Compose Multiplatform presentation module, and an installable
-Android host app. Android and iOS use the same Companion design system and
+Android host app. Android and iOS use the same Tandem design system and
 screens; the iOS host is `MainViewController()` in `mobile/composeApp`.
 
-The current UI is a sample-data preview. It does not yet load credentials,
-connect a budget, instantiate the sync coordinator, or persist settings. The
-preview clearly labels synthetic data, and actions do not write to Actual. The
-screens and current Pixel captures are listed in the ignored
+The shared app now pairs devices through the generated API client, lists the
+server-authorized budgets, and runs the initial snapshot/change-feed sync into
+Room on Android and iOS. Activity and transaction detail read recent local
+transaction records. The category plan, account views, transaction editing,
+conflict actions, automatic refresh, and most settings remain sample or
+read-only surfaces; they do not write to Actual. Screens and current Pixel
+captures are listed in the ignored
 `.dev-tmp/mobile-wireframes/README.md` and `.dev-tmp/android-screenshots/`.
 
 ## Components and entry point
@@ -18,12 +21,21 @@ screens and current Pixel captures are listed in the ignored
 - `mobile/api-client` contains the generated OpenAPI client and the handwritten
   `GeneratedBudgetSyncRemote` adapter that implements the data module's remote
   protocol.
-- For live integration, the app must own authentication, its database location,
-  connectivity/lifecycle triggers, and presentation of sync/conflict state.
-  Create one coordinator for a repository and call `synchronize(budgetId)` when
-  the app starts, returns to the foreground, or reconnects. Calls through that
-  coordinator are serialized. A caller can set `sendQueuedWrites = false` for a
-  pull-only refresh. These triggers are not wired into the current preview UI.
+- The Compose root creates the API client, local repository, and sync
+  coordinator. Pairing, budget catalog loading, and the first sync are wired to
+  onboarding. The coordinator serializes calls; the UI currently starts a sync
+  when the user opens a budget. Foreground and reconnect triggers, a manual
+  retry surface, and queued-write controls are not wired yet.
+- Device bearer credentials are held in memory for the current app process. The
+  user must pair again after Android or iOS terminates and restarts the app.
+  Persisting the credential with Android Keystore and the iOS Keychain remains
+  open work. Pairing codes and encrypted-budget passwords are excluded from
+  saved instance state; the budget password is cleared after a successful
+  initial sync.
+- The Activity screen reads up to 50 recent transactions from the local Room
+  database and resolves payee, category, and account display names from local
+  records. Transaction details are read-only. Transaction creation and editing
+  do not yet submit operations to the server.
 
 The Android host handles system Back through the shared route stack and uses
 safe drawing insets for the status and navigation bars. Pixel 10a review
@@ -34,7 +46,8 @@ lists their screens. Git ignores the captures.
 
 Pass an encrypted budget's password to `synchronize` when needed. It is sent
 only on the relevant budget requests and is not stored in the database or
-outbox. Device bearer credentials belong in platform secure storage.
+outbox. Device bearer credentials should move to platform secure storage before
+the app treats pairing as durable across process restarts.
 
 ## Pulling a budget
 
@@ -49,7 +62,7 @@ run keeps the server's `throughCursor` fixed, applies each page and its next
 cursor in one database transaction, and continues until `hasMore` is false.
 Upserts replace remote records; deletion events create tombstones. If the server
 requires a reset or changes generation, the coordinator fetches a fresh
-snapshot. The Companion's feed is shared server history, so independent device
+snapshot. The Tandem's feed is shared server history, so independent device
 databases each advance their own cursor over the same changes.
 
 The change feed and snapshot behavior, including retention and generation
@@ -59,7 +72,7 @@ resets, is described in [the API contract guide](api/README.md#transaction-reads
 
 Local edits are stored optimistically with their base revision, base snapshot,
 patch, operation UUID, and idempotency key. Unsent edits to one record can be
-coalesced while they share the same base. The current Companion write endpoint
+coalesced while they share the same base. The current Tandem write endpoint
 supports transaction updates and deletions only. Local creates are marked
 `rejected` with `create-not-supported`; the coordinator does not send them.
 
@@ -99,15 +112,19 @@ edits so users can understand what still needs attention.
 ## Local verification
 
 From `mobile/`, run the JVM regression and coverage checks for the persistence,
-coordinator, and generated-client adapter:
+coordinator, and generated-client adapter, then compile the connected app:
 
 ```sh
 ./gradlew :data:jvmTest :data:koverVerify :data:ktlintCheck \
   :api-client:jvmTest :api-client:koverVerify :api-client:ktlintCheck
+./gradlew :composeApp:compileAndroidMain :composeApp:compileKotlinIosArm64 \
+  :composeApp:compileKotlinIosSimulatorArm64 :composeApp:ktlintCheck \
+  :androidApp:assembleDebug
 ```
 
 Android and iOS target compilation is covered by the mobile CI job; iOS
 simulator runtime tests require macOS. The current Android build can be
 installed on an authorized device and started in sample preview mode as
-documented in the development setup. Do not treat the preview screens or their
-synthetic balances as live budget state.
+documented in the development setup. The live Activity list comes from the
+selected budget's local copy; do not treat the separately labeled preview
+category plan, account screens, or sample transaction form as live budget state.

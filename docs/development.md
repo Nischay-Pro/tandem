@@ -53,7 +53,7 @@ export PATH="$PWD/../.dev-tmp/android-sdk/platform-tools:$PATH"
 ./gradlew :androidApp:assembleDebug
 adb devices -l
 adb install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk
-adb shell am start -n org.actualbudget.companion.android/.MainActivity --ez preview true
+adb shell am start -n app.tandemforactual.android/.MainActivity --ez preview true
 ```
 
 The project uses the pinned Gradle 9.8.2 / Java 27 toolchain documented in
@@ -108,7 +108,7 @@ copied into the compiled output by the API build so startup behavior is the same
 in development and production. Because this release is still unreleased, the
 current migration identity was changed when its schema expanded. A database
 from the earlier pre-release identity now fails startup with an explicit history
-mismatch; use a compatible build or recreate that pre-release Companion
+mismatch; use a compatible build or recreate that pre-release Tandem
 database. The service never silently treats changed migration contents as
 already applied.
 
