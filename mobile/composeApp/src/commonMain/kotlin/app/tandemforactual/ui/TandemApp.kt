@@ -463,18 +463,32 @@ private val appRouteStackSaver =
 fun TandemApp(
     startInPreview: Boolean = false,
     database: TandemDatabase? = null,
+    deviceCredentialStore: DeviceCredentialStore? = null,
     nowEpochMillis: () -> Long = { 0L },
     allowInsecureLoopback: Boolean = false,
 ) {
     val state = rememberSaveable(saver = AppState.Saver) { AppState() }
     val apiClient = remember(allowInsecureLoopback) { TandemApiClient(allowInsecureLoopback) }
-    val mobileSession = remember(apiClient, database) { TandemMobileSession(apiClient, database, nowEpochMillis) }
+    val mobileSession =
+        remember(apiClient, database, deviceCredentialStore) {
+            TandemMobileSession(apiClient, database, nowEpochMillis, deviceCredentialStore)
+        }
     val coroutineScope = rememberCoroutineScope()
     var syncRetryCounter by remember { mutableStateOf(0) }
     val backStack =
         rememberSaveable(startInPreview, saver = appRouteStackSaver) {
             mutableStateListOf(if (startInPreview) AppRoute.BUDGET else AppRoute.WELCOME)
         }
+    LaunchedEffect(mobileSession) {
+        val storedServerUrl = mobileSession.restoreStoredSession()
+        if (storedServerUrl != null) {
+            state.serverUrl = storedServerUrl
+            if (backStack.lastOrNull() == AppRoute.WELCOME) {
+                backStack.clear()
+                backStack.add(AppRoute.BUDGET_CHOOSER)
+            }
+        }
+    }
     val navigation =
         AppNavigation(
             open = { next ->
@@ -747,6 +761,7 @@ fun TandemApp(
                     onResolveConflict = resolveConflict,
                     onDiscardWrite = discardWrite,
                     onRetryUncertainWrite = retryUncertainWrite,
+                    onForgetDevice = { coroutineScope.launch { mobileSession.forgetDevice() } },
                 )
             }
             if (route.isTab()) {
@@ -1027,6 +1042,7 @@ private fun ScreenContent(
     onResolveConflict: (String, Boolean) -> Unit,
     onDiscardWrite: (String) -> Unit,
     onRetryUncertainWrite: (String) -> Unit,
+    onForgetDevice: () -> Unit,
 ) {
     when (route) {
         AppRoute.WELCOME -> WelcomeScreen(navigation)
@@ -1131,7 +1147,8 @@ private fun ScreenContent(
         AppRoute.HOME_LAYOUT -> HomeLayoutScreen(state)
         AppRoute.BUDGET_PREFERENCES -> BudgetPreferencesScreen(state, mobileSession)
         AppRoute.SYNC_PREFERENCES -> SyncPreferencesScreen(state, mobileSession, onSyncNow)
-        AppRoute.SERVER_DEVICE -> ServerDeviceScreen(state, mobileSession, navigation)
+        AppRoute.SERVER_DEVICE ->
+            ServerDeviceScreen(state, mobileSession, navigation, onForgetDevice)
         AppRoute.SECURITY_PRIVACY -> SecurityScreen(state, mobileSession)
         AppRoute.NOTIFICATIONS -> NotificationsScreen(state)
         AppRoute.LOCAL_DATA -> LocalDataScreen(state, mobileSession, onSyncNow)
@@ -1736,7 +1753,16 @@ private fun PairingResultScreen(
                     BodyText(
                         "This device can access ${device.budgetIds.size} authorized budget scope${if (device.budgetIds.size == 1) "" else "s"}.",
                     )
-                    BodyText("The device credential stays in memory for this session and is not included in saved app state.")
+                    BodyText(
+                        when {
+                            mobileSession.isCredentialStored ->
+                                "The device credential is saved in this phone’s secure storage. Pairing codes and budget passwords are never saved."
+                            mobileSession.credentialStorageError != null ->
+                                "Secure storage is unavailable, so this pairing lasts only until the app closes. Pairing codes and budget passwords are never saved."
+                            else ->
+                                "This pairing lasts only until the app closes. Pairing codes and budget passwords are never saved."
+                        },
+                    )
                 }
             }
         }
@@ -3634,11 +3660,19 @@ private fun ServerDeviceScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
+    onForgetDevice: () -> Unit,
 ) {
     val device = mobileSession.pairedDevice
     PageColumn {
         Heading("Connection details", "Review the server address and device pairing.")
-        SectionCard("Server", if (device != null) "Paired for this app session" else "No device pairing") {
+        SectionCard(
+            "Server",
+            when {
+                device == null -> "No device pairing"
+                mobileSession.isCredentialStored -> "Paired on this phone"
+                else -> "Paired for this app session"
+            },
+        ) {
             ListRow("◎", "Server URL", state.serverUrl, if (device != null) "Paired" else "Add") {
                 navigation.open(AppRoute.SERVER_ADDRESS)
             }
@@ -3646,12 +3680,19 @@ private fun ServerDeviceScreen(
             ListRow(
                 "↻",
                 "Connection status",
-                if (mobileSession.isAuthenticated) "Device credential is active in memory" else "Pair this device to access budgets",
+                if (mobileSession.isAuthenticated) "Device credential is active" else "Pair this device to access budgets",
                 if (mobileSession.isAuthenticated) "Paired" else "Offline",
                 if (mobileSession.isAuthenticated) tandemPalette.positive else tandemPalette.warning,
             )
         }
-        SectionCard("This device", if (device != null) "Device pairing is active" else "Pairing is not active") {
+        SectionCard(
+            "This device",
+            when {
+                device == null -> "Pairing is not active"
+                mobileSession.isCredentialStored -> "Pairing is saved on this phone"
+                else -> "Pairing is active until the app closes"
+            },
+        ) {
             ListRow("▣", "Device name", if (device != null) "Tandem mobile" else "Not paired")
             DividerLine()
             ListRow(
@@ -3664,10 +3705,30 @@ private fun ServerDeviceScreen(
                 },
             )
             DividerLine()
-            ListRow("⌑", "Device credential", "In-memory for this app session", if (device != null) "Active" else "None")
+            ListRow(
+                "⌑",
+                "Device credential",
+                if (mobileSession.isCredentialStored) "Encrypted in system secure storage" else "In-memory for this app session",
+                when {
+                    mobileSession.isCredentialStored -> "Saved"
+                    device != null -> "Active"
+                    else -> "None"
+                },
+            )
         }
-        BodyText("Pairing codes are never saved. The device credential is held in memory only; pair again after the app process restarts.")
-        if (device == null) SecondaryButton("Pair this device") { navigation.open(AppRoute.SERVER_ADDRESS) }
+        BodyText(
+            if (mobileSession.isCredentialStored) {
+                "Pairing codes and budget passwords are never saved. The device credential is protected by the platform secure store. Removing it here only clears this phone; revoke the device on the server to disable its token."
+            } else {
+                "Pairing codes and budget passwords are never saved. The device credential is active only until the app closes."
+            },
+        )
+        mobileSession.credentialStorageError?.let { PreviewNote(it) }
+        if (device == null) {
+            SecondaryButton("Pair this device") { navigation.open(AppRoute.SERVER_ADDRESS) }
+        } else {
+            SecondaryButton("Forget this device on this phone", onClick = onForgetDevice)
+        }
     }
 }
 
@@ -3678,7 +3739,10 @@ private fun SecurityScreen(
 ) {
     PageColumn {
         Heading("Device protection", "Protect financial data and manage device access.")
-        SectionCard("Device unlock", "Device pairing is currently held in memory") {
+        SectionCard(
+            "Device unlock",
+            if (mobileSession.isCredentialStored) "Device credential is securely stored" else "Pairing is active for this app session",
+        ) {
             ToggleRow("Use biometric unlock", "Require this device’s biometrics to reopen a budget", state.faceUnlock) {
                 state.faceUnlock =
                     it
@@ -3697,13 +3761,18 @@ private fun SecurityScreen(
             ListRow(
                 "⌑",
                 "Device credential",
-                "Kept in memory until the app process exits",
-                if (mobileSession.isAuthenticated) "Active" else "Not paired",
+                if (mobileSession.isCredentialStored) "Encrypted in system secure storage" else "In-memory until the app closes",
+                when {
+                    mobileSession.isCredentialStored -> "Saved"
+                    mobileSession.isAuthenticated -> "Active"
+                    else -> "Not paired"
+                },
             )
             DividerLine()
             ListRow("◉", "Budget password", "Used only to open an encrypted budget", "Not stored")
         }
-        PreviewNote("Biometric unlock is not wired yet. Device credentials are not persisted between app launches.")
+        PreviewNote("Biometric unlock is not wired yet. Pairing codes and encrypted-budget passwords are never stored.")
+        mobileSession.credentialStorageError?.let { PreviewNote(it) }
     }
 }
 

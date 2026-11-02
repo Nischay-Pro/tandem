@@ -21,6 +21,8 @@ import app.tandemforactual.data.store.LocalRecordProjection
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
@@ -33,11 +35,12 @@ import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import kotlin.uuid.Uuid
 
-/** In-memory connection state. Device credentials and budget passwords are never saved here. */
+/** In-memory session state. Device credentials use a platform store; budget passwords are never persisted. */
 internal class TandemMobileSession(
     private val apiClient: TandemApiClient,
     database: TandemDatabase?,
     private val nowEpochMillis: () -> Long,
+    private val credentialStore: DeviceCredentialStore? = null,
 ) {
     private val repository = database?.let { LocalBudgetRepository(it, nowEpochMillis) }
     private val syncCoordinator =
@@ -59,6 +62,12 @@ internal class TandemMobileSession(
         private set
 
     var pairingError by mutableStateOf<String?>(null)
+        private set
+
+    var credentialStorageError by mutableStateOf<String?>(null)
+        private set
+
+    var isCredentialStored by mutableStateOf(false)
         private set
 
     var isLoadingBudgets by mutableStateOf(false)
@@ -122,6 +131,44 @@ internal class TandemMobileSession(
     val isAuthenticated: Boolean
         get() = apiClient.isAuthenticated
 
+    suspend fun restoreStoredSession(): String? {
+        val store = credentialStore ?: return null
+        val storedSession =
+            try {
+                withContext(Dispatchers.Default) { store.read() }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                credentialStorageError = "The saved device credential could not be read. Pair this device again."
+                clearStoredCredential()
+                return null
+            } ?: return null
+
+        return try {
+            pairedDevice = apiClient.restoreStoredSession(storedSession)
+            isCredentialStored = true
+            loadBudgets()
+            apiClient.currentServerUrl.takeIf { apiClient.isAuthenticated }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            apiClient.forgetSession()
+            pairedDevice = null
+            budgets = emptyList()
+            credentialStorageError = "The saved device credential is invalid. Pair this device again."
+            clearStoredCredential()
+            null
+        }
+    }
+
+    suspend fun forgetDevice() {
+        apiClient.forgetSession()
+        pairedDevice = null
+        budgets = emptyList()
+        budgetError = null
+        clearStoredCredential()
+    }
+
     suspend fun pair(
         serverUrl: String,
         pairingCode: String,
@@ -131,6 +178,7 @@ internal class TandemMobileSession(
         isPairing = true
         try {
             pairedDevice = apiClient.pair(serverUrl, pairingCode, deviceName)
+            persistCurrentSession()
             loadBudgets()
         } catch (error: CancellationException) {
             throw error
@@ -154,6 +202,12 @@ internal class TandemMobileSession(
             throw error
         } catch (error: TandemApiException) {
             budgetError = error.message ?: "Could not load budgets from this server."
+            if (error.httpStatus == 401) {
+                apiClient.forgetSession()
+                pairedDevice = null
+                budgets = emptyList()
+                clearStoredCredential()
+            }
         } catch (error: Exception) {
             budgetError = "Could not load budgets from this server. Check the connection and try again."
         } finally {
@@ -543,6 +597,33 @@ internal class TandemMobileSession(
         categoryGroupRecords = localRepository.findRecords(budgetId, "category-group")
         budgetMonthRecords = localRepository.findRecords(budgetId, "budget-month")
         pendingWrites = localRepository.readPendingWrites(budgetId)
+    }
+
+    private suspend fun persistCurrentSession() {
+        val store = credentialStore ?: return
+        val storedSession = apiClient.exportStoredSession() ?: return
+        credentialStorageError = null
+        try {
+            withContext(Dispatchers.Default) { store.write(storedSession) }
+            isCredentialStored = true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            isCredentialStored = false
+            credentialStorageError = "Secure storage is unavailable. This pairing will end when the app closes."
+        }
+    }
+
+    private suspend fun clearStoredCredential() {
+        val store = credentialStore ?: return
+        try {
+            withContext(Dispatchers.Default) { store.clear() }
+            isCredentialStored = false
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            credentialStorageError = "The saved device credential could not be removed."
+        }
     }
 }
 

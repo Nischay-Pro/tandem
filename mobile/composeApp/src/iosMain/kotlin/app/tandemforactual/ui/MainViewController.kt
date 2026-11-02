@@ -14,6 +14,7 @@ private fun createTandemViewController(database: app.tandemforactual.data.databa
     ComposeUIViewController {
         TandemApp(
             database = database,
+            deviceCredentialStore = IosDeviceCredentialStore(),
             nowEpochMillis = { Clock.System.now().toEpochMilliseconds() },
         )
     }

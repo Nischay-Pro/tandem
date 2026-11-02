@@ -49,6 +49,10 @@ class TandemApiClientTest {
                 assertEquals("household-owner", paired.principalId)
                 assertEquals(listOf("budget-1", "budget-2"), paired.budgetIds)
                 assertTrue(client.isAuthenticated)
+                assertEquals("https://tandem.example", client.currentServerUrl)
+                val storedSession = client.exportStoredSession()
+                assertTrue(storedSession.orEmpty().contains("test-device-token"))
+                assertFalse(storedSession.orEmpty().contains("4DF7-J1M9"))
                 assertNull(requests.first().headers[HttpHeaders.Authorization])
                 assertEquals("/api/v1/auth/pair", requests.first().url.encodedPath)
                 assertEquals(
@@ -71,7 +75,13 @@ class TandemApiClientTest {
                 val unauthenticated = captureApiException { client.listBudgets() }
                 assertEquals("not-paired", unauthenticated.errorCode)
                 assertEquals("Pair this device before loading its budgets.", unauthenticated.message)
-                assertEquals(2, requests.size)
+
+                val restored = client.restoreStoredSession(storedSession.orEmpty())
+                assertEquals(paired, restored)
+                assertTrue(client.isAuthenticated)
+                assertEquals(2, client.listBudgets().size)
+                assertEquals("Bearer test-device-token", requests.last().headers[HttpHeaders.Authorization])
+                assertEquals(3, requests.size)
             } finally {
                 cleanup()
                 Api.baseUrl = previousBaseUrl
@@ -223,6 +233,27 @@ class TandemApiClientTest {
                 Api.client.close()
                 previousClient.close()
             }
+        }
+
+    @Test
+    fun restoringStoredSessionRejectsMalformedAndIncompletePayloads() =
+        runBlocking {
+            val client = TandemApiClient()
+            assertEquals(
+                "Stored device session is invalid",
+                captureProtocolException { client.restoreStoredSession("not-json") }.message,
+            )
+            assertEquals(
+                "Server response is missing a valid serverUrl",
+                captureProtocolException { client.restoreStoredSession("{}") }.message,
+            )
+            assertEquals(
+                "Stored device session has no device",
+                captureProtocolException {
+                    client.restoreStoredSession("""{"serverUrl":"https://tandem.example","accessToken":"token"}""")
+                }.message,
+            )
+            assertFalse(client.isAuthenticated)
         }
 
     @Test

@@ -10,6 +10,7 @@ import com.kroegerama.openapi.kmp.gen.companion.CallException
 import com.kroegerama.openapi.kmp.gen.companion.HttpCallException
 import com.kroegerama.openapi.kmp.gen.companion.HttpCallResponse
 import io.ktor.http.Url
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -17,6 +18,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 
 data class PairedDevice(
@@ -57,6 +59,8 @@ class TandemApiClient(
     private val allowInsecureLoopback: Boolean = false,
 ) {
     private var accessToken: String? = null
+    private var serverUrl: String? = null
+    private var pairedDevice: PairedDevice? = null
     internal val bearerAuth =
         Auth.BearerAuth {
             accessToken?.let(AuthItem::Bearer)
@@ -69,14 +73,62 @@ class TandemApiClient(
     val isAuthenticated: Boolean
         get() = accessToken != null
 
+    val currentServerUrl: String?
+        get() = serverUrl
+
     fun restoreSession(
         serverUrl: String,
         token: String,
     ) {
-        Api.baseUrl = parseServerUrl(serverUrl, allowInsecureLoopback)
-        accessToken = token.takeIf { it.isNotBlank() }
-            ?: throw TandemApiProtocolException("Stored device credential is empty")
+        val sessionToken =
+            token.takeIf { it.isNotBlank() }
+                ?: throw TandemApiProtocolException("Stored device credential is empty")
+        val parsedUrl = parseServerUrl(serverUrl, allowInsecureLoopback)
+        Api.baseUrl = parsedUrl
+        this.serverUrl = parsedUrl.toString()
+        accessToken = sessionToken
         Api.setAuthProvider(bearerAuth)
+    }
+
+    fun exportStoredSession(): String? {
+        val token = accessToken ?: return null
+        val server = serverUrl ?: return null
+        val device = pairedDevice ?: return null
+        return buildJsonObject {
+            put("serverUrl", server)
+            put("accessToken", token)
+            put(
+                "device",
+                buildJsonObject {
+                    put("deviceId", device.deviceId)
+                    put("principalId", device.principalId)
+                    put("budgetIds", JsonArray(device.budgetIds.map(::JsonPrimitive)))
+                },
+            )
+        }.toString()
+    }
+
+    fun restoreStoredSession(value: String): PairedDevice {
+        val root =
+            try {
+                Json.parseToJsonElement(value).jsonObject
+            } catch (_: Exception) {
+                throw TandemApiProtocolException("Stored device session is invalid")
+            }
+        val server = root.requiredString("serverUrl")
+        val token = root.requiredString("accessToken")
+        val deviceJson =
+            root["device"] as? JsonObject
+                ?: throw TandemApiProtocolException("Stored device session has no device")
+        val device =
+            PairedDevice(
+                deviceId = deviceJson.requiredString("deviceId"),
+                principalId = deviceJson.requiredString("principalId"),
+                budgetIds = deviceJson.requiredStringArray("budgetIds"),
+            )
+        restoreSession(server, token)
+        pairedDevice = device
+        return device
     }
 
     suspend fun pair(
@@ -85,7 +137,9 @@ class TandemApiClient(
         deviceName: String,
     ): PairedDevice {
         Api.baseUrl = parseServerUrl(serverUrl, allowInsecureLoopback)
+        this.serverUrl = Api.baseUrl.toString()
         accessToken = null
+        pairedDevice = null
 
         val body =
             buildJsonObject {
@@ -99,7 +153,7 @@ class TandemApiClient(
         val token = payload.requiredString("accessToken")
 
         accessToken = token
-        return PairedDevice(deviceId, principalId, budgetIds)
+        return PairedDevice(deviceId, principalId, budgetIds).also { pairedDevice = it }
     }
 
     suspend fun listBudgets(): List<BudgetCatalogItem> {
@@ -130,6 +184,8 @@ class TandemApiClient(
 
     fun forgetSession() {
         accessToken = null
+        serverUrl = null
+        pairedDevice = null
         Api.clearAuthProvider(bearerAuth)
     }
 

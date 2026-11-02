@@ -64,10 +64,17 @@ need implementation.
 
 The eight-character pairing code is shown as readable, centered text in the
 entry field. It accepts the server's `XXXX-XXXX` format, with or without the
-hyphen. The code and device bearer credential are not saved in route state;
-the bearer credential is held in memory and requires re-pairing after process
-restart. Temporary wireframes, test data, and device review artifacts belong
-under ignored `.dev-tmp/` paths and must not be committed.
+hyphen. The pairing code is never persisted. After pairing, the app stores the
+server URL, device bearer credential, device identity, and authorized budget
+IDs through the platform secure store. Android encrypts that record with
+AES-GCM and keeps the key in Android Keystore; iOS stores it as a Keychain
+generic-password item marked for this device only. The app restores the device
+session on launch and clears the saved credential after the server rejects it.
+“Forget this device on this phone” removes the local credential; revoke the
+device on the server as well to invalidate its bearer token. Encrypted-budget
+passwords are not saved.
+Temporary wireframes, test data, and device review artifacts belong under
+ignored `.dev-tmp/` paths and must not be committed.
 
 ## Components and entry point
 
@@ -83,12 +90,15 @@ under ignored `.dev-tmp/` paths and must not be committed.
   uncertain, and rejected write review screens expose their supported
   keep/rebase, retry, and discard actions. Automatic foreground and reconnect
   sync triggers are not wired yet.
-- Device bearer credentials are held in memory for the current app process. The
-  user must pair again after Android or iOS terminates and restarts the app.
-  Persisting the credential with Android Keystore and the iOS Keychain remains
-  open work. Pairing codes and encrypted-budget passwords are excluded from
-  saved instance state; the budget password is cleared after a successful
-  initial sync.
+- Device bearer credentials are restored from platform secure storage when the
+  app launches. Android stores AES-GCM ciphertext in app-private preferences
+  with its encryption key in Android Keystore; iOS stores the serialized
+  session as a device-only Keychain generic-password item. A 401 clears the
+  local session.
+  Forgetting the device clears its credential from this phone but does not
+  revoke the server-side device token. Pairing codes and encrypted-budget
+  passwords are never persisted; the budget password is cleared after a
+  successful initial sync.
 - The budget, account, and Activity screens read local Room records. Cached
   budget months supply the available-to-budget, category-group, and category
   values; account snapshots supply current balances; transaction records supply
@@ -108,8 +118,8 @@ not be committed.
 
 Pass an encrypted budget's password to `synchronize` when needed. It is sent
 only on the relevant budget requests and is not stored in the database or
-outbox. Device bearer credentials should move to platform secure storage before
-the app treats pairing as durable across process restarts.
+outbox. Device credentials are persisted only through the Android Keystore
+backed store or iOS Keychain implementation.
 
 ## Pulling a budget
 
