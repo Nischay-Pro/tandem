@@ -1,5 +1,12 @@
-package org.actualbudget.companion.api.client
+package app.tandemforactual.api.client
 
+import app.tandemforactual.api.generated.Api
+import app.tandemforactual.api.generated.Auth
+import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.data.store.BudgetChange
+import app.tandemforactual.data.store.BudgetSyncProtocolException
+import app.tandemforactual.data.store.BudgetSyncRemoteException
+import app.tandemforactual.data.store.RemoteOperationStatus
 import com.kroegerama.openapi.kmp.gen.companion.AuthItem
 import com.kroegerama.openapi.kmp.gen.companion.AuthPlugin
 import io.ktor.client.HttpClient
@@ -17,13 +24,6 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
-import org.actualbudget.companion.api.generated.Api
-import org.actualbudget.companion.api.generated.Auth
-import org.actualbudget.companion.data.database.OutboxOperationEntity
-import org.actualbudget.companion.data.store.BudgetChange
-import org.actualbudget.companion.data.store.BudgetSyncProtocolException
-import org.actualbudget.companion.data.store.BudgetSyncRemoteException
-import org.actualbudget.companion.data.store.RemoteOperationStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

@@ -10,7 +10,7 @@ plugins {
 kotlin {
   jvm()
   android {
-    namespace = "org.actualbudget.companion.api.client"
+    namespace = "app.tandemforactual.api.client"
     compileSdk = 36
     minSdk = 26
   }
@@ -29,7 +29,7 @@ kotlin {
 }
 
 kmpgen {
-  spec(packageName = "org.actualbudget.companion.api.generated") {
+  spec(packageName = "app.tandemforactual.api.generated") {
     specFile = file("../../docs/api/openapi-v1.json")
   }
 }
@@ -38,7 +38,7 @@ ktlint {
   filter {
     include("**/src/**/*.kt", "**/*.kts")
     exclude(
-      "**/org/actualbudget/companion/api/generated/**",
+      "**/app/tandemforactual/api/generated/**",
       "**/Api.kt",
       "**/Auth.kt",
       "**/Services.kt",
@@ -52,7 +52,7 @@ kover {
     filters {
       excludes {
         // Kover treats the generated, compile-time @SerialName metadata line as executable.
-        classes("org.actualbudget.companion.api.generated.models.ApiV1HealthReady200Response*")
+        classes("app.tandemforactual.api.generated.models.ApiV1HealthReady200Response*")
       }
     }
     verify {

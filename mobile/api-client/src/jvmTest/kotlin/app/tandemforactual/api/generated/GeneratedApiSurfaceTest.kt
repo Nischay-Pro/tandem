@@ -1,4 +1,4 @@
-package org.actualbudget.companion.api.generated
+package app.tandemforactual.api.generated
 
 import com.kroegerama.openapi.kmp.gen.companion.AuthItem
 import com.kroegerama.openapi.kmp.gen.companion.AuthPlugin
@@ -19,12 +19,12 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import org.actualbudget.companion.api.generated.api.AuthenticationApi
-import org.actualbudget.companion.api.generated.api.BudgetsApi
-import org.actualbudget.companion.api.generated.api.DefaultApi
-import org.actualbudget.companion.api.generated.api.HealthApi
-import org.actualbudget.companion.api.generated.api.TransactionsApi
-import org.actualbudget.companion.api.generated.models.ApiV1HealthReady200Response
+import app.tandemforactual.api.generated.api.AuthenticationApi
+import app.tandemforactual.api.generated.api.BudgetsApi
+import app.tandemforactual.api.generated.api.DefaultApi
+import app.tandemforactual.api.generated.api.HealthApi
+import app.tandemforactual.api.generated.api.TransactionsApi
+import app.tandemforactual.api.generated.models.ApiV1HealthReady200Response
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull

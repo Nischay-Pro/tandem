@@ -1,0 +1,256 @@
+package app.tandemforactual.api.client
+
+import app.tandemforactual.api.generated.Api
+import app.tandemforactual.api.generated.Auth
+import com.kroegerama.openapi.kmp.gen.companion.AuthPlugin
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.client.plugins.DefaultRequest
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.HttpRequestData
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.Url
+import io.ktor.http.content.TextContent
+import io.ktor.http.headersOf
+import io.ktor.http.takeFrom
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.runBlocking
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+class TandemApiClientTest {
+    @Test
+    fun pairingAndBudgetCatalogUseTheGeneratedApi() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            val engine =
+                MockEngine { request ->
+                    requests += request
+                    when (request.url.encodedPath) {
+                        "/api/v1/auth/pair" -> respond(pairResponse(), headers = jsonHeaders())
+                        "/api/v1/budgets" -> respond(budgetsResponse(), headers = jsonHeaders())
+                        else -> error("Unexpected API path ${request.url.encodedPath}")
+                    }
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                val paired = client.pair("https://tandem.example/", " 4DF7-J1M9 ", " Pixel 10a ")
+
+                assertEquals("device-1", paired.deviceId)
+                assertEquals("household-owner", paired.principalId)
+                assertEquals(listOf("budget-1", "budget-2"), paired.budgetIds)
+                assertTrue(client.isAuthenticated)
+                assertNull(requests.first().headers[HttpHeaders.Authorization])
+                assertEquals("/api/v1/auth/pair", requests.first().url.encodedPath)
+                assertEquals(
+                    """{"code":"4DF7-J1M9","deviceName":"Pixel 10a"}""",
+                    (requests.first().body as TextContent).text,
+                )
+
+                val budgets = client.listBudgets()
+                assertEquals(
+                    listOf(
+                        BudgetCatalogItem("budget-1", "Household", false),
+                        BudgetCatalogItem("budget-2", "Travel", true),
+                    ),
+                    budgets,
+                )
+                assertEquals("Bearer test-device-token", requests.last().headers[HttpHeaders.Authorization])
+
+                client.forgetSession()
+                assertFalse(client.isAuthenticated)
+                val unauthenticated = captureApiException { client.listBudgets() }
+                assertEquals("not-paired", unauthenticated.errorCode)
+                assertEquals(2, requests.size)
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
+    fun invalidServerAndRejectedPairingReturnSanitizedErrors() =
+        runBlocking {
+            var status = HttpStatusCode.Unauthorized
+            val engine =
+                MockEngine { request ->
+                    assertEquals("/api/v1/auth/pair", request.url.encodedPath)
+                    respond("""{"error":"pairing-code-invalid","private":"host detail"}""", status, jsonHeaders())
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                val invalidUrl = captureApiException { client.pair("http://tandem.example", "4DF7-J1M9", "Phone") }
+                assertEquals("invalid-server-url", invalidUrl.errorCode)
+                val malformedUrl = captureApiException { client.pair("https://tandem.example:invalid", "4DF7-J1M9", "Phone") }
+                assertEquals("invalid-server-url", malformedUrl.errorCode)
+
+                status = HttpStatusCode.BadRequest
+                val rejected = captureApiException { client.pair("https://tandem.example", "NOPE-0000", "Phone") }
+                assertEquals("http-400", rejected.errorCode)
+                assertEquals(400, rejected.httpStatus)
+                assertEquals("Check the pairing code and try again.", rejected.message)
+                assertFalse(rejected.message.orEmpty().contains("host detail"))
+                assertFalse(client.isAuthenticated)
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
+    fun restoringSessionRejectsEmptyTokenAndUsesRestoredCredential() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            val engine =
+                MockEngine { request ->
+                    requests += request
+                    respond(budgetsResponse(), headers = jsonHeaders())
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                val emptyToken = captureProtocolException { client.restoreSession("https://tandem.example", " ") }
+                assertEquals("Stored device credential is empty", emptyToken.message)
+                assertFalse(client.isAuthenticated)
+
+                client.restoreSession(" https://tandem.example/ ", "restored-device-token")
+                assertTrue(client.isAuthenticated)
+                assertEquals(2, client.listBudgets().size)
+                assertEquals("Bearer restored-device-token", requests.single().headers[HttpHeaders.Authorization])
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
+    fun malformedPairingAndBudgetPayloadsAreRejectedAsProtocolErrors() =
+        runBlocking {
+            var response = """{"deviceId":"device-1","principalId":"owner","budgetIds":[""] ,"accessToken":"token"}"""
+            var path = "/api/v1/auth/pair"
+            val engine =
+                MockEngine { request ->
+                    assertEquals(path, request.url.encodedPath)
+                    respond(response, headers = jsonHeaders())
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                val badPair = captureProtocolException { client.pair("https://tandem.example", "4DF7-J1M9", "Phone") }
+                assertEquals("Server response contains an invalid budgetIds entry", badPair.message)
+
+                response = """{"deviceId":"device-1","principalId":"owner","budgetIds":"budget-1","accessToken":"token"}"""
+                val badBudgetIds = captureProtocolException { client.pair("https://tandem.example", "4DF7-J1M9", "Phone") }
+                assertEquals("Server response is missing a valid budgetIds", badBudgetIds.message)
+
+                client.restoreSession("https://tandem.example", "token")
+                path = "/api/v1/budgets"
+                response = "{}"
+                val missingCatalog = captureProtocolException { client.listBudgets() }
+                assertEquals("Budget catalog response is missing its budgets", missingCatalog.message)
+
+                response = """{"budgets":[{"budgetId":"budget-1","name":"Household","isEncrypted":"yes"}]}"""
+                val badEncryptionFlag = captureProtocolException { client.listBudgets() }
+                assertEquals("Budget catalog item has an invalid encryption flag", badEncryptionFlag.message)
+
+                response = """{"budgets":[null]}"""
+                val badItem = captureProtocolException { client.listBudgets() }
+                assertEquals("Budget catalog contains an invalid item", badItem.message)
+
+                response = """{"budgets":[]}"""
+                assertTrue(client.listBudgets().isEmpty())
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
+    fun transportFailuresAreSanitized() =
+        runBlocking {
+            val engine = MockEngine { throw IllegalStateException("private transport detail") }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                client.restoreSession("https://tandem.example", "device-token")
+                val failure = captureApiException { client.listBudgets() }
+                assertEquals("network-error", failure.errorCode)
+                assertEquals("Could not connect to the Tandem server. Check the address and connection.", failure.message)
+                assertFalse(failure.message.orEmpty().contains("private transport detail"))
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    private fun configureApi(
+        engine: MockEngine,
+        auth: Auth.BearerAuth,
+    ): () -> Unit {
+        Api.baseUrl = Url("https://tandem.example")
+        Api.setAuthProvider(auth)
+        Api.updateClient(
+            createHttpClient = {
+                HttpClient(engine) {
+                    install(ContentNegotiation) { json(Api.json) }
+                    install(DefaultRequest) { url.takeFrom(Api.baseUrl) }
+                    install(AuthPlugin) {
+                        authItem { key -> if (key == auth.key) auth.provideAuthItem() else null }
+                    }
+                }
+            },
+        )
+        return { Api.clearAuthProvider(auth) }
+    }
+
+    private suspend fun captureApiException(block: suspend () -> Any?): TandemApiException =
+        try {
+            block()
+            error("Expected a Tandem API exception")
+        } catch (exception: TandemApiException) {
+            exception
+        }
+
+    private suspend fun captureProtocolException(block: suspend () -> Any?): TandemApiProtocolException =
+        try {
+            block()
+            error("Expected a Tandem protocol exception")
+        } catch (exception: TandemApiProtocolException) {
+            exception
+        }
+
+    private fun jsonHeaders() = headersOf(HttpHeaders.ContentType, "application/json")
+
+    private fun pairResponse() =
+        """{"deviceId":"device-1","principalId":"household-owner","budgetIds":["budget-1","budget-2"],"accessToken":"test-device-token"}"""
+
+    private fun budgetsResponse() =
+        """{"budgets":[{"budgetId":"budget-1","name":"Household","isEncrypted":false},{"budgetId":"budget-2","name":"Travel","isEncrypted":true}]}"""
+}

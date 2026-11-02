@@ -1,5 +1,15 @@
-package org.actualbudget.companion.api.client
+package app.tandemforactual.api.client
 
+import app.tandemforactual.api.generated.api.BudgetsApi
+import app.tandemforactual.api.generated.api.TransactionsApi
+import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.data.store.BudgetSyncProtocolException
+import app.tandemforactual.data.store.BudgetSyncRemote
+import app.tandemforactual.data.store.BudgetSyncRemoteException
+import app.tandemforactual.data.store.RemoteBudgetChangePage
+import app.tandemforactual.data.store.RemoteBudgetSnapshot
+import app.tandemforactual.data.store.RemoteOperationResult
+import app.tandemforactual.data.store.RemoteTransactionRecord
 import arrow.core.Either
 import com.kroegerama.openapi.kmp.gen.companion.CallException
 import com.kroegerama.openapi.kmp.gen.companion.HttpCallException
@@ -7,16 +17,6 @@ import com.kroegerama.openapi.kmp.gen.companion.HttpCallResponse
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import org.actualbudget.companion.api.generated.api.BudgetsApi
-import org.actualbudget.companion.api.generated.api.TransactionsApi
-import org.actualbudget.companion.data.database.OutboxOperationEntity
-import org.actualbudget.companion.data.store.BudgetSyncProtocolException
-import org.actualbudget.companion.data.store.BudgetSyncRemote
-import org.actualbudget.companion.data.store.BudgetSyncRemoteException
-import org.actualbudget.companion.data.store.RemoteBudgetChangePage
-import org.actualbudget.companion.data.store.RemoteBudgetSnapshot
-import org.actualbudget.companion.data.store.RemoteOperationResult
-import org.actualbudget.companion.data.store.RemoteTransactionRecord
 import kotlin.uuid.Uuid
 
 /** Adapts the generated OpenAPI client to the local-first sync protocol. */

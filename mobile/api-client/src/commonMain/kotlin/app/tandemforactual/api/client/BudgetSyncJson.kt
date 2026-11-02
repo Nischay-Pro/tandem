@@ -1,5 +1,14 @@
-package org.actualbudget.companion.api.client
+package app.tandemforactual.api.client
 
+import app.tandemforactual.data.store.BudgetChange
+import app.tandemforactual.data.store.BudgetSyncProtocolException
+import app.tandemforactual.data.store.LocalRecordProjection
+import app.tandemforactual.data.store.RemoteBudgetChangePage
+import app.tandemforactual.data.store.RemoteBudgetRecord
+import app.tandemforactual.data.store.RemoteBudgetSnapshot
+import app.tandemforactual.data.store.RemoteOperationResult
+import app.tandemforactual.data.store.RemoteOperationStatus
+import app.tandemforactual.data.store.RemoteTransactionRecord
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -11,15 +20,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
-import org.actualbudget.companion.data.store.BudgetChange
-import org.actualbudget.companion.data.store.BudgetSyncProtocolException
-import org.actualbudget.companion.data.store.LocalRecordProjection
-import org.actualbudget.companion.data.store.RemoteBudgetChangePage
-import org.actualbudget.companion.data.store.RemoteBudgetRecord
-import org.actualbudget.companion.data.store.RemoteBudgetSnapshot
-import org.actualbudget.companion.data.store.RemoteOperationResult
-import org.actualbudget.companion.data.store.RemoteOperationStatus
-import org.actualbudget.companion.data.store.RemoteTransactionRecord
 
 object BudgetSyncJson {
     fun parseSnapshot(
