@@ -86,7 +86,17 @@ const authHeaders = { authorization: `Bearer ${accessToken}` };
 
 describe("budget snapshot and change feed routes", () => {
   it("lists named, encryption-aware budgets only within the device scope", async () => {
-    const budgetApi = createBudgetReadApi();
+    const budgetApi = createBudgetReadApi({
+      listBudgets: vi.fn(async () => [
+        { budgetId: "budget-1", name: "Household", isEncrypted: false },
+        {
+          budgetId: "budget-1",
+          name: "Duplicate household",
+          isEncrypted: false,
+        },
+        { budgetId: "private-budget", name: "Private", isEncrypted: true },
+      ]),
+    });
     const app = await buildApp(budgetApi);
     const unauthorized = await app.inject({
       method: "GET",

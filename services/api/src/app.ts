@@ -1033,12 +1033,19 @@ function registerBudgetReadRoutes(
 
       try {
         const budgets = await listBudgets();
-        reply.header("cache-control", "no-store");
-        return reply.code(200).send({
-          budgets: budgets.filter((budget) =>
-            DeviceAuthorization.canAccessBudget(device, budget.budgetId),
-          ),
+        const seenBudgetIds = new Set<string>();
+        const authorizedBudgets = budgets.filter((budget) => {
+          if (
+            !DeviceAuthorization.canAccessBudget(device, budget.budgetId) ||
+            seenBudgetIds.has(budget.budgetId)
+          ) {
+            return false;
+          }
+          seenBudgetIds.add(budget.budgetId);
+          return true;
         });
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send({ budgets: authorizedBudgets });
       } catch (error) {
         reportTransactionFailure("Budget catalog read failed", error);
         return budgetReadFailed(reply);
