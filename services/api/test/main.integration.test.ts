@@ -4,6 +4,8 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { reportProcessFailure, runApi, runProductionApi } from "../src/main.js";
 import type { Database } from "../src/database.js";
+import { createPostgresDatabase } from "../src/database.js";
+import { runPairingCommand } from "../src/auth/pairing-cli.js";
 import type { ShutdownSignal } from "../src/server.js";
 import { OperatorMessageError } from "../src/operator-message-error.js";
 
@@ -11,6 +13,13 @@ const actualApi = vi.hoisted(() => ({
   init: vi.fn(async () => undefined),
   getServerVersion: vi.fn(async () => ({ version: "26.10.0" })),
   downloadBudget: vi.fn(async () => undefined),
+  getBudgets: vi.fn(async () => [
+    {
+      groupId: "synthetic-catalog-budget",
+      name: "Synthetic catalog budget",
+      encryptKeyId: "synthetic-encryption-key-id",
+    },
+  ]),
   sync: vi.fn(async () => undefined),
   shutdown: vi.fn(async () => undefined),
 }));
@@ -132,6 +141,53 @@ describe("API bootstrap integration", () => {
     await handlers.get("SIGTERM")?.();
   });
 
+  it("wires the Actual budget catalog into authenticated runtime reads", async () => {
+    const port = await findAvailablePort();
+    const environment = {
+      DATABASE_URL: isolatedDatabaseUrl,
+      HOST: "127.0.0.1",
+      PORT: String(port),
+      ACTUAL_SERVER_URL: "http://actual.example",
+      ACTUAL_SERVER_PASSWORD: "synthetic-actual-server-password",
+      ACTUAL_API_DATA_DIR: `/tmp/tandem-main-${randomUUID()}`,
+    };
+    actualApi.getBudgets.mockClear();
+    const app = await runApi(environment, createPostgresDatabase, () => {});
+
+    try {
+      const pairing = await runPairingCommand(["--all-budgets"], {
+        DATABASE_URL: isolatedDatabaseUrl,
+      });
+      const pairedResponse = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/pair",
+        payload: { code: pairing.code, deviceName: "Synthetic test phone" },
+      });
+      expect(pairedResponse.statusCode).toBe(201);
+      const paired = pairedResponse.json() as { accessToken: string };
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/api/v1/budgets",
+        headers: { authorization: `Bearer ${paired.accessToken}` },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        budgets: [
+          {
+            budgetId: "synthetic-catalog-budget",
+            name: "Synthetic catalog budget",
+            isEncrypted: true,
+          },
+        ],
+      });
+      expect(actualApi.getBudgets).toHaveBeenCalledOnce();
+    } finally {
+      await app.close();
+    }
+  });
+
   it("logs the safe migration-history diagnostic from a production startup failure", async () => {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) {
@@ -179,7 +235,7 @@ describe("API bootstrap integration", () => {
       expect(error).toBeInstanceOf(OperatorMessageError);
       expect(consoleError).toHaveBeenCalledWith("API startup failed", {
         message: expect.stringContaining(
-          "Companion migration history mismatch at position 1: expected 20261101155148-companion-schema-v2, found 20261101000000-older-schema",
+          "Tandem migration history mismatch at position 1: expected 20261101155148-companion-schema-v2, found 20261101000000-older-schema",
         ),
       });
     } finally {
@@ -211,7 +267,7 @@ describe("API bootstrap integration", () => {
         PORT: String(port),
         ACTUAL_SERVER_URL: "http://127.0.0.1:5006",
         ACTUAL_SERVER_PASSWORD: "synthetic-server-password",
-        ACTUAL_API_DATA_DIR: "/tmp/actual-companion-runtime-test",
+        ACTUAL_API_DATA_DIR: "/tmp/tandem-runtime-test",
       },
       () => database,
       vi.fn(),
@@ -220,7 +276,7 @@ describe("API bootstrap integration", () => {
     expect(actualApi.init).toHaveBeenCalledWith({
       serverURL: "http://127.0.0.1:5006",
       password: "synthetic-server-password",
-      dataDir: "/tmp/actual-companion-runtime-test",
+      dataDir: "/tmp/tandem-runtime-test",
     });
     expect(actualApi.getServerVersion).toHaveBeenCalledOnce();
     const response = await app.inject({

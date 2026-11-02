@@ -71,10 +71,9 @@ export async function buildApiApp(
     openapi: {
       openapi: "3.1.0",
       info: {
-        title: "Actual Budget Companion API",
+        title: "Tandem for Actual Budget API",
         version: "0.1.0",
-        description:
-          "Unofficial API for the Actual Budget Companion ecosystem.",
+        description: "Unofficial API for the Tandem for Actual Budget app.",
       },
       tags: [
         { name: "Health" },
@@ -987,6 +986,66 @@ function registerBudgetReadRoutes(
     additionalProperties: false,
   };
 
+  app.get(
+    "/api/v1/budgets",
+    {
+      schema: {
+        tags: ["Budgets"],
+        operationId: "listBudgets",
+        summary: "List Actual budgets available to the authenticated device",
+        security: [{ bearerAuth: [] }],
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              budgets: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    budgetId: { type: "string" },
+                    name: { type: "string" },
+                    isEncrypted: { type: "boolean" },
+                  },
+                  required: ["budgetId", "name", "isEncrypted"],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ["budgets"],
+            additionalProperties: false,
+          },
+          401: errorSchema,
+          502: errorSchema,
+          503: errorSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const device = await requireDevice(
+        deviceAuth,
+        request.headers.authorization,
+        reply,
+      );
+      if (!device) return reply;
+      const listBudgets = budgetReadApi?.listBudgets;
+      if (!listBudgets) return actualNotConfigured(reply);
+
+      try {
+        const budgets = await listBudgets();
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send({
+          budgets: budgets.filter((budget) =>
+            DeviceAuthorization.canAccessBudget(device, budget.budgetId),
+          ),
+        });
+      } catch (error) {
+        reportTransactionFailure("Budget catalog read failed", error);
+        return budgetReadFailed(reply);
+      }
+    },
+  );
+
   app.get<{
     Params: BudgetRouteParams;
     Headers: BudgetReadHeaders;
@@ -1233,7 +1292,7 @@ async function requireDevice(
   if (device) {
     return device;
   }
-  reply.header("www-authenticate", 'Bearer realm="actual-budget-companion"');
+  reply.header("www-authenticate", 'Bearer realm="tandem-for-actual"');
   await reply.code(401).send({
     error: {
       code: "unauthorized",

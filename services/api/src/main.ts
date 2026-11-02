@@ -9,6 +9,7 @@ import { createTransactionApi } from "./actual/transaction-api.js";
 import { TransactionReconciler } from "./actual/transaction-reconciler.js";
 import { createActualTransactionStore } from "./actual/transaction-store.js";
 import { ActualBudgetSnapshotReader } from "./actual/budget-snapshot-reader.js";
+import { ActualBudgetCatalogReader } from "./actual/budget-catalog-reader.js";
 import { BudgetReadApi } from "./budget-projection/budget-read-api.js";
 import { OperatorMessageError } from "./operator-message-error.js";
 
@@ -37,11 +38,13 @@ function createActualRuntime(
   }
   const session = new ActualSession(actualApi, actualConfig);
   const transactions = createActualTransactionStore();
+  const budgetCatalogReader = new ActualBudgetCatalogReader(session);
   const budgetReadApi = new BudgetReadApi(
     database,
     new ActualBudgetSnapshotReader(session),
     database.budgetProjection,
     changeFeedEpoch,
+    () => budgetCatalogReader.read(),
   );
   const reconciler = new TransactionReconciler(
     database,

@@ -72,6 +72,27 @@ function createApi(
 }
 
 describe("budget read API", () => {
+  it("exposes the Actual budget catalog reader when configured", async () => {
+    const fake = createApi();
+    const budgets = [
+      { budgetId: "budget-1", name: "Household", isEncrypted: false },
+    ];
+    const listBudgets = vi.fn(async () => budgets);
+    const api = new BudgetReadApi(
+      { withBudgetLock: fake.lock } as BudgetLockPort,
+      fake.reader,
+      {
+        applySnapshot: fake.applySnapshot,
+        readChanges: fake.readChanges,
+      } as unknown as BudgetProjectionStore,
+      "feed-epoch-1",
+      listBudgets,
+    );
+
+    await expect(api.listBudgets?.()).resolves.toBe(budgets);
+    expect(listBudgets).toHaveBeenCalledOnce();
+  });
+
   it("refreshes Actual and persists a complete snapshot under the budget lock", async () => {
     const fake = createApi();
     await expect(

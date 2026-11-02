@@ -15,7 +15,14 @@ export interface BudgetChangeRequest {
   encryptionPassword?: string;
 }
 
+export interface BudgetCatalogEntry {
+  budgetId: string;
+  name: string;
+  isEncrypted: boolean;
+}
+
 export interface BudgetReadApiPort {
+  listBudgets?: (() => Promise<BudgetCatalogEntry[]>) | undefined;
   getSnapshot(
     budgetId: string,
     encryptionPassword?: string,
@@ -24,12 +31,16 @@ export interface BudgetReadApiPort {
 }
 
 export class BudgetReadApi implements BudgetReadApiPort {
+  readonly listBudgets: (() => Promise<BudgetCatalogEntry[]>) | undefined;
+
   constructor(
     private readonly locks: BudgetLockPort,
     private readonly reader: BudgetSnapshotReader,
     private readonly store: BudgetProjectionStore,
     private readonly feedEpoch: string,
+    listBudgets?: () => Promise<BudgetCatalogEntry[]>,
   ) {
+    this.listBudgets = listBudgets;
     if (!/^[A-Za-z0-9._:-]{1,100}$/.test(feedEpoch)) {
       throw new Error("Change feed epoch is invalid");
     }

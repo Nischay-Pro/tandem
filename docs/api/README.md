@@ -1,6 +1,6 @@
-# Companion API
+# Tandem API
 
-The Companion REST API is versioned under `/api/v1`. It is served by the self-hosted Companion service; Actual's own server does not expose a general-purpose REST API.
+The Tandem REST API is versioned under `/api/v1`. It is served by the self-hosted Tandem service; Actual's own server does not expose a general-purpose REST API.
 
 The generated OpenAPI 3.1 document is served from the running API at:
 
@@ -22,6 +22,7 @@ definitions and is part of `pnpm check:all`.
 | `GET`    | `/api/v1/auth/me`                                                    | Return the authenticated device and its budget scope.          |
 | `GET`    | `/api/v1/devices`                                                    | List devices paired to the same principal.                     |
 | `DELETE` | `/api/v1/devices/{deviceId}`                                         | Revoke a paired device token.                                  |
+| `GET`    | `/api/v1/budgets`                                                    | List Actual budgets visible to the authenticated device.       |
 | `GET`    | `/api/v1/budgets/{budgetId}/snapshot`                                | Refresh and read a complete budget snapshot.                   |
 | `GET`    | `/api/v1/budgets/{budgetId}/changes`                                 | Read generation-aware pages of budget changes.                 |
 | `GET`    | `/api/v1/budgets/{budgetId}/transactions/{transactionId}`            | Read a transaction snapshot and revision.                      |
@@ -34,7 +35,7 @@ Create a one-time pairing code from an API container with database access:
 
 ```sh
 docker compose -f docker-compose.dev.yml exec api \
-  pnpm --filter @actual-budget-companion/api pair \
+  pnpm --filter @tandem-for-actual/api pair \
   --budget-id '<Actual budget sync ID>'
 ```
 
@@ -78,15 +79,20 @@ devices. Attempts to manage an invisible device return 404. Revoked tokens stop
 authenticating immediately. The pairing response uses `Cache-Control: no-store`
 because it contains the new credential.
 
+`GET /api/v1/budgets` requires a device token and returns cloud-backed budgets
+within that device's authorized scope. Each item includes its Actual sync ID,
+display name, and whether the budget is encrypted. The response does not expose
+an encryption key or password and uses `Cache-Control: no-store`.
+
 ## Transaction reads and reconciliation
 
-Set `ACTUAL_SERVER_URL` and `ACTUAL_SERVER_PASSWORD` on the Companion API
+Set `ACTUAL_SERVER_URL` and `ACTUAL_SERVER_PASSWORD` on the Tandem API
 container to enable Actual integration. The server must be the exact version
 supported by the API build; the API fails startup if it cannot verify that
 version. `ACTUAL_API_DATA_DIR` defaults to `/data/actual-api` and must be mounted
 on persistent storage. This workspace belongs to the official Node.js API and
 can contain decrypted budget data; protect it and its backups as financial data.
-The server password authenticates the Companion service to Actual. It is never
+The server password authenticates the Tandem service to Actual. It is never
 sent to mobile devices.
 
 Startup logs include application-controlled configuration and migration-history
@@ -141,7 +147,7 @@ These endpoints return the state in the Actual copy downloaded for that
 request. Actual offers no public revision-conditional reads or incremental
 feed, so a change made through another Actual client after the download is
 visible on the next refresh. Refresh failures return a structured `502` and do
-not advance the Companion cursor. PostgreSQL stores a plaintext projection of
+not advance the Tandem cursor. PostgreSQL stores a plaintext projection of
 budget data; protect its volume and backups as financial data.
 
 Use `GET /api/v1/budgets/{budgetId}/transactions/{transactionId}` to obtain the
@@ -178,7 +184,7 @@ principal and within the device's budget scope. Missing, foreign, and out-of-sco
 operations return HTTP 404.
 
 The public Actual transaction update/delete API has no revision precondition.
-The Companion detects changes visible before a write and records them as
+The Tandem detects changes visible before a write and records them as
 conflicts, but cannot prevent an Actual edit racing between its last read and
 write. Transfers and split transactions are readable but remain non-editable
 through reconciliation until their mutation semantics are verified.

@@ -59,6 +59,10 @@ function createDeviceAuth(device?: DeviceRecord) {
 
 function createBudgetReadApi(overrides: Record<string, unknown> = {}) {
   return {
+    listBudgets: vi.fn(async () => [
+      { budgetId: "budget-1", name: "Household", isEncrypted: false },
+      { budgetId: "private-budget", name: "Private", isEncrypted: true },
+    ]),
     getSnapshot: vi.fn(async () => snapshot),
     getChanges: vi.fn(async () => page),
     ...overrides,
@@ -81,6 +85,64 @@ async function buildApp(
 const authHeaders = { authorization: `Bearer ${accessToken}` };
 
 describe("budget snapshot and change feed routes", () => {
+  it("lists named, encryption-aware budgets only within the device scope", async () => {
+    const budgetApi = createBudgetReadApi();
+    const app = await buildApp(budgetApi);
+    const unauthorized = await app.inject({
+      method: "GET",
+      url: "/api/v1/budgets",
+    });
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/budgets",
+      headers: authHeaders,
+    });
+
+    expect(unauthorized.statusCode).toBe(401);
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.json()).toEqual({
+      budgets: [
+        { budgetId: "budget-1", name: "Household", isEncrypted: false },
+      ],
+    });
+    expect(budgetApi.listBudgets).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
+  it("reports unavailable or failed budget catalog reads", async () => {
+    const withoutActual = await buildApp(undefined);
+    const unavailable = await withoutActual.inject({
+      method: "GET",
+      url: "/api/v1/budgets",
+      headers: authHeaders,
+    });
+    expect(unavailable.statusCode).toBe(503);
+    await withoutActual.close();
+
+    const failedApi = createBudgetReadApi({
+      listBudgets: vi.fn(async () => {
+        throw new Error("private Actual account data");
+      }),
+    });
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const app = await buildApp(failedApi);
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/budgets",
+      headers: authHeaders,
+    });
+    expect(response.statusCode).toBe(502);
+    expect(response.body).not.toContain("private Actual account data");
+    expect(consoleError).toHaveBeenCalledWith("Budget catalog read failed", {
+      errorType: "Error",
+    });
+    vi.restoreAllMocks();
+    await app.close();
+  });
+
   it("returns a no-store snapshot and forwards its budget encryption password", async () => {
     const budgetApi = createBudgetReadApi();
     const app = await buildApp(budgetApi);
