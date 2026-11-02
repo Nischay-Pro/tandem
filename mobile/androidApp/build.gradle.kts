@@ -19,6 +19,10 @@ android {
   compileOptions {
     isCoreLibraryDesugaringEnabled = true
   }
+
+  buildFeatures {
+    buildConfig = true
+  }
 }
 
 dependencies {

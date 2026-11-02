@@ -69,6 +69,7 @@ class TandemApiClientTest {
                 assertFalse(client.isAuthenticated)
                 val unauthenticated = captureApiException { client.listBudgets() }
                 assertEquals("not-paired", unauthenticated.errorCode)
+                assertEquals("Pair this device before loading its budgets.", unauthenticated.message)
                 assertEquals(2, requests.size)
             } finally {
                 cleanup()
@@ -94,8 +95,15 @@ class TandemApiClientTest {
             try {
                 val invalidUrl = captureApiException { client.pair("http://tandem.example", "4DF7-J1M9", "Phone") }
                 assertEquals("invalid-server-url", invalidUrl.errorCode)
+                val insecureLoopbackUrl = captureApiException { client.pair("http://localhost:19753", "4DF7-J1M9", "Phone") }
+                assertEquals("invalid-server-url", insecureLoopbackUrl.errorCode)
                 val malformedUrl = captureApiException { client.pair("https://tandem.example:invalid", "4DF7-J1M9", "Phone") }
                 assertEquals("invalid-server-url", malformedUrl.errorCode)
+
+                val unauthorized = captureApiException { client.pair("https://tandem.example", "4DF7-J1M9", "Phone") }
+                assertEquals("http-401", unauthorized.errorCode)
+                assertEquals(401, unauthorized.httpStatus)
+                assertEquals("The pairing code is invalid, expired, or already used.", unauthorized.message)
 
                 status = HttpStatusCode.BadRequest
                 val rejected = captureApiException { client.pair("https://tandem.example", "NOPE-0000", "Phone") }
@@ -104,6 +112,77 @@ class TandemApiClientTest {
                 assertEquals("Check the pairing code and try again.", rejected.message)
                 assertFalse(rejected.message.orEmpty().contains("host detail"))
                 assertFalse(client.isAuthenticated)
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
+    fun debugClientAllowsHttpOnlyForLoopbackHosts() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            val engine =
+                MockEngine { request ->
+                    requests += request
+                    respond(pairResponse(), headers = jsonHeaders())
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient(allowInsecureLoopback = true)
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                client.pair("http://localhost:19753", "4DF7-J1M9", "Pixel 10a")
+                val requestUrl = requests.single().url
+                assertEquals("localhost", requestUrl.host)
+                assertEquals("http", requestUrl.protocol.name)
+
+                val publicHost = captureApiException { client.pair("http://tandem.example", "4DF7-J1M9", "Pixel 10a") }
+                assertEquals("invalid-server-url", publicHost.errorCode)
+                val lanHost = captureApiException { client.pair("http://192.168.1.20", "4DF7-J1M9", "Pixel 10a") }
+                assertEquals("invalid-server-url", lanHost.errorCode)
+                assertEquals(1, requests.size)
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
+    fun rejectedBudgetCatalogRequestsExplainRePairingOrAccessScope() =
+        runBlocking {
+            var status = HttpStatusCode.Unauthorized
+            val engine =
+                MockEngine {
+                    respond("""{"error":"private server detail"}""", status, jsonHeaders())
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                client.restoreSession("https://tandem.example", "device-token")
+
+                val unauthorized = captureApiException { client.listBudgets() }
+                assertEquals("http-401", unauthorized.errorCode)
+                assertEquals(401, unauthorized.httpStatus)
+                assertEquals("This device needs to be paired again.", unauthorized.message)
+                assertFalse(unauthorized.message.orEmpty().contains("private server detail"))
+
+                status = HttpStatusCode.Forbidden
+                val forbidden = captureApiException { client.listBudgets() }
+                assertEquals("http-403", forbidden.errorCode)
+                assertEquals(403, forbidden.httpStatus)
+                assertEquals("This device is not allowed to access that budget.", forbidden.message)
+
+                status = HttpStatusCode.BadGateway
+                val unavailable = captureApiException { client.listBudgets() }
+                assertEquals(502, unavailable.httpStatus)
+                assertEquals("The Tandem server could not read Actual. Try again later.", unavailable.message)
             } finally {
                 cleanup()
                 Api.baseUrl = previousBaseUrl

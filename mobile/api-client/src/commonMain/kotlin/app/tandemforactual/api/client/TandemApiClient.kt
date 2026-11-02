@@ -35,12 +35,14 @@ class TandemApiException(
     val errorCode: String,
     val httpStatus: Int? = null,
     cause: Throwable? = null,
+    safeMessageOverride: String? = null,
 ) : Exception(
-        when (httpStatus) {
-            400 -> "Check the pairing code and try again."
-            401 -> "The pairing code is invalid, expired, or already used."
-            403 -> "This device is not allowed to access that budget."
-            in 500..599 -> "The Tandem server could not read Actual. Try again later."
+        safeMessageOverride ?: when {
+            errorCode == "not-paired" -> "Pair this device before loading its budgets."
+            httpStatus == 400 -> "Check the pairing code and try again."
+            httpStatus == 401 -> "The pairing code is invalid, expired, or already used."
+            httpStatus == 403 -> "This device is not allowed to access that budget."
+            httpStatus in 500..599 -> "The Tandem server could not read Actual. Try again later."
             else -> "Could not connect to the Tandem server. Check the address and connection."
         },
         cause,
@@ -51,7 +53,9 @@ class TandemApiProtocolException(
 ) : IllegalStateException(message)
 
 /** Owns the generated API client's server address and in-memory device credential. */
-class TandemApiClient {
+class TandemApiClient(
+    private val allowInsecureLoopback: Boolean = false,
+) {
     private var accessToken: String? = null
     internal val bearerAuth =
         Auth.BearerAuth {
@@ -69,7 +73,7 @@ class TandemApiClient {
         serverUrl: String,
         token: String,
     ) {
-        Api.baseUrl = parseServerUrl(serverUrl)
+        Api.baseUrl = parseServerUrl(serverUrl, allowInsecureLoopback)
         accessToken = token.takeIf { it.isNotBlank() }
             ?: throw TandemApiProtocolException("Stored device credential is empty")
         Api.setAuthProvider(bearerAuth)
@@ -80,7 +84,7 @@ class TandemApiClient {
         code: String,
         deviceName: String,
     ): PairedDevice {
-        Api.baseUrl = parseServerUrl(serverUrl)
+        Api.baseUrl = parseServerUrl(serverUrl, allowInsecureLoopback)
         accessToken = null
 
         val body =
@@ -98,9 +102,10 @@ class TandemApiClient {
         return PairedDevice(deviceId, principalId, budgetIds)
     }
 
-    suspend fun listBudgets(): List<BudgetCatalogItem> {
-        requireAuthenticated()
-        val payload = unwrap(BudgetsApi.listBudgets())
+    suspend fun listBudgets(): List<BudgetCatalogItem> = requireAuthenticated().let { parseBudgetCatalog(BudgetsApi.listBudgets()) }
+
+    private fun parseBudgetCatalog(response: Either<CallException, HttpCallResponse<Map<String, JsonElement>>>): List<BudgetCatalogItem> {
+        val payload = unwrap(response, unauthorizedMessage = "This device needs to be paired again.")
         val budgets =
             payload["budgets"] as? JsonArray
                 ?: throw TandemApiProtocolException("Budget catalog response is missing its budgets")
@@ -132,20 +137,26 @@ class TandemApiClient {
         Api.setAuthProvider(bearerAuth)
     }
 
-    private fun unwrap(result: Either<CallException, HttpCallResponse<Map<String, JsonElement>>>): JsonObject =
+    private fun unwrap(
+        result: Either<CallException, HttpCallResponse<Map<String, JsonElement>>>,
+        unauthorizedMessage: String? = null,
+    ): JsonObject =
         result.fold(
-            { error -> throw error.toTandemApiException() },
+            { error -> throw error.toTandemApiException(unauthorizedMessage) },
             { response -> JsonObject(response.data) },
         )
 
-    private fun CallException.toTandemApiException(): TandemApiException =
+    private fun CallException.toTandemApiException(unauthorizedMessage: String? = null): TandemApiException =
         when (this) {
-            is HttpCallException -> TandemApiException("http-$code", code, this)
+            is HttpCallException -> TandemApiException("http-$code", code, this, unauthorizedMessage.takeIf { code == 401 })
             else -> TandemApiException("network-error", cause = this)
         }
 }
 
-private fun parseServerUrl(value: String): Url {
+private fun parseServerUrl(
+    value: String,
+    allowInsecureLoopback: Boolean,
+): Url {
     val address = value.trim().trimEnd('/')
     val url =
         try {
@@ -153,7 +164,12 @@ private fun parseServerUrl(value: String): Url {
         } catch (error: Exception) {
             throw TandemApiException("invalid-server-url", cause = error)
         }
-    if (url.host.isBlank() || url.protocol.name != "https" || url.user != null || url.password != null) {
+    val secure = url.protocol.name == "https"
+    val allowedLoopback =
+        allowInsecureLoopback &&
+            url.protocol.name == "http" &&
+            url.host.lowercase() in setOf("localhost", "127.0.0.1")
+    if (url.host.isBlank() || (!secure && !allowedLoopback) || url.user != null || url.password != null) {
         throw TandemApiException("invalid-server-url")
     }
     return url

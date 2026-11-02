@@ -317,9 +317,10 @@ fun TandemApp(
     startInPreview: Boolean = false,
     database: TandemDatabase? = null,
     nowEpochMillis: () -> Long = { 0L },
+    allowInsecureLoopback: Boolean = false,
 ) {
     val state = rememberSaveable(saver = AppState.Saver) { AppState() }
-    val apiClient = remember { TandemApiClient() }
+    val apiClient = remember(allowInsecureLoopback) { TandemApiClient(allowInsecureLoopback) }
     val mobileSession = remember(apiClient, database) { TandemMobileSession(apiClient, database, nowEpochMillis) }
     val coroutineScope = rememberCoroutineScope()
     var syncRetryCounter by remember { mutableStateOf(0) }
@@ -766,7 +767,7 @@ private fun PageColumn(content: @Composable ColumnScope.() -> Unit) {
 }
 
 @Composable
-private fun SampleBanner(message: String = "No live budget is connected") {
+private fun SampleBanner(message: String = "This screen remains a preview") {
     val palette = tandemPalette
     Row(
         modifier =
@@ -1983,7 +1984,7 @@ private fun TransactionDetailScreen(
             Text(state.transactionPayee, color = tandemPalette.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Text("${state.transactionDate} · ${state.transactionAccount}", color = tandemPalette.muted, fontSize = 12.sp)
         }
-        SectionCard("Transaction", if (isLive) "Stored in this device's local budget" else "Sample details") {
+        SectionCard("Transaction", if (isLive) "Stored in this device’s local budget" else "Sample details") {
             ListRow("C", "Account", "Where money moved", state.transactionAccount)
             DividerLine()
             ListRow("G", "Category", "Budget category", state.transactionCategory)

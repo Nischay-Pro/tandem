@@ -17,6 +17,7 @@ class MainActivity : ComponentActivity() {
         startInPreview = openPreview,
         database = database,
         nowEpochMillis = { System.currentTimeMillis() },
+        allowInsecureLoopback = BuildConfig.DEBUG,
       )
     }
   }
