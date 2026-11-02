@@ -108,7 +108,10 @@ flights, insurance, a wedding, pet surgery, and a home purchase. The local-only
 seed script is `.dev-tmp/household-seed.mjs`; neither the script nor the budget
 data belongs in Git. The Pixel 10a full-sync check stored 2,182 transaction
 records for the CAD budget and 13,164 for the USD budget in Room. Those totals
-include non-purchase transaction rows in addition to the 15,000 purchases.
+include non-purchase transaction rows in addition to the 15,000 purchases. The
+compatibility server also retains a separate older synthetic fixture, so a
+device paired with all budgets sees three catalog entries; that fixture is not
+part of the household dataset.
 
 ## Code quality
 
