@@ -522,6 +522,21 @@ describe.skipIf(!compatibilityTestEnabled)(
           createPostgresDatabase,
           (signal, handler) => signalHandlers.set(signal, handler),
         );
+        const runtimeCatalogResponse = await productionApp.inject({
+          method: "GET",
+          url: "/api/v1/budgets",
+          headers: runtimeAuthorizationHeaders,
+        });
+        expect(runtimeCatalogResponse.statusCode).toBe(200);
+        expect(runtimeCatalogResponse.json()).toMatchObject({
+          budgets: [
+            {
+              budgetId: budget.groupId,
+              name: budget.name,
+              isEncrypted: Boolean(budget.encryptKeyId),
+            },
+          ],
+        });
         const runtimeRead = await productionApp.inject({
           method: "GET",
           url: `/api/v1/budgets/${budget.groupId}/transactions/${transaction.id}`,
