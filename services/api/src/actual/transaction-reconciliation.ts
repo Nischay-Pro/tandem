@@ -36,7 +36,8 @@ export interface TransactionCreateInput {
 // new or edited amount small enough that a million same-sign rows still leave
 // more than a 2x margin below that internal ceiling.
 export const MAX_TRANSACTION_AMOUNT = 1_000_000_000;
-export const MIN_TRANSACTION_DATE = "1900-01-01";
+// Actual 26.10.0 silently drops transactions dated before 1995-01-01.
+export const MIN_TRANSACTION_DATE = "1995-01-01";
 
 export const COMPANION_TRANSACTION_ID_PREFIX = "tandem:";
 

@@ -193,20 +193,21 @@ describe("transaction snapshots and merge planning", () => {
     expect(parseTransactionCreateInput(validCreate).amount).toBe(
       MAX_TRANSACTION_AMOUNT,
     );
+    expect(parseTransactionCreateInput(validCreate).date).toBe("1995-01-01");
     expect(() =>
       parseTransactionCreateInput({ ...validCreate, amount: 9007199254740991 }),
     ).toThrow(
       `amount must be between -${MAX_TRANSACTION_AMOUNT} and ${MAX_TRANSACTION_AMOUNT}`,
     );
     expect(() =>
-      parseTransactionCreateInput({ ...validCreate, date: "0001-01-01" }),
+      parseTransactionCreateInput({ ...validCreate, date: "1994-12-31" }),
     ).toThrow(`date must be on or after ${MIN_TRANSACTION_DATE}`);
     expect(() =>
       parseTransactionPatch({ amount: MAX_TRANSACTION_AMOUNT + 1 }),
     ).toThrow(
       `amount must be between -${MAX_TRANSACTION_AMOUNT} and ${MAX_TRANSACTION_AMOUNT}`,
     );
-    expect(() => parseTransactionPatch({ date: "0001-01-01" })).toThrow(
+    expect(() => parseTransactionPatch({ date: "1994-12-31" })).toThrow(
       `date must be on or after ${MIN_TRANSACTION_DATE}`,
     );
   });

@@ -291,6 +291,7 @@ describe.skipIf(!compatibilityTestEnabled)(
         const companionTransactionId = `tandem:${randomUUID()}`;
         const maxAmountTransactionId = `tandem:${randomUUID()}`;
         const followupTransactionId = `tandem:${randomUUID()}`;
+        const minimumDateTransactionId = `tandem:${randomUUID()}`;
         const createOperationId = randomUUID();
         const companionTransactionPath = `/api/v1/budgets/${budget.groupId}/transactions/${encodeURIComponent(companionTransactionId)}`;
         try {
@@ -414,6 +415,34 @@ describe.skipIf(!compatibilityTestEnabled)(
             notes: "Normal create after maximum supported amount",
           });
 
+          const minimumDateCreate = await submitCreate(
+            minimumDateTransactionId,
+            {
+              account: initialData.accountId,
+              amount: -10,
+              date: "1995-01-01",
+              payee: null,
+              category: null,
+              notes: "Minimum supported Actual date",
+              cleared: false,
+            },
+          );
+          expect(minimumDateCreate.response.statusCode).toBe(200);
+          expect(minimumDateCreate.response.json().operation.status).toBe(
+            "committed",
+          );
+          const minimumDateRead = await reconciliationApp.inject({
+            method: "GET",
+            url: `/api/v1/budgets/${budget.groupId}/transactions/${encodeURIComponent(minimumDateTransactionId)}`,
+            headers: authorizationHeaders,
+          });
+          expect(minimumDateRead.statusCode).toBe(200);
+          expect(minimumDateRead.json().transaction).toMatchObject({
+            id: minimumDateTransactionId,
+            date: "1995-01-01",
+            notes: "Minimum supported Actual date",
+          });
+
           const invalidReferenceCases = [
             {
               code: "account-not-found",
@@ -472,7 +501,7 @@ describe.skipIf(!compatibilityTestEnabled)(
           const invalidDate = await submitCreate(`tandem:${randomUUID()}`, {
             account: initialData.accountId,
             amount: -10,
-            date: "0001-01-01",
+            date: "1994-12-31",
             payee: null,
             category: null,
             notes: "Date before supported range",
@@ -481,7 +510,7 @@ describe.skipIf(!compatibilityTestEnabled)(
           expect(invalidDate.response.statusCode).toBe(400);
           expect(invalidDate.response.json().error).toMatchObject({
             code: "invalid_request",
-            message: "date must be on or after 1900-01-01",
+            message: "date must be on or after 1995-01-01",
           });
           await expect(
             database.journal.get(invalidDate.operationId),
@@ -495,6 +524,7 @@ describe.skipIf(!compatibilityTestEnabled)(
                   companionTransactionId,
                   maxAmountTransactionId,
                   followupTransactionId,
+                  minimumDateTransactionId,
                 ]) {
                   if (await transactionStore.read(stableId)) {
                     await transactionStore.delete(stableId);
