@@ -26,11 +26,13 @@ Editing the amount and notes of an existing transaction enqueues an optimistic
 local update and sends it through the sync coordinator. Conflict review can
 keep Actual's copy or rebase and submit the device edit; uncertain and rejected
 writes have explicit review, retry, and discard controls. These UI write flows
-are wired to the API and local outbox, but a real transaction edit/conflict has
-not yet been exercised on the Pixel. Creating transactions remains unavailable
-because the API lacks a caller-supplied stable ID for safe retries. Settings
-pages are present, but several controls remain previews or are not persisted
-and do not modify Actual.
+are wired to the API and local outbox. On the Pixel, an existing synthetic
+Safeway transaction was changed from -$95.58 to -$100.00, confirmed by Actual,
+then restored to -$95.58 and confirmed again. Conflict review has not yet been
+exercised on the Pixel. Creating transactions remains unavailable because the
+API lacks a caller-supplied stable ID for safe retries. Settings pages are
+present, but several controls remain previews or are not persisted and do not
+modify Actual.
 
 The eight-character pairing code is shown as readable text and left-aligned in
 the entry field. It accepts the server's `XXXX-XXXX` format, with or without
