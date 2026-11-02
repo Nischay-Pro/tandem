@@ -12,7 +12,7 @@ plugins {
 kotlin {
   jvm()
   android {
-    namespace = "org.actualbudget.companion.data"
+    namespace = "app.tandemforactual.data"
     compileSdk = 36
     minSdk = 26
 
@@ -76,7 +76,7 @@ ktlint {
   filter {
     include("**/src/**/*.kt", "**/*.kts")
     // Source-root-relative filters cannot see KSP's generated directory prefix.
-    exclude("**/*_Impl.kt", "**/CompanionDatabaseConstructor.kt")
+    exclude("**/*_Impl.kt", "**/TandemDatabaseConstructor.kt")
   }
 }
 
@@ -85,9 +85,9 @@ kover {
     filters {
       excludes {
         classes(
-          "org.actualbudget.companion.data.database.*_Impl*",
-          "org.actualbudget.companion.data.database.CompanionDatabaseConstructor*",
-          "org.actualbudget.companion.data.store.LocalBudgetRepository$*",
+          "app.tandemforactual.data.database.*_Impl*",
+          "app.tandemforactual.data.database.TandemDatabaseConstructor*",
+          "app.tandemforactual.data.store.LocalBudgetRepository$*",
         )
       }
     }
