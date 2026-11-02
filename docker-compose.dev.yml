@@ -6,9 +6,11 @@ services:
       POSTGRES_USER: companion
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-development-only-password}
     ports:
-      - "127.0.0.1:55432:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-55432}:5432"
     volumes:
-      - ./.dev-tmp/postgres:/var/lib/postgresql
+      - type: bind
+        source: ${POSTGRES_DATA_DIR:-./.dev-tmp/postgres}
+        target: /var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U companion -d companion"]
       interval: 5s
@@ -41,6 +43,7 @@ services:
 
   integration-tests:
     profiles: ["test"]
+    image: tandem-for-actual-integration-tests
     build:
       context: .
       dockerfile: services/api/Dockerfile.dev
@@ -80,15 +83,16 @@ services:
     build:
       context: .
       dockerfile: services/api/Dockerfile.dev
-    user: "${ACTUAL_COMPAT_UID:-1000}:${ACTUAL_COMPAT_GID:-1000}"
-    command: ["pnpm", "--filter", "@actual-budget-companion/api", "test:actual"]
+    user: "0:0"
+    command: ["pnpm", "--filter", "@tandem-for-actual/api", "test:actual"]
     environment:
+      HOME: /home/node
       DATABASE_URL: postgresql://companion:${POSTGRES_PASSWORD:-development-only-password}@postgres:5432/companion
       ACTUAL_SERVER_URL: http://actual-compat-server:5006
       ACTUAL_SERVER_PASSWORD: compatibility-test-only-password
       ACTUAL_API_DATA_DIR: /actual-api-data/device-one
     volumes:
-      - ./.dev-tmp/actual/compat-client:/actual-api-data
+      - actual-compat-client-data:/actual-api-data
     depends_on:
       actual-compat-server:
         condition: service_healthy
@@ -100,3 +104,6 @@ services:
 networks:
   companion-private:
     internal: true
+
+volumes:
+  actual-compat-client-data:
