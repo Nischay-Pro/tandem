@@ -13,6 +13,7 @@ const snapshot = {
   budgetId: "budget-1",
   generation,
   cursor: "2",
+  displaySettings: null,
   records: [
     {
       type: "account",
@@ -31,6 +32,7 @@ const page = {
   hasMore: false,
   resetRequired: false,
   changes: [],
+  displaySettings: null,
 };
 
 function createDevice(): DeviceRecord {

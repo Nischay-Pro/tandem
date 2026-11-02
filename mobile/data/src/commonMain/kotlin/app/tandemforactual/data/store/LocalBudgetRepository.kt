@@ -8,10 +8,15 @@ import app.tandemforactual.data.database.TandemDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.put
 
 enum class LocalWriteAction {
     CREATE,
@@ -89,6 +94,7 @@ data class BudgetChangePage(
     val fromCursor: String?,
     val nextCursor: String,
     val changes: List<BudgetChange>,
+    val displaySettings: BudgetDisplaySettings? = null,
 )
 
 data class BudgetSyncCheckpoint(
@@ -198,6 +204,22 @@ class LocalBudgetRepository(
 
     suspend fun readSyncState(budgetId: String): BudgetSyncStateEntity? = database.budgetSyncStateDao().find(budgetId)
 
+    suspend fun readBudgetDisplaySettings(budgetId: String): BudgetDisplaySettings? =
+        database.budgetRecordDao().find(budgetId, "budget-settings", "display")?.remoteJson?.let { body ->
+            runCatching {
+                val settings = Json.parseToJsonElement(body).jsonObject
+                BudgetDisplaySettings(
+                    currencyCode = settings.displayString("currencyCode") ?: return@runCatching null,
+                    currencySymbol = settings.displayString("currencySymbol") ?: return@runCatching null,
+                    currencyFractionDigits = settings.displayInt("currencyFractionDigits") ?: return@runCatching null,
+                    numberFormat = settings.displayString("numberFormat"),
+                    hideFraction = settings.displayBoolean("hideFraction"),
+                    currencySymbolPosition = settings.displayString("currencySymbolPosition"),
+                    currencySpaceBetweenAmountAndSymbol = settings.displayBoolean("currencySpaceBetweenAmountAndSymbol"),
+                )
+            }.getOrNull()
+        }
+
     /** Capture this before requesting a remote snapshot and pass it back to [applyFullSnapshot]. */
     suspend fun readSyncCheckpoint(budgetId: String): BudgetSyncCheckpoint? {
         requireIdentifier(budgetId, "budgetId")
@@ -256,6 +278,7 @@ class LocalBudgetRepository(
         cursor: String,
         expectedCheckpoint: BudgetSyncCheckpoint?,
         records: List<RemoteBudgetRecord>,
+        displaySettings: BudgetDisplaySettings? = null,
     ): FullSnapshotResult {
         requireIdentifier(budgetId, "budgetId")
         requireIdentifier(generation, "generation")
@@ -276,6 +299,7 @@ class LocalBudgetRepository(
             }
             database.budgetRecordDao().tombstoneAllRemoteRecords(budgetId)
             records.forEach { applyRemoteUpsert(it) }
+            displaySettings?.let { storeBudgetDisplaySettings(budgetId, generation, it) }
             markEditsForDeletedRecords(budgetId)
             syncStateDao.put(
                 BudgetSyncStateEntity(
@@ -321,6 +345,7 @@ class LocalBudgetRepository(
                     is BudgetChange.Delete -> applyRemoteDelete(change, page.generation)
                 }
             }
+            page.displaySettings?.let { storeBudgetDisplaySettings(page.budgetId, page.generation, it) }
             dao.put(
                 BudgetSyncStateEntity(
                     budgetId = page.budgetId,
@@ -949,4 +974,47 @@ class LocalBudgetRepository(
             amountMinor = amountMinor,
             budgetMonth = budgetMonth,
         )
+
+    private suspend fun storeBudgetDisplaySettings(
+        budgetId: String,
+        generation: String,
+        settings: BudgetDisplaySettings,
+    ) {
+        val body =
+            buildJsonObject {
+                put("currencyCode", settings.currencyCode)
+                put("currencySymbol", settings.currencySymbol)
+                put("currencyFractionDigits", settings.currencyFractionDigits)
+                put("numberFormat", settings.numberFormat?.let { JsonPrimitive(it) } ?: JsonNull)
+                put("hideFraction", settings.hideFraction)
+                put("currencySymbolPosition", settings.currencySymbolPosition?.let { JsonPrimitive(it) } ?: JsonNull)
+                put("currencySpaceBetweenAmountAndSymbol", settings.currencySpaceBetweenAmountAndSymbol)
+            }.toString()
+        database.budgetRecordDao().put(
+            BudgetRecordEntity(
+                budgetId = budgetId,
+                recordType = "budget-settings",
+                recordId = "display",
+                remoteJson = body,
+                remoteRevision = null,
+                localJson = null,
+                localDeleted = false,
+                remoteDeleted = false,
+                syncGeneration = generation,
+                recordDate = null,
+                accountId = null,
+                categoryId = null,
+                payeeId = null,
+                amountMinor = null,
+                budgetMonth = null,
+            ),
+        )
+    }
 }
+
+private fun JsonObject.displayString(name: String): String? = (this[name] as? JsonPrimitive)?.takeIf { it != JsonNull }?.contentOrNull
+
+private fun JsonObject.displayInt(name: String): Int? = (this[name] as? JsonPrimitive)?.longOrNull?.takeIf { it in 0..6 }?.toInt()
+
+private fun JsonObject.displayBoolean(name: String): Boolean =
+    (this[name] as? JsonPrimitive)?.let { it.booleanOrNull ?: (it.contentOrNull == "true") } ?: false

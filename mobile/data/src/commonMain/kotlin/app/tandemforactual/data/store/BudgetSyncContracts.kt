@@ -2,11 +2,22 @@ package app.tandemforactual.data.store
 
 import app.tandemforactual.data.database.OutboxOperationEntity
 
+data class BudgetDisplaySettings(
+    val currencyCode: String,
+    val currencySymbol: String,
+    val currencyFractionDigits: Int,
+    val numberFormat: String?,
+    val hideFraction: Boolean,
+    val currencySymbolPosition: String?,
+    val currencySpaceBetweenAmountAndSymbol: Boolean,
+)
+
 data class RemoteBudgetSnapshot(
     val budgetId: String,
     val generation: String,
     val cursor: String,
     val records: List<RemoteBudgetRecord>,
+    val displaySettings: BudgetDisplaySettings? = null,
 )
 
 data class RemoteBudgetChangePage(
@@ -18,6 +29,7 @@ data class RemoteBudgetChangePage(
     val hasMore: Boolean,
     val resetRequired: Boolean,
     val changes: List<BudgetChange>,
+    val displaySettings: BudgetDisplaySettings? = null,
 )
 
 data class RemoteTransactionRecord(

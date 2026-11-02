@@ -75,6 +75,7 @@ import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.TandemDatabase
+import app.tandemforactual.data.store.BudgetDisplaySettings
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -146,7 +147,16 @@ private data class TransactionItem(
     val accountId: String? = null,
     val recordId: String? = null,
     val notes: String = "",
+    val displaySettings: BudgetDisplaySettings? = null,
 )
+
+private fun AppState.formatCurrency(minorUnits: Long): String = formatCurrency(minorUnits, budgetDisplaySettings)
+
+private fun AppState.formatAmount(minorUnits: Long): String = formatAmount(minorUnits, budgetDisplaySettings)
+
+private fun AppState.formatSignedCurrency(minorUnits: Long): String = formatSignedCurrency(minorUnits, budgetDisplaySettings)
+
+private fun AppState.parseAmountMinorUnits(value: String): Long? = parseAmountMinorUnits(value, budgetDisplaySettings)
 
 private val previewTransactions =
     listOf(
@@ -175,6 +185,7 @@ private fun liveTransactionItems(session: TandemMobileSession): List<Transaction
             accountId = record.accountId,
             recordId = record.recordId,
             notes = record.recordBody()?.stringValue("notes") ?: "",
+            displaySettings = session.budgetDisplaySettings,
         )
     }
 }
@@ -311,6 +322,7 @@ private class AppState {
     var selectedBudget by mutableStateOf("Household")
     var selectedBudgetId by mutableStateOf("")
     var selectedBudgetEncrypted by mutableStateOf(false)
+    var budgetDisplaySettings by mutableStateOf<BudgetDisplaySettings?>(null)
     var selectedMonth by mutableStateOf(formatMonth(2026, 5))
     var selectedMonthId by mutableStateOf("2026-05")
     var selectedAccountId by mutableStateOf("")
@@ -499,6 +511,7 @@ fun TandemApp(
                 AppRoute.CONFLICT_REVIEW,
                 AppRoute.UNCERTAIN_WRITE,
                 AppRoute.REJECTED_WRITE,
+                AppRoute.BUDGET_PREFERENCES,
                 AppRoute.LOCAL_DATA,
             ) &&
             state.selectedBudgetId.isNotBlank()
@@ -521,12 +534,23 @@ fun TandemApp(
         }
         previousRoute = route
     }
+    LaunchedEffect(
+        state.selectedBudgetId,
+        mobileSession.budgetDisplaySettingsBudgetId,
+        mobileSession.budgetDisplaySettings,
+    ) {
+        state.budgetDisplaySettings =
+            mobileSession.budgetDisplaySettings.takeIf {
+                mobileSession.budgetDisplaySettingsBudgetId == state.selectedBudgetId
+            }
+    }
     val liveTransactions =
         remember(
             mobileSession.transactionRecords,
             mobileSession.accountRecords,
             mobileSession.payeeRecords,
             mobileSession.categoryRecords,
+            mobileSession.budgetDisplaySettings,
         ) {
             liveTransactionItems(mobileSession)
         }
@@ -554,6 +578,7 @@ fun TandemApp(
     }
     val selectBudget: (BudgetCatalogItem) -> Unit = { budget ->
         if (state.selectedBudgetId != budget.budgetId) state.encryptedPassword = ""
+        if (state.selectedBudgetId != budget.budgetId) state.budgetDisplaySettings = null
         state.selectedBudget = budget.name
         state.selectedBudgetId = budget.budgetId
         state.selectedBudgetEncrypted = budget.isEncrypted
@@ -601,6 +626,7 @@ fun TandemApp(
                     notes = state.transactionNotes,
                     originalAmountMinor = originalAmount,
                     encryptionPassword = state.encryptedPassword.takeIf { it.isNotBlank() },
+                    displaySettings = state.budgetDisplaySettings,
                 )
             }
         }
@@ -971,7 +997,7 @@ private fun ScreenContent(
         AppRoute.ACCOUNTS -> AccountsScreen(state, navigation, liveAccounts, liveTransactions)
         AppRoute.ACCOUNT_DETAIL -> AccountDetailScreen(state, navigation, liveAccounts, liveTransactions)
         AppRoute.ACCOUNT_OPTIONS -> AccountOptionsScreen(state, navigation, liveAccounts)
-        AppRoute.RECONCILIATION -> ReconciliationScreen()
+        AppRoute.RECONCILIATION -> ReconciliationScreen(state)
         AppRoute.ACTIVITY -> ActivityScreen(state, navigation, liveTransactions)
         AppRoute.ACTIVITY_SEARCH -> ActivitySearchScreen(state, navigation, liveTransactions)
         AppRoute.ACTIVITY_FILTER -> ActivityFilterScreen()
@@ -1003,7 +1029,7 @@ private fun ScreenContent(
                 ; navigation.back()
             }
         AppRoute.CHOOSE_DATE -> DatePickerScreen(state, navigation)
-        AppRoute.SAVE_RESULT -> SaveResultScreen(navigation)
+        AppRoute.SAVE_RESULT -> SaveResultScreen(state, navigation)
         AppRoute.SYNC_CENTER -> SyncCenterScreen(state, mobileSession, navigation, onSyncNow)
         AppRoute.CONFLICT_INBOX -> ConflictInboxScreen(state, mobileSession, navigation)
         AppRoute.CONFLICT_REVIEW -> ConflictReviewScreen(state, mobileSession, onResolveConflict)
@@ -1015,7 +1041,7 @@ private fun ScreenContent(
         AppRoute.ACCENT_COLOR -> AccentColorScreen(state)
         AppRoute.BACKGROUND_MOTION -> BackgroundScreen(state)
         AppRoute.HOME_LAYOUT -> HomeLayoutScreen(state)
-        AppRoute.BUDGET_PREFERENCES -> BudgetPreferencesScreen()
+        AppRoute.BUDGET_PREFERENCES -> BudgetPreferencesScreen(state, mobileSession)
         AppRoute.SYNC_PREFERENCES -> SyncPreferencesScreen(state, mobileSession, onSyncNow)
         AppRoute.SERVER_DEVICE -> ServerDeviceScreen(state, mobileSession, navigation)
         AppRoute.SECURITY_PRIVACY -> SecurityScreen(state, mobileSession)
@@ -1826,7 +1852,7 @@ private fun BudgetScreen(
                     ) {
                         LabelText("Ready to assign")
                         Text(
-                            formatCurrency(liveBudgetMonth.toBudgetMinor ?: 0),
+                            state.formatCurrency(liveBudgetMonth.toBudgetMinor ?: 0),
                             color = palette.text,
                             fontSize = 34.sp,
                             lineHeight = 39.sp,
@@ -1842,8 +1868,8 @@ private fun BudgetScreen(
                 liveBudgetMonth.groups.forEach { group ->
                     SectionCard(
                         group.name,
-                        "${formatCurrency(group.assignedMinor)} assigned · ${group.categories.size} categories",
-                        formatCurrency(group.balanceMinor),
+                        "${state.formatCurrency(group.assignedMinor)} assigned · ${group.categories.size} categories",
+                        state.formatCurrency(group.balanceMinor),
                         onClick = {
                             state.selectedCategoryGroupId = group.id
                             navigation.open(AppRoute.CATEGORY_GROUP)
@@ -1854,10 +1880,10 @@ private fun BudgetScreen(
                             ListRow(
                                 category.name.take(1).uppercase(),
                                 category.name,
-                                "Spent ${formatCurrency(
+                                "Spent ${state.formatCurrency(
                                     kotlin.math.abs(category.activityMinor),
-                                )} · ${formatCurrency(category.balanceMinor)} left",
-                                formatCurrency(category.assignedMinor),
+                                )} · ${state.formatCurrency(category.balanceMinor)} left",
+                                state.formatCurrency(category.assignedMinor),
                                 if (category.balanceMinor >= 0) palette.positive else palette.warning,
                             ) {
                                 state.selectedCategoryGroupId = group.id
@@ -1909,7 +1935,13 @@ private fun BudgetScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 LabelText("Ready to assign")
-                Text(formatCurrency(124_000), color = palette.text, fontSize = 34.sp, lineHeight = 39.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    state.formatCurrency(124_000),
+                    color = palette.text,
+                    fontSize = 34.sp,
+                    lineHeight = 39.sp,
+                    fontWeight = FontWeight.Bold,
+                )
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1920,28 +1952,28 @@ private fun BudgetScreen(
                 }
             }
         }
-        SectionCard("Essentials", "${formatCurrency(232_000)} assigned · 3 categories", formatCurrency(232_000), onClick = {
+        SectionCard("Essentials", "${state.formatCurrency(232_000)} assigned · 3 categories", state.formatCurrency(232_000), onClick = {
             navigation.open(AppRoute.CATEGORY_GROUP)
         }) {
-            ListRow("H", "Rent", "Due ${formatShortDate(SampleDate(2026, 5, 1))}", formatCurrency(150_000), palette.positive) {
+            ListRow("H", "Rent", "Due ${formatShortDate(SampleDate(2026, 5, 1))}", state.formatCurrency(150_000), palette.positive) {
                 navigation.open(AppRoute.CATEGORY_DETAIL)
             }
             DividerLine()
-            ListRow("G", "Groceries", "Spent ${formatCurrency(18_400)} this month", formatCurrency(50_000), palette.positive) {
+            ListRow("G", "Groceries", "Spent ${state.formatCurrency(18_400)} this month", state.formatCurrency(50_000), palette.positive) {
                 navigation.open(AppRoute.CATEGORY_DETAIL)
             }
             DividerLine()
-            ListRow("U", "Utilities", "Spent ${formatCurrency(11_200)} this month", formatCurrency(32_000), palette.positive) {
+            ListRow("U", "Utilities", "Spent ${state.formatCurrency(11_200)} this month", state.formatCurrency(32_000), palette.positive) {
                 navigation.open(AppRoute.CATEGORY_DETAIL)
             }
         }
         SectionCard(
             "Everyday",
             "Flexible spending",
-            "${formatCurrency(18_000)} left",
+            "${state.formatCurrency(18_000)} left",
             onClick = { navigation.open(AppRoute.CATEGORY_GROUP) },
         ) {
-            ListRow("D", "Dining", "Spent ${formatCurrency(17_000)} this month", formatCurrency(18_000), palette.positive) {
+            ListRow("D", "Dining", "Spent ${state.formatCurrency(17_000)} this month", state.formatCurrency(18_000), palette.positive) {
                 navigation.open(AppRoute.CATEGORY_DETAIL)
             }
         }
@@ -1955,11 +1987,11 @@ private fun BudgetScreen(
                 "↗",
                 "Electric Company",
                 "Utilities · due ${formatShortDate(SampleDate(2026, 5, 18))}",
-                formatCurrency(12_000),
+                state.formatCurrency(12_000),
                 palette.text,
             )
             DividerLine()
-            ListRow("H", "Rent", "Essentials · due ${formatShortDate(SampleDate(2026, 6, 1))}", formatCurrency(150_000), palette.text)
+            ListRow("H", "Rent", "Essentials · due ${formatShortDate(SampleDate(2026, 6, 1))}", state.formatCurrency(150_000), palette.text)
         }
         SectionCard("Recent activity", "Latest budget changes", "See all", onClick = { navigation.selectTab(AppRoute.ACTIVITY) }) {
             (liveTransactions.takeIf { it.isNotEmpty() } ?: previewTransactions).take(2).forEachIndexed { index, item ->
@@ -2009,7 +2041,7 @@ private fun TransactionRow(
             transaction.icon,
             transaction.payee,
             transaction.category,
-            formatSignedCurrency(transaction.amountMinorUnits),
+            formatSignedCurrency(transaction.amountMinorUnits, transaction.displaySettings),
             if (transaction.amountMinorUnits > 0) palette.positive else palette.text,
             onClick,
         )
@@ -2027,7 +2059,7 @@ private fun openTransaction(
     state.transactionAccount = transaction.account
     state.transactionDate = transaction.dateLabel
     state.transactionNotes = transaction.notes
-    state.transactionAmount = formatAmount(kotlin.math.abs(transaction.amountMinorUnits))
+    state.transactionAmount = formatAmount(kotlin.math.abs(transaction.amountMinorUnits), state.budgetDisplaySettings)
     state.selectedTransactionAmountMinor = transaction.amountMinorUnits
     state.selectedTransactionRecordId = transaction.recordId.orEmpty()
     state.selectedTransactionIsLive = isLive
@@ -2135,8 +2167,8 @@ private fun CategoryGroupScreen(
                 Heading(group.name, state.selectedMonth)
                 AmountHero(
                     "Assigned this month",
-                    formatCurrency(group.assignedMinor),
-                    "${formatCurrency(group.balanceMinor)} available across ${group.categories.size} categories",
+                    state.formatCurrency(group.assignedMinor),
+                    "${state.formatCurrency(group.balanceMinor)} available across ${group.categories.size} categories",
                 )
                 SectionCard("Categories", "${group.categories.size} synced categories", "") {
                     group.categories.forEachIndexed { index, category ->
@@ -2144,10 +2176,10 @@ private fun CategoryGroupScreen(
                         ListRow(
                             category.name.take(1).uppercase(),
                             category.name,
-                            "Spent ${formatCurrency(
+                            "Spent ${state.formatCurrency(
                                 kotlin.math.abs(category.activityMinor),
-                            )} · ${formatCurrency(category.balanceMinor)} available",
-                            formatCurrency(category.assignedMinor),
+                            )} · ${state.formatCurrency(category.balanceMinor)} available",
+                            state.formatCurrency(category.assignedMinor),
                             if (category.balanceMinor >= 0) palette.positive else palette.warning,
                         ) {
                             state.selectedCategoryGroupId = group.id
@@ -2163,29 +2195,29 @@ private fun CategoryGroupScreen(
     PageColumn {
         SampleBanner()
         Heading("Group overview", "Review the bills and needs planned first.")
-        AmountHero("Assigned this month", formatCurrency(232_000), "${formatCurrency(232_000)} available across 3 categories")
+        AmountHero("Assigned this month", state.formatCurrency(232_000), "${state.formatCurrency(232_000)} available across 3 categories")
         SectionCard("Categories", "3 plans", "Edit group") {
             ListRow(
                 "H",
                 "Rent",
-                "Assigned ${formatCurrency(150_000)} · Available ${formatCurrency(150_000)}",
-                formatCurrency(150_000),
+                "Assigned ${state.formatCurrency(150_000)} · Available ${state.formatCurrency(150_000)}",
+                state.formatCurrency(150_000),
                 palette.positive,
             ) { navigation.open(AppRoute.CATEGORY_DETAIL) }
             DividerLine()
             ListRow(
                 "G",
                 "Groceries",
-                "Assigned ${formatCurrency(50_000)} · Available ${formatCurrency(50_000)}",
-                formatCurrency(50_000),
+                "Assigned ${state.formatCurrency(50_000)} · Available ${state.formatCurrency(50_000)}",
+                state.formatCurrency(50_000),
                 palette.positive,
             ) { navigation.open(AppRoute.CATEGORY_DETAIL) }
             DividerLine()
             ListRow(
                 "U",
                 "Utilities",
-                "Assigned ${formatCurrency(32_000)} · Available ${formatCurrency(32_000)}",
-                formatCurrency(32_000),
+                "Assigned ${state.formatCurrency(32_000)} · Available ${state.formatCurrency(32_000)}",
+                state.formatCurrency(32_000),
                 palette.positive,
             ) { navigation.open(AppRoute.CATEGORY_DETAIL) }
         }
@@ -2213,13 +2245,17 @@ private fun CategoryDetailScreen(
                 BodyText("This category is not included in the cached plan for this month.")
             } else {
                 Heading(category.name, state.selectedMonth)
-                AmountHero("Available", formatCurrency(category.balanceMinor), "${formatCurrency(category.assignedMinor)} assigned")
+                AmountHero(
+                    "Available",
+                    state.formatCurrency(category.balanceMinor),
+                    "${state.formatCurrency(category.assignedMinor)} assigned",
+                )
                 SectionCard("This month", "Actual plan and activity") {
-                    ListRow("↗", "Assigned", "Budgeted in Actual", formatCurrency(category.assignedMinor))
+                    ListRow("↗", "Assigned", "Budgeted in Actual", state.formatCurrency(category.assignedMinor))
                     DividerLine()
-                    ListRow("◷", "Activity", "Transactions in this category", formatCurrency(kotlin.math.abs(category.activityMinor)))
+                    ListRow("◷", "Activity", "Transactions in this category", state.formatCurrency(kotlin.math.abs(category.activityMinor)))
                     DividerLine()
-                    ListRow("=", "Available", "Assigned plus activity", formatCurrency(category.balanceMinor))
+                    ListRow("=", "Available", "Assigned plus activity", state.formatCurrency(category.balanceMinor))
                 }
                 PrimaryButton("View all activity") { navigation.selectTab(AppRoute.ACTIVITY) }
             }
@@ -2229,9 +2265,9 @@ private fun CategoryDetailScreen(
     PageColumn {
         SampleBanner()
         Heading("Category details", "Essentials · monthly plan")
-        AmountHero("Available", formatCurrency(150_000), "Fully funded for ${formatMonth(2026, 5)}")
-        SectionCard("This month", "Assigned ${formatCurrency(150_000)} · Spent ${formatCurrency(0)}") {
-            ListRow("↗", "Planned amount", "Monthly target", formatCurrency(150_000))
+        AmountHero("Available", state.formatCurrency(150_000), "Fully funded for ${formatMonth(2026, 5)}")
+        SectionCard("This month", "Assigned ${state.formatCurrency(150_000)} · Spent ${state.formatCurrency(0)}") {
+            ListRow("↗", "Planned amount", "Monthly target", state.formatCurrency(150_000))
             DividerLine()
             ListRow("◷", "Next due date", "Scheduled payment", formatShortDate(SampleDate(2026, 6, 1)))
         }
@@ -2265,7 +2301,7 @@ private fun AccountsScreen(
         PageColumn {
             Badge("Actual · read only", tandemPalette.positive)
             Heading("Balances", "Synced account balances from Actual.")
-            AmountHero("Total on budget", formatCurrency(totalOnBudget), "Across ${onBudgetAccounts.size} on-budget accounts")
+            AmountHero("Total on budget", state.formatCurrency(totalOnBudget), "Across ${onBudgetAccounts.size} on-budget accounts")
             if (liveAccounts.isEmpty()) {
                 SurfaceCard {
                     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2282,7 +2318,7 @@ private fun AccountsScreen(
                                 account.name.take(1).uppercase(),
                                 account.name,
                                 if (account.offBudget) "Tracking · off budget" else account.type ?: "On budget",
-                                account.balanceMinor?.let(::formatCurrency) ?: "Unavailable",
+                                account.balanceMinor?.let { state.formatCurrency(it) } ?: "Unavailable",
                                 if (account.offBudget) tandemPalette.muted else tandemPalette.text,
                             ) {
                                 state.selectedAccountId = account.id
@@ -2299,13 +2335,13 @@ private fun AccountsScreen(
     PageColumn {
         SampleBanner()
         Heading("Balances", "Review account balances and recent activity.")
-        AmountHero("Total on budget", formatCurrency(348_216), "Across 4 sample accounts")
+        AmountHero("Total on budget", state.formatCurrency(348_216), "Across 4 sample accounts")
         SectionCard("Cash accounts", "2 accounts", "") {
             ListRow(
                 "C",
                 "Checking",
                 "Everyday spending",
-                formatCurrency(348_216),
+                state.formatCurrency(348_216),
                 tandemPalette.text,
             ) { navigation.open(AppRoute.ACCOUNT_DETAIL) }
             DividerLine()
@@ -2313,7 +2349,7 @@ private fun AccountsScreen(
                 "S",
                 "Savings",
                 "Emergency fund",
-                formatCurrency(820_000),
+                state.formatCurrency(820_000),
                 tandemPalette.text,
             ) { navigation.open(AppRoute.ACCOUNT_DETAIL) }
         }
@@ -2322,7 +2358,7 @@ private fun AccountsScreen(
                 "V",
                 "Travel card",
                 "Statement closes ${formatShortDate(SampleDate(2026, 5, 22))}",
-                formatCurrency(-64_280),
+                state.formatCurrency(-64_280),
                 tandemPalette.text,
             ) { navigation.open(AppRoute.ACCOUNT_DETAIL) }
         }
@@ -2331,7 +2367,7 @@ private fun AccountsScreen(
                 "H",
                 "Car loan",
                 "Off budget",
-                formatCurrency(-830_000),
+                state.formatCurrency(-830_000),
                 tandemPalette.muted,
             ) { navigation.open(AppRoute.ACCOUNT_DETAIL) }
         }
@@ -2356,7 +2392,7 @@ private fun AccountDetailScreen(
             } else {
                 AmountHero(
                     "Available balance",
-                    account.balanceMinor?.let(::formatCurrency) ?: "Unavailable",
+                    account.balanceMinor?.let { state.formatCurrency(it) } ?: "Unavailable",
                     "${account.name} · ${if (account.offBudget) "off budget" else "on budget"}",
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -2382,7 +2418,7 @@ private fun AccountDetailScreen(
     }
     PageColumn {
         SampleBanner()
-        AmountHero("Available balance", formatCurrency(348_216), "Checking · Updated ${formatShortDate(SampleDate(2026, 5, 14))}")
+        AmountHero("Available balance", state.formatCurrency(348_216), "Checking · Updated ${formatShortDate(SampleDate(2026, 5, 14))}")
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
             PrimaryButton("Add transaction", modifier = Modifier.weight(1f)) { navigation.open(AppRoute.NEW_TRANSACTION) }
             SecondaryButton("Reconcile", modifier = Modifier.weight(1f)) { navigation.open(AppRoute.RECONCILIATION) }
@@ -2439,14 +2475,14 @@ private fun AccountOptionsScreen(
 }
 
 @Composable
-private fun ReconciliationScreen() {
+private fun ReconciliationScreen(state: AppState) {
     PageColumn {
         Heading("Compare balances", "Compare cleared transactions with a statement.")
-        TextFieldCard("Statement balance", formatAmount(348_216), {}, formatAmount(0))
+        TextFieldCard("Statement balance", state.formatAmount(348_216), {}, state.formatAmount(0))
         SectionCard("Difference", "Sample calculation") {
-            ListRow("=", "Account balance", "Current sample balance", formatCurrency(348_216))
+            ListRow("=", "Account balance", "Current sample balance", state.formatCurrency(348_216))
             DividerLine()
-            ListRow("Δ", "Out of balance", "No cleared transactions compared", formatCurrency(0), tandemPalette.positive)
+            ListRow("Δ", "Out of balance", "No cleared transactions compared", state.formatCurrency(0), tandemPalette.positive)
         }
         PreviewNote(
             "Reconciliation is display-only. Do not treat the sample balance as verified, and no statement or transaction will be changed.",
@@ -2533,8 +2569,8 @@ private fun ActivitySearchScreen(
                     transaction.category,
                     transaction.account,
                     transaction.dateLabel,
-                    formatCurrency(kotlin.math.abs(transaction.amountMinorUnits)),
-                    formatSignedCurrency(transaction.amountMinorUnits),
+                    state.formatCurrency(kotlin.math.abs(transaction.amountMinorUnits)),
+                    state.formatSignedCurrency(transaction.amountMinorUnits),
                 ).any { it.contains(search.trim(), ignoreCase = true) }
         }
     PageColumn {
@@ -2546,7 +2582,7 @@ private fun ActivitySearchScreen(
                 "Search the sample activity by payee, amount, or category."
             },
         )
-        TextFieldCard("Search", search, { search = it }, "Try “groceries” or “${formatCurrency(4_200)}”")
+        TextFieldCard("Search", search, { search = it }, "Try “groceries” or “${state.formatCurrency(4_200)}”")
         if (isLiveBudget) {
             SectionCard("Matches", "${results.size} transactions in this device’s local copy") {
                 if (results.isEmpty()) {
@@ -2612,7 +2648,7 @@ private fun TransactionDetailScreen(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            Text(formatCurrency(amount), color = tandemPalette.text, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+            Text(state.formatCurrency(amount), color = tandemPalette.text, fontSize = 32.sp, fontWeight = FontWeight.Bold)
             Text(state.transactionPayee, color = tandemPalette.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Text("${state.transactionDate} · ${state.transactionAccount}", color = tandemPalette.muted, fontSize = 12.sp)
         }
@@ -2661,7 +2697,7 @@ private fun TransactionFormScreen(
         }
         PageColumn {
             Heading("Edit transaction", "Changes stay local until the sync confirms them.")
-            TextFieldCard("Amount", state.transactionAmount, { state.transactionAmount = it }, formatAmount(4_218))
+            TextFieldCard("Amount", state.transactionAmount, { state.transactionAmount = it }, state.formatAmount(4_218))
             TextFieldCard("Notes", state.transactionNotes, { state.transactionNotes = it }, "Add a note (optional)", singleLine = false)
             SectionCard("Transaction details", "Other fields are read-only in this build") {
                 ListRow("A", "Account", "Account is unchanged", state.transactionAccount)
@@ -2685,7 +2721,7 @@ private fun TransactionFormScreen(
     PageColumn {
         SampleBanner()
         Heading("Transaction details", "Record a change to the budget.")
-        TextFieldCard("Amount", state.transactionAmount, { state.transactionAmount = it }, "For example, ${formatAmount(1_250)}")
+        TextFieldCard("Amount", state.transactionAmount, { state.transactionAmount = it }, "For example, ${state.formatAmount(1_250)}")
         ReadOnlyField("Account", state.transactionAccount, "A") { navigation.open(AppRoute.CHOOSE_ACCOUNT) }
         ReadOnlyField("Payee", state.transactionPayee, "P") { navigation.open(AppRoute.CHOOSE_PAYEE) }
         ReadOnlyField("Category", state.transactionCategory, "C") { navigation.open(AppRoute.CHOOSE_CATEGORY) }
@@ -2786,14 +2822,17 @@ private fun DatePickerScreen(
 }
 
 @Composable
-private fun SaveResultScreen(navigation: AppNavigation) {
+private fun SaveResultScreen(
+    state: AppState,
+    navigation: AppNavigation,
+) {
     val palette = tandemPalette
     PageColumn {
         Spacer(Modifier.height(16.dp))
         Badge("Not saved", palette.warning)
         Heading("No change was made", "This sample form cannot save a transaction yet.")
         SectionCard("Transaction draft", "Sample data") {
-            ListRow("¤", "Amount", "Corner Market", formatCurrency(-4_218))
+            ListRow("¤", "Amount", "Corner Market", state.formatCurrency(-4_218))
             DividerLine()
             ListRow("C", "Account and category", "Checking · Groceries")
         }
@@ -2956,8 +2995,8 @@ private fun ConflictInboxScreen(
                 }
                 Text("${formatDate(SampleDate(2026, 5, 14))} · Groceries · Checking", color = tandemPalette.muted, fontSize = 11.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ConflictValueCard("On this device", formatCurrency(1_200), Modifier.weight(1f))
-                    ConflictValueCard("In Actual", formatCurrency(1_500), Modifier.weight(1f))
+                    ConflictValueCard("On this device", state.formatCurrency(1_200), Modifier.weight(1f))
+                    ConflictValueCard("In Actual", state.formatCurrency(1_500), Modifier.weight(1f))
                 }
                 Text("Review both versions ›", color = tandemPalette.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             }
@@ -3049,8 +3088,8 @@ private fun ConflictReviewScreen(
         Badge("Conflict · sample data", tandemPalette.warning)
         Heading("Two versions differ", "Review the two sample amounts for Corner Market.")
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            ConflictValueCard("On this device", formatCurrency(1_200), Modifier.weight(1f))
-            ConflictValueCard("In Actual", formatCurrency(1_500), Modifier.weight(1f))
+            ConflictValueCard("On this device", state.formatCurrency(1_200), Modifier.weight(1f))
+            ConflictValueCard("In Actual", state.formatCurrency(1_500), Modifier.weight(1f))
         }
         SectionCard("Other details", "Review before choosing") {
             ListRow("C", "Account", "Same on both versions", "Checking")
@@ -3062,8 +3101,14 @@ private fun ConflictReviewScreen(
         if (state.conflictChoice.isNotEmpty()) {
             PreviewNote("Sample choice selected: ${state.conflictChoice}. No server update has been sent.")
         }
-        PrimaryButton("Keep ${formatCurrency(1_200)} on this device") { state.conflictChoice = "device value ${formatCurrency(1_200)}" }
-        SecondaryButton("Keep ${formatCurrency(1_500)} from Actual") { state.conflictChoice = "Actual value ${formatCurrency(1_500)}" }
+        PrimaryButton("Keep ${state.formatCurrency(1_200)} on this device") {
+            state.conflictChoice =
+                "device value ${state.formatCurrency(1_200)}"
+        }
+        SecondaryButton("Keep ${state.formatCurrency(1_500)} from Actual") {
+            state.conflictChoice =
+                "Actual value ${state.formatCurrency(1_500)}"
+        }
         PreviewNote(
             "The app would compare that choice with the latest server copy before saving. Nothing changes until the server confirms it.",
         )
@@ -3095,7 +3140,7 @@ private fun UncertainWriteScreen(
                         "¤",
                         "Requested amount",
                         "Device edit",
-                        operation.optimisticAmountMinor?.let(::formatSignedCurrency) ?: "Unavailable",
+                        operation.optimisticAmountMinor?.let { state.formatSignedCurrency(it) } ?: "Unavailable",
                     )
                     DividerLine()
                     ListRow(
@@ -3120,7 +3165,7 @@ private fun UncertainWriteScreen(
         Badge("Status unknown", tandemPalette.warning)
         Heading("Check before retrying", "The connection ended before this change could be confirmed.")
         SectionCard("Corner Market", "${formatShortDate(SampleDate(2026, 5, 14))} · Groceries") {
-            ListRow("¤", "Requested amount", "Local change", formatCurrency(1_200))
+            ListRow("¤", "Requested amount", "Local change", state.formatCurrency(1_200))
             DividerLine()
             ListRow("?", "Server result", "The change has not been confirmed", "Unknown", tandemPalette.warning)
         }
@@ -3154,7 +3199,7 @@ private fun RejectedWriteScreen(
                         "¤",
                         "Requested amount",
                         "Local draft",
-                        operation.optimisticAmountMinor?.let(::formatSignedCurrency) ?: "Unavailable",
+                        operation.optimisticAmountMinor?.let { state.formatSignedCurrency(it) } ?: "Unavailable",
                     )
                     DividerLine()
                     ListRow("!", "Reason", "The update was not applied", operation.lastErrorCode ?: "Rejected", tandemPalette.warning)
@@ -3171,7 +3216,7 @@ private fun RejectedWriteScreen(
         Badge("Not applied", tandemPalette.negative)
         Heading("Previous value kept", "This change was not applied in Actual Budget.")
         SectionCard("Sample edit", "Corner Market · ${formatShortDate(SampleDate(2026, 5, 14))}") {
-            ListRow("¤", "Requested amount", "Device draft", formatCurrency(1_200))
+            ListRow("¤", "Requested amount", "Device draft", state.formatCurrency(1_200))
             DividerLine()
             ListRow("!", "Reason", "New transactions are not available yet", "Unavailable", tandemPalette.warning)
         }
@@ -3262,7 +3307,7 @@ private fun AppearanceScreen(
                             .border(1.dp, palette.accent, RoundedCornerShape(13.dp)),
                     )
                 }
-                Text(formatCurrency(124_000), color = palette.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text(state.formatCurrency(124_000), color = palette.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 Text("Available to assign · ${state.selectedMonth}", color = palette.muted, fontSize = 11.sp)
             }
         }
@@ -3365,21 +3410,32 @@ private fun HomeLayoutScreen(state: AppState) {
         SurfaceCard {
             Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 LabelText("Layout preview")
-                ListRow("H", "Essentials", "3 categories", formatCurrency(232_000))
+                ListRow("H", "Essentials", "3 categories", state.formatCurrency(232_000))
                 DividerLine()
-                ListRow("G", "Groceries", "Available this month", formatCurrency(50_000))
+                ListRow("G", "Groceries", "Available this month", state.formatCurrency(50_000))
             }
         }
     }
 }
 
 @Composable
-private fun BudgetPreferencesScreen() {
-    val currencyCode = platformCurrencyCode()
+private fun BudgetPreferencesScreen(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+) {
+    val currencyCode = state.budgetDisplaySettings?.currencyCode ?: platformCurrencyCode()
     PageColumn {
         Heading("Amount and planning", "Choose how amounts and plans are presented.")
-        SectionCard("Number format", "Sample values use $currencyCode") {
-            ListRow("¤", "Currency", "Follows the device locale", currencyCode)
+        SectionCard(
+            "Number format",
+            if (state.budgetDisplaySettings != null) "Uses Actual budget settings" else "Device locale fallback",
+        ) {
+            ListRow(
+                "¤",
+                "Currency",
+                if (mobileSession.budgetDisplaySettings != null) "Selected Actual budget" else "Follows the device locale",
+                currencyCode,
+            )
             DividerLine()
             ListRow("◷", "Start of week", "Follows the device locale", formatFirstWeekday())
         }
@@ -3390,7 +3446,7 @@ private fun BudgetPreferencesScreen() {
             DividerLine()
             ToggleRow("Carry category balances forward", "Use the amount available from prior months", true, {})
         }
-        PreviewNote("Preferences are sample controls only and do not alter an Actual budget.")
+        PreviewNote("Planning controls are previews and do not alter an Actual budget.")
     }
 }
 

@@ -103,6 +103,7 @@ class BudgetSyncCoordinator(
                         fromCursor = cursor,
                         nextCursor = page.nextCursor,
                         changes = page.changes,
+                        displaySettings = page.displaySettings,
                     ),
                 )
             if (result == ChangePageResult.NEEDS_FULL_SYNC) {
@@ -144,6 +145,7 @@ class BudgetSyncCoordinator(
                     cursor = snapshot.cursor,
                     expectedCheckpoint = expectedCheckpoint,
                     records = snapshot.records,
+                    displaySettings = snapshot.displaySettings,
                 )
             ) {
                 FullSnapshotResult.APPLIED -> return snapshot.generation

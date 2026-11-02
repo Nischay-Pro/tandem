@@ -97,7 +97,7 @@ describe("budget read API", () => {
     const fake = createApi();
     await expect(
       fake.api.getSnapshot("budget-1", "encrypted-password"),
-    ).resolves.toBe(snapshot);
+    ).resolves.toEqual({ ...snapshot, displaySettings: null });
     expect(fake.events).toEqual(["lock:budget-1", "read", "apply"]);
     expect(fake.reader.read).toHaveBeenCalledWith(
       "budget-1",
@@ -110,6 +110,47 @@ describe("budget read API", () => {
     );
   });
 
+  it("returns Actual display settings on snapshots and the first change page", async () => {
+    const fake = createApi();
+    const displaySettings = {
+      currencyCode: "CAD",
+      currencySymbol: "CA$",
+      currencyFractionDigits: 2,
+      numberFormat: "comma-dot",
+      hideFraction: false,
+      currencySymbolPosition: "before" as const,
+      currencySpaceBetweenAmountAndSymbol: false,
+    };
+    const reader = {
+      read: fake.reader.read,
+      readWithSettings: vi.fn(async () => ({
+        records: snapshot.records,
+        displaySettings,
+      })),
+    } as unknown as BudgetSnapshotReader;
+    const api = new BudgetReadApi(
+      { withBudgetLock: fake.lock } as BudgetLockPort,
+      reader,
+      {
+        applySnapshot: fake.applySnapshot,
+        readChanges: fake.readChanges,
+      } as unknown as BudgetProjectionStore,
+      "feed-epoch-1",
+    );
+
+    await expect(api.getSnapshot("budget-1")).resolves.toMatchObject({
+      displaySettings,
+    });
+    await expect(
+      api.getChanges({
+        budgetId: "budget-1",
+        generation: snapshot.generation,
+        cursor: "2",
+        limit: 25,
+      }),
+    ).resolves.toMatchObject({ displaySettings });
+  });
+
   it("refreshes before beginning a new change page and passes its encryption password", async () => {
     const fake = createApi();
     await expect(
@@ -120,7 +161,7 @@ describe("budget read API", () => {
         limit: 25,
         encryptionPassword: "encrypted-password",
       }),
-    ).resolves.toBe(page);
+    ).resolves.toEqual({ ...page, displaySettings: null });
     expect(fake.events).toEqual(["lock:budget-1", "read", "apply", "changes"]);
     expect(fake.readChanges).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -141,7 +182,10 @@ describe("budget read API", () => {
       throughCursor: "4",
       limit: 1,
     };
-    await expect(fake.api.getChanges(request)).resolves.toBe(page);
+    await expect(fake.api.getChanges(request)).resolves.toEqual({
+      ...page,
+      displaySettings: null,
+    });
     expect(fake.events).toEqual(["lock:budget-1", "changes"]);
     expect(fake.reader.read).not.toHaveBeenCalled();
   });
@@ -155,7 +199,10 @@ describe("budget read API", () => {
       throughCursor: "0",
       limit: 10,
     };
-    await expect(fake.api.getChanges(request)).resolves.toBe(page);
+    await expect(fake.api.getChanges(request)).resolves.toEqual({
+      ...page,
+      displaySettings: null,
+    });
     expect(fake.events).toEqual([
       "lock:budget-1",
       "changes",

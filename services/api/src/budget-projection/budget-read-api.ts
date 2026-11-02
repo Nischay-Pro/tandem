@@ -1,6 +1,8 @@
 import type {
+  BudgetDisplaySettings,
   BudgetLockPort,
   BudgetProjectionChangePage,
+  BudgetProjectionRecord,
   BudgetProjectionSnapshot,
   BudgetProjectionStore,
   BudgetSnapshotReader,
@@ -51,8 +53,13 @@ export class BudgetReadApi implements BudgetReadApiPort {
     encryptionPassword?: string,
   ): Promise<BudgetProjectionSnapshot> {
     return this.locks.withBudgetLock(budgetId, async () => {
-      const records = await this.reader.read(budgetId, encryptionPassword);
-      return this.store.applySnapshot(budgetId, this.feedEpoch, records);
+      const result = await this.readSnapshot(budgetId, encryptionPassword);
+      const snapshot = await this.store.applySnapshot(
+        budgetId,
+        this.feedEpoch,
+        result.records,
+      );
+      return { ...snapshot, displaySettings: result.displaySettings };
     });
   }
 
@@ -60,27 +67,51 @@ export class BudgetReadApi implements BudgetReadApiPort {
     request: BudgetChangeRequest,
   ): Promise<BudgetProjectionChangePage> {
     return this.locks.withBudgetLock(request.budgetId, async () => {
+      let displaySettings: BudgetDisplaySettings | null = null;
       if (request.throughCursor === undefined) {
-        await this.refresh(request.budgetId, request.encryptionPassword);
+        displaySettings = await this.refresh(
+          request.budgetId,
+          request.encryptionPassword,
+        );
       }
 
       let page = await this.store.readChanges(request);
       if (page === undefined) {
-        await this.refresh(request.budgetId, request.encryptionPassword);
+        displaySettings = await this.refresh(
+          request.budgetId,
+          request.encryptionPassword,
+        );
         page = await this.store.readChanges(request);
       }
       if (!page) {
         throw new Error("Budget change feed state was not created");
       }
-      return page;
+      return { ...page, displaySettings };
     });
   }
 
   private async refresh(
     budgetId: string,
     encryptionPassword?: string,
-  ): Promise<void> {
-    const records = await this.reader.read(budgetId, encryptionPassword);
-    await this.store.applySnapshot(budgetId, this.feedEpoch, records);
+  ): Promise<BudgetDisplaySettings | null> {
+    const result = await this.readSnapshot(budgetId, encryptionPassword);
+    await this.store.applySnapshot(budgetId, this.feedEpoch, result.records);
+    return result.displaySettings;
+  }
+
+  private async readSnapshot(
+    budgetId: string,
+    encryptionPassword?: string,
+  ): Promise<{
+    records: BudgetProjectionRecord[];
+    displaySettings: BudgetDisplaySettings | null;
+  }> {
+    if (this.reader.readWithSettings) {
+      return this.reader.readWithSettings(budgetId, encryptionPassword);
+    }
+    return {
+      records: await this.reader.read(budgetId, encryptionPassword),
+      displaySettings: null,
+    };
   }
 }

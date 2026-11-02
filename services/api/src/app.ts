@@ -932,6 +932,47 @@ function registerBudgetReadRoutes(
     required: ["type", "id", "revision", "body"],
     additionalProperties: false,
   };
+  const displaySettingsSchema = {
+    type: "object",
+    properties: {
+      currencyCode: { type: "string", pattern: "^[A-Z]{3}$" },
+      currencySymbol: { type: "string" },
+      currencyFractionDigits: { type: "integer", minimum: 0 },
+      numberFormat: {
+        anyOf: [
+          {
+            type: "string",
+            enum: [
+              "comma-dot",
+              "dot-comma",
+              "space-comma",
+              "apostrophe-dot",
+              "comma-dot-in",
+            ],
+          },
+          { type: "null" },
+        ],
+      },
+      hideFraction: { type: "boolean" },
+      currencySymbolPosition: {
+        anyOf: [
+          { type: "string", enum: ["before", "after"] },
+          { type: "null" },
+        ],
+      },
+      currencySpaceBetweenAmountAndSymbol: { type: "boolean" },
+    },
+    required: [
+      "currencyCode",
+      "currencySymbol",
+      "currencyFractionDigits",
+      "numberFormat",
+      "hideFraction",
+      "currencySymbolPosition",
+      "currencySpaceBetweenAmountAndSymbol",
+    ],
+    additionalProperties: false,
+  };
   const snapshotSchema = {
     type: "object",
     properties: {
@@ -939,8 +980,17 @@ function registerBudgetReadRoutes(
       generation: { type: "string", format: "uuid" },
       cursor: { type: "string", pattern: "^(0|[1-9][0-9]*)$" },
       records: { type: "array", items: recordSchema },
+      displaySettings: {
+        anyOf: [displaySettingsSchema, { type: "null" }],
+      },
     },
-    required: ["budgetId", "generation", "cursor", "records"],
+    required: [
+      "budgetId",
+      "generation",
+      "cursor",
+      "records",
+      "displaySettings",
+    ],
     additionalProperties: false,
   };
   const changeSchema = {
@@ -972,6 +1022,9 @@ function registerBudgetReadRoutes(
       hasMore: { type: "boolean" },
       resetRequired: { type: "boolean" },
       changes: { type: "array", items: changeSchema },
+      displaySettings: {
+        anyOf: [displaySettingsSchema, { type: "null" }],
+      },
     },
     required: [
       "budgetId",
@@ -982,6 +1035,7 @@ function registerBudgetReadRoutes(
       "hasMore",
       "resetRequired",
       "changes",
+      "displaySettings",
     ],
     additionalProperties: false,
   };

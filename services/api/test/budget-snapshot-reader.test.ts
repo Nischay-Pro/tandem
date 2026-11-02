@@ -65,6 +65,7 @@ function createApi(overrides: Record<string, unknown> = {}) {
       totalBudgeted: 50_00,
       categoryGroups: [],
     })),
+    getPreferences: vi.fn(async () => ({})),
     q: vi.fn(() => {
       const query = createQueryBuilder();
       queries.push(query);
@@ -209,6 +210,107 @@ describe("Actual budget snapshot reader", () => {
   it("uses the default page and row limits", () => {
     expect(ACTUAL_TRANSACTION_PAGE_SIZE).toBe(500);
     expect(ACTUAL_TRANSACTION_MAX_ROWS).toBe(1_000_000);
+  });
+
+  it("returns Actual currency metadata and supported display preferences", async () => {
+    const fake = createApi({
+      getPreferences: vi.fn(async () => ({
+        "flags.currency": "true",
+        defaultCurrencyCode: "CAD",
+        numberFormat: "space-comma",
+        hideFraction: "true",
+        currencySymbolPosition: "after",
+        currencySpaceBetweenAmountAndSymbol: "true",
+        isPrivacyEnabled: "true",
+        privateImportToken: "never-expose-this",
+      })),
+    });
+    const reader = new ActualBudgetSnapshotReader(fake.session, fake.actual);
+
+    await expect(reader.readWithSettings("budget-1")).resolves.toMatchObject({
+      displaySettings: {
+        currencyCode: "CAD",
+        currencySymbol: "CA$",
+        currencyFractionDigits: 2,
+        numberFormat: "space-comma",
+        hideFraction: true,
+        currencySymbolPosition: "after",
+        currencySpaceBetweenAmountAndSymbol: true,
+      },
+    });
+    expect(fake.actual.getPreferences).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["CLP", "CLP$", 2, "dot-comma", "before"],
+    ["IRR", "﷼", 0, "comma-dot", "after"],
+  ])(
+    "uses Actual's own %s symbol, scale, number format and position",
+    async (
+      currencyCode,
+      currencySymbol,
+      fractionDigits,
+      numberFormat,
+      position,
+    ) => {
+      const fake = createApi({
+        getPreferences: vi.fn(async () => ({
+          "flags.currency": "true",
+          defaultCurrencyCode: currencyCode,
+        })),
+      });
+      const reader = new ActualBudgetSnapshotReader(fake.session, fake.actual);
+
+      await expect(reader.readWithSettings("budget-1")).resolves.toMatchObject({
+        displaySettings: {
+          currencyCode,
+          currencySymbol,
+          currencyFractionDigits: fractionDigits,
+          numberFormat,
+          currencySymbolPosition: position,
+          currencySpaceBetweenAmountAndSymbol: false,
+        },
+      });
+    },
+  );
+
+  it("uses Actual's USD defaults when currency preferences are disabled or unset", async () => {
+    const fake = createApi({
+      getPreferences: vi.fn(async () => ({
+        "flags.currency": "false",
+        defaultCurrencyCode: "CAD",
+      })),
+    });
+    const reader = new ActualBudgetSnapshotReader(fake.session, fake.actual);
+
+    await expect(reader.readWithSettings("budget-1")).resolves.toMatchObject({
+      displaySettings: {
+        currencyCode: "USD",
+        currencySymbol: "$",
+        currencyFractionDigits: 2,
+        numberFormat: null,
+        currencySymbolPosition: "before",
+        currencySpaceBetweenAmountAndSymbol: false,
+      },
+    });
+  });
+
+  it("falls back to Actual's USD defaults for an unsupported configured currency", async () => {
+    const fake = createApi({
+      getPreferences: vi.fn(async () => ({
+        "flags.currency": true,
+        defaultCurrencyCode: "XYZ",
+      })),
+    });
+    const reader = new ActualBudgetSnapshotReader(fake.session, fake.actual);
+
+    await expect(reader.readWithSettings("budget-1")).resolves.toMatchObject({
+      displaySettings: {
+        currencyCode: "USD",
+        currencySymbol: "$",
+        currencyFractionDigits: 2,
+      },
+    });
   });
 
   it.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])(

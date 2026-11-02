@@ -4,6 +4,7 @@ import app.tandemforactual.api.generated.Api
 import app.tandemforactual.api.generated.Auth
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.store.BudgetChange
+import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.BudgetSyncProtocolException
 import app.tandemforactual.data.store.BudgetSyncRemoteException
 import app.tandemforactual.data.store.RemoteOperationStatus
@@ -238,6 +239,99 @@ class GeneratedBudgetSyncRemoteTest {
         assertProtocolException { BudgetSyncJson.parseChanges(objectBoolean, BUDGET) }
         val missingRecords = Json.parseToJsonElement(snapshotJson().replace(Regex(",\"records\":\\[.*]"), "")).jsonObject
         assertProtocolException { BudgetSyncJson.parseSnapshot(missingRecords, BUDGET) }
+    }
+
+    @Test
+    fun protocolParserReadsActualBudgetDisplaySettingsAndRejectsUnsupportedFormats() {
+        val displaySettingsJson =
+            """{"currencyCode":"CAD","currencySymbol":"CA$","currencyFractionDigits":2,"numberFormat":"space-comma","hideFraction":false,"currencySymbolPosition":"after","currencySpaceBetweenAmountAndSymbol":true}"""
+        val expectedSettings =
+            BudgetDisplaySettings(
+                currencyCode = "CAD",
+                currencySymbol = "CA$",
+                currencyFractionDigits = 2,
+                numberFormat = "space-comma",
+                hideFraction = false,
+                currencySymbolPosition = "after",
+                currencySpaceBetweenAmountAndSymbol = true,
+            )
+        val snapshot =
+            Json
+                .parseToJsonElement(snapshotJson().replace("\"records\":", "\"displaySettings\":$displaySettingsJson,\"records\":"))
+                .jsonObject
+        val page =
+            Json
+                .parseToJsonElement(changePageJson().replace("\"changes\":", "\"displaySettings\":$displaySettingsJson,\"changes\":"))
+                .jsonObject
+
+        assertEquals(expectedSettings, BudgetSyncJson.parseSnapshot(snapshot, BUDGET).displaySettings)
+        assertEquals(expectedSettings, BudgetSyncJson.parseChanges(page, BUDGET).displaySettings)
+        assertNull(BudgetSyncJson.parseSnapshot(Json.parseToJsonElement(snapshotJson()).jsonObject, BUDGET).displaySettings)
+
+        val invalidCurrency = Json.parseToJsonElement(displaySettingsJson.replace("CAD", "CA")).toString()
+        assertProtocolException {
+            BudgetSyncJson.parseSnapshot(
+                Json
+                    .parseToJsonElement(
+                        snapshotJson().replace("\"records\":", "\"displaySettings\":$invalidCurrency,\"records\":"),
+                    ).jsonObject,
+                BUDGET,
+            )
+        }
+        val unsupportedNumberFormat = displaySettingsJson.replace("space-comma", "unsupported")
+        assertProtocolException {
+            BudgetSyncJson.parseChanges(
+                Json
+                    .parseToJsonElement(
+                        changePageJson().replace("\"changes\":", "\"displaySettings\":$unsupportedNumberFormat,\"changes\":"),
+                    ).jsonObject,
+                BUDGET,
+            )
+        }
+
+        val unsupportedSymbolPosition = displaySettingsJson.replace("\"after\"", "\"center\"")
+        assertProtocolException {
+            BudgetSyncJson.parseSnapshot(
+                Json
+                    .parseToJsonElement(
+                        snapshotJson().replace("\"records\":", "\"displaySettings\":$unsupportedSymbolPosition,\"records\":"),
+                    ).jsonObject,
+                BUDGET,
+            )
+        }
+
+        val unsupportedFractionDigits = displaySettingsJson.replace("\"currencyFractionDigits\":2", "\"currencyFractionDigits\":7")
+        assertProtocolException {
+            BudgetSyncJson.parseSnapshot(
+                Json
+                    .parseToJsonElement(
+                        snapshotJson().replace("\"records\":", "\"displaySettings\":$unsupportedFractionDigits,\"records\":"),
+                    ).jsonObject,
+                BUDGET,
+            )
+        }
+
+        val nonIntegerFractionDigits = displaySettingsJson.replace("\"currencyFractionDigits\":2", "\"currencyFractionDigits\":{}")
+        assertProtocolException {
+            BudgetSyncJson.parseSnapshot(
+                Json
+                    .parseToJsonElement(
+                        snapshotJson().replace("\"records\":", "\"displaySettings\":$nonIntegerFractionDigits,\"records\":"),
+                    ).jsonObject,
+                BUDGET,
+            )
+        }
+
+        val missingFractionDigits = displaySettingsJson.replace("\"currencyFractionDigits\":2,", "")
+        assertProtocolException {
+            BudgetSyncJson.parseSnapshot(
+                Json
+                    .parseToJsonElement(
+                        snapshotJson().replace("\"records\":", "\"displaySettings\":$missingFractionDigits,\"records\":"),
+                    ).jsonObject,
+                BUDGET,
+            )
+        }
     }
 
     private fun configureApi(engine: MockEngine): () -> Unit {

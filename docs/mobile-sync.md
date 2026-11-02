@@ -14,6 +14,18 @@ Room retains the complete synced transaction set; Sync Center reports the full
 visible count. Initial setup selects the most recently active cached month when
 the prior selection is unavailable.
 
+Snapshot and first-page change responses also carry an allowlist of the
+selected Actual budget's currency and display preferences. The mobile client
+persists these settings beside that budget's local records. The API carries
+Actual's own currency symbol, decimal places, default number format, and symbol
+placement for the pinned `@actual-app/api` release; Android and iOS use these
+values instead of their platform currency tables. An explicit budget
+number-format preference takes precedence. If currency preferences are
+disabled, Actual itself falls back to USD; if no number format is configured,
+the phone locale supplies separators. The `hideFraction` preference applies
+to displayed totals, while transaction edit fields retain the full editable
+precision so a notes-only edit cannot silently change an amount.
+
 The local Actual 26.10.0 load fixture contains a CAD budget with 2,182
 transaction records and a USD budget with 13,164 records. Across the two
 budgets, 15,000 rows are synthetic purchases spanning seven years. Pixel 10a

@@ -13,6 +13,21 @@ export const BUDGET_ENTITY_TYPES = [
 export type BudgetEntityType = (typeof BUDGET_ENTITY_TYPES)[number];
 export type JsonObject = { [key: string]: JsonValue };
 
+export interface BudgetDisplaySettings {
+  currencyCode: string;
+  currencySymbol: string;
+  currencyFractionDigits: number;
+  numberFormat: string | null;
+  hideFraction: boolean;
+  currencySymbolPosition: "before" | "after" | null;
+  currencySpaceBetweenAmountAndSymbol: boolean;
+}
+
+export interface BudgetSnapshotReadResult {
+  records: BudgetProjectionRecord[];
+  displaySettings: BudgetDisplaySettings;
+}
+
 export interface BudgetProjectionRecord {
   type: BudgetEntityType;
   id: string;
@@ -25,6 +40,7 @@ export interface BudgetProjectionSnapshot {
   generation: string;
   cursor: string;
   records: BudgetProjectionRecord[];
+  displaySettings?: BudgetDisplaySettings | null;
 }
 
 export interface BudgetProjectionChange {
@@ -45,6 +61,7 @@ export interface BudgetProjectionChangePage {
   hasMore: boolean;
   resetRequired: boolean;
   changes: BudgetProjectionChange[];
+  displaySettings?: BudgetDisplaySettings | null;
 }
 
 export interface BudgetProjectionStore {
@@ -68,6 +85,10 @@ export interface BudgetSnapshotReader {
     budgetId: string,
     encryptionPassword?: string,
   ): Promise<BudgetProjectionRecord[]>;
+  readWithSettings?(
+    budgetId: string,
+    encryptionPassword?: string,
+  ): Promise<BudgetSnapshotReadResult>;
 }
 
 export interface BudgetLockPort {

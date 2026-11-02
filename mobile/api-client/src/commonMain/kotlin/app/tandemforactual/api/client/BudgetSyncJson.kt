@@ -1,6 +1,7 @@
 package app.tandemforactual.api.client
 
 import app.tandemforactual.data.store.BudgetChange
+import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.BudgetSyncProtocolException
 import app.tandemforactual.data.store.LocalRecordProjection
 import app.tandemforactual.data.store.RemoteBudgetChangePage
@@ -16,6 +17,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -43,7 +45,7 @@ object BudgetSyncJson {
         if (records.map { it.recordType to it.recordId }.toSet().size != records.size) {
             throw BudgetSyncProtocolException("Snapshot contains duplicate record identities")
         }
-        return RemoteBudgetSnapshot(budgetId, generation, cursor, records)
+        return RemoteBudgetSnapshot(budgetId, generation, cursor, records, root.optionalDisplaySettings())
     }
 
     fun parseChanges(
@@ -89,6 +91,7 @@ object BudgetSyncJson {
             hasMore,
             resetRequired,
             changes,
+            root.optionalDisplaySettings(),
         )
     }
 
@@ -168,6 +171,47 @@ object BudgetSyncJson {
         }
         return primitive.booleanOrNull
             ?: throw BudgetSyncProtocolException("Response is missing a valid $name")
+    }
+
+    private fun JsonObject.requiredInt(name: String): Int {
+        val value =
+            try {
+                this[name]?.jsonPrimitive?.intOrNull
+            } catch (error: IllegalArgumentException) {
+                throw BudgetSyncProtocolException("Response field $name must be an integer", error)
+            }
+        return value ?: throw BudgetSyncProtocolException("Response is missing a valid $name")
+    }
+
+    private fun JsonObject.optionalDisplaySettings(): BudgetDisplaySettings? {
+        val element = this["displaySettings"]?.takeUnless { it == JsonNull } ?: return null
+        val settings = element.requireObject("displaySettings")
+        val currencyCode = settings.requiredString("currencyCode")
+        if (!currencyCode.matches(Regex("[A-Z]{3}"))) {
+            throw BudgetSyncProtocolException("Response has an invalid currencyCode")
+        }
+        val currencySymbol = settings.requiredString("currencySymbol")
+        val currencyFractionDigits = settings.requiredInt("currencyFractionDigits")
+        if (currencyFractionDigits !in 0..6) {
+            throw BudgetSyncProtocolException("Response has an invalid currencyFractionDigits")
+        }
+        val numberFormat = settings.optionalString("numberFormat")
+        if (numberFormat != null && numberFormat !in setOf("comma-dot", "dot-comma", "space-comma", "apostrophe-dot", "comma-dot-in")) {
+            throw BudgetSyncProtocolException("Response has an unsupported numberFormat")
+        }
+        val currencySymbolPosition = settings.optionalString("currencySymbolPosition")
+        if (currencySymbolPosition != null && currencySymbolPosition !in setOf("before", "after")) {
+            throw BudgetSyncProtocolException("Response has an unsupported currencySymbolPosition")
+        }
+        return BudgetDisplaySettings(
+            currencyCode = currencyCode,
+            currencySymbol = currencySymbol,
+            currencyFractionDigits = currencyFractionDigits,
+            numberFormat = numberFormat,
+            hideFraction = settings.requiredBoolean("hideFraction"),
+            currencySymbolPosition = currencySymbolPosition,
+            currencySpaceBetweenAmountAndSymbol = settings.requiredBoolean("currencySpaceBetweenAmountAndSymbol"),
+        )
     }
 
     private fun JsonObject.requiredCursor(name: String): String {

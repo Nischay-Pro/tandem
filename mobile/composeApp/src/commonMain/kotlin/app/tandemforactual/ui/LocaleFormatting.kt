@@ -1,16 +1,27 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.data.store.BudgetDisplaySettings
+
 internal data class SampleDate(
     val year: Int,
     val month: Int,
     val day: Int,
 )
 
-internal expect fun platformFormatCurrency(minorUnits: Long): String
+internal expect fun platformFormatCurrency(
+    minorUnits: Long,
+    displaySettings: BudgetDisplaySettings?,
+): String
 
-internal expect fun platformFormatDecimal(minorUnits: Long): String
+internal expect fun platformFormatDecimal(
+    minorUnits: Long,
+    displaySettings: BudgetDisplaySettings?,
+): String
 
-internal expect fun platformParseDecimalMinorUnits(value: String): Long?
+internal expect fun platformParseDecimalMinorUnits(
+    value: String,
+    displaySettings: BudgetDisplaySettings?,
+): Long?
 
 internal expect fun platformFormatDate(
     year: Int,
@@ -43,14 +54,25 @@ internal expect fun platformWeekdayName(
     day: Int,
 ): String
 
-internal fun formatCurrency(minorUnits: Long): String = platformFormatCurrency(minorUnits)
+internal fun formatCurrency(
+    minorUnits: Long,
+    displaySettings: BudgetDisplaySettings? = null,
+): String = platformFormatCurrency(minorUnits, displaySettings)
 
-internal fun formatAmount(minorUnits: Long): String = platformFormatDecimal(minorUnits)
+internal fun formatAmount(
+    minorUnits: Long,
+    displaySettings: BudgetDisplaySettings? = null,
+): String = platformFormatDecimal(minorUnits, displaySettings)
 
-internal fun parseAmountMinorUnits(value: String): Long? = platformParseDecimalMinorUnits(value)
+internal fun parseAmountMinorUnits(
+    value: String,
+    displaySettings: BudgetDisplaySettings? = null,
+): Long? = platformParseDecimalMinorUnits(value, displaySettings)
 
-internal fun formatSignedCurrency(minorUnits: Long): String =
-    if (minorUnits > 0) "+${formatCurrency(minorUnits)}" else formatCurrency(minorUnits)
+internal fun formatSignedCurrency(
+    minorUnits: Long,
+    displaySettings: BudgetDisplaySettings? = null,
+): String = if (minorUnits > 0) "+${formatCurrency(minorUnits, displaySettings)}" else formatCurrency(minorUnits, displaySettings)
 
 internal fun formatDate(date: SampleDate): String = platformFormatDate(date.year, date.month, date.day, includeYear = true)
 

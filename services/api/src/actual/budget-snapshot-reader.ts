@@ -1,9 +1,12 @@
 import { createHash } from "node:crypto";
 import * as Actual from "@actual-app/api";
+import { ACTUAL_CURRENCY_DISPLAY_METADATA } from "./actual-currencies.js";
 import type { ActualBudgetSessionPort } from "./transaction-reconciler.js";
 import type {
+  BudgetDisplaySettings,
   BudgetEntityType,
   BudgetProjectionRecord,
+  BudgetSnapshotReadResult,
   BudgetSnapshotReader,
   JsonObject,
 } from "../budget-projection/contracts.js";
@@ -26,6 +29,7 @@ export type ActualBudgetReadApi = Pick<
   | "getPayees"
   | "getBudgetMonths"
   | "getBudgetMonth"
+  | "getPreferences"
   | "q"
   | "aqlQuery"
 >;
@@ -53,6 +57,15 @@ export class ActualBudgetSnapshotReader implements BudgetSnapshotReader {
     budgetId: string,
     encryptionPassword?: string,
   ): Promise<BudgetProjectionRecord[]> {
+    return this.readWithSettings(budgetId, encryptionPassword).then(
+      ({ records }) => records,
+    );
+  }
+
+  readWithSettings(
+    budgetId: string,
+    encryptionPassword?: string,
+  ): Promise<BudgetSnapshotReadResult> {
     return this.session.runBudget(
       budgetId,
       () => this.readLoadedBudget(),
@@ -60,7 +73,10 @@ export class ActualBudgetSnapshotReader implements BudgetSnapshotReader {
     );
   }
 
-  private async readLoadedBudget(): Promise<BudgetProjectionRecord[]> {
+  private async readLoadedBudget(): Promise<BudgetSnapshotReadResult> {
+    const displaySettings = readDisplaySettings(
+      await this.actual.getPreferences(),
+    );
     const records: BudgetProjectionRecord[] = [];
 
     const accountGroups = requireArray(
@@ -134,7 +150,7 @@ export class ActualBudgetSnapshotReader implements BudgetSnapshotReader {
         : left.type.localeCompare(right.type),
     );
     assertUniqueRecords(records);
-    return records;
+    return { records, displaySettings };
   }
 
   private async readTransactions(): Promise<BudgetProjectionRecord[]> {
@@ -320,6 +336,62 @@ function assertUniqueRecords(records: readonly BudgetProjectionRecord[]): void {
     }
     keys.add(key);
   }
+}
+
+function readDisplaySettings(value: unknown): BudgetDisplaySettings {
+  const preferences = requireRecord(value, "budget display preferences");
+  const currencyEnabled =
+    preferences["flags.currency"] === "true" ||
+    preferences["flags.currency"] === true;
+  const configuredCurrency = preferences.defaultCurrencyCode;
+  const configuredCurrencyCode =
+    currencyEnabled &&
+    typeof configuredCurrency === "string" &&
+    /^[A-Z]{3}$/.test(configuredCurrency)
+      ? configuredCurrency
+      : null;
+  const configuredCurrencyMetadata = configuredCurrencyCode
+    ? ACTUAL_CURRENCY_DISPLAY_METADATA[configuredCurrencyCode]
+    : undefined;
+  const currencyCode =
+    configuredCurrencyCode && configuredCurrencyMetadata
+      ? configuredCurrencyCode
+      : "USD";
+  const currencyMetadata =
+    configuredCurrencyMetadata ?? ACTUAL_CURRENCY_DISPLAY_METADATA.USD!;
+  const supportedNumberFormats = new Set([
+    "comma-dot",
+    "dot-comma",
+    "space-comma",
+    "apostrophe-dot",
+    "comma-dot-in",
+  ]);
+  const numberFormat =
+    typeof preferences.numberFormat === "string" &&
+    supportedNumberFormats.has(preferences.numberFormat)
+      ? preferences.numberFormat
+      : (configuredCurrencyMetadata?.numberFormat ?? null);
+  const symbolPosition = preferences.currencySymbolPosition;
+
+  return {
+    currencyCode,
+    currencySymbol: currencyMetadata.symbol,
+    currencyFractionDigits: currencyMetadata.decimalPlaces,
+    numberFormat,
+    hideFraction:
+      preferences.hideFraction === "true" || preferences.hideFraction === true,
+    currencySymbolPosition:
+      configuredCurrencyMetadata &&
+      (symbolPosition === "before" || symbolPosition === "after")
+        ? symbolPosition
+        : currencyMetadata.symbolFirst
+          ? "before"
+          : "after",
+    currencySpaceBetweenAmountAndSymbol:
+      configuredCurrencyMetadata !== undefined &&
+      (preferences.currencySpaceBetweenAmountAndSymbol === "true" ||
+        preferences.currencySpaceBetweenAmountAndSymbol === true),
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

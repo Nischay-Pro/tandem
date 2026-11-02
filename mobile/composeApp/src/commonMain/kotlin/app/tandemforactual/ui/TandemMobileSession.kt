@@ -11,6 +11,7 @@ import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.BudgetSyncStateEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.TandemDatabase
+import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.BudgetSyncCoordinator
 import app.tandemforactual.data.store.BudgetSyncProtocolException
 import app.tandemforactual.data.store.BudgetSyncRemoteException
@@ -88,6 +89,12 @@ internal class TandemMobileSession(
         private set
 
     var localSyncState by mutableStateOf<BudgetSyncStateEntity?>(null)
+        private set
+
+    var budgetDisplaySettings by mutableStateOf<BudgetDisplaySettings?>(null)
+        private set
+
+    var budgetDisplaySettingsBudgetId by mutableStateOf<String?>(null)
         private set
 
     var transactionRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
@@ -205,9 +212,10 @@ internal class TandemMobileSession(
         notes: String,
         originalAmountMinor: Long,
         encryptionPassword: String?,
+        displaySettings: BudgetDisplaySettings? = null,
     ) {
         transactionWriteMessage = null
-        val enteredAmount = parseAmountMinorUnits(amountText)
+        val enteredAmount = parseAmountMinorUnits(amountText, displaySettings)
         if (enteredAmount == null || enteredAmount < 0) {
             transactionWriteMessage = "Enter a valid positive amount using this device’s number format."
             return
@@ -386,6 +394,8 @@ internal class TandemMobileSession(
 
     suspend fun loadLocalRecords(budgetId: String) {
         val localRepository = repository ?: return
+        budgetDisplaySettingsBudgetId = budgetId
+        budgetDisplaySettings = localRepository.readBudgetDisplaySettings(budgetId)
         localSyncState = localRepository.readSyncState(budgetId)
         transactionRecords = localRepository.findRecentRecords(budgetId, "transaction", limit = 50)
         cachedTransactionCount =

@@ -11,6 +11,10 @@ kotlin {
     namespace = "app.tandemforactual.ui"
     compileSdk = 37
     minSdk = 26
+
+    withHostTest {
+      isIncludeAndroidResources = true
+    }
   }
   iosArm64 {
     binaries.framework {
@@ -36,6 +40,11 @@ kotlin {
     }
     androidMain.dependencies {
       implementation(libs.activityCompose)
+    }
+    getByName("androidHostTest") {
+      dependencies {
+        implementation(kotlin("test"))
+      }
     }
   }
 }

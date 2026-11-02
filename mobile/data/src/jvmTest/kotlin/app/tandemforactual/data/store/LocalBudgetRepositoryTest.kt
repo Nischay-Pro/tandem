@@ -19,6 +19,57 @@ import kotlin.test.fail
 
 class LocalBudgetRepositoryTest {
     @Test
+    fun budgetDisplaySettingsPersistAcrossSnapshotsAndIncrementalSync() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val canadaSettings =
+                    BudgetDisplaySettings(
+                        currencyCode = "CAD",
+                        currencySymbol = "CA$",
+                        currencyFractionDigits = 2,
+                        numberFormat = "comma-dot",
+                        hideFraction = true,
+                        currencySymbolPosition = "after",
+                        currencySpaceBetweenAmountAndSymbol = true,
+                    )
+                val usaSettings = canadaSettings.copy(currencyCode = "USD")
+                assertEquals(
+                    FullSnapshotResult.APPLIED,
+                    repository.applyFullSnapshot(
+                        budgetId = BUDGET,
+                        generation = GENERATION,
+                        cursor = "c1",
+                        expectedCheckpoint = null,
+                        records = listOf(transaction()),
+                        displaySettings = canadaSettings,
+                    ),
+                )
+                assertEquals(canadaSettings, repository.readBudgetDisplaySettings(BUDGET))
+                assertEquals(1L, repository.countVisibleRecords(BUDGET, "transaction"))
+
+                assertEquals(
+                    ChangePageResult.APPLIED,
+                    repository.applyChangePage(
+                        BudgetChangePage(
+                            budgetId = BUDGET,
+                            generation = GENERATION,
+                            fromCursor = "c1",
+                            nextCursor = "c2",
+                            changes = emptyList(),
+                            displaySettings = usaSettings,
+                        ),
+                    ),
+                )
+
+                assertEquals(usaSettings, LocalBudgetRepository(database) { 200L }.readBudgetDisplaySettings(BUDGET))
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun writesAreOptimisticDurableAndIdempotent() =
         runBlocking {
             val database = newDatabase()

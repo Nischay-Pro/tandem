@@ -1537,9 +1537,72 @@
                         "required": ["type", "id", "revision", "body"],
                         "additionalProperties": false
                       }
+                    },
+                    "displaySettings": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "currencyCode": {
+                              "type": "string",
+                              "pattern": "^[A-Z]{3}$"
+                            },
+                            "currencySymbol": { "type": "string" },
+                            "currencyFractionDigits": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "numberFormat": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "comma-dot",
+                                    "dot-comma",
+                                    "space-comma",
+                                    "apostrophe-dot",
+                                    "comma-dot-in"
+                                  ]
+                                },
+                                { "type": "null" }
+                              ]
+                            },
+                            "hideFraction": { "type": "boolean" },
+                            "currencySymbolPosition": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": ["before", "after"]
+                                },
+                                { "type": "null" }
+                              ]
+                            },
+                            "currencySpaceBetweenAmountAndSymbol": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "currencyCode",
+                            "currencySymbol",
+                            "currencyFractionDigits",
+                            "numberFormat",
+                            "hideFraction",
+                            "currencySymbolPosition",
+                            "currencySpaceBetweenAmountAndSymbol"
+                          ],
+                          "additionalProperties": false
+                        },
+                        { "type": "null" }
+                      ]
                     }
                   },
-                  "required": ["budgetId", "generation", "cursor", "records"],
+                  "required": [
+                    "budgetId",
+                    "generation",
+                    "cursor",
+                    "records",
+                    "displaySettings"
+                  ],
                   "additionalProperties": false
                 }
               }
@@ -1786,6 +1849,63 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "displaySettings": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "currencyCode": {
+                              "type": "string",
+                              "pattern": "^[A-Z]{3}$"
+                            },
+                            "currencySymbol": { "type": "string" },
+                            "currencyFractionDigits": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "numberFormat": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "comma-dot",
+                                    "dot-comma",
+                                    "space-comma",
+                                    "apostrophe-dot",
+                                    "comma-dot-in"
+                                  ]
+                                },
+                                { "type": "null" }
+                              ]
+                            },
+                            "hideFraction": { "type": "boolean" },
+                            "currencySymbolPosition": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": ["before", "after"]
+                                },
+                                { "type": "null" }
+                              ]
+                            },
+                            "currencySpaceBetweenAmountAndSymbol": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "currencyCode",
+                            "currencySymbol",
+                            "currencyFractionDigits",
+                            "numberFormat",
+                            "hideFraction",
+                            "currencySymbolPosition",
+                            "currencySpaceBetweenAmountAndSymbol"
+                          ],
+                          "additionalProperties": false
+                        },
+                        { "type": "null" }
+                      ]
                     }
                   },
                   "required": [
@@ -1796,7 +1916,8 @@
                     "nextCursor",
                     "hasMore",
                     "resetRequired",
-                    "changes"
+                    "changes",
+                    "displaySettings"
                   ],
                   "additionalProperties": false
                 }
