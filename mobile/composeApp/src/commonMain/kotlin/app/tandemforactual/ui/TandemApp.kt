@@ -77,9 +77,13 @@ import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.TandemDatabase
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 
 private enum class AppRoute(
     val title: String,
@@ -139,7 +143,9 @@ private data class TransactionItem(
     val amountMinorUnits: Long,
     val icon: String,
     val account: String = "Checking",
+    val accountId: String? = null,
     val recordId: String? = null,
+    val notes: String = "",
 )
 
 private val previewTransactions =
@@ -166,24 +172,123 @@ private fun liveTransactionItems(session: TandemMobileSession): List<Transaction
             amountMinorUnits = amount,
             icon = (payeeName ?: "•").take(1).uppercase(),
             account = record.accountId?.let(accounts::get) ?: record.accountId ?: "No account",
+            accountId = record.accountId,
             recordId = record.recordId,
+            notes = record.recordBody()?.stringValue("notes") ?: "",
         )
     }
 }
 
-private fun BudgetRecordEntity.recordName(): String? {
+private fun BudgetRecordEntity.recordBody(): JsonObject? {
     val json = localJson ?: remoteJson ?: return null
     return try {
-        Json
-            .parseToJsonElement(json)
-            .jsonObject["name"]
-            ?.jsonPrimitive
-            ?.contentOrNull
-            ?.takeIf { it.isNotBlank() }
+        Json.parseToJsonElement(json).jsonObject
     } catch (_: Exception) {
         null
     }
 }
+
+private data class LiveAccountSummary(
+    val id: String,
+    val name: String,
+    val balanceMinor: Long?,
+    val type: String?,
+    val offBudget: Boolean,
+)
+
+private data class LiveCategorySummary(
+    val id: String,
+    val name: String,
+    val assignedMinor: Long,
+    val activityMinor: Long,
+    val balanceMinor: Long,
+)
+
+private data class LiveCategoryGroupSummary(
+    val id: String,
+    val name: String,
+    val categories: List<LiveCategorySummary>,
+) {
+    val assignedMinor: Long get() = categories.sumOf { it.assignedMinor }
+    val activityMinor: Long get() = categories.sumOf { it.activityMinor }
+    val balanceMinor: Long get() = categories.sumOf { it.balanceMinor }
+}
+
+private data class LiveBudgetMonthSummary(
+    val toBudgetMinor: Long?,
+    val incomeAvailableMinor: Long?,
+    val totalBudgetedMinor: Long?,
+    val totalSpentMinor: Long?,
+    val groups: List<LiveCategoryGroupSummary>,
+)
+
+private fun liveAccountSummaries(session: TandemMobileSession): List<LiveAccountSummary> =
+    session.accountRecords.mapNotNull { record ->
+        val body = record.recordBody() ?: return@mapNotNull null
+        LiveAccountSummary(
+            id = record.recordId,
+            name = body.stringValue("name") ?: return@mapNotNull null,
+            balanceMinor = body.longValue("balance_current"),
+            type = body.stringValue("type"),
+            offBudget = body.booleanValue("offbudget") ?: body.booleanValue("offBudget") ?: false,
+        )
+    }
+
+private fun liveBudgetMonthSummary(
+    session: TandemMobileSession,
+    monthId: String,
+): LiveBudgetMonthSummary? {
+    val monthRecord = session.budgetMonthRecords.firstOrNull { it.recordId == monthId } ?: return null
+    val month = monthRecord.recordBody() ?: return null
+    val categoryNames = session.categoryRecords.associate { it.recordId to (it.recordName() ?: it.recordId) }
+    val groupNames = session.categoryGroupRecords.associate { it.recordId to (it.recordName() ?: it.recordId) }
+    val groups =
+        (month["categoryGroups"] as? JsonArray)
+            ?.mapNotNull { element ->
+                val group = element as? JsonObject ?: return@mapNotNull null
+                if (group.booleanValue("hidden") == true) return@mapNotNull null
+                val groupId = group.stringValue("id") ?: return@mapNotNull null
+                val categories =
+                    (group["categories"] as? JsonArray)
+                        ?.mapNotNull { categoryElement ->
+                            val category = categoryElement as? JsonObject ?: return@mapNotNull null
+                            if (category.booleanValue("hidden") == true || category.booleanValue("deleted") == true) {
+                                return@mapNotNull null
+                            }
+                            val categoryId = category.stringValue("id") ?: return@mapNotNull null
+                            val assigned = category.longValue("budgeted") ?: category.longValue("assigned") ?: 0
+                            val activity = category.longValue("activity") ?: category.longValue("spent") ?: 0
+                            LiveCategorySummary(
+                                id = categoryId,
+                                name = category.stringValue("name") ?: categoryNames[categoryId] ?: categoryId,
+                                assignedMinor = assigned,
+                                activityMinor = activity,
+                                balanceMinor = category.longValue("balance") ?: (assigned + activity),
+                            )
+                        }.orEmpty()
+                LiveCategoryGroupSummary(
+                    id = groupId,
+                    name = group.stringValue("name") ?: groupNames[groupId] ?: groupId,
+                    categories = categories,
+                )
+            }.orEmpty()
+    return LiveBudgetMonthSummary(
+        toBudgetMinor = month.longValue("toBudget"),
+        incomeAvailableMinor = month.longValue("incomeAvailable"),
+        totalBudgetedMinor = month.longValue("totalBudgeted"),
+        totalSpentMinor = month.longValue("totalSpent"),
+        groups = groups,
+    )
+}
+
+private fun BudgetRecordEntity.recordName(): String? = recordBody()?.stringValue("name")?.takeIf { it.isNotBlank() }
+
+private fun JsonObject.stringValue(name: String): String? = (this[name] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+
+private fun JsonObject.longValue(name: String): Long? =
+    (this[name] as? JsonPrimitive)?.let { it.longOrNull ?: it.contentOrNull?.toLongOrNull() }
+
+private fun JsonObject.booleanValue(name: String): Boolean? = (this[name] as? JsonPrimitive)?.booleanOrNull
 
 private fun formatLiveDate(value: String?): String {
     val parts = value?.split('-')
@@ -197,10 +302,8 @@ private fun formatLiveDate(value: String?): String {
     }
 }
 
-private fun formatPairingCodeInput(value: String): String {
-    val compact = value.uppercase().filter { it in 'A'..'Z' || it in '0'..'9' }.take(8)
-    return if (compact.length > 4) "${compact.take(4)}-${compact.drop(4)}" else compact
-}
+private fun sanitizePairingCodeInput(value: String): String =
+    value.uppercase().filter { it in 'A'..'Z' || it in '0'..'9' || it == '-' }.take(9)
 
 private class AppState {
     var theme by mutableStateOf(ThemeMode.DARK)
@@ -209,6 +312,12 @@ private class AppState {
     var selectedBudgetId by mutableStateOf("")
     var selectedBudgetEncrypted by mutableStateOf(false)
     var selectedMonth by mutableStateOf(formatMonth(2026, 5))
+    var selectedMonthId by mutableStateOf("2026-05")
+    var selectedAccountId by mutableStateOf("")
+    var selectedCategoryGroupId by mutableStateOf("")
+    var selectedCategoryId by mutableStateOf("")
+    var selectedTransactionRecordId by mutableStateOf("")
+    var selectedConflictOperationId by mutableStateOf("")
     var serverUrl by mutableStateOf("https://budget.example.com")
     var pairingCode by mutableStateOf("")
     var encryptedPassword by mutableStateOf("")
@@ -242,6 +351,12 @@ private class AppState {
                         "selectedBudgetId" to state.selectedBudgetId,
                         "selectedBudgetEncrypted" to state.selectedBudgetEncrypted,
                         "selectedMonth" to state.selectedMonth,
+                        "selectedMonthId" to state.selectedMonthId,
+                        "selectedAccountId" to state.selectedAccountId,
+                        "selectedCategoryGroupId" to state.selectedCategoryGroupId,
+                        "selectedCategoryId" to state.selectedCategoryId,
+                        "selectedTransactionRecordId" to state.selectedTransactionRecordId,
+                        "selectedConflictOperationId" to state.selectedConflictOperationId,
                         "serverUrl" to state.serverUrl,
                         "transactionAmount" to state.transactionAmount,
                         "transactionAccount" to state.transactionAccount,
@@ -270,6 +385,12 @@ private class AppState {
                         selectedBudgetId = saved["selectedBudgetId"] as? String ?: selectedBudgetId
                         selectedBudgetEncrypted = saved["selectedBudgetEncrypted"] as? Boolean ?: selectedBudgetEncrypted
                         selectedMonth = saved["selectedMonth"] as? String ?: selectedMonth
+                        selectedMonthId = saved["selectedMonthId"] as? String ?: selectedMonthId
+                        selectedAccountId = saved["selectedAccountId"] as? String ?: selectedAccountId
+                        selectedCategoryGroupId = saved["selectedCategoryGroupId"] as? String ?: selectedCategoryGroupId
+                        selectedCategoryId = saved["selectedCategoryId"] as? String ?: selectedCategoryId
+                        selectedTransactionRecordId = saved["selectedTransactionRecordId"] as? String ?: selectedTransactionRecordId
+                        selectedConflictOperationId = saved["selectedConflictOperationId"] as? String ?: selectedConflictOperationId
                         serverUrl = saved["serverUrl"] as? String ?: serverUrl
                         transactionAmount = saved["transactionAmount"] as? String ?: transactionAmount
                         transactionAccount = saved["transactionAccount"] as? String ?: transactionAccount
@@ -363,7 +484,23 @@ fun TandemApp(
         }
     }
     LaunchedEffect(route, state.selectedBudgetId) {
-        if (route in setOf(AppRoute.BUDGET, AppRoute.ACCOUNTS, AppRoute.ACTIVITY) && state.selectedBudgetId.isNotBlank()) {
+        if (
+            route in
+            setOf(
+                AppRoute.BUDGET,
+                AppRoute.CATEGORY_GROUP,
+                AppRoute.CATEGORY_DETAIL,
+                AppRoute.ACCOUNTS,
+                AppRoute.ACCOUNT_DETAIL,
+                AppRoute.ACTIVITY,
+                AppRoute.SYNC_CENTER,
+                AppRoute.CONFLICT_INBOX,
+                AppRoute.CONFLICT_REVIEW,
+                AppRoute.UNCERTAIN_WRITE,
+                AppRoute.REJECTED_WRITE,
+            ) &&
+            state.selectedBudgetId.isNotBlank()
+        ) {
             mobileSession.loadLocalRecords(state.selectedBudgetId)
         }
     }
@@ -375,6 +512,16 @@ fun TandemApp(
             mobileSession.categoryRecords,
         ) {
             liveTransactionItems(mobileSession)
+        }
+    val liveAccounts = remember(mobileSession.accountRecords) { liveAccountSummaries(mobileSession) }
+    val liveBudgetMonth =
+        remember(
+            mobileSession.budgetMonthRecords,
+            mobileSession.categoryRecords,
+            mobileSession.categoryGroupRecords,
+            state.selectedMonthId,
+        ) {
+            liveBudgetMonthSummary(mobileSession, state.selectedMonthId)
         }
 
     val pairDevice = {
@@ -415,6 +562,56 @@ fun TandemApp(
             backStack.add(AppRoute.FIRST_SYNC)
         }
     }
+    val syncNow: () -> Unit = {
+        if (!mobileSession.isSyncing && state.selectedBudgetId.isNotBlank()) {
+            coroutineScope.launch {
+                mobileSession.synchronize(
+                    state.selectedBudgetId,
+                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                )
+            }
+        }
+    }
+    val saveTransaction: () -> Unit = {
+        val transactionId = state.selectedTransactionRecordId
+        val originalAmount = state.selectedTransactionAmountMinor
+        if (transactionId.isNotBlank() && originalAmount != null && !mobileSession.isSavingTransaction) {
+            coroutineScope.launch {
+                mobileSession.updateTransaction(
+                    budgetId = state.selectedBudgetId,
+                    transactionId = transactionId,
+                    amountText = state.transactionAmount,
+                    notes = state.transactionNotes,
+                    originalAmountMinor = originalAmount,
+                    encryptionPassword = state.encryptedPassword.takeIf { it.isNotBlank() },
+                )
+            }
+        }
+    }
+    val resolveConflict: (String, Boolean) -> Unit = { operationId, keepDeviceVersion ->
+        if (!mobileSession.isSavingTransaction) {
+            coroutineScope.launch {
+                mobileSession.resolveConflict(
+                    budgetId = state.selectedBudgetId,
+                    operationId = operationId,
+                    keepDeviceVersion = keepDeviceVersion,
+                    encryptionPassword = state.encryptedPassword.takeIf { it.isNotBlank() },
+                )
+            }
+        }
+    }
+    val discardWrite: (String) -> Unit = { operationId ->
+        coroutineScope.launch { mobileSession.discardWrite(state.selectedBudgetId, operationId) }
+    }
+    val retryUncertainWrite: (String) -> Unit = { operationId ->
+        coroutineScope.launch {
+            mobileSession.retryUncertainWrite(
+                state.selectedBudgetId,
+                operationId,
+                state.encryptedPassword.takeIf { it.isNotBlank() },
+            )
+        }
+    }
 
     TandemTheme(state.theme, state.accent) {
         val palette = tandemPalette
@@ -435,6 +632,9 @@ fun TandemApp(
                     onBack = navigation.back,
                     onSync = { navigation.open(AppRoute.SYNC_CENTER) },
                     onBudget = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+                    actualConnected = mobileSession.isAuthenticated,
+                    liveAccounts = liveAccounts,
+                    liveBudgetMonth = liveBudgetMonth,
                 )
             }
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -449,6 +649,13 @@ fun TandemApp(
                     onOpenSelectedBudget = openSelectedBudget,
                     onRetrySync = { syncRetryCounter += 1 },
                     liveTransactions = liveTransactions,
+                    liveAccounts = liveAccounts,
+                    liveBudgetMonth = liveBudgetMonth,
+                    onSyncNow = syncNow,
+                    onSaveTransaction = saveTransaction,
+                    onResolveConflict = resolveConflict,
+                    onDiscardWrite = discardWrite,
+                    onRetryUncertainWrite = retryUncertainWrite,
                 )
             }
             if (route.isTab()) {
@@ -469,8 +676,27 @@ private fun AppHeader(
     onBack: () -> Unit,
     onSync: () -> Unit,
     onBudget: () -> Unit,
+    actualConnected: Boolean,
+    liveAccounts: List<LiveAccountSummary>,
+    liveBudgetMonth: LiveBudgetMonthSummary?,
 ) {
     val palette = tandemPalette
+    val headerTitle =
+        when (route) {
+            AppRoute.BUDGET -> state.selectedBudget
+            AppRoute.CATEGORY_GROUP ->
+                liveBudgetMonth?.groups?.firstOrNull { it.id == state.selectedCategoryGroupId }?.name ?: route.title
+            AppRoute.CATEGORY_DETAIL ->
+                liveBudgetMonth
+                    ?.groups
+                    ?.firstOrNull { it.id == state.selectedCategoryGroupId }
+                    ?.categories
+                    ?.firstOrNull { it.id == state.selectedCategoryId }
+                    ?.name ?: route.title
+            AppRoute.ACCOUNT_DETAIL -> liveAccounts.firstOrNull { it.id == state.selectedAccountId }?.name ?: route.title
+            AppRoute.TRANSACTION_DETAIL -> state.transactionPayee.ifBlank { route.title }
+            else -> route.title
+        }
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 18.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -501,7 +727,7 @@ private fun AppHeader(
                 ),
         ) {
             Text(
-                text = if (route == AppRoute.BUDGET) state.selectedBudget else route.title,
+                text = headerTitle,
                 color = palette.text,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -509,7 +735,15 @@ private fun AppHeader(
                 overflow = TextOverflow.Ellipsis,
             )
             if (route == AppRoute.BUDGET) {
-                Text("${state.selectedMonth} · Sample budget", color = palette.muted, fontSize = 11.sp)
+                Text(
+                    if (state.selectedBudgetId.isNotBlank()) {
+                        "${state.selectedMonth} · Actual"
+                    } else {
+                        "${state.selectedMonth} · Sample budget"
+                    },
+                    color = palette.muted,
+                    fontSize = 11.sp,
+                )
             }
         }
         if (route.isTab()) {
@@ -526,8 +760,17 @@ private fun AppHeader(
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
             )
-        } else if (route in listOf(AppRoute.BUDGET_CHOOSER, AppRoute.SERVER_ADDRESS)) {
-            Text("Sample data", color = palette.muted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        } else if (route == AppRoute.BUDGET_CHOOSER) {
+            Text(
+                when {
+                    actualConnected -> "Actual budgets"
+                    state.selectedBudgetId.isNotBlank() -> "Pair again"
+                    else -> "Sample data"
+                },
+                color = palette.muted,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+            )
         }
     }
 }
@@ -685,6 +928,13 @@ private fun ScreenContent(
     onOpenSelectedBudget: () -> Unit,
     onRetrySync: () -> Unit,
     liveTransactions: List<TransactionItem>,
+    liveAccounts: List<LiveAccountSummary>,
+    liveBudgetMonth: LiveBudgetMonthSummary?,
+    onSyncNow: () -> Unit,
+    onSaveTransaction: () -> Unit,
+    onResolveConflict: (String, Boolean) -> Unit,
+    onDiscardWrite: (String) -> Unit,
+    onRetryUncertainWrite: (String) -> Unit,
 ) {
     when (route) {
         AppRoute.WELCOME -> WelcomeScreen(navigation)
@@ -696,20 +946,21 @@ private fun ScreenContent(
         AppRoute.BUDGET_CHOOSER ->
             BudgetChooserScreen(state, mobileSession, navigation, onSelectBudget, onRefreshBudgets, onOpenSelectedBudget)
         AppRoute.UNLOCK_BUDGET -> UnlockBudgetScreen(state, navigation)
-        AppRoute.FIRST_SYNC -> FirstSyncScreen(mobileSession, navigation, onRetrySync)
-        AppRoute.BUDGET -> BudgetScreen(state, navigation, liveTransactions)
+        AppRoute.FIRST_SYNC -> FirstSyncScreen(state, mobileSession, navigation, onRetrySync)
+        AppRoute.BUDGET -> BudgetScreen(state, navigation, liveTransactions, liveBudgetMonth)
         AppRoute.MONTH_PICKER -> MonthPickerScreen(state, navigation)
-        AppRoute.CATEGORY_GROUP -> CategoryGroupScreen(navigation)
-        AppRoute.CATEGORY_DETAIL -> CategoryDetailScreen(navigation)
-        AppRoute.ACCOUNTS -> AccountsScreen(navigation)
-        AppRoute.ACCOUNT_DETAIL -> AccountDetailScreen(navigation)
-        AppRoute.ACCOUNT_OPTIONS -> AccountOptionsScreen(navigation)
+        AppRoute.CATEGORY_GROUP -> CategoryGroupScreen(state, navigation, liveBudgetMonth)
+        AppRoute.CATEGORY_DETAIL -> CategoryDetailScreen(state, navigation, liveBudgetMonth)
+        AppRoute.ACCOUNTS -> AccountsScreen(state, navigation, liveAccounts, liveTransactions)
+        AppRoute.ACCOUNT_DETAIL -> AccountDetailScreen(state, navigation, liveAccounts, liveTransactions)
+        AppRoute.ACCOUNT_OPTIONS -> AccountOptionsScreen(state, navigation, liveAccounts)
         AppRoute.RECONCILIATION -> ReconciliationScreen()
         AppRoute.ACTIVITY -> ActivityScreen(state, navigation, liveTransactions)
-        AppRoute.ACTIVITY_SEARCH -> ActivitySearchScreen(navigation)
+        AppRoute.ACTIVITY_SEARCH -> ActivitySearchScreen(state, navigation, liveTransactions)
         AppRoute.ACTIVITY_FILTER -> ActivityFilterScreen()
         AppRoute.TRANSACTION_DETAIL -> TransactionDetailScreen(state, navigation)
-        AppRoute.NEW_TRANSACTION, AppRoute.EDIT_TRANSACTION -> TransactionFormScreen(route, state, navigation)
+        AppRoute.NEW_TRANSACTION, AppRoute.EDIT_TRANSACTION ->
+            TransactionFormScreen(route, state, navigation, mobileSession, onSaveTransaction)
         AppRoute.CHOOSE_ACCOUNT ->
             SelectorScreen(listOf("Checking", "Savings", "Credit Card", "Cash"), state.transactionAccount) {
                 state.transactionAccount =
@@ -736,11 +987,11 @@ private fun ScreenContent(
             }
         AppRoute.CHOOSE_DATE -> DatePickerScreen(state, navigation)
         AppRoute.SAVE_RESULT -> SaveResultScreen(navigation)
-        AppRoute.SYNC_CENTER -> SyncCenterScreen(navigation)
-        AppRoute.CONFLICT_INBOX -> ConflictInboxScreen(navigation)
-        AppRoute.CONFLICT_REVIEW -> ConflictReviewScreen(state)
-        AppRoute.UNCERTAIN_WRITE -> UncertainWriteScreen()
-        AppRoute.REJECTED_WRITE -> RejectedWriteScreen()
+        AppRoute.SYNC_CENTER -> SyncCenterScreen(state, mobileSession, navigation, onSyncNow)
+        AppRoute.CONFLICT_INBOX -> ConflictInboxScreen(state, mobileSession, navigation)
+        AppRoute.CONFLICT_REVIEW -> ConflictReviewScreen(state, mobileSession, onResolveConflict)
+        AppRoute.UNCERTAIN_WRITE -> UncertainWriteScreen(state, mobileSession, onSyncNow, onRetryUncertainWrite, onDiscardWrite)
+        AppRoute.REJECTED_WRITE -> RejectedWriteScreen(state, mobileSession, onDiscardWrite)
         AppRoute.SETTINGS -> SettingsScreen(state, navigation)
         AppRoute.APPEARANCE -> AppearanceScreen(state, navigation)
         AppRoute.THEME_MODE -> ThemeModeScreen(state)
@@ -855,6 +1106,7 @@ private fun PrimaryButton(
 private fun SecondaryButton(
     label: String,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
@@ -865,11 +1117,11 @@ private fun SecondaryButton(
                 .heightIn(min = 50.dp)
                 .clip(RoundedCornerShape(15.dp))
                 .border(1.dp, palette.border, RoundedCornerShape(15.dp))
-                .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)
+                .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
                 .padding(horizontal = 18.dp, vertical = 13.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = palette.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text(label, color = if (enabled) palette.text else palette.muted, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -887,6 +1139,8 @@ private fun TextFieldCard(
     singleLine: Boolean = true,
     isSecret: Boolean = false,
     secretKeyboardType: KeyboardType = KeyboardType.Password,
+    keyboardOptions: KeyboardOptions? = null,
+    textAlign: TextAlign = TextAlign.Start,
 ) {
     val palette = tandemPalette
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -907,7 +1161,7 @@ private fun TextFieldCard(
                 onValueChange = onValueChange,
                 singleLine = singleLine,
                 keyboardOptions =
-                    if (isSecret) {
+                    keyboardOptions ?: if (isSecret) {
                         KeyboardOptions(
                             capitalization = KeyboardCapitalization.None,
                             autoCorrectEnabled = false,
@@ -917,7 +1171,7 @@ private fun TextFieldCard(
                         KeyboardOptions.Default
                     },
                 visualTransformation = if (isSecret) PasswordVisualTransformation() else VisualTransformation.None,
-                textStyle = TextStyle(color = palette.text, fontSize = 15.sp, lineHeight = 20.sp),
+                textStyle = TextStyle(color = palette.text, fontSize = 15.sp, lineHeight = 20.sp, textAlign = textAlign),
                 cursorBrush = SolidColor(palette.accent),
                 modifier = Modifier.fillMaxWidth().semantics { contentDescription = label },
                 decorationBox = { innerTextField ->
@@ -1304,10 +1558,15 @@ private fun PairingCodeScreen(
         TextFieldCard(
             "Pairing code",
             state.pairingCode,
-            { state.pairingCode = formatPairingCodeInput(it) },
+            { state.pairingCode = sanitizePairingCodeInput(it) },
             "For example, 4DF7-J1M9",
-            isSecret = true,
-            secretKeyboardType = KeyboardType.Password,
+            keyboardOptions =
+                KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Characters,
+                    autoCorrectEnabled = false,
+                    keyboardType = KeyboardType.Ascii,
+                ),
+            textAlign = TextAlign.Start,
         )
         BodyText("The code works once and expires after five minutes. It is sent securely to the server only when you pair.")
         mobileSession.pairingError?.let { error ->
@@ -1424,6 +1683,7 @@ private fun UnlockBudgetScreen(
 
 @Composable
 private fun FirstSyncScreen(
+    state: AppState,
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
     onRetrySync: () -> Unit,
@@ -1471,8 +1731,42 @@ private fun FirstSyncScreen(
                 SecondaryButton("Retry initial sync", onClick = onRetrySync)
             }
         }
-        PrimaryButton("Done", enabled = mobileSession.syncComplete) { navigation.selectTab(AppRoute.BUDGET) }
+        PrimaryButton("Done", enabled = mobileSession.syncComplete) {
+            selectLatestCachedMonth(state, mobileSession.budgetMonthRecords, mobileSession.transactionRecords)
+            navigation.selectTab(AppRoute.BUDGET)
+        }
     }
+}
+
+private fun selectLatestCachedMonth(
+    state: AppState,
+    budgetMonthRecords: List<BudgetRecordEntity>,
+    transactionRecords: List<BudgetRecordEntity>,
+) {
+    val cachedMonthIds =
+        budgetMonthRecords
+            .mapNotNull { record ->
+                val parts = record.recordId.split('-')
+                if (parts.size != 2) return@mapNotNull null
+                val year = parts[0].toIntOrNull() ?: return@mapNotNull null
+                val month = parts[1].toIntOrNull()?.takeIf { it in 1..12 } ?: return@mapNotNull null
+                record.recordId
+            }.distinct()
+            .sorted()
+    if (state.selectedMonthId in cachedMonthIds) return
+
+    val latestActivityMonth =
+        transactionRecords
+            .mapNotNull { it.recordDate?.take(7)?.takeIf { monthId -> monthId in cachedMonthIds } }
+            .maxOrNull()
+    val selectedMonthId =
+        latestActivityMonth
+            ?: cachedMonthIds.filter { it <= state.selectedMonthId }.maxOrNull()
+            ?: cachedMonthIds.firstOrNull()
+            ?: return
+    val (year, month) = selectedMonthId.split('-').map(String::toInt)
+    state.selectedMonthId = selectedMonthId
+    state.selectedMonth = formatMonth(year, month)
 }
 
 @Composable
@@ -1480,8 +1774,96 @@ private fun BudgetScreen(
     state: AppState,
     navigation: AppNavigation,
     liveTransactions: List<TransactionItem>,
+    liveBudgetMonth: LiveBudgetMonthSummary?,
 ) {
     val palette = tandemPalette
+    if (state.selectedBudgetId.isNotBlank()) {
+        PageColumn {
+            Badge("Actual · read only", palette.positive)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Budget overview", color = palette.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text("Review the synced plan and recent activity for the selected month.", color = palette.muted, fontSize = 13.sp)
+            }
+            SurfaceCard(onClick = { navigation.open(AppRoute.MONTH_PICKER) }) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        LabelText("Planning period")
+                        Spacer(Modifier.height(4.dp))
+                        Text(state.selectedMonth, color = palette.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Text("⌄", color = palette.accent, fontSize = 20.sp)
+                }
+            }
+            if (liveBudgetMonth == null) {
+                SurfaceCard {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("No plan for this month is cached", color = palette.text, fontWeight = FontWeight.SemiBold)
+                        BodyText("Sync a month available in Actual, or choose a different planning period.")
+                    }
+                }
+            } else {
+                SurfaceCard {
+                    Column(
+                        Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 18.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        LabelText("Ready to assign")
+                        Text(
+                            formatCurrency(liveBudgetMonth.toBudgetMinor ?: 0),
+                            color = palette.text,
+                            fontSize = 34.sp,
+                            lineHeight = 39.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            "${liveBudgetMonth.groups.sumOf { it.categories.size }} categories · ${state.selectedMonth}",
+                            color = palette.muted,
+                            fontSize = 12.sp,
+                        )
+                    }
+                }
+                liveBudgetMonth.groups.forEach { group ->
+                    SectionCard(
+                        group.name,
+                        "${formatCurrency(group.assignedMinor)} assigned · ${group.categories.size} categories",
+                        formatCurrency(group.balanceMinor),
+                        onClick = {
+                            state.selectedCategoryGroupId = group.id
+                            navigation.open(AppRoute.CATEGORY_GROUP)
+                        },
+                    ) {
+                        group.categories.forEachIndexed { index, category ->
+                            if (index > 0) DividerLine()
+                            ListRow(
+                                category.name.take(1).uppercase(),
+                                category.name,
+                                "Spent ${formatCurrency(
+                                    kotlin.math.abs(category.activityMinor),
+                                )} · ${formatCurrency(category.balanceMinor)} left",
+                                formatCurrency(category.assignedMinor),
+                                if (category.balanceMinor >= 0) palette.positive else palette.warning,
+                            ) {
+                                state.selectedCategoryGroupId = group.id
+                                state.selectedCategoryId = category.id
+                                navigation.open(AppRoute.CATEGORY_DETAIL)
+                            }
+                        }
+                    }
+                }
+            }
+            if (liveTransactions.isNotEmpty()) {
+                SectionCard("Recent activity", "${liveTransactions.size} synced transactions", "See all", onClick = {
+                    navigation.selectTab(AppRoute.ACTIVITY)
+                }) {
+                    liveTransactions.take(3).forEachIndexed { index, item ->
+                        if (index > 0) DividerLine()
+                        TransactionRow(item) { openTransaction(state, navigation, item, isLive = true) }
+                    }
+                }
+            }
+        }
+        return
+    }
     PageColumn {
         SampleBanner(
             if (liveTransactions.isNotEmpty()) {
@@ -1627,8 +2009,10 @@ private fun openTransaction(
     state.transactionCategory = transaction.category
     state.transactionAccount = transaction.account
     state.transactionDate = transaction.dateLabel
+    state.transactionNotes = transaction.notes
     state.transactionAmount = formatAmount(kotlin.math.abs(transaction.amountMinorUnits))
     state.selectedTransactionAmountMinor = transaction.amountMinorUnits
+    state.selectedTransactionRecordId = transaction.recordId.orEmpty()
     state.selectedTransactionIsLive = isLive
     navigation.open(AppRoute.TRANSACTION_DETAIL)
 }
@@ -1640,7 +2024,9 @@ private fun MonthPickerScreen(
 ) {
     PageColumn {
         Heading("Select a month", "Choose which month to review.")
-        var selectedYear by remember { mutableStateOf(2026) }
+        var selectedYear by remember {
+            mutableStateOf(state.selectedMonthId.substringBefore('-').toIntOrNull() ?: 2026)
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "‹",
@@ -1686,6 +2072,7 @@ private fun MonthPickerScreen(
                                     role = Role.RadioButton,
                                     onClick = {
                                         state.selectedMonth = full
+                                        state.selectedMonthId = "$selectedYear-${monthNumber.toString().padStart(2, '0')}"
                                         navigation.back()
                                     },
                                 ),
@@ -1701,13 +2088,61 @@ private fun MonthPickerScreen(
                 }
             }
         }
-        PreviewNote("Months are sample planning periods.")
+        PreviewNote(
+            if (state.selectedBudgetId.isNotBlank()) {
+                "Only months cached from Actual show plan details."
+            } else {
+                "Months are sample planning periods."
+            },
+        )
     }
 }
 
 @Composable
-private fun CategoryGroupScreen(navigation: AppNavigation) {
+private fun CategoryGroupScreen(
+    state: AppState,
+    navigation: AppNavigation,
+    liveBudgetMonth: LiveBudgetMonthSummary?,
+) {
     val palette = tandemPalette
+    if (state.selectedBudgetId.isNotBlank()) {
+        val group =
+            liveBudgetMonth?.groups?.firstOrNull { it.id == state.selectedCategoryGroupId }
+                ?: liveBudgetMonth?.groups?.firstOrNull()
+        PageColumn {
+            Badge("Actual · read only", palette.positive)
+            if (group == null) {
+                Heading("Category group", state.selectedMonth)
+                BodyText("No synced category group is available for this month.")
+            } else {
+                Heading(group.name, state.selectedMonth)
+                AmountHero(
+                    "Assigned this month",
+                    formatCurrency(group.assignedMinor),
+                    "${formatCurrency(group.balanceMinor)} available across ${group.categories.size} categories",
+                )
+                SectionCard("Categories", "${group.categories.size} synced categories", "") {
+                    group.categories.forEachIndexed { index, category ->
+                        if (index > 0) DividerLine()
+                        ListRow(
+                            category.name.take(1).uppercase(),
+                            category.name,
+                            "Spent ${formatCurrency(
+                                kotlin.math.abs(category.activityMinor),
+                            )} · ${formatCurrency(category.balanceMinor)} available",
+                            formatCurrency(category.assignedMinor),
+                            if (category.balanceMinor >= 0) palette.positive else palette.warning,
+                        ) {
+                            state.selectedCategoryGroupId = group.id
+                            state.selectedCategoryId = category.id
+                            navigation.open(AppRoute.CATEGORY_DETAIL)
+                        }
+                    }
+                }
+            }
+        }
+        return
+    }
     PageColumn {
         SampleBanner()
         Heading("Group overview", "Review the bills and needs planned first.")
@@ -1742,7 +2177,38 @@ private fun CategoryGroupScreen(navigation: AppNavigation) {
 }
 
 @Composable
-private fun CategoryDetailScreen(navigation: AppNavigation) {
+private fun CategoryDetailScreen(
+    state: AppState,
+    navigation: AppNavigation,
+    liveBudgetMonth: LiveBudgetMonthSummary?,
+) {
+    if (state.selectedBudgetId.isNotBlank()) {
+        val category =
+            liveBudgetMonth
+                ?.groups
+                ?.firstOrNull { it.id == state.selectedCategoryGroupId }
+                ?.categories
+                ?.firstOrNull { it.id == state.selectedCategoryId }
+        PageColumn {
+            Badge("Actual · read only", tandemPalette.positive)
+            if (category == null) {
+                Heading("Category details", state.selectedMonth)
+                BodyText("This category is not included in the cached plan for this month.")
+            } else {
+                Heading(category.name, state.selectedMonth)
+                AmountHero("Available", formatCurrency(category.balanceMinor), "${formatCurrency(category.assignedMinor)} assigned")
+                SectionCard("This month", "Actual plan and activity") {
+                    ListRow("↗", "Assigned", "Budgeted in Actual", formatCurrency(category.assignedMinor))
+                    DividerLine()
+                    ListRow("◷", "Activity", "Transactions in this category", formatCurrency(kotlin.math.abs(category.activityMinor)))
+                    DividerLine()
+                    ListRow("=", "Available", "Assigned plus activity", formatCurrency(category.balanceMinor))
+                }
+                PrimaryButton("View all activity") { navigation.selectTab(AppRoute.ACTIVITY) }
+            }
+        }
+        return
+    }
     PageColumn {
         SampleBanner()
         Heading("Category details", "Essentials · monthly plan")
@@ -1758,7 +2224,61 @@ private fun CategoryDetailScreen(navigation: AppNavigation) {
 }
 
 @Composable
-private fun AccountsScreen(navigation: AppNavigation) {
+private fun AccountsScreen(
+    state: AppState,
+    navigation: AppNavigation,
+    liveAccounts: List<LiveAccountSummary>,
+    liveTransactions: List<TransactionItem>,
+) {
+    if (state.selectedBudgetId.isNotBlank()) {
+        val onBudgetAccounts = liveAccounts.filterNot { it.offBudget }
+        val totalOnBudget = onBudgetAccounts.sumOf { it.balanceMinor ?: 0L }
+        val groupedAccounts =
+            listOf("Cash", "Credit", "Tracking").mapNotNull { groupName ->
+                val accounts =
+                    liveAccounts.filter { account ->
+                        when (groupName) {
+                            "Tracking" -> account.offBudget
+                            "Credit" -> !account.offBudget && account.type.orEmpty().contains("credit", ignoreCase = true)
+                            else -> !account.offBudget && !account.type.orEmpty().contains("credit", ignoreCase = true)
+                        }
+                    }
+                groupName.takeIf { accounts.isNotEmpty() }?.let { it to accounts }
+            }
+        PageColumn {
+            Badge("Actual · read only", tandemPalette.positive)
+            Heading("Balances", "Synced account balances from Actual.")
+            AmountHero("Total on budget", formatCurrency(totalOnBudget), "Across ${onBudgetAccounts.size} on-budget accounts")
+            if (liveAccounts.isEmpty()) {
+                SurfaceCard {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("No accounts are cached", color = tandemPalette.text, fontWeight = FontWeight.SemiBold)
+                        BodyText("Sync this budget to load its Actual account list and balances.")
+                    }
+                }
+            } else {
+                groupedAccounts.forEach { (groupName, accounts) ->
+                    SectionCard(groupName, "${accounts.size} Actual accounts", "") {
+                        accounts.forEachIndexed { index, account ->
+                            if (index > 0) DividerLine()
+                            ListRow(
+                                account.name.take(1).uppercase(),
+                                account.name,
+                                if (account.offBudget) "Tracking · off budget" else account.type ?: "On budget",
+                                account.balanceMinor?.let(::formatCurrency) ?: "Unavailable",
+                                if (account.offBudget) tandemPalette.muted else tandemPalette.text,
+                            ) {
+                                state.selectedAccountId = account.id
+                                navigation.open(AppRoute.ACCOUNT_DETAIL)
+                            }
+                        }
+                    }
+                }
+            }
+            Text("Balances are read-only in this build.", color = tandemPalette.muted, fontSize = 12.sp)
+        }
+        return
+    }
     PageColumn {
         SampleBanner()
         Heading("Balances", "Review account balances and recent activity.")
@@ -1803,7 +2323,46 @@ private fun AccountsScreen(navigation: AppNavigation) {
 }
 
 @Composable
-private fun AccountDetailScreen(navigation: AppNavigation) {
+private fun AccountDetailScreen(
+    state: AppState,
+    navigation: AppNavigation,
+    liveAccounts: List<LiveAccountSummary>,
+    liveTransactions: List<TransactionItem>,
+) {
+    if (state.selectedBudgetId.isNotBlank()) {
+        val account = liveAccounts.firstOrNull { it.id == state.selectedAccountId }
+        val accountActivity = liveTransactions.filter { it.accountId == state.selectedAccountId }
+        PageColumn {
+            Badge("Actual · read only", tandemPalette.positive)
+            if (account == null) {
+                Heading("Account details", "Actual account not found in the local copy.")
+            } else {
+                AmountHero(
+                    "Available balance",
+                    account.balanceMinor?.let(::formatCurrency) ?: "Unavailable",
+                    "${account.name} · ${if (account.offBudget) "off budget" else "on budget"}",
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    PrimaryButton("New transaction unavailable", enabled = false, modifier = Modifier.weight(1f)) {}
+                    SecondaryButton("Reconcile preview", modifier = Modifier.weight(1f)) { navigation.open(AppRoute.RECONCILIATION) }
+                }
+                if (accountActivity.isEmpty()) {
+                    SurfaceCard {
+                        Text("No recent activity for this account.", modifier = Modifier.padding(16.dp), color = tandemPalette.muted)
+                    }
+                } else {
+                    SectionCard("Recent activity", account.name, "See all", onClick = { navigation.selectTab(AppRoute.ACTIVITY) }) {
+                        accountActivity.take(6).forEachIndexed { index, item ->
+                            if (index > 0) DividerLine()
+                            TransactionRow(item) { openTransaction(state, navigation, item, isLive = true) }
+                        }
+                    }
+                }
+                SettingRow("•••", "Account options", "Read-only account details", onClick = { navigation.open(AppRoute.ACCOUNT_OPTIONS) })
+            }
+        }
+        return
+    }
     PageColumn {
         SampleBanner()
         AmountHero("Available balance", formatCurrency(348_216), "Checking · Updated ${formatShortDate(SampleDate(2026, 5, 14))}")
@@ -1822,7 +2381,30 @@ private fun AccountDetailScreen(navigation: AppNavigation) {
 }
 
 @Composable
-private fun AccountOptionsScreen(navigation: AppNavigation) {
+private fun AccountOptionsScreen(
+    state: AppState,
+    navigation: AppNavigation,
+    liveAccounts: List<LiveAccountSummary>,
+) {
+    if (state.selectedBudgetId.isNotBlank()) {
+        val account = liveAccounts.firstOrNull { it.id == state.selectedAccountId }
+        PageColumn {
+            Heading(account?.name ?: "Account options", "Actual account details")
+            if (account == null) {
+                BodyText("This account is not available in the local copy.")
+            } else {
+                SectionCard("Account", "Read-only Actual data") {
+                    ListRow("A", "Name", "Account name", account.name)
+                    DividerLine()
+                    ListRow("¤", "Balance", "Current Actual balance", account.balanceMinor?.let(::formatCurrency) ?: "Unavailable")
+                    DividerLine()
+                    ListRow("◷", "Budget status", "Account scope", if (account.offBudget) "Off budget" else "On budget")
+                }
+                PreviewNote("Renaming and hiding accounts are not available here. No Actual account settings are changed.")
+            }
+        }
+        return
+    }
     PageColumn {
         Heading("Checking", "Account options")
         SettingRow("✎", "Edit account details", "Name and notes", onClick = { })
@@ -1880,16 +2462,16 @@ private fun ActivityScreen(
                 Text("⌘ K", color = tandemPalette.muted, fontSize = 10.sp)
             }
         }
-        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("All", "Income", "Spending", "Transfers").forEachIndexed { index, filter ->
-                Badge(filter, if (index == 0) tandemPalette.accent else tandemPalette.muted)
+        if (!isLiveBudget) {
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("All", "Income", "Spending", "Transfers").forEachIndexed { index, filter ->
+                    Badge(filter, if (index == 0) tandemPalette.accent else tandemPalette.muted)
+                }
+                Badge("Filter · 2", tandemPalette.accent)
             }
-            Badge("Filter · 2", tandemPalette.accent)
         }
         if (isLiveBudget) {
-            SectionCard(state.selectedMonth, "${liveTransactions.size} recent transactions", "Filter", onClick = {
-                navigation.open(AppRoute.ACTIVITY_FILTER)
-            }) {
+            SectionCard("All transactions", "${liveTransactions.size} synced transactions · newest first") {
                 if (liveTransactions.isEmpty()) {
                     BodyText("No transactions are available in the local copy yet. Sync the budget to refresh it.")
                 } else {
@@ -1918,27 +2500,60 @@ private fun ActivityScreen(
 }
 
 @Composable
-private fun ActivitySearchScreen(navigation: AppNavigation) {
+private fun ActivitySearchScreen(
+    state: AppState,
+    navigation: AppNavigation,
+    liveTransactions: List<TransactionItem>,
+) {
     var search by remember { mutableStateOf("") }
-    PageColumn {
-        Heading("Find transactions", "Search by payee, note, amount, or category.")
-        TextFieldCard("Search", search, { search = it }, "Try “groceries” or “${formatCurrency(4_200)}”")
-        SectionCard("Suggested", "Recent sample searches", "") {
-            listOf("Groceries", "Electric Company", "Paycheck").forEachIndexed { index, value ->
-                if (index > 0) DividerLine()
-                ListRow("⌕", value, "Sample results", onClick = { navigation.open(AppRoute.TRANSACTION_DETAIL) })
-            }
+    val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    val searchTransactions = if (isLiveBudget) liveTransactions else previewTransactions
+    val results =
+        searchTransactions.filter { transaction ->
+            search.isBlank() ||
+                listOf(
+                    transaction.payee,
+                    transaction.category,
+                    transaction.account,
+                    transaction.dateLabel,
+                    formatCurrency(kotlin.math.abs(transaction.amountMinorUnits)),
+                    formatSignedCurrency(transaction.amountMinorUnits),
+                ).any { it.contains(search.trim(), ignoreCase = true) }
         }
-        SectionCard("Results", "3 matching transactions", "") {
-            previewTransactions
-                .filter {
-                    search.isBlank() ||
-                        it.payee.contains(search, ignoreCase = true) ||
-                        it.category.contains(search, ignoreCase = true)
-                }.forEachIndexed { index, item ->
-                    if (index > 0) DividerLine()
-                    TransactionRow(item) { navigation.open(AppRoute.TRANSACTION_DETAIL) }
+    PageColumn {
+        Heading(
+            "Find transactions",
+            if (isLiveBudget) {
+                "Search synced transactions by payee, account, category, date, or amount."
+            } else {
+                "Search the sample activity by payee, amount, or category."
+            },
+        )
+        TextFieldCard("Search", search, { search = it }, "Try “groceries” or “${formatCurrency(4_200)}”")
+        if (isLiveBudget) {
+            SectionCard("Matches", "${results.size} transactions in this device's local copy") {
+                if (results.isEmpty()) {
+                    BodyText("No matching transactions were found in the local copy.")
+                } else {
+                    results.forEachIndexed { index, transaction ->
+                        if (index > 0) DividerLine()
+                        TransactionRow(transaction) { openTransaction(state, navigation, transaction, isLive = true) }
+                    }
                 }
+            }
+        } else {
+            SectionCard("Suggested", "Recent sample searches", "") {
+                listOf("Groceries", "Electric Company", "Paycheck").forEachIndexed { index, value ->
+                    if (index > 0) DividerLine()
+                    ListRow("⌕", value, "Sample results", onClick = { navigation.open(AppRoute.TRANSACTION_DETAIL) })
+                }
+            }
+            SectionCard("Results", "${results.size} matching sample transactions", "") {
+                results.forEachIndexed { index, item ->
+                    if (index > 0) DividerLine()
+                    TransactionRow(item) { openTransaction(state, navigation, item, isLive = false) }
+                }
+            }
         }
     }
 }
@@ -1994,7 +2609,10 @@ private fun TransactionDetailScreen(
             ListRow("▤", "Notes", "Optional", if (isLive) "Not available" else "Weekly shop")
         }
         if (isLive) {
-            BodyText("Live transaction editing is not available yet. No changes have been sent to Actual.")
+            BodyText("Edit a transaction already in Actual. Changes are saved on this device first and then checked with the server.")
+            PrimaryButton("Edit transaction", enabled = state.selectedTransactionRecordId.isNotBlank()) {
+                navigation.open(AppRoute.EDIT_TRANSACTION)
+            }
         } else {
             PreviewNote("This sample transaction is read-only. Editing it will not change Actual Budget.")
             PrimaryButton("Edit transaction") { navigation.open(AppRoute.EDIT_TRANSACTION) }
@@ -2008,8 +2626,45 @@ private fun TransactionFormScreen(
     route: AppRoute,
     state: AppState,
     navigation: AppNavigation,
+    mobileSession: TandemMobileSession,
+    onSaveTransaction: () -> Unit,
 ) {
     val isNew = route == AppRoute.NEW_TRANSACTION
+    if (state.selectedBudgetId.isNotBlank()) {
+        if (isNew) {
+            PageColumn {
+                Badge("Unavailable", tandemPalette.warning)
+                Heading("New transactions are not available", "This server supports updating existing transactions only.")
+                PreviewNote(
+                    "A stable caller-supplied transaction ID is required for safe retries. This device will not create a placeholder transaction or send a new transaction to Actual.",
+                )
+                PrimaryButton("Return to activity") { navigation.back() }
+            }
+            return
+        }
+        PageColumn {
+            Heading("Edit transaction", "Changes stay local until the sync confirms them.")
+            TextFieldCard("Amount", state.transactionAmount, { state.transactionAmount = it }, formatAmount(4_218))
+            TextFieldCard("Notes", state.transactionNotes, { state.transactionNotes = it }, "Add a note (optional)", singleLine = false)
+            SectionCard("Transaction details", "Other fields are read-only in this build") {
+                ListRow("A", "Account", "Account is unchanged", state.transactionAccount)
+                DividerLine()
+                ListRow("P", "Payee", "Payee is unchanged", state.transactionPayee)
+                DividerLine()
+                ListRow("C", "Category", "Category is unchanged", state.transactionCategory)
+                DividerLine()
+                ListRow("◷", "Date", "Date is unchanged", state.transactionDate)
+            }
+            mobileSession.transactionWriteMessage?.let { message ->
+                SurfaceCard {
+                    Column(Modifier.padding(14.dp)) { BodyText(message) }
+                }
+            }
+            PrimaryButton("Save changes", enabled = !mobileSession.isSavingTransaction) { onSaveTransaction() }
+            SecondaryButton("Cancel") { navigation.back() }
+        }
+        return
+    }
     PageColumn {
         SampleBanner()
         Heading("Transaction details", "Record a change to the budget.")
@@ -2134,7 +2789,66 @@ private fun SaveResultScreen(navigation: AppNavigation) {
 }
 
 @Composable
-private fun SyncCenterScreen(navigation: AppNavigation) {
+private fun SyncCenterScreen(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
+    onSyncNow: () -> Unit,
+) {
+    if (state.selectedBudgetId.isNotBlank()) {
+        val attention = mobileSession.pendingWrites.filter { it.status in setOf("queued", "conflict", "uncertain", "rejected") }
+        PageColumn {
+            Badge(if (mobileSession.isAuthenticated) "Actual · connected" else "Offline copy", tandemPalette.positive)
+            Heading("Sync center", "Review the local budget copy and any changes that need attention.")
+            SurfaceCard {
+                Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LabelText(state.selectedBudget)
+                    BodyText("${mobileSession.cachedTransactionCount} transactions · ${mobileSession.accountRecords.size} accounts cached")
+                    Text(
+                        mobileSession.syncError ?: if (mobileSession.isSyncing) "Sync in progress" else "Local data is available offline",
+                        color = if (mobileSession.syncError == null) tandemPalette.muted else tandemPalette.warning,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+            SectionCard("Changes needing attention", "${attention.size} local operations") {
+                if (attention.isEmpty()) {
+                    BodyText("No pending, uncertain, rejected, or conflicted changes.")
+                } else {
+                    attention.forEachIndexed { index, operation ->
+                        if (index > 0) DividerLine()
+                        val transaction =
+                            liveTransactionItems(mobileSession).firstOrNull { it.recordId == operation.recordId }
+                        ListRow(
+                            when (operation.status) {
+                                "conflict" -> "!"
+                                "uncertain" -> "?"
+                                "rejected" -> "×"
+                                else -> "↻"
+                            },
+                            transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
+                            "${operation.status.replaceFirstChar { it.uppercase() }} · ${transaction?.category ?: "Transaction edit"}",
+                            "Review",
+                            onClick = {
+                                state.selectedConflictOperationId = operation.operationId
+                                navigation.open(
+                                    when (operation.status) {
+                                        "conflict" -> AppRoute.CONFLICT_REVIEW
+                                        "uncertain" -> AppRoute.UNCERTAIN_WRITE
+                                        "rejected" -> AppRoute.REJECTED_WRITE
+                                        else -> AppRoute.UNCERTAIN_WRITE
+                                    },
+                                )
+                            },
+                        )
+                    }
+                }
+            }
+            PrimaryButton("Sync now", enabled = mobileSession.isAuthenticated && !mobileSession.isSyncing) { onSyncNow() }
+            if (mobileSession.transactionWriteMessage != null) BodyText(mobileSession.transactionWriteMessage!!)
+        }
+        return
+    }
     PageColumn {
         Heading("Connection status", "Review device data, pending edits, and server activity.")
         SurfaceCard {
@@ -2178,7 +2892,42 @@ private fun SyncCenterScreen(navigation: AppNavigation) {
 }
 
 @Composable
-private fun ConflictInboxScreen(navigation: AppNavigation) {
+private fun ConflictInboxScreen(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
+) {
+    if (state.selectedBudgetId.isNotBlank()) {
+        val conflicts = mobileSession.pendingWrites.filter { it.status == "conflict" }
+        PageColumn {
+            Badge("Actual · review required", tandemPalette.warning)
+            Heading("Changes to review", "Choose whether to keep the device edit or the latest Actual version.")
+            if (conflicts.isEmpty()) {
+                SurfaceCard {
+                    Column(Modifier.padding(15.dp)) { BodyText("There are no conflicts in the current local copy.") }
+                }
+            } else {
+                SectionCard("Conflicts", "${conflicts.size} transaction changes") {
+                    conflicts.forEachIndexed { index, operation ->
+                        if (index > 0) DividerLine()
+                        val transaction = liveTransactionItems(mobileSession).firstOrNull { it.recordId == operation.recordId }
+                        ListRow(
+                            "!",
+                            transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
+                            "${transaction?.dateLabel ?: "Actual changed"} · ${transaction?.category ?: "Transaction"}",
+                            "Review",
+                            tandemPalette.warning,
+                        ) {
+                            state.selectedConflictOperationId = operation.operationId
+                            navigation.open(AppRoute.CONFLICT_REVIEW)
+                        }
+                    }
+                }
+            }
+            mobileSession.transactionWriteMessage?.let { BodyText(it) }
+        }
+        return
+    }
     PageColumn {
         SampleBanner()
         Heading("Changes to review", "Choose which version to keep before a change is sent.")
@@ -2216,7 +2965,69 @@ private fun ConflictValueCard(
 }
 
 @Composable
-private fun ConflictReviewScreen(state: AppState) {
+private fun ConflictReviewScreen(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    onResolveConflict: (String, Boolean) -> Unit,
+) {
+    if (state.selectedBudgetId.isNotBlank()) {
+        val operation =
+            mobileSession.pendingWrites.firstOrNull {
+                it.operationId == state.selectedConflictOperationId &&
+                    it.status == "conflict"
+            }
+        val record = operation?.let { item -> mobileSession.transactionRecords.firstOrNull { it.recordId == item.recordId } }
+        val deviceVersion = operation?.optimisticJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
+        val actualVersion = record?.remoteJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
+        val deviceAmount = deviceVersion?.longValue("amount")
+        val actualAmount = actualVersion?.longValue("amount")
+        PageColumn {
+            Badge("Actual · conflict", tandemPalette.warning)
+            if (operation == null) {
+                Heading("Conflict is no longer available", "Refresh the sync center to see the current state.")
+            } else {
+                val transaction = liveTransactionItems(mobileSession).firstOrNull { it.recordId == operation.recordId }
+                Heading("Two versions differ", transaction?.payee ?: "Review this transaction before continuing.")
+                Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    ConflictValueCard(
+                        "On this device",
+                        deviceAmount?.let(::formatSignedCurrency) ?: "Deleted",
+                        Modifier.weight(1f),
+                    )
+                    ConflictValueCard(
+                        "In Actual",
+                        actualAmount?.let(::formatSignedCurrency) ?: "Deleted",
+                        Modifier.weight(1f),
+                    )
+                }
+                SectionCard("Details", "Latest cached transaction") {
+                    ListRow("A", "Account", "Actual account", transaction?.account ?: "Unavailable")
+                    DividerLine()
+                    ListRow("C", "Category", "Actual category", transaction?.category ?: "Unavailable")
+                    DividerLine()
+                    ListRow("◷", "Date", "Actual date", transaction?.dateLabel ?: "Unavailable")
+                }
+                if (record?.remoteDeleted == true) {
+                    PreviewNote(
+                        "Actual deleted this transaction. The device version cannot be rebased; keep Actual to discard the local draft.",
+                    )
+                } else {
+                    PreviewNote(
+                        "Keeping the device version rebases the edit on the latest Actual revision, then submits it through the normal sync queue.",
+                    )
+                }
+                mobileSession.transactionWriteMessage?.let { BodyText(it) }
+                PrimaryButton(
+                    "Keep device version",
+                    enabled = !mobileSession.isSavingTransaction && record?.remoteDeleted != true,
+                ) { onResolveConflict(operation.operationId, true) }
+                SecondaryButton("Keep latest Actual version", enabled = !mobileSession.isSavingTransaction) {
+                    onResolveConflict(operation.operationId, false)
+                }
+            }
+        }
+        return
+    }
     PageColumn {
         Badge("Conflict · sample data", tandemPalette.warning)
         Heading("Two versions differ", "Review the two sample amounts for Corner Market.")
@@ -2243,7 +3054,51 @@ private fun ConflictReviewScreen(state: AppState) {
 }
 
 @Composable
-private fun UncertainWriteScreen() {
+private fun UncertainWriteScreen(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    onSyncNow: () -> Unit,
+    onRetry: (String) -> Unit,
+    onDiscard: (String) -> Unit,
+) {
+    if (state.selectedBudgetId.isNotBlank()) {
+        val operation =
+            mobileSession.pendingWrites.firstOrNull {
+                it.operationId == state.selectedConflictOperationId && it.status == "uncertain"
+            } ?: mobileSession.pendingWrites.firstOrNull { it.status == "uncertain" }
+        PageColumn {
+            Badge("Status unknown", tandemPalette.warning)
+            Heading("Check before retrying", "The server has not confirmed whether this edit was applied.")
+            if (operation == null) {
+                BodyText("There is no uncertain operation in the current local copy.")
+            } else {
+                val transaction = liveTransactionItems(mobileSession).firstOrNull { it.recordId == operation.recordId }
+                SectionCard(transaction?.payee ?: "Transaction", "${transaction?.dateLabel ?: "Local edit"} · ${operation.status}") {
+                    ListRow(
+                        "¤",
+                        "Requested amount",
+                        "Device edit",
+                        operation.optimisticAmountMinor?.let(::formatSignedCurrency) ?: "Unavailable",
+                    )
+                    DividerLine()
+                    ListRow(
+                        "?",
+                        "Server result",
+                        "Must be checked before retry",
+                        operation.lastErrorCode ?: "Unknown",
+                        tandemPalette.warning,
+                    )
+                }
+                PreviewNote(
+                    "Checking status asks the server about the same operation without sending it again. Retry is a separate explicit action.",
+                )
+                PrimaryButton("Check status", enabled = !mobileSession.isSyncing) { onSyncNow() }
+                SecondaryButton("Retry the same operation", enabled = !mobileSession.isSyncing) { onRetry(operation.operationId) }
+                SecondaryButton("Discard local edit") { onDiscard(operation.operationId) }
+            }
+        }
+        return
+    }
     PageColumn {
         Badge("Status unknown", tandemPalette.warning)
         Heading("Check before retrying", "The connection ended before this change could be confirmed.")
@@ -2260,7 +3115,41 @@ private fun UncertainWriteScreen() {
 }
 
 @Composable
-private fun RejectedWriteScreen() {
+private fun RejectedWriteScreen(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    onDiscard: (String) -> Unit,
+) {
+    if (state.selectedBudgetId.isNotBlank()) {
+        val operation =
+            mobileSession.pendingWrites.firstOrNull {
+                it.operationId == state.selectedConflictOperationId && it.status == "rejected"
+            } ?: mobileSession.pendingWrites.firstOrNull { it.status == "rejected" }
+        PageColumn {
+            Badge("Not applied", tandemPalette.negative)
+            Heading("Previous value kept", "Actual rejected this change. The remote value remains in the budget.")
+            if (operation == null) {
+                BodyText("There are no rejected edits in the current local copy.")
+            } else {
+                val transaction = liveTransactionItems(mobileSession).firstOrNull { it.recordId == operation.recordId }
+                SectionCard(transaction?.payee ?: "Transaction", transaction?.dateLabel ?: "Rejected edit") {
+                    ListRow(
+                        "¤",
+                        "Requested amount",
+                        "Local draft",
+                        operation.optimisticAmountMinor?.let(::formatSignedCurrency) ?: "Unavailable",
+                    )
+                    DividerLine()
+                    ListRow("!", "Reason", "The update was not applied", operation.lastErrorCode ?: "Rejected", tandemPalette.warning)
+                }
+                PreviewNote(
+                    "The data layer removed the rejected optimistic overlay and retained the local audit entry until you dismiss it.",
+                )
+                PrimaryButton("Dismiss rejected edit") { onDiscard(operation.operationId) }
+            }
+        }
+        return
+    }
     PageColumn {
         Badge("Not applied", tandemPalette.negative)
         Heading("Previous value kept", "This change was not applied in Actual Budget.")
@@ -2282,7 +3171,6 @@ private fun SettingsScreen(
     navigation: AppNavigation,
 ) {
     PageColumn {
-        SampleBanner()
         Heading("Preferences", "Adjust appearance, sync, privacy, and app behavior.")
         SectionCard("Personalize", "Appearance and budget") {
             ListRow("◐", "Appearance", "Theme, accent, and background", state.theme.label) { navigation.open(AppRoute.APPEARANCE) }

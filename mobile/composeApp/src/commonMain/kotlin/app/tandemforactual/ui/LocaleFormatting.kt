@@ -10,6 +10,8 @@ internal expect fun platformFormatCurrency(minorUnits: Long): String
 
 internal expect fun platformFormatDecimal(minorUnits: Long): String
 
+internal expect fun platformParseDecimalMinorUnits(value: String): Long?
+
 internal expect fun platformFormatDate(
     year: Int,
     month: Int,
@@ -44,6 +46,8 @@ internal expect fun platformWeekdayName(
 internal fun formatCurrency(minorUnits: Long): String = platformFormatCurrency(minorUnits)
 
 internal fun formatAmount(minorUnits: Long): String = platformFormatDecimal(minorUnits)
+
+internal fun parseAmountMinorUnits(value: String): Long? = platformParseDecimalMinorUnits(value)
 
 internal fun formatSignedCurrency(minorUnits: Long): String =
     if (minorUnits > 0) "+${formatCurrency(minorUnits)}" else formatCurrency(minorUnits)

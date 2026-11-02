@@ -14,6 +14,8 @@ import platform.Foundation.NSNumberFormatter
 import platform.Foundation.NSNumberFormatterCurrencyStyle
 import platform.Foundation.NSNumberFormatterDecimalStyle
 import platform.Foundation.currentLocale
+import kotlin.math.abs
+import kotlin.math.roundToLong
 
 internal actual fun platformFormatCurrency(minorUnits: Long): String {
     val formatter =
@@ -35,6 +37,23 @@ internal actual fun platformFormatDecimal(minorUnits: Long): String {
             maximumFractionDigits = fractionDigits
         }
     return formatter.stringFromNumber(NSNumber(minorUnits.toDouble() / 100.0)) ?: ""
+}
+
+internal actual fun platformParseDecimalMinorUnits(value: String): Long? {
+    val input = value.trim()
+    if (input.isEmpty()) return null
+    val formatter =
+        NSNumberFormatter().apply {
+            locale = NSLocale.currentLocale
+            numberStyle = NSNumberFormatterDecimalStyle
+            usesGroupingSeparator = true
+            maximumFractionDigits = 2uL
+        }
+    val amount = formatter.numberFromString(input)?.doubleValue ?: return null
+    val minorUnits = amount * 100.0
+    if (!minorUnits.isFinite() || abs(minorUnits) > Long.MAX_VALUE.toDouble()) return null
+    val rounded = minorUnits.roundToLong()
+    return rounded.takeIf { abs(minorUnits - it.toDouble()) < 0.000001 }
 }
 
 internal actual fun platformFormatDate(

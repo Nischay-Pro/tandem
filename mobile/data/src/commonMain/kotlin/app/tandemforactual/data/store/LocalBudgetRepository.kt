@@ -181,6 +181,15 @@ class LocalBudgetRepository(
         return database.budgetRecordDao().findRecentVisible(budgetId, recordType, limit)
     }
 
+    suspend fun countVisibleRecords(
+        budgetId: String,
+        recordType: String,
+    ): Long {
+        requireIdentifier(budgetId, "budgetId")
+        requireIdentifier(recordType, "recordType")
+        return database.budgetRecordDao().countVisible(budgetId, recordType)
+    }
+
     suspend fun findRecord(
         budgetId: String,
         recordType: String,

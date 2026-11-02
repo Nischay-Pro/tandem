@@ -64,6 +64,19 @@ interface BudgetRecordDao {
     ): List<BudgetRecordEntity>
 
     @Query(
+        """
+    SELECT COUNT(*) FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = :recordType
+      AND localDeleted = 0
+      AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))
+    """,
+    )
+    suspend fun countVisible(
+        budgetId: String,
+        recordType: String,
+    ): Long
+
+    @Query(
         "SELECT * FROM budget_records WHERE budgetId = :budgetId AND recordType = :recordType AND recordId = :recordId",
     )
     suspend fun find(

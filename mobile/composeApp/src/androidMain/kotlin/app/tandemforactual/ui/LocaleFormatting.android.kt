@@ -1,8 +1,10 @@
 package app.tandemforactual.ui
 
 import java.math.BigDecimal
+import java.math.RoundingMode
 import java.text.DateFormat
 import java.text.NumberFormat
+import java.text.ParsePosition
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Currency
@@ -22,6 +24,17 @@ internal actual fun platformFormatDecimal(minorUnits: Long): String {
             minimumFractionDigits = fractionDigits
             maximumFractionDigits = fractionDigits
         }.format(BigDecimal.valueOf(minorUnits, 2))
+}
+
+internal actual fun platformParseDecimalMinorUnits(value: String): Long? {
+    val input = value.trim()
+    if (input.isEmpty()) return null
+    val position = ParsePosition(0)
+    val parsed = NumberFormat.getNumberInstance(Locale.getDefault()).parse(input, position) ?: return null
+    if (position.index != input.length || position.errorIndex >= 0) return null
+    return runCatching {
+        BigDecimal(parsed.toString()).movePointRight(2).setScale(0, RoundingMode.UNNECESSARY).longValueExact()
+    }.getOrNull()
 }
 
 internal actual fun platformFormatDate(
