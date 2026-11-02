@@ -41,10 +41,15 @@ was created for the Docker mount path `/workspace`, so its metadata must be
 relocated or regenerated before running it directly from a differently rooted
 host checkout. The previous Linux/Docker emulator test attempt did not leave a
 connected emulator. A USB-authorized Pixel 10a is available for local app
-debugging when attached. The shared Compose UI is sample-only and does not
-connect to a server or live budget.
+debugging when attached. The shared Compose app can pair through Tandem, load
+the authorized budget catalog, and sync budget data locally. Budget, account,
+category, and activity views read that local copy. Editing an existing
+transaction and reviewing sync conflicts use the durable local write queue;
+creating transactions remains unavailable until the API supports a
+caller-supplied stable ID. For phone-to-host debug pairing, use `adb reverse`
+to forward the app's loopback port to the local API.
 
-### Android preview and screenshots
+### Android preview and Pixel debugging
 
 Build and install the debug app from the `mobile/` directory:
 
@@ -60,9 +65,9 @@ The project uses the pinned Gradle 9.8.2 / Java 27 toolchain documented in
 [`docs/mobile-api-client.md`](mobile-api-client.md). In this workspace, Gradle
 and the Android SDK run in the configured Docker environment. Use normal ADB
 touch, swipe, and Back inputs to inspect flows on the connected Pixel. Save
-temporary screenshots under `.dev-tmp/android-screenshots/`; the repository
-ignores the whole `.dev-tmp/` directory. The `preview` launch extra opens the
-synthetic budget overview; without it the app opens its welcome screen.
+Do not commit wireframes or device captures; `.dev-tmp/` is ignored. The
+`preview` launch extra opens the synthetic budget overview; without it the app
+opens its welcome screen.
 The ignored SDK copy currently contains Platform Tools 37.0.1, verified against
 Google's SDK repository metadata; the host's default ADB may be older. See the
 [Platform Tools release notes](https://developer.android.com/tools/releases/platform-tools)
@@ -91,6 +96,19 @@ Keep `CHANGE_FEED_EPOCH` stable during normal restarts. After restoring an older
 PostgreSQL backup, change it to a new value before starting the API. This
 invalidates prior mobile cursors and makes devices download a fresh server
 snapshot; the epoch must be backed up separately from PostgreSQL.
+
+## Local household load fixture
+
+The ignored Actual 26.10.0 compatibility server at
+`.dev-tmp/actual/compat-server` contains two synthetic household budgets: one
+CAD budget for the first year in Canada and one USD budget for the following
+six years in the United States. Together they contain 15,000 synthetic
+purchase rows, spanning apartment moves, rent changes, a four-year car loan,
+flights, insurance, a wedding, pet surgery, and a home purchase. The local-only
+seed script is `.dev-tmp/household-seed.mjs`; neither the script nor the budget
+data belongs in Git. The Pixel 10a full-sync check stored 2,182 transaction
+records for the CAD budget and 13,164 for the USD budget in Room. Those totals
+include non-purchase transaction rows in addition to the 15,000 purchases.
 
 ## Code quality
 

@@ -5,14 +5,39 @@ libraries, a Compose Multiplatform presentation module, and an installable
 Android host app. Android and iOS use the same Tandem design system and
 screens; the iOS host is `MainViewController()` in `mobile/composeApp`.
 
-The shared app now pairs devices through the generated API client, lists the
-server-authorized budgets, and runs the initial snapshot/change-feed sync into
-Room on Android and iOS. Activity and transaction detail read recent local
-transaction records. The category plan, account views, transaction editing,
-conflict actions, automatic refresh, and most settings remain sample or
-read-only surfaces; they do not write to Actual. Screens and current Pixel
-captures are listed in the ignored
-`.dev-tmp/mobile-wireframes/README.md` and `.dev-tmp/android-screenshots/`.
+The shared app pairs devices through the generated API client, lists only
+server-authorized budgets, and syncs snapshots and changes into Room on Android
+and iOS. The budget overview, cached month/category plan, category group/detail,
+account balances, account activity, and transaction activity read the selected
+budget's local records. The Activity screen displays the newest 50 rows while
+Room retains the complete synced transaction set; Sync Center reports the full
+visible count. Initial setup selects the most recently active cached month when
+the prior selection is unavailable.
+
+The local Actual 26.10.0 load fixture contains a CAD budget with 2,182
+transaction records and a USD budget with 13,164 records. Across the two
+budgets, 15,000 rows are synthetic purchases spanning seven years. Pixel 10a
+first-sync verification confirmed both budgets reached the `READY` state and
+the records were stored locally. One first attempt for USD hit a transient
+connection error; retry completed successfully. This test data and its seed
+script live only under ignored `.dev-tmp/` paths.
+
+Editing the amount and notes of an existing transaction enqueues an optimistic
+local update and sends it through the sync coordinator. Conflict review can
+keep Actual's copy or rebase and submit the device edit; uncertain and rejected
+writes have explicit review, retry, and discard controls. These UI write flows
+are wired to the API and local outbox, but a real transaction edit/conflict has
+not yet been exercised on the Pixel. Creating transactions remains unavailable
+because the API lacks a caller-supplied stable ID for safe retries. Settings
+pages are present, but several controls remain previews or are not persisted
+and do not modify Actual.
+
+The eight-character pairing code is shown as readable text and left-aligned in
+the entry field. It accepts the server's `XXXX-XXXX` format, with or without
+the hyphen. The code and device bearer credential are not saved in route state;
+the bearer credential is held in memory and requires re-pairing after process
+restart. Temporary wireframes, test data, and device review artifacts belong
+under ignored `.dev-tmp/` paths and must not be committed.
 
 ## Components and entry point
 
@@ -23,26 +48,31 @@ captures are listed in the ignored
   protocol.
 - The Compose root creates the API client, local repository, and sync
   coordinator. Pairing, budget catalog loading, and the first sync are wired to
-  onboarding. The coordinator serializes calls; the UI currently starts a sync
-  when the user opens a budget. Foreground and reconnect triggers, a manual
-  retry surface, and queued-write controls are not wired yet.
+  onboarding. The coordinator serializes calls; the UI starts an initial sync
+  when a budget is opened and exposes manual sync in Sync Center. Conflict,
+  uncertain, and rejected write review screens expose their supported
+  keep/rebase, retry, and discard actions. Automatic foreground and reconnect
+  sync triggers are not wired yet.
 - Device bearer credentials are held in memory for the current app process. The
   user must pair again after Android or iOS terminates and restarts the app.
   Persisting the credential with Android Keystore and the iOS Keychain remains
   open work. Pairing codes and encrypted-budget passwords are excluded from
   saved instance state; the budget password is cleared after a successful
   initial sync.
-- The Activity screen reads up to 50 recent transactions from the local Room
-  database and resolves payee, category, and account display names from local
-  records. Transaction details are read-only. Transaction creation and editing
-  do not yet submit operations to the server.
+- The budget, account, and Activity screens read local Room records. Cached
+  budget months supply the available-to-budget, category-group, and category
+  values; account snapshots supply current balances; transaction records supply
+  recent activity and account filtering. Transaction details are read-only.
+  Editing an existing transaction's amount or notes and resolving conflicts
+  submit through the durable local outbox and sync coordinator. Creation is
+  disabled pending stable caller-supplied IDs in the write API.
 
 The Android host handles system Back through the shared route stack and uses
 safe drawing insets for the status and navigation bars. Pixel 10a review
 confirmed that headers clear the status bar and that system-bar icon contrast
 tracks the selected light or dark theme. Screenshots are disposable review
-artifacts under `.dev-tmp/android-screenshots/`; the [capture index](../.dev-tmp/android-screenshots/README.md)
-lists their screens. Git ignores the captures.
+artifacts only when explicitly requested; they are not source assets and must
+not be committed.
 
 Pass an encrypted budget's password to `synchronize` when needed. It is sent
 only on the relevant budget requests and is not stored in the database or
@@ -123,8 +153,10 @@ coordinator, and generated-client adapter, then compile the connected app:
 ```
 
 Android and iOS target compilation is covered by the mobile CI job; iOS
-simulator runtime tests require macOS. The current Android build can be
-installed on an authorized device and started in sample preview mode as
-documented in the development setup. The live Activity list comes from the
-selected budget's local copy; do not treat the separately labeled preview
-category plan, account screens, or sample transaction form as live budget state.
+simulator runtime tests require macOS. The Android build can be installed on an
+authorized device and started in sample preview mode as documented in the
+development setup. After pairing, account/category/transaction values come
+from the selected budget's local copy. A month without a cached budget record
+shows an explicit empty state. Use the ignored two-currency Actual fixture to
+exercise larger local snapshots; transaction editing and conflict handling
+still need physical-device write-path verification.
