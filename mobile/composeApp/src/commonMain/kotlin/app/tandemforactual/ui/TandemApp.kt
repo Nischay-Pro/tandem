@@ -2548,7 +2548,7 @@ private fun ActivitySearchScreen(
         )
         TextFieldCard("Search", search, { search = it }, "Try “groceries” or “${formatCurrency(4_200)}”")
         if (isLiveBudget) {
-            SectionCard("Matches", "${results.size} transactions in this device's local copy") {
+            SectionCard("Matches", "${results.size} transactions in this device’s local copy") {
                 if (results.isEmpty()) {
                     BodyText("No matching transactions were found in the local copy.")
                 } else {
