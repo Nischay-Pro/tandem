@@ -1,6 +1,7 @@
 import * as actualApi from "@actual-app/api";
 
 export const SUPPORTED_ACTUAL_SERVER_VERSION = "26.10.0";
+export const ACTUAL_SESSION_OPERATION_TIMEOUT_MS = 5 * 60 * 1_000;
 
 export type ActualConnectionConfig = {
   serverURL: string;
@@ -47,6 +48,13 @@ export class ActualPostWriteSyncError<T = unknown> extends Error {
       "Actual operation returned a result, but budget synchronization failed",
     );
     this.name = "ActualPostWriteSyncError";
+  }
+}
+
+export class ActualSessionOperationTimeoutError extends Error {
+  constructor(readonly timeoutMs: number) {
+    super(`Actual operation exceeded its ${timeoutMs} ms time limit`);
+    this.name = "ActualSessionOperationTimeoutError";
   }
 }
 
@@ -99,6 +107,7 @@ function reportSecondaryFailure(failure: ActualSecondaryFailure): void {
 export class ActualSession {
   #sessionId = Symbol("ActualSession");
   #closing = false;
+  #poisoned = false;
   #cleanupFailed = false;
   #closePromise: Promise<void> | undefined;
 
@@ -107,11 +116,18 @@ export class ActualSession {
     private readonly config: ActualConnectionConfig,
     private readonly expectedVersion = SUPPORTED_ACTUAL_SERVER_VERSION,
     private readonly onSecondaryFailure: ActualSecondaryFailureHandler = reportSecondaryFailure,
-  ) {}
+    private readonly operationTimeoutMs = ACTUAL_SESSION_OPERATION_TIMEOUT_MS,
+  ) {
+    if (!Number.isSafeInteger(operationTimeoutMs) || operationTimeoutMs < 1) {
+      throw new Error("Actual operation timeout must be a positive integer");
+    }
+  }
 
   async start(): Promise<void> {
     this.#assertAcceptingWork();
-    return enqueueActualApiOperation(() => this.#initialize());
+    return enqueueActualApiOperation(() =>
+      this.#withTimeout(() => this.#initialize()),
+    );
   }
 
   async execute<T>(
@@ -119,10 +135,12 @@ export class ActualSession {
     options: Pick<BudgetOperationOptions, "synchronizeAfterWrite"> = {},
   ): Promise<T> {
     this.#assertAcceptingWork();
-    return enqueueActualApiOperation(async () => {
-      await this.#initialize();
-      return this.#executeOperation(operation, options.synchronizeAfterWrite);
-    });
+    return enqueueActualApiOperation(() =>
+      this.#withTimeout(async () => {
+        await this.#initialize();
+        return this.#executeOperation(operation, options.synchronizeAfterWrite);
+      }),
+    );
   }
 
   async runBudget<T>(
@@ -136,15 +154,17 @@ export class ActualSession {
     }
 
     this.#assertAcceptingWork();
-    return enqueueActualApiOperation(async () => {
-      await this.#initialize();
-      const encryptionOptions =
-        options.encryptionPassword === undefined
-          ? undefined
-          : { password: options.encryptionPassword };
-      await this.client.downloadBudget(normalizedSyncId, encryptionOptions);
-      return this.#executeOperation(operation, options.synchronizeAfterWrite);
-    });
+    return enqueueActualApiOperation(() =>
+      this.#withTimeout(async () => {
+        await this.#initialize();
+        const encryptionOptions =
+          options.encryptionPassword === undefined
+            ? undefined
+            : { password: options.encryptionPassword };
+        await this.client.downloadBudget(normalizedSyncId, encryptionOptions);
+        return this.#executeOperation(operation, options.synchronizeAfterWrite);
+      }),
+    );
   }
 
   close(): Promise<void> {
@@ -154,11 +174,14 @@ export class ActualSession {
 
     this.#closing = true;
     const closePromise = enqueueActualApiOperation(async () => {
+      if (this.#poisoned) {
+        return;
+      }
       if (activeActualSession !== this.#sessionId) {
         return;
       }
 
-      await this.client.shutdown();
+      await this.#withTimeout(() => this.client.shutdown());
       activeActualSession = undefined;
     });
     this.#closePromise = closePromise;
@@ -169,12 +192,42 @@ export class ActualSession {
   }
 
   #assertAcceptingWork(): void {
+    if (this.#poisoned) {
+      throw new Error(
+        "Actual session is unavailable after an operation timed out; restart the API process",
+      );
+    }
     if (this.#closing) {
       throw new Error("Actual session is closing");
     }
   }
 
+  async #withTimeout<T>(operation: () => Promise<T>): Promise<T> {
+    let rejectTimeout!: (error: ActualSessionOperationTimeoutError) => void;
+    const timeout = new Promise<never>((_resolve, reject) => {
+      rejectTimeout = reject;
+    });
+    const timeoutHandle = setTimeout(() => {
+      this.#poisoned = true;
+      rejectTimeout(
+        new ActualSessionOperationTimeoutError(this.operationTimeoutMs),
+      );
+    }, this.operationTimeoutMs);
+    timeoutHandle.unref?.();
+
+    try {
+      return await Promise.race([Promise.resolve().then(operation), timeout]);
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
+  }
+
   async #initialize(): Promise<void> {
+    if (this.#poisoned) {
+      throw new Error(
+        "Actual session is unavailable after an operation timed out; restart the API process",
+      );
+    }
     if (this.#cleanupFailed) {
       throw new Error(
         "Actual client cleanup previously failed; close the session before retrying",

@@ -550,6 +550,36 @@ describe("durable write journal integration", () => {
     ).resolves.toMatchObject({ status: "queued" });
   });
 
+  it("records a pre-write validation failure as a terminal rejection", async () => {
+    const input = createOperation();
+    await database.journal.enqueue(input);
+    await database.journal.claim(input.operationId);
+
+    const rejected = await database.journal.markRejected(
+      input.operationId,
+      "account-not-found",
+    );
+    const repeated = await database.journal.markRejected(
+      input.operationId,
+      "account-not-found",
+    );
+
+    expect(rejected).toMatchObject({
+      status: "rejected",
+      errorCode: "account-not-found",
+      actualResult: null,
+      leaseExpiresAt: null,
+      completedAt: expect.any(Date),
+    });
+    expect(repeated.status).toBe("rejected");
+    await expect(
+      database.journal.markRejected(input.operationId, "category-not-found"),
+    ).rejects.toThrow("cannot transition from rejected to rejected");
+    expect((await database.journal.claim(input.operationId)).claimed).toBe(
+      false,
+    );
+  });
+
   it("never automatically reclaims an uncertain write", async () => {
     const input = createOperation();
     await database.journal.enqueue(input);
@@ -963,6 +993,9 @@ describe("durable write journal integration", () => {
     const transactions: ActualTransactionStore = {
       async read() {
         return actual;
+      },
+      async validateCreateInput() {
+        throw new Error("This test does not validate creates");
       },
       async create() {
         throw new Error("This test does not create transactions");

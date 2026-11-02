@@ -7,6 +7,9 @@ import {
 
 export interface ActualTransactionStore {
   read(id: string): Promise<unknown | undefined>;
+  validateCreateInput(
+    input: TransactionCreateInput,
+  ): Promise<TransactionCreateValidationIssue | undefined>;
   create(id: string, input: TransactionCreateInput): Promise<unknown>;
   update(id: string, fields: TransactionPatch): Promise<unknown>;
   delete(id: string): Promise<unknown>;
@@ -17,9 +20,21 @@ type ActualTransactionApiClient = Pick<
   | "aqlQuery"
   | "q"
   | "addTransactions"
+  | "getAccounts"
+  | "getCategories"
+  | "getPayees"
   | "updateTransaction"
   | "deleteTransaction"
 >;
+
+export interface TransactionCreateValidationIssue {
+  code:
+    | "account-not-found"
+    | "account-closed"
+    | "payee-not-found"
+    | "category-not-found";
+  message: string;
+}
 
 export function createActualTransactionStore(
   client: ActualTransactionApiClient = actualApi,
@@ -86,8 +101,60 @@ export function createActualTransactionStore(
     return transaction.id;
   }
 
+  async function validateCreateInput(
+    input: TransactionCreateInput,
+  ): Promise<TransactionCreateValidationIssue | undefined> {
+    const accounts = await client.getAccounts();
+    const account = accounts.find(
+      (candidate) => candidate.id === input.account,
+    );
+    if (!account) {
+      return {
+        code: "account-not-found",
+        message: "Account does not exist in this budget",
+      };
+    }
+    if (account.closed) {
+      return {
+        code: "account-closed",
+        message: "Choose an open account for this transaction",
+      };
+    }
+
+    if (input.payee !== null) {
+      const payees = await client.getPayees();
+      if (!payees.some((candidate) => candidate.id === input.payee)) {
+        return {
+          code: "payee-not-found",
+          message: "Payee does not exist in this budget",
+        };
+      }
+    }
+
+    if (input.category !== null) {
+      const categories = await client.getCategories();
+      let exists = categories.some(
+        (candidate) => candidate.id === input.category,
+      );
+      if (!exists) {
+        const hiddenCategories = await client.getCategories({ hidden: true });
+        exists = hiddenCategories.some(
+          (candidate) => candidate.id === input.category,
+        );
+      }
+      if (!exists) {
+        return {
+          code: "category-not-found",
+          message: "Category does not exist in this budget",
+        };
+      }
+    }
+    return undefined;
+  }
+
   return {
     read,
+    validateCreateInput,
     async create(id, input) {
       if (!isCompanionTransactionId(id)) {
         throw new Error("New transactions require a Companion transaction ID");

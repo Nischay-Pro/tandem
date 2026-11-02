@@ -75,6 +75,7 @@ export interface DurableWriteJournal {
   claim(operationId: string): Promise<ClaimResult>;
   renewLease(operationId: string): Promise<boolean>;
   releaseClaim(operationId: string, errorCode: string): Promise<WriteOperation>;
+  markRejected(operationId: string, errorCode: string): Promise<WriteOperation>;
   markCommitted(
     operationId: string,
     actualResult: JsonValue,

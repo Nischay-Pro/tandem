@@ -16,6 +16,7 @@ import { ActualBudgetSnapshotReader } from "../src/actual/budget-snapshot-reader
 import { createTransactionApi } from "../src/actual/transaction-api.js";
 import { TransactionReconciler } from "../src/actual/transaction-reconciler.js";
 import {
+  MAX_TRANSACTION_AMOUNT,
   createTransactionRevision,
   snapshotActualTransaction,
   type TransactionSnapshot,
@@ -288,6 +289,8 @@ describe.skipIf(!compatibilityTestEnabled)(
           authorization: `Bearer ${compatibilityToken}`,
         };
         const companionTransactionId = `tandem:${randomUUID()}`;
+        const maxAmountTransactionId = `tandem:${randomUUID()}`;
+        const followupTransactionId = `tandem:${randomUUID()}`;
         const createOperationId = randomUUID();
         const companionTransactionPath = `/api/v1/budgets/${budget.groupId}/transactions/${encodeURIComponent(companionTransactionId)}`;
         try {
@@ -354,13 +357,148 @@ describe.skipIf(!compatibilityTestEnabled)(
             id: companionTransactionId,
             body: { id: companionTransactionId, importedId: null },
           });
+
+          const submitCreate = async (
+            stableId: string,
+            patch: Record<string, unknown>,
+          ) => {
+            const operationId = randomUUID();
+            const response = await reconciliationApp.inject({
+              method: "POST",
+              url: `/api/v1/budgets/${budget.groupId}/transactions/${encodeURIComponent(stableId)}/operations`,
+              headers: {
+                ...authorizationHeaders,
+                "idempotency-key": `compat-create-${operationId}`,
+              },
+              payload: { operationId, action: "create", patch },
+            });
+            return { operationId, response };
+          };
+
+          const largeAmountCreate = await submitCreate(maxAmountTransactionId, {
+            account: initialData.accountId,
+            amount: MAX_TRANSACTION_AMOUNT,
+            date: transactionDate,
+            payee: null,
+            category: categoryId,
+            notes: "Maximum supported Actual amount",
+            cleared: false,
+          });
+          expect(largeAmountCreate.response.statusCode).toBe(200);
+          expect(largeAmountCreate.response.json().operation.status).toBe(
+            "committed",
+          );
+
+          const followupCreate = await submitCreate(followupTransactionId, {
+            account: initialData.accountId,
+            amount: -1234,
+            date: transactionDate,
+            payee: null,
+            category: categoryId,
+            notes: "Normal create after maximum supported amount",
+            cleared: false,
+          });
+          expect(followupCreate.response.statusCode).toBe(200);
+          expect(followupCreate.response.json().operation.status).toBe(
+            "committed",
+          );
+          const followupRead = await reconciliationApp.inject({
+            method: "GET",
+            url: `/api/v1/budgets/${budget.groupId}/transactions/${encodeURIComponent(followupTransactionId)}`,
+            headers: authorizationHeaders,
+          });
+          expect(followupRead.statusCode).toBe(200);
+          expect(followupRead.json().transaction).toMatchObject({
+            id: followupTransactionId,
+            amount: -1234,
+            notes: "Normal create after maximum supported amount",
+          });
+
+          const invalidReferenceCases = [
+            {
+              code: "account-not-found",
+              patch: {
+                account: "no-such-account",
+                amount: -10,
+                date: transactionDate,
+                payee: null,
+                category: null,
+                notes: "Invalid account",
+                cleared: false,
+              },
+            },
+            {
+              code: "payee-not-found",
+              patch: {
+                account: initialData.accountId,
+                amount: -10,
+                date: transactionDate,
+                payee: "no-such-payee",
+                category: null,
+                notes: "Invalid payee",
+                cleared: false,
+              },
+            },
+            {
+              code: "category-not-found",
+              patch: {
+                account: initialData.accountId,
+                amount: -10,
+                date: transactionDate,
+                payee: null,
+                category: "no-such-category",
+                notes: "Invalid category",
+                cleared: false,
+              },
+            },
+          ];
+          for (const testCase of invalidReferenceCases) {
+            const invalidId = `tandem:${randomUUID()}`;
+            const invalidCreate = await submitCreate(invalidId, testCase.patch);
+            expect(invalidCreate.response.statusCode).toBe(400);
+            expect(invalidCreate.response.json().error.code).toBe(
+              testCase.code,
+            );
+            await expect(
+              database.journal.get(invalidCreate.operationId),
+            ).resolves.toMatchObject({ status: "rejected" });
+            await expect(
+              firstDevice.runBudget(budget.groupId, () =>
+                transactionStore.read(invalidId),
+              ),
+            ).resolves.toBeUndefined();
+          }
+
+          const invalidDate = await submitCreate(`tandem:${randomUUID()}`, {
+            account: initialData.accountId,
+            amount: -10,
+            date: "0001-01-01",
+            payee: null,
+            category: null,
+            notes: "Date before supported range",
+            cleared: false,
+          });
+          expect(invalidDate.response.statusCode).toBe(400);
+          expect(invalidDate.response.json().error).toMatchObject({
+            code: "invalid_request",
+            message: "date must be on or after 1900-01-01",
+          });
+          await expect(
+            database.journal.get(invalidDate.operationId),
+          ).resolves.toBeUndefined();
         } finally {
           await firstDevice
             .runBudget(
               budget.groupId,
               async () => {
-                if (await transactionStore.read(companionTransactionId)) {
-                  await transactionStore.delete(companionTransactionId);
+                for (const stableId of [
+                  companionTransactionId,
+                  maxAmountTransactionId,
+                  followupTransactionId,
+                ]) {
+                  if (await transactionStore.read(stableId)) {
+                    await transactionStore.delete(stableId);
+                  }
                 }
               },
               { synchronizeAfterWrite: true },

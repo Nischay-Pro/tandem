@@ -497,6 +497,55 @@ describe("transaction REST routes", () => {
   });
 
   it.each([
+    ["account-not-found", "Account does not exist in this budget"],
+    ["account-closed", "Choose an open account for this transaction"],
+    ["payee-not-found", "Payee does not exist in this budget"],
+    ["category-not-found", "Category does not exist in this budget"],
+    ["unknown-rejection", "Transaction request is invalid"],
+    [null, "Transaction request is invalid"],
+  ])(
+    "returns a clear 400 when a create operation was rejected: %s",
+    async (errorCode, message) => {
+      const fake = createApi({
+        submit: async () => ({
+          operation: createOperation({
+            action: "create",
+            status: "rejected",
+            errorCode,
+          }),
+          conflict: null,
+        }),
+      });
+      const app = await fake.buildApp();
+      const response = await app.inject({
+        method: "POST",
+        url: `${transactionUrl}/operations`,
+        headers: { ...authHeaders, "idempotency-key": "rejected-create" },
+        payload: {
+          operationId,
+          action: "create",
+          patch: {
+            account: "checking-account",
+            amount: -10,
+            date: "2026-11-01",
+            payee: null,
+            category: null,
+            notes: "Rejected create",
+            cleared: false,
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toEqual({
+        code: errorCode ?? "invalid_request",
+        message,
+      });
+      await app.close();
+    },
+  );
+
+  it.each([
     [new TransactionRequestValidationError("bad base revision"), 400],
     [new IdempotencyKeyReuseError(), 409],
     [new OperationIdReuseError(), 409],

@@ -72,12 +72,27 @@ describe("transaction request validation integration", () => {
   it("returns 400 for invalid journal input without attempting an Actual write", async () => {
     const currentTransaction = { ...baseSnapshot };
     let actualReads = 0;
+    let createAttempts = 0;
+    let referenceIssue:
+      | {
+          code:
+            | "account-not-found"
+            | "account-closed"
+            | "payee-not-found"
+            | "category-not-found";
+          message: string;
+        }
+      | undefined;
     const transactions: ActualTransactionStore = {
-      async read() {
+      async read(id: string) {
         actualReads += 1;
-        return currentTransaction;
+        return id.startsWith("tandem:") ? undefined : currentTransaction;
+      },
+      async validateCreateInput() {
+        return referenceIssue;
       },
       async create() {
+        createAttempts += 1;
         throw new Error("Invalid requests must not create in Actual");
       },
       async update() {
@@ -156,6 +171,64 @@ describe("transaction request validation integration", () => {
       }
 
       expect(actualReads).toBe(0);
+
+      const referenceIssues = [
+        {
+          code: "account-not-found",
+          message: "Account does not exist in this budget",
+        },
+        {
+          code: "account-closed",
+          message: "Choose an open account for this transaction",
+        },
+        {
+          code: "payee-not-found",
+          message: "Payee does not exist in this budget",
+        },
+        {
+          code: "category-not-found",
+          message: "Category does not exist in this budget",
+        },
+      ] as const;
+      for (const [index, issue] of referenceIssues.entries()) {
+        referenceIssue = issue;
+        const operationId = randomUUID();
+        const createRequest = {
+          method: "POST" as const,
+          url: `/api/v1/budgets/synthetic-budget/transactions/tandem:${randomUUID()}/operations`,
+          headers: {
+            authorization: `Bearer ${pairedDevice.accessToken}`,
+            "idempotency-key": `invalid-reference-${index}`,
+          },
+          payload: {
+            operationId,
+            action: "create",
+            patch: {
+              account: "missing-account",
+              amount: -100,
+              date: "2026-11-01",
+              payee: null,
+              category: null,
+              notes: "Must be rejected before Actual write",
+              cleared: false,
+            },
+          },
+        };
+        const rejectedCreate = await app.inject(createRequest);
+        expect(rejectedCreate.statusCode).toBe(400);
+        expect(rejectedCreate.json()).toMatchObject({
+          error: { code: issue.code, message: issue.message },
+        });
+        await expect(database!.journal.get(operationId)).resolves.toMatchObject(
+          { status: "rejected", errorCode: issue.code },
+        );
+        const replayedRejection = await app.inject(createRequest);
+        expect(replayedRejection.statusCode).toBe(400);
+        expect(replayedRejection.json()).toMatchObject({
+          error: { code: issue.code, message: issue.message },
+        });
+      }
+      expect(createAttempts).toBe(0);
       expect(report).not.toHaveBeenCalled();
     } finally {
       report.mockRestore();

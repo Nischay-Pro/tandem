@@ -794,11 +794,23 @@ function registerTransactionRoutes(
         const result = await transactionApi.submit({
           ...transactionRequest,
         });
+        if (result.operation.status === "rejected") {
+          const errorCode = result.operation.errorCode ?? "invalid_request";
+          return invalidTransactionRequest(
+            reply,
+            rejectedTransactionMessage(errorCode),
+            errorCode,
+          );
+        }
         reply.header("cache-control", "no-store");
         return reply.code(200).send(toOperationResultResponse(result));
       } catch (error) {
         if (error instanceof TransactionRequestValidationError) {
-          return invalidTransactionRequest(reply);
+          return invalidTransactionRequest(
+            reply,
+            error.message,
+            error.errorCode,
+          );
         }
         if (error instanceof IdempotencyKeyReuseError) {
           return reply.code(409).send({
@@ -1294,13 +1306,29 @@ function budgetReadFailed(reply: import("fastify").FastifyReply) {
   });
 }
 
-function invalidTransactionRequest(reply: import("fastify").FastifyReply) {
+function invalidTransactionRequest(
+  reply: import("fastify").FastifyReply,
+  message = "Transaction request is invalid",
+  code = "invalid_request",
+) {
   return reply.code(400).send({
-    error: {
-      code: "invalid_request",
-      message: "Transaction request is invalid",
-    },
+    error: { code, message },
   });
+}
+
+function rejectedTransactionMessage(errorCode: string): string {
+  switch (errorCode) {
+    case "account-not-found":
+      return "Account does not exist in this budget";
+    case "account-closed":
+      return "Choose an open account for this transaction";
+    case "payee-not-found":
+      return "Payee does not exist in this budget";
+    case "category-not-found":
+      return "Category does not exist in this budget";
+    default:
+      return "Transaction request is invalid";
+  }
 }
 
 function transactionNotFound(reply: import("fastify").FastifyReply) {

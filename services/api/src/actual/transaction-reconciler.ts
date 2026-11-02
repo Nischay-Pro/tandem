@@ -74,7 +74,11 @@ export interface TransactionReconciliationResult {
 }
 
 export class TransactionRequestValidationError extends Error {
-  constructor(message: string, options?: ErrorOptions) {
+  constructor(
+    message: string,
+    options?: ErrorOptions,
+    readonly errorCode = "invalid_request",
+  ) {
     super(message, options);
     this.name = "TransactionRequestValidationError";
   }
@@ -233,6 +237,17 @@ export class TransactionReconciler {
               kind: "create-id-exists",
               snapshot: snapshotActualTransaction(existing),
             };
+          }
+
+          const validationIssue = await this.transactions.validateCreateInput(
+            prepared.input,
+          );
+          if (validationIssue) {
+            throw new TransactionRequestValidationError(
+              validationIssue.message,
+              undefined,
+              validationIssue.code,
+            );
           }
 
           mutationStarted = true;
@@ -663,7 +678,14 @@ export class TransactionReconciler {
           ),
         );
       }
-      await this.journal.releaseClaim(operation.operationId, preWriteErrorCode);
+      if (error instanceof TransactionRequestValidationError) {
+        await this.journal.markRejected(operation.operationId, error.errorCode);
+      } else {
+        await this.journal.releaseClaim(
+          operation.operationId,
+          preWriteErrorCode,
+        );
+      }
     } catch (journalError) {
       reportJournalFailure(journalError);
     }

@@ -240,6 +240,31 @@ export class PostgresWriteJournal implements DurableWriteJournal {
     });
   }
 
+  async markRejected(
+    operationId: string,
+    errorCode: string,
+  ): Promise<WriteOperation> {
+    validateUuid("operationId", operationId);
+    validateErrorCode(errorCode);
+    return this.#finish(
+      operationId,
+      "rejected",
+      async (client) => {
+        const result = await client.query<OperationRow>(
+          `UPDATE companion_operations
+          SET status = 'rejected', error_code = $2,
+              actual_result = NULL, completed_at = clock_timestamp(),
+              updated_at = clock_timestamp(), lease_expires_at = NULL
+          WHERE operation_id = $1 AND status = 'applying'
+          RETURNING *`,
+          [operationId, errorCode],
+        );
+        return result.rows[0];
+      },
+      (operation) => operation.errorCode === errorCode,
+    );
+  }
+
   async markCommitted(
     operationId: string,
     actualResult: JsonValue,
@@ -429,7 +454,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
 
   async #finish(
     operationId: string,
-    targetStatus: "committed" | "uncertain",
+    targetStatus: "committed" | "uncertain" | "rejected",
     transition: (client: PoolClient) => Promise<OperationRow | undefined>,
     isSameTerminalState: (operation: WriteOperation) => boolean,
   ): Promise<WriteOperation> {

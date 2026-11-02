@@ -153,6 +153,12 @@ even though Actual assigns a separate internal UUID. Room, the outbox, retries,
 and change-feed reconciliation therefore use the caller-generated key without
 writing to Actual's database directly.
 
+Create and update amounts are limited to ±1,000,000,000 Actual amount units,
+and dates before 1900-01-01 are rejected. A create also requires an existing
+open account; any non-null payee or category must exist in the selected budget.
+Those reference checks run under the budget lock before the Actual write. A
+failed check returns HTTP 400 and leaves a terminal rejected journal entry.
+
 After posting, the coordinator reads the authoritative transaction before
 marking a create or update committed. A conflict keeps the local draft and stores the
 latest remote transaction for review. Resolving a conflict means enqueueing a

@@ -172,6 +172,14 @@ an `Idempotency-Key` header and a JSON body containing:
   `baseSnapshot` returned by the transaction read endpoint. Supply a field
   patch for updates or an empty patch for deletion.
 
+Create and update amounts must be integer Actual amount units between
+`-1,000,000,000` and `1,000,000,000`. Transaction dates must be valid ISO dates
+on or after `1900-01-01`. Create requests must reference an existing open
+account; non-null payee and category IDs must exist in that budget. Invalid
+amounts, dates, or references return HTTP 400. Reference failures are stored
+as terminal `rejected` operations, so retrying the same operation returns the
+same 400 response. These checks run before Actual is asked to write a row.
+
 Keep the same operation ID, idempotency key, base snapshot, and patch when
 retrying an uncertain HTTP request. The durable journal prevents repeated
 requests from applying twice. Reusing a key or operation ID with a different
@@ -195,6 +203,12 @@ write. Stable create IDs are reserved to the `tandem:<uuid>` namespace;
 collisions are reported as conflicts. Transfers and split transactions are
 readable but remain non-editable through reconciliation until their mutation
 semantics are verified.
+
+Actual API calls share one serialized process-wide client. Each Actual session
+call has a five-minute deadline. If one expires, in-flight writes remain
+uncertain and the client fails closed; restart the API process before using
+Actual again. This prevents one stalled call from holding the serialized queue
+indefinitely or allowing overlapping calls into Actual's singleton client.
 
 These endpoints are described by the generated OpenAPI document. Validate each
 response against the contract served by the running version.

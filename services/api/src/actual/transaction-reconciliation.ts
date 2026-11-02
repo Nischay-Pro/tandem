@@ -32,6 +32,12 @@ export interface TransactionCreateInput {
   cleared: boolean;
 }
 
+// Actual 26.10.0 guards its budget arithmetic at 2^51 - 1. Keep any single
+// new or edited amount small enough that a million same-sign rows still leave
+// more than a 2x margin below that internal ceiling.
+export const MAX_TRANSACTION_AMOUNT = 1_000_000_000;
+export const MIN_TRANSACTION_DATE = "1900-01-01";
+
 export const COMPANION_TRANSACTION_ID_PREFIX = "tandem:";
 
 export function isCompanionTransactionId(value: string): boolean {
@@ -223,10 +229,10 @@ export function parseTransactionPatch(value: JsonValue): TransactionPatch {
         patch.account = patchText(requiredString(valueForField, field), field);
         break;
       case "amount":
-        patch.amount = requiredInteger(valueForField, field);
+        patch.amount = requiredTransactionAmount(valueForField, field);
         break;
       case "date":
-        patch.date = requiredDate(valueForField);
+        patch.date = requiredTransactionDate(valueForField);
         break;
       case "payee":
         patch.payee = nullablePatchString(valueForField, field);
@@ -280,8 +286,8 @@ export function parseTransactionCreateInput(
 
   return {
     account: patchText(requiredString(record.account, "account"), "account"),
-    amount: requiredInteger(record.amount, "amount"),
-    date: requiredDate(record.date),
+    amount: requiredTransactionAmount(record.amount, "amount"),
+    date: requiredTransactionDate(record.date),
     payee: nullablePatchString(record.payee, "payee"),
     category: nullablePatchString(record.category, "category"),
     notes: patchText(requiredText(record.notes, "notes"), "notes"),
@@ -473,6 +479,24 @@ function requiredInteger(value: unknown, name: string): number {
     throw new Error(`${name} must be a safe integer`);
   }
   return value;
+}
+
+function requiredTransactionAmount(value: unknown, name: string): number {
+  const amount = requiredInteger(value, name);
+  if (Math.abs(amount) > MAX_TRANSACTION_AMOUNT) {
+    throw new Error(
+      `${name} must be between -${MAX_TRANSACTION_AMOUNT} and ${MAX_TRANSACTION_AMOUNT}`,
+    );
+  }
+  return amount;
+}
+
+function requiredTransactionDate(value: unknown): string {
+  const date = requiredDate(value);
+  if (date < MIN_TRANSACTION_DATE) {
+    throw new Error(`date must be on or after ${MIN_TRANSACTION_DATE}`);
+  }
+  return date;
 }
 
 function requiredDate(value: unknown): string {

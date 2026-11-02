@@ -6,7 +6,27 @@ import type {
   TransactionPatch,
 } from "../src/actual/transaction-reconciliation.js";
 
-function createClient(result: unknown) {
+function createClient(
+  result: unknown,
+  references: {
+    accounts?: Array<{ id: string; name: string; closed?: boolean }>;
+    categories?: Array<{
+      id: string;
+      name: string;
+      is_income: boolean;
+      hidden: boolean;
+      group_id: string;
+    }>;
+    hiddenCategories?: Array<{
+      id: string;
+      name: string;
+      is_income: boolean;
+      hidden: boolean;
+      group_id: string;
+    }>;
+    payees?: Array<{ id: string; name: string; transfer_acct: string }>;
+  } = {},
+) {
   const queries: unknown[] = [];
   const client = {
     q: actualApi.q,
@@ -15,6 +35,31 @@ function createClient(result: unknown) {
       return result;
     }),
     addTransactions: vi.fn(async () => "ok" as const),
+    getAccounts: vi.fn(
+      async () =>
+        references.accounts ?? [
+          { id: "account-1", name: "Checking", closed: false },
+        ],
+    ),
+    getCategories: vi.fn(async (options?: { hidden?: boolean }) =>
+      options?.hidden
+        ? (references.hiddenCategories ?? [])
+        : (references.categories ?? [
+            {
+              id: "category-1",
+              name: "Groceries",
+              is_income: false,
+              hidden: false,
+              group_id: "category-group-1",
+            },
+          ]),
+    ),
+    getPayees: vi.fn(
+      async () =>
+        references.payees ?? [
+          { id: "payee-1", name: "Market", transfer_acct: "" },
+        ],
+    ),
     updateTransaction: vi.fn(async () => []),
     deleteTransaction: vi.fn(async () => []),
   };
@@ -22,6 +67,134 @@ function createClient(result: unknown) {
 }
 
 describe("Actual transaction store", () => {
+  it.each([
+    [
+      "missing account",
+      { account: "missing-account", payee: null, category: null },
+      {
+        code: "account-not-found",
+        message: "Account does not exist in this budget",
+      },
+      {},
+    ],
+    [
+      "closed account",
+      { account: "account-1", payee: null, category: null },
+      {
+        code: "account-closed",
+        message: "Choose an open account for this transaction",
+      },
+      { accounts: [{ id: "account-1", name: "Closed", closed: true }] },
+    ],
+    [
+      "missing payee",
+      { account: "account-1", payee: "missing-payee", category: null },
+      {
+        code: "payee-not-found",
+        message: "Payee does not exist in this budget",
+      },
+      { payees: [] },
+    ],
+    [
+      "missing category",
+      { account: "account-1", payee: null, category: "missing-category" },
+      {
+        code: "category-not-found",
+        message: "Category does not exist in this budget",
+      },
+      { categories: [], hiddenCategories: [] },
+    ],
+  ])(
+    "validates a %s reference without creating a transaction",
+    async (_label, refs, issue, references) => {
+      const fake = createClient({ data: [] }, references as never);
+      const store = createActualTransactionStore(fake.client);
+      const input: TransactionCreateInput = {
+        account: refs.account,
+        amount: -100,
+        date: "2026-11-01",
+        payee: refs.payee,
+        category: refs.category,
+        notes: "Synthetic validation case",
+        cleared: false,
+      };
+
+      await expect(store.validateCreateInput(input)).resolves.toEqual(issue);
+      expect(fake.client.addTransactions).not.toHaveBeenCalled();
+    },
+  );
+
+  it("accepts existing hidden categories and nullable payees", async () => {
+    const hiddenCategory = {
+      id: "hidden-category",
+      name: "Archived",
+      is_income: false,
+      hidden: true,
+      group_id: "category-group-1",
+    };
+    const fake = createClient(
+      { data: [] },
+      { categories: [], hiddenCategories: [hiddenCategory] },
+    );
+    const store = createActualTransactionStore(fake.client);
+
+    await expect(
+      store.validateCreateInput({
+        account: "account-1",
+        amount: -100,
+        date: "2026-11-01",
+        payee: null,
+        category: "hidden-category",
+        notes: "Hidden category remains a valid reference",
+        cleared: false,
+      }),
+    ).resolves.toBeUndefined();
+    expect(fake.client.getCategories.mock.calls[0]).toEqual([]);
+    expect(fake.client.getCategories).toHaveBeenNthCalledWith(2, {
+      hidden: true,
+    });
+  });
+
+  it("accepts existing visible category, account, and payee references", async () => {
+    const fake = createClient({ data: [] });
+    const store = createActualTransactionStore(fake.client);
+
+    await expect(
+      store.validateCreateInput({
+        account: "account-1",
+        amount: -100,
+        date: "2026-11-01",
+        payee: "payee-1",
+        category: "category-1",
+        notes: "Existing references are valid",
+        cleared: false,
+      }),
+    ).resolves.toBeUndefined();
+    expect(fake.client.getAccounts).toHaveBeenCalledOnce();
+    expect(fake.client.getPayees).toHaveBeenCalledOnce();
+    expect(fake.client.getCategories).toHaveBeenCalledOnce();
+  });
+
+  it("accepts a valid account when optional payee and category are null", async () => {
+    const fake = createClient({ data: [] });
+    const store = createActualTransactionStore(fake.client);
+
+    await expect(
+      store.validateCreateInput({
+        account: "account-1",
+        amount: -100,
+        date: "2026-11-01",
+        payee: null,
+        category: null,
+        notes: "Optional references can be empty",
+        cleared: false,
+      }),
+    ).resolves.toBeUndefined();
+    expect(fake.client.getAccounts).toHaveBeenCalledOnce();
+    expect(fake.client.getPayees).not.toHaveBeenCalled();
+    expect(fake.client.getCategories).not.toHaveBeenCalled();
+  });
+
   it("reads by stable ID with grouped split data through public AQL", async () => {
     const transaction = {
       id: "transaction-1",
@@ -186,6 +359,21 @@ describe("Actual transaction store", () => {
           return "ok" as const;
         },
       ),
+      getAccounts: vi.fn(async () => [
+        { id: "account-1", name: "Checking", closed: false },
+      ]),
+      getCategories: vi.fn(async () => [
+        {
+          id: "category-1",
+          name: "Groceries",
+          is_income: false,
+          hidden: false,
+          group_id: "category-group-1",
+        },
+      ]),
+      getPayees: vi.fn(async () => [
+        { id: "payee-1", name: "Market", transfer_acct: "" },
+      ]),
       updateTransaction: vi.fn(async () => []),
       deleteTransaction: vi.fn(async () => []),
     };

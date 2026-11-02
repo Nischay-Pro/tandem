@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { JsonValue } from "../src/write-journal/contracts.js";
 import {
+  MAX_TRANSACTION_AMOUNT,
+  MIN_TRANSACTION_DATE,
   createTransactionRevision,
   isStructuredTransaction,
   parseTransactionCreateInput,
@@ -175,6 +177,37 @@ describe("transaction snapshots and merge planning", () => {
       }),
     ).toThrow(
       "transaction create input contains unsupported fields: importedId",
+    );
+  });
+
+  it("bounds create and update amounts and transaction dates", () => {
+    const validCreate = {
+      account: "account-1",
+      amount: MAX_TRANSACTION_AMOUNT,
+      date: MIN_TRANSACTION_DATE,
+      payee: null,
+      category: null,
+      notes: "Boundary values are accepted",
+      cleared: false,
+    };
+    expect(parseTransactionCreateInput(validCreate).amount).toBe(
+      MAX_TRANSACTION_AMOUNT,
+    );
+    expect(() =>
+      parseTransactionCreateInput({ ...validCreate, amount: 9007199254740991 }),
+    ).toThrow(
+      `amount must be between -${MAX_TRANSACTION_AMOUNT} and ${MAX_TRANSACTION_AMOUNT}`,
+    );
+    expect(() =>
+      parseTransactionCreateInput({ ...validCreate, date: "0001-01-01" }),
+    ).toThrow(`date must be on or after ${MIN_TRANSACTION_DATE}`);
+    expect(() =>
+      parseTransactionPatch({ amount: MAX_TRANSACTION_AMOUNT + 1 }),
+    ).toThrow(
+      `amount must be between -${MAX_TRANSACTION_AMOUNT} and ${MAX_TRANSACTION_AMOUNT}`,
+    );
+    expect(() => parseTransactionPatch({ date: "0001-01-01" })).toThrow(
+      `date must be on or after ${MIN_TRANSACTION_DATE}`,
     );
   });
 

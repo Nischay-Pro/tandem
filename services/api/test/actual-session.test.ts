@@ -94,6 +94,13 @@ describe("ActualSession", () => {
     expect(SUPPORTED_ACTUAL_SERVER_VERSION).toBe("26.10.0");
   });
 
+  it("requires a positive integer operation timeout", () => {
+    const fake = createFakeClient();
+    expect(
+      () => new ActualSession(fake.api, config, undefined, undefined, 0),
+    ).toThrow("Actual operation timeout must be a positive integer");
+  });
+
   it("initializes once and verifies the supported server release", async () => {
     const fake = createFakeClient();
     const session = createActualSession(config, fake.api);
@@ -541,5 +548,48 @@ describe("ActualSession", () => {
     );
     consoleError.mockRestore();
     await session.close();
+  });
+
+  it("times out a stuck Actual call, releases the queue, and fails closed", async () => {
+    vi.useFakeTimers();
+    const fake = createFakeClient();
+    const session = new ActualSession(
+      fake.api,
+      config,
+      undefined,
+      undefined,
+      10,
+    );
+    let signalStarted: (() => void) | undefined;
+    const operationStarted = new Promise<void>((resolve) => {
+      signalStarted = resolve;
+    });
+    const stuck = session.execute(async () => {
+      signalStarted?.();
+      return new Promise<never>(() => {});
+    });
+    const queued = session.execute(async () => {
+      fake.calls.push("queued-operation");
+    });
+    const queuedRejection = expect(queued).rejects.toThrow(
+      "Actual session is unavailable after an operation timed out; restart the API process",
+    );
+
+    await operationStarted;
+    const stuckRejection = expect(stuck).rejects.toMatchObject({
+      name: "ActualSessionOperationTimeoutError",
+      timeoutMs: 10,
+    });
+    await vi.advanceTimersByTimeAsync(10);
+    await stuckRejection;
+    await queuedRejection;
+
+    expect(fake.calls).not.toContain("queued-operation");
+    await expect(session.execute(async () => undefined)).rejects.toThrow(
+      "Actual session is unavailable after an operation timed out; restart the API process",
+    );
+    const close = session.close();
+    await expect(close).resolves.toBeUndefined();
+    expect(fake.calls).not.toContain("shutdown");
   });
 });

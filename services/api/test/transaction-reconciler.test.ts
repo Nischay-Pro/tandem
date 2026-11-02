@@ -227,6 +227,24 @@ class MemoryWriteJournal implements DurableWriteJournal {
     return this.operation;
   }
 
+  async markRejected(
+    _operationId: string,
+    errorCode: string,
+  ): Promise<WriteOperation> {
+    this.#throwIfFailed("markRejected");
+    const operation = this.#requireOperation();
+    if (operation.status !== "applying") {
+      throw new Error(`Cannot reject from ${operation.status}`);
+    }
+    this.operation = {
+      ...operation,
+      status: "rejected",
+      errorCode,
+      actualResult: null,
+    };
+    return this.operation;
+  }
+
   async markCommitted(
     _operationId: string,
     actualResult: JsonValue,
@@ -423,6 +441,9 @@ function createHarness(
       }
       return actual;
     },
+    async validateCreateInput() {
+      return undefined;
+    },
     async create(id, input) {
       actual = {
         id: randomUUID(),
@@ -556,6 +577,29 @@ describe("Actual transaction reconciliation", () => {
       account: "account-1",
     });
     expect(harness.syncPredicateResults).toEqual([true]);
+  });
+
+  it("rejects an invalid Actual reference before writing and journals it as rejected", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request);
+    const create = vi.spyOn(harness.store, "create");
+    vi.spyOn(harness.store, "validateCreateInput").mockResolvedValue({
+      code: "account-not-found",
+      message: "Account does not exist in this budget",
+    });
+
+    await expect(harness.reconciler.submit(request)).rejects.toMatchObject({
+      name: "TransactionRequestValidationError",
+      message: "Account does not exist in this budget",
+      errorCode: "account-not-found",
+    });
+
+    expect(create).not.toHaveBeenCalled();
+    expect(harness.actual).toBeUndefined();
+    expect(harness.journal.operation).toMatchObject({
+      status: "rejected",
+      errorCode: "account-not-found",
+    });
   });
 
   it("returns a previously committed create without applying it again", async () => {
