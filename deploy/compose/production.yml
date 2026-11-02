@@ -1,0 +1,78 @@
+name: tandem
+
+services:
+  postgres:
+    image: postgres:18.6-alpine3.24
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in deploy/compose/.env}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in deploy/compose/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/compose/.env}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test:
+        ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    networks:
+      - data
+
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in deploy/compose/.env}
+      HOST: 0.0.0.0
+      PORT: 19753
+      TRUST_PROXY: ${TRUST_PROXY:-}
+      CHANGE_FEED_EPOCH: ${CHANGE_FEED_EPOCH:?Set CHANGE_FEED_EPOCH in deploy/compose/.env}
+      ACTUAL_SERVER_URL: ${ACTUAL_SERVER_URL:-}
+      ACTUAL_SERVER_PASSWORD: ${ACTUAL_SERVER_PASSWORD:-}
+      ACTUAL_API_DATA_DIR: /data/actual-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - actual-workspace:/data/actual-api
+    expose:
+      - "19753"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:19753/api/v1/health/ready').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    stop_grace_period: 45s
+    networks:
+      - data
+      - edge
+
+volumes:
+  postgres-data:
+  actual-workspace:
+
+networks:
+  data:
+    internal: true
+  edge:
+    name: ${TANDEM_EDGE_NETWORK:-tandem-edge}
+    external: true

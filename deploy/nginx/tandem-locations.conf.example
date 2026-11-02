@@ -1,6 +1,6 @@
 # Copy these locations into the existing TLS server block for budget.example.com.
 # Put the API location before the existing Actual catch-all. Define the upstreams
-# in the http context using actual-companion-upstreams.conf.example.
+# in the http context using tandem-upstreams.conf.example.
 # Nginx and both upstream containers must share a Docker network. If Nginx runs
 # on the host, publish upstream ports on loopback and use 127.0.0.1 instead.
 
@@ -9,7 +9,7 @@ location = /api/v1 {
 }
 
 location ^~ /api/v1/ {
-    proxy_pass http://actual_companion_api;
+    proxy_pass http://tandem_api;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
