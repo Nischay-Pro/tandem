@@ -1127,11 +1127,20 @@ class LocalBudgetRepositoryTest {
                         throughDate = "2026-10-31",
                     )
                 val observed = repository.observeRecords(BUDGET, "transaction").first()
+                val observedRecent = repository.observeRecentRecords(BUDGET, "transaction", limit = 1).first()
+                val observedCount = repository.observeVisibleRecordCount(BUDGET, "transaction").first()
                 val recent = repository.findRecentRecords(BUDGET, "transaction", limit = 1)
                 assertEquals(listOf("txn-a"), filtered.map { it.recordId })
                 assertEquals(listOf("txn-a", "txn-b"), observed.map { it.recordId })
+                assertEquals(listOf("txn-a"), observedRecent.map { it.recordId })
+                assertEquals(2L, observedCount)
                 assertEquals(listOf("txn-a"), recent.map { it.recordId })
                 assertFails<IllegalArgumentException> { repository.findRecentRecords(BUDGET, "transaction", limit = 0) }
+
+                repository.enqueueWrite(updateRequest(recordId = "txn-a"))
+                assertEquals(1, repository.observePendingWrites(BUDGET).first().size)
+                repository.markSyncStarted(BUDGET)
+                assertEquals(BudgetSyncStatus.SYNCING.name, repository.observeSyncState(BUDGET).first()?.status)
             } finally {
                 database.close()
             }

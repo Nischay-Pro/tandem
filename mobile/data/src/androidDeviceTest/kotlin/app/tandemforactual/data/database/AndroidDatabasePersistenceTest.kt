@@ -4,9 +4,16 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.tandemforactual.data.store.LocalBudgetRepository
+import app.tandemforactual.data.store.LocalRecordProjection
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Test
 import org.junit.runner.RunWith
 import kotlin.test.assertEquals
@@ -41,6 +48,55 @@ class AndroidDatabasePersistenceTest {
             Unit
         }
 
+    @Test
+    fun appAndWorkerDatabaseInstancesShareInvalidationEvents() =
+        runBlocking {
+            val context = ApplicationProvider.getApplicationContext<Context>()
+            context.deleteDatabase(DATABASE_NAME)
+            val appDatabase = openTandemDatabase(tandemDatabaseBuilder(context))
+            val workerDatabase = openTandemDatabase(tandemDatabaseBuilder(context))
+            val initialQueryObserved = CompletableDeferred<Unit>()
+            try {
+                val visibleRecords =
+                    async(Dispatchers.IO) {
+                        LocalBudgetRepository(workerDatabase) { 100L }
+                            .observeRecords(BUDGET_ID, "transaction")
+                            .onEach { records -> if (records.isEmpty()) initialQueryObserved.complete(Unit) }
+                            .first { records -> records.isNotEmpty() }
+                    }
+                withTimeout(5_000) { initialQueryObserved.await() }
+
+                appDatabase
+                    .budgetRecordDao()
+                    .put(
+                        BudgetRecordEntity(
+                            budgetId = BUDGET_ID,
+                            recordType = "transaction",
+                            recordId = "shared-transaction",
+                            remoteJson = """{"id":"shared-transaction"}""",
+                            remoteRevision = "revision-1",
+                            localJson = null,
+                            localDeleted = false,
+                            remoteDeleted = false,
+                            syncGeneration = "generation-1",
+                            recordDate = "2026-11-03",
+                            accountId = null,
+                            categoryId = null,
+                            payeeId = null,
+                            amountMinor = null,
+                            budgetMonth = null,
+                        ),
+                    )
+
+                assertEquals("shared-transaction", withTimeout(5_000) { visibleRecords.await() }.single().recordId)
+            } finally {
+                workerDatabase.close()
+                appDatabase.close()
+                context.deleteDatabase(DATABASE_NAME)
+            }
+            Unit
+        }
+
     private fun createRequest() =
         LocalWriteRequest(
             operationId = "android-db-operation",
@@ -54,6 +110,7 @@ class AndroidDatabasePersistenceTest {
             patchJson = "{\"amount\":1200}",
             optimisticJson = "{\"id\":\"$RECORD_ID\",\"amount\":1200}",
             createdAtEpochMs = 100L,
+            optimisticProjection = LocalRecordProjection("2026-11-03", "checking", "groceries", "market", 1200L, null),
         )
 
     private companion object {

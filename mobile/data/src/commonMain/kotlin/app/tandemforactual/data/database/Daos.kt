@@ -27,6 +27,35 @@ interface BudgetRecordDao {
         """
     SELECT * FROM budget_records
     WHERE budgetId = :budgetId AND recordType = :recordType
+      AND localDeleted = 0
+      AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))
+    ORDER BY recordDate DESC, recordId ASC
+    LIMIT :limit
+    """,
+    )
+    fun observeRecentVisible(
+        budgetId: String,
+        recordType: String,
+        limit: Int,
+    ): Flow<List<BudgetRecordEntity>>
+
+    @Query(
+        """
+    SELECT COUNT(*) FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = :recordType
+      AND localDeleted = 0
+      AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))
+    """,
+    )
+    fun observeVisibleCount(
+        budgetId: String,
+        recordType: String,
+    ): Flow<Long>
+
+    @Query(
+        """
+    SELECT * FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = :recordType
       AND (:accountId IS NULL OR accountId = :accountId)
       AND (:categoryId IS NULL OR categoryId = :categoryId)
       AND (:payeeId IS NULL OR payeeId = :payeeId)
@@ -171,6 +200,11 @@ interface OutboxDao {
     )
     suspend fun findPending(budgetId: String): List<OutboxOperationEntity>
 
+    @Query(
+        "SELECT * FROM sync_outbox WHERE budgetId = :budgetId AND status IN ('queued', 'sending', 'uncertain', 'conflict', 'rejected', 'superseded', 'discarded') ORDER BY createdAtEpochMs ASC, operationId ASC",
+    )
+    fun observePending(budgetId: String): Flow<List<OutboxOperationEntity>>
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(operation: OutboxOperationEntity)
 
@@ -215,6 +249,9 @@ interface OutboxDao {
 interface BudgetSyncStateDao {
     @Query("SELECT * FROM budget_sync_state WHERE budgetId = :budgetId")
     suspend fun find(budgetId: String): BudgetSyncStateEntity?
+
+    @Query("SELECT * FROM budget_sync_state WHERE budgetId = :budgetId")
+    fun observe(budgetId: String): Flow<BudgetSyncStateEntity?>
 
     @Upsert
     suspend fun put(state: BudgetSyncStateEntity)

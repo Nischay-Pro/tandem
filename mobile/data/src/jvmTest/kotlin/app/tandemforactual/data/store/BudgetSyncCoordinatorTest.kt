@@ -6,10 +6,12 @@ import app.tandemforactual.data.database.openTandemDatabase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -294,6 +296,43 @@ class BudgetSyncCoordinatorTest {
                 File(file.absolutePath + "-wal").delete()
                 File(file.absolutePath + "-shm").delete()
                 file.delete()
+            }
+        }
+
+    @Test
+    fun separateCoordinatorWaitsInsteadOfRecoveringAnotherCoordinatorsActiveSend() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val remote = FakeBudgetSyncRemote(snapshot(records = listOf(transaction())))
+                val foregroundCoordinator = BudgetSyncCoordinator(repository, remote)
+                val backgroundCoordinator = BudgetSyncCoordinator(repository, remote)
+                foregroundCoordinator.synchronize(BUDGET, sendQueuedWrites = false)
+                val request = updateRequest()
+                repository.enqueueWrite(request)
+
+                val submitStarted = CompletableDeferred<Unit>()
+                val finishSubmit = CompletableDeferred<Unit>()
+                remote.submitHandler = { operation ->
+                    submitStarted.complete(Unit)
+                    finishSubmit.await()
+                    operationResult(operation.operationId, RemoteOperationStatus.COMMITTED)
+                }
+                remote.transactionHandler = { _, transactionId, _ -> remoteTransaction(transactionId, "revision-2", 1200L) }
+                val foreground = async { foregroundCoordinator.synchronize(BUDGET) }
+                submitStarted.await()
+
+                val background = async { backgroundCoordinator.synchronize(BUDGET) }
+                yield()
+                assertEquals("sending", repository.readPendingWrites(BUDGET).single().status)
+
+                finishSubmit.complete(Unit)
+                assertEquals(1, foreground.await().writesCommitted)
+                assertEquals(0, background.await().writesCommitted)
+                assertEquals("committed", database.outboxDao().find(request.operationId)?.status)
+            } finally {
+                database.close()
             }
         }
 

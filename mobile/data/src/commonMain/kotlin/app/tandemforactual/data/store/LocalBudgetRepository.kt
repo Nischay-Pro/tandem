@@ -157,6 +157,21 @@ class LocalBudgetRepository(
         recordType: String,
     ): Flow<List<BudgetRecordEntity>> = database.budgetRecordDao().observeVisible(budgetId, recordType)
 
+    fun observeRecentRecords(
+        budgetId: String,
+        recordType: String,
+        limit: Int,
+    ): Flow<List<BudgetRecordEntity>> = database.budgetRecordDao().observeRecentVisible(budgetId, recordType, limit)
+
+    fun observeVisibleRecordCount(
+        budgetId: String,
+        recordType: String,
+    ): Flow<Long> = database.budgetRecordDao().observeVisibleCount(budgetId, recordType)
+
+    fun observePendingWrites(budgetId: String): Flow<List<OutboxOperationEntity>> = database.outboxDao().observePending(budgetId)
+
+    fun observeSyncState(budgetId: String): Flow<BudgetSyncStateEntity?> = database.budgetSyncStateDao().observe(budgetId)
+
     suspend fun findRecords(
         budgetId: String,
         recordType: String,

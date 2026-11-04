@@ -22,6 +22,9 @@ import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -611,6 +614,29 @@ internal class TandemMobileSession(
         categoryGroupRecords = localRepository.findRecords(budgetId, "category-group")
         budgetMonthRecords = localRepository.findRecords(budgetId, "budget-month")
         pendingWrites = localRepository.readPendingWrites(budgetId)
+    }
+
+    suspend fun observeLocalRecords(budgetId: String) {
+        val localRepository = repository ?: return
+        budgetDisplaySettingsBudgetId = budgetId
+        budgetDisplaySettings = localRepository.readBudgetDisplaySettings(budgetId)
+        coroutineScope {
+            launch {
+                localRepository.observeRecentRecords(budgetId, "transaction", 50).collect { transactionRecords = it }
+            }
+            launch {
+                localRepository.observeVisibleRecordCount(budgetId, "transaction").collect {
+                    cachedTransactionCount = it.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                }
+            }
+            launch { localRepository.observeRecords(budgetId, "account").collect { accountRecords = it } }
+            launch { localRepository.observeRecords(budgetId, "payee").collect { payeeRecords = it } }
+            launch { localRepository.observeRecords(budgetId, "category").collect { categoryRecords = it } }
+            launch { localRepository.observeRecords(budgetId, "category-group").collect { categoryGroupRecords = it } }
+            launch { localRepository.observeRecords(budgetId, "budget-month").collect { budgetMonthRecords = it } }
+            launch { localRepository.observePendingWrites(budgetId).collect { pendingWrites = it } }
+            launch { localRepository.observeSyncState(budgetId).collect { localSyncState = it } }
+        }
     }
 
     private suspend fun persistCurrentSession() {

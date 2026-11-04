@@ -7,6 +7,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
+// WorkManager creates its own coordinator and Room instance in the app process.
+// Serialize recovery and write finalization across those coordinator instances.
+private val processSyncMutex = Mutex()
+
 data class BudgetSyncSummary(
     val fullSnapshotApplied: Boolean,
     val changePagesApplied: Int,
@@ -22,15 +26,13 @@ class BudgetSyncCoordinator(
     private val repository: LocalBudgetRepository,
     private val remote: BudgetSyncRemote,
 ) {
-    private val mutex = Mutex()
-
     /** Reconciles pending remote writes once and returns after the change feed is current. */
     suspend fun synchronize(
         budgetId: String,
         encryptionPassword: String? = null,
         sendQueuedWrites: Boolean = true,
     ): BudgetSyncSummary =
-        mutex.withLock {
+        processSyncMutex.withLock {
             try {
                 repository.recoverInterruptedWrites()
                 repository.markSyncStarted(budgetId)

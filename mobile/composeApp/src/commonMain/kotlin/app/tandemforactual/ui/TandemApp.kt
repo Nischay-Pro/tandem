@@ -671,27 +671,9 @@ fun TandemApp(
             if (mobileSession.syncComplete) state.encryptedPassword = ""
         }
     }
-    LaunchedEffect(route, state.selectedBudgetId) {
-        if (
-            route in
-            setOf(
-                AppRoute.BUDGET,
-                AppRoute.CATEGORY_GROUP,
-                AppRoute.CATEGORY_DETAIL,
-                AppRoute.ACCOUNTS,
-                AppRoute.ACCOUNT_DETAIL,
-                AppRoute.ACTIVITY,
-                AppRoute.SYNC_CENTER,
-                AppRoute.CONFLICT_INBOX,
-                AppRoute.CONFLICT_REVIEW,
-                AppRoute.UNCERTAIN_WRITE,
-                AppRoute.REJECTED_WRITE,
-                AppRoute.BUDGET_PREFERENCES,
-                AppRoute.LOCAL_DATA,
-            ) &&
-            state.selectedBudgetId.isNotBlank()
-        ) {
-            mobileSession.loadLocalRecords(state.selectedBudgetId)
+    LaunchedEffect(state.selectedBudgetId, mobileSession) {
+        if (state.selectedBudgetId.isNotBlank()) {
+            mobileSession.observeLocalRecords(state.selectedBudgetId)
         }
     }
     LaunchedEffect(route, state.selectedBudgetId, state.syncOnOpen) {

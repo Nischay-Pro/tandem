@@ -65,12 +65,21 @@ constraint is `CONNECTED`, or `UNMETERED` when the Wi-Fi-only option is enabled
 (this also permits other unmetered networks). The worker reloads the selected
 budget and secure device credential from local storage, checks that the budget
 is authorized for that device, and uses the regular snapshot/change-feed and
-outbox coordinator. It skips encrypted budgets because budget passwords are
-never persisted. WorkManager may defer periodic execution to meet system power
-and network rules. The interval, network constraints, and Android build are
-verified; live background execution still needs a running Tandem/Actual test
-server. At the latest Pixel check, the debug app launched without a crash, but
-the local Docker stack was stopped and the saved server could not be reached.
+outbox coordinator. Foreground and worker syncs can use separate coordinator
+and Room instances, so all coordinators in the app process share one mutex;
+this prevents a second sync from treating another coordinator's active `sending`
+write as an interrupted process. Android Room builders enable multi-instance
+invalidation, and the open Compose session observes recent transactions, total
+transaction count, related budget records, outbox rows, and sync state as Room
+flows. Worker changes therefore appear in the open UI without a route reload.
+The Pixel's Android device regression verified updates across two independently
+opened database instances. The worker skips encrypted budgets because budget
+passwords are never persisted. WorkManager may defer periodic execution to meet
+system power and network rules. The interval, network constraints, and Android
+build are verified; live background execution still needs a running
+Tandem/Actual test server. At the latest Pixel check, the debug app launched
+without a crash, but the local Docker stack was stopped and the saved server
+could not be reached.
 
 This workspace has no iOS app host target to register with `BGTaskScheduler`,
 so scheduled background sync is currently Android-only. Automatic app-resume
