@@ -54,13 +54,28 @@ projection and follow-up reads translate Actual's internal random ID back to
 this stable ID, so the local optimistic record, outbox, snapshot, change feed,
 reads, updates, and deletes all refer to one key. The server checks the ID is
 unused and reads the created transaction back from Actual before committing the
-journal entry. Sync preferences now trigger the real coordinator for manual refreshes
-and, when enabled, on returns to a budget. The local-data page reads the full
-transaction count, cached account count, sync state, and queued/conflicted
-outbox rows from Room. Refresh uses the same sync action; clearing local data
-remains disabled to protect queued and uncertain writes. Background scheduling,
-Wi-Fi-only behavior, durable settings, and most other settings controls still
-need implementation.
+journal entry. Sync preferences trigger the real coordinator for manual
+refreshes and, when enabled, on returns to a budget. The local-data page reads
+the full transaction count, cached account count, sync state, and
+queued/conflicted outbox rows from Room. Refresh uses the same sync action;
+clearing local data remains disabled to protect queued and uncertain writes.
+
+Android can schedule a unique six-hour periodic WorkManager job. Its network
+constraint is `CONNECTED`, or `UNMETERED` when the Wi-Fi-only option is enabled
+(this also permits other unmetered networks). The worker reloads the selected
+budget and secure device credential from local storage, checks that the budget
+is authorized for that device, and uses the regular snapshot/change-feed and
+outbox coordinator. It skips encrypted budgets because budget passwords are
+never persisted. WorkManager may defer periodic execution to meet system power
+and network rules. The interval, network constraints, and Android build are
+verified; live background execution still needs a running Tandem/Actual test
+server. At the latest Pixel check, the debug app launched without a crash, but
+the local Docker stack was stopped and the saved server could not be reached.
+
+This workspace has no iOS app host target to register with `BGTaskScheduler`,
+so scheduled background sync is currently Android-only. Automatic app-resume
+and connectivity-reconnect triggers, iOS scheduling, and real behavior for
+most other preview settings still need implementation.
 
 The eight-character pairing code is shown as readable, centered text in the
 entry field. It accepts the server's `XXXX-XXXX` format, with or without the
@@ -85,11 +100,16 @@ ignored `.dev-tmp/` paths and must not be committed.
   protocol.
 - The Compose root creates the API client, local repository, and sync
   coordinator. Pairing, budget catalog loading, and the first sync are wired to
-  onboarding. The coordinator serializes calls; the UI starts an initial sync
-  when a budget is opened and exposes manual sync in Sync Center. Conflict,
-  uncertain, and rejected write review screens expose their supported
-  keep/rebase, retry, and discard actions. Automatic foreground and reconnect
-  sync triggers are not wired yet.
+  onboarding. A per-session lock protects a full multi-request sync from a
+  concurrent re-pair or credential removal. The generated API package also
+  keeps its base URL and auth provider process-wide, so requests select the
+  owning session under a shared request lock. The UI starts an initial sync
+  when a budget is opened and exposes manual sync in Sync Center. Android
+  background sync uses WorkManager as described above. Conflict, uncertain,
+  and rejected write review screens expose their supported keep/rebase, retry,
+  and discard actions. Automatic app-resume and connectivity-reconnect triggers
+  are not wired yet; iOS scheduling requires a host target that is not present
+  in this workspace.
 - Device bearer credentials are restored from platform secure storage when the
   app launches. Android stores AES-GCM ciphertext in app-private preferences
   with its encryption key in Android Keystore; iOS stores the serialized

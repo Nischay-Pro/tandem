@@ -12,8 +12,10 @@ class AppStateTest {
                 accent = AccentChoice.VIOLET
                 backgroundStyle = "Plain"
                 homeLayout = "Compact"
+                selectedBudgetId = "household-budget-id"
                 reduceMotion = true
                 syncOnOpen = false
+                backgroundSyncEnabled = true
                 syncOnWifi = true
                 syncReminders = false
                 conflictReviewAlerts = true
@@ -28,8 +30,10 @@ class AppStateTest {
         assertEquals(AccentChoice.VIOLET, restored.accent)
         assertEquals("Plain", restored.backgroundStyle)
         assertEquals("Compact", restored.homeLayout)
+        assertEquals("household-budget-id", restored.selectedBudgetId)
         assertEquals(true, restored.reduceMotion)
         assertEquals(false, restored.syncOnOpen)
+        assertEquals(true, restored.backgroundSyncEnabled)
         assertEquals(true, restored.syncOnWifi)
         assertEquals(false, restored.syncReminders)
         assertEquals(true, restored.conflictReviewAlerts)

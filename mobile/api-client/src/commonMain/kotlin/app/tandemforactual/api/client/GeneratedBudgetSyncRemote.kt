@@ -20,17 +20,21 @@ import kotlinx.serialization.json.put
 import kotlin.uuid.Uuid
 
 /** Adapts the generated OpenAPI client to the local-first sync protocol. */
-class GeneratedBudgetSyncRemote : BudgetSyncRemote {
+class GeneratedBudgetSyncRemote(
+    private val apiClient: TandemApiClient,
+) : BudgetSyncRemote {
     override suspend fun readSnapshot(
         budgetId: String,
         encryptionPassword: String?,
     ): RemoteBudgetSnapshot =
         BudgetSyncJson.parseSnapshot(
             unwrap(
-                BudgetsApi.getBudgetSnapshot(
-                    xBudgetEncryptionPassword = encryptionPassword,
-                    budgetId = budgetId,
-                ),
+                withApiRequest {
+                    BudgetsApi.getBudgetSnapshot(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        budgetId = budgetId,
+                    )
+                },
             ),
             budgetId,
         )
@@ -44,13 +48,15 @@ class GeneratedBudgetSyncRemote : BudgetSyncRemote {
     ): RemoteBudgetChangePage =
         BudgetSyncJson.parseChanges(
             unwrap(
-                BudgetsApi.getBudgetChanges(
-                    xBudgetEncryptionPassword = encryptionPassword,
-                    budgetId = budgetId,
-                    generation = generation,
-                    cursor = cursor,
-                    throughCursor = throughCursor,
-                ),
+                withApiRequest {
+                    BudgetsApi.getBudgetChanges(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        budgetId = budgetId,
+                        generation = generation,
+                        cursor = cursor,
+                        throughCursor = throughCursor,
+                    )
+                },
             ),
             budgetId,
         )
@@ -84,13 +90,15 @@ class GeneratedBudgetSyncRemote : BudgetSyncRemote {
             }
         return BudgetSyncJson.parseOperation(
             unwrap(
-                TransactionsApi.submitTransactionOperation(
-                    xBudgetEncryptionPassword = encryptionPassword,
-                    idempotencyKey = operation.idempotencyKey,
-                    budgetId = operation.budgetId,
-                    transactionId = operation.recordId,
-                    body = payload,
-                ),
+                withApiRequest {
+                    TransactionsApi.submitTransactionOperation(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = operation.idempotencyKey,
+                        budgetId = operation.budgetId,
+                        transactionId = operation.recordId,
+                        body = payload,
+                    )
+                },
             ),
         )
     }
@@ -103,7 +111,7 @@ class GeneratedBudgetSyncRemote : BudgetSyncRemote {
                 throw BudgetSyncProtocolException("Outbox operation ID is not a UUID", error)
             }
         return BudgetSyncJson.parseOperation(
-            unwrap(TransactionsApi.getTransactionOperation(parsedId)),
+            unwrap(withApiRequest { TransactionsApi.getTransactionOperation(parsedId) }),
         )
     }
 
@@ -115,11 +123,13 @@ class GeneratedBudgetSyncRemote : BudgetSyncRemote {
         val payload =
             try {
                 unwrap(
-                    TransactionsApi.getBudgetTransaction(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        budgetId = budgetId,
-                        transactionId = transactionId,
-                    ),
+                    withApiRequest {
+                        TransactionsApi.getBudgetTransaction(
+                            xBudgetEncryptionPassword = encryptionPassword,
+                            budgetId = budgetId,
+                            transactionId = transactionId,
+                        )
+                    },
                 )
             } catch (error: BudgetSyncRemoteException) {
                 if (error.httpStatus == 404) return null
@@ -133,6 +143,8 @@ class GeneratedBudgetSyncRemote : BudgetSyncRemote {
         if (error != null) throw error.toBudgetSyncException()
         return result.getOrNull()!!.data
     }
+
+    private suspend fun <T> withApiRequest(block: suspend () -> T): T = apiClient.withGeneratedApi(block)
 
     private fun CallException.toBudgetSyncException(): BudgetSyncRemoteException =
         when (this) {

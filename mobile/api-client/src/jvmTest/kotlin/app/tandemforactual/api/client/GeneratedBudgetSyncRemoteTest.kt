@@ -56,7 +56,8 @@ class GeneratedBudgetSyncRemoteTest {
                 }
             val cleanup = configureApi(engine)
             try {
-                val remote = GeneratedBudgetSyncRemote()
+                val apiClient = testApiClient()
+                val remote = GeneratedBudgetSyncRemote(apiClient)
                 val snapshot = remote.readSnapshot(BUDGET, "encrypted-budget")
                 assertEquals(GENERATION, snapshot.generation)
                 assertEquals("1000", snapshot.cursor)
@@ -139,7 +140,8 @@ class GeneratedBudgetSyncRemoteTest {
                 }
             val cleanup = configureApi(engine)
             try {
-                val remote = GeneratedBudgetSyncRemote()
+                val apiClient = testApiClient()
+                val remote = GeneratedBudgetSyncRemote(apiClient)
                 val httpError = captureSyncException { remote.readSnapshot(BUDGET, null) }
                 assertEquals("http-502", httpError.errorCode)
                 assertEquals(502, httpError.httpStatus)
@@ -385,6 +387,11 @@ class GeneratedBudgetSyncRemoteTest {
             previousClient.close()
         }
     }
+
+    private suspend fun testApiClient(): TandemApiClient =
+        TandemApiClient().apply {
+            restoreSession("https://companion.example", "sync-test-token")
+        }
 
     private fun outboxOperation(action: String) =
         OutboxOperationEntity(

@@ -29,10 +29,13 @@ dependencies {
   coreLibraryDesugaring(libs.desugarJdkLibs)
   implementation(project(":composeApp"))
   implementation(project(":data"))
+  implementation(project(":api-client"))
   implementation(libs.room3Runtime)
+  implementation(libs.workRuntimeKtx)
   implementation(libs.activityCompose)
   implementation(libs.composeRuntimeAndroid)
   implementation(libs.composeUiAndroid)
   implementation(libs.composeFoundationAndroid)
   implementation(libs.composeMaterialAndroid)
+  testImplementation(libs.junit)
 }

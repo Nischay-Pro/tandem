@@ -48,7 +48,7 @@ internal class TandemMobileSession(
             BudgetSyncCoordinator(
                 it,
                 app.tandemforactual.api.client
-                    .GeneratedBudgetSyncRemote(),
+                    .GeneratedBudgetSyncRemote(apiClient),
             )
         }
 
@@ -243,7 +243,10 @@ internal class TandemMobileSession(
 
         isSyncing = true
         try {
-            val summary = coordinator.synchronize(budgetId, encryptionPassword)
+            val summary =
+                apiClient.withExclusiveSession {
+                    coordinator.synchronize(budgetId, encryptionPassword)
+                }
             lastSyncSummary = summary
             loadLocalRecords(budgetId)
             syncedTransactionCount =

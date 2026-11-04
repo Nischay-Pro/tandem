@@ -16,6 +16,8 @@ import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import io.ktor.http.takeFrom
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
@@ -25,6 +27,31 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class TandemApiClientTest {
+    @Test
+    fun forgettingSessionWaitsForAnActiveMultiRequestSync() =
+        runBlocking {
+            val client = TandemApiClient()
+            client.restoreSession("https://tandem.example", "device-token")
+            val syncStarted = CompletableDeferred<Unit>()
+            val finishSync = CompletableDeferred<Unit>()
+            val sync =
+                async {
+                    client.withExclusiveSession {
+                        syncStarted.complete(Unit)
+                        finishSync.await()
+                    }
+                }
+            syncStarted.await()
+
+            val forget = async { client.forgetSession() }
+            assertFalse(forget.isCompleted)
+
+            finishSync.complete(Unit)
+            sync.await()
+            forget.await()
+            assertFalse(client.isAuthenticated)
+        }
+
     @Test
     fun pairingAndBudgetCatalogUseTheGeneratedApi() =
         runBlocking {

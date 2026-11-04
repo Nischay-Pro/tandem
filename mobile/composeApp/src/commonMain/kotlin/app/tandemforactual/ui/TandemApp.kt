@@ -359,6 +359,7 @@ internal class AppState {
     var homeLayout by mutableStateOf("Comfortable")
     var reduceMotion by mutableStateOf(false)
     var syncOnOpen by mutableStateOf(true)
+    var backgroundSyncEnabled by mutableStateOf(false)
     var syncOnWifi by mutableStateOf(false)
     var syncReminders by mutableStateOf(true)
     var conflictReviewAlerts by mutableStateOf(true)
@@ -367,6 +368,7 @@ internal class AppState {
     var confirmBeforeDelete by mutableStateOf(true)
     var settingsStorageError by mutableStateOf<String?>(null)
     var settingsStorageRetry by mutableStateOf(0)
+    var settingsStorageReady by mutableStateOf(false)
 
     fun persistentSettings(): Map<String, String> =
         mapOf(
@@ -374,8 +376,10 @@ internal class AppState {
             "accent" to accent.name,
             "backgroundStyle" to backgroundStyle,
             "homeLayout" to homeLayout,
+            "selectedBudgetId" to selectedBudgetId,
             "reduceMotion" to reduceMotion.toString(),
             "syncOnOpen" to syncOnOpen.toString(),
+            "backgroundSyncEnabled" to backgroundSyncEnabled.toString(),
             "syncOnWifi" to syncOnWifi.toString(),
             "syncReminders" to syncReminders.toString(),
             "conflictReviewAlerts" to conflictReviewAlerts.toString(),
@@ -389,8 +393,10 @@ internal class AppState {
         accent = AccentChoice.entries.firstOrNull { it.name == saved["accent"] } ?: accent
         backgroundStyle = saved["backgroundStyle"] ?: backgroundStyle
         homeLayout = saved["homeLayout"] ?: homeLayout
+        selectedBudgetId = saved["selectedBudgetId"] ?: selectedBudgetId
         reduceMotion = saved["reduceMotion"]?.toBooleanStrictOrNull() ?: reduceMotion
         syncOnOpen = saved["syncOnOpen"]?.toBooleanStrictOrNull() ?: syncOnOpen
+        backgroundSyncEnabled = saved["backgroundSyncEnabled"]?.toBooleanStrictOrNull() ?: backgroundSyncEnabled
         syncOnWifi = saved["syncOnWifi"]?.toBooleanStrictOrNull() ?: syncOnWifi
         val legacyNotifications = saved["notifications"]?.toBooleanStrictOrNull()
         syncReminders = saved["syncReminders"]?.toBooleanStrictOrNull() ?: legacyNotifications ?: syncReminders
@@ -437,6 +443,7 @@ internal class AppState {
                         "homeLayout" to state.homeLayout,
                         "reduceMotion" to state.reduceMotion,
                         "syncOnOpen" to state.syncOnOpen,
+                        "backgroundSyncEnabled" to state.backgroundSyncEnabled,
                         "syncOnWifi" to state.syncOnWifi,
                         "syncReminders" to state.syncReminders,
                         "conflictReviewAlerts" to state.conflictReviewAlerts,
@@ -474,8 +481,10 @@ internal class AppState {
                         conflictChoice = saved["conflictChoice"] as? String ?: conflictChoice
                         backgroundStyle = saved["backgroundStyle"] as? String ?: backgroundStyle
                         homeLayout = saved["homeLayout"] as? String ?: homeLayout
+                        selectedBudgetId = saved["selectedBudgetId"] as? String ?: selectedBudgetId
                         reduceMotion = saved["reduceMotion"] as? Boolean ?: reduceMotion
                         syncOnOpen = saved["syncOnOpen"] as? Boolean ?: syncOnOpen
+                        backgroundSyncEnabled = saved["backgroundSyncEnabled"] as? Boolean ?: backgroundSyncEnabled
                         syncOnWifi = saved["syncOnWifi"] as? Boolean ?: syncOnWifi
                         val legacyNotifications = saved["notifications"] as? Boolean
                         syncReminders = saved["syncReminders"] as? Boolean ?: legacyNotifications ?: syncReminders
@@ -516,6 +525,7 @@ fun TandemApp(
     deviceCredentialStore: DeviceCredentialStore? = null,
     nowEpochMillis: () -> Long = { 0L },
     allowInsecureLoopback: Boolean = false,
+    onBackgroundSyncSettingsChanged: ((enabled: Boolean, wifiOnly: Boolean, budgetId: String) -> Unit)? = null,
 ) {
     val state = rememberSaveable(saver = AppState.Saver) { AppState() }
     val apiClient = remember(allowInsecureLoopback) { TandemApiClient(allowInsecureLoopback) }
@@ -541,7 +551,11 @@ fun TandemApp(
         }
     }
     LaunchedEffect(appPreferencesStore) {
-        val store = appPreferencesStore ?: return@LaunchedEffect
+        val store = appPreferencesStore
+        if (store == null) {
+            state.settingsStorageReady = true
+            return@LaunchedEffect
+        }
         val initialSettings = state.persistentSettings()
         val localChanges = mutableMapOf<String, String>()
         val localSettingsObserver =
@@ -571,6 +585,7 @@ fun TandemApp(
             .forEach { (name, value) -> localChanges[name] = value }
         localSettingsObserver.cancel()
         state.restorePersistentSettings(storedPreferences + localChanges)
+        state.settingsStorageReady = true
         var lastSavedPreferences = if (localChanges.isEmpty()) state.persistentSettings() else emptyMap()
         var lastAttemptedRetry = state.settingsStorageRetry
         snapshotFlow { state.persistentSettings() to state.settingsStorageRetry }
@@ -593,6 +608,21 @@ fun TandemApp(
                         }
                 }
             }
+    }
+    LaunchedEffect(
+        state.settingsStorageReady,
+        state.backgroundSyncEnabled,
+        state.syncOnWifi,
+        state.selectedBudgetId,
+        onBackgroundSyncSettingsChanged,
+    ) {
+        if (state.settingsStorageReady) {
+            onBackgroundSyncSettingsChanged?.invoke(
+                state.backgroundSyncEnabled,
+                state.syncOnWifi,
+                state.selectedBudgetId,
+            )
+        }
     }
     val navigation =
         AppNavigation(
@@ -868,6 +898,7 @@ fun TandemApp(
                     onRefreshBudgets = refreshBudgets,
                     onOpenSelectedBudget = openSelectedBudget,
                     onRetrySync = { syncRetryCounter += 1 },
+                    backgroundSyncSupported = onBackgroundSyncSettingsChanged != null,
                     liveTransactions = liveTransactions,
                     liveAccounts = liveAccounts,
                     liveBudgetMonth = liveBudgetMonth,
@@ -1150,6 +1181,7 @@ private fun ScreenContent(
     onRefreshBudgets: () -> Unit,
     onOpenSelectedBudget: () -> Unit,
     onRetrySync: () -> Unit,
+    backgroundSyncSupported: Boolean,
     liveTransactions: List<TransactionItem>,
     liveAccounts: List<LiveAccountSummary>,
     liveBudgetMonth: LiveBudgetMonthSummary?,
@@ -1263,7 +1295,13 @@ private fun ScreenContent(
         AppRoute.BACKGROUND_MOTION -> BackgroundScreen(state)
         AppRoute.HOME_LAYOUT -> HomeLayoutScreen(state)
         AppRoute.BUDGET_PREFERENCES -> BudgetPreferencesScreen(state, mobileSession)
-        AppRoute.SYNC_PREFERENCES -> SyncPreferencesScreen(state, mobileSession, onSyncNow)
+        AppRoute.SYNC_PREFERENCES ->
+            SyncPreferencesScreen(
+                state,
+                mobileSession,
+                onSyncNow,
+                backgroundSyncSupported,
+            )
         AppRoute.SERVER_DEVICE ->
             ServerDeviceScreen(state, mobileSession, navigation, onForgetDevice)
         AppRoute.SECURITY_PRIVACY -> SecurityScreen(state, mobileSession)
@@ -3735,6 +3773,7 @@ private fun SyncPreferencesScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
     onSyncNow: () -> Unit,
+    backgroundSyncSupported: Boolean,
 ) {
     val hasSelectedBudget = state.selectedBudgetId.isNotBlank()
     val syncState = mobileSession.localSyncState
@@ -3761,9 +3800,25 @@ private fun SyncPreferencesScreen(
                 state.syncOnOpen =
                     it
             }
+            if (backgroundSyncSupported) {
+                DividerLine()
+                ToggleRow(
+                    "Schedule background sync",
+                    "Refresh the selected budget about every six hours",
+                    state.backgroundSyncEnabled,
+                ) { state.backgroundSyncEnabled = it }
+                DividerLine()
+                ToggleRow(
+                    "Background sync on Wi-Fi only",
+                    "Wait for Wi-Fi or another unmetered network",
+                    state.syncOnWifi,
+                ) { state.syncOnWifi = it }
+                BodyText("Encrypted budgets are skipped because budget passwords are never stored.")
+            } else {
+                BodyText("Scheduled sync is managed by the iOS host app and is not configured in this workspace.")
+            }
             BodyText(
-                "Background scheduling and Wi-Fi-only rules are not available yet. " +
-                    "Sync on open and manual sync use the current connection.",
+                "Manual sync and sync on open use the current connection.",
             )
         }
         SectionCard("Current budget", if (hasSelectedBudget) state.selectedBudget else "Choose an Actual budget") {

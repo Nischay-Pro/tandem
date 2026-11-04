@@ -12,6 +12,8 @@ import com.kroegerama.openapi.kmp.gen.companion.HttpCallResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.Url
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -62,17 +64,15 @@ class TandemApiProtocolException(
 class TandemApiClient(
     private val allowInsecureLoopback: Boolean = false,
 ) {
+    private val sessionMutex = Mutex()
     private var accessToken: String? = null
     private var serverUrl: String? = null
     private var pairedDevice: PairedDevice? = null
+    private var activeAuthProvider: Auth.BearerAuth? = null
     internal val bearerAuth =
         Auth.BearerAuth {
             accessToken?.let(AuthItem::Bearer)
         }
-
-    init {
-        Api.setAuthProvider(bearerAuth)
-    }
 
     val isAuthenticated: Boolean
         get() = accessToken != null
@@ -80,18 +80,13 @@ class TandemApiClient(
     val currentServerUrl: String?
         get() = serverUrl
 
-    fun restoreSession(
+    suspend fun restoreSession(
         serverUrl: String,
         token: String,
     ) {
-        val sessionToken =
-            token.takeIf { it.isNotBlank() }
-                ?: throw TandemApiProtocolException("Stored device credential is empty")
-        val parsedUrl = parseServerUrl(serverUrl, allowInsecureLoopback)
-        Api.baseUrl = parsedUrl
-        this.serverUrl = parsedUrl.toString()
-        accessToken = sessionToken
-        Api.setAuthProvider(bearerAuth)
+        sessionMutex.withLock {
+            restoreSessionLocked(serverUrl, token)
+        }
     }
 
     fun exportStoredSession(): String? {
@@ -112,7 +107,7 @@ class TandemApiClient(
         }.toString()
     }
 
-    fun restoreStoredSession(value: String): PairedDevice {
+    suspend fun restoreStoredSession(value: String): PairedDevice {
         val root =
             try {
                 Json.parseToJsonElement(value).jsonObject
@@ -130,40 +125,57 @@ class TandemApiClient(
                 principalId = deviceJson.requiredString("principalId"),
                 budgetIds = deviceJson.requiredStringArray("budgetIds"),
             )
-        restoreSession(server, token)
-        pairedDevice = device
-        return device
+        return sessionMutex.withLock {
+            restoreSessionLocked(server, token)
+            pairedDevice = device
+            device
+        }
     }
 
     suspend fun pair(
         serverUrl: String,
         code: String,
         deviceName: String,
-    ): PairedDevice {
-        Api.baseUrl = parseServerUrl(serverUrl, allowInsecureLoopback)
-        this.serverUrl = Api.baseUrl.toString()
-        accessToken = null
-        pairedDevice = null
+    ): PairedDevice =
+        sessionMutex.withLock {
+            val parsedUrl = parseServerUrl(serverUrl, allowInsecureLoopback)
+            this.serverUrl = parsedUrl.toString()
+            accessToken = null
+            pairedDevice = null
 
-        val body =
-            buildJsonObject {
-                put("code", code.trim())
-                put("deviceName", deviceName.trim())
-            }.toMap()
-        val payload = unwrap(AuthenticationApi.pairDevice(body))
-        val deviceId = payload.requiredString("deviceId")
-        val principalId = payload.requiredString("principalId")
-        val budgetIds = payload.requiredStringArray("budgetIds")
-        val token = payload.requiredString("accessToken")
+            val body =
+                buildJsonObject {
+                    put("code", code.trim())
+                    put("deviceName", deviceName.trim())
+                }.toMap()
+            GeneratedApiAccess.mutex.withLock {
+                clearGeneratedAuthProvider()
+                Api.baseUrl = parsedUrl
+                setGeneratedAuthProvider(bearerAuth)
+                val payload = unwrap(AuthenticationApi.pairDevice(body))
+                val deviceId = payload.requiredString("deviceId")
+                val principalId = payload.requiredString("principalId")
+                val budgetIds = payload.requiredStringArray("budgetIds")
+                val token = payload.requiredString("accessToken")
+                accessToken = token
+                PairedDevice(deviceId, principalId, budgetIds).also { pairedDevice = it }
+            }
+        }
 
-        accessToken = token
-        return PairedDevice(deviceId, principalId, budgetIds).also { pairedDevice = it }
-    }
+    suspend fun listBudgets(): List<BudgetCatalogItem> =
+        sessionMutex.withLock {
+            withGeneratedApi { parseBudgetCatalog(BudgetsApi.listBudgets()) }
+        }
 
-    suspend fun listBudgets(): List<BudgetCatalogItem> {
-        requireAuthenticated()
-        return parseBudgetCatalog(BudgetsApi.listBudgets())
-    }
+    /** Prevents credential changes during a multi-request sync. */
+    suspend fun <T> withExclusiveSession(block: suspend () -> T): T = sessionMutex.withLock { block() }
+
+    /** Runs one generated request with this instance's server and credential selected. */
+    internal suspend fun <T> withGeneratedApi(block: suspend () -> T): T =
+        GeneratedApiAccess.mutex.withLock {
+            configureGeneratedApi()
+            block()
+        }
 
     private suspend fun parseBudgetCatalog(
         response: Either<CallException, HttpCallResponse<Map<String, JsonElement>>>,
@@ -188,18 +200,49 @@ class TandemApiClient(
         }
     }
 
-    fun forgetSession() {
-        accessToken = null
-        serverUrl = null
-        pairedDevice = null
-        Api.clearAuthProvider(bearerAuth)
+    suspend fun forgetSession() {
+        sessionMutex.withLock {
+            GeneratedApiAccess.mutex.withLock {
+                clearGeneratedAuthProvider()
+                accessToken = null
+                serverUrl = null
+                pairedDevice = null
+            }
+        }
     }
 
-    private fun requireAuthenticated() {
-        if (accessToken.isNullOrBlank()) {
+    private fun configureGeneratedApi() {
+        val currentServerUrl = serverUrl
+        if (currentServerUrl.isNullOrBlank() || accessToken.isNullOrBlank()) {
             throw TandemApiException("not-paired")
         }
-        Api.setAuthProvider(bearerAuth)
+        Api.baseUrl = parseServerUrl(currentServerUrl, allowInsecureLoopback)
+        setGeneratedAuthProvider(bearerAuth)
+    }
+
+    private fun setGeneratedAuthProvider(provider: Auth.BearerAuth) {
+        Api.setAuthProvider(provider)
+        activeAuthProvider = provider
+    }
+
+    private fun clearGeneratedAuthProvider() {
+        activeAuthProvider?.let(Api::clearAuthProvider)
+        activeAuthProvider = null
+    }
+
+    private suspend fun restoreSessionLocked(
+        serverUrl: String,
+        token: String,
+    ) {
+        val sessionToken =
+            token.takeIf { it.isNotBlank() }
+                ?: throw TandemApiProtocolException("Stored device credential is empty")
+        val parsedUrl = parseServerUrl(serverUrl, allowInsecureLoopback)
+        GeneratedApiAccess.mutex.withLock {
+            clearGeneratedAuthProvider()
+            this.serverUrl = parsedUrl.toString()
+            accessToken = sessionToken
+        }
     }
 
     private suspend fun unwrap(result: Either<CallException, HttpCallResponse<Map<String, JsonElement>>>): JsonObject =
@@ -227,6 +270,11 @@ class TandemApiClient(
         } catch (_: Exception) {
             null
         }
+}
+
+/** The generated OpenAPI package stores its URL and auth provider in process-wide state. */
+internal object GeneratedApiAccess {
+    val mutex = Mutex()
 }
 
 private fun parseServerUrl(
