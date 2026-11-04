@@ -39,6 +39,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -108,6 +109,7 @@ import kotlinx.serialization.json.put
 private enum class AppRoute(
     val title: String,
 ) {
+    STARTUP("Tandem"),
     WELCOME("Tandem"),
     SERVER_ADDRESS("Server address"),
     PAIRING_OPTIONS("Pair a device"),
@@ -409,6 +411,29 @@ internal fun shouldTriggerAutomaticSync(
     return nowEpochMillis < lastSyncAt || nowEpochMillis - lastSyncAt >= AUTOMATIC_SYNC_COOLDOWN_MS
 }
 
+internal enum class AppStartupDestination {
+    WAIT,
+    CACHED_BUDGET,
+    BUDGET_CHOOSER,
+    WELCOME,
+}
+
+internal fun resolveAppStartupDestination(
+    cacheDiscoveryComplete: Boolean,
+    hasCachedBudget: Boolean,
+    preferencesReady: Boolean,
+    preferencesFailed: Boolean,
+    sessionRestoreComplete: Boolean,
+    isAuthenticated: Boolean,
+): AppStartupDestination {
+    if (!cacheDiscoveryComplete) return AppStartupDestination.WAIT
+    if (hasCachedBudget) {
+        return if (preferencesReady || preferencesFailed) AppStartupDestination.CACHED_BUDGET else AppStartupDestination.WAIT
+    }
+    if (!sessionRestoreComplete) return AppStartupDestination.WAIT
+    return if (isAuthenticated) AppStartupDestination.BUDGET_CHOOSER else AppStartupDestination.WELCOME
+}
+
 private const val AUTOMATIC_SYNC_COOLDOWN_MS = 30_000L
 
 internal class AppState {
@@ -596,7 +621,10 @@ private val appRouteStackSaver =
         restore = { saved ->
             mutableStateListOf<AppRoute>().apply {
                 saved.mapNotNull { name -> AppRoute.entries.firstOrNull { it.name == name } }.forEach(::add)
-                if (isEmpty()) add(AppRoute.WELCOME)
+                if (isEmpty() || (size == 1 && single() == AppRoute.WELCOME)) {
+                    clear()
+                    add(AppRoute.STARTUP)
+                }
             }
         },
     )
@@ -636,41 +664,73 @@ fun TandemApp(
     var lastAutomaticSyncBudgetId by remember { mutableStateOf<String?>(null) }
     var automaticSyncInFlight by remember { mutableStateOf(false) }
     var pendingAutomaticSync by remember { mutableStateOf(false) }
+    var cacheDiscoveryComplete by remember { mutableStateOf(false) }
+    var sessionRestoreComplete by remember { mutableStateOf(false) }
     val backStack =
         rememberSaveable(startInPreview, saver = appRouteStackSaver) {
-            mutableStateListOf(if (startInPreview) AppRoute.BUDGET else AppRoute.WELCOME)
+            mutableStateListOf(if (startInPreview) AppRoute.BUDGET else AppRoute.STARTUP)
         }
-    LaunchedEffect(mobileSession, state.settingsStorageReady) {
-        if (!state.settingsStorageReady) return@LaunchedEffect
-        val storedServerUrl = mobileSession.restoreStoredSession()
-        if (storedServerUrl != null) {
-            state.serverUrl = storedServerUrl
+    LaunchedEffect(mobileSession) {
+        try {
+            mobileSession.loadCachedBudgets()
+        } finally {
+            cacheDiscoveryComplete = true
         }
-        val localCachedBudgets = mobileSession.loadCachedBudgets()
-        val availableCachedBudgets =
-            cachedBudgetsWithLocalSnapshots(
-                decodeCachedBudgetCatalog(state.cachedBudgetCatalogJson),
-                localCachedBudgets,
+    }
+    LaunchedEffect(mobileSession) {
+        try {
+            val storedServerUrl = mobileSession.restoreStoredSession()
+            if (storedServerUrl != null) state.serverUrl = storedServerUrl
+        } finally {
+            sessionRestoreComplete = true
+        }
+    }
+    LaunchedEffect(
+        cacheDiscoveryComplete,
+        mobileSession.cachedBudgets,
+        state.settingsStorageReady,
+        state.settingsStorageError,
+        state.selectedBudgetId,
+        state.cachedBudgetCatalogJson,
+        sessionRestoreComplete,
+        mobileSession.isAuthenticated,
+    ) {
+        if (backStack.lastOrNull() != AppRoute.STARTUP) return@LaunchedEffect
+        val destination =
+            resolveAppStartupDestination(
+                cacheDiscoveryComplete = cacheDiscoveryComplete,
+                hasCachedBudget = mobileSession.cachedBudgets.isNotEmpty(),
+                preferencesReady = state.settingsStorageReady,
+                preferencesFailed = state.settingsStorageError != null,
+                sessionRestoreComplete = sessionRestoreComplete,
+                isAuthenticated = mobileSession.isAuthenticated,
             )
-        val selectedCachedBudget = availableCachedBudgets.firstOrNull { it.budgetId == state.selectedBudgetId }
-        val firstCachedBudget = selectedCachedBudget ?: availableCachedBudgets.firstOrNull()
-        when {
-            selectedCachedBudget != null -> {
-                state.selectedBudget = selectedCachedBudget.name
-                state.selectedBudgetEncrypted = selectedCachedBudget.isEncrypted
-                backStack.clear()
-                backStack.add(AppRoute.BUDGET)
+        when (destination) {
+            AppStartupDestination.WAIT -> Unit
+            AppStartupDestination.CACHED_BUDGET -> {
+                val localCachedBudgets = mobileSession.cachedBudgets
+                val availableCachedBudgets =
+                    cachedBudgetsWithLocalSnapshots(
+                        decodeCachedBudgetCatalog(state.cachedBudgetCatalogJson),
+                        localCachedBudgets,
+                    )
+                val selectedCachedBudget = availableCachedBudgets.firstOrNull { it.budgetId == state.selectedBudgetId }
+                val firstCachedBudget = selectedCachedBudget ?: availableCachedBudgets.firstOrNull()
+                if (firstCachedBudget != null) {
+                    state.selectedBudget = firstCachedBudget.name
+                    state.selectedBudgetId = firstCachedBudget.budgetId
+                    state.selectedBudgetEncrypted = firstCachedBudget.isEncrypted
+                    backStack.clear()
+                    backStack.add(AppRoute.BUDGET)
+                }
             }
-            firstCachedBudget != null -> {
-                state.selectedBudget = firstCachedBudget.name
-                state.selectedBudgetId = firstCachedBudget.budgetId
-                state.selectedBudgetEncrypted = firstCachedBudget.isEncrypted
-                backStack.clear()
-                backStack.add(AppRoute.BUDGET)
-            }
-            storedServerUrl != null -> {
+            AppStartupDestination.BUDGET_CHOOSER -> {
                 backStack.clear()
                 backStack.add(AppRoute.BUDGET_CHOOSER)
+            }
+            AppStartupDestination.WELCOME -> {
+                backStack.clear()
+                backStack.add(AppRoute.WELCOME)
             }
         }
     }
@@ -1060,7 +1120,7 @@ fun TandemApp(
                     .background(appBackgroundBrush(state.backgroundStyle, palette))
                     .safeDrawingPadding(),
         ) {
-            if (route != AppRoute.WELCOME) {
+            if (route != AppRoute.WELCOME && route != AppRoute.STARTUP) {
                 AppHeader(
                     route = route,
                     state = state,
@@ -1392,6 +1452,7 @@ private fun ScreenContent(
     onForgetDevice: () -> Unit,
 ) {
     when (route) {
+        AppRoute.STARTUP -> StartupScreen()
         AppRoute.WELCOME -> WelcomeScreen(navigation)
         AppRoute.SERVER_ADDRESS -> ServerAddressScreen(state, navigation)
         AppRoute.PAIRING_OPTIONS -> PairingOptionsScreen(navigation)
@@ -1995,6 +2056,31 @@ private fun Badge(
 }
 
 private fun Color.withOpacity(alpha: Float) = copy(alpha = alpha)
+
+@Composable
+private fun StartupScreen() {
+    val palette = tandemPalette
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            Modifier.size(58.dp).clip(RoundedCornerShape(19.dp)).background(palette.accentSurface),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("A", color = palette.accent, fontSize = 27.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(24.dp))
+        CircularProgressIndicator(
+            modifier = Modifier.size(24.dp),
+            color = palette.accent,
+            strokeWidth = 2.dp,
+        )
+        Spacer(Modifier.height(16.dp))
+        Text("Opening your budget", color = palette.muted, fontSize = 14.sp)
+    }
+}
 
 @Composable
 private fun WelcomeScreen(navigation: AppNavigation) {

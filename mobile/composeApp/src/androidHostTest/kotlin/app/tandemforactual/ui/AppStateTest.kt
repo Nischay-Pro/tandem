@@ -8,6 +8,54 @@ import kotlin.test.assertTrue
 
 class AppStateTest {
     @Test
+    fun startupOpensCachedBudgetWithoutWaitingForDeviceCredentialRestore() {
+        assertEquals(
+            AppStartupDestination.CACHED_BUDGET,
+            resolveAppStartupDestination(
+                cacheDiscoveryComplete = true,
+                hasCachedBudget = true,
+                preferencesReady = true,
+                preferencesFailed = false,
+                sessionRestoreComplete = false,
+                isAuthenticated = false,
+            ),
+        )
+        assertEquals(
+            AppStartupDestination.WAIT,
+            resolveAppStartupDestination(
+                cacheDiscoveryComplete = true,
+                hasCachedBudget = true,
+                preferencesReady = false,
+                preferencesFailed = false,
+                sessionRestoreComplete = false,
+                isAuthenticated = false,
+            ),
+        )
+        assertEquals(
+            AppStartupDestination.WELCOME,
+            resolveAppStartupDestination(
+                cacheDiscoveryComplete = true,
+                hasCachedBudget = false,
+                preferencesReady = false,
+                preferencesFailed = false,
+                sessionRestoreComplete = true,
+                isAuthenticated = false,
+            ),
+        )
+        assertEquals(
+            AppStartupDestination.BUDGET_CHOOSER,
+            resolveAppStartupDestination(
+                cacheDiscoveryComplete = true,
+                hasCachedBudget = false,
+                preferencesReady = false,
+                preferencesFailed = false,
+                sessionRestoreComplete = true,
+                isAuthenticated = true,
+            ),
+        )
+    }
+
+    @Test
     fun persistentSettingsRoundTripAcrossStateRecreation() {
         val original =
             AppState().apply {

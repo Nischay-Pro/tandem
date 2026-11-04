@@ -14,14 +14,17 @@ Room retains the complete synced transaction set; Sync Center reports the full
 visible count. Initial setup selects the most recently active cached month when
 the prior selection is unavailable.
 
-App launch is local-first after a budget has synced once. The app reads Room's
-completed sync checkpoints and opens the previously selected cached budget
-without waiting for the Tandem server, budget catalog, or a working device
-credential. If there is no saved selection, it opens the most recently synced
-cached budget. It uses the saved server catalog only to recover names and
-encryption metadata, and filters that catalog to budgets that really have a
-local snapshot. If the preference catalog is missing, cached budgets are
-discovered from Room and labeled using their saved currency when available.
+App launch is local-first after a budget has synced once. Cache discovery,
+preference loading, and device-credential restoration run independently. The
+startup screen shows “Opening your budget” while local state is read, rather
+than presenting pairing or welcome UI first. The app opens the previously
+selected cached budget without waiting for the Tandem server, budget catalog,
+or a working device credential. If there is no saved selection, it opens the
+most recently synced cached budget. It uses the saved server catalog only to
+recover names and encryption metadata, and filters that catalog to budgets
+that really have a local snapshot. If the preference catalog is missing,
+cached budgets are discovered from Room and labeled using their saved currency
+when available.
 The app can then attempt sync in the background of the open screen; a network
 failure leaves the cached budget readable and offers retry through Sync Center.
 Pairing is only needed again for remote access when the server says the device
