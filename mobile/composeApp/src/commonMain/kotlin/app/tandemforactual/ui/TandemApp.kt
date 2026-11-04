@@ -438,7 +438,7 @@ private const val AUTOMATIC_SYNC_COOLDOWN_MS = 30_000L
 
 internal class AppState {
     var theme by mutableStateOf(ThemeMode.DARK)
-    var accent by mutableStateOf(AccentChoice.TEAL)
+    var accent by mutableStateOf(AccentChoice.ACTUAL_PURPLE)
     var selectedBudget by mutableStateOf("Household")
     var selectedBudgetId by mutableStateOf("")
     var selectedBudgetEncrypted by mutableStateOf(false)
@@ -466,7 +466,7 @@ internal class AppState {
     var selectedTransactionAmountMinor by mutableStateOf<Long?>(null)
     var selectedTransactionIsLive by mutableStateOf(false)
     var conflictChoice by mutableStateOf("")
-    var backgroundStyle by mutableStateOf("Soft gradient")
+    var backgroundStyle by mutableStateOf("Solid surface")
     var homeLayout by mutableStateOf("Comfortable")
     var reduceMotion by mutableStateOf(false)
     var syncOnOpen by mutableStateOf(true)
@@ -1111,7 +1111,7 @@ fun TandemApp(
             state.theme == ThemeMode.DARK ||
                 state.theme == ThemeMode.PURE_BLACK ||
                 (state.theme == ThemeMode.SYSTEM && isSystemInDarkTheme())
-        TandemSystemBars(isDark)
+        TandemSystemBars(isDark, palette.background)
         TandemBackHandler(enabled = backStack.size > 1, onBack = navigation.back)
         Column(
             modifier =
@@ -1708,7 +1708,7 @@ private fun PrimaryButton(
                 .padding(horizontal = 18.dp, vertical = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = if (enabled) Color(0xFF081A1B) else palette.muted, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = if (enabled) palette.accentContent else palette.muted, fontSize = 15.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -1954,7 +1954,7 @@ private fun ToggleRow(
                     .padding(3.dp),
             contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart,
         ) {
-            Box(Modifier.size(18.dp).clip(CircleShape).background(if (checked) Color(0xFF10201F) else palette.muted))
+            Box(Modifier.size(18.dp).clip(CircleShape).background(if (checked) palette.accentContent else palette.muted))
         }
     }
 }
@@ -2065,12 +2065,7 @@ private fun StartupScreen() {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            Modifier.size(58.dp).clip(RoundedCornerShape(19.dp)).background(palette.accentSurface),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("A", color = palette.accent, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-        }
+        TandemBrandMark(Modifier.size(96.dp))
         Spacer(Modifier.height(24.dp))
         CircularProgressIndicator(
             modifier = Modifier.size(24.dp),
@@ -2090,9 +2085,7 @@ private fun WelcomeScreen(navigation: AppNavigation) {
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         Spacer(Modifier.height(14.dp))
-        Box(Modifier.size(58.dp).clip(RoundedCornerShape(19.dp)).background(palette.accentSurface), contentAlignment = Alignment.Center) {
-            Text("A", color = palette.accent, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-        }
+        TandemBrandMark(Modifier.size(72.dp))
         Heading("Budget and account overview", "Plan spending, review accounts, and follow recent changes.")
         SurfaceCard {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -4176,7 +4169,7 @@ private fun AccentColorScreen(state: AppState) {
                         Text(accent.label, color = palette.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         Text("Preview across buttons, badges, and selection states", color = palette.muted, fontSize = 11.sp)
                     }
-                    if (state.accent == accent) Text("✓", color = accent.color, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    if (state.accent == accent) Text("✓", color = palette.accent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

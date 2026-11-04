@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 
 internal enum class ThemeMode(
     val label: String,
@@ -22,6 +23,7 @@ internal enum class AccentChoice(
     val label: String,
     val color: Color,
 ) {
+    ACTUAL_PURPLE("Actual Purple", Color(0xFF8719E0)),
     TEAL("Lagoon", Color(0xFF31D4C7)),
     BLUE("Cobalt", Color(0xFF73A7FF)),
     VIOLET("Orchid", Color(0xFFB49AFF)),
@@ -37,6 +39,7 @@ internal data class TandemPalette(
     val text: Color,
     val muted: Color,
     val accent: Color,
+    val accentContent: Color,
     val accentSurface: Color,
     val positive: Color,
     val warning: Color,
@@ -46,14 +49,15 @@ internal data class TandemPalette(
 private val LocalTandemPalette =
     staticCompositionLocalOf {
         TandemPalette(
-            background = Color(0xFF10131A),
-            surface = Color(0xFF191E28),
-            raised = Color(0xFF222A36),
-            border = Color(0xFF313B4B),
-            text = Color(0xFFF4F6FA),
-            muted = Color(0xFFA9B2C1),
-            accent = Color(0xFF31D4C7),
-            accentSurface = Color(0xFF193834),
+            background = Color(0xFF102A43),
+            surface = Color(0xFF18344C),
+            raised = Color(0xFF23435C),
+            border = Color(0xFF36536B),
+            text = Color(0xFFF7FAFC),
+            muted = Color(0xFFB0C4D6),
+            accent = Color(0xFFA368FC),
+            accentContent = Color.White,
+            accentSurface = Color(0xFF2B2440),
             positive = Color(0xFF73D9A4),
             warning = Color(0xFFFFC56E),
             negative = Color(0xFFFF8C98),
@@ -68,34 +72,43 @@ internal fun TandemTheme(
 ) {
     val dark = mode == ThemeMode.DARK || mode == ThemeMode.PURE_BLACK || (mode == ThemeMode.SYSTEM && isSystemInDarkTheme())
     val black = mode == ThemeMode.PURE_BLACK
+    val selectedAccent =
+        when {
+            accent == AccentChoice.ACTUAL_PURPLE && dark -> Color(0xFFA368FC)
+            accent == AccentChoice.TEAL && !dark -> Color(0xFF079AA2)
+            else -> accent.color
+        }
+    val accentContent = if (selectedAccent.luminance() > 0.58f) Color(0xFF272630) else Color.White
     val palette =
         if (dark) {
             TandemPalette(
-                background = if (black) Color.Black else Color(0xFF10131A),
-                surface = if (black) Color(0xFF101216) else Color(0xFF191E28),
-                raised = if (black) Color(0xFF1B1F25) else Color(0xFF222A36),
-                border = if (black) Color(0xFF2C323C) else Color(0xFF313B4B),
-                text = Color(0xFFF4F6FA),
-                muted = Color(0xFFA9B2C1),
-                accent = accent.color,
-                accentSurface = accent.color.copy(alpha = 0.14f),
+                background = if (black) Color.Black else Color(0xFF102A43),
+                surface = if (black) Color(0xFF101216) else Color(0xFF18344C),
+                raised = if (black) Color(0xFF1B1F25) else Color(0xFF23435C),
+                border = if (black) Color(0xFF2C323C) else Color(0xFF36536B),
+                text = Color(0xFFF7FAFC),
+                muted = Color(0xFFB0C4D6),
+                accent = selectedAccent,
+                accentContent = accentContent,
+                accentSurface = selectedAccent.copy(alpha = 0.18f),
                 positive = Color(0xFF73D9A4),
                 warning = Color(0xFFFFC56E),
                 negative = Color(0xFFFF8C98),
             )
         } else {
             TandemPalette(
-                background = Color(0xFFF7F8FA),
+                background = Color(0xFFE8ECF0),
                 surface = Color.White,
-                raised = Color(0xFFF0F3F7),
-                border = Color(0xFFD9E0E8),
-                text = Color(0xFF172033),
-                muted = Color(0xFF526176),
-                accent = if (accent == AccentChoice.TEAL) Color(0xFF079AA2) else accent.color,
-                accentSurface = accent.color.copy(alpha = 0.12f),
-                positive = Color(0xFF16874E),
-                warning = Color(0xFF9A6500),
-                negative = Color(0xFFB93C4D),
+                raised = Color(0xFFF7FAFC),
+                border = Color(0xFFE8ECF0),
+                text = Color(0xFF272630),
+                muted = Color(0xFF627D98),
+                accent = selectedAccent,
+                accentContent = accentContent,
+                accentSurface = selectedAccent.copy(alpha = 0.10f),
+                positive = Color(0xFF147D64),
+                warning = Color(0xFFB88115),
+                negative = Color(0xFFE12D39),
             )
         }
 
@@ -109,7 +122,10 @@ internal val tandemPalette: TandemPalette
 
 @Composable
 @Suppress("ktlint:standard:function-naming")
-internal expect fun TandemSystemBars(isDark: Boolean)
+internal expect fun TandemSystemBars(
+    isDark: Boolean,
+    background: Color,
+)
 
 @Composable
 @Suppress("ktlint:standard:function-naming")

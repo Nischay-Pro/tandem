@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "tandem-white-transparent.svg",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

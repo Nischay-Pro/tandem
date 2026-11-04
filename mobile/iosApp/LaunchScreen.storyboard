@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="23094" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="tandem-launch-controller">
+    <device id="retina6_12" orientation="portrait" appearance="dark"/>
+    <dependencies>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="23084"/>
+    </dependencies>
+    <scenes>
+        <scene sceneID="tandem-launch-scene">
+            <objects>
+                <viewController id="tandem-launch-controller" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="tandem-launch-view">
+                        <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
+                        <subviews>
+                            <imageView opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="TandemWhiteMark" translatesAutoresizingMaskIntoConstraints="NO" id="tandem-launch-logo">
+                                <rect key="frame" x="144.5" y="374.0" width="104" height="104"/>
+                            </imageView>
+                        </subviews>
+                        <viewLayoutGuide key="safeArea" id="tandem-launch-safe-area"/>
+                        <color key="backgroundColor" red="0.0627" green="0.1647" blue="0.2627" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        <constraints>
+                            <constraint firstItem="tandem-launch-logo" firstAttribute="centerX" secondItem="tandem-launch-view" secondAttribute="centerX" id="tandem-launch-center-x"/>
+                            <constraint firstItem="tandem-launch-logo" firstAttribute="centerY" secondItem="tandem-launch-view" secondAttribute="centerY" id="tandem-launch-center-y"/>
+                            <constraint firstItem="tandem-launch-logo" firstAttribute="width" constant="104" id="tandem-launch-width"/>
+                            <constraint firstItem="tandem-launch-logo" firstAttribute="height" constant="104" id="tandem-launch-height"/>
+                        </constraints>
+                    </view>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="tandem-launch-first-responder" userLabel="First Responder" sceneMemberID="firstResponder"/>
+            </objects>
+        </scene>
+    </scenes>
+    <resources>
+        <image name="TandemWhiteMark" width="1248" height="1248"/>
+    </resources>
+</document>
