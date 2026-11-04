@@ -35,6 +35,7 @@ kotlin {
       implementation(project(":api-client"))
       implementation("org.jetbrains.compose.runtime:runtime:1.12.2")
       implementation("org.jetbrains.compose.foundation:foundation:1.12.2")
+      implementation(libs.composeAnimation)
       implementation("org.jetbrains.compose.ui:ui:1.12.2")
       implementation("org.jetbrains.compose.material:material:1.12.2")
     }

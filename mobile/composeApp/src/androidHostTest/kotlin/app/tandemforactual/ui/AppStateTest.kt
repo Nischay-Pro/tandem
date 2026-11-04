@@ -2,6 +2,7 @@ package app.tandemforactual.ui
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 class AppStateTest {
     @Test
@@ -20,8 +21,6 @@ class AppStateTest {
                 syncReminders = false
                 conflictReviewAlerts = true
                 rejectedEditAlerts = false
-                faceUnlock = true
-                confirmBeforeDelete = false
             }
 
         val restored = AppState().apply { restorePersistentSettings(original.persistentSettings()) }
@@ -38,8 +37,6 @@ class AppStateTest {
         assertEquals(false, restored.syncReminders)
         assertEquals(true, restored.conflictReviewAlerts)
         assertEquals(false, restored.rejectedEditAlerts)
-        assertEquals(true, restored.faceUnlock)
-        assertEquals(false, restored.confirmBeforeDelete)
     }
 
     @Test
@@ -49,5 +46,21 @@ class AppStateTest {
         assertEquals(false, restored.syncReminders)
         assertEquals(false, restored.conflictReviewAlerts)
         assertEquals(false, restored.rejectedEditAlerts)
+    }
+
+    @Test
+    fun unsupportedLegacySecurityPreferencesAreNotRestoredOrSaved() {
+        val restored =
+            AppState().apply {
+                restorePersistentSettings(
+                    mapOf(
+                        "faceUnlock" to "true",
+                        "confirmBeforeDelete" to "false",
+                    ),
+                )
+            }
+
+        assertFalse("faceUnlock" in restored.persistentSettings())
+        assertFalse("confirmBeforeDelete" in restored.persistentSettings())
     }
 }

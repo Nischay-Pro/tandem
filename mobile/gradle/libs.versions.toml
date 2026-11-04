@@ -52,3 +52,4 @@ composeRuntimeAndroid = { module = "androidx.compose.runtime:runtime", version.r
 composeUiAndroid = { module = "androidx.compose.ui:ui", version.ref = "jetpackCompose" }
 composeFoundationAndroid = { module = "androidx.compose.foundation:foundation", version.ref = "jetpackCompose" }
 composeMaterialAndroid = { module = "androidx.compose.material:material", version.ref = "jetpackCompose" }
+composeAnimation = { module = "org.jetbrains.compose.animation:animation", version.ref = "composeMultiplatform" }

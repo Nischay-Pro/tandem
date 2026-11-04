@@ -74,8 +74,18 @@ the local Docker stack was stopped and the saved server could not be reached.
 
 This workspace has no iOS app host target to register with `BGTaskScheduler`,
 so scheduled background sync is currently Android-only. Automatic app-resume
-and connectivity-reconnect triggers, iOS scheduling, and real behavior for
-most other preview settings still need implementation.
+and connectivity-reconnect triggers and iOS scheduling still need
+implementation.
+
+Appearance and home-layout preferences now affect the shared UI: the selected
+background is applied to every screen, the budget overview supports roomy,
+compact, and essentials-first layouts, and Reduce Motion switches route changes
+to immediate transitions. Conflict, rejected-edit, and sync-reminder settings
+control in-app banners on the live budget overview. They do not post operating
+system notifications. Budget Preferences shows which planning values come from
+Actual and marks upcoming due-date data as unavailable because that data is not
+part of the current mobile sync. Biometric app lock and transaction deletion are
+not exposed as switches or actions until those features are implemented.
 
 The eight-character pairing code is shown as readable, centered text in the
 entry field. It accepts the server's `XXXX-XXXX` format, with or without the
@@ -84,7 +94,8 @@ server URL, device bearer credential, device identity, and authorized budget
 IDs through the platform secure store. Android encrypts that record with
 AES-GCM and keeps the key in Android Keystore; iOS stores it as a Keychain
 generic-password item marked for this device only. The app restores the device
-session on launch and clears the saved credential after the server rejects it.
+session on launch and clears the saved credential only when the server explicitly
+reports that the device credential is invalid.
 “Forget this device on this phone” removes the local credential; revoke the
 device on the server as well to invalidate its bearer token. Encrypted-budget
 passwords are not saved.

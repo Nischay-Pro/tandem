@@ -2,6 +2,13 @@
 
 package app.tandemforactual.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -53,6 +60,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -364,8 +372,6 @@ internal class AppState {
     var syncReminders by mutableStateOf(true)
     var conflictReviewAlerts by mutableStateOf(true)
     var rejectedEditAlerts by mutableStateOf(true)
-    var faceUnlock by mutableStateOf(false)
-    var confirmBeforeDelete by mutableStateOf(true)
     var settingsStorageError by mutableStateOf<String?>(null)
     var settingsStorageRetry by mutableStateOf(0)
     var settingsStorageReady by mutableStateOf(false)
@@ -384,8 +390,6 @@ internal class AppState {
             "syncReminders" to syncReminders.toString(),
             "conflictReviewAlerts" to conflictReviewAlerts.toString(),
             "rejectedEditAlerts" to rejectedEditAlerts.toString(),
-            "faceUnlock" to faceUnlock.toString(),
-            "confirmBeforeDelete" to confirmBeforeDelete.toString(),
         )
 
     fun restorePersistentSettings(saved: Map<String, String>) {
@@ -404,8 +408,6 @@ internal class AppState {
             saved["conflictReviewAlerts"]?.toBooleanStrictOrNull() ?: legacyNotifications ?: conflictReviewAlerts
         rejectedEditAlerts =
             saved["rejectedEditAlerts"]?.toBooleanStrictOrNull() ?: legacyNotifications ?: rejectedEditAlerts
-        faceUnlock = saved["faceUnlock"]?.toBooleanStrictOrNull() ?: faceUnlock
-        confirmBeforeDelete = saved["confirmBeforeDelete"]?.toBooleanStrictOrNull() ?: confirmBeforeDelete
     }
 
     companion object {
@@ -448,8 +450,6 @@ internal class AppState {
                         "syncReminders" to state.syncReminders,
                         "conflictReviewAlerts" to state.conflictReviewAlerts,
                         "rejectedEditAlerts" to state.rejectedEditAlerts,
-                        "faceUnlock" to state.faceUnlock,
-                        "confirmBeforeDelete" to state.confirmBeforeDelete,
                     )
                 },
                 restore = { saved ->
@@ -492,8 +492,6 @@ internal class AppState {
                             saved["conflictReviewAlerts"] as? Boolean ?: legacyNotifications ?: conflictReviewAlerts
                         rejectedEditAlerts =
                             saved["rejectedEditAlerts"] as? Boolean ?: legacyNotifications ?: rejectedEditAlerts
-                        faceUnlock = saved["faceUnlock"] as? Boolean ?: faceUnlock
-                        confirmBeforeDelete = saved["confirmBeforeDelete"] as? Boolean ?: confirmBeforeDelete
                     }
                 },
             )
@@ -871,7 +869,11 @@ fun TandemApp(
         TandemSystemBars(isDark)
         TandemBackHandler(enabled = backStack.size > 1, onBack = navigation.back)
         Column(
-            modifier = Modifier.fillMaxSize().background(palette.background).safeDrawingPadding(),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(appBackgroundBrush(state.backgroundStyle, palette))
+                    .safeDrawingPadding(),
         ) {
             if (route != AppRoute.WELCOME) {
                 AppHeader(
@@ -886,9 +888,20 @@ fun TandemApp(
                     liveBudgetMonth = liveBudgetMonth,
                 )
             }
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            AnimatedContent(
+                targetState = route,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                transitionSpec = {
+                    if (state.reduceMotion) {
+                        EnterTransition.None togetherWith ExitTransition.None
+                    } else {
+                        fadeIn(tween(140)) togetherWith fadeOut(tween(110))
+                    }
+                },
+                label = "tandem-screen-transition",
+            ) { visibleRoute ->
                 ScreenContent(
-                    route = route,
+                    route = visibleRoute,
                     state = state,
                     navigation = navigation,
                     mobileSession = mobileSession,
@@ -1204,7 +1217,7 @@ private fun ScreenContent(
             BudgetChooserScreen(state, mobileSession, navigation, onSelectBudget, onRefreshBudgets, onOpenSelectedBudget)
         AppRoute.UNLOCK_BUDGET -> UnlockBudgetScreen(state, navigation)
         AppRoute.FIRST_SYNC -> FirstSyncScreen(state, mobileSession, navigation, onRetrySync)
-        AppRoute.BUDGET -> BudgetScreen(state, navigation, liveTransactions, liveBudgetMonth)
+        AppRoute.BUDGET -> BudgetScreen(state, navigation, mobileSession, liveTransactions, liveBudgetMonth)
         AppRoute.MONTH_PICKER -> MonthPickerScreen(state, navigation)
         AppRoute.CATEGORY_GROUP -> CategoryGroupScreen(state, navigation, liveBudgetMonth)
         AppRoute.CATEGORY_DETAIL -> CategoryDetailScreen(state, navigation, liveBudgetMonth)
@@ -1304,7 +1317,7 @@ private fun ScreenContent(
             )
         AppRoute.SERVER_DEVICE ->
             ServerDeviceScreen(state, mobileSession, navigation, onForgetDevice)
-        AppRoute.SECURITY_PRIVACY -> SecurityScreen(state, mobileSession)
+        AppRoute.SECURITY_PRIVACY -> SecurityScreen(mobileSession)
         AppRoute.NOTIFICATIONS -> NotificationsScreen(state)
         AppRoute.LOCAL_DATA -> LocalDataScreen(state, mobileSession, onSyncNow)
         AppRoute.ABOUT -> AboutScreen()
@@ -1312,13 +1325,31 @@ private fun ScreenContent(
 }
 
 @Composable
-private fun PageColumn(content: @Composable ColumnScope.() -> Unit) {
+private fun PageColumn(
+    verticalSpacing: androidx.compose.ui.unit.Dp = 16.dp,
+    horizontalPadding: androidx.compose.ui.unit.Dp = 20.dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = horizontalPadding, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(verticalSpacing),
         content = content,
     )
 }
+
+private fun appBackgroundBrush(
+    style: String,
+    palette: TandemPalette,
+): Brush =
+    when (style) {
+        "Solid surface" -> Brush.verticalGradient(listOf(palette.background, palette.background))
+        "Low-motion glow" -> Brush.radialGradient(listOf(palette.accentSurface, palette.background), radius = 1_300f)
+        else -> Brush.verticalGradient(listOf(palette.background, palette.surface, palette.background))
+    }
 
 @Composable
 private fun SampleBanner(message: String = "This screen remains a preview") {
@@ -1337,6 +1368,36 @@ private fun SampleBanner(message: String = "This screen remains a preview") {
         Text("●", color = palette.accent, fontSize = 9.sp)
         Text("Sample data", color = palette.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         Text(message, color = palette.muted, fontSize = 11.sp)
+    }
+}
+
+@Composable
+private fun AttentionBanner(
+    title: String,
+    detail: String,
+    action: String,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    SurfaceCard(onClick = onClick) {
+        Row(
+            Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(11.dp),
+        ) {
+            Box(
+                Modifier.size(34.dp).clip(CircleShape).background(palette.warning.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("!", color = palette.warning, fontWeight = FontWeight.Bold)
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(title, color = palette.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(detail, color = palette.muted, fontSize = 11.sp, lineHeight = 15.sp)
+                Text(action, color = palette.accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Text("›", color = palette.muted, fontSize = 20.sp)
+        }
     }
 }
 
@@ -1541,6 +1602,7 @@ private fun ListRow(
     subtitle: String? = null,
     trailing: String? = null,
     trailingColor: Color? = null,
+    dense: Boolean = false,
     onClick: (() -> Unit)? = null,
 ) {
     val palette = tandemPalette
@@ -1548,19 +1610,19 @@ private fun ListRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .defaultMinSize(minHeight = 62.dp)
+                .defaultMinSize(minHeight = if (dense) 48.dp else 62.dp)
                 .then(
                     if (onClick != null) {
                         Modifier.clickable(role = Role.Button, onClickLabel = title, onClick = onClick)
                     } else {
                         Modifier
                     },
-                ).padding(horizontal = 14.dp, vertical = 10.dp),
+                ).padding(horizontal = 14.dp, vertical = if (dense) 6.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(
-            modifier = Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(palette.raised),
+            modifier = Modifier.size(if (dense) 30.dp else 36.dp).clip(RoundedCornerShape(12.dp)).background(palette.raised),
             contentAlignment = Alignment.Center,
         ) {
             Text(icon, modifier = Modifier.clearAndSetSemantics {}, color = palette.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -2100,12 +2162,38 @@ private fun selectLatestCachedMonth(
 private fun BudgetScreen(
     state: AppState,
     navigation: AppNavigation,
+    mobileSession: TandemMobileSession,
     liveTransactions: List<TransactionItem>,
     liveBudgetMonth: LiveBudgetMonthSummary?,
 ) {
     val palette = tandemPalette
+    val compact = state.homeLayout == "Compact"
+    val essentialsFirst = state.homeLayout == "Essentials first"
     if (state.selectedBudgetId.isNotBlank()) {
-        PageColumn {
+        PageColumn(verticalSpacing = if (compact) 10.dp else 16.dp, horizontalPadding = if (compact) 16.dp else 20.dp) {
+            if (state.syncReminders && mobileSession.syncError != null) {
+                AttentionBanner(
+                    "Sync needs attention",
+                    mobileSession.syncError ?: "This budget could not sync.",
+                    "Open sync center",
+                ) { navigation.open(AppRoute.SYNC_CENTER) }
+            }
+            val conflictCount = mobileSession.pendingWrites.count { it.status == "conflict" }
+            if (state.conflictReviewAlerts && conflictCount > 0) {
+                AttentionBanner(
+                    "$conflictCount change${if (conflictCount == 1) "" else "s"} need${if (conflictCount == 1) "s" else ""} review",
+                    "Choose which version of the budget change to keep.",
+                    "Review changes",
+                ) { navigation.open(AppRoute.CONFLICT_INBOX) }
+            }
+            val rejectedCount = mobileSession.pendingWrites.count { it.status == "rejected" }
+            if (state.rejectedEditAlerts && rejectedCount > 0) {
+                AttentionBanner(
+                    "$rejectedCount edit${if (rejectedCount == 1) "" else "s"} not applied",
+                    "Review the reason and dismiss or correct the local edit.",
+                    "View rejected edits",
+                ) { navigation.open(AppRoute.REJECTED_WRITE) }
+            }
             Badge("Actual · read only", palette.positive)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Budget overview", color = palette.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
@@ -2149,7 +2237,20 @@ private fun BudgetScreen(
                         )
                     }
                 }
-                liveBudgetMonth.groups.forEach { group ->
+                val displayGroups =
+                    if (essentialsFirst) {
+                        liveBudgetMonth.groups
+                            .withIndex()
+                            .sortedWith(
+                                compareBy<IndexedValue<LiveCategoryGroupSummary>>(
+                                    { essentialGroupOrder(it.value.name) },
+                                    { it.index },
+                                ),
+                            ).map { it.value }
+                    } else {
+                        liveBudgetMonth.groups
+                    }
+                displayGroups.forEach { group ->
                     SectionCard(
                         group.name,
                         "${state.formatCurrency(group.assignedMinor)} assigned · ${group.categories.size} categories",
@@ -2159,7 +2260,20 @@ private fun BudgetScreen(
                             navigation.open(AppRoute.CATEGORY_GROUP)
                         },
                     ) {
-                        group.categories.forEachIndexed { index, category ->
+                        val displayCategories =
+                            if (essentialsFirst) {
+                                group.categories
+                                    .withIndex()
+                                    .sortedWith(
+                                        compareBy<IndexedValue<LiveCategorySummary>>(
+                                            { essentialCategoryOrder(it.value.name) },
+                                            { it.index },
+                                        ),
+                                    ).map { it.value }
+                            } else {
+                                group.categories
+                            }
+                        displayCategories.forEachIndexed { index, category ->
                             if (index > 0) DividerLine()
                             ListRow(
                                 category.name.take(1).uppercase(),
@@ -2169,6 +2283,7 @@ private fun BudgetScreen(
                                 )} · ${state.formatCurrency(category.balanceMinor)} left",
                                 state.formatCurrency(category.assignedMinor),
                                 if (category.balanceMinor >= 0) palette.positive else palette.warning,
+                                dense = compact,
                             ) {
                                 state.selectedCategoryGroupId = group.id
                                 state.selectedCategoryId = category.id
@@ -2191,7 +2306,7 @@ private fun BudgetScreen(
         }
         return
     }
-    PageColumn {
+    PageColumn(verticalSpacing = if (compact) 10.dp else 16.dp, horizontalPadding = if (compact) 16.dp else 20.dp) {
         SampleBanner(
             if (liveTransactions.isNotEmpty()) {
                 "Category plan is preview; recent activity is live"
@@ -2236,18 +2351,40 @@ private fun BudgetScreen(
                 }
             }
         }
+        if (essentialsFirst) UpcomingBillsCard(state, navigation)
         SectionCard("Essentials", "${state.formatCurrency(232_000)} assigned · 3 categories", state.formatCurrency(232_000), onClick = {
             navigation.open(AppRoute.CATEGORY_GROUP)
         }) {
-            ListRow("H", "Rent", "Due ${formatShortDate(SampleDate(2026, 5, 1))}", state.formatCurrency(150_000), palette.positive) {
+            ListRow(
+                "H",
+                "Rent",
+                "Due ${formatShortDate(SampleDate(2026, 5, 1))}",
+                state.formatCurrency(150_000),
+                palette.positive,
+                dense = compact,
+            ) {
                 navigation.open(AppRoute.CATEGORY_DETAIL)
             }
             DividerLine()
-            ListRow("G", "Groceries", "Spent ${state.formatCurrency(18_400)} this month", state.formatCurrency(50_000), palette.positive) {
+            ListRow(
+                "G",
+                "Groceries",
+                "Spent ${state.formatCurrency(18_400)} this month",
+                state.formatCurrency(50_000),
+                palette.positive,
+                dense = compact,
+            ) {
                 navigation.open(AppRoute.CATEGORY_DETAIL)
             }
             DividerLine()
-            ListRow("U", "Utilities", "Spent ${state.formatCurrency(11_200)} this month", state.formatCurrency(32_000), palette.positive) {
+            ListRow(
+                "U",
+                "Utilities",
+                "Spent ${state.formatCurrency(11_200)} this month",
+                state.formatCurrency(32_000),
+                palette.positive,
+                dense = compact,
+            ) {
                 navigation.open(AppRoute.CATEGORY_DETAIL)
             }
         }
@@ -2257,26 +2394,18 @@ private fun BudgetScreen(
             "${state.formatCurrency(18_000)} left",
             onClick = { navigation.open(AppRoute.CATEGORY_GROUP) },
         ) {
-            ListRow("D", "Dining", "Spent ${state.formatCurrency(17_000)} this month", state.formatCurrency(18_000), palette.positive) {
+            ListRow(
+                "D",
+                "Dining",
+                "Spent ${state.formatCurrency(17_000)} this month",
+                state.formatCurrency(18_000),
+                palette.positive,
+                dense = compact,
+            ) {
                 navigation.open(AppRoute.CATEGORY_DETAIL)
             }
         }
-        SectionCard(
-            "Upcoming",
-            "Two bills before the end of the month",
-            "View all",
-            onClick = { navigation.open(AppRoute.CATEGORY_GROUP) },
-        ) {
-            ListRow(
-                "↗",
-                "Electric Company",
-                "Utilities · due ${formatShortDate(SampleDate(2026, 5, 18))}",
-                state.formatCurrency(12_000),
-                palette.text,
-            )
-            DividerLine()
-            ListRow("H", "Rent", "Essentials · due ${formatShortDate(SampleDate(2026, 6, 1))}", state.formatCurrency(150_000), palette.text)
-        }
+        if (!essentialsFirst) UpcomingBillsCard(state, navigation)
         SectionCard("Recent activity", "Latest budget changes", "See all", onClick = { navigation.selectTab(AppRoute.ACTIVITY) }) {
             (liveTransactions.takeIf { it.isNotEmpty() } ?: previewTransactions).take(2).forEachIndexed { index, item ->
                 if (index > 0) DividerLine()
@@ -2308,6 +2437,41 @@ private fun BudgetScreen(
     }
 }
 
+private fun essentialGroupOrder(name: String): Int =
+    if (listOf("essential", "housing", "fixed bill", "bill").any { it in name.lowercase() }) 0 else 1
+
+private fun essentialCategoryOrder(name: String): Int =
+    when {
+        listOf("rent", "mortgage", "housing").any { it in name.lowercase() } -> 0
+        listOf("utility", "electric", "water", "gas").any { it in name.lowercase() } -> 1
+        listOf("insurance", "groceries", "food").any { it in name.lowercase() } -> 2
+        else -> 3
+    }
+
+@Composable
+private fun UpcomingBillsCard(
+    state: AppState,
+    navigation: AppNavigation,
+) {
+    val palette = tandemPalette
+    SectionCard(
+        "Upcoming",
+        "Two bills before the end of the month",
+        "View all",
+        onClick = { navigation.open(AppRoute.CATEGORY_GROUP) },
+    ) {
+        ListRow(
+            "↗",
+            "Electric Company",
+            "Utilities · due ${formatShortDate(SampleDate(2026, 5, 18))}",
+            state.formatCurrency(12_000),
+            palette.text,
+        )
+        DividerLine()
+        ListRow("H", "Rent", "Essentials · due ${formatShortDate(SampleDate(2026, 6, 1))}", state.formatCurrency(150_000), palette.text)
+    }
+}
+
 @Composable
 private fun TransactionRow(
     transaction: TransactionItem,
@@ -2327,7 +2491,7 @@ private fun TransactionRow(
             transaction.category,
             formatSignedCurrency(transaction.amountMinorUnits, transaction.displaySettings),
             if (transaction.amountMinorUnits > 0) palette.positive else palette.text,
-            onClick,
+            onClick = onClick,
         )
     }
 }
@@ -3698,19 +3862,35 @@ private fun AccentColorScreen(state: AppState) {
 @Composable
 private fun BackgroundScreen(state: AppState) {
     PageColumn {
-        Heading("Motion settings", "Choose a background style and reduce animation.")
-        SectionCard("Background style", "Sample controls") {
-            listOf("Soft gradient", "Solid surface", "Low-motion glow").forEach { style ->
-                ChoiceRow(style, selected = state.backgroundStyle == style, onClick = { state.backgroundStyle = style })
+        Heading("Background and motion", "These choices apply across every screen.")
+        SurfaceCard {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(88.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(appBackgroundBrush(state.backgroundStyle, tandemPalette)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("${state.backgroundStyle} preview", color = tandemPalette.text, fontWeight = FontWeight.SemiBold)
+            }
+        }
+        SectionCard("Background style", state.backgroundStyle) {
+            listOf(
+                "Soft gradient" to "A subtle vertical blend behind the cards",
+                "Solid surface" to "A single steady canvas color",
+                "Low-motion glow" to "A static accent glow behind the content",
+            ).forEach { (style, description) ->
+                ChoiceRow(style, description, selected = state.backgroundStyle == style, onClick = { state.backgroundStyle = style })
             }
         }
         SectionCard("Motion", "Animation should never get in the way") {
-            ToggleRow("Reduce motion", "Use still transitions and remove animated backgrounds", state.reduceMotion) {
+            ToggleRow("Reduce motion", "Make screen changes immediate", state.reduceMotion) {
                 state.reduceMotion =
                     it
             }
         }
-        PreviewNote("Motion preferences will also respect the operating system’s reduced-motion accessibility setting.")
+        PreviewNote("This setting controls transitions inside Tandem. Device system animations remain controlled by Android or iOS.")
     }
 }
 
@@ -3728,9 +3908,22 @@ private fun HomeLayoutScreen(state: AppState) {
         SurfaceCard {
             Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 LabelText("Layout preview")
-                ListRow("H", "Essentials", "3 categories", state.formatCurrency(232_000))
+                Text(
+                    when (state.homeLayout) {
+                        "Compact" -> "Compact rows and tighter spacing"
+                        "Essentials first" -> "Upcoming bills and essentials appear first"
+                        else -> "Roomy category rows with more breathing space"
+                    },
+                    color = tandemPalette.muted,
+                    fontSize = 12.sp,
+                )
+                if (state.homeLayout == "Essentials first") {
+                    ListRow("◷", "Upcoming bills", "Due soon", state.formatCurrency(12_000), dense = false)
+                    DividerLine()
+                }
+                ListRow("H", "Essentials", "3 categories", state.formatCurrency(232_000), dense = state.homeLayout == "Compact")
                 DividerLine()
-                ListRow("G", "Groceries", "Available this month", state.formatCurrency(50_000))
+                ListRow("G", "Groceries", "Available this month", state.formatCurrency(50_000), dense = state.homeLayout == "Compact")
             }
         }
     }
@@ -3757,14 +3950,14 @@ private fun BudgetPreferencesScreen(
             DividerLine()
             ListRow("◷", "Start of week", "Follows the device locale", formatFirstWeekday())
         }
-        SectionCard("Planning", "Budget overview") {
-            ToggleRow("Show available category amounts", "Keep remaining-to-spend visible on the overview", true, {})
+        SectionCard("Planning", "Values come from the selected Actual budget") {
+            ListRow("✓", "Available category amounts", "Shown from the synced plan", "Available", tandemPalette.positive)
             DividerLine()
-            ToggleRow("Show upcoming bills", "Highlight planned payments near their due date", true, {})
+            ListRow("◷", "Upcoming bills", "Due-date data is not in the mobile sync yet", "Unavailable")
             DividerLine()
-            ToggleRow("Carry category balances forward", "Use the amount available from prior months", true, {})
+            ListRow("↻", "Carry balances forward", "Controlled by Actual and shown read-only", "Actual")
         }
-        PreviewNote("Planning controls are previews and do not alter an Actual budget.")
+        PreviewNote("Tandem displays planning values from Actual. It does not change budget rules from this page.")
     }
 }
 
@@ -3918,29 +4111,13 @@ private fun ServerDeviceScreen(
 }
 
 @Composable
-private fun SecurityScreen(
-    state: AppState,
-    mobileSession: TandemMobileSession,
-) {
+private fun SecurityScreen(mobileSession: TandemMobileSession) {
     PageColumn {
         Heading("Device protection", "Protect financial data and manage device access.")
-        SectionCard(
-            "Device unlock",
-            if (mobileSession.isCredentialStored) "Device credential is securely stored" else "Pairing is active for this app session",
-        ) {
-            ToggleRow("Use biometric unlock", "Require this device’s biometrics to reopen a budget", state.faceUnlock) {
-                state.faceUnlock =
-                    it
-            }
+        SectionCard("Feature availability", "Pairing and budget credentials") {
+            ListRow("◎", "Biometric unlock", "App lock is not available in this build", "Unavailable")
             DividerLine()
-            ToggleRow(
-                "Confirm before deleting a transaction",
-                "Show the transaction name and amount before removal",
-                state.confirmBeforeDelete,
-            ) {
-                state.confirmBeforeDelete =
-                    it
-            }
+            ListRow("⌫", "Transaction deletion", "Delete actions are not available in the mobile app", "Unavailable")
         }
         SectionCard("Data handling", "Server connection") {
             ListRow(
@@ -3956,7 +4133,9 @@ private fun SecurityScreen(
             DividerLine()
             ListRow("◉", "Budget password", "Used only to open an encrypted budget", "Not stored")
         }
-        PreviewNote("Biometric unlock is not wired yet. Pairing codes and encrypted-budget passwords are never stored.")
+        PreviewNote(
+            "Pairing codes and encrypted-budget passwords are never stored. Device credentials use the platform secure store when available.",
+        )
         mobileSession.credentialStorageError?.let { PreviewNote(it) }
     }
 }
@@ -3964,9 +4143,9 @@ private fun SecurityScreen(
 @Composable
 private fun NotificationsScreen(state: AppState) {
     PageColumn {
-        Heading("Alert preferences", "Choose which changes should trigger alerts.")
-        SectionCard("Budget activity", "Change these settings at any time") {
-            ToggleRow("Sync reminders", "Let you know when this device has been offline", state.syncReminders) { state.syncReminders = it }
+        Heading("Alert preferences", "Choose which in-app reminders appear on the budget overview.")
+        SectionCard("Budget activity", "Reminders appear while using the app") {
+            ToggleRow("Sync reminders", "Show a banner when a sync fails", state.syncReminders) { state.syncReminders = it }
             DividerLine()
             ToggleRow("Conflict review alerts", "Show a reminder when an edit needs review", state.conflictReviewAlerts) {
                 state.conflictReviewAlerts =
@@ -3975,11 +4154,11 @@ private fun NotificationsScreen(state: AppState) {
             DividerLine()
             ToggleRow(
                 "Rejected edit alerts",
-                "Explain when a server change could not be applied",
+                "Show a reminder when an edit was not applied",
                 state.rejectedEditAlerts,
             ) { state.rejectedEditAlerts = it }
         }
-        PreviewNote("These sample controls do not request notification permission.")
+        PreviewNote("These controls show in-app banners. System notifications are not sent.")
     }
 }
 
