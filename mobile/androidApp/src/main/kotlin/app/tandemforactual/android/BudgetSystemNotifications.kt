@@ -15,6 +15,7 @@ internal object BudgetSystemNotifications {
     private const val SYNC_FAILURE_ID = 4101
     private const val CONFLICT_ID = 4102
     private const val REJECTED_ID = 4103
+    private const val PAIRING_REQUIRED_ID = 4104
 
     fun initialize(context: Context) {
         context.applicationContext.getSystemService(NotificationManager::class.java)?.let(::createChannel)
@@ -25,7 +26,16 @@ internal object BudgetSystemNotifications {
             context,
             SYNC_FAILURE_ID,
             "Budget sync needs attention",
-            "Tandem couldn't refresh your budget. Open the app to retry.",
+            "Tandem couldn’t refresh your budget. Open the app to retry.",
+        )
+    }
+
+    fun pairingRequired(context: Context) {
+        show(
+            context,
+            PAIRING_REQUIRED_ID,
+            "Device pairing needs attention",
+            "This device needs to be paired again. Open Tandem to pair it with a new pairing code.",
         )
     }
 
@@ -44,7 +54,7 @@ internal object BudgetSystemNotifications {
         show(
             context,
             REJECTED_ID,
-            "An edit wasn't applied",
+            "An edit wasn’t applied",
             "$count edit${if (count == 1) "" else "s"} need${if (count == 1) "s" else ""} review.",
         )
     }

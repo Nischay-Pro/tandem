@@ -5,6 +5,7 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.SystemClock
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
@@ -16,7 +17,7 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class BudgetSystemNotificationsTest {
-    private val notificationIds = listOf(4101, 4102, 4103)
+    private val notificationIds = listOf(4101, 4102, 4103, 4104)
 
     @After
     fun clearNotifications() {
@@ -32,14 +33,25 @@ class BudgetSystemNotificationsTest {
 
         BudgetSystemNotifications.initialize(context)
         BudgetSystemNotifications.syncFailed(context)
+        SystemClock.sleep(1_100)
+        BudgetSystemNotifications.pairingRequired(context)
+        SystemClock.sleep(1_100)
         BudgetSystemNotifications.conflicts(context, count = 2)
+        SystemClock.sleep(1_100)
         BudgetSystemNotifications.rejected(context, count = 1)
+        SystemClock.sleep(1_100)
 
         val active = notificationManager().activeNotifications.associateBy { it.id }
         assertEquals(notificationIds.toSet(), active.keys.intersect(notificationIds.toSet()))
         assertNotification(active.getValue(4101).notification, "Budget sync needs attention")
         assertNotification(active.getValue(4102).notification, "Budget changes need review")
-        assertNotification(active.getValue(4103).notification, "An edit wasn't applied")
+        assertNotification(active.getValue(4103).notification, "An edit wasn’t applied")
+        assertNotification(active.getValue(4104).notification, "Device pairing needs attention")
+        val failureMessage = active.getValue(4101).notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
+        assertEquals(true, failureMessage.contains("couldn’t"))
+        assertEquals(false, failureMessage.contains("couldn't"))
+        val pairingMessage = active.getValue(4104).notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
+        assertEquals(true, pairingMessage.contains("new pairing code"))
     }
 
     private fun notificationManager() =

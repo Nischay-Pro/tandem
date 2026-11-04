@@ -99,7 +99,7 @@ class BackgroundBudgetSyncWorker(
                 apiClient?.let { client -> runCatching { client.forgetSession() } }
                 runCatching { credentialStore.clear() }
                 if (notificationPreferences?.get("syncReminders") == "true") {
-                    BudgetSystemNotifications.syncFailed(applicationContext)
+                    BudgetSystemNotifications.pairingRequired(applicationContext)
                 }
                 Result.success()
             } else {
