@@ -44,6 +44,7 @@ import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -638,6 +639,7 @@ fun TandemApp(
     nowEpochMillis: () -> Long = { 0L },
     allowInsecureLoopback: Boolean = false,
     onBackgroundSyncSettingsChanged: ((enabled: Boolean, wifiOnly: Boolean, budgetId: String) -> Unit)? = null,
+    onSystemAppearanceChanged: ((isDark: Boolean, followsSystem: Boolean) -> Unit)? = null,
     appResumeEvents: Flow<Unit> = emptyFlow(),
     networkRestoredEvents: Flow<Unit> = emptyFlow(),
 ) {
@@ -1111,6 +1113,9 @@ fun TandemApp(
             state.theme == ThemeMode.DARK ||
                 state.theme == ThemeMode.PURE_BLACK ||
                 (state.theme == ThemeMode.SYSTEM && isSystemInDarkTheme())
+        SideEffect {
+            onSystemAppearanceChanged?.invoke(isDark, state.theme == ThemeMode.SYSTEM)
+        }
         TandemSystemBars(isDark, palette.background)
         TandemBackHandler(enabled = backStack.size > 1, onBack = navigation.back)
         Column(

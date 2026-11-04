@@ -21,6 +21,8 @@ project at `mobile/iosApp/TandemForActual.xcodeproj` contains the app icon,
 launch storyboard, and native background-task entry point. Its build phase links
 the Kotlin framework through
 `:composeApp:embedAndSignAppleFrameworkForXcode`.
+The shared appearance preference is forwarded to SwiftUI, so iOS system chrome
+follows the selected light, dark, or system mode alongside the Compose screens.
 
 Android builds and Pixel 10a display checks run from Linux. The shared Kotlin
 targets compile for iOS here, but the native Swift host, Xcode asset catalog,

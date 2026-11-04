@@ -93,16 +93,27 @@ opened database instances. The worker skips encrypted budgets because budget
 passwords are never persisted. WorkManager may defer periodic execution to meet
 system power and network rules. On 2026-11-04, Pixel 10a ran
 `BackgroundBudgetSyncWorker` against the original local Tandem/Actual API using
-the saved device credential. WorkManager reported `SUCCESS`, and the selected
-CAD budget's Room `lastSyncedAt` advanced. The six-hour periodic job was
-registered; forcing it before its due time correctly made WorkManager defer
-execution. The same worker was then enqueued as one-time WorkManager work to
-verify its live API and Room path immediately. The temporary debug trigger was
-removed, the standard debug APK reinstalled, and the schedule preference
-restored to off. The Pixel still showed its device credential as active and the
-cached budget as `READY`. Execution after a full periodic interval remains
-unobserved. iOS scheduling still needs an iOS host target, and iOS runtime
-behavior cannot be verified in this Linux workspace.
+the saved device credential. The actual six-hour periodic WorkManager job
+ran and returned `SUCCESS`; the selected CAD Room row remained `READY`, had no
+sync error, and its `lastSyncedAt` advanced to 2026-11-04 21:31:25 UTC. The saved
+credential remained active, confirming the scheduled run did not require
+pairing again. The schedule preference was restored to off after verification.
+
+iOS now has a native host target at `mobile/iosApp/TandemForActual.xcodeproj`.
+Its app delegate registers a `BGAppRefreshTask`, schedules the next request with
+a six-hour earliest start, and connects the background-sync preference to the
+shared Kotlin sync coordinator. iOS decides when an eligible refresh actually
+runs; the six-hour value is not a fixed execution interval. The Kotlin runner
+loads the selected budget and preferences from Room, the device session from
+Keychain, honors Wi-Fi-only mode, and skips encrypted budgets whose passwords
+are not stored. The Xcode target also owns the iOS app icon and dark launch
+screen assets. The shared appearance setting is forwarded to SwiftUI so iOS
+system chrome follows the selected light, dark, or system mode.
+
+This Linux workspace cannot run Xcode or the iOS app. Kotlin iOS arm64 and
+simulator targets compile here, but the Swift host, Xcode framework link, asset
+catalog, and scheduled runtime behavior still need a macOS build and device or
+simulator check.
 
 Automatic sync runs when the app resumes or network access returns while a
 cached budget is visible. It requires the sync-on-open preference, a restored
@@ -113,8 +124,8 @@ have a 30-second cooldown per budget. Android uses Activity resume and
 default-network callbacks while the app is started. iOS listens for the
 app-active notification and Network framework path changes. Both iOS targets
 compile, but iOS runtime behavior has not been device-tested from this Linux
-workspace. This workspace has no iOS app host target to register with
-`BGTaskScheduler`, so scheduled background sync remains Android-only.
+workspace. The iOS host registers scheduled refresh, but its Swift integration
+and runtime scheduling remain unverified until an Xcode build runs on macOS.
 
 Appearance and home-layout preferences now affect the shared UI: the selected
 background is applied to every screen, the budget overview supports roomy,

@@ -5,21 +5,35 @@ package app.tandemforactual.ui
 import androidx.compose.ui.window.ComposeUIViewController
 import app.tandemforactual.data.database.openTandemDatabase
 import app.tandemforactual.data.database.tandemDatabaseBuilder
+import platform.UIKit.UIViewController
 import kotlin.time.Clock
 
 @Suppress("ktlint:standard:function-naming")
-fun MainViewController() = createTandemViewController(openTandemDatabase(tandemDatabaseBuilder()))
+fun MainViewController(
+    onBackgroundSyncSettingsChanged: ((Boolean, Boolean, String) -> Unit)? = null,
+    onSystemAppearanceChanged: ((Boolean, Boolean) -> Unit)? = null,
+): UIViewController =
+    createTandemViewController(
+        openTandemDatabase(tandemDatabaseBuilder()),
+        onBackgroundSyncSettingsChanged,
+        onSystemAppearanceChanged,
+    )
 
-private fun createTandemViewController(database: app.tandemforactual.data.database.TandemDatabase) =
-    run {
-        val syncEvents = IosSyncEventSource()
-        ComposeUIViewController {
-            TandemApp(
-                database = database,
-                deviceCredentialStore = IosDeviceCredentialStore(),
-                nowEpochMillis = { Clock.System.now().toEpochMilliseconds() },
-                appResumeEvents = syncEvents.appResumeEvents,
-                networkRestoredEvents = syncEvents.networkRestoredEvents,
-            )
-        }
+private fun createTandemViewController(
+    database: app.tandemforactual.data.database.TandemDatabase,
+    onBackgroundSyncSettingsChanged: ((Boolean, Boolean, String) -> Unit)?,
+    onSystemAppearanceChanged: ((Boolean, Boolean) -> Unit)?,
+): UIViewController {
+    val syncEvents = IosSyncEventSource()
+    return ComposeUIViewController {
+        TandemApp(
+            database = database,
+            deviceCredentialStore = IosDeviceCredentialStore(),
+            nowEpochMillis = { Clock.System.now().toEpochMilliseconds() },
+            onBackgroundSyncSettingsChanged = onBackgroundSyncSettingsChanged,
+            onSystemAppearanceChanged = onSystemAppearanceChanged,
+            appResumeEvents = syncEvents.appResumeEvents,
+            networkRestoredEvents = syncEvents.networkRestoredEvents,
+        )
     }
+}
