@@ -134,6 +134,9 @@ to immediate transitions. Conflict, rejected-edit, and sync-reminder settings
 control in-app banners and alerts from scheduled background sync. Android and
 iOS ask for notification permission from the Notifications settings page;
 delivery remains controlled by OS permission and notification settings.
+If scheduled sync clears a device credential rejected by the server, Android
+asks the person to pair this device again with a new pairing code. Connectivity
+failures continue to offer a retry.
 Budget Preferences shows which planning values come from Actual and marks
 upcoming due-date data as unavailable because that data is not part of the
 current mobile sync. Biometric app lock and transaction deletion are not exposed
