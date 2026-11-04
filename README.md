@@ -28,7 +28,11 @@ Actual's [sync system includes a CRDT implementation](https://actualbudget.org/d
 
 ## Getting started
 
-### Start the Tandem API
+### 1. Set up Actual Budget
+
+Set up a self-hosted Actual server using the [official installation guide](https://actualbudget.org/docs/install/). Use the supported `26.10.0` server release and have the server URL, server password, and budget Sync ID ready.
+
+### 2. Start the Tandem API
 
 From the repository root, install the pinned tools and dependencies:
 
@@ -59,7 +63,7 @@ docker compose -f docker-compose.dev.yml exec api \
 
 The code expires after five minutes and can only be used once. See the [API guide](docs/api/README.md) for budget scopes and deployment guidance.
 
-### Build and run Android
+### 3. Build and run Android
 
 From the `mobile/` directory:
 
