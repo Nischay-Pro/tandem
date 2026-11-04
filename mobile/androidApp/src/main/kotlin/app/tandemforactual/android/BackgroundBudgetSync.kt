@@ -95,18 +95,27 @@ class BackgroundBudgetSyncWorker(
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
-            if (error.errorCode == "invalid_device_credential") {
-                apiClient?.let { client -> runCatching { client.forgetSession() } }
-                runCatching { credentialStore.clear() }
-                if (notificationPreferences?.get("syncReminders") == "true") {
-                    BudgetSystemNotifications.pairingRequired(applicationContext)
+            when (error.backgroundSyncFailureAction()) {
+                BackgroundSyncFailureAction.PAIR_AGAIN -> {
+                    apiClient?.let { client -> runCatching { client.forgetSession() } }
+                    runCatching { credentialStore.clear() }
+                    if (notificationPreferences?.get("syncReminders") == "true") {
+                        BudgetSystemNotifications.pairingRequired(applicationContext)
+                    }
+                    Result.success()
                 }
-                Result.success()
-            } else {
-                if (notificationPreferences?.get("syncReminders") == "true") {
-                    BudgetSystemNotifications.syncFailed(applicationContext)
+                BackgroundSyncFailureAction.RETRY -> {
+                    if (notificationPreferences?.get("syncReminders") == "true") {
+                        BudgetSystemNotifications.syncFailed(applicationContext)
+                    }
+                    Result.retry()
                 }
-                error.httpStatus.toWorkResult()
+                BackgroundSyncFailureAction.FINISH -> {
+                    if (notificationPreferences?.get("syncReminders") == "true") {
+                        BudgetSystemNotifications.syncFailed(applicationContext)
+                    }
+                    Result.success()
+                }
             }
         } catch (error: BudgetSyncRemoteException) {
             if (notificationPreferences?.get("syncReminders") == "true") {
@@ -121,6 +130,28 @@ class BackgroundBudgetSyncWorker(
         } finally {
             database.close()
         }
+    }
+}
+
+internal enum class BackgroundSyncFailureAction {
+    PAIR_AGAIN,
+    RETRY,
+    FINISH,
+}
+
+internal fun TandemApiException.backgroundSyncFailureAction(): BackgroundSyncFailureAction {
+    if (errorCode == "invalid_device_credential") return BackgroundSyncFailureAction.PAIR_AGAIN
+
+    val status = httpStatus
+    return when {
+        status == null ||
+            status == 401 ||
+            status == 408 ||
+            status == 429 ||
+            status >= 500 ->
+            BackgroundSyncFailureAction.RETRY
+        status in 400..499 -> BackgroundSyncFailureAction.FINISH
+        else -> BackgroundSyncFailureAction.RETRY
     }
 }
 
