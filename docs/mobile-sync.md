@@ -94,10 +94,17 @@ Tandem/Actual test server. At the latest Pixel check, the debug app launched
 without a crash, but the local Docker stack was stopped and the saved server
 could not be reached.
 
-This workspace has no iOS app host target to register with `BGTaskScheduler`,
-so scheduled background sync is currently Android-only. Automatic app-resume
-and connectivity-reconnect triggers and iOS scheduling still need
-implementation.
+Automatic sync runs when the app resumes or network access returns while a
+cached budget is visible. It requires the sync-on-open preference, a restored
+device session, and an encryption password for encrypted budgets. Resume and
+network events coalesce while a sync is active; a failed sync gets one queued
+follow-up, while a successful sync clears the queued event. Successful attempts
+have a 30-second cooldown per budget. Android uses Activity resume and
+default-network callbacks while the app is started. iOS listens for the
+app-active notification and Network framework path changes. Both iOS targets
+compile, but iOS runtime behavior has not been device-tested from this Linux
+workspace. This workspace has no iOS app host target to register with
+`BGTaskScheduler`, so scheduled background sync remains Android-only.
 
 Appearance and home-layout preferences now affect the shared UI: the selected
 background is applied to every screen, the budget overview supports roomy,
@@ -144,9 +151,9 @@ ignored `.dev-tmp/` paths and must not be committed.
   when a budget is opened and exposes manual sync in Sync Center. Android
   background sync uses WorkManager as described above. Conflict, uncertain,
   and rejected write review screens expose their supported keep/rebase, retry,
-  and discard actions. Automatic app-resume and connectivity-reconnect triggers
-  are not wired yet; iOS scheduling requires a host target that is not present
-  in this workspace.
+  and discard actions. Resume and network-restoration signals trigger a
+  throttled selected-budget sync on Android and iOS; iOS scheduled background
+  work still requires a host target that is not present in this workspace.
 - Device bearer credentials are restored from platform secure storage when the
   app launches. Android stores AES-GCM ciphertext in app-private preferences
   with its encryption key in Android Keystore; iOS stores the serialized

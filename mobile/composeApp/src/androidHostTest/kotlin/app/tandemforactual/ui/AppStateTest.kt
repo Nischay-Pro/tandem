@@ -4,6 +4,7 @@ import app.tandemforactual.api.client.BudgetCatalogItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class AppStateTest {
     @Test
@@ -95,6 +96,41 @@ class AppStateTest {
             budgetChoicesForSelection(server, cached, serverCatalogLoaded = true),
         )
         assertEquals(cached, budgetChoicesForSelection(server, cached, serverCatalogLoaded = false))
+    }
+
+    @Test
+    fun automaticSyncRunsOnlyForEligibleVisibleBudgetsAndIsRateLimited() {
+        fun eligible(
+            lastSyncAt: Long? = null,
+            now: Long = 100_000L,
+        ) = shouldTriggerAutomaticSync(
+            isBudgetVisible = true,
+            isAuthenticated = true,
+            syncOnOpen = true,
+            budgetId = "budget-1",
+            isSyncing = false,
+            encryptedBudgetNeedsPassword = false,
+            hasEncryptionPassword = false,
+            lastAutomaticSyncAtEpochMillis = lastSyncAt,
+            nowEpochMillis = now,
+        )
+
+        assertTrue(eligible())
+        assertFalse(eligible(lastSyncAt = 75_000L))
+        assertTrue(eligible(lastSyncAt = 69_999L))
+        assertFalse(
+            shouldTriggerAutomaticSync(
+                isBudgetVisible = true,
+                isAuthenticated = false,
+                syncOnOpen = true,
+                budgetId = "budget-1",
+                isSyncing = false,
+                encryptedBudgetNeedsPassword = false,
+                hasEncryptionPassword = false,
+                lastAutomaticSyncAtEpochMillis = null,
+                nowEpochMillis = 100_000L,
+            ),
+        )
     }
 
     @Test

@@ -11,10 +11,15 @@ import kotlin.time.Clock
 fun MainViewController() = createTandemViewController(openTandemDatabase(tandemDatabaseBuilder()))
 
 private fun createTandemViewController(database: app.tandemforactual.data.database.TandemDatabase) =
-    ComposeUIViewController {
-        TandemApp(
-            database = database,
-            deviceCredentialStore = IosDeviceCredentialStore(),
-            nowEpochMillis = { Clock.System.now().toEpochMilliseconds() },
-        )
+    run {
+        val syncEvents = IosSyncEventSource()
+        ComposeUIViewController {
+            TandemApp(
+                database = database,
+                deviceCredentialStore = IosDeviceCredentialStore(),
+                nowEpochMillis = { Clock.System.now().toEpochMilliseconds() },
+                appResumeEvents = syncEvents.appResumeEvents,
+                networkRestoredEvents = syncEvents.networkRestoredEvents,
+            )
+        }
     }

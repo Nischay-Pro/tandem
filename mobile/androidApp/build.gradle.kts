@@ -31,6 +31,7 @@ dependencies {
   implementation(project(":data"))
   implementation(project(":api-client"))
   implementation(libs.room3Runtime)
+  implementation(libs.coroutinesCore)
   implementation(libs.workRuntimeKtx)
   implementation(libs.activityCompose)
   implementation(libs.composeRuntimeAndroid)

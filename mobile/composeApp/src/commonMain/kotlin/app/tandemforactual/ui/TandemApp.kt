@@ -48,6 +48,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.mapSaver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -87,7 +88,9 @@ import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -381,6 +384,33 @@ internal fun budgetChoicesForSelection(
         serverCatalog + cachedCatalog.filter { cached -> serverCatalog.none { it.budgetId == cached.budgetId } }
     }
 
+internal fun shouldTriggerAutomaticSync(
+    isBudgetVisible: Boolean,
+    isAuthenticated: Boolean,
+    syncOnOpen: Boolean,
+    budgetId: String,
+    isSyncing: Boolean,
+    encryptedBudgetNeedsPassword: Boolean,
+    hasEncryptionPassword: Boolean,
+    lastAutomaticSyncAtEpochMillis: Long?,
+    nowEpochMillis: Long,
+): Boolean {
+    if (
+        !isBudgetVisible ||
+        !isAuthenticated ||
+        !syncOnOpen ||
+        budgetId.isBlank() ||
+        isSyncing ||
+        (encryptedBudgetNeedsPassword && !hasEncryptionPassword)
+    ) {
+        return false
+    }
+    val lastSyncAt = lastAutomaticSyncAtEpochMillis ?: return true
+    return nowEpochMillis < lastSyncAt || nowEpochMillis - lastSyncAt >= AUTOMATIC_SYNC_COOLDOWN_MS
+}
+
+private const val AUTOMATIC_SYNC_COOLDOWN_MS = 30_000L
+
 internal class AppState {
     var theme by mutableStateOf(ThemeMode.DARK)
     var accent by mutableStateOf(AccentChoice.TEAL)
@@ -580,6 +610,8 @@ fun TandemApp(
     nowEpochMillis: () -> Long = { 0L },
     allowInsecureLoopback: Boolean = false,
     onBackgroundSyncSettingsChanged: ((enabled: Boolean, wifiOnly: Boolean, budgetId: String) -> Unit)? = null,
+    appResumeEvents: Flow<Unit> = emptyFlow(),
+    networkRestoredEvents: Flow<Unit> = emptyFlow(),
 ) {
     val state = rememberSaveable(saver = AppState.Saver) { AppState() }
     val apiClient = remember(allowInsecureLoopback) { TandemApiClient(allowInsecureLoopback) }
@@ -600,6 +632,10 @@ fun TandemApp(
         budgetChoicesForSelection(mobileSession.budgets, cachedBudgetCatalog, mobileSession.budgetCatalogLoaded)
     val usingCachedBudgetCatalog = !mobileSession.budgetCatalogLoaded && cachedBudgetCatalog.isNotEmpty()
     var syncRetryCounter by remember { mutableStateOf(0) }
+    var lastAutomaticSyncAtEpochMillis by remember { mutableStateOf<Long?>(null) }
+    var lastAutomaticSyncBudgetId by remember { mutableStateOf<String?>(null) }
+    var automaticSyncInFlight by remember { mutableStateOf(false) }
+    var pendingAutomaticSync by remember { mutableStateOf(false) }
     val backStack =
         rememberSaveable(startInPreview, saver = appRouteStackSaver) {
             mutableStateListOf(if (startInPreview) AppRoute.BUDGET else AppRoute.WELCOME)
@@ -744,6 +780,61 @@ fun TandemApp(
         )
     val route = backStack.last()
     var previousRoute by remember { mutableStateOf(route) }
+    val automaticSyncRequest =
+        rememberUpdatedState(
+            newValue = {
+                val now = nowEpochMillis()
+                if (mobileSession.isSyncing || automaticSyncInFlight) {
+                    pendingAutomaticSync = true
+                } else if (
+                    shouldTriggerAutomaticSync(
+                        isBudgetVisible = route == AppRoute.BUDGET,
+                        isAuthenticated = mobileSession.isAuthenticated,
+                        syncOnOpen = state.syncOnOpen,
+                        budgetId = state.selectedBudgetId,
+                        isSyncing = false,
+                        encryptedBudgetNeedsPassword = state.selectedBudgetEncrypted,
+                        hasEncryptionPassword = state.encryptedPassword.isNotBlank(),
+                        lastAutomaticSyncAtEpochMillis =
+                            lastAutomaticSyncAtEpochMillis.takeIf {
+                                lastAutomaticSyncBudgetId == state.selectedBudgetId
+                            },
+                        nowEpochMillis = now,
+                    )
+                ) {
+                    val budgetId = state.selectedBudgetId
+                    val encryptionPassword = state.encryptedPassword.takeIf { it.isNotBlank() }
+                    automaticSyncInFlight = true
+                    coroutineScope.launch {
+                        var syncSucceeded = false
+                        try {
+                            syncSucceeded =
+                                mobileSession.synchronize(
+                                    budgetId,
+                                    encryptionPassword,
+                                ) != null
+                        } finally {
+                            lastAutomaticSyncAtEpochMillis = now.takeIf { syncSucceeded }
+                            lastAutomaticSyncBudgetId = budgetId.takeIf { syncSucceeded }
+                            automaticSyncInFlight = false
+                        }
+                    }
+                }
+            },
+        )
+    LaunchedEffect(appResumeEvents) {
+        appResumeEvents.collect { automaticSyncRequest.value() }
+    }
+    LaunchedEffect(networkRestoredEvents) {
+        networkRestoredEvents.collect { automaticSyncRequest.value() }
+    }
+    LaunchedEffect(mobileSession.isSyncing, pendingAutomaticSync) {
+        if (!mobileSession.isSyncing && pendingAutomaticSync) {
+            pendingAutomaticSync = false
+            if (!mobileSession.syncComplete) lastAutomaticSyncAtEpochMillis = null
+            automaticSyncRequest.value()
+        }
+    }
 
     LaunchedEffect(route, mobileSession.pairedDevice?.deviceId) {
         if (
@@ -778,7 +869,14 @@ fun TandemApp(
             mobileSession.observeLocalRecords(state.selectedBudgetId)
         }
     }
-    LaunchedEffect(route, state.selectedBudgetId, state.syncOnOpen) {
+    LaunchedEffect(
+        route,
+        state.selectedBudgetId,
+        state.syncOnOpen,
+        mobileSession.isAuthenticated,
+        state.selectedBudgetEncrypted,
+        state.encryptedPassword,
+    ) {
         if (
             route == AppRoute.BUDGET &&
             previousRoute != AppRoute.FIRST_SYNC &&
@@ -787,10 +885,7 @@ fun TandemApp(
             state.selectedBudgetId.isNotBlank() &&
             (!state.selectedBudgetEncrypted || state.encryptedPassword.isNotBlank())
         ) {
-            mobileSession.synchronize(
-                state.selectedBudgetId,
-                state.encryptedPassword.takeIf { it.isNotBlank() },
-            )
+            automaticSyncRequest.value()
         }
         previousRoute = route
     }
