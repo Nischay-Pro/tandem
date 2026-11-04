@@ -95,9 +95,12 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.put
 
 private enum class AppRoute(
     val title: String,
@@ -334,12 +337,57 @@ private fun formatLiveDate(value: String?): String {
 private fun sanitizePairingCodeInput(value: String): String =
     value.uppercase().filter { it in 'A'..'Z' || it in '0'..'9' || it == '-' }.take(9)
 
+internal fun encodeCachedBudgetCatalog(budgets: List<BudgetCatalogItem>): String =
+    JsonArray(
+        budgets.map { budget ->
+            buildJsonObject {
+                put("budgetId", budget.budgetId)
+                put("name", budget.name)
+                put("isEncrypted", budget.isEncrypted)
+            }
+        },
+    ).toString()
+
+internal fun decodeCachedBudgetCatalog(value: String): List<BudgetCatalogItem> =
+    runCatching {
+        Json
+            .parseToJsonElement(value)
+            .jsonArray
+            .mapNotNull { element ->
+                val budget = element as? JsonObject ?: return@mapNotNull null
+                val budgetId = budget.stringValue("budgetId") ?: return@mapNotNull null
+                val name = budget.stringValue("name") ?: return@mapNotNull null
+                val isEncrypted = (budget["isEncrypted"] as? JsonPrimitive)?.booleanOrNull ?: return@mapNotNull null
+                BudgetCatalogItem(budgetId, name, isEncrypted)
+            }
+    }.getOrDefault(emptyList())
+
+internal fun cachedBudgetsWithLocalSnapshots(
+    savedCatalog: List<BudgetCatalogItem>,
+    localSnapshots: List<BudgetCatalogItem>,
+): List<BudgetCatalogItem> =
+    localSnapshots.map { localBudget ->
+        savedCatalog.firstOrNull { it.budgetId == localBudget.budgetId } ?: localBudget
+    }
+
+internal fun budgetChoicesForSelection(
+    serverCatalog: List<BudgetCatalogItem>,
+    cachedCatalog: List<BudgetCatalogItem>,
+    serverCatalogLoaded: Boolean,
+): List<BudgetCatalogItem> =
+    if (!serverCatalogLoaded) {
+        cachedCatalog
+    } else {
+        serverCatalog + cachedCatalog.filter { cached -> serverCatalog.none { it.budgetId == cached.budgetId } }
+    }
+
 internal class AppState {
     var theme by mutableStateOf(ThemeMode.DARK)
     var accent by mutableStateOf(AccentChoice.TEAL)
     var selectedBudget by mutableStateOf("Household")
     var selectedBudgetId by mutableStateOf("")
     var selectedBudgetEncrypted by mutableStateOf(false)
+    var cachedBudgetCatalogJson by mutableStateOf("")
     var budgetDisplaySettings by mutableStateOf<BudgetDisplaySettings?>(null)
     var selectedMonth by mutableStateOf(formatMonth(2026, 5))
     var selectedMonthId by mutableStateOf("2026-05")
@@ -382,7 +430,10 @@ internal class AppState {
             "accent" to accent.name,
             "backgroundStyle" to backgroundStyle,
             "homeLayout" to homeLayout,
+            "selectedBudget" to selectedBudget,
             "selectedBudgetId" to selectedBudgetId,
+            "selectedBudgetEncrypted" to selectedBudgetEncrypted.toString(),
+            "cachedBudgetCatalogJson" to cachedBudgetCatalogJson,
             "reduceMotion" to reduceMotion.toString(),
             "syncOnOpen" to syncOnOpen.toString(),
             "backgroundSyncEnabled" to backgroundSyncEnabled.toString(),
@@ -397,7 +448,10 @@ internal class AppState {
         accent = AccentChoice.entries.firstOrNull { it.name == saved["accent"] } ?: accent
         backgroundStyle = saved["backgroundStyle"] ?: backgroundStyle
         homeLayout = saved["homeLayout"] ?: homeLayout
+        selectedBudget = saved["selectedBudget"] ?: selectedBudget
         selectedBudgetId = saved["selectedBudgetId"] ?: selectedBudgetId
+        selectedBudgetEncrypted = saved["selectedBudgetEncrypted"]?.toBooleanStrictOrNull() ?: selectedBudgetEncrypted
+        cachedBudgetCatalogJson = saved["cachedBudgetCatalogJson"] ?: cachedBudgetCatalogJson
         reduceMotion = saved["reduceMotion"]?.toBooleanStrictOrNull() ?: reduceMotion
         syncOnOpen = saved["syncOnOpen"]?.toBooleanStrictOrNull() ?: syncOnOpen
         backgroundSyncEnabled = saved["backgroundSyncEnabled"]?.toBooleanStrictOrNull() ?: backgroundSyncEnabled
@@ -421,6 +475,7 @@ internal class AppState {
                         "selectedBudget" to state.selectedBudget,
                         "selectedBudgetId" to state.selectedBudgetId,
                         "selectedBudgetEncrypted" to state.selectedBudgetEncrypted,
+                        "cachedBudgetCatalogJson" to state.cachedBudgetCatalogJson,
                         "selectedMonth" to state.selectedMonth,
                         "selectedMonthId" to state.selectedMonthId,
                         "selectedAccountId" to state.selectedAccountId,
@@ -459,6 +514,7 @@ internal class AppState {
                         selectedBudget = saved["selectedBudget"] as? String ?: selectedBudget
                         selectedBudgetId = saved["selectedBudgetId"] as? String ?: selectedBudgetId
                         selectedBudgetEncrypted = saved["selectedBudgetEncrypted"] as? Boolean ?: selectedBudgetEncrypted
+                        cachedBudgetCatalogJson = saved["cachedBudgetCatalogJson"] as? String ?: cachedBudgetCatalogJson
                         selectedMonth = saved["selectedMonth"] as? String ?: selectedMonth
                         selectedMonthId = saved["selectedMonthId"] as? String ?: selectedMonthId
                         selectedAccountId = saved["selectedAccountId"] as? String ?: selectedAccountId
@@ -533,16 +589,50 @@ fun TandemApp(
         }
     val appPreferencesStore = remember(database) { database?.let(::AppPreferencesStore) }
     val coroutineScope = rememberCoroutineScope()
+    val cachedBudgetCatalog =
+        remember(state.cachedBudgetCatalogJson, mobileSession.cachedBudgets) {
+            cachedBudgetsWithLocalSnapshots(
+                decodeCachedBudgetCatalog(state.cachedBudgetCatalogJson),
+                mobileSession.cachedBudgets,
+            )
+        }
+    val availableBudgets =
+        budgetChoicesForSelection(mobileSession.budgets, cachedBudgetCatalog, mobileSession.budgetCatalogLoaded)
+    val usingCachedBudgetCatalog = !mobileSession.budgetCatalogLoaded && cachedBudgetCatalog.isNotEmpty()
     var syncRetryCounter by remember { mutableStateOf(0) }
     val backStack =
         rememberSaveable(startInPreview, saver = appRouteStackSaver) {
             mutableStateListOf(if (startInPreview) AppRoute.BUDGET else AppRoute.WELCOME)
         }
-    LaunchedEffect(mobileSession) {
+    LaunchedEffect(mobileSession, state.settingsStorageReady) {
+        if (!state.settingsStorageReady) return@LaunchedEffect
         val storedServerUrl = mobileSession.restoreStoredSession()
         if (storedServerUrl != null) {
             state.serverUrl = storedServerUrl
-            if (backStack.lastOrNull() == AppRoute.WELCOME) {
+        }
+        val localCachedBudgets = mobileSession.loadCachedBudgets()
+        val availableCachedBudgets =
+            cachedBudgetsWithLocalSnapshots(
+                decodeCachedBudgetCatalog(state.cachedBudgetCatalogJson),
+                localCachedBudgets,
+            )
+        val selectedCachedBudget = availableCachedBudgets.firstOrNull { it.budgetId == state.selectedBudgetId }
+        val firstCachedBudget = selectedCachedBudget ?: availableCachedBudgets.firstOrNull()
+        when {
+            selectedCachedBudget != null -> {
+                state.selectedBudget = selectedCachedBudget.name
+                state.selectedBudgetEncrypted = selectedCachedBudget.isEncrypted
+                backStack.clear()
+                backStack.add(AppRoute.BUDGET)
+            }
+            firstCachedBudget != null -> {
+                state.selectedBudget = firstCachedBudget.name
+                state.selectedBudgetId = firstCachedBudget.budgetId
+                state.selectedBudgetEncrypted = firstCachedBudget.isEncrypted
+                backStack.clear()
+                backStack.add(AppRoute.BUDGET)
+            }
+            storedServerUrl != null -> {
                 backStack.clear()
                 backStack.add(AppRoute.BUDGET_CHOOSER)
             }
@@ -622,6 +712,11 @@ fun TandemApp(
             )
         }
     }
+    LaunchedEffect(mobileSession.budgetCatalogVersion) {
+        if (mobileSession.budgetCatalogVersion > 0) {
+            state.cachedBudgetCatalogJson = encodeCachedBudgetCatalog(mobileSession.budgets)
+        }
+    }
     val navigation =
         AppNavigation(
             open = { next ->
@@ -651,11 +746,18 @@ fun TandemApp(
     var previousRoute by remember { mutableStateOf(route) }
 
     LaunchedEffect(route, mobileSession.pairedDevice?.deviceId) {
-        if (route == AppRoute.BUDGET_CHOOSER && mobileSession.isAuthenticated && mobileSession.budgets.isEmpty()) {
+        if (
+            route == AppRoute.BUDGET_CHOOSER &&
+            mobileSession.isAuthenticated &&
+            !mobileSession.budgetCatalogLoaded &&
+            mobileSession.budgets.isEmpty()
+        ) {
             mobileSession.loadBudgets()
         }
-        if (route == AppRoute.BUDGET_CHOOSER && mobileSession.budgets.none { it.budgetId == state.selectedBudgetId }) {
-            mobileSession.budgets.firstOrNull()?.let { budget ->
+    }
+    LaunchedEffect(route, state.selectedBudgetId, availableBudgets) {
+        if (route == AppRoute.BUDGET_CHOOSER && state.selectedBudgetId.isBlank()) {
+            availableBudgets.firstOrNull()?.let { budget ->
                 state.selectedBudget = budget.name
                 state.selectedBudgetId = budget.budgetId
                 state.selectedBudgetEncrypted = budget.isEncrypted
@@ -681,6 +783,7 @@ fun TandemApp(
             route == AppRoute.BUDGET &&
             previousRoute != AppRoute.FIRST_SYNC &&
             state.syncOnOpen &&
+            mobileSession.isAuthenticated &&
             state.selectedBudgetId.isNotBlank() &&
             (!state.selectedBudgetEncrypted || state.encryptedPassword.isNotBlank())
         ) {
@@ -759,16 +862,21 @@ fun TandemApp(
         }
     }
     val openSelectedBudget: () -> Unit = {
-        val selected = mobileSession.budgets.firstOrNull { it.budgetId == state.selectedBudgetId }
+        val selected = availableBudgets.firstOrNull { it.budgetId == state.selectedBudgetId }
         if (selected == null) {
-            // Keep a visible message in the chooser when the server catalog is empty or stale.
+            // Keep a visible message in the chooser when neither cache nor server has a catalog.
             coroutineScope.launch {
                 mobileSession.loadBudgets()
             }
-        } else if (selected.isEncrypted && state.encryptedPassword.isBlank()) {
-            backStack.add(AppRoute.UNLOCK_BUDGET)
         } else {
-            backStack.add(AppRoute.FIRST_SYNC)
+            coroutineScope.launch {
+                val isCached = mobileSession.hasCachedBudgetSnapshot(selected.budgetId)
+                when {
+                    isCached -> backStack.add(AppRoute.BUDGET)
+                    selected.isEncrypted && state.encryptedPassword.isBlank() -> backStack.add(AppRoute.UNLOCK_BUDGET)
+                    else -> backStack.add(AppRoute.FIRST_SYNC)
+                }
+            }
         }
     }
     val syncNow: () -> Unit = {
@@ -865,7 +973,7 @@ fun TandemApp(
                     onBack = navigation.back,
                     onSync = { navigation.open(AppRoute.SYNC_CENTER) },
                     onBudget = { navigation.open(AppRoute.BUDGET_CHOOSER) },
-                    actualConnected = mobileSession.isAuthenticated,
+                    actualConnected = mobileSession.isServerReachable,
                     liveAccounts = liveAccounts,
                     liveBudgetMonth = liveBudgetMonth,
                 )
@@ -1012,7 +1120,7 @@ private fun AppHeader(
             Text(
                 when {
                     actualConnected -> "Actual budgets"
-                    state.selectedBudgetId.isNotBlank() -> "Pair again"
+                    state.selectedBudgetId.isNotBlank() -> "Offline copy"
                     else -> "Sample data"
                 },
                 color = palette.muted,
@@ -1992,9 +2100,60 @@ private fun BudgetChooserScreen(
     onRefreshBudgets: () -> Unit,
     onOpenSelectedBudget: () -> Unit,
 ) {
+    val cachedCatalog =
+        remember(state.cachedBudgetCatalogJson, mobileSession.cachedBudgets) {
+            cachedBudgetsWithLocalSnapshots(
+                decodeCachedBudgetCatalog(state.cachedBudgetCatalogJson),
+                mobileSession.cachedBudgets,
+            )
+        }
+    val selectableBudgets =
+        budgetChoicesForSelection(mobileSession.budgets, cachedCatalog, mobileSession.budgetCatalogLoaded)
+    val usingCachedCatalog = !mobileSession.budgetCatalogLoaded && cachedCatalog.isNotEmpty()
+    val hasCachedOnlyBudgets = cachedCatalog.any { cached -> mobileSession.budgets.none { it.budgetId == cached.budgetId } }
+    val cachedBudgetSelected = cachedCatalog.any { it.budgetId == state.selectedBudgetId }
+    val selectedBudgetIsAvailable = selectableBudgets.any { it.budgetId == state.selectedBudgetId }
     PageColumn {
-        Heading("Select a budget", "Choose one of the budgets authorized for this device.")
+        Heading(
+            if (usingCachedCatalog || (mobileSession.budgets.isEmpty() && cachedCatalog.isNotEmpty())) {
+                "Saved budgets"
+            } else {
+                "Select a budget"
+            },
+            if (usingCachedCatalog) {
+                "Open a budget already saved on this phone. You can sync again when the server is available."
+            } else if (hasCachedOnlyBudgets) {
+                "Choose a server budget or open one of the saved copies on this phone."
+            } else {
+                "Choose one of the budgets authorized for this device."
+            },
+        )
         when {
+            usingCachedCatalog || (mobileSession.budgets.isEmpty() && cachedCatalog.isNotEmpty()) -> {
+                BodyText("The live budget list is unavailable. These copies stay on this phone.")
+                selectableBudgets.forEach { budget ->
+                    ChoiceRow(
+                        budget.name,
+                        if (budget.isEncrypted) "Encrypted budget · saved on this phone" else "Saved on this phone",
+                        selected = state.selectedBudgetId == budget.budgetId,
+                    ) { onSelectBudget(budget) }
+                }
+            }
+            selectableBudgets.isNotEmpty() -> {
+                selectableBudgets.forEach { budget ->
+                    val isOnServer = mobileSession.budgets.any { it.budgetId == budget.budgetId }
+                    val detail =
+                        when {
+                            !isOnServer && budget.isEncrypted -> "Encrypted budget · saved on this phone"
+                            !isOnServer -> "Saved on this phone"
+                            budget.isEncrypted -> "Encrypted Actual budget"
+                            else -> "Available on this server"
+                        }
+                    ChoiceRow(budget.name, detail, selected = state.selectedBudgetId == budget.budgetId) {
+                        onSelectBudget(budget)
+                    }
+                }
+            }
             mobileSession.isLoadingBudgets -> BodyText("Loading budgets from the Tandem server…")
             mobileSession.budgets.isEmpty() && mobileSession.isAuthenticated -> {
                 mobileSession.budgetError?.let { error ->
@@ -2011,21 +2170,17 @@ private fun BudgetChooserScreen(
                 }
                 SecondaryButton("Pair a device") { navigation.open(AppRoute.SERVER_ADDRESS) }
             }
-            else -> {
-                mobileSession.budgets.forEach { budget ->
-                    val detail = if (budget.isEncrypted) "Encrypted Actual budget" else "Available on this server"
-                    ChoiceRow(budget.name, detail, selected = state.selectedBudgetId == budget.budgetId) {
-                        onSelectBudget(budget)
-                    }
-                }
-            }
         }
-        mobileSession.budgetError?.takeIf { mobileSession.budgets.isNotEmpty() }?.let { error ->
+        mobileSession.budgetError?.takeIf { selectableBudgets.isNotEmpty() }?.let { error ->
             Text(error, color = tandemPalette.warning, fontSize = 12.sp)
         }
         PrimaryButton(
-            if (state.selectedBudgetEncrypted && state.encryptedPassword.isBlank()) "Unlock and open" else "Open budget",
-            enabled = mobileSession.budgets.isNotEmpty() && !mobileSession.isLoadingBudgets,
+            if (state.selectedBudgetEncrypted && state.encryptedPassword.isBlank() && !cachedBudgetSelected) {
+                "Unlock and open"
+            } else {
+                "Open budget"
+            },
+            enabled = selectedBudgetIsAvailable && (!mobileSession.isLoadingBudgets || cachedBudgetSelected),
             onClick = onOpenSelectedBudget,
         )
     }
@@ -2100,6 +2255,13 @@ private fun FirstSyncScreen(
             mobileSession.syncError != null -> {
                 Text(mobileSession.syncError.orEmpty(), color = palette.warning, fontSize = 13.sp, lineHeight = 19.sp)
                 SecondaryButton("Retry initial sync", onClick = onRetrySync)
+                if (mobileSession.cachedSnapshotBudgetId == state.selectedBudgetId && mobileSession.hasCachedSnapshot) {
+                    BodyText("The last saved copy is still available on this phone.")
+                    SecondaryButton("Open saved copy") {
+                        selectLatestCachedMonth(state, mobileSession.budgetMonthRecords, mobileSession.transactionRecords)
+                        navigation.selectTab(AppRoute.BUDGET)
+                    }
+                }
             }
         }
         PrimaryButton("Done", enabled = mobileSession.syncComplete) {
@@ -3314,7 +3476,7 @@ private fun SyncCenterScreen(
     if (state.selectedBudgetId.isNotBlank()) {
         val attention = mobileSession.pendingWrites.filter { it.status in setOf("queued", "conflict", "uncertain", "rejected") }
         PageColumn {
-            Badge(if (mobileSession.isAuthenticated) "Actual · connected" else "Offline copy", tandemPalette.positive)
+            Badge(if (mobileSession.isServerReachable) "Actual · connected" else "Offline copy", tandemPalette.positive)
             Heading("Sync center", "Review the local budget copy and any changes that need attention.")
             SurfaceCard {
                 Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -10,6 +10,33 @@ import kotlin.test.assertTrue
 
 class TandemMobileSessionTest {
     @Test
+    fun restoringStoredDeviceSessionDoesNotWaitForTheRemoteBudgetCatalog() =
+        runBlocking {
+            val savedSession =
+                """{"serverUrl":"https://budget.example.test","accessToken":"saved-token","device":{"deviceId":"device-1","principalId":"person-1","budgetIds":["budget-1"]}}"""
+            val credentialStore =
+                object : DeviceCredentialStore {
+                    override fun read(): String = savedSession
+
+                    override fun write(value: String) = Unit
+
+                    override fun clear() = Unit
+                }
+            val session =
+                TandemMobileSession(
+                    apiClient = TandemApiClient(),
+                    database = null,
+                    nowEpochMillis = { 0L },
+                    credentialStore = credentialStore,
+                )
+
+            assertEquals("https://budget.example.test", session.restoreStoredSession())
+            assertTrue(session.isAuthenticated)
+            assertTrue(session.budgets.isEmpty())
+            assertFalse(session.budgetCatalogLoaded)
+        }
+
+    @Test
     fun transientCredentialReadFailureKeepsStoredCredentialAndCanBeRetried() =
         runBlocking {
             var readAttempts = 0

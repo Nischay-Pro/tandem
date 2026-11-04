@@ -14,6 +14,19 @@ Room retains the complete synced transaction set; Sync Center reports the full
 visible count. Initial setup selects the most recently active cached month when
 the prior selection is unavailable.
 
+App launch is local-first after a budget has synced once. The app reads Room's
+completed sync checkpoints and opens the previously selected cached budget
+without waiting for the Tandem server, budget catalog, or a working device
+credential. If there is no saved selection, it opens the most recently synced
+cached budget. It uses the saved server catalog only to recover names and
+encryption metadata, and filters that catalog to budgets that really have a
+local snapshot. If the preference catalog is missing, cached budgets are
+discovered from Room and labeled using their saved currency when available.
+The app can then attempt sync in the background of the open screen; a network
+failure leaves the cached budget readable and offers retry through Sync Center.
+Pairing is only needed again for remote access when the server says the device
+credential is invalid.
+
 Snapshot and first-page change responses also carry an allowlist of the
 selected Actual budget's currency and display preferences. The mobile client
 persists these settings beside that budget's local records. The API carries
@@ -120,7 +133,11 @@ ignored `.dev-tmp/` paths and must not be committed.
   protocol.
 - The Compose root creates the API client, local repository, and sync
   coordinator. Pairing, budget catalog loading, and the first sync are wired to
-  onboarding. A per-session lock protects a full multi-request sync from a
+  onboarding. On launch, completed Room checkpoints are enough to open a local
+  budget; restoring the device credential and loading the server catalog are
+  not prerequisites for showing cached data. The most recently selected cached
+  budget is preferred, with the newest successful local snapshot as fallback.
+  A per-session lock protects a full multi-request sync from a
   concurrent re-pair or credential removal. The generated API package also
   keeps its base URL and auth provider process-wide, so requests select the
   owning session under a shared request lock. The UI starts an initial sync

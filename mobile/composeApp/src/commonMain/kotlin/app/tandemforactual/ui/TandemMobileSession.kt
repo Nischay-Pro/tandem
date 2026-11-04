@@ -61,6 +61,24 @@ internal class TandemMobileSession(
     var budgets by mutableStateOf<List<BudgetCatalogItem>>(emptyList())
         private set
 
+    var cachedBudgets by mutableStateOf<List<BudgetCatalogItem>>(emptyList())
+        private set
+
+    var budgetCatalogLoaded by mutableStateOf(false)
+        private set
+
+    var budgetCatalogVersion by mutableStateOf(0)
+        private set
+
+    var isServerReachable by mutableStateOf(false)
+        private set
+
+    var hasCachedSnapshot by mutableStateOf(false)
+        private set
+
+    var cachedSnapshotBudgetId by mutableStateOf("")
+        private set
+
     var isPairing by mutableStateOf(false)
         private set
 
@@ -167,7 +185,6 @@ internal class TandemMobileSession(
                     return null
                 }
             isCredentialStored = true
-            loadBudgets()
             return apiClient.currentServerUrl.takeIf { apiClient.isAuthenticated }
         } finally {
             isRestoringStoredSession = false
@@ -178,6 +195,8 @@ internal class TandemMobileSession(
         apiClient.forgetSession()
         pairedDevice = null
         budgets = emptyList()
+        budgetCatalogLoaded = false
+        isServerReachable = false
         budgetError = null
         clearStoredCredential()
     }
@@ -191,6 +210,7 @@ internal class TandemMobileSession(
         isPairing = true
         try {
             pairedDevice = apiClient.pair(serverUrl, pairingCode, deviceName)
+            isServerReachable = true
             persistCurrentSession()
             loadBudgets()
         } catch (error: CancellationException) {
@@ -211,9 +231,13 @@ internal class TandemMobileSession(
         isLoadingBudgets = true
         try {
             budgets = apiClient.listBudgets()
+            budgetCatalogLoaded = true
+            budgetCatalogVersion += 1
+            isServerReachable = true
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
+            isServerReachable = error.httpStatus != null
             budgetError = error.message ?: "Could not load budgets from this server."
             if (error.errorCode == "invalid_device_credential") {
                 apiClient.forgetSession()
@@ -223,6 +247,7 @@ internal class TandemMobileSession(
                 clearStoredCredential()
             }
         } catch (error: Exception) {
+            isServerReachable = false
             budgetError = "Could not load budgets from this server. Check the connection and try again."
         } finally {
             isLoadingBudgets = false
@@ -250,6 +275,7 @@ internal class TandemMobileSession(
                 apiClient.withExclusiveSession {
                     coordinator.synchronize(budgetId, encryptionPassword)
                 }
+            isServerReachable = true
             lastSyncSummary = summary
             loadLocalRecords(budgetId)
             syncedTransactionCount =
@@ -259,6 +285,7 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (error: BudgetSyncRemoteException) {
+            isServerReachable = error.httpStatus != null
             syncError =
                 when (error.httpStatus) {
                     401 -> "This device needs to be paired again."
@@ -270,9 +297,11 @@ internal class TandemMobileSession(
                 }
             return null
         } catch (error: BudgetSyncProtocolException) {
+            isServerReachable = true
             syncError = "The server returned budget data the app could not read."
             return null
         } catch (error: Exception) {
+            isServerReachable = false
             syncError = "Could not sync this budget. Your local data is still available."
             return null
         } finally {
@@ -602,6 +631,8 @@ internal class TandemMobileSession(
 
     suspend fun loadLocalRecords(budgetId: String) {
         val localRepository = repository ?: return
+        cachedSnapshotBudgetId = budgetId
+        hasCachedSnapshot = localRepository.hasCachedSnapshot(budgetId)
         budgetDisplaySettingsBudgetId = budgetId
         budgetDisplaySettings = localRepository.readBudgetDisplaySettings(budgetId)
         localSyncState = localRepository.readSyncState(budgetId)
@@ -618,6 +649,8 @@ internal class TandemMobileSession(
 
     suspend fun observeLocalRecords(budgetId: String) {
         val localRepository = repository ?: return
+        cachedSnapshotBudgetId = budgetId
+        hasCachedSnapshot = localRepository.hasCachedSnapshot(budgetId)
         budgetDisplaySettingsBudgetId = budgetId
         budgetDisplaySettings = localRepository.readBudgetDisplaySettings(budgetId)
         coroutineScope {
@@ -637,6 +670,23 @@ internal class TandemMobileSession(
             launch { localRepository.observePendingWrites(budgetId).collect { pendingWrites = it } }
             launch { localRepository.observeSyncState(budgetId).collect { localSyncState = it } }
         }
+    }
+
+    suspend fun hasCachedBudgetSnapshot(budgetId: String): Boolean = repository?.hasCachedSnapshot(budgetId) == true
+
+    suspend fun loadCachedBudgets(): List<BudgetCatalogItem> {
+        val localRepository = repository ?: return emptyList()
+        val cached =
+            localRepository.findCachedBudgetIds().map { budgetId ->
+                val currencyCode = localRepository.readBudgetDisplaySettings(budgetId)?.currencyCode
+                BudgetCatalogItem(
+                    budgetId = budgetId,
+                    name = currencyCode?.let { "Saved budget · $it" } ?: "Saved budget",
+                    isEncrypted = false,
+                )
+            }
+        cachedBudgets = cached
+        return cached
     }
 
     private suspend fun persistCurrentSession() {
@@ -665,6 +715,11 @@ internal class TandemMobileSession(
             credentialStorageError = "The saved device credential could not be removed."
         }
     }
+}
+
+private suspend fun LocalBudgetRepository.hasCachedSnapshot(budgetId: String): Boolean {
+    val checkpoint = readSyncCheckpoint(budgetId) ?: return false
+    return checkpoint.generation.isNotBlank() && checkpoint.cursor != null
 }
 
 private fun JsonObject.stringValue(name: String): String? = (this[name] as? JsonPrimitive)?.contentOrNull

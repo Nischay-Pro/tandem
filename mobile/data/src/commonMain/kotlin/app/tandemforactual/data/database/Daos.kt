@@ -250,6 +250,11 @@ interface BudgetSyncStateDao {
     @Query("SELECT * FROM budget_sync_state WHERE budgetId = :budgetId")
     suspend fun find(budgetId: String): BudgetSyncStateEntity?
 
+    @Query(
+        "SELECT * FROM budget_sync_state WHERE generation != '' AND cursor IS NOT NULL ORDER BY COALESCE(lastSyncedAtEpochMs, 0) DESC, budgetId ASC",
+    )
+    suspend fun findCachedBudgets(): List<BudgetSyncStateEntity>
+
     @Query("SELECT * FROM budget_sync_state WHERE budgetId = :budgetId")
     fun observe(budgetId: String): Flow<BudgetSyncStateEntity?>
 

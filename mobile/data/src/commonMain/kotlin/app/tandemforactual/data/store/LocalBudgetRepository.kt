@@ -219,6 +219,9 @@ class LocalBudgetRepository(
 
     suspend fun readSyncState(budgetId: String): BudgetSyncStateEntity? = database.budgetSyncStateDao().find(budgetId)
 
+    /** Lists local snapshots with a completed sync checkpoint, newest successful sync first. */
+    suspend fun findCachedBudgetIds(): List<String> = database.budgetSyncStateDao().findCachedBudgets().map { it.budgetId }
+
     suspend fun readBudgetDisplaySettings(budgetId: String): BudgetDisplaySettings? =
         database.budgetRecordDao().find(budgetId, "budget-settings", "display")?.remoteJson?.let { body ->
             runCatching {

@@ -19,6 +19,25 @@ import kotlin.test.fail
 
 class LocalBudgetRepositoryTest {
     @Test
+    fun cachedBudgetIdsIncludeSnapshotsAfterFailedRefreshAndSortByLastSuccessfulSync() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                var now = 100L
+                val repository = LocalBudgetRepository(database) { now }
+                repository.applySnapshot("older-budget", GENERATION, "c1", emptyList())
+                now = 200L
+                repository.applySnapshot("newer-budget", GENERATION, "c1", emptyList())
+                now = 300L
+                repository.markSyncFailed("newer-budget", "connection-lost")
+
+                assertEquals(listOf("newer-budget", "older-budget"), repository.findCachedBudgetIds())
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun budgetDisplaySettingsPersistAcrossSnapshotsAndIncrementalSync() =
         runBlocking {
             val database = newDatabase()
