@@ -91,11 +91,18 @@ flows. Worker changes therefore appear in the open UI without a route reload.
 The Pixel's Android device regression verified updates across two independently
 opened database instances. The worker skips encrypted budgets because budget
 passwords are never persisted. WorkManager may defer periodic execution to meet
-system power and network rules. The interval, network constraints, and Android
-build are verified; live background execution still needs a running
-Tandem/Actual test server. At the latest Pixel check, the debug app launched
-without a crash, but the local Docker stack was stopped and the saved server
-could not be reached.
+system power and network rules. On 2026-11-04, Pixel 10a ran
+`BackgroundBudgetSyncWorker` against the original local Tandem/Actual API using
+the saved device credential. WorkManager reported `SUCCESS`, and the selected
+CAD budget's Room `lastSyncedAt` advanced. The six-hour periodic job was
+registered; forcing it before its due time correctly made WorkManager defer
+execution. The same worker was then enqueued as one-time WorkManager work to
+verify its live API and Room path immediately. The temporary debug trigger was
+removed, the standard debug APK reinstalled, and the schedule preference
+restored to off. The Pixel still showed its device credential as active and the
+cached budget as `READY`. Execution after a full periodic interval remains
+unobserved. iOS scheduling still needs an iOS host target, and iOS runtime
+behavior cannot be verified in this Linux workspace.
 
 Automatic sync runs when the app resumes or network access returns while a
 cached budget is visible. It requires the sync-on-open preference, a restored
