@@ -67,8 +67,10 @@ class BackgroundBudgetSyncWorker(
             }
         val credentialStore = AndroidDeviceCredentialStore(applicationContext)
         var apiClient: TandemApiClient? = null
+        var notificationPreferences: Map<String, String>? = null
         return try {
             val preferences = AppPreferencesStore(database).read()
+            notificationPreferences = preferences
             if (preferences["backgroundSyncEnabled"] != "true") return Result.success()
             val budgetId = preferences["selectedBudgetId"]?.takeIf { it.isNotBlank() } ?: return Result.success()
             val storedSession = credentialStore.read() ?: return Result.success()
@@ -80,8 +82,14 @@ class BackgroundBudgetSyncWorker(
             if (budget.isEncrypted) return Result.success()
 
             val repository = LocalBudgetRepository(database) { System.currentTimeMillis() }
-            sessionClient.withExclusiveSession {
+            val summary = sessionClient.withExclusiveSession {
                 BudgetSyncCoordinator(repository, GeneratedBudgetSyncRemote(sessionClient)).synchronize(budgetId)
+            }
+            if (preferences["conflictReviewAlerts"] == "true") {
+                BudgetSystemNotifications.conflicts(applicationContext, summary.writesConflicted)
+            }
+            if (preferences["rejectedEditAlerts"] == "true") {
+                BudgetSystemNotifications.rejected(applicationContext, summary.writesRejected)
             }
             Result.success()
         } catch (error: CancellationException) {
@@ -90,13 +98,25 @@ class BackgroundBudgetSyncWorker(
             if (error.errorCode == "invalid_device_credential") {
                 apiClient?.let { client -> runCatching { client.forgetSession() } }
                 runCatching { credentialStore.clear() }
+                if (notificationPreferences?.get("syncReminders") == "true") {
+                    BudgetSystemNotifications.syncFailed(applicationContext)
+                }
                 Result.success()
             } else {
+                if (notificationPreferences?.get("syncReminders") == "true") {
+                    BudgetSystemNotifications.syncFailed(applicationContext)
+                }
                 error.httpStatus.toWorkResult()
             }
         } catch (error: BudgetSyncRemoteException) {
+            if (notificationPreferences?.get("syncReminders") == "true") {
+                BudgetSystemNotifications.syncFailed(applicationContext)
+            }
             error.httpStatus.toWorkResult()
         } catch (_: Exception) {
+            if (notificationPreferences?.get("syncReminders") == "true") {
+                BudgetSystemNotifications.syncFailed(applicationContext)
+            }
             Result.retry()
         } finally {
             database.close()

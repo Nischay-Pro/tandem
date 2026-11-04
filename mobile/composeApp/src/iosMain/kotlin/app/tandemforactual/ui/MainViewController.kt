@@ -12,17 +12,23 @@ import kotlin.time.Clock
 fun MainViewController(
     onBackgroundSyncSettingsChanged: ((Boolean, Boolean, String) -> Unit)? = null,
     onSystemAppearanceChanged: ((Boolean, Boolean) -> Unit)? = null,
+    onRequestNotificationPermission: (() -> Unit)? = null,
+    onOpenNotificationSettings: (() -> Unit)? = null,
 ): UIViewController =
     createTandemViewController(
         openTandemDatabase(tandemDatabaseBuilder()),
         onBackgroundSyncSettingsChanged,
         onSystemAppearanceChanged,
+        onRequestNotificationPermission,
+        onOpenNotificationSettings,
     )
 
 private fun createTandemViewController(
     database: app.tandemforactual.data.database.TandemDatabase,
     onBackgroundSyncSettingsChanged: ((Boolean, Boolean, String) -> Unit)?,
     onSystemAppearanceChanged: ((Boolean, Boolean) -> Unit)?,
+    onRequestNotificationPermission: (() -> Unit)?,
+    onOpenNotificationSettings: (() -> Unit)?,
 ): UIViewController {
     val syncEvents = IosSyncEventSource()
     return ComposeUIViewController {
@@ -32,6 +38,8 @@ private fun createTandemViewController(
             nowEpochMillis = { Clock.System.now().toEpochMilliseconds() },
             onBackgroundSyncSettingsChanged = onBackgroundSyncSettingsChanged,
             onSystemAppearanceChanged = onSystemAppearanceChanged,
+            onRequestNotificationPermission = onRequestNotificationPermission,
+            onOpenNotificationSettings = onOpenNotificationSettings,
             appResumeEvents = syncEvents.appResumeEvents,
             networkRestoredEvents = syncEvents.networkRestoredEvents,
         )

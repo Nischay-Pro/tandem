@@ -93,8 +93,13 @@ final class IosBackgroundSyncScheduler {
 
             guard runGate.claim() else { return }
             monitor.cancel()
-            let handle = IosBackgroundSyncHandleKt.startIosBackgroundBudgetSync { success in
-                completion.finish(success: success.boolValue)
+            let handle = IosBackgroundSyncHandleKt.startIosBackgroundBudgetSync { taskSucceeded, syncFailed, conflictCount, rejectedCount in
+                if syncFailed.boolValue {
+                    IosBudgetNotifications.shared.syncFailed()
+                }
+                IosBudgetNotifications.shared.conflicts(Int32(conflictCount.intValue))
+                IosBudgetNotifications.shared.rejected(Int32(rejectedCount.intValue))
+                completion.finish(success: taskSucceeded.boolValue)
                 return KotlinUnit()
             }
             handleSlot.install(handle)

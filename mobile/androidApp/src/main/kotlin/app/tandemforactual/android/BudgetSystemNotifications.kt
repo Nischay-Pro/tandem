@@ -1,0 +1,97 @@
+package app.tandemforactual.android
+
+import android.Manifest
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+
+internal object BudgetSystemNotifications {
+    private const val CHANNEL_ID = "tandem-budget-alerts"
+    private const val SYNC_FAILURE_ID = 4101
+    private const val CONFLICT_ID = 4102
+    private const val REJECTED_ID = 4103
+
+    fun initialize(context: Context) {
+        context.applicationContext.getSystemService(NotificationManager::class.java)?.let(::createChannel)
+    }
+
+    fun syncFailed(context: Context) {
+        show(
+            context,
+            SYNC_FAILURE_ID,
+            "Budget sync needs attention",
+            "Tandem couldn't refresh your budget. Open the app to retry.",
+        )
+    }
+
+    fun conflicts(context: Context, count: Int) {
+        if (count <= 0) return
+        show(
+            context,
+            CONFLICT_ID,
+            "Budget changes need review",
+            "$count change${if (count == 1) "" else "s"} need${if (count == 1) "s" else ""} your choice.",
+        )
+    }
+
+    fun rejected(context: Context, count: Int) {
+        if (count <= 0) return
+        show(
+            context,
+            REJECTED_ID,
+            "An edit wasn't applied",
+            "$count edit${if (count == 1) "" else "s"} need${if (count == 1) "s" else ""} review.",
+        )
+    }
+
+    private fun show(
+        context: Context,
+        notificationId: Int,
+        title: String,
+        message: String,
+    ) {
+        val applicationContext = context.applicationContext
+        val manager = applicationContext.getSystemService(NotificationManager::class.java) ?: return
+        if (!manager.areNotificationsEnabled()) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            applicationContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+
+        createChannel(manager)
+        val openApp =
+            PendingIntent.getActivity(
+                applicationContext,
+                notificationId,
+                Intent(applicationContext, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        val notification =
+            Notification.Builder(applicationContext, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_tandem_notification)
+                .setContentTitle(title)
+                .setContentText(message)
+                .setStyle(Notification.BigTextStyle().bigText(message))
+                .setContentIntent(openApp)
+                .setAutoCancel(true)
+                .setOnlyAlertOnce(true)
+                .build()
+        manager.notify(notificationId, notification)
+    }
+
+    private fun createChannel(manager: NotificationManager) {
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_ID, "Budget activity", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Background budget sync and review alerts"
+            },
+        )
+    }
+}

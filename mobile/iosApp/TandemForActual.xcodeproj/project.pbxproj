@@ -12,6 +12,7 @@
 		A10000000000000000000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* Assets.xcassets */; };
 		A10000000000000000000004 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* LaunchScreen.storyboard */; };
 		A10000000000000000000005 /* ComposeApp.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* ComposeApp.framework */; };
+		A10000000000000000000006 /* IosBudgetNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* IosBudgetNotifications.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,6 +23,7 @@
 		A20000000000000000000005 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		A20000000000000000000006 /* ComposeApp.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ComposeApp.framework; path = ComposeApp.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000000000000000000007 /* TandemForActual.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TandemForActual.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000008 /* IosBudgetNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosBudgetNotifications.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -41,6 +43,7 @@
 			children = (
 				A20000000000000000000001 /* TandemCompanionApp.swift */,
 				A20000000000000000000002 /* IosBackgroundSyncScheduler.swift */,
+				A20000000000000000000008 /* IosBudgetNotifications.swift */,
 				A20000000000000000000003 /* Info.plist */,
 				A20000000000000000000004 /* Assets.xcassets */,
 				A20000000000000000000005 /* LaunchScreen.storyboard */,
@@ -138,6 +141,7 @@
 			files = (
 				A10000000000000000000001 /* TandemCompanionApp.swift in Sources */,
 				A10000000000000000000002 /* IosBackgroundSyncScheduler.swift in Sources */,
+				A10000000000000000000006 /* IosBudgetNotifications.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

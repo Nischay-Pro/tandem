@@ -131,11 +131,13 @@ Appearance and home-layout preferences now affect the shared UI: the selected
 background is applied to every screen, the budget overview supports roomy,
 compact, and essentials-first layouts, and Reduce Motion switches route changes
 to immediate transitions. Conflict, rejected-edit, and sync-reminder settings
-control in-app banners on the live budget overview. They do not post operating
-system notifications. Budget Preferences shows which planning values come from
-Actual and marks upcoming due-date data as unavailable because that data is not
-part of the current mobile sync. Biometric app lock and transaction deletion are
-not exposed as switches or actions until those features are implemented.
+control in-app banners and alerts from scheduled background sync. Android and
+iOS ask for notification permission from the Notifications settings page;
+delivery remains controlled by OS permission and notification settings.
+Budget Preferences shows which planning values come from Actual and marks
+upcoming due-date data as unavailable because that data is not part of the
+current mobile sync. Biometric app lock and transaction deletion are not exposed
+as switches or actions until those features are implemented.
 
 The eight-character pairing code is shown as readable, centered text in the
 entry field. It accepts the server's `XXXX-XXXX` format, with or without the

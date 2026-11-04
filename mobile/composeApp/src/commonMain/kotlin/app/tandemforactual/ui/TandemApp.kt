@@ -640,6 +640,8 @@ fun TandemApp(
     allowInsecureLoopback: Boolean = false,
     onBackgroundSyncSettingsChanged: ((enabled: Boolean, wifiOnly: Boolean, budgetId: String) -> Unit)? = null,
     onSystemAppearanceChanged: ((isDark: Boolean, followsSystem: Boolean) -> Unit)? = null,
+    onRequestNotificationPermission: (() -> Unit)? = null,
+    onOpenNotificationSettings: (() -> Unit)? = null,
     appResumeEvents: Flow<Unit> = emptyFlow(),
     networkRestoredEvents: Flow<Unit> = emptyFlow(),
 ) {
@@ -1172,6 +1174,8 @@ fun TandemApp(
                     onDiscardWrite = discardWrite,
                     onRetryUncertainWrite = retryUncertainWrite,
                     onForgetDevice = { coroutineScope.launch { mobileSession.forgetDevice() } },
+                    onRequestNotificationPermission = onRequestNotificationPermission,
+                    onOpenNotificationSettings = onOpenNotificationSettings,
                 )
             }
             if (route.isTab()) {
@@ -1455,6 +1459,8 @@ private fun ScreenContent(
     onDiscardWrite: (String) -> Unit,
     onRetryUncertainWrite: (String) -> Unit,
     onForgetDevice: () -> Unit,
+    onRequestNotificationPermission: (() -> Unit)?,
+    onOpenNotificationSettings: (() -> Unit)?,
 ) {
     when (route) {
         AppRoute.STARTUP -> StartupScreen()
@@ -1569,7 +1575,12 @@ private fun ScreenContent(
         AppRoute.SERVER_DEVICE ->
             ServerDeviceScreen(state, mobileSession, navigation, onForgetDevice)
         AppRoute.SECURITY_PRIVACY -> SecurityScreen(mobileSession)
-        AppRoute.NOTIFICATIONS -> NotificationsScreen(state)
+        AppRoute.NOTIFICATIONS ->
+            NotificationsScreen(
+                state,
+                onRequestNotificationPermission,
+                onOpenNotificationSettings,
+            )
         AppRoute.LOCAL_DATA -> LocalDataScreen(state, mobileSession, onSyncNow)
         AppRoute.ABOUT -> AboutScreen()
     }
@@ -4464,24 +4475,49 @@ private fun SecurityScreen(mobileSession: TandemMobileSession) {
 }
 
 @Composable
-private fun NotificationsScreen(state: AppState) {
+private fun NotificationsScreen(
+    state: AppState,
+    onRequestNotificationPermission: (() -> Unit)?,
+    onOpenNotificationSettings: (() -> Unit)?,
+) {
     PageColumn {
-        Heading("Alert preferences", "Choose which in-app reminders appear on the budget overview.")
-        SectionCard("Budget activity", "Reminders appear while using the app") {
-            ToggleRow("Sync reminders", "Show a banner when a sync fails", state.syncReminders) { state.syncReminders = it }
+        Heading("Alert preferences", "Choose in-app reminders and background notifications.")
+        SectionCard("Budget activity", "In-app banners appear when you open the budget") {
+            ToggleRow(
+                "Sync reminders",
+                "Show a banner and notification when a background sync fails",
+                state.syncReminders,
+            ) {
+                state.syncReminders = it
+            }
             DividerLine()
-            ToggleRow("Conflict review alerts", "Show a reminder when an edit needs review", state.conflictReviewAlerts) {
+            ToggleRow(
+                "Conflict review alerts",
+                "Show a banner and notification when a background sync finds a conflict",
+                state.conflictReviewAlerts,
+            ) {
                 state.conflictReviewAlerts =
                     it
             }
             DividerLine()
             ToggleRow(
                 "Rejected edit alerts",
-                "Show a reminder when an edit was not applied",
+                "Show a banner and notification when a background sync cannot apply an edit",
                 state.rejectedEditAlerts,
-            ) { state.rejectedEditAlerts = it }
+            ) {
+                state.rejectedEditAlerts = it
+            }
         }
-        PreviewNote("These controls show in-app banners. System notifications are not sent.")
+        SectionCard("System permission", "The operating system controls notification delivery") {
+            if (onRequestNotificationPermission != null) {
+                SecondaryButton("Allow notifications") { onRequestNotificationPermission() }
+                Spacer(Modifier.height(8.dp))
+            }
+            if (onOpenNotificationSettings != null) {
+                SecondaryButton("Open notification settings") { onOpenNotificationSettings() }
+            }
+        }
+        PreviewNote("System alerts follow scheduled sync; banners appear in-app. If disabled, manage permission in system settings.")
     }
 }
 
