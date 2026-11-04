@@ -3,10 +3,12 @@
     android:height="1248dp"
     android:viewportWidth="1248"
     android:viewportHeight="1248">
+  <group android:scaleX="0.58" android:scaleY="0.58" android:pivotX="624" android:pivotY="624">
     <path
         android:fillColor="#FF805AD5"
         android:pathData="M312,0h624c172,0 312,140 312,312v624c0,172 -140,312 -312,312H312C140,1248 0,1108 0,936V312C0,140 140,0 312,0z" />
-  <group android:scaleX="0.9" android:scaleY="0.9" android:pivotX="624" android:pivotY="624">
+  </group>
+  <group android:scaleX="0.52" android:scaleY="0.52" android:pivotX="624" android:pivotY="624">
     <path
         android:fillColor="#00000000"
         android:strokeColor="#FFFFFFFF"
