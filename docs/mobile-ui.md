@@ -8,13 +8,11 @@ uses a lighter purple for contrast. Pure Black remains available as the OLED
 option. A saved accent choice is preserved; new installs start with Actual
 Purple.
 
-Tandem's supplied logo remains its own brand mark. The app icon uses the
-purple-field/white-mark treatment in `mobile/branding/tandem-app-icon.svg` and
-the platform launch screens use a white transparent mark on an Actual navy
-background. The supplied `tandem-purple-transparent.svg` is retained unchanged
-as the purple-on-transparent source. `tandem-white-transparent.svg` is the
-white-on-transparent derivative used on dark launch surfaces. The in-app mark
-chooses purple on light surfaces and white on dark surfaces.
+Tandem's supplied `tandem-ratio-1point2.svg` and inverted variant are the active
+logo sources. The app icon uses the inverted purple-field/white-mark treatment;
+Android and iOS apply their native squircle icon masks. The in-app mark and
+launch screens use a purple squircle tile with the white logo. The transparent
+purple and white vectors are retained for use on other backgrounds.
 
 Android resources use an adaptive icon and a navy system splash. The iOS host
 project at `mobile/iosApp/TandemForActual.xcodeproj` contains the app icon,
