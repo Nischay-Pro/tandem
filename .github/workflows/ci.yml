@@ -15,7 +15,7 @@ jobs:
   mobile:
     name: Android, iOS, and generated client gate
     runs-on: macos-26
-    timeout-minutes: 35
+    timeout-minutes: 50
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -63,6 +63,16 @@ jobs:
           :data:iosSimulatorArm64Test
           :data:koverVerify
           :data:ktlintCheck
+
+      - name: Build iOS app host with Xcode
+        working-directory: mobile
+        run: |
+          xcodebuild \
+            -project iosApp/TandemForActual.xcodeproj \
+            -scheme TandemForActual \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
 
       - name: Run Android database persistence test on emulator
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0

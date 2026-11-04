@@ -110,10 +110,10 @@ are not stored. The Xcode target also owns the iOS app icon and dark launch
 screen assets. The shared appearance setting is forwarded to SwiftUI so iOS
 system chrome follows the selected light, dark, or system mode.
 
-This Linux workspace cannot run Xcode or the iOS app. Kotlin iOS arm64 and
-simulator targets compile here, but the Swift host, Xcode framework link, asset
-catalog, and scheduled runtime behavior still need a macOS build and device or
-simulator check.
+The macOS mobile CI job builds the iOS simulator app with Xcode, checking the
+Swift host, framework link, and asset catalog. This Linux workspace cannot run
+the iOS app. Scheduled refresh behavior still needs a simulator or device
+runtime check.
 
 Automatic sync runs when the app resumes or network access returns while a
 cached budget is visible. It requires the sync-on-open preference, a restored

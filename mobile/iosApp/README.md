@@ -20,6 +20,7 @@ registers it at launch and schedules it only when the user enables background
 sync and has selected a budget. iOS treats the six-hour date as an earliest
 start and chooses whether and when to run the refresh.
 
-The Swift host and Xcode project have not been built in this Linux workspace.
-Run the Xcode build and scheduled-task check on macOS before treating iOS
-background execution as runtime-verified.
+The macOS mobile CI job builds this Xcode simulator target. This Linux
+workspace cannot run Xcode locally. The build checks Swift, project wiring,
+framework linking, and assets; scheduled-task behavior still requires a
+simulator or device runtime check before it is treated as verified.
