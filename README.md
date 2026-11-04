@@ -22,7 +22,7 @@ Actual's [sync system includes a CRDT implementation](https://actualbudget.org/d
 
 - A reachable self-hosted Actual Budget server. The verified compatibility baseline is Actual `26.10.0` with `@actual-app/api` `26.10.0`.
 - A running Tandem API service configured to connect to that Actual server.
-- For backend development: the versions pinned in `mise.toml` and Docker Compose.
+- For backend development: `mise`, Docker Compose, and the tool versions pinned in `mise.toml`.
 - For Android development: Android Studio, Android SDK, and the Java/Gradle toolchain documented in [`docs/mobile-api-client.md`](docs/mobile-api-client.md).
 - For iOS development: macOS with Xcode.
 
@@ -43,7 +43,7 @@ Configure `ACTUAL_SERVER_URL` and `ACTUAL_SERVER_PASSWORD` in the environment us
 pnpm dev:up
 ```
 
-The API listens on port `19753`. Check that it is ready:
+Leave the service running. In another terminal, check that the API is ready:
 
 ```sh
 curl --fail http://localhost:19753/api/v1/health/ready
