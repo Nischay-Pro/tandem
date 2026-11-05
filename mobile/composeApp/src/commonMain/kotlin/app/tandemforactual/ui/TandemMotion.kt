@@ -17,6 +17,7 @@ internal object TandemMotion {
     const val REVEAL_MILLIS = 280
     const val STATUS_ENTER_MILLIS = 220
     const val STATUS_EXIT_MILLIS = 120
+    const val STATUS_CHANGE_MILLIS = 180
     const val FADE_THROUGH_DELAY_MILLIS = STATUS_EXIT_MILLIS
 
     val enterEasing = LinearOutSlowInEasing

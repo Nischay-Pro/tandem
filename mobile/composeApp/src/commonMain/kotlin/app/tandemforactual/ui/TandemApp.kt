@@ -18,9 +18,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -1736,8 +1734,7 @@ private fun AppHeader(
                             } else {
                                 fadeIn(
                                     tween(
-                                        TandemMotion.CONTROL_MILLIS,
-                                        delayMillis = TandemMotion.FADE_THROUGH_DELAY_MILLIS,
+                                        TandemMotion.STATUS_CHANGE_MILLIS,
                                         easing = TandemMotion.enterEasing,
                                     ),
                                 ) togetherWith
@@ -2226,24 +2223,9 @@ private fun AnimatedStatusText(
             if (reduceMotion) {
                 EnterTransition.None togetherWith ExitTransition.None
             } else {
-                (
-                    fadeIn(
-                        tween(
-                            TandemMotion.STATUS_ENTER_MILLIS,
-                            delayMillis = TandemMotion.FADE_THROUGH_DELAY_MILLIS,
-                            easing = TandemMotion.enterEasing,
-                        ),
-                    ) +
-                        slideInVertically(
-                            tween(TandemMotion.STATUS_ENTER_MILLIS, easing = TandemMotion.movementEasing),
-                        ) { it / 8 }
-                ) togetherWith
-                    (
-                        fadeOut(tween(TandemMotion.STATUS_EXIT_MILLIS, easing = TandemMotion.exitEasing)) +
-                            slideOutVertically(
-                                tween(TandemMotion.STATUS_EXIT_MILLIS, easing = TandemMotion.movementEasing),
-                            ) { -it / 10 }
-                    )
+                fadeIn(
+                    tween(TandemMotion.STATUS_CHANGE_MILLIS, easing = TandemMotion.enterEasing),
+                ) togetherWith fadeOut(tween(TandemMotion.STATUS_EXIT_MILLIS, easing = TandemMotion.exitEasing))
             }
         },
         contentAlignment = Alignment.CenterStart,
@@ -4565,33 +4547,35 @@ private fun SyncCenterScreen(
                         lineHeight = 20.sp,
                     )
                 }
-                if (attention.isNotEmpty()) {
-                    attention.forEachIndexed { index, operation ->
-                        if (index > 0) DividerLine()
-                        val transaction =
-                            liveTransactionItems(mobileSession).firstOrNull { it.recordId == operation.recordId }
-                        ListRow(
-                            when (operation.status) {
-                                "conflict" -> "!"
-                                "uncertain" -> "?"
-                                "rejected" -> "×"
-                                else -> "↻"
-                            },
-                            transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
-                            "${operation.status.replaceFirstChar { it.uppercase() }} · ${transaction?.category ?: "Transaction edit"}",
-                            "Review",
-                            onClick = {
-                                state.selectedConflictOperationId = operation.operationId
-                                navigation.open(
-                                    when (operation.status) {
-                                        "conflict" -> AppRoute.CONFLICT_REVIEW
-                                        "uncertain" -> AppRoute.UNCERTAIN_WRITE
-                                        "rejected" -> AppRoute.REJECTED_WRITE
-                                        else -> AppRoute.UNCERTAIN_WRITE
-                                    },
-                                )
-                            },
-                        )
+                AnimatedReveal(visible = attention.isNotEmpty()) {
+                    Column {
+                        attention.forEachIndexed { index, operation ->
+                            if (index > 0) DividerLine()
+                            val transaction =
+                                liveTransactionItems(mobileSession).firstOrNull { it.recordId == operation.recordId }
+                            ListRow(
+                                when (operation.status) {
+                                    "conflict" -> "!"
+                                    "uncertain" -> "?"
+                                    "rejected" -> "×"
+                                    else -> "↻"
+                                },
+                                transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
+                                "${operation.status.replaceFirstChar { it.uppercase() }} · ${transaction?.category ?: "Transaction edit"}",
+                                "Review",
+                                onClick = {
+                                    state.selectedConflictOperationId = operation.operationId
+                                    navigation.open(
+                                        when (operation.status) {
+                                            "conflict" -> AppRoute.CONFLICT_REVIEW
+                                            "uncertain" -> AppRoute.UNCERTAIN_WRITE
+                                            "rejected" -> AppRoute.REJECTED_WRITE
+                                            else -> AppRoute.UNCERTAIN_WRITE
+                                        },
+                                    )
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -4660,7 +4644,7 @@ private fun ConflictInboxScreen(
                     Column(Modifier.padding(15.dp)) { BodyText("There are no conflicts in the current local copy.") }
                 }
             }
-            if (conflicts.isNotEmpty()) {
+            AnimatedReveal(visible = conflicts.isNotEmpty()) {
                 SectionCard("Conflicts", "${conflicts.size} transaction changes") {
                     conflicts.forEachIndexed { index, operation ->
                         if (index > 0) DividerLine()
@@ -5475,9 +5459,11 @@ private fun LocalDataScreen(
             ListRow("↑", "Queued changes", "Waiting to sync", formatInteger(queuedCount))
             DividerLine()
             ListRow("!", "Conflicts to review", "Changes with a newer server version", formatInteger(conflictCount))
-            if (attentionCount > 0) {
-                DividerLine()
-                ListRow("⚠", "Other changes needing attention", "Uncertain or rejected", formatInteger(attentionCount))
+            AnimatedReveal(visible = attentionCount > 0) {
+                Column {
+                    DividerLine()
+                    ListRow("⚠", "Other changes needing attention", "Uncertain or rejected", formatInteger(attentionCount))
+                }
             }
         }
         SectionCard("Storage actions", "") {
