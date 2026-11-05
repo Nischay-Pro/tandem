@@ -11,7 +11,12 @@ class MerchantIconMatchingTest {
     @Test
     fun categoryIconsUseWholeWordsAndSpecificPhrases() {
         assertEquals(Lucide.CarFront, financeIcon("Petrol"))
+        assertNull(financeIcon("Carpet cleaning"))
+        assertNull(financeIcon("Competition fees"))
         assertNull(financeIcon("Current account"))
+        assertNull(financeIcon("Parent loan"))
+        assertNull(financeIcon("Different bank"))
+        assertNull(financeIcon("Marketing"))
         assertNull(financeIcon("Home Depot"))
         assertEquals(Lucide.ShieldCheck, financeIcon("Home insurance"))
     }
@@ -27,6 +32,12 @@ class MerchantIconMatchingTest {
                 add("Hilton", "hilton", licensePriority = 0, isTitle = true)
                 add("Walmart", "walmart", licensePriority = 0, isTitle = true)
                 add("Whole Foods", "whole-foods", licensePriority = 0, isTitle = true)
+                add("Transfer", "transfer", licensePriority = 0, isTitle = true)
+                add("Education", "education", licensePriority = 0, isTitle = true)
+                add("Search", "search", licensePriority = 0, isTitle = true)
+                add("Mobile", "mobile", licensePriority = 0, isTitle = true)
+                add("Metro", "metro", licensePriority = 0, isTitle = true)
+                add("Costco", "costco", licensePriority = 0, isTitle = true)
             }
 
         assertEquals("target", matcher.findPayeeIcon("Target"))
@@ -37,6 +48,11 @@ class MerchantIconMatchingTest {
         assertNull(matcher.findPayeeIcon("Amazon Pay refund"))
         assertNull(matcher.findPayeeIcon("Uber One"))
         assertNull(matcher.findPayeeIcon("Paris Hilton"))
+        assertNull(matcher.findPayeeIcon("Savings transfer"))
+        assertNull(matcher.findPayeeIcon("Education fees"))
+        assertNull(matcher.findPayeeIcon("Search history"))
+        assertNull(matcher.findPayeeIcon("Mobile service"))
+        assertNull(matcher.findPayeeIcon("Metro card"))
         assertNull(matcher.findPayeeIcon("Costco Gas"))
         assertEquals("walmart", matcher.findPayeeIcon("Walmart #1234"))
         assertEquals("walmart", matcher.findPayeeIcon("Walmart location 231"))
