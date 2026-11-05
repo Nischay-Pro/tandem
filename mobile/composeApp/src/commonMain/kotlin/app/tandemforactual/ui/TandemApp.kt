@@ -3,6 +3,7 @@
 package app.tandemforactual.ui
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterTransition
@@ -1619,7 +1620,7 @@ fun TandemApp(
                                                     easing = TandemMotion.exitEasing,
                                                 ),
                                             )
-                                    )
+                                    ) using null
                             routeTransitionDirection < 0f ->
                                 (
                                     slideInHorizontally(
@@ -1643,18 +1644,11 @@ fun TandemApp(
                                                     easing = TandemMotion.exitEasing,
                                                 ),
                                             )
-                                    )
-                            else ->
-                                fadeIn(
-                                    tween(
-                                        TandemMotion.TAB_MILLIS - TandemMotion.FADE_THROUGH_DELAY_MILLIS,
-                                        delayMillis = TandemMotion.FADE_THROUGH_DELAY_MILLIS,
-                                        easing = TandemMotion.enterEasing,
-                                    ),
-                                ) togetherWith
-                                    fadeOut(
-                                        tween(TandemMotion.FADE_THROUGH_DELAY_MILLIS, easing = TandemMotion.exitEasing),
-                                    )
+                                    ) using null
+                            else -> {
+                                val (enter, exit) = fadeThroughTransitions(reduceMotion = false, durationMillis = TandemMotion.TAB_MILLIS)
+                                enter togetherWith exit using null
+                            }
                         }
                     },
                     label = "tandem-screen-transition",
@@ -1810,23 +1804,8 @@ private fun AppHeader(
                     AnimatedContent(
                         targetState = syncIndicator,
                         transitionSpec = {
-                            if (reduceMotion) {
-                                EnterTransition.None togetherWith ExitTransition.None
-                            } else {
-                                fadeIn(
-                                    tween(
-                                        TandemMotion.STATUS_CHANGE_MILLIS,
-                                        delayMillis = TandemMotion.FADE_THROUGH_DELAY_MILLIS,
-                                        easing = TandemMotion.enterEasing,
-                                    ),
-                                ) togetherWith
-                                    fadeOut(
-                                        tween(
-                                            TandemMotion.FADE_THROUGH_DELAY_MILLIS,
-                                            easing = TandemMotion.exitEasing,
-                                        ),
-                                    )
-                            }
+                            val (enter, exit) = fadeThroughTransitions(reduceMotion, TandemMotion.STATUS_CHANGE_MILLIS)
+                            enter togetherWith exit using null
                         },
                         contentAlignment = Alignment.Center,
                         label = "sync-chip-indicator-transition",
@@ -2301,24 +2280,24 @@ private fun AnimatedStatusText(
     fontWeight: FontWeight = FontWeight.Normal,
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip,
+    animateSizeChanges: Boolean = false,
 ) {
     val reduceMotion = tandemReduceMotion
     AnimatedContent(
         targetState = AnimatedTextContent(text, color),
-        modifier = modifier,
+        modifier =
+            modifier.then(
+                if (animateSizeChanges) {
+                    Modifier.animateContentSize(
+                        animationSpec = tandemMotionSpec(reduceMotion, TandemMotion.CONTENT_SIZE_MILLIS),
+                    )
+                } else {
+                    Modifier
+                },
+            ),
         transitionSpec = {
-            if (reduceMotion) {
-                EnterTransition.None togetherWith ExitTransition.None
-            } else {
-                fadeIn(
-                    tween(
-                        TandemMotion.STATUS_CHANGE_MILLIS,
-                        delayMillis = TandemMotion.FADE_THROUGH_DELAY_MILLIS,
-                        easing = TandemMotion.enterEasing,
-                    ),
-                ) togetherWith
-                    fadeOut(tween(TandemMotion.FADE_THROUGH_DELAY_MILLIS, easing = TandemMotion.exitEasing))
-            }
+            val (enter, exit) = fadeThroughTransitions(reduceMotion, TandemMotion.STATUS_CHANGE_MILLIS)
+            enter togetherWith exit using null
         },
         contentKey = { it.text },
         contentAlignment = Alignment.CenterStart,
@@ -2346,6 +2325,27 @@ private data class AnimatedTextContent(
     val text: String,
     val color: Color,
 )
+
+private fun fadeThroughTransitions(
+    reduceMotion: Boolean,
+    durationMillis: Int,
+): Pair<EnterTransition, ExitTransition> =
+    if (reduceMotion) {
+        EnterTransition.None to ExitTransition.None
+    } else {
+        val fadeOutMillis = minOf(TandemMotion.FADE_THROUGH_DELAY_MILLIS, durationMillis)
+        val fadeInMillis = durationMillis - fadeOutMillis
+        Pair(
+            fadeIn(
+                tween(
+                    fadeInMillis,
+                    delayMillis = fadeOutMillis,
+                    easing = TandemMotion.enterEasing,
+                ),
+            ),
+            fadeOut(tween(fadeOutMillis, easing = TandemMotion.exitEasing)),
+        )
+    }
 
 @Composable
 private fun LabelText(text: String) {
@@ -2411,11 +2411,15 @@ private fun PrimaryButton(
                 .padding(horizontal = 18.dp, vertical = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (loading) {
+        Row(
+            modifier = Modifier.animateContentSize(tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS)),
+            horizontalArrangement = Arrangement.spacedBy(9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AnimatedReveal(visible = loading, animateHeight = false) {
                 TandemLoadingIndicator(Modifier.size(17.dp), textColor, 2.dp)
             }
-            Text(label, color = textColor, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            AnimatedStatusText(label, textColor, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -2888,7 +2892,13 @@ private fun PreviewNote(text: String) {
         verticalAlignment = Alignment.Top,
     ) {
         Text("i", color = palette.accent, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-        AnimatedStatusText(text, palette.muted, fontSize = 12.sp, lineHeight = 17.sp)
+        AnimatedStatusText(
+            text,
+            palette.muted,
+            fontSize = 12.sp,
+            lineHeight = 17.sp,
+            animateSizeChanges = true,
+        )
     }
 }
 
@@ -2927,11 +2937,12 @@ private fun Badge(
     val animatedColor by androidx.compose.animation.animateColorAsState(color, motionSpec, label = "badge-color")
     Box(
         Modifier
+            .animateContentSize(tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS))
             .clip(RoundedCornerShape(999.dp))
             .background(animatedColor.copy(alpha = 0.13f))
             .padding(horizontal = 9.dp, vertical = 5.dp),
     ) {
-        Text(label, color = animatedColor, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+        AnimatedStatusText(label, color, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
@@ -2951,35 +2962,75 @@ private fun TandemLoadingIndicator(
 @Composable
 private fun AnimatedReveal(
     visible: Boolean,
+    animateHeight: Boolean = true,
     content: @Composable AnimatedVisibilityScope.() -> Unit,
 ) {
     val enter =
         if (tandemReduceMotion) {
             EnterTransition.None
         } else {
-            fadeIn(tween(TandemMotion.STATUS_ENTER_MILLIS, easing = TandemMotion.enterEasing)) +
-                expandVertically(
-                    animationSpec = tween(TandemMotion.REVEAL_MILLIS, easing = TandemMotion.movementEasing),
-                    clip = true,
-                )
+            fadeIn(tween(TandemMotion.REVEAL_MILLIS, easing = TandemMotion.enterEasing)) +
+                if (animateHeight) {
+                    expandVertically(
+                        expandFrom = Alignment.Top,
+                        animationSpec = tween(TandemMotion.REVEAL_MILLIS, easing = TandemMotion.movementEasing),
+                        clip = true,
+                    )
+                } else {
+                    EnterTransition.None
+                }
         }
     val exit =
         if (tandemReduceMotion) {
             ExitTransition.None
         } else {
-            fadeOut(tween(TandemMotion.STATUS_EXIT_MILLIS + 40, easing = TandemMotion.exitEasing)) +
-                shrinkVertically(
-                    animationSpec = tween(TandemMotion.CONTROL_MILLIS, easing = TandemMotion.movementEasing),
-                    clip = true,
-                )
+            fadeOut(tween(TandemMotion.REVEAL_MILLIS, easing = TandemMotion.exitEasing)) +
+                if (animateHeight) {
+                    shrinkVertically(
+                        shrinkTowards = Alignment.Top,
+                        animationSpec = tween(TandemMotion.REVEAL_MILLIS, easing = TandemMotion.movementEasing),
+                        clip = true,
+                    )
+                } else {
+                    ExitTransition.None
+                }
         }
     AnimatedVisibility(visible = visible, enter = enter, exit = exit, content = content)
 }
 
 @Composable
+private fun AnimatedAttentionContent(
+    showingAttention: Boolean,
+    animateSizeChanges: Boolean = false,
+    content: @Composable AnimatedContentScope.(Boolean) -> Unit,
+) {
+    val reduceMotion = tandemReduceMotion
+    AnimatedContent(
+        targetState = showingAttention,
+        modifier =
+            if (animateSizeChanges) {
+                Modifier.animateContentSize(tandemMotionSpec(reduceMotion, TandemMotion.CONTENT_SIZE_MILLIS))
+            } else {
+                Modifier
+            },
+        transitionSpec = {
+            val (enter, exit) = fadeThroughTransitions(reduceMotion, TandemMotion.STATUS_CHANGE_MILLIS)
+            enter togetherWith exit using null
+        },
+        contentAlignment = Alignment.TopStart,
+        label = "attention-content-transition",
+        content = content,
+    )
+}
+
+@Composable
 private fun AnimatedPreviewNote(text: String?) {
+    var retainedText by remember { mutableStateOf(text) }
+    LaunchedEffect(text) {
+        if (text != null) retainedText = text
+    }
     AnimatedReveal(visible = text != null) {
-        PreviewNote(text.orEmpty())
+        PreviewNote(text ?: retainedText.orEmpty())
     }
 }
 
@@ -3359,6 +3410,8 @@ private fun FirstSyncScreen(
         }
         val syncMessage =
             when {
+                mobileSession.isSyncing && mobileSession.syncError != null ->
+                    "Retrying initial sync · ${mobileSession.syncError}"
                 mobileSession.isSyncing -> "Sync is running. Keep this screen open while the first local copy is prepared."
                 mobileSession.syncComplete ->
                     "Initial sync complete. ${mobileSession.syncedTransactionCount} transactions are available on this device."
@@ -3367,7 +3420,7 @@ private fun FirstSyncScreen(
             }
         val syncMessageColor by
             animateColorAsState(
-                targetValue = if (mobileSession.syncError != null && !mobileSession.isSyncing) palette.warning else palette.muted,
+                targetValue = if (mobileSession.syncError != null) palette.warning else palette.muted,
                 animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
                 label = "first-sync-status-color",
             )
@@ -3376,6 +3429,7 @@ private fun FirstSyncScreen(
             syncMessageColor,
             fontSize = 13.sp,
             lineHeight = 19.sp,
+            animateSizeChanges = true,
         )
         AnimatedReveal(visible = mobileSession.syncError != null && !mobileSession.isSyncing) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -4650,20 +4704,15 @@ private fun SyncCenterScreen(
                     BodyText("${mobileSession.cachedTransactionCount} transactions · ${mobileSession.accountRecords.size} accounts cached")
                     val syncMessage =
                         when {
+                            mobileSession.isSyncing && mobileSession.syncError != null ->
+                                "Retrying sync · ${mobileSession.syncError}"
                             mobileSession.isSyncing -> "Sync in progress"
                             mobileSession.syncError != null -> mobileSession.syncError.orEmpty()
                             else -> "Local data is available offline"
                         }
                     val syncMessageColor by
                         animateColorAsState(
-                            targetValue =
-                                if (mobileSession.syncError != null &&
-                                    !mobileSession.isSyncing
-                                ) {
-                                    tandemPalette.warning
-                                } else {
-                                    tandemPalette.muted
-                                },
+                            targetValue = if (mobileSession.syncError != null) tandemPalette.warning else tandemPalette.muted,
                             animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
                             label = "sync-center-status-color",
                         )
@@ -4679,44 +4728,47 @@ private fun SyncCenterScreen(
                 }
             }
             SectionCard("Changes needing attention", "${attention.size} local operations", animateDetail = true) {
-                AnimatedReveal(visible = attention.isEmpty()) {
-                    Text(
-                        "No pending, uncertain, rejected, or conflicted changes.",
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
-                        color = tandemPalette.muted,
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp,
-                    )
-                }
-                AnimatedReveal(visible = attention.isNotEmpty()) {
-                    Column {
-                        attention.forEachIndexed { index, operation ->
-                            if (index > 0) DividerLine()
-                            val transaction =
-                                liveTransactionItems(mobileSession).firstOrNull { it.recordId == operation.recordId }
-                            ListRow(
-                                when (operation.status) {
-                                    "conflict" -> "!"
-                                    "uncertain" -> "?"
-                                    "rejected" -> "×"
-                                    else -> "↻"
-                                },
-                                transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
-                                "${operation.status.replaceFirstChar { it.uppercase() }} · ${transaction?.category ?: "Transaction edit"}",
-                                "Review",
-                                onClick = {
-                                    state.selectedConflictOperationId = operation.operationId
-                                    navigation.open(
-                                        when (operation.status) {
-                                            "conflict" -> AppRoute.CONFLICT_REVIEW
-                                            "uncertain" -> AppRoute.UNCERTAIN_WRITE
-                                            "rejected" -> AppRoute.REJECTED_WRITE
-                                            else -> AppRoute.UNCERTAIN_WRITE
-                                        },
-                                    )
-                                },
-                            )
+                AnimatedAttentionContent(showingAttention = attention.isNotEmpty()) { showingAttention ->
+                    if (showingAttention) {
+                        Column {
+                            attention.forEachIndexed { index, operation ->
+                                if (index > 0) DividerLine()
+                                val transaction =
+                                    liveTransactionItems(mobileSession).firstOrNull { it.recordId == operation.recordId }
+                                ListRow(
+                                    when (operation.status) {
+                                        "conflict" -> "!"
+                                        "uncertain" -> "?"
+                                        "rejected" -> "×"
+                                        else -> "↻"
+                                    },
+                                    transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
+                                    "${operation.status.replaceFirstChar {
+                                        it.uppercase()
+                                    }} · ${transaction?.category ?: "Transaction edit"}",
+                                    "Review",
+                                    onClick = {
+                                        state.selectedConflictOperationId = operation.operationId
+                                        navigation.open(
+                                            when (operation.status) {
+                                                "conflict" -> AppRoute.CONFLICT_REVIEW
+                                                "uncertain" -> AppRoute.UNCERTAIN_WRITE
+                                                "rejected" -> AppRoute.REJECTED_WRITE
+                                                else -> AppRoute.UNCERTAIN_WRITE
+                                            },
+                                        )
+                                    },
+                                )
+                            }
                         }
+                    } else {
+                        Text(
+                            "No pending, uncertain, rejected, or conflicted changes.",
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                            color = tandemPalette.muted,
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp,
+                        )
                     }
                 }
             }
@@ -4784,26 +4836,27 @@ private fun ConflictInboxScreen(
         PageColumn {
             Badge("Actual · review required", tandemPalette.warning)
             Heading("Changes to review", "Choose whether to keep the device edit or the latest Actual version.")
-            AnimatedReveal(visible = conflicts.isEmpty()) {
-                SurfaceCard {
-                    Column(Modifier.padding(15.dp)) { BodyText("There are no conflicts in the current local copy.") }
-                }
-            }
-            AnimatedReveal(visible = conflicts.isNotEmpty()) {
-                SectionCard("Conflicts", "${conflicts.size} transaction changes") {
-                    conflicts.forEachIndexed { index, operation ->
-                        if (index > 0) DividerLine()
-                        val transaction = liveTransactionItems(mobileSession).firstOrNull { it.recordId == operation.recordId }
-                        ListRow(
-                            "!",
-                            transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
-                            "${transaction?.dateLabel ?: "Actual changed"} · ${transaction?.category ?: "Transaction"}",
-                            "Review",
-                            tandemPalette.warning,
-                        ) {
-                            state.selectedConflictOperationId = operation.operationId
-                            navigation.open(AppRoute.CONFLICT_REVIEW)
+            AnimatedAttentionContent(showingAttention = conflicts.isNotEmpty(), animateSizeChanges = true) { showingConflicts ->
+                if (showingConflicts) {
+                    SectionCard("Conflicts", "${conflicts.size} transaction changes") {
+                        conflicts.forEachIndexed { index, operation ->
+                            if (index > 0) DividerLine()
+                            val transaction = liveTransactionItems(mobileSession).firstOrNull { it.recordId == operation.recordId }
+                            ListRow(
+                                "!",
+                                transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
+                                "${transaction?.dateLabel ?: "Actual changed"} · ${transaction?.category ?: "Transaction"}",
+                                "Review",
+                                tandemPalette.warning,
+                            ) {
+                                state.selectedConflictOperationId = operation.operationId
+                                navigation.open(AppRoute.CONFLICT_REVIEW)
+                            }
                         }
+                    }
+                } else {
+                    SurfaceCard {
+                        Column(Modifier.padding(15.dp)) { BodyText("There are no conflicts in the current local copy.") }
                     }
                 }
             }
@@ -5338,6 +5391,7 @@ private fun SyncPreferencesScreen(
     val syncStatus =
         when {
             !hasSelectedBudget -> "No budget selected"
+            mobileSession.isSyncing && mobileSession.syncError != null -> "Retrying"
             mobileSession.isSyncing -> "Syncing"
             mobileSession.syncError != null -> "Needs attention"
             syncState?.lastSyncedAtEpochMs != null -> "Ready"
@@ -5346,8 +5400,8 @@ private fun SyncPreferencesScreen(
     val syncDescription =
         when {
             !hasSelectedBudget -> "Pair this device and choose an Actual budget to sync"
+            mobileSession.syncError != null -> mobileSession.syncError.orEmpty()
             mobileSession.isSyncing -> "Reading changes from Actual"
-            mobileSession.syncError != null -> mobileSession.syncError ?: "Could not sync this budget"
             syncState?.lastSyncedAtEpochMs != null -> "Last successful sync for ${state.selectedBudget}"
             else -> "Open a budget and sync it to start keeping a local copy"
         }
@@ -5393,7 +5447,14 @@ private fun SyncPreferencesScreen(
                 animateChanges = true,
             )
             DividerLine()
-            ListRow("◷", "Sync status", syncDescription, syncStatus, animateChanges = true)
+            ListRow(
+                "◷",
+                "Sync status",
+                syncDescription,
+                syncStatus,
+                trailingColor = if (mobileSession.syncError != null) tandemPalette.warning else null,
+                animateChanges = true,
+            )
         }
         AnimatedPreviewNote(mobileSession.syncError)
     }
@@ -5573,6 +5634,7 @@ private fun LocalDataScreen(
     val syncStatus =
         when {
             !hasSelectedBudget -> "No budget selected"
+            mobileSession.isSyncing && mobileSession.syncError != null -> "Retrying"
             mobileSession.isSyncing -> "Syncing"
             mobileSession.syncError != null -> "Needs attention"
             mobileSession.localSyncState?.lastSyncedAtEpochMs != null -> "Ready"
@@ -5605,7 +5667,7 @@ private fun LocalDataScreen(
             ListRow("↑", "Queued changes", "Waiting to sync", formatInteger(queuedCount))
             DividerLine()
             ListRow("!", "Conflicts to review", "Changes with a newer server version", formatInteger(conflictCount))
-            AnimatedReveal(visible = attentionCount > 0) {
+            AnimatedReveal(visible = attentionCount > 0, animateHeight = false) {
                 Column {
                     DividerLine()
                     ListRow("⚠", "Other changes needing attention", "Uncertain or rejected", formatInteger(attentionCount))
@@ -5689,9 +5751,9 @@ private fun MerchantIconLicensesScreen(
                             SurfaceCard(
                                 modifier =
                                     Modifier.animateItem(
-                                        fadeInSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.STATUS_ENTER_MILLIS),
+                                        fadeInSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.REVEAL_MILLIS),
                                         placementSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS),
-                                        fadeOutSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.STATUS_EXIT_MILLIS),
+                                        fadeOutSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.REVEAL_MILLIS),
                                     ),
                             ) {
                                 Column(
