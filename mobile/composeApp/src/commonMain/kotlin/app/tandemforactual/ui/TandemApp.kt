@@ -2111,7 +2111,7 @@ private fun ScreenContent(
         AppRoute.ACTIVITY -> ActivityScreen(state, navigation, liveTransactions)
         AppRoute.ACTIVITY_SEARCH -> ActivitySearchScreen(state, navigation, liveTransactions)
         AppRoute.ACTIVITY_FILTER -> ActivityFilterScreen()
-        AppRoute.TRANSACTION_DETAIL -> TransactionDetailScreen(state, mobileSession, navigation)
+        AppRoute.TRANSACTION_DETAIL -> TransactionDetailScreen(state, mobileSession, navigation, merchantIconPack)
         AppRoute.NEW_TRANSACTION, AppRoute.EDIT_TRANSACTION ->
             TransactionFormScreen(route, state, navigation, mobileSession, onSaveTransaction, onCreateTransaction)
         AppRoute.CHOOSE_ACCOUNT -> {
@@ -4475,9 +4475,12 @@ private fun TransactionDetailScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
+    merchantIconPack: MerchantIconPack?,
 ) {
     val isLive = state.selectedTransactionIsLive
     val amount = state.selectedTransactionAmountMinor ?: -4_218L
+    val merchantIcon = remember(merchantIconPack, state.transactionPayee) { merchantIconPack?.iconFor(state.transactionPayee) }
+    val categoryIcon = remember(state.transactionCategory) { financeIcon(state.transactionCategory) ?: Lucide.Receipt }
     val hasUnsentTransactionChange =
         mobileSession.pendingWrites.any { operation ->
             operation.recordType == "transaction" &&
@@ -4492,27 +4495,54 @@ private fun TransactionDetailScreen(
             else -> "Sample transaction, not synced to Actual"
         }
     PageColumn(verticalSpacing = 12.dp) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Spacer(Modifier.size(28.dp))
-            Text(
-                state.formatCurrency(amount),
-                modifier = Modifier.weight(1f),
-                color = tandemPalette.text,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Icon(
-                imageVector = if (isSyncedToActual) Lucide.CloudCheck else Lucide.CloudOff,
-                contentDescription = syncDescription,
-                modifier = Modifier.size(28.dp),
-                tint = if (isSyncedToActual) tandemPalette.positive else tandemPalette.muted,
-            )
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier
+                        .size(46.dp)
+                        .clip(RoundedCornerShape(15.dp))
+                        .background(tandemPalette.raised),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (merchantIcon != null) {
+                        Image(
+                            painter = painterResource(merchantIcon),
+                            contentDescription = null,
+                            modifier = Modifier.size(38.dp).padding(3.dp),
+                            contentScale = ContentScale.Fit,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = categoryIcon,
+                            contentDescription = null,
+                            modifier = Modifier.size(23.dp),
+                            tint = tandemPalette.accent,
+                        )
+                    }
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Spacer(Modifier.size(28.dp))
+                Text(
+                    state.formatCurrency(amount),
+                    modifier = Modifier.weight(1f),
+                    color = tandemPalette.text,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Icon(
+                    imageVector = if (isSyncedToActual) Lucide.CloudCheck else Lucide.CloudOff,
+                    contentDescription = syncDescription,
+                    modifier = Modifier.size(28.dp),
+                    tint = if (isSyncedToActual) tandemPalette.positive else tandemPalette.muted,
+                )
+            }
         }
         SectionCard(title = "") {
             ListRow("", "Account", trailing = state.transactionAccount, leadingVector = Lucide.WalletCards)
