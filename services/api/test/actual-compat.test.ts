@@ -93,7 +93,7 @@ async function bootstrapDisposableServer(
 }
 
 describe.skipIf(!compatibilityTestEnabled)(
-  "Actual Budget 26.10.0 compatibility",
+  "Actual Budget 26.11.0 compatibility",
   () => {
     beforeAll(async () => {
       if (!databaseUrl) {

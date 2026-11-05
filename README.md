@@ -18,7 +18,7 @@ Tandem uses this service because Actual does not provide a budget REST API and i
 
 ## Requirements
 
-- A reachable self-hosted Actual Budget server. The verified compatibility baseline is Actual `26.10.0` with `@actual-app/api` `26.10.0`.
+- A reachable self-hosted Actual Budget server. The verified compatibility baseline is Actual `26.11.0` with `@actual-app/api` `26.11.0`.
 - Docker Engine with Docker Compose for a container deployment, or Node.js `26.13.0`, pnpm `12.16.1`, and PostgreSQL `18.6` for a host-process deployment.
 - A reverse proxy with HTTPS for access from phones. Keep the Tandem API and PostgreSQL off the public internet; route the API through the same trusted proxy used for Actual.
 - For Android development: Android Studio, Android SDK, and the Java/Gradle toolchain documented in [`docs/mobile-api-client.md`](docs/mobile-api-client.md).
@@ -28,7 +28,7 @@ Tandem uses this service because Actual does not provide a budget REST API and i
 
 ### 1. Set up Actual Budget
 
-Set up a self-hosted Actual server using the [official installation guide](https://actualbudget.org/docs/install/). Use the supported `26.10.0` server release and have the server URL, server password, and budget Sync ID ready.
+Set up a self-hosted Actual server using the [official installation guide](https://actualbudget.org/docs/install/). Use the supported `26.11.0` server release and have the server URL, server password, and budget Sync ID ready.
 
 ### 2. Run the Tandem API
 
@@ -36,7 +36,7 @@ Tandem does not publish a prebuilt API image yet. From the root of the Tandem re
 
 ```sh
 docker build \
-  --tag tandem-for-actual-api:26.10.0-local \
+  --tag tandem-for-actual-api:26.11.0-local \
   --file services/api/Dockerfile \
   .
 ```
@@ -66,7 +66,7 @@ services:
       - tandem-data
 
   tandem-api:
-    image: tandem-for-actual-api:26.10.0-local
+    image: tandem-for-actual-api:26.11.0-local
     restart: unless-stopped
     init: true
     read_only: true
@@ -132,7 +132,7 @@ Use your actual Compose filename in place of `docker-compose.yml`. If your Actua
 The image tag in the Compose service must match the tag used by `docker build`. When updating Tandem later, build from the Tandem repository root, then run Compose from the Actual deployment directory to recreate only the API service:
 
 ```sh
-docker build --tag tandem-for-actual-api:26.10.0-local --file services/api/Dockerfile .
+docker build --tag tandem-for-actual-api:26.11.0-local --file services/api/Dockerfile .
 # From the directory containing your Actual Compose file:
 docker compose --env-file .env --env-file .env.tandem -f docker-compose.yml up -d tandem-api
 ```

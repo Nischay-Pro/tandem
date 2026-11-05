@@ -1,6 +1,6 @@
 import * as actualApi from "@actual-app/api";
 
-export const SUPPORTED_ACTUAL_SERVER_VERSION = "26.10.0";
+export const SUPPORTED_ACTUAL_SERVER_VERSION = "26.11.0";
 export const ACTUAL_SESSION_OPERATION_TIMEOUT_MS = 5 * 60 * 1_000;
 
 export type ActualConnectionConfig = {

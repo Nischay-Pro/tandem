@@ -213,7 +213,7 @@ describe("API server lifecycle integration", () => {
   it("preserves the Actual startup error when runtime cleanup and logging fail", async () => {
     const startupError = new ActualCompatibilityError(
       "server-version-mismatch",
-      "26.10.0",
+      "26.11.0",
       "27.0.0",
     );
     const closeError = new Error("synthetic runtime close failure");

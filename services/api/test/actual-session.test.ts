@@ -91,7 +91,7 @@ function createFakeClient(): FakeClient {
 
 describe("ActualSession", () => {
   it("keeps the API package version pinned to the tested release", () => {
-    expect(SUPPORTED_ACTUAL_SERVER_VERSION).toBe("26.10.0");
+    expect(SUPPORTED_ACTUAL_SERVER_VERSION).toBe("26.11.0");
   });
 
   it("requires a positive integer operation timeout", () => {
@@ -337,7 +337,7 @@ describe("ActualSession", () => {
       expectedVersion: SUPPORTED_ACTUAL_SERVER_VERSION,
     });
     await expect(startPromise).rejects.toThrow(
-      "Could not verify the Actual server version (network-failure); this build requires 26.10.0",
+      "Could not verify the Actual server version (network-failure); this build requires 26.11.0",
     );
     expect(fake.calls).toEqual(["init", "version", "shutdown"]);
   });
@@ -355,7 +355,7 @@ describe("ActualSession", () => {
       actualVersion: "26.9.0",
     });
     await expect(startPromise).rejects.toThrow(
-      "Unsupported Actual server version 26.9.0; this build supports 26.10.0",
+      "Unsupported Actual server version 26.9.0; this build supports 26.11.0",
     );
     expect(fake.calls).toEqual(["init", "version", "shutdown"]);
   });

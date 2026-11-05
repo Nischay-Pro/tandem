@@ -60,7 +60,7 @@ services:
 
   actual-compat-server:
     profiles: ["actual-compat"]
-    image: actualbudget/actual-server:26.10.0
+    image: ghcr.io/actualbudget/actual:26.11.0
     user: "${ACTUAL_COMPAT_UID:-1000}:${ACTUAL_COMPAT_GID:-1000}"
     volumes:
       - ./.dev-tmp/actual/compat-gate-server:/data

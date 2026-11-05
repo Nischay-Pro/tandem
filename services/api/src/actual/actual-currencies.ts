@@ -1,6 +1,6 @@
 /**
  * Display metadata copied from Actual's MIT-licensed currencies.ts bundled in
- * @actual-app/api 26.10.0. Update when that pinned dependency changes.
+ * @actual-app/api 26.11.0. Update when that pinned dependency changes.
  */
 export interface ActualCurrencyDisplayMetadata {
   symbol: string;

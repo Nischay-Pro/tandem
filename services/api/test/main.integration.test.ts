@@ -11,7 +11,7 @@ import { OperatorMessageError } from "../src/operator-message-error.js";
 
 const actualApi = vi.hoisted(() => ({
   init: vi.fn(async () => undefined),
-  getServerVersion: vi.fn(async () => ({ version: "26.10.0" })),
+  getServerVersion: vi.fn(async () => ({ version: "26.11.0" })),
   downloadBudget: vi.fn(async () => undefined),
   getBudgets: vi.fn(async () => [
     {

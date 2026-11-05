@@ -1,8 +1,8 @@
 # Actual compatibility
 
 The API adapter is version-gated to the exact release pair that passed its
-current compatibility baseline: **Actual server 26.10.0 + `@actual-app/api`
-26.10.0**. Both are pinned in the compatibility test setup and API dependency
+current compatibility baseline: **Actual server 26.11.0 + `@actual-app/api`
+26.11.0**. Both are pinned in the compatibility test setup and API dependency
 manifest. A server with another release is rejected before the adapter can
 open a budget. The integration test establishes login, version check, synthetic
 budget/account/transaction creation, ordinary transaction update and deletion,
@@ -111,9 +111,9 @@ database.
 
 - Official package docs say Actual has no HTTP REST API and that the Node API
   works against a local data copy: <https://actualbudget.org/docs/api/>.
-- The 26.10.0 `getServerVersion()` implementation and no-open-budget test are
-  in the official source: <https://github.com/actualbudget/actual/tree/v26.10.0/packages/api>.
+- The 26.11.0 `getServerVersion()` implementation and no-open-budget test are
+  in the official source: <https://github.com/actualbudget/actual/tree/v26.11.0/packages/api>.
 - The official Docker image repositories and version tags are documented at
   <https://actualbudget.org/docs/install/docker/>.
-- The package manifest declares version 26.10.0, Node `>=22`, and MIT license.
+- The package manifest declares version 26.11.0, Node `>=22`, and MIT license.
   Tandem pins it exactly and does not copy Actual source code.
