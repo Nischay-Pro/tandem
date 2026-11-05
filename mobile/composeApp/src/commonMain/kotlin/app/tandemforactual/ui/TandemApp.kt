@@ -1388,7 +1388,14 @@ fun TandemApp(
         }
         TandemSystemBars(isDark, palette.background)
         val handleBack = {
-            if (backGestureProgress > 0f) skipNextRouteTransition = true
+            if (backGestureProgress > 0f) {
+                // Predictive back has already moved the outgoing route with the finger. Settle
+                // that gesture before popping so the restored route is composed at its origin,
+                // instead of briefly inheriting the completed gesture's off-screen offset.
+                skipNextRouteTransition = true
+                backGestureProgress = 0f
+                backPreviewRoute = null
+            }
             navigation.back()
         }
         val updateBackGesture: (Float, Float) -> Unit = { progress, direction ->
