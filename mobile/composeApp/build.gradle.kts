@@ -11,7 +11,7 @@ val generatedTheSvgResources = layout.buildDirectory.dir("generated/thesvg-icon-
 val generateTheSvgIconPack =
   tasks.register<Exec>("generateTheSvgIconPack") {
     group = "build setup"
-    description = "Creates offline Compose resources from the pinned TheSVG icon catalog."
+    description = "Creates offline Compose merchant resources from pinned catalogs and documented brand sources."
     workingDir = repositoryRoot
     commandLine(
       "node",
@@ -23,6 +23,7 @@ val generateTheSvgIconPack =
       val requiredPackages =
         listOf(
           repositoryRoot.resolve("node_modules/.pnpm/@thesvg+icons@4.0.4/node_modules/@thesvg/icons/package.json"),
+          repositoryRoot.resolve("node_modules/.pnpm/@rei+cedar-icons@2.6.1/node_modules/@rei/cedar-icons/package.json"),
           repositoryRoot.resolve("node_modules/.pnpm/@resvg+resvg-js@2.6.2/node_modules/@resvg/resvg-js/package.json"),
         )
       val missingPackages = requiredPackages.filterNot { it.isFile }
@@ -36,12 +37,14 @@ val generateTheSvgIconPack =
     }
     inputs.files(
       repositoryRoot.resolve("scripts/generate-thesvg-icon-pack.mjs"),
+      repositoryRoot.resolve("mobile/composeApp/third_party/merchant-icons/panera-bread-wordmark.svg"),
       repositoryRoot.resolve("mobile/composeApp/third_party/Apache-2.0.txt"),
       repositoryRoot.resolve("package.json"),
       repositoryRoot.resolve("pnpm-lock.yaml"),
     )
     inputs.files(
       fileTree(repositoryRoot.resolve("node_modules/.pnpm/@thesvg+icons@4.0.4/node_modules/@thesvg/icons")),
+      fileTree(repositoryRoot.resolve("node_modules/.pnpm/@rei+cedar-icons@2.6.1/node_modules/@rei/cedar-icons")),
       fileTree(repositoryRoot.resolve("node_modules/.pnpm/@resvg+resvg-js@2.6.2/node_modules/@resvg/resvg-js")),
     )
     outputs.dir(generatedTheSvgResources)

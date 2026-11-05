@@ -172,6 +172,9 @@ importers:
       '@eslint/js':
         specifier: 10.0.1
         version: 10.0.1(eslint@10.14.0)
+      '@rei/cedar-icons':
+        specifier: 2.6.1
+        version: 2.6.1
       '@resvg/resvg-js':
         specifier: 2.6.2
         version: 2.6.2
@@ -864,6 +867,10 @@ packages:
 
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
+
+  '@rei/cedar-icons@2.6.1':
+    resolution: {integrity: sha512-rkV5kQra0nYmd82zIFDqWGIU6VNE6y+DyP6i3oeJUo0OFjsdFKqtt3e/PSGjCKmmIOEBop62FBDc5DzSU0+VKA==}
+    hasBin: true
 
   '@resvg/resvg-js-android-arm-eabi@2.6.2':
     resolution: {integrity: sha512-FrJibrAk6v29eabIPgcTUMPXiEz8ssrAk7TXxsiZzww9UTQ1Z5KAbFJs+Z0Ez+VZTYgnE5IQJqBcoSiMebtPHA==}
@@ -2949,6 +2956,8 @@ snapshots:
   '@oxc-project/types@0.156.0': {}
 
   '@pinojs/redact@0.4.0': {}
+
+  '@rei/cedar-icons@2.6.1': {}
 
   '@resvg/resvg-js-android-arm-eabi@2.6.2':
     optional: true

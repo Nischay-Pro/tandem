@@ -25,6 +25,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@rei/cedar-icons": "2.6.1",
     "@resvg/resvg-js": "2.6.2",
     "@thesvg/icons": "4.0.4",
     "eslint": "10.14.0",

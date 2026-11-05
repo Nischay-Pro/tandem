@@ -2,6 +2,12 @@ package app.tandemforactual.ui
 
 private val storeNumberSuffix = Regex("(?:(?:store|location|branch) )?\\d+[a-z]?(?: (?:(?:store|location|branch) )?\\d+[a-z]?)*")
 
+internal val supplementaryMerchantAliases =
+    mapOf(
+        // Costco fuel transactions are commonly labeled separately from the warehouse.
+        "costco" to listOf("Costco Gas"),
+    )
+
 internal class MerchantAliasMatcher<T> {
     private class Node<T> {
         val children = mutableMapOf<String, Node<T>>()

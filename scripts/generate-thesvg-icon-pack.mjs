@@ -38,44 +38,11 @@ const iconModules = (await readdir(packageDirectory)).filter(
   (file) => file.endsWith(".cjs") && file !== "index.cjs",
 );
 const openSourceLicenses = new Set(["Apache-2.0", "CC0-1.0", "MIT"]);
-const merchantCategories = new Set([
-  "Automotive",
-  "Aviation",
-  "Booking",
-  "Communication",
-  "E-commerce",
-  "Education",
-  "Energy",
-  "Entertainment",
-  "Fashion",
-  "Finance",
-  "Food",
-  "Hardware",
-  "Health",
-  "Hospitality",
-  "Insurance",
-  "Investment",
-  "Jewelry",
-  "Logistics",
-  "Marketplace",
-  "Media",
-  "Music",
-  "Oil & Gas",
-  "Payment",
-  "Photography",
-  "Real Estate",
-  "Services",
-  "Shopping",
-  "Sports",
-  "Telecommunications",
-  "Transportation",
-  "Travel",
-]);
 
 function permittedLicense(license) {
   if (openSourceLicenses.has(license)) return true;
   return (
-    license.trim().toLowerCase() === "fair use" ||
+    ["fair use", "public domain"].includes(license.trim().toLowerCase()) ||
     /^trademark of .+used for identification under nominative fair use\.?$/i.test(
       license,
     )
@@ -83,7 +50,9 @@ function permittedLicense(license) {
 }
 
 function licenseFamily(license) {
-  return /fair use/i.test(license) ? "fair-use" : "open-source";
+  if (/fair use/i.test(license)) return "fair-use";
+  if (/public domain/i.test(license)) return "public-domain";
+  return "open-source";
 }
 
 function viewBoxRatio(svg) {
@@ -129,7 +98,7 @@ const icons = [];
 const licenseCounts = new Map();
 const resourceNames = new Map();
 let skippedWithoutData = 0;
-let skippedScope = 0;
+let skippedUnlicensed = 0;
 
 for (const file of iconModules) {
   const exported = require(join(packageDirectory, file));
@@ -138,11 +107,8 @@ for (const file of iconModules) {
     skippedWithoutData += 1;
     continue;
   }
-  if (
-    !permittedLicense(icon.license ?? "") ||
-    !icon.categories?.some((category) => merchantCategories.has(category))
-  ) {
-    skippedScope += 1;
+  if (!permittedLicense(icon.license ?? "")) {
+    skippedUnlicensed += 1;
     continue;
   }
 
@@ -168,6 +134,66 @@ for (const file of iconModules) {
     svg: iconArtwork(icon),
   });
 }
+
+function addSupplementalIcon(icon) {
+  const previousSlug = resourceNames.get(icon.resourceName);
+  if (previousSlug) {
+    throw new Error(
+      `Supplemental icon ${icon.slug} conflicts with ${previousSlug} at ${icon.resourceName}.`,
+    );
+  }
+  resourceNames.set(icon.resourceName, icon.slug);
+  icons.push(icon);
+}
+
+const paneraSvg = await readFile(
+  join(
+    repositoryDirectory,
+    "mobile/composeApp/third_party/merchant-icons/panera-bread-wordmark.svg",
+  ),
+  "utf8",
+);
+addSupplementalIcon({
+  slug: "panera-bread",
+  title: "Panera Bread",
+  aliases: ["Panera"],
+  categories: ["Food"],
+  license: "Public domain",
+  licenseFamily: "public-domain",
+  url: "https://www.panerabread.com/",
+  registryUrl:
+    "https://commons.wikimedia.org/wiki/File:Panera_Bread_wordmark.svg",
+  resourceName: "merchant_panera_bread",
+  svg: paneraSvg,
+});
+licenseCounts.set(
+  "Public domain",
+  (licenseCounts.get("Public domain") ?? 0) + 1,
+);
+
+const reiPackageDirectory = dirname(
+  require.resolve("@rei/cedar-icons/package.json"),
+);
+const reiPackageJson = JSON.parse(
+  await readFile(join(reiPackageDirectory, "package.json"), "utf8"),
+);
+const reiSvg = await readFile(
+  join(reiPackageDirectory, "dist", "icons", "brand-rei-ice-axes.svg"),
+  "utf8",
+);
+addSupplementalIcon({
+  slug: "rei",
+  title: "REI",
+  aliases: ["REI Co-op", "REI Co Op"],
+  categories: ["Shopping", "Sports"],
+  license: "MIT",
+  licenseFamily: "open-source",
+  url: "https://www.rei.com/",
+  registryUrl: "https://www.npmjs.com/package/@rei/cedar-icons",
+  resourceName: "merchant_rei",
+  svg: reiSvg,
+});
+licenseCounts.set("MIT", (licenseCounts.get("MIT") ?? 0) + 1);
 
 icons.sort((left, right) => left.slug.localeCompare(right.slug));
 await rm(outputDirectory, { recursive: true, force: true });
@@ -213,9 +239,14 @@ const packageJson = JSON.parse(
   await readFile(join(packageDirectory, "..", "package.json"), "utf8"),
 );
 const packageLicense = await readFile(join(packageDirectory, "..", "LICENSE"));
+const reiPackageLicense = await readFile(join(reiPackageDirectory, "LICENSE"));
 await writeFile(
   join(filesDirectory, "THESVG-PACKAGE-LICENSE.txt"),
   packageLicense,
+);
+await writeFile(
+  join(filesDirectory, "REI-CEDAR-ICONS-LICENSE.txt"),
+  reiPackageLicense,
 );
 await copyFile(
   join(repositoryDirectory, "mobile/composeApp/third_party/Apache-2.0.txt"),
@@ -226,6 +257,7 @@ await writeFile(
   `${JSON.stringify({
     source: "@thesvg/icons",
     sourceVersion: packageJson.version,
+    sourceSummary: `TheSVG ${packageJson.version} · REI Cedar ${reiPackageJson.version} · Wikimedia Commons`,
     generatedImageSize: imageSize,
     iconCount: records.length,
     licenseCounts: Object.fromEntries(licenseSummary),
@@ -261,13 +293,13 @@ log(
       discoveredModules: iconModules.length,
       includedIcons: records.length,
       skippedWithoutData,
-      skippedLicenseOrCategory: skippedScope,
+      skippedUnlicensed,
       renderFailures: failures,
       generatedPngBytes: outputBytes,
       generatedResourceBytes: await directorySize(outputDirectory),
       licenseFamilies,
       uniqueOpenSourceLicenses: licenseSummary.filter(
-        ([license]) => !/fair use/i.test(license),
+        ([license]) => !/fair use|public domain/i.test(license),
       ).length,
       nominativeFairUseIcons: records.filter((icon) =>
         /nominative fair use/i.test(icon.license),

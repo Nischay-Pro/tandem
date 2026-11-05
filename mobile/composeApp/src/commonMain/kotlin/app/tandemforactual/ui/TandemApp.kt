@@ -255,10 +255,10 @@ private data class MerchantIconNotice(
 private data class MerchantIconPack(
     private val matcher: MerchantAliasMatcher<DrawableResource>,
     val notices: List<MerchantIconNotice>,
-    val sourceVersion: String,
+    val sourceSummary: String,
 ) {
     val iconCount: Int get() = notices.size
-    val openSourceIconCount: Int get() = notices.count { it.license in setOf("CC0-1.0", "MIT", "Apache-2.0") }
+    val openSourceIconCount: Int get() = notices.count { it.license in setOf("CC0-1.0", "MIT", "Apache-2.0", "Public domain") }
     val fairUseIconCount: Int get() = notices.size - openSourceIconCount
 
     fun iconFor(payee: String): DrawableResource? = matcher.findPayeeIcon(payee)
@@ -276,6 +276,7 @@ private suspend fun loadMerchantIconPack(): MerchantIconPack {
         val resource = resources[resourceName] ?: continue
         val title = icon["title"]?.jsonPrimitive?.contentOrNull ?: continue
         val license = icon["license"]?.jsonPrimitive?.contentOrNull ?: continue
+        val slug = icon["slug"]?.jsonPrimitive?.contentOrNull.orEmpty()
         val registryUrl =
             icon["registryUrl"]?.jsonPrimitive?.contentOrNull
                 ?: "https://thesvg.org/icon/${icon["slug"]?.jsonPrimitive?.contentOrNull.orEmpty()}"
@@ -285,6 +286,7 @@ private suspend fun loadMerchantIconPack(): MerchantIconPack {
             buildList {
                 add(title to true)
                 icon["aliases"]?.jsonArray?.forEach { alias -> alias.jsonPrimitive.contentOrNull?.let { add(it to false) } }
+                supplementaryMerchantAliases[slug]?.forEach { add(it to false) }
             }
         for ((label, isTitle) in labels) {
             val words = labelWords(label)
@@ -296,7 +298,7 @@ private suspend fun loadMerchantIconPack(): MerchantIconPack {
     return MerchantIconPack(
         matcher = matcher,
         notices = notices.sortedBy { it.title.lowercase() },
-        sourceVersion = catalog["sourceVersion"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+        sourceSummary = catalog["sourceSummary"]?.jsonPrimitive?.contentOrNull.orEmpty(),
     )
 }
 
@@ -5875,20 +5877,24 @@ private fun AboutScreen(
             ListRow("T", "TheSVG icon package", "Build-time catalog and tooling · MIT")
             DividerLine()
             ListRow("T", "TheSVG merchant artwork", "Per-icon licenses and source links are bundled")
+            DividerLine()
+            ListRow("R", "REI Cedar icons", "MIT · REI merchant artwork")
+            DividerLine()
+            ListRow("W", "Panera Bread wordmark", "Public domain · Wikimedia Commons source")
         }
-        SectionCard("Merchant artwork", "TheSVG catalog is bundled for offline merchant matching") {
+        SectionCard("Merchant artwork", "License-approved marks are bundled for offline matching") {
             ListRow(
                 "M",
                 "Bundled merchant icons",
-                merchantIconPack?.let { "${it.iconCount} icons · @thesvg/icons ${it.sourceVersion}" }
+                merchantIconPack?.let { "${it.iconCount} icons · ${it.sourceSummary}" }
                     ?: if (merchantIconPackLoadError == null) "Catalog details load when opened" else "Unavailable",
             )
             DividerLine()
             ListRow(
                 "CC",
                 "Artwork license scope",
-                merchantIconPack?.let { "${it.openSourceIconCount} CC0 / MIT / Apache · ${it.fairUseIconCount} Fair Use" }
-                    ?: "CC0, MIT, Apache-2.0, and Fair Use entries",
+                merchantIconPack?.let { "${it.openSourceIconCount} open license / public domain · ${it.fairUseIconCount} Fair Use" }
+                    ?: "CC0, MIT, Apache-2.0, public domain, and Fair Use entries",
             )
             DividerLine()
             ListRow(
@@ -5907,7 +5913,7 @@ private fun AboutScreen(
                     "Tandem matches merchant names and aliases against this local catalog. The match runs on this device and does not request an icon from a service.",
                 )
                 BodyText(
-                    "Only CC0, MIT, Apache-2.0, and TheSVG entries marked Fair Use are bundled. Other per-icon license types are excluded. Each bundled mark keeps its reported license and source URL.",
+                    "The full TheSVG catalog is checked and every CC0, MIT, Apache-2.0, public-domain, or Fair Use mark is included. REI artwork is from REI Cedar (MIT), and the Panera Bread wordmark is public domain. Other license types are excluded. Every mark keeps its license and source URL.",
                 )
                 BodyText(
                     "Names, logos, and trademarks belong to their respective owners. Tandem displays a matched mark only to identify the payee and is not affiliated with those brands. Follow each brand’s usage guidelines.",

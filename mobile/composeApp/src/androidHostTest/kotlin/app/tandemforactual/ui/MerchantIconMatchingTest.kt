@@ -38,6 +38,14 @@ class MerchantIconMatchingTest {
                 add("Mobile", "mobile", licensePriority = 0, isTitle = true)
                 add("Metro", "metro", licensePriority = 0, isTitle = true)
                 add("Costco", "costco", licensePriority = 0, isTitle = true)
+                add("Panera Bread", "panera", licensePriority = 0, isTitle = true)
+                add("Panera", "panera", licensePriority = 0, isTitle = false)
+                add("REI", "rei", licensePriority = 0, isTitle = true)
+                add("REI Co-op", "rei", licensePriority = 0, isTitle = false)
+                add("REI Co Op", "rei", licensePriority = 0, isTitle = false)
+                supplementaryMerchantAliases["costco"].orEmpty().forEach {
+                    add(it, "costco", licensePriority = 0, isTitle = false)
+                }
             }
 
         assertEquals("target", matcher.findPayeeIcon("Target"))
@@ -53,7 +61,14 @@ class MerchantIconMatchingTest {
         assertNull(matcher.findPayeeIcon("Search history"))
         assertNull(matcher.findPayeeIcon("Mobile service"))
         assertNull(matcher.findPayeeIcon("Metro card"))
-        assertNull(matcher.findPayeeIcon("Costco Gas"))
+        assertEquals("costco", matcher.findPayeeIcon("Costco Gas"))
+        assertEquals("costco", matcher.findPayeeIcon("Costco Gas #0463"))
+        assertNull(matcher.findPayeeIcon("Costco Gasoline"))
+        assertEquals("panera", matcher.findPayeeIcon("Panera Bread"))
+        assertEquals("panera", matcher.findPayeeIcon("Panera #0421"))
+        assertNull(matcher.findPayeeIcon("Panera Bread Catering"))
+        assertEquals("rei", matcher.findPayeeIcon("REI"))
+        assertEquals("rei", matcher.findPayeeIcon("REI Co-op Store 31"))
         assertEquals("walmart", matcher.findPayeeIcon("Walmart #1234"))
         assertEquals("walmart", matcher.findPayeeIcon("Walmart location 231"))
         assertEquals("whole-foods", matcher.findPayeeIcon("Whole Foods Store 42"))
