@@ -32,7 +32,7 @@ Set up a self-hosted Actual server using the [official installation guide](https
 
 ### 2. Run the Tandem API
 
-There is no published Tandem API image yet. Build it from this repository on the deployment host (or build it elsewhere and transfer it to that host):
+Tandem does not publish a prebuilt API image yet. From the root of the Tandem repository, build the image on the deployment host (or build it elsewhere and transfer it there):
 
 ```sh
 docker build \
@@ -43,7 +43,7 @@ docker build \
 
 #### If Actual already runs in Docker Compose
 
-Add the following services and volumes to the Compose file that already runs Actual. Merge the `services`, `volumes`, and `networks` entries with the existing sections; keep the existing Actual and reverse-proxy services. The example assumes the Actual service is named `actual-server` and listens on port `5006` inside Compose. Change that name if needed.
+Change to the directory containing your existing `docker-compose.yml` (use its actual filename if different). Leave the existing Actual service configuration in place. Add the two Tandem service definitions under its existing `services:` section, and merge the `volumes:` and `networks:` entries below into the corresponding top-level sections. The example assumes your Actual service is named `actual-server` and listens on port `5006` inside Compose. Check the service name with `docker compose config --services`; set `ACTUAL_SERVER_URL` below to `http://<that-service-name>:5006` if it differs.
 
 ```yaml
 services:
@@ -104,9 +104,9 @@ networks:
     internal: true
 ```
 
-The API uses the Compose project’s `default` network to reach Actual and the reverse proxy, while PostgreSQL is isolated on `tandem-data`. If your existing file uses a named network for Actual or the proxy, replace `default` under `tandem-api` with that network name and ensure the Actual service and proxy are members of it. `expose` makes the API available to containers on that network without publishing it on a host port. If your reverse proxy runs directly on the host, publish only to loopback (`127.0.0.1:19753:19753`) and point the proxy at `127.0.0.1:19753`.
+The API joins the Compose project's `default` network so it can reach Actual and a proxy in the same project. PostgreSQL is isolated on `tandem-data`. If Actual or the proxy uses a named network, replace `default` under `tandem-api` with the shared network name and ensure the Actual service and proxy join it too. `expose` makes the API available to containers on that network without publishing a host port. If the reverse proxy runs directly on the host, add `ports: ["127.0.0.1:19753:19753"]` to `tandem-api` and point the proxy at `127.0.0.1:19753`.
 
-Keep Tandem's credentials in a separate, private `.env.tandem` file beside the Compose file. Generate a URL-safe database password with `openssl rand -hex 32` and a stable change-feed value with `openssl rand -hex 24`:
+Keep Tandem's credentials in a separate, private `.env.tandem` file beside your Compose file. Generate a URL-safe database password with `openssl rand -hex 32` and a stable change-feed value with `openssl rand -hex 24`:
 
 ```dotenv
 TANDEM_DB_PASSWORD=<paste-the-generated-database-password>
@@ -116,7 +116,7 @@ ACTUAL_SERVER_PASSWORD=<your-Actual-server-password>
 TRUST_PROXY=
 ```
 
-Restrict the file to the deployment account with `chmod 600 .env.tandem`. Keep `CHANGE_FEED_EPOCH` stable across normal restarts; see [deployment and restore guidance](deploy/README.md) before changing it or restoring a backup. If your existing Compose deployment uses another environment file, pass both so its current settings remain available and Tandem's values are added:
+Replace the example Actual service name and password with the values for your server. Restrict this file to the deployment account with `chmod 600 .env.tandem`. Keep `CHANGE_FEED_EPOCH` stable across normal restarts; see [deployment and restore guidance](deploy/README.md) before changing it or restoring a backup. If the existing Actual stack has an `.env` file, pass both files so its current settings remain available and Tandem's values are added:
 
 ```sh
 docker compose \
@@ -126,7 +126,15 @@ docker compose \
   up -d tandem-postgres tandem-api
 ```
 
-Use your actual Compose filename in place of `docker-compose.yml`. If there is no existing `.env`, omit that `--env-file` argument. Add an Nginx `/api/v1/` route to `http://tandem-api:19753` before the existing Actual catch-all. In [`deploy/nginx/tandem-upstreams.conf.example`](deploy/nginx/tandem-upstreams.conf.example), change the upstream target from `api:19753` to `tandem-api:19753` to match this example service name. Keep TLS termination in the existing proxy and set `TRUST_PROXY` to its exact container IP or a narrow subnet when you want Fastify to honor forwarded client addresses. Do not publish PostgreSQL or expose the API directly to the internet.
+Use your actual Compose filename in place of `docker-compose.yml`. If your Actual Compose file reads values from an existing `.env`, include `--env-file .env` on each Compose command; if it does not, use only `--env-file .env.tandem`. Add an Nginx `/api/v1/` route to `http://tandem-api:19753` before the existing Actual catch-all. In [`deploy/nginx/tandem-upstreams.conf.example`](deploy/nginx/tandem-upstreams.conf.example), change the upstream target from `api:19753` to `tandem-api:19753` to match this example service name. Keep TLS termination in the existing proxy and set `TRUST_PROXY` to its exact container IP or a narrow subnet when you want Fastify to honor forwarded client addresses. Do not publish PostgreSQL or expose the API directly to the internet.
+
+The image tag in the Compose service must match the tag used by `docker build`. When updating Tandem later, build from the Tandem repository root, then run Compose from the Actual deployment directory to recreate only the API service:
+
+```sh
+docker build --tag tandem-for-actual-api:26.10.0-local --file services/api/Dockerfile .
+# From the directory containing your Actual Compose file:
+docker compose --env-file .env --env-file .env.tandem -f docker-compose.yml up -d tandem-api
+```
 
 Check readiness through the HTTPS address configured in the reverse proxy:
 
