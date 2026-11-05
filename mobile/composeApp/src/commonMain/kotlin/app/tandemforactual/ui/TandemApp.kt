@@ -2796,7 +2796,7 @@ private fun PreviewNote(text: String) {
         verticalAlignment = Alignment.Top,
     ) {
         Text("i", color = palette.accent, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-        Text(text, color = palette.muted, fontSize = 12.sp, lineHeight = 17.sp)
+        AnimatedStatusText(text, palette.muted, fontSize = 12.sp, lineHeight = 17.sp)
     }
 }
 
@@ -2869,6 +2869,13 @@ private fun AnimatedReveal(
                 )
         }
     AnimatedVisibility(visible = visible, enter = enter, exit = exit, content = content)
+}
+
+@Composable
+private fun AnimatedPreviewNote(text: String?) {
+    AnimatedReveal(visible = text != null) {
+        PreviewNote(text.orEmpty())
+    }
 }
 
 private fun Color.withOpacity(alpha: Float) = copy(alpha = alpha)
@@ -4549,7 +4556,7 @@ private fun SyncCenterScreen(
                 }
             }
             SectionCard("Changes needing attention", "${attention.size} local operations", animateDetail = true) {
-                if (attention.isEmpty()) {
+                AnimatedReveal(visible = attention.isEmpty()) {
                     Text(
                         "No pending, uncertain, rejected, or conflicted changes.",
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
@@ -4557,7 +4564,8 @@ private fun SyncCenterScreen(
                         fontSize = 14.sp,
                         lineHeight = 20.sp,
                     )
-                } else {
+                }
+                if (attention.isNotEmpty()) {
                     attention.forEachIndexed { index, operation ->
                         if (index > 0) DividerLine()
                         val transaction =
@@ -4647,11 +4655,12 @@ private fun ConflictInboxScreen(
         PageColumn {
             Badge("Actual · review required", tandemPalette.warning)
             Heading("Changes to review", "Choose whether to keep the device edit or the latest Actual version.")
-            if (conflicts.isEmpty()) {
+            AnimatedReveal(visible = conflicts.isEmpty()) {
                 SurfaceCard {
                     Column(Modifier.padding(15.dp)) { BodyText("There are no conflicts in the current local copy.") }
                 }
-            } else {
+            }
+            if (conflicts.isNotEmpty()) {
                 SectionCard("Conflicts", "${conflicts.size} transaction changes") {
                     conflicts.forEachIndexed { index, operation ->
                         if (index > 0) DividerLine()
@@ -4923,9 +4932,11 @@ private fun SettingsScreen(
 ) {
     PageColumn {
         Heading("Preferences", "Adjust appearance, sync, privacy, and app behavior.")
-        state.settingsStorageError?.let {
-            PreviewNote(it)
-            SecondaryButton("Retry settings storage") { state.settingsStorageRetry += 1 }
+        AnimatedReveal(visible = state.settingsStorageError != null) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                PreviewNote(state.settingsStorageError.orEmpty())
+                SecondaryButton("Retry settings storage") { state.settingsStorageRetry += 1 }
+            }
         }
         SectionCard("Personalize", "Appearance and budget") {
             ListRow("◐", "Appearance", "Theme, accent, and background", state.theme.label) { navigation.open(AppRoute.APPEARANCE) }
@@ -5254,7 +5265,7 @@ private fun SyncPreferencesScreen(
             DividerLine()
             ListRow("◷", "Sync status", syncDescription, syncStatus, animateChanges = true)
         }
-        if (mobileSession.syncError != null) PreviewNote(mobileSession.syncError ?: "Sync failed")
+        AnimatedPreviewNote(mobileSession.syncError)
     }
 }
 
@@ -5326,7 +5337,7 @@ private fun ServerDeviceScreen(
                 "Pairing codes and budget passwords are never saved. The device credential is active only until the app closes."
             },
         )
-        mobileSession.credentialStorageError?.let { PreviewNote(it) }
+        AnimatedPreviewNote(mobileSession.credentialStorageError)
         if (device == null) {
             SecondaryButton("Pair this device") { navigation.open(AppRoute.SERVER_ADDRESS) }
         } else {
@@ -5361,7 +5372,7 @@ private fun SecurityScreen(mobileSession: TandemMobileSession) {
         PreviewNote(
             "Pairing codes and encrypted-budget passwords are never stored. Device credentials use the platform secure store when available.",
         )
-        mobileSession.credentialStorageError?.let { PreviewNote(it) }
+        AnimatedPreviewNote(mobileSession.credentialStorageError)
     }
 }
 
@@ -5485,9 +5496,7 @@ private fun LocalDataScreen(
             DividerLine()
             ListRow("×", "Clear local data", "Not available while local-first sync is active", "Unavailable")
         }
-        if (mobileSession.syncError != null) {
-            PreviewNote(mobileSession.syncError ?: "Sync failed. Local data remains available.")
-        }
+        AnimatedPreviewNote(mobileSession.syncError)
         BodyText(
             "Cached data belongs to this budget on this device. Clearing it is disabled so queued, " +
                 "conflicted, or uncertain edits cannot be lost.",
@@ -5689,7 +5698,7 @@ private fun AboutScreen(
                 )
             }
         }
-        merchantIconPackLoadError?.let { PreviewNote(it) }
+        AnimatedPreviewNote(merchantIconPackLoadError)
         PreviewNote("TheSVG package license and the per-icon license and source list are bundled with the app resources.")
     }
 }
