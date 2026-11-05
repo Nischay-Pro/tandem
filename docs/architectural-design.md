@@ -27,12 +27,10 @@ recover from uncertain results and surface conflicts.
 
 Actual's synchronization system uses CRDT techniques for multi-device changes.
 Projects such as [Actuali](https://github.com/MattFaz/actuali) use a direct
-client approach. That can remove a separate middleware service from the sync
-path, but it moves protocol compatibility and release tracking into the client
-apps. Tandem chose the official API boundary because it fits the existing
-Kotlin Multiplatform apps and avoids maintaining separate synchronization
-implementations for Android and iOS. If you want fully encrypted sync, use
-Actuali.
+client approach. Tandem chose the official API boundary because it fits the
+existing Kotlin Multiplatform apps and avoids maintaining separate
+synchronization implementations for Android and iOS. If you want fully
+encrypted sync, use Actuali.
 
 ## Unencrypted and encrypted budgets
 
