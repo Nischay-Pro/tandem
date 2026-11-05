@@ -111,6 +111,10 @@ first-sync checkpoint stored 2,182 transaction records for the CAD budget and
 13,164 for the USD budget in Room. A fresh Actual readback after the
 2026-11-04 probe cleanup found 2,194 CAD and 13,236 USD transaction rows. Those
 totals include non-purchase rows in addition to the 15,000 synthetic purchases.
+This retained household server is still on Actual 26.10.0 from earlier device
+checks; the checked-in adapter now requires 26.11.0. Its containers and data
+were left untouched. Use the disposable compatibility gate to verify the
+current adapter baseline until the household fixture is upgraded.
 
 ## Code quality
 
