@@ -5520,8 +5520,8 @@ private fun SyncPreferencesScreen(
                 ) { state.backgroundSyncEnabled = it }
                 DividerLine()
                 ToggleRow(
-                    "Background sync on unmetered networks",
-                    "Wait until the system reports the connection as unmetered",
+                    "Background sync on Wi-Fi or other unrestricted connections",
+                    "Your device pauses sync on networks marked as limited or costly.",
                     state.syncOnWifi,
                 ) { state.syncOnWifi = it }
                 BodyText("Encrypted budgets are skipped because budget passwords are never stored.")
