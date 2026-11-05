@@ -12,6 +12,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -85,6 +86,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -918,6 +920,8 @@ fun TandemApp(
     var routeTransitionDirection by remember { mutableStateOf(1f) }
     var backGestureProgress by remember { mutableStateOf(0f) }
     var backGestureDirection by remember { mutableStateOf(1f) }
+    var backGestureCommitPending by remember { mutableStateOf(false) }
+    var backGestureOutgoingEntry by remember { mutableStateOf<AppRouteEntry?>(null) }
     var backPreviewRoute by remember { mutableStateOf<AppRouteEntry?>(null) }
     var backGestureCancelJob by remember { mutableStateOf<Job?>(null) }
     var skipNextRouteTransition by remember { mutableStateOf(false) }
@@ -1097,6 +1101,46 @@ fun TandemApp(
         state.selectedTransactionIsLive = false
         backStack.add(newRouteEntry(AppRoute.NEW_TRANSACTION))
     }
+    val popRoute: () -> Unit = {
+        if (backStack.size > 1) {
+            routeTransitionDirection = -1f
+            backStack.removeAt(backStack.lastIndex)
+        }
+    }
+    val handleBack: () -> Unit = {
+        backGestureCancelJob?.cancel()
+        backGestureCancelJob = null
+        if (backGestureCommitPending) {
+            backGestureCommitPending = false
+            skipNextRouteTransition = true
+            popRoute()
+        } else if (backStack.size > 1) {
+            val outgoingEntry = backStack.last()
+            val incomingEntry = backStack.getOrNull(backStack.lastIndex - 1)
+            if (incomingEntry == null) {
+                popRoute()
+            } else {
+                // Button back runs the same route pair and progress transform as predictive back.
+                backGestureProgress = 0f
+                backGestureDirection = 1f
+                backGestureOutgoingEntry = outgoingEntry
+                backPreviewRoute = incomingEntry
+                backGestureCancelJob =
+                    coroutineScope.launch {
+                        val returnAnimation = Animatable(0f)
+                        returnAnimation.animateTo(
+                            targetValue = 1f,
+                            animationSpec = tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS),
+                        ) {
+                            backGestureProgress = value
+                        }
+                        skipNextRouteTransition = true
+                        popRoute()
+                        backGestureCancelJob = null
+                    }
+            }
+        }
+    }
     val navigation =
         AppNavigation(
             open = { next ->
@@ -1115,12 +1159,7 @@ fun TandemApp(
                     backStack.add(newRouteEntry(it))
                 }
             },
-            back = {
-                if (backStack.size > 1) {
-                    routeTransitionDirection = -1f
-                    backStack.removeAt(backStack.lastIndex)
-                }
-            },
+            back = handleBack,
         )
     val routeEntry = backStack.last()
     val route = routeEntry.route
@@ -1142,6 +1181,8 @@ fun TandemApp(
         if (route != AppRoute.STARTUP) onStartupComplete?.invoke()
         if (skipNextRouteTransition) {
             backGestureProgress = 0f
+            backGestureCommitPending = false
+            backGestureOutgoingEntry = null
             backPreviewRoute = null
             skipNextRouteTransition = false
         }
@@ -1431,29 +1472,21 @@ fun TandemApp(
             onSystemAppearanceChanged?.invoke(isDark, state.theme == ThemeMode.SYSTEM)
         }
         TandemSystemBars(isDark, palette.background)
-        val handleBack = {
-            backGestureCancelJob?.cancel()
-            backGestureCancelJob = null
-            if (backGestureProgress > 0f) {
-                // Predictive back has already moved the outgoing route with the finger. Settle
-                // that gesture before popping so the restored route is composed at its origin,
-                // instead of briefly inheriting the completed gesture's off-screen offset.
-                skipNextRouteTransition = true
-                backGestureProgress = 0f
-                backPreviewRoute = null
-            }
-            navigation.back()
-        }
         val updateBackGesture: (Float, Float) -> Unit = { progress, direction ->
             backGestureDirection = direction
             if (progress > 0f) {
+                backGestureCommitPending = progress >= 1f
                 backGestureCancelJob?.cancel()
                 backGestureCancelJob = null
                 backGestureProgress = progress
+                if (backGestureOutgoingEntry == null) {
+                    backGestureOutgoingEntry = backStack.lastOrNull()
+                }
                 if (backPreviewRoute == null) {
                     backPreviewRoute = backStack.getOrNull(backStack.lastIndex - 1)
                 }
             } else if (backGestureProgress > 0f) {
+                backGestureCommitPending = false
                 backGestureCancelJob?.cancel()
                 backGestureCancelJob =
                     coroutineScope.launch {
@@ -1464,11 +1497,14 @@ fun TandemApp(
                         ) {
                             backGestureProgress = value
                         }
+                        backGestureOutgoingEntry = null
                         backPreviewRoute = null
                         backGestureCancelJob = null
                     }
             } else {
+                backGestureCommitPending = false
                 backGestureProgress = 0f
+                backGestureOutgoingEntry = null
                 backPreviewRoute = null
             }
         }
@@ -1568,6 +1604,7 @@ fun TandemApp(
                     Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        .clipToBounds()
                         .tandemEdgeBackGesture(backStack.size > 1, handleBack, updateBackGesture),
             ) {
                 if (backGestureProgress > 0f && backPreviewRoute != null && backPreviewRoute != routeEntry) {
@@ -1579,17 +1616,14 @@ fun TandemApp(
                             .clearAndSetSemantics {}
                             .graphicsLayer {
                                 val progress = backGestureProgress
-                                scaleX = 0.96f + 0.04f * progress
-                                scaleY = 0.96f + 0.04f * progress
-                                alpha = 0.72f + 0.28f * progress
-                                translationX = -direction * size.width * 0.04f * (1f - progress)
+                                translationX = -direction * size.width * (1f - progress)
                             },
                         false,
                     )
                 }
                 AnimatedContent(
                     targetState = routeEntry,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().clipToBounds(),
                     transitionSpec = {
                         when {
                             reduceMotion ||
@@ -1597,58 +1631,36 @@ fun TandemApp(
                                 initialState.route == AppRoute.STARTUP ||
                                 targetState.route == AppRoute.STARTUP ->
                                 EnterTransition.None togetherWith ExitTransition.None
+                            initialState.route.isTab() && targetState.route.isTab() -> {
+                                val movesForward = targetState.route.tabOrder() > initialState.route.tabOrder()
+                                val enterFrom = if (movesForward) 1 else -1
+                                val durationMillis = TandemMotion.TAB_MILLIS
+                                (
+                                    slideInHorizontally(
+                                        tween(durationMillis, easing = TandemMotion.movementEasing),
+                                    ) { it * enterFrom }
+                                ) togetherWith
+                                    slideOutHorizontally(
+                                        tween(durationMillis, easing = TandemMotion.movementEasing),
+                                    ) { -it * enterFrom } using null
+                            }
                             routeTransitionDirection > 0f ->
                                 (
                                     slideInHorizontally(
                                         tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                    ) { it / 8 } +
-                                        fadeIn(
-                                            tween(
-                                                TandemMotion.ROUTE_MILLIS - TandemMotion.FADE_THROUGH_DELAY_MILLIS,
-                                                delayMillis = TandemMotion.FADE_THROUGH_DELAY_MILLIS,
-                                                easing = TandemMotion.enterEasing,
-                                            ),
-                                        )
+                                    ) { it }
                                 ) togetherWith
-                                    (
-                                        slideOutHorizontally(
-                                            tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                        ) { -it / 16 } +
-                                            fadeOut(
-                                                tween(
-                                                    TandemMotion.FADE_THROUGH_DELAY_MILLIS,
-                                                    easing = TandemMotion.exitEasing,
-                                                ),
-                                            )
-                                    ) using null
-                            routeTransitionDirection < 0f ->
-                                (
-                                    slideInHorizontally(
+                                    slideOutHorizontally(
                                         tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                    ) { -it / 16 } +
-                                        fadeIn(
-                                            tween(
-                                                TandemMotion.ROUTE_MILLIS - TandemMotion.FADE_THROUGH_DELAY_MILLIS,
-                                                delayMillis = TandemMotion.FADE_THROUGH_DELAY_MILLIS,
-                                                easing = TandemMotion.enterEasing,
-                                            ),
-                                        )
-                                ) togetherWith
-                                    (
-                                        slideOutHorizontally(
-                                            tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                        ) { it / 8 } +
-                                            fadeOut(
-                                                tween(
-                                                    TandemMotion.FADE_THROUGH_DELAY_MILLIS,
-                                                    easing = TandemMotion.exitEasing,
-                                                ),
-                                            )
-                                    ) using null
-                            else -> {
-                                val (enter, exit) = fadeThroughTransitions(reduceMotion = false, durationMillis = TandemMotion.TAB_MILLIS)
-                                enter togetherWith exit using null
-                            }
+                                    ) { -it } using null
+                            routeTransitionDirection < 0f ->
+                                slideInHorizontally(
+                                    tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
+                                ) { -it } togetherWith
+                                    slideOutHorizontally(
+                                        tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
+                                    ) { it } using null
+                            else -> EnterTransition.None togetherWith ExitTransition.None
                         }
                     },
                     label = "tandem-screen-transition",
@@ -1656,11 +1668,8 @@ fun TandemApp(
                     renderRoute(
                         visibleEntry,
                         Modifier.fillMaxSize().graphicsLayer {
-                            if (visibleEntry == routeEntry && backGestureProgress > 0f) {
+                            if (visibleEntry == backGestureOutgoingEntry && backGestureProgress > 0f) {
                                 translationX = backGestureProgress * size.width * backGestureDirection
-                                val scale = 1f - 0.025f * backGestureProgress
-                                scaleX = scale
-                                scaleY = scale
                             }
                         },
                         true,
@@ -1673,6 +1682,15 @@ fun TandemApp(
 
 private fun AppRoute.isTab(): Boolean =
     this == AppRoute.BUDGET || this == AppRoute.ACCOUNTS || this == AppRoute.ACTIVITY || this == AppRoute.SETTINGS
+
+private fun AppRoute.tabOrder(): Int =
+    when (this) {
+        AppRoute.BUDGET -> 0
+        AppRoute.ACCOUNTS -> 1
+        AppRoute.ACTIVITY -> 2
+        AppRoute.SETTINGS -> 3
+        else -> -1
+    }
 
 @Composable
 private fun AppHeader(
@@ -1804,7 +1822,7 @@ private fun AppHeader(
                     AnimatedContent(
                         targetState = syncIndicator,
                         transitionSpec = {
-                            val (enter, exit) = fadeThroughTransitions(reduceMotion, TandemMotion.STATUS_CHANGE_MILLIS)
+                            val (enter, exit) = crossfadeTransitions(reduceMotion, TandemMotion.STATUS_CHANGE_MILLIS)
                             enter togetherWith exit using null
                         },
                         contentAlignment = Alignment.Center,
@@ -2296,7 +2314,7 @@ private fun AnimatedStatusText(
                 },
             ),
         transitionSpec = {
-            val (enter, exit) = fadeThroughTransitions(reduceMotion, TandemMotion.STATUS_CHANGE_MILLIS)
+            val (enter, exit) = crossfadeTransitions(reduceMotion, TandemMotion.STATUS_CHANGE_MILLIS)
             enter togetherWith exit using null
         },
         contentKey = { it.text },
@@ -2326,24 +2344,17 @@ private data class AnimatedTextContent(
     val color: Color,
 )
 
-private fun fadeThroughTransitions(
+private fun crossfadeTransitions(
     reduceMotion: Boolean,
     durationMillis: Int,
 ): Pair<EnterTransition, ExitTransition> =
     if (reduceMotion) {
         EnterTransition.None to ExitTransition.None
     } else {
-        val fadeOutMillis = minOf(TandemMotion.FADE_THROUGH_DELAY_MILLIS, durationMillis)
-        val fadeInMillis = durationMillis - fadeOutMillis
+        val fadeMillis = minOf(TandemMotion.CROSSFADE_MILLIS, durationMillis)
         Pair(
-            fadeIn(
-                tween(
-                    fadeInMillis,
-                    delayMillis = fadeOutMillis,
-                    easing = TandemMotion.enterEasing,
-                ),
-            ),
-            fadeOut(tween(fadeOutMillis, easing = TandemMotion.exitEasing)),
+            fadeIn(tween(fadeMillis, easing = LinearEasing)),
+            fadeOut(tween(fadeMillis, easing = LinearEasing)),
         )
     }
 
@@ -3014,7 +3025,7 @@ private fun AnimatedAttentionContent(
                 Modifier
             },
         transitionSpec = {
-            val (enter, exit) = fadeThroughTransitions(reduceMotion, TandemMotion.STATUS_CHANGE_MILLIS)
+            val (enter, exit) = crossfadeTransitions(reduceMotion, TandemMotion.STATUS_CHANGE_MILLIS)
             enter togetherWith exit using null
         },
         contentAlignment = Alignment.TopStart,
