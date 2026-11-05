@@ -23,23 +23,19 @@ class MainActivity : ComponentActivity() {
     registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
   private val appResumeEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
   private val networkRestoredEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-  private var activeNetwork: Network? = null
-  private var networkStateInitialized = false
+  private val syncSignalState = SyncSignalState<Network>()
   private var networkCallbackRegistered = false
-  private var hasBeenResumed = false
   private val connectivityManager by lazy {
     getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
   }
   private val networkCallback =
     object : ConnectivityManager.NetworkCallback() {
       override fun onAvailable(network: Network) {
-        if (networkStateInitialized && activeNetwork == null) networkRestoredEvents.tryEmit(Unit)
-        activeNetwork = network
-        networkStateInitialized = true
+        if (syncSignalState.onNetworkAvailable(network)) networkRestoredEvents.tryEmit(Unit)
       }
 
       override fun onLost(network: Network) {
-        if (activeNetwork == network) activeNetwork = null
+        syncSignalState.onNetworkLost(network)
       }
     }
 
@@ -88,8 +84,7 @@ class MainActivity : ComponentActivity() {
   override fun onStart() {
     super.onStart()
     if (!networkCallbackRegistered) {
-      activeNetwork = connectivityManager.activeNetwork
-      networkStateInitialized = true
+      syncSignalState.onNetworkStarted(connectivityManager.activeNetwork)
       connectivityManager.registerDefaultNetworkCallback(networkCallback)
       networkCallbackRegistered = true
     }
@@ -97,16 +92,14 @@ class MainActivity : ComponentActivity() {
 
   override fun onResume() {
     super.onResume()
-    if (hasBeenResumed) appResumeEvents.tryEmit(Unit)
-    hasBeenResumed = true
+    if (syncSignalState.onActivityResumed()) appResumeEvents.tryEmit(Unit)
   }
 
   override fun onStop() {
     if (networkCallbackRegistered) {
       connectivityManager.unregisterNetworkCallback(networkCallback)
       networkCallbackRegistered = false
-      activeNetwork = null
-      networkStateInitialized = false
+      syncSignalState.onActivityStopped()
     }
     super.onStop()
   }
