@@ -7,8 +7,9 @@ manifest. A server with another release is rejected before the adapter can
 open a budget. The integration test establishes login, version check, synthetic
 budget/account/transaction creation, ordinary transaction update and deletion,
 transfer creation, split creation and readback, server sync, and readback through
-independent local workspaces. Encrypted budget behavior and transfer
-mutation/deletion require their own tests before being declared supported.
+independent local workspaces. It also verifies the adapter's encrypted-budget
+read path and verifies that edits and deletions of split or transfer records
+are rejected without changing the Actual records.
 
 The version gate calls the official package's `getServerVersion()` method. In
 the pinned source, that method reads the server build version, is available
@@ -49,10 +50,17 @@ feed is therefore a Tandem projection, not Actual's synchronization
 protocol; refresh sees the copy downloaded for that request, with external
 edits appearing on a subsequent refresh.
 
-For an end-to-end encrypted budget, callers pass its encryption password only
-to the specific `runBudget()` call. It is separate from the Actual server login
-credential. The adapter does not persist that password. Encrypted-budget
-compatibility remains unverified until its dedicated test is added.
+For an end-to-end encrypted budget, callers pass its encryption password to the
+specific `runBudget()` call that opens the budget. It is separate from the
+Actual server login credential. The adapter forwards it to Actual's
+`downloadBudget()` call; the Tandem write journal does not store it. The
+compatibility test verifies that the catalog identifies the encrypted budget,
+a snapshot request without the password fails, and snapshot and transaction
+reads with the password succeed. The Actual API opens a local working copy for
+these operations, while Tandem stores readable projected records in
+PostgreSQL. Actual's encryption therefore protects the budget on Actual's sync
+server, but does not make the Tandem API service an encrypted relay; deployers
+must trust and protect the service and its storage.
 
 The adapter must be the only owner of the package singleton in its Node.js
 process. This queue coordinates one Tandem API process. Cross-process and
@@ -84,8 +92,18 @@ through `updatePayee`, and adds a transaction with `runTransfers: true`. Actual
 creates the paired transaction and each leg points to the other leg's ID; the
 outgoing leg keeps that link after download into the second workspace. Split
 creation is verified through Actual's grouped transaction result and public AQL
-read. The reconciler treats both transfers and splits as structured records
-that need review rather than editing one leg or child independently.
+read. The compatibility check submits both update and delete operations for a
+split parent, split child, outgoing transfer leg, and incoming transfer leg.
+Each returns a `structured-transaction-unsupported` conflict, and the test
+checks that the Actual transaction revision remains unchanged. The reconciler
+treats both transfers and splits as structured records that need review rather
+than editing one leg or child independently.
+
+The encrypted fixture uses the pinned package's internal `key-make` handler to
+enable encryption on synthetic data because the public API has no encryption
+toggle. This is test setup only; production adapter reads and writes use the
+public API methods and do not access Actual's SQLite files or internal
+database.
 
 ## Verified upstream evidence
 

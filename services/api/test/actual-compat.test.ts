@@ -39,6 +39,8 @@ let database: Database | undefined;
 let adminPool: Pool | undefined;
 let compatibilitySchema: string | undefined;
 let compatibilityDatabaseUrl: string | undefined;
+let encryptedCompatibilityFixture:
+  { budgetId: string; budgetName: string; transactionId: string } | undefined;
 
 async function findAvailablePort(): Promise<number> {
   const probe = createServer();
@@ -618,8 +620,6 @@ describe.skipIf(!compatibilityTestEnabled)(
         });
         expect(operationStatus.statusCode).toBe(200);
         expect(operationStatus.json().operation.status).toBe("committed");
-        await reconciliationApp.close();
-
         await firstDevice.runBudget(
           budget.groupId,
           async () => {
@@ -650,6 +650,9 @@ describe.skipIf(!compatibilityTestEnabled)(
         const splitParent = splitTransactions.find(
           (item) => item.notes === "Synthetic split parent",
         );
+        if (!splitParent) {
+          throw new Error("Actual did not return the synthetic split parent");
+        }
         expect(splitParent?.is_parent).toBe(true);
         expect(splitParent?.subtransactions).toHaveLength(2);
         const splitParentSnapshot = snapshotActualTransaction(splitParent);
@@ -743,6 +746,83 @@ describe.skipIf(!compatibilityTestEnabled)(
           transferLegs.outgoing,
         );
         expect(transferSnapshot.transferId).toBe(transferLegs.incoming?.id);
+
+        const transferOutgoingId = transferLegs.outgoing?.id;
+        const transferIncomingId = transferLegs.incoming?.id;
+        if (!transferOutgoingId || !transferIncomingId) {
+          throw new Error("Actual did not return both synthetic transfer legs");
+        }
+
+        const assertStructuredWriteConflict = async (
+          transactionId: string,
+          action: "update" | "delete",
+        ) => {
+          const transactionPath = `/api/v1/budgets/${budget.groupId}/transactions/${encodeURIComponent(transactionId)}`;
+          const readResponse = await reconciliationApp.inject({
+            method: "GET",
+            url: transactionPath,
+            headers: authorizationHeaders,
+          });
+          expect(readResponse.statusCode).toBe(200);
+          const base = readResponse.json() as {
+            transaction: TransactionSnapshot;
+            revision: string;
+          };
+          const operationId = randomUUID();
+          const writeResponse = await reconciliationApp.inject({
+            method: "POST",
+            url: `${transactionPath}/operations`,
+            headers: {
+              ...authorizationHeaders,
+              "idempotency-key": `compat-structured-${operationId}`,
+            },
+            payload: {
+              operationId,
+              action,
+              baseRevision: base.revision,
+              baseSnapshot: base.transaction,
+              patch:
+                action === "update"
+                  ? { amount: base.transaction.amount + 1 }
+                  : {},
+            },
+          });
+          expect(writeResponse.statusCode).toBe(200);
+          expect(writeResponse.json()).toMatchObject({
+            operation: { action, status: "conflict" },
+            conflict: {
+              conflictType: "structured-transaction-unsupported",
+            },
+          });
+
+          const unchanged = await firstDevice.runBudget(budget.groupId, () =>
+            transactionStore.read(transactionId),
+          );
+          if (!unchanged) {
+            throw new Error("Structured Actual transaction disappeared");
+          }
+          expect(
+            createTransactionRevision(snapshotActualTransaction(unchanged)),
+          ).toBe(base.revision);
+        };
+
+        for (const structuredTransactionId of [
+          splitParent.id,
+          splitChild.id,
+          transferOutgoingId,
+          transferIncomingId,
+        ]) {
+          await assertStructuredWriteConflict(
+            structuredTransactionId,
+            "update",
+          );
+          await assertStructuredWriteConflict(
+            structuredTransactionId,
+            "delete",
+          );
+        }
+
+        await reconciliationApp.close();
 
         await firstDevice.close();
 
@@ -947,8 +1027,167 @@ describe.skipIf(!compatibilityTestEnabled)(
         } finally {
           await thirdDevice.close();
         }
+        encryptedCompatibilityFixture = {
+          budgetId: budget.groupId,
+          budgetName: budget.name,
+          transactionId: splitParent.id,
+        };
       } finally {
         await firstDevice.close();
+      }
+    }, 60_000);
+
+    it("reads an end-to-end encrypted synthetic budget through the API adapter", async () => {
+      if (!serverURL || !serverPassword || !firstDataDir) {
+        throw new Error("Actual compatibility test configuration is missing");
+      }
+      if (!database || !compatibilityDatabaseUrl) {
+        throw new Error("Actual compatibility database is not initialized");
+      }
+
+      const fixture = encryptedCompatibilityFixture;
+      if (!fixture) {
+        throw new Error("The synthetic Actual budget fixture was not captured");
+      }
+      const encryptedBudgetPassword = "synthetic-encryption-test-password";
+      const ownerDataDir = path.join(
+        firstDataDir,
+        `encrypted-owner-${randomUUID()}`,
+      );
+      await mkdir(ownerDataDir, { recursive: true });
+
+      const encryptedOwner = createActualSession({
+        serverURL,
+        password: serverPassword,
+        dataDir: ownerDataDir,
+      });
+      let encryptedBudgetId: string | undefined;
+      try {
+        await encryptedOwner.runBudget(
+          fixture.budgetId,
+          async () => {
+            if (!Actual.internal) {
+              throw new Error("Actual encryption handler is unavailable");
+            }
+            const result = await Actual.internal.send("key-make", {
+              password: encryptedBudgetPassword,
+            });
+            if (result.error) {
+              throw new Error("Actual could not encrypt the synthetic budget");
+            }
+          },
+          { synchronizeAfterWrite: true },
+        );
+
+        const budgets = await encryptedOwner.execute(() => Actual.getBudgets());
+        const encrypted = budgets.find(
+          (item) =>
+            item.name === fixture.budgetName && Boolean(item.encryptKeyId),
+        );
+        if (!encrypted?.groupId) {
+          throw new Error(
+            "Encrypted Actual budget was not registered for sync",
+          );
+        }
+        encryptedBudgetId = encrypted.groupId;
+      } finally {
+        await encryptedOwner.close();
+      }
+      if (!encryptedBudgetId) {
+        throw new Error("Encrypted Actual budget ID is unavailable");
+      }
+
+      const pairing = await database.deviceAuth.createPairingCode({
+        principalId: `encrypted-owner-${randomUUID()}`,
+        budgetIds: [encryptedBudgetId],
+      });
+      const device = await database.deviceAuth.pair({
+        code: pairing.code,
+        deviceName: "Synthetic encrypted compatibility client",
+      });
+      if (!device) {
+        throw new Error(
+          "Could not pair the encrypted compatibility test client",
+        );
+      }
+
+      const apiDataDir = path.join(
+        firstDataDir,
+        `encrypted-api-${randomUUID()}`,
+      );
+      await mkdir(apiDataDir, { recursive: true });
+      const encryptedApp = await runApi(
+        {
+          DATABASE_URL: compatibilityDatabaseUrl,
+          ACTUAL_SERVER_URL: serverURL,
+          ACTUAL_SERVER_PASSWORD: serverPassword,
+          ACTUAL_API_DATA_DIR: apiDataDir,
+          HOST: "127.0.0.1",
+          PORT: String(await findAvailablePort()),
+        },
+        createPostgresDatabase,
+        () => undefined,
+      );
+
+      try {
+        const authorizationHeaders = {
+          authorization: `Bearer ${device.accessToken}`,
+        };
+        const catalog = await encryptedApp.inject({
+          method: "GET",
+          url: "/api/v1/budgets",
+          headers: authorizationHeaders,
+        });
+        expect(catalog.statusCode).toBe(200);
+        expect(catalog.json().budgets).toMatchObject([
+          {
+            budgetId: encryptedBudgetId,
+            name: fixture.budgetName,
+            isEncrypted: true,
+          },
+        ]);
+
+        const snapshotPath = `/api/v1/budgets/${encryptedBudgetId}/snapshot`;
+        const missingPassword = await encryptedApp.inject({
+          method: "GET",
+          url: snapshotPath,
+          headers: authorizationHeaders,
+        });
+        expect(missingPassword.statusCode).toBe(502);
+
+        const snapshot = await encryptedApp.inject({
+          method: "GET",
+          url: snapshotPath,
+          headers: {
+            ...authorizationHeaders,
+            "x-budget-encryption-password": encryptedBudgetPassword,
+          },
+        });
+        expect(snapshot.statusCode).toBe(200);
+        expect(
+          snapshot
+            .json()
+            .records.find(
+              (record: { type: string; id: string }) =>
+                record.type === "transaction" &&
+                record.id === fixture.transactionId,
+            ),
+        ).toBeDefined();
+
+        const transactionRead = await encryptedApp.inject({
+          method: "GET",
+          url: `/api/v1/budgets/${encryptedBudgetId}/transactions/${fixture.transactionId}`,
+          headers: {
+            ...authorizationHeaders,
+            "x-budget-encryption-password": encryptedBudgetPassword,
+          },
+        });
+        expect(transactionRead.statusCode).toBe(200);
+        expect(transactionRead.json().transaction).toMatchObject({
+          id: fixture.transactionId,
+        });
+      } finally {
+        await encryptedApp.close();
       }
     }, 60_000);
   },
