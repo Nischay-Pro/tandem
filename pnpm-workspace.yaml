@@ -4,5 +4,8 @@ packages:
 allowBuilds:
   better-sqlite3: true
   esbuild: true
+minimumReleaseAgeExclude:
+  # The icon source is pinned at 4.0.4; remove this exception after it passes pnpm's release-age window.
+  - "@thesvg/icons@4.0.4"
 overrides:
   minimatch: 11.0.3

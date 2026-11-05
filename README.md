@@ -23,6 +23,7 @@ Tandem uses this service because Actual does not provide a budget REST API and i
 - A reverse proxy with HTTPS for access from phones. Keep the Tandem API and PostgreSQL off the public internet; route the API through the same trusted proxy used for Actual.
 - For Android development: Android Studio, Android SDK, and the Java/Gradle toolchain documented in [`docs/mobile-api-client.md`](docs/mobile-api-client.md).
 - For iOS development: macOS with Xcode.
+- For mobile builds, install Node.js `26.13.0` and pnpm `12.16.1`; Gradle generates Tandem's offline merchant artwork from the pinned TheSVG package.
 
 ## Getting started
 
@@ -204,7 +205,14 @@ Store these values in the supervisor's protected environment file instead of a s
 
 ### 3. Build and run Android
 
-From the `mobile/` directory:
+From the repository root, install the pinned JavaScript packages used by the mobile resource generator:
+
+```sh
+mise install
+pnpm install --frozen-lockfile
+```
+
+Then from the `mobile/` directory:
 
 ```sh
 ./gradlew :androidApp:assembleDebug
@@ -216,7 +224,7 @@ Open Tandem, enter the HTTPS API address reachable from the Android device, and 
 
 ### Build iOS
 
-On macOS with Xcode installed, from the `mobile/` directory:
+After installing the pinned JavaScript packages above, on macOS with Xcode installed, from the `mobile/` directory:
 
 ```sh
 xcodebuild \
