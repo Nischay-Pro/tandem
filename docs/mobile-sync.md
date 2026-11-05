@@ -78,21 +78,22 @@ queued/conflicted outbox rows from Room. Refresh uses the same sync action;
 clearing local data remains disabled to protect queued and uncertain writes.
 
 Android can schedule a unique six-hour periodic WorkManager job. Its network
-constraint is `CONNECTED`, or `UNMETERED` when the Wi-Fi-only option is enabled
-(this also permits other unmetered networks). The worker reloads the selected
-budget and secure device credential from local storage, checks that the budget
-is authorized for that device, and uses the regular snapshot/change-feed and
-outbox coordinator. Foreground and worker syncs can use separate coordinator
-and Room instances, so all coordinators in the app process share one mutex;
-this prevents a second sync from treating another coordinator's active `sending`
-write as an interrupted process. Android Room builders enable multi-instance
-invalidation, and the open Compose session observes recent transactions, total
-transaction count, related budget records, outbox rows, and sync state as Room
-flows. Worker changes therefore appear in the open UI without a route reload.
-An Android device regression verified updates across two independently
-opened database instances. The worker skips encrypted budgets because budget
-passwords are never persisted. WorkManager may defer periodic execution to meet
-system power and network rules. On 2026-11-04, an Android device ran
+constraint is `CONNECTED`, or `UNMETERED` when the unmetered-network option is
+enabled. That constraint permits Wi-Fi and other networks Android marks as
+unmetered. The worker reloads the selected budget and secure device credential
+from local storage, checks that the budget is authorized for that device, and
+uses the regular snapshot/change-feed and outbox coordinator. Foreground and
+worker syncs can use separate coordinator and Room instances, so all
+coordinators in the app process share one mutex; this prevents a second sync
+from treating another coordinator's active `sending` write as an interrupted
+process. Android Room builders enable multi-instance invalidation, and the open
+Compose session observes recent transactions, total transaction count, related
+budget records, outbox rows, and sync state as Room flows. Worker changes
+therefore appear in the open UI without a route reload. An Android device
+regression verified updates across two independently opened database
+instances. The worker skips encrypted budgets because budget passwords are
+never persisted. WorkManager may defer periodic execution to meet system power
+and network rules. On 2026-11-04, an Android device ran
 `BackgroundBudgetSyncWorker` against the original local Tandem/Actual API using
 the saved device credential. The actual six-hour periodic WorkManager job
 ran and returned `SUCCESS`; the selected CAD Room row remained `READY`, had no
@@ -106,7 +107,8 @@ a six-hour earliest start, and connects the background-sync preference to the
 shared Kotlin sync coordinator. iOS decides when an eligible refresh actually
 runs; the six-hour value is not a fixed execution interval. The Kotlin runner
 loads the selected budget and preferences from Room, the device session from
-Keychain, honors Wi-Fi-only mode, and skips encrypted budgets whose passwords
+Keychain, and honors the unmetered-network preference by waiting for a path not
+marked expensive or constrained. It skips encrypted budgets whose passwords
 are not stored. The Xcode target also owns the iOS app icon and dark launch
 screen assets. The shared appearance setting is forwarded to SwiftUI so iOS
 system chrome follows the selected light, dark, or system mode.
