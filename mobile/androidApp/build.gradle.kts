@@ -35,6 +35,7 @@ dependencies {
   implementation(libs.coroutinesCore)
   implementation(libs.workRuntimeKtx)
   implementation(libs.activityCompose)
+  implementation(libs.coreSplashScreen)
   implementation(libs.composeRuntimeAndroid)
   implementation(libs.composeUiAndroid)
   implementation(libs.composeFoundationAndroid)

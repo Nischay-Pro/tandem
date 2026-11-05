@@ -3,14 +3,28 @@
 package app.tandemforactual.ui
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,6 +34,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -27,10 +42,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
@@ -40,12 +58,16 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.Icon
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,9 +76,11 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.mapSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,6 +92,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -89,12 +116,30 @@ import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetDisplaySettings
+import app.tandemforactual.ui.generated.resources.Res
+import app.tandemforactual.ui.generated.resources.allDrawableResources
+import com.composables.icons.lucide.BriefcaseBusiness
+import com.composables.icons.lucide.CarFront
+import com.composables.icons.lucide.Coffee
+import com.composables.icons.lucide.HeartPulse
+import com.composables.icons.lucide.House
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.PawPrint
+import com.composables.icons.lucide.Plane
+import com.composables.icons.lucide.Receipt
+import com.composables.icons.lucide.ShieldCheck
+import com.composables.icons.lucide.ShoppingCart
+import com.composables.icons.lucide.Utensils
+import com.composables.icons.lucide.Zap
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -104,8 +149,11 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.painterResource
 
 private const val SUPPORTED_ACTUAL_SERVER_VERSION = "26.11.0"
 
@@ -159,6 +207,7 @@ private enum class AppRoute(
     NOTIFICATIONS("Notifications"),
     LOCAL_DATA("Local data and storage"),
     ABOUT("About and help"),
+    MERCHANT_ICON_LICENSES("Merchant icon licenses"),
 }
 
 private data class TransactionItem(
@@ -167,12 +216,113 @@ private data class TransactionItem(
     val dateLabel: String,
     val amountMinorUnits: Long,
     val icon: String,
+    val categoryIcon: ImageVector? = null,
+    val merchantIcon: DrawableResource? = null,
     val account: String = "Checking",
     val accountId: String? = null,
     val recordId: String? = null,
     val notes: String = "",
     val displaySettings: BudgetDisplaySettings? = null,
 )
+
+private class MerchantAliasNode {
+    val children = mutableMapOf<String, MerchantAliasNode>()
+    var icon: DrawableResource? = null
+    var titleMatch = false
+    var licensePriority = Int.MAX_VALUE
+}
+
+private fun merchantLicensePriority(license: String): Int =
+    when (license) {
+        "CC0-1.0" -> 0
+        "MIT" -> 1
+        "Apache-2.0" -> 2
+        else -> 3
+    }
+
+private data class MerchantIconNotice(
+    val title: String,
+    val license: String,
+    val registryUrl: String,
+    val brandUrl: String,
+    val resourceName: String,
+    val resource: DrawableResource,
+)
+
+private val storeNumberSuffix = Regex("(?:(?:store|location|branch) )?\\d+[a-z]?(?: (?:(?:store|location|branch) )?\\d+[a-z]?)*")
+
+private fun isStoreNumberSuffix(words: List<String>): Boolean = words.isNotEmpty() && storeNumberSuffix.matches(words.joinToString(" "))
+
+private fun MerchantAliasNode.findPayeeIcon(words: List<String>): DrawableResource? {
+    if (words.isEmpty()) return null
+    var node = this
+    var bestIcon: DrawableResource? = null
+    for (end in words.indices) {
+        node = node.children[words[end]] ?: break
+        val icon = node.icon ?: continue
+        if (end == words.lastIndex || isStoreNumberSuffix(words.drop(end + 1))) bestIcon = icon
+    }
+    return bestIcon
+}
+
+private data class MerchantIconPack(
+    private val root: MerchantAliasNode,
+    val notices: List<MerchantIconNotice>,
+    val sourceVersion: String,
+) {
+    val iconCount: Int get() = notices.size
+    val openSourceIconCount: Int get() = notices.count { it.license in setOf("CC0-1.0", "MIT", "Apache-2.0") }
+    val fairUseIconCount: Int get() = notices.size - openSourceIconCount
+
+    fun iconFor(payee: String): DrawableResource? = root.findPayeeIcon(labelWords(payee))
+}
+
+private suspend fun loadMerchantIconPack(): MerchantIconPack {
+    val catalog = Json.parseToJsonElement(Res.readBytes("files/merchant-icon-catalog.json").decodeToString()).jsonObject
+    val resources = Res.allDrawableResources
+    val root = MerchantAliasNode()
+    val notices = mutableListOf<MerchantIconNotice>()
+
+    for (element in catalog["icons"]?.jsonArray.orEmpty()) {
+        val icon = element.jsonObject
+        val resourceName = icon["resourceName"]?.jsonPrimitive?.contentOrNull ?: continue
+        val resource = resources[resourceName] ?: continue
+        val title = icon["title"]?.jsonPrimitive?.contentOrNull ?: continue
+        val license = icon["license"]?.jsonPrimitive?.contentOrNull ?: continue
+        val registryUrl =
+            icon["registryUrl"]?.jsonPrimitive?.contentOrNull
+                ?: "https://thesvg.org/icon/${icon["slug"]?.jsonPrimitive?.contentOrNull.orEmpty()}"
+        val brandUrl = icon["url"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        notices += MerchantIconNotice(title, license, registryUrl, brandUrl, resourceName, resource)
+        val labels =
+            buildList {
+                add(title to true)
+                icon["aliases"]?.jsonArray?.forEach { alias -> alias.jsonPrimitive.contentOrNull?.let { add(it to false) } }
+            }
+        for ((label, isTitle) in labels) {
+            val words = labelWords(label)
+            if (words.isEmpty()) continue
+            var node = root
+            for (word in words) node = node.children.getOrPut(word) { MerchantAliasNode() }
+            val licensePriority = merchantLicensePriority(license)
+            if (
+                node.icon == null ||
+                licensePriority < node.licensePriority ||
+                (licensePriority == node.licensePriority && isTitle && !node.titleMatch)
+            ) {
+                node.icon = resource
+                node.titleMatch = isTitle
+                node.licensePriority = licensePriority
+            }
+        }
+    }
+
+    return MerchantIconPack(
+        root = root,
+        notices = notices.sortedBy { it.title.lowercase() },
+        sourceVersion = catalog["sourceVersion"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+    )
+}
 
 private fun AppState.formatCurrency(minorUnits: Long): String = formatCurrency(minorUnits, budgetDisplaySettings)
 
@@ -184,27 +334,70 @@ private fun AppState.parseAmountMinorUnits(value: String): Long? = parseAmountMi
 
 private val previewTransactions =
     listOf(
-        TransactionItem("Corner Market", "Groceries", formatShortDate(SampleDate(2026, 5, 14)), -4_218, "G"),
-        TransactionItem("Electric Company", "Utilities", formatShortDate(SampleDate(2026, 5, 12)), -12_000, "E"),
-        TransactionItem("Acme Corp", "Paycheck", formatShortDate(SampleDate(2026, 5, 10)), 250_000, "A"),
-        TransactionItem("Riverside Cafe", "Dining", formatShortDate(SampleDate(2026, 5, 8)), -2_840, "R"),
-        TransactionItem("City Transit", "Transport", formatShortDate(SampleDate(2026, 5, 6)), -1_650, "C"),
-        TransactionItem("Book Nook", "Personal", formatShortDate(SampleDate(2026, 5, 4)), -2_399, "B"),
+        TransactionItem(
+            "Corner Market",
+            "Groceries",
+            formatShortDate(SampleDate(2026, 5, 14)),
+            -4_218,
+            "G",
+            categoryIcon = financeIcon("Groceries"),
+        ),
+        TransactionItem(
+            "Electric Company",
+            "Utilities",
+            formatShortDate(SampleDate(2026, 5, 12)),
+            -12_000,
+            "E",
+            categoryIcon = financeIcon("Utilities"),
+        ),
+        TransactionItem(
+            "Acme Corp",
+            "Paycheck",
+            formatShortDate(SampleDate(2026, 5, 10)),
+            250_000,
+            "A",
+            categoryIcon = financeIcon("Paycheck"),
+        ),
+        TransactionItem(
+            "Riverside Cafe",
+            "Dining",
+            formatShortDate(SampleDate(2026, 5, 8)),
+            -2_840,
+            "R",
+            categoryIcon = financeIcon("Dining"),
+        ),
+        TransactionItem(
+            "City Transit",
+            "Transport",
+            formatShortDate(SampleDate(2026, 5, 6)),
+            -1_650,
+            "C",
+            categoryIcon = financeIcon("Transport"),
+        ),
+        TransactionItem("Book Nook", "Personal", formatShortDate(SampleDate(2026, 5, 4)), -2_399, "B", categoryIcon = Lucide.Receipt),
     )
 
-private fun liveTransactionItems(session: TandemMobileSession): List<TransactionItem> {
+private fun liveTransactionItems(
+    session: TandemMobileSession,
+    merchantIconPack: MerchantIconPack? = null,
+): List<TransactionItem> {
     val accounts = session.accountRecords.mapNotNull { record -> record.recordName()?.let { record.recordId to it } }.toMap()
     val payees = session.payeeRecords.mapNotNull { record -> record.recordName()?.let { record.recordId to it } }.toMap()
     val categories = session.categoryRecords.mapNotNull { record -> record.recordName()?.let { record.recordId to it } }.toMap()
+    val payeeIconCache = mutableMapOf<String, DrawableResource?>()
     return session.transactionRecords.mapNotNull { record ->
         val amount = record.amountMinor ?: return@mapNotNull null
         val payeeName = record.payeeId?.let(payees::get)
+        val categoryName = record.categoryId?.let(categories::get) ?: record.categoryId ?: "Uncategorized"
+        val displayedPayee = payeeName ?: record.payeeId ?: "No payee"
         TransactionItem(
-            payee = payeeName ?: record.payeeId ?: "No payee",
-            category = record.categoryId?.let(categories::get) ?: record.categoryId ?: "Uncategorized",
+            payee = displayedPayee,
+            category = categoryName,
             dateLabel = formatLiveDate(record.recordDate),
             amountMinorUnits = amount,
-            icon = (payeeName ?: "•").take(1).uppercase(),
+            icon = displayedPayee.take(1).uppercase(),
+            categoryIcon = financeIcon(categoryName),
+            merchantIcon = payeeIconCache.getOrPut(displayedPayee) { merchantIconPack?.iconFor(displayedPayee) },
             account = record.accountId?.let(accounts::get) ?: record.accountId ?: "No account",
             accountId = record.accountId,
             recordId = record.recordId,
@@ -439,6 +632,21 @@ internal fun resolveAppStartupDestination(
 
 private const val AUTOMATIC_SYNC_COOLDOWN_MS = 30_000L
 
+private val LocalRouteScrollState = staticCompositionLocalOf<ScrollState?> { null }
+
+private fun decodeScrollPositions(serialized: String?): Map<String, Int> =
+    serialized
+        ?.split('|')
+        ?.mapNotNull { entry ->
+            val delimiter = entry.lastIndexOf(':')
+            if (delimiter < 1) {
+                null
+            } else {
+                entry.substring(delimiter + 1).toIntOrNull()?.let { entry.substring(0, delimiter) to it }
+            }
+        }?.toMap()
+        ?: emptyMap()
+
 internal class AppState {
     var theme by mutableStateOf(ThemeMode.DARK)
     var accent by mutableStateOf(AccentChoice.ACTUAL_PURPLE)
@@ -471,7 +679,9 @@ internal class AppState {
     var conflictChoice by mutableStateOf("")
     var backgroundStyle by mutableStateOf("Solid surface")
     var homeLayout by mutableStateOf("Comfortable")
-    var reduceMotion by mutableStateOf(false)
+    var reduceMotionOverride by mutableStateOf<Boolean?>(null)
+    var systemReduceMotionEnabled by mutableStateOf(false)
+    val reduceMotion: Boolean get() = reduceMotionOverride ?: systemReduceMotionEnabled
     var syncOnOpen by mutableStateOf(true)
     var backgroundSyncEnabled by mutableStateOf(false)
     var syncOnWifi by mutableStateOf(false)
@@ -481,6 +691,7 @@ internal class AppState {
     var settingsStorageError by mutableStateOf<String?>(null)
     var settingsStorageRetry by mutableStateOf(0)
     var settingsStorageReady by mutableStateOf(false)
+    val scrollPositions = mutableMapOf<String, Int>()
 
     fun persistentSettings(): Map<String, String> =
         mapOf(
@@ -492,7 +703,7 @@ internal class AppState {
             "selectedBudgetId" to selectedBudgetId,
             "selectedBudgetEncrypted" to selectedBudgetEncrypted.toString(),
             "cachedBudgetCatalogJson" to cachedBudgetCatalogJson,
-            "reduceMotion" to reduceMotion.toString(),
+            "reduceMotionMode" to (reduceMotionOverride?.let { if (it) "on" else "off" } ?: "system"),
             "syncOnOpen" to syncOnOpen.toString(),
             "backgroundSyncEnabled" to backgroundSyncEnabled.toString(),
             "syncOnWifi" to syncOnWifi.toString(),
@@ -510,7 +721,13 @@ internal class AppState {
         selectedBudgetId = saved["selectedBudgetId"] ?: selectedBudgetId
         selectedBudgetEncrypted = saved["selectedBudgetEncrypted"]?.toBooleanStrictOrNull() ?: selectedBudgetEncrypted
         cachedBudgetCatalogJson = saved["cachedBudgetCatalogJson"] ?: cachedBudgetCatalogJson
-        reduceMotion = saved["reduceMotion"]?.toBooleanStrictOrNull() ?: reduceMotion
+        reduceMotionOverride =
+            when (saved["reduceMotionMode"]) {
+                "on" -> true
+                "off" -> false
+                "system" -> null
+                else -> saved["reduceMotion"]?.toBooleanStrictOrNull() ?: reduceMotionOverride
+            }
         syncOnOpen = saved["syncOnOpen"]?.toBooleanStrictOrNull() ?: syncOnOpen
         backgroundSyncEnabled = saved["backgroundSyncEnabled"]?.toBooleanStrictOrNull() ?: backgroundSyncEnabled
         syncOnWifi = saved["syncOnWifi"]?.toBooleanStrictOrNull() ?: syncOnWifi
@@ -556,13 +773,14 @@ internal class AppState {
                         "conflictChoice" to state.conflictChoice,
                         "backgroundStyle" to state.backgroundStyle,
                         "homeLayout" to state.homeLayout,
-                        "reduceMotion" to state.reduceMotion,
+                        "reduceMotionOverride" to state.reduceMotionOverride,
                         "syncOnOpen" to state.syncOnOpen,
                         "backgroundSyncEnabled" to state.backgroundSyncEnabled,
                         "syncOnWifi" to state.syncOnWifi,
                         "syncReminders" to state.syncReminders,
                         "conflictReviewAlerts" to state.conflictReviewAlerts,
                         "rejectedEditAlerts" to state.rejectedEditAlerts,
+                        "scrollPositions" to state.scrollPositions.entries.joinToString("|") { "${it.key}:${it.value}" },
                     )
                 },
                 restore = { saved ->
@@ -596,7 +814,8 @@ internal class AppState {
                         backgroundStyle = saved["backgroundStyle"] as? String ?: backgroundStyle
                         homeLayout = saved["homeLayout"] as? String ?: homeLayout
                         selectedBudgetId = saved["selectedBudgetId"] as? String ?: selectedBudgetId
-                        reduceMotion = saved["reduceMotion"] as? Boolean ?: reduceMotion
+                        reduceMotionOverride =
+                            (saved["reduceMotionOverride"] as? Boolean) ?: (saved["reduceMotion"] as? Boolean)
                         syncOnOpen = saved["syncOnOpen"] as? Boolean ?: syncOnOpen
                         backgroundSyncEnabled = saved["backgroundSyncEnabled"] as? Boolean ?: backgroundSyncEnabled
                         syncOnWifi = saved["syncOnWifi"] as? Boolean ?: syncOnWifi
@@ -606,6 +825,7 @@ internal class AppState {
                             saved["conflictReviewAlerts"] as? Boolean ?: legacyNotifications ?: conflictReviewAlerts
                         rejectedEditAlerts =
                             saved["rejectedEditAlerts"] as? Boolean ?: legacyNotifications ?: rejectedEditAlerts
+                        scrollPositions.putAll(decodeScrollPositions(saved["scrollPositions"] as? String))
                     }
                 },
             )
@@ -618,15 +838,29 @@ private data class AppNavigation(
     val back: () -> Unit,
 )
 
+private data class AppRouteEntry(
+    val route: AppRoute,
+    val id: Long,
+) {
+    val stateKey: String
+        get() = if (route.isTab()) "tab-${route.name}" else "route-${route.name}-$id"
+}
+
 private val appRouteStackSaver =
-    listSaver<SnapshotStateList<AppRoute>, String>(
-        save = { stack -> stack.map { it.name } },
+    listSaver<SnapshotStateList<AppRouteEntry>, String>(
+        save = { stack -> stack.map { "${it.id}:${it.route.name}" } },
         restore = { saved ->
-            mutableStateListOf<AppRoute>().apply {
-                saved.mapNotNull { name -> AppRoute.entries.firstOrNull { it.name == name } }.forEach(::add)
-                if (isEmpty() || (size == 1 && single() == AppRoute.WELCOME)) {
+            mutableStateListOf<AppRouteEntry>().apply {
+                saved.forEachIndexed { index, value ->
+                    val split = value.split(':', limit = 2)
+                    val savedId = split.firstOrNull()?.toLongOrNull()
+                    val routeName = if (savedId == null) value else split.getOrNull(1).orEmpty()
+                    val route = AppRoute.entries.firstOrNull { it.name == routeName }
+                    if (route != null) add(AppRouteEntry(route, savedId ?: index.toLong() + 1))
+                }
+                if (isEmpty() || (size == 1 && single().route == AppRoute.WELCOME)) {
                     clear()
-                    add(AppRoute.STARTUP)
+                    add(AppRouteEntry(AppRoute.STARTUP, 1))
                 }
             }
         },
@@ -644,10 +878,17 @@ fun TandemApp(
     onSystemAppearanceChanged: ((isDark: Boolean, followsSystem: Boolean) -> Unit)? = null,
     onRequestNotificationPermission: (() -> Unit)? = null,
     onOpenNotificationSettings: (() -> Unit)? = null,
+    onStartupComplete: (() -> Unit)? = null,
     appResumeEvents: Flow<Unit> = emptyFlow(),
     networkRestoredEvents: Flow<Unit> = emptyFlow(),
 ) {
+    var accessibilitySettingsRevision by remember { mutableStateOf(0) }
+    val systemReduceMotion = key(accessibilitySettingsRevision) { SystemReduceMotionEnabled() }
     val state = rememberSaveable(saver = AppState.Saver) { AppState() }
+    val saveableStateHolder = rememberSaveableStateHolder()
+    val routeScrollStates = remember { mutableMapOf<String, ScrollState>() }
+    SideEffect { state.systemReduceMotionEnabled = systemReduceMotion }
+    val reduceMotion = state.reduceMotionOverride ?: systemReduceMotion
     val apiClient = remember(allowInsecureLoopback) { TandemApiClient(allowInsecureLoopback) }
     val mobileSession =
         remember(apiClient, database, deviceCredentialStore) {
@@ -655,6 +896,8 @@ fun TandemApp(
         }
     val appPreferencesStore = remember(database) { database?.let(::AppPreferencesStore) }
     val coroutineScope = rememberCoroutineScope()
+    var merchantIconPack by remember { mutableStateOf<MerchantIconPack?>(null) }
+    var merchantIconPackLoadError by remember { mutableStateOf<String?>(null) }
     val cachedBudgetCatalog =
         remember(state.cachedBudgetCatalogJson, mobileSession.cachedBudgets) {
             cachedBudgetsWithLocalSnapshots(
@@ -672,10 +915,21 @@ fun TandemApp(
     var pendingAutomaticSync by remember { mutableStateOf(false) }
     var cacheDiscoveryComplete by remember { mutableStateOf(false) }
     var sessionRestoreComplete by remember { mutableStateOf(false) }
+    var routeTransitionDirection by remember { mutableStateOf(1f) }
+    var backGestureProgress by remember { mutableStateOf(0f) }
+    var backGestureDirection by remember { mutableStateOf(1f) }
+    var backPreviewRoute by remember { mutableStateOf<AppRouteEntry?>(null) }
+    var skipNextRouteTransition by remember { mutableStateOf(false) }
+    var nextRouteEntryId by rememberSaveable { mutableStateOf(2L) }
     val backStack =
         rememberSaveable(startInPreview, saver = appRouteStackSaver) {
-            mutableStateListOf(if (startInPreview) AppRoute.BUDGET else AppRoute.STARTUP)
+            mutableStateListOf(AppRouteEntry(if (startInPreview) AppRoute.BUDGET else AppRoute.STARTUP, 1))
         }
+    val newRouteEntry: (AppRoute) -> AppRouteEntry = { nextRoute ->
+        val entryId = nextRouteEntryId
+        nextRouteEntryId += 1
+        AppRouteEntry(nextRoute, entryId)
+    }
     LaunchedEffect(mobileSession) {
         try {
             mobileSession.loadCachedBudgets()
@@ -701,7 +955,7 @@ fun TandemApp(
         sessionRestoreComplete,
         mobileSession.isAuthenticated,
     ) {
-        if (backStack.lastOrNull() != AppRoute.STARTUP) return@LaunchedEffect
+        if (backStack.lastOrNull()?.route != AppRoute.STARTUP) return@LaunchedEffect
         val destination =
             resolveAppStartupDestination(
                 cacheDiscoveryComplete = cacheDiscoveryComplete,
@@ -727,16 +981,16 @@ fun TandemApp(
                     state.selectedBudgetId = firstCachedBudget.budgetId
                     state.selectedBudgetEncrypted = firstCachedBudget.isEncrypted
                     backStack.clear()
-                    backStack.add(AppRoute.BUDGET)
+                    backStack.add(newRouteEntry(AppRoute.BUDGET))
                 }
             }
             AppStartupDestination.BUDGET_CHOOSER -> {
                 backStack.clear()
-                backStack.add(AppRoute.BUDGET_CHOOSER)
+                backStack.add(newRouteEntry(AppRoute.BUDGET_CHOOSER))
             }
             AppStartupDestination.WELCOME -> {
                 backStack.clear()
-                backStack.add(AppRoute.WELCOME)
+                backStack.add(newRouteEntry(AppRoute.WELCOME))
             }
         }
     }
@@ -822,6 +1076,7 @@ fun TandemApp(
     val navigation =
         AppNavigation(
             open = { next ->
+                routeTransitionDirection = 1f
                 if (next == AppRoute.NEW_TRANSACTION) {
                     state.transactionAmount = ""
                     val defaultAccount = liveAccountSummaries(mobileSession).firstOrNull { !it.offBudget }
@@ -834,17 +1089,46 @@ fun TandemApp(
                     state.transactionDate = platformTodayIsoDate()
                     state.transactionNotes = ""
                 }
-                backStack.add(next)
+                backStack.add(newRouteEntry(next))
             },
             selectTab = {
-                backStack.clear()
-                backStack.add(it)
+                if (backStack.lastOrNull()?.route != it) {
+                    routeTransitionDirection = 0f
+                    backStack.clear()
+                    backStack.add(newRouteEntry(it))
+                }
             },
             back = {
-                if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                if (backStack.size > 1) {
+                    routeTransitionDirection = -1f
+                    backStack.removeAt(backStack.lastIndex)
+                }
             },
         )
-    val route = backStack.last()
+    val routeEntry = backStack.last()
+    val route = routeEntry.route
+    val merchantCatalogNeeded =
+        route == AppRoute.ABOUT || route == AppRoute.MERCHANT_ICON_LICENSES || mobileSession.transactionRecords.isNotEmpty()
+    LaunchedEffect(mobileSession, merchantCatalogNeeded) {
+        if (merchantIconPack == null && merchantIconPackLoadError == null && merchantCatalogNeeded) {
+            try {
+                merchantIconPack = withContext(Dispatchers.Default) { loadMerchantIconPack() }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                val cause = failure.message?.take(160) ?: "unknown error"
+                merchantIconPackLoadError = "The bundled merchant icon catalog or artwork could not be loaded ($cause)."
+            }
+        }
+    }
+    LaunchedEffect(routeEntry) {
+        if (route != AppRoute.STARTUP) onStartupComplete?.invoke()
+        if (skipNextRouteTransition) {
+            backGestureProgress = 0f
+            backPreviewRoute = null
+            skipNextRouteTransition = false
+        }
+    }
     var previousRoute by remember { mutableStateOf(route) }
     val automaticSyncRequest =
         rememberUpdatedState(
@@ -889,7 +1173,10 @@ fun TandemApp(
             },
         )
     LaunchedEffect(appResumeEvents) {
-        appResumeEvents.collect { automaticSyncRequest.value() }
+        appResumeEvents.collect {
+            accessibilitySettingsRevision += 1
+            automaticSyncRequest.value()
+        }
     }
     LaunchedEffect(networkRestoredEvents) {
         networkRestoredEvents.collect { automaticSyncRequest.value() }
@@ -972,8 +1259,9 @@ fun TandemApp(
             mobileSession.payeeRecords,
             mobileSession.categoryRecords,
             mobileSession.budgetDisplaySettings,
+            merchantIconPack,
         ) {
-            liveTransactionItems(mobileSession)
+            liveTransactionItems(mobileSession, merchantIconPack)
         }
     val liveAccounts = remember(mobileSession.accountRecords) { liveAccountSummaries(mobileSession) }
     val liveBudgetMonth =
@@ -992,7 +1280,7 @@ fun TandemApp(
                 mobileSession.pair(state.serverUrl, state.pairingCode, "Tandem mobile")
                 if (mobileSession.pairedDevice != null) {
                     state.pairingCode = ""
-                    backStack.add(AppRoute.PAIRING_RESULT)
+                    backStack.add(newRouteEntry(AppRoute.PAIRING_RESULT))
                 }
             }
         }
@@ -1003,7 +1291,7 @@ fun TandemApp(
             if (storedServerUrl != null) {
                 state.serverUrl = storedServerUrl
                 backStack.clear()
-                backStack.add(AppRoute.BUDGET_CHOOSER)
+                backStack.add(newRouteEntry(AppRoute.BUDGET_CHOOSER))
             }
         }
     }
@@ -1033,9 +1321,9 @@ fun TandemApp(
             coroutineScope.launch {
                 val isCached = mobileSession.hasCachedBudgetSnapshot(selected.budgetId)
                 when {
-                    isCached -> backStack.add(AppRoute.BUDGET)
-                    selected.isEncrypted && state.encryptedPassword.isBlank() -> backStack.add(AppRoute.UNLOCK_BUDGET)
-                    else -> backStack.add(AppRoute.FIRST_SYNC)
+                    isCached -> backStack.add(newRouteEntry(AppRoute.BUDGET))
+                    selected.isEncrypted && state.encryptedPassword.isBlank() -> backStack.add(newRouteEntry(AppRoute.UNLOCK_BUDGET))
+                    else -> backStack.add(newRouteEntry(AppRoute.FIRST_SYNC))
                 }
             }
         }
@@ -1111,7 +1399,12 @@ fun TandemApp(
         }
     }
 
-    TandemTheme(state.theme, state.accent) {
+    TandemTheme(
+        state.theme,
+        state.accent,
+        reduceMotion,
+        animateThemeChanges = state.settingsStorageReady || appPreferencesStore == null,
+    ) {
         val palette = tandemPalette
         val isDark =
             state.theme == ThemeMode.DARK ||
@@ -1121,7 +1414,102 @@ fun TandemApp(
             onSystemAppearanceChanged?.invoke(isDark, state.theme == ThemeMode.SYSTEM)
         }
         TandemSystemBars(isDark, palette.background)
-        TandemBackHandler(enabled = backStack.size > 1, onBack = navigation.back)
+        val handleBack = {
+            if (backGestureProgress > 0f) skipNextRouteTransition = true
+            navigation.back()
+        }
+        val updateBackGesture: (Float, Float) -> Unit = { progress, direction ->
+            backGestureProgress = progress
+            backGestureDirection = direction
+            if (progress > 0f && backPreviewRoute == null) {
+                backPreviewRoute = backStack.getOrNull(backStack.lastIndex - 1)
+            } else if (progress <= 0f) {
+                backPreviewRoute = null
+            }
+        }
+        TandemBackHandler(
+            enabled = backStack.size > 1,
+            onBack = handleBack,
+            onBackProgress = updateBackGesture,
+        )
+        val renderRoute: @Composable (AppRouteEntry, Modifier, Boolean) -> Unit = { visibleEntry, pageModifier, saveRouteState ->
+            val visibleRoute = visibleEntry.route
+            val routeScrollState =
+                remember(visibleEntry.stateKey) {
+                    routeScrollStates.getOrPut(visibleEntry.stateKey) {
+                        ScrollState(state.scrollPositions[visibleEntry.stateKey] ?: 0)
+                    }
+                }
+            LaunchedEffect(visibleEntry.stateKey, routeScrollState) {
+                snapshotFlow { routeScrollState.value }.collect { state.scrollPositions[visibleEntry.stateKey] = it }
+            }
+            if (saveRouteState) {
+                DisposableEffect(visibleEntry.stateKey, routeScrollState) {
+                    onDispose {
+                        state.scrollPositions[visibleEntry.stateKey] = routeScrollState.value
+                        if (!visibleRoute.isTab() && backStack.none { it.stateKey == visibleEntry.stateKey }) {
+                            state.scrollPositions.remove(visibleEntry.stateKey)
+                        }
+                        routeScrollStates.remove(visibleEntry.stateKey)
+                    }
+                }
+            }
+            val routeContent: @Composable () -> Unit = {
+                CompositionLocalProvider(LocalRouteScrollState provides routeScrollState) {
+                    Column(modifier = pageModifier.fillMaxSize()) {
+                        if (visibleRoute != AppRoute.WELCOME && visibleRoute != AppRoute.STARTUP) {
+                            AppHeader(
+                                route = visibleRoute,
+                                state = state,
+                                showBack = !visibleRoute.isTab(),
+                                onBack = handleBack,
+                                onSync = { navigation.open(AppRoute.SYNC_CENTER) },
+                                syncNeedsAttention = state.syncReminders && mobileSession.syncError != null,
+                                onBudget = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+                                actualConnected = mobileSession.isServerReachable,
+                                liveAccounts = liveAccounts,
+                                liveBudgetMonth = liveBudgetMonth,
+                            )
+                        }
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                            ScreenContent(
+                                route = visibleRoute,
+                                state = state,
+                                navigation = navigation,
+                                mobileSession = mobileSession,
+                                onPairDevice = pairDevice,
+                                onRetryStoredSession = retryStoredSession,
+                                onSelectBudget = selectBudget,
+                                onRefreshBudgets = refreshBudgets,
+                                onOpenSelectedBudget = openSelectedBudget,
+                                onRetrySync = { syncRetryCounter += 1 },
+                                backgroundSyncSupported = onBackgroundSyncSettingsChanged != null,
+                                merchantIconPack = merchantIconPack,
+                                merchantIconPackLoadError = merchantIconPackLoadError,
+                                liveTransactions = liveTransactions,
+                                liveAccounts = liveAccounts,
+                                liveBudgetMonth = liveBudgetMonth,
+                                onSyncNow = syncNow,
+                                onSaveTransaction = saveTransaction,
+                                onCreateTransaction = createTransaction,
+                                onResolveConflict = resolveConflict,
+                                onDiscardWrite = discardWrite,
+                                onRetryUncertainWrite = retryUncertainWrite,
+                                onForgetDevice = { coroutineScope.launch { mobileSession.forgetDevice() } },
+                                onRequestNotificationPermission = onRequestNotificationPermission,
+                                onOpenNotificationSettings = onOpenNotificationSettings,
+                            )
+                        }
+                        if (visibleRoute.isTab()) BottomNavigation(visibleRoute, navigation.selectTab)
+                    }
+                }
+            }
+            if (saveRouteState) {
+                saveableStateHolder.SaveableStateProvider(visibleEntry.stateKey) { routeContent() }
+            } else {
+                routeContent()
+            }
+        }
         Column(
             modifier =
                 Modifier
@@ -1129,59 +1517,64 @@ fun TandemApp(
                     .background(appBackgroundBrush(state.backgroundStyle, palette))
                     .safeDrawingPadding(),
         ) {
-            if (route != AppRoute.WELCOME && route != AppRoute.STARTUP) {
-                AppHeader(
-                    route = route,
-                    state = state,
-                    showBack = !route.isTab(),
-                    onBack = navigation.back,
-                    onSync = { navigation.open(AppRoute.SYNC_CENTER) },
-                    onBudget = { navigation.open(AppRoute.BUDGET_CHOOSER) },
-                    actualConnected = mobileSession.isServerReachable,
-                    liveAccounts = liveAccounts,
-                    liveBudgetMonth = liveBudgetMonth,
-                )
-            }
-            AnimatedContent(
-                targetState = route,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                transitionSpec = {
-                    if (state.reduceMotion) {
-                        EnterTransition.None togetherWith ExitTransition.None
-                    } else {
-                        fadeIn(tween(140)) togetherWith fadeOut(tween(110))
-                    }
-                },
-                label = "tandem-screen-transition",
-            ) { visibleRoute ->
-                ScreenContent(
-                    route = visibleRoute,
-                    state = state,
-                    navigation = navigation,
-                    mobileSession = mobileSession,
-                    onPairDevice = pairDevice,
-                    onRetryStoredSession = retryStoredSession,
-                    onSelectBudget = selectBudget,
-                    onRefreshBudgets = refreshBudgets,
-                    onOpenSelectedBudget = openSelectedBudget,
-                    onRetrySync = { syncRetryCounter += 1 },
-                    backgroundSyncSupported = onBackgroundSyncSettingsChanged != null,
-                    liveTransactions = liveTransactions,
-                    liveAccounts = liveAccounts,
-                    liveBudgetMonth = liveBudgetMonth,
-                    onSyncNow = syncNow,
-                    onSaveTransaction = saveTransaction,
-                    onCreateTransaction = createTransaction,
-                    onResolveConflict = resolveConflict,
-                    onDiscardWrite = discardWrite,
-                    onRetryUncertainWrite = retryUncertainWrite,
-                    onForgetDevice = { coroutineScope.launch { mobileSession.forgetDevice() } },
-                    onRequestNotificationPermission = onRequestNotificationPermission,
-                    onOpenNotificationSettings = onOpenNotificationSettings,
-                )
-            }
-            if (route.isTab()) {
-                BottomNavigation(route, navigation.selectTab)
+            Box(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .tandemEdgeBackGesture(backStack.size > 1, handleBack, updateBackGesture),
+            ) {
+                if (backGestureProgress > 0f && backPreviewRoute != null && backPreviewRoute != routeEntry) {
+                    val direction = backGestureDirection
+                    renderRoute(
+                        backPreviewRoute!!,
+                        Modifier
+                            .fillMaxSize()
+                            .clearAndSetSemantics {}
+                            .graphicsLayer {
+                                val progress = backGestureProgress
+                                scaleX = 0.96f + 0.04f * progress
+                                scaleY = 0.96f + 0.04f * progress
+                                alpha = 0.72f + 0.28f * progress
+                                translationX = -direction * size.width * 0.04f * (1f - progress)
+                            },
+                        false,
+                    )
+                }
+                AnimatedContent(
+                    targetState = routeEntry,
+                    modifier = Modifier.fillMaxSize(),
+                    transitionSpec = {
+                        when {
+                            reduceMotion ||
+                                skipNextRouteTransition ||
+                                initialState.route == AppRoute.STARTUP ||
+                                targetState.route == AppRoute.STARTUP ->
+                                EnterTransition.None togetherWith ExitTransition.None
+                            routeTransitionDirection > 0f ->
+                                (slideInHorizontally(tween(220)) { it / 4 } + fadeIn(tween(180))) togetherWith
+                                    (slideOutHorizontally(tween(220)) { -it / 6 } + fadeOut(tween(180)))
+                            routeTransitionDirection < 0f ->
+                                (slideInHorizontally(tween(220)) { -it / 6 } + fadeIn(tween(180))) togetherWith
+                                    (slideOutHorizontally(tween(220)) { it / 4 } + fadeOut(tween(180)))
+                            else -> fadeIn(tween(160)) togetherWith fadeOut(tween(160))
+                        }
+                    },
+                    label = "tandem-screen-transition",
+                ) { visibleEntry ->
+                    renderRoute(
+                        visibleEntry,
+                        Modifier.fillMaxSize().graphicsLayer {
+                            if (visibleEntry == routeEntry && backGestureProgress > 0f) {
+                                translationX = backGestureProgress * size.width * backGestureDirection
+                                val scale = 1f - 0.025f * backGestureProgress
+                                scaleX = scale
+                                scaleY = scale
+                            }
+                        },
+                        true,
+                    )
+                }
             }
         }
     }
@@ -1197,6 +1590,7 @@ private fun AppHeader(
     showBack: Boolean,
     onBack: () -> Unit,
     onSync: () -> Unit,
+    syncNeedsAttention: Boolean,
     onBudget: () -> Unit,
     actualConnected: Boolean,
     liveAccounts: List<LiveAccountSummary>,
@@ -1269,19 +1663,47 @@ private fun AppHeader(
             }
         }
         if (route.isTab()) {
-            Text(
-                text = "Sync",
+            val syncChipBackground by animateColorAsState(
+                targetValue = if (syncNeedsAttention) palette.warning.copy(alpha = 0.16f) else palette.surface,
+                animationSpec = if (tandemReduceMotion) snap() else tween(180),
+                label = "sync-chip-background",
+            )
+            val syncChipText by animateColorAsState(
+                targetValue = if (syncNeedsAttention) palette.warning else palette.accent,
+                animationSpec = if (tandemReduceMotion) snap() else tween(180),
+                label = "sync-chip-text",
+            )
+            val syncDotAlpha by animateFloatAsState(
+                targetValue = if (syncNeedsAttention) 1f else 0f,
+                animationSpec = if (tandemReduceMotion) snap() else tween(140),
+                label = "sync-attention-dot",
+            )
+            Box(
                 modifier =
                     Modifier
-                        .clip(
-                            RoundedCornerShape(999.dp),
-                        ).clickable(role = Role.Button, onClickLabel = "Open sync center", onClick = onSync)
-                        .background(palette.surface)
-                        .padding(horizontal = 11.dp, vertical = 9.dp),
-                color = palette.accent,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
+                        .width(56.dp)
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(syncChipBackground)
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = if (syncNeedsAttention) "Sync needs attention" else "Sync center"
+                        }.clickable(
+                            role = Role.Button,
+                            onClickLabel = if (syncNeedsAttention) "Review sync needs attention" else "Open sync center",
+                            onClick = onSync,
+                        ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("Sync", color = syncChipText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(3.dp)
+                        .size(7.dp)
+                        .graphicsLayer { alpha = syncDotAlpha }
+                        .background(palette.warning, CircleShape),
+                )
+            }
         } else if (route == AppRoute.BUDGET_CHOOSER) {
             Text(
                 when {
@@ -1451,6 +1873,8 @@ private fun ScreenContent(
     onOpenSelectedBudget: () -> Unit,
     onRetrySync: () -> Unit,
     backgroundSyncSupported: Boolean,
+    merchantIconPack: MerchantIconPack?,
+    merchantIconPackLoadError: String?,
     liveTransactions: List<TransactionItem>,
     liveAccounts: List<LiveAccountSummary>,
     liveBudgetMonth: LiveBudgetMonthSummary?,
@@ -1584,7 +2008,8 @@ private fun ScreenContent(
                 onOpenNotificationSettings,
             )
         AppRoute.LOCAL_DATA -> LocalDataScreen(state, mobileSession, onSyncNow)
-        AppRoute.ABOUT -> AboutScreen()
+        AppRoute.ABOUT -> AboutScreen(merchantIconPack, merchantIconPackLoadError, navigation)
+        AppRoute.MERCHANT_ICON_LICENSES -> MerchantIconLicensesScreen(merchantIconPack, merchantIconPackLoadError)
     }
 }
 
@@ -1594,11 +2019,12 @@ private fun PageColumn(
     horizontalPadding: androidx.compose.ui.unit.Dp = 20.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val scrollState = LocalRouteScrollState.current ?: rememberScrollState()
     Column(
         modifier =
             Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(horizontal = horizontalPadding, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(verticalSpacing),
         content = content,
@@ -1643,24 +2069,38 @@ private fun AttentionBanner(
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
-    SurfaceCard(onClick = onClick) {
+    SurfaceCard(onClick = onClick, onClickLabel = action) {
         Row(
-            Modifier.fillMaxWidth().padding(14.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(11.dp),
+            horizontalArrangement = Arrangement.spacedBy(9.dp),
         ) {
             Box(
-                Modifier.size(34.dp).clip(CircleShape).background(palette.warning.copy(alpha = 0.16f)),
+                Modifier.size(28.dp).clip(CircleShape).background(palette.warning.copy(alpha = 0.16f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("!", color = palette.warning, fontWeight = FontWeight.Bold)
+                Text("!", color = palette.warning, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(title, color = palette.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Text(detail, color = palette.muted, fontSize = 11.sp, lineHeight = 15.sp)
-                Text(action, color = palette.accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    title,
+                    color = palette.text,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(detail, color = palette.muted, fontSize = 10.sp, lineHeight = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Text("›", color = palette.muted, fontSize = 20.sp)
+            Text(
+                action,
+                color = palette.accent,
+                fontSize = 10.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text("›", color = palette.muted, fontSize = 18.sp)
         }
     }
 }
@@ -1691,14 +2131,21 @@ private fun LabelText(text: String) {
 private fun SurfaceCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
+    onClickLabel: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val palette = tandemPalette
     Surface(
         modifier =
-            modifier.then(
-                if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier,
-            ),
+            modifier
+                .animateContentSize(animationSpec = if (tandemReduceMotion) snap() else tween(220))
+                .then(
+                    if (onClick != null) {
+                        Modifier.clickable(role = Role.Button, onClickLabel = onClickLabel, onClick = onClick)
+                    } else {
+                        Modifier
+                    },
+                ),
         shape = RoundedCornerShape(18.dp),
         color = palette.surface,
         border = BorderStroke(1.dp, palette.border),
@@ -1867,9 +2314,14 @@ private fun ListRow(
     trailing: String? = null,
     trailingColor: Color? = null,
     dense: Boolean = false,
+    leadingVector: ImageVector? = null,
+    fallbackVector: ImageVector? = null,
+    leadingIconResource: DrawableResource? = null,
     onClick: (() -> Unit)? = null,
 ) {
     val palette = tandemPalette
+    val resolvedPainter = leadingIconResource?.let { painterResource(it) }
+    val resolvedVector = if (resolvedPainter == null) leadingVector ?: fallbackVector else null
     Row(
         modifier =
             Modifier
@@ -1889,7 +2341,29 @@ private fun ListRow(
             modifier = Modifier.size(if (dense) 30.dp else 36.dp).clip(RoundedCornerShape(12.dp)).background(palette.raised),
             contentAlignment = Alignment.Center,
         ) {
-            Text(icon, modifier = Modifier.clearAndSetSemantics {}, color = palette.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            if (resolvedPainter != null) {
+                Image(
+                    painter = resolvedPainter,
+                    contentDescription = null,
+                    modifier = Modifier.size(if (dense) 22.dp else 26.dp).padding(3.dp),
+                    contentScale = ContentScale.Fit,
+                )
+            } else if (resolvedVector != null) {
+                Icon(
+                    imageVector = resolvedVector,
+                    contentDescription = null,
+                    modifier = Modifier.size(if (dense) 17.dp else 20.dp),
+                    tint = palette.accent,
+                )
+            } else {
+                Text(
+                    icon,
+                    modifier = Modifier.clearAndSetSemantics {},
+                    color = palette.accent,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
         }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(
@@ -1908,6 +2382,60 @@ private fun ListRow(
             Text("›", modifier = Modifier.clearAndSetSemantics {}, color = palette.muted, fontSize = 20.sp)
         }
     }
+}
+
+private fun financeIcon(label: String): ImageVector? {
+    val words = labelWords(label)
+
+    fun matches(vararg phrases: String): Boolean = phrases.any { containsPhrase(words, it) }
+
+    return when {
+        matches("pet", "pets", "veterinary", "vet clinic", "animal care") -> Lucide.PawPrint
+        matches("flight", "airfare", "airport", "plane", "travel") -> Lucide.Plane
+        matches("rent", "mortgage", "housing", "home maintenance", "home repair", "landlord") -> Lucide.House
+        matches("electric", "utility", "utilities", "power bill", "water bill", "energy", "internet bill") -> Lucide.Zap
+        matches("grocery", "groceries", "supermarket", "produce", "market", "shopping", "household supplies") -> Lucide.ShoppingCart
+        matches("cafe", "coffee") -> Lucide.Coffee
+        matches("dining", "restaurant", "takeout", "food and drink") -> Lucide.Utensils
+        matches(
+            "transport",
+            "transit",
+            "car payment",
+            "auto repair",
+            "fuel",
+            "petrol",
+            "gas station",
+            "parking",
+            "train fare",
+        ) -> Lucide.CarFront
+        matches("insurance", "coverage", "policy premium") -> Lucide.ShieldCheck
+        matches("medical", "healthcare", "doctor", "pharmacy", "dental", "hospital") -> Lucide.HeartPulse
+        matches("paycheck", "payroll", "salary", "income") -> Lucide.BriefcaseBusiness
+        else -> null
+    }
+}
+
+private fun containsPhrase(
+    words: List<String>,
+    phrase: String,
+): Boolean {
+    val phraseWords = labelWords(phrase)
+    return phraseWords.isNotEmpty() && words.windowed(phraseWords.size).any { it == phraseWords }
+}
+
+private fun labelWords(label: String): List<String> {
+    val words = mutableListOf<String>()
+    val word = StringBuilder()
+    label.lowercase().forEach { character ->
+        if (character.isLetterOrDigit()) {
+            word.append(character)
+        } else if (word.isNotEmpty()) {
+            words += word.toString()
+            word.clear()
+        }
+    }
+    if (word.isNotEmpty()) words += word.toString()
+    return words
 }
 
 @Composable
@@ -1947,6 +2475,12 @@ private fun ToggleRow(
     onChange: (Boolean) -> Unit,
 ) {
     val palette = tandemPalette
+    val thumbOffset by
+        animateDpAsState(
+            targetValue = if (checked) 18.dp else 0.dp,
+            animationSpec = if (tandemReduceMotion) snap() else tween(160),
+            label = "toggle-thumb-position",
+        )
     Row(
         modifier =
             Modifier
@@ -1970,9 +2504,14 @@ private fun ToggleRow(
                     .clip(CircleShape)
                     .background(if (checked) palette.accent else palette.raised)
                     .padding(3.dp),
-            contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart,
         ) {
-            Box(Modifier.size(18.dp).clip(CircleShape).background(if (checked) palette.accentContent else palette.muted))
+            Box(
+                Modifier
+                    .offset(x = thumbOffset)
+                    .size(18.dp)
+                    .clip(CircleShape)
+                    .background(if (checked) palette.accentContent else palette.muted),
+            )
         }
     }
 }
@@ -2068,9 +2607,36 @@ private fun Badge(
     label: String,
     color: Color = tandemPalette.accent,
 ) {
-    Box(Modifier.clip(RoundedCornerShape(999.dp)).background(color.copy(alpha = 0.13f)).padding(horizontal = 9.dp, vertical = 5.dp)) {
-        Text(label, color = color, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+    val motionSpec: FiniteAnimationSpec<Color> = if (tandemReduceMotion) snap() else tween(160)
+    val animatedColor by androidx.compose.animation.animateColorAsState(color, motionSpec, label = "badge-color")
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(animatedColor.copy(alpha = 0.13f))
+            .padding(horizontal = 9.dp, vertical = 5.dp),
+    ) {
+        Text(label, color = animatedColor, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
     }
+}
+
+@Composable
+private fun AnimatedReveal(
+    visible: Boolean,
+    content: @Composable AnimatedVisibilityScope.() -> Unit,
+) {
+    val enter =
+        if (tandemReduceMotion) {
+            EnterTransition.None
+        } else {
+            fadeIn(tween(200)) + expandVertically(animationSpec = tween(220), clip = false)
+        }
+    val exit =
+        if (tandemReduceMotion) {
+            ExitTransition.None
+        } else {
+            fadeOut(tween(180)) + shrinkVertically(animationSpec = tween(200), clip = false)
+        }
+    AnimatedVisibility(visible = visible, enter = enter, exit = exit, content = content)
 }
 
 private fun Color.withOpacity(alpha: Float) = copy(alpha = alpha)
@@ -2078,20 +2644,29 @@ private fun Color.withOpacity(alpha: Float) = copy(alpha = alpha)
 @Composable
 private fun StartupScreen() {
     val palette = tandemPalette
+    var showLoadingIndicator by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(300)
+        showLoadingIndicator = true
+    }
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         TandemBrandMark(Modifier.size(96.dp))
-        Spacer(Modifier.height(24.dp))
-        CircularProgressIndicator(
-            modifier = Modifier.size(24.dp),
-            color = palette.accent,
-            strokeWidth = 2.dp,
-        )
-        Spacer(Modifier.height(16.dp))
-        Text("Opening your budget", color = palette.muted, fontSize = 14.sp)
+        AnimatedReveal(showLoadingIndicator) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Spacer(Modifier.height(24.dp))
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color = palette.accent,
+                    strokeWidth = 2.dp,
+                )
+                Spacer(Modifier.height(16.dp))
+                Text("Opening your budget", color = palette.muted, fontSize = 14.sp)
+            }
+        }
     }
 }
 
@@ -2507,15 +3082,8 @@ private fun BudgetScreen(
     val essentialsFirst = state.homeLayout == "Essentials first"
     if (state.selectedBudgetId.isNotBlank()) {
         PageColumn(verticalSpacing = if (compact) 10.dp else 16.dp, horizontalPadding = if (compact) 16.dp else 20.dp) {
-            if (state.syncReminders && mobileSession.syncError != null) {
-                AttentionBanner(
-                    "Sync needs attention",
-                    mobileSession.syncError ?: "This budget could not sync.",
-                    "Open sync center",
-                ) { navigation.open(AppRoute.SYNC_CENTER) }
-            }
             val conflictCount = mobileSession.pendingWrites.count { it.status == "conflict" }
-            if (state.conflictReviewAlerts && conflictCount > 0) {
+            AnimatedReveal(visible = state.conflictReviewAlerts && conflictCount > 0) {
                 AttentionBanner(
                     "$conflictCount change${if (conflictCount == 1) "" else "s"} need${if (conflictCount == 1) "s" else ""} review",
                     "Choose which version of the budget change to keep.",
@@ -2523,7 +3091,7 @@ private fun BudgetScreen(
                 ) { navigation.open(AppRoute.CONFLICT_INBOX) }
             }
             val rejectedCount = mobileSession.pendingWrites.count { it.status == "rejected" }
-            if (state.rejectedEditAlerts && rejectedCount > 0) {
+            AnimatedReveal(visible = state.rejectedEditAlerts && rejectedCount > 0) {
                 AttentionBanner(
                     "$rejectedCount edit${if (rejectedCount == 1) "" else "s"} not applied",
                     "Review the reason and dismiss or correct the local edit.",
@@ -2620,6 +3188,7 @@ private fun BudgetScreen(
                                 state.formatCurrency(category.assignedMinor),
                                 if (category.balanceMinor >= 0) palette.positive else palette.warning,
                                 dense = compact,
+                                leadingVector = financeIcon(category.name),
                             ) {
                                 state.selectedCategoryGroupId = group.id
                                 state.selectedCategoryId = category.id
@@ -2698,6 +3267,7 @@ private fun BudgetScreen(
                 state.formatCurrency(150_000),
                 palette.positive,
                 dense = compact,
+                leadingVector = financeIcon("Rent"),
             ) {
                 navigation.open(AppRoute.CATEGORY_DETAIL)
             }
@@ -2709,6 +3279,7 @@ private fun BudgetScreen(
                 state.formatCurrency(50_000),
                 palette.positive,
                 dense = compact,
+                leadingVector = financeIcon("Groceries"),
             ) {
                 navigation.open(AppRoute.CATEGORY_DETAIL)
             }
@@ -2720,6 +3291,7 @@ private fun BudgetScreen(
                 state.formatCurrency(32_000),
                 palette.positive,
                 dense = compact,
+                leadingVector = financeIcon("Utilities"),
             ) {
                 navigation.open(AppRoute.CATEGORY_DETAIL)
             }
@@ -2802,9 +3374,17 @@ private fun UpcomingBillsCard(
             "Utilities · due ${formatShortDate(SampleDate(2026, 5, 18))}",
             state.formatCurrency(12_000),
             palette.text,
+            leadingVector = financeIcon("Utilities"),
         )
         DividerLine()
-        ListRow("H", "Rent", "Essentials · due ${formatShortDate(SampleDate(2026, 6, 1))}", state.formatCurrency(150_000), palette.text)
+        ListRow(
+            "H",
+            "Rent",
+            "Essentials · due ${formatShortDate(SampleDate(2026, 6, 1))}",
+            state.formatCurrency(150_000),
+            palette.text,
+            leadingVector = financeIcon("Rent"),
+        )
     }
 }
 
@@ -2827,6 +3407,8 @@ private fun TransactionRow(
             transaction.category,
             formatSignedCurrency(transaction.amountMinorUnits, transaction.displaySettings),
             if (transaction.amountMinorUnits > 0) palette.positive else palette.text,
+            leadingVector = transaction.categoryIcon ?: Lucide.Receipt,
+            leadingIconResource = transaction.merchantIcon,
             onClick = onClick,
         )
     }
@@ -2965,6 +3547,7 @@ private fun CategoryGroupScreen(
                             )} · ${state.formatCurrency(category.balanceMinor)} available",
                             state.formatCurrency(category.assignedMinor),
                             if (category.balanceMinor >= 0) palette.positive else palette.warning,
+                            leadingVector = financeIcon(category.name),
                         ) {
                             state.selectedCategoryGroupId = group.id
                             state.selectedCategoryId = category.id
@@ -2987,6 +3570,7 @@ private fun CategoryGroupScreen(
                 "Assigned ${state.formatCurrency(150_000)} · Available ${state.formatCurrency(150_000)}",
                 state.formatCurrency(150_000),
                 palette.positive,
+                leadingVector = financeIcon("Rent"),
             ) { navigation.open(AppRoute.CATEGORY_DETAIL) }
             DividerLine()
             ListRow(
@@ -2995,6 +3579,7 @@ private fun CategoryGroupScreen(
                 "Assigned ${state.formatCurrency(50_000)} · Available ${state.formatCurrency(50_000)}",
                 state.formatCurrency(50_000),
                 palette.positive,
+                leadingVector = financeIcon("Groceries"),
             ) { navigation.open(AppRoute.CATEGORY_DETAIL) }
             DividerLine()
             ListRow(
@@ -3003,6 +3588,7 @@ private fun CategoryGroupScreen(
                 "Assigned ${state.formatCurrency(32_000)} · Available ${state.formatCurrency(32_000)}",
                 state.formatCurrency(32_000),
                 palette.positive,
+                leadingVector = financeIcon("Utilities"),
             ) { navigation.open(AppRoute.CATEGORY_DETAIL) }
         }
         PreviewNote("Category balances and activity use sample data.")
@@ -3486,9 +4072,9 @@ private fun TransactionFormScreen(
                 }
                 TextFieldCard("Date · YYYY-MM-DD", state.transactionDate, { state.transactionDate = it }, "${platformTodayIsoDate()}")
                 TextFieldCard("Notes", state.transactionNotes, { state.transactionNotes = it }, "Add a note (optional)", singleLine = false)
-                mobileSession.transactionWriteMessage?.let { message ->
+                AnimatedReveal(visible = mobileSession.transactionWriteMessage != null) {
                     SurfaceCard {
-                        Column(Modifier.padding(14.dp)) { BodyText(message) }
+                        Column(Modifier.padding(14.dp)) { BodyText(mobileSession.transactionWriteMessage.orEmpty()) }
                     }
                 }
                 PrimaryButton("Save transaction", enabled = !mobileSession.isSavingTransaction) { onCreateTransaction() }
@@ -3715,7 +4301,9 @@ private fun SyncCenterScreen(
                 }
             }
             PrimaryButton("Sync now", enabled = mobileSession.isAuthenticated && !mobileSession.isSyncing) { onSyncNow() }
-            if (mobileSession.transactionWriteMessage != null) BodyText(mobileSession.transactionWriteMessage!!)
+            AnimatedReveal(visible = mobileSession.transactionWriteMessage != null) {
+                BodyText(mobileSession.transactionWriteMessage.orEmpty())
+            }
         }
         return
     }
@@ -4221,12 +4809,25 @@ private fun BackgroundScreen(state: AppState) {
             }
         }
         SectionCard("Motion", "Animation should never get in the way") {
-            ToggleRow("Reduce motion", "Make screen changes immediate", state.reduceMotion) {
-                state.reduceMotion =
-                    it
+            ToggleRow(
+                "Reduce motion",
+                "Use the device setting by default; turn on to reduce motion further.",
+                state.reduceMotion,
+            ) { state.reduceMotionOverride = it }
+            if (state.reduceMotionOverride != null) {
+                SettingRow(
+                    "↺",
+                    "Use device setting",
+                    if (state.systemReduceMotionEnabled) {
+                        "The device currently requests reduced motion"
+                    } else {
+                        "The device default allows motion"
+                    },
+                    onClick = { state.reduceMotionOverride = null },
+                )
             }
         }
-        PreviewNote("This setting controls transitions inside Tandem. Device system animations remain controlled by Android or iOS.")
+        PreviewNote("Tandem follows the device motion preference unless you choose an override here.")
     }
 }
 
@@ -4606,22 +5207,125 @@ private fun LocalDataScreen(
 }
 
 @Composable
-private fun AboutScreen() {
+private fun MerchantIconLicensesScreen(
+    merchantIconPack: MerchantIconPack?,
+    loadError: String?,
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    Column(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Heading("Merchant icon licenses", "Each bundled mark, its reported license, and its source.")
+        when {
+            loadError != null -> BodyText(loadError)
+            merchantIconPack == null -> {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(color = tandemPalette.accent, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                    BodyText("Loading the bundled icon catalog…")
+                }
+            }
+            else -> {
+                TextFieldCard("Search", query, { query = it }, "Name, license, or source")
+                val filteredNotices =
+                    remember(merchantIconPack, query) {
+                        val normalizedQuery = query.trim()
+                        merchantIconPack.notices.filter { notice ->
+                            normalizedQuery.isEmpty() ||
+                                notice.title.contains(normalizedQuery, ignoreCase = true) ||
+                                notice.license.contains(normalizedQuery, ignoreCase = true) ||
+                                notice.registryUrl.contains(normalizedQuery, ignoreCase = true) ||
+                                notice.brandUrl.contains(normalizedQuery, ignoreCase = true)
+                        }
+                    }
+                Text(
+                    "${filteredNotices.size} of ${merchantIconPack.notices.size} bundled icons",
+                    color = tandemPalette.muted,
+                    fontSize = 12.sp,
+                )
+                if (filteredNotices.isEmpty()) {
+                    BodyText("No bundled icons match that search.")
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        contentPadding = PaddingValues(bottom = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(9.dp),
+                    ) {
+                        items(filteredNotices, key = { it.resourceName }) { notice ->
+                            SurfaceCard(modifier = if (tandemReduceMotion) Modifier else Modifier.animateItem()) {
+                                Column(
+                                    Modifier.fillMaxWidth().padding(13.dp),
+                                    verticalArrangement = Arrangement.spacedBy(7.dp),
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Image(
+                                            painter = painterResource(notice.resource),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(34.dp),
+                                            contentScale = ContentScale.Fit,
+                                        )
+                                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            Text(
+                                                notice.title,
+                                                color = tandemPalette.text,
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                            Text(notice.license, color = tandemPalette.muted, fontSize = 12.sp)
+                                        }
+                                    }
+                                    Text(
+                                        "Registry source: ${notice.registryUrl}",
+                                        color = tandemPalette.muted,
+                                        fontSize = 10.sp,
+                                        lineHeight = 14.sp,
+                                        modifier = Modifier.semantics { contentDescription = "Registry source URL: ${notice.registryUrl}" },
+                                    )
+                                    if (notice.brandUrl.isNotBlank()) {
+                                        Text(
+                                            "Brand site: ${notice.brandUrl}",
+                                            color = tandemPalette.muted,
+                                            fontSize = 10.sp,
+                                            lineHeight = 14.sp,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AboutScreen(
+    merchantIconPack: MerchantIconPack?,
+    merchantIconPackLoadError: String?,
+    navigation: AppNavigation,
+) {
     PageColumn {
-        Heading("About Tandem for Actual Budget", "An unofficial, offline-first mobile client for Actual Budget.")
+        Heading("About Tandem", "An independent, local-first companion for Actual Budget.")
         SurfaceCard {
             Column(
-                Modifier.fillMaxWidth().padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(9.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(11.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Box(
-                    Modifier.size(54.dp).clip(RoundedCornerShape(18.dp)).background(tandemPalette.accentSurface),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("A", color = tandemPalette.accent, fontSize = 25.sp, fontWeight = FontWeight.Bold)
-                }
-                Text("Version 0.1.0 · Sample interface", color = tandemPalette.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                TandemBrandMark(Modifier.size(84.dp), contentDescription = "Tandem app icon")
+                Text("Tandem", color = tandemPalette.text, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                Badge("Version 0.1.0")
+                Text(
+                    "Your budget stays on this device and remains available when the server is offline.",
+                    color = tandemPalette.muted,
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp,
+                    textAlign = TextAlign.Center,
+                )
                 Text(
                     "Not affiliated with, endorsed by, or supported by Actual Budget.",
                     color = tandemPalette.muted,
@@ -4630,18 +5334,73 @@ private fun AboutScreen() {
                 )
             }
         }
-        SectionCard("Help and project", "") {
-            ListRow("?", "Connection setup", "Pair this device with the server")
+        SectionCard("Project", "Independent companion for Actual Budget") {
+            ListRow("A", "Supported Actual server", "Required by this Tandem release", SUPPORTED_ACTUAL_SERVER_VERSION)
             DividerLine()
-            ListRow("▣", "Open-source licenses", "AGPL-3.0-or-later")
+            ListRow("⌘", "Open-source license", "GNU AGPL-3.0-or-later")
+        }
+        SectionCard("Open-source libraries", "Direct mobile-app dependencies and licenses") {
+            ListRow("K", "Kotlin and kotlinx", "Kotlin, Coroutines and Serialization · Apache-2.0")
+            DividerLine()
+            ListRow("C", "Compose Multiplatform and resources", "Apache-2.0")
+            DividerLine()
+            ListRow("N", "Ktor", "Apache-2.0")
+            DividerLine()
+            ListRow("R", "AndroidX Room and SQLite", "Apache-2.0")
             DividerLine()
             ListRow(
-                "↗",
-                "Supported server version",
-                "Required by this Tandem release",
-                SUPPORTED_ACTUAL_SERVER_VERSION,
+                "W",
+                "AndroidX platform libraries",
+                "Activity Compose, WorkManager and SplashScreen · Apache-2.0",
             )
+            DividerLine()
+            ListRow("M", "Compose Icons", "MIT")
+            DividerLine()
+            ListRow("L", "Lucide icon artwork", "ISC")
+            DividerLine()
+            ListRow("T", "TheSVG icon package", "Build-time catalog and tooling · MIT")
+            DividerLine()
+            ListRow("T", "TheSVG merchant artwork", "Per-icon licenses and source links are bundled")
         }
-        PreviewNote("License notices, supported-version details, and help links will appear here.")
+        SectionCard("Merchant artwork", "TheSVG catalog is bundled for offline merchant matching") {
+            ListRow(
+                "M",
+                "Bundled merchant icons",
+                merchantIconPack?.let { "${it.iconCount} icons · @thesvg/icons ${it.sourceVersion}" }
+                    ?: if (merchantIconPackLoadError == null) "Catalog details load when opened" else "Unavailable",
+            )
+            DividerLine()
+            ListRow(
+                "CC",
+                "Artwork license scope",
+                merchantIconPack?.let { "${it.openSourceIconCount} CC0 / MIT / Apache · ${it.fairUseIconCount} Fair Use" }
+                    ?: "CC0, MIT, Apache-2.0, and Fair Use entries",
+            )
+            DividerLine()
+            ListRow(
+                "©",
+                "View icon licenses and sources",
+                "Search the license and source record for every bundled mark",
+                trailing = merchantIconPack?.iconCount?.toString(),
+                onClick = { navigation.open(AppRoute.MERCHANT_ICON_LICENSES) },
+            )
+            DividerLine()
+            Column(
+                Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                BodyText(
+                    "Tandem matches merchant names and aliases against this local catalog. The match runs on this device and does not request an icon from a service.",
+                )
+                BodyText(
+                    "Only CC0, MIT, Apache-2.0, and TheSVG entries marked Fair Use are bundled. Other per-icon license types are excluded. Each bundled mark keeps its reported license and source URL.",
+                )
+                BodyText(
+                    "Names, logos, and trademarks belong to their respective owners. Tandem displays a matched mark only to identify the payee and is not affiliated with those brands. Follow each brand's usage guidelines.",
+                )
+            }
+        }
+        merchantIconPackLoadError?.let { PreviewNote(it) }
+        PreviewNote("TheSVG package license and the per-icon license and source list are bundled with the app resources.")
     }
 }

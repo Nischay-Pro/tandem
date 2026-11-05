@@ -8,17 +8,21 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.remember
+import androidx.core.splashscreen.SplashScreen
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import app.tandemforactual.data.database.openTandemDatabase
 import app.tandemforactual.data.database.tandemDatabaseBuilder
 import app.tandemforactual.ui.TandemApp
 import kotlinx.coroutines.flow.MutableSharedFlow
 
 class MainActivity : ComponentActivity() {
+  private var appStartupComplete = false
   private val notificationPermissionLauncher =
     registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
   private val appResumeEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -40,6 +44,11 @@ class MainActivity : ComponentActivity() {
     }
 
   override fun onCreate(savedInstanceState: Bundle?) {
+    val splashScreen: SplashScreen = installSplashScreen()
+    val splashDeadline = SystemClock.uptimeMillis() + MAX_SYSTEM_SPLASH_WAIT_MILLIS
+    splashScreen.setKeepOnScreenCondition {
+      !appStartupComplete && SystemClock.uptimeMillis() < splashDeadline
+    }
     super.onCreate(savedInstanceState)
     val openPreview = intent.getBooleanExtra("preview", false)
     BudgetSystemNotifications.initialize(applicationContext)
@@ -59,6 +68,7 @@ class MainActivity : ComponentActivity() {
         onBackgroundSyncSettingsChanged = onBackgroundSyncSettingsChanged,
         onRequestNotificationPermission = { requestNotificationPermission() },
         onOpenNotificationSettings = { openNotificationSettings() },
+        onStartupComplete = { appStartupComplete = true },
         appResumeEvents = appResumeEvents,
         networkRestoredEvents = networkRestoredEvents,
       )
@@ -104,3 +114,5 @@ class MainActivity : ComponentActivity() {
     super.onStop()
   }
 }
+
+private const val MAX_SYSTEM_SPLASH_WAIT_MILLIS = 2_500L

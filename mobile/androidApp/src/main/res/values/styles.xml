@@ -1,10 +1,13 @@
 <resources>
-  <style name="Theme.Tandem" parent="android:style/Theme.Material.Light.NoActionBar">
+  <style name="Theme.Tandem" parent="Theme.SplashScreen">
+    <item name="windowSplashScreenBackground">@color/tandem_splash_background</item>
+    <item name="windowSplashScreenAnimatedIcon">@drawable/tandem_splash_mark</item>
+    <item name="postSplashScreenTheme">@style/Theme.Tandem.App</item>
+  </style>
+  <style name="Theme.Tandem.App" parent="android:style/Theme.Material.Light.NoActionBar">
     <item name="android:fontFamily">sans</item>
     <item name="android:colorAccent">#31D4C7</item>
     <item name="android:windowBackground">@color/tandem_splash_background</item>
-    <item name="android:windowSplashScreenBackground">@color/tandem_splash_background</item>
-    <item name="android:windowSplashScreenAnimatedIcon">@drawable/tandem_splash_mark</item>
     <item name="android:statusBarColor">@color/tandem_splash_background</item>
     <item name="android:navigationBarColor">@color/tandem_splash_background</item>
     <item name="android:windowLightStatusBar">false</item>

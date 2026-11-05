@@ -2,11 +2,15 @@
 
 package app.tandemforactual.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 
@@ -63,11 +67,14 @@ private val LocalTandemPalette =
             negative = Color(0xFFFF8C98),
         )
     }
+private val LocalReduceMotion = staticCompositionLocalOf { false }
 
 @Composable
 internal fun TandemTheme(
     mode: ThemeMode,
     accent: AccentChoice,
+    reduceMotion: Boolean = false,
+    animateThemeChanges: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val dark = mode == ThemeMode.DARK || mode == ThemeMode.PURE_BLACK || (mode == ThemeMode.SYSTEM && isSystemInDarkTheme())
@@ -112,13 +119,36 @@ internal fun TandemTheme(
             )
         }
 
-    CompositionLocalProvider(LocalTandemPalette provides palette) {
+    val colorSpec = if (reduceMotion || !animateThemeChanges) snap() else tween<Color>(durationMillis = 180)
+    val animatedPalette =
+        TandemPalette(
+            background = animateColorAsState(palette.background, colorSpec, label = "theme-background").value,
+            surface = animateColorAsState(palette.surface, colorSpec, label = "theme-surface").value,
+            raised = animateColorAsState(palette.raised, colorSpec, label = "theme-raised").value,
+            border = animateColorAsState(palette.border, colorSpec, label = "theme-border").value,
+            text = animateColorAsState(palette.text, colorSpec, label = "theme-text").value,
+            muted = animateColorAsState(palette.muted, colorSpec, label = "theme-muted").value,
+            accent = animateColorAsState(palette.accent, colorSpec, label = "theme-accent").value,
+            accentContent = animateColorAsState(palette.accentContent, colorSpec, label = "theme-accent-content").value,
+            accentSurface = animateColorAsState(palette.accentSurface, colorSpec, label = "theme-accent-surface").value,
+            positive = animateColorAsState(palette.positive, colorSpec, label = "theme-positive").value,
+            warning = animateColorAsState(palette.warning, colorSpec, label = "theme-warning").value,
+            negative = animateColorAsState(palette.negative, colorSpec, label = "theme-negative").value,
+        )
+
+    CompositionLocalProvider(
+        LocalTandemPalette provides animatedPalette,
+        LocalReduceMotion provides reduceMotion,
+    ) {
         MaterialTheme(content = content)
     }
 }
 
 internal val tandemPalette: TandemPalette
     @Composable get() = LocalTandemPalette.current
+
+internal val tandemReduceMotion: Boolean
+    @Composable get() = LocalReduceMotion.current
 
 @Composable
 @Suppress("ktlint:standard:function-naming")
@@ -132,4 +162,15 @@ internal expect fun TandemSystemBars(
 internal expect fun TandemBackHandler(
     enabled: Boolean,
     onBack: () -> Unit,
+    onBackProgress: (progress: Float, direction: Float) -> Unit,
 )
+
+@Composable
+@Suppress("ktlint:standard:function-naming")
+internal expect fun SystemReduceMotionEnabled(): Boolean
+
+internal expect fun Modifier.tandemEdgeBackGesture(
+    enabled: Boolean,
+    onBack: () -> Unit,
+    onBackProgress: (progress: Float, direction: Float) -> Unit,
+): Modifier
