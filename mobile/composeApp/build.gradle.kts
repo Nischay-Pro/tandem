@@ -40,8 +40,10 @@ val generateTheSvgIconPack =
       repositoryRoot.resolve("package.json"),
       repositoryRoot.resolve("pnpm-lock.yaml"),
     )
-    inputs.dir(repositoryRoot.resolve("node_modules/.pnpm/@thesvg+icons@4.0.4/node_modules/@thesvg/icons"))
-    inputs.dir(repositoryRoot.resolve("node_modules/.pnpm/@resvg+resvg-js@2.6.2/node_modules/@resvg/resvg-js"))
+    inputs.files(
+      fileTree(repositoryRoot.resolve("node_modules/.pnpm/@thesvg+icons@4.0.4/node_modules/@thesvg/icons")),
+      fileTree(repositoryRoot.resolve("node_modules/.pnpm/@resvg+resvg-js@2.6.2/node_modules/@resvg/resvg-js")),
+    )
     outputs.dir(generatedTheSvgResources)
   }
 
