@@ -12,7 +12,9 @@ internal class SyncSignalState<Network> {
   }
 
   fun onNetworkAvailable(network: Network): Boolean {
-    val restored = networkStateInitialized && activeNetwork == null
+    // A default-network callback reports a replacement with onAvailable(); it
+    // does not always report onLost() for the previous default network.
+    val restored = networkStateInitialized && activeNetwork != network
     activeNetwork = network
     networkStateInitialized = true
     return restored

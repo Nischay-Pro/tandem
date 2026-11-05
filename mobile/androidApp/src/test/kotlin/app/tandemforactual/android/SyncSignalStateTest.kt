@@ -25,10 +25,11 @@ class SyncSignalStateTest {
   }
 
   @Test
-  fun losingAStaleNetworkDoesNotTriggerRecovery() {
+  fun defaultNetworkSwitchTriggersSyncAndStaleLossKeepsTheReplacement() {
     val signals = SyncSignalState<String>()
     signals.onNetworkStarted("wifi")
-    assertFalse(signals.onNetworkAvailable("cellular"))
+
+    assertTrue(signals.onNetworkAvailable("cellular"))
     signals.onNetworkLost("wifi")
 
     assertFalse(signals.onNetworkAvailable("cellular"))
