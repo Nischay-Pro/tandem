@@ -397,6 +397,31 @@ private data class LiveAccountSummary(
     val offBudget: Boolean,
 )
 
+internal data class PreviewAccount(
+    val id: String,
+    val name: String,
+    val description: String,
+    val group: String,
+    val balanceMinor: Long,
+    val offBudget: Boolean = false,
+)
+
+internal val previewAccounts =
+    listOf(
+        PreviewAccount("sample:checking", "Checking", "Everyday spending", "Cash accounts", 348_216),
+        PreviewAccount("sample:savings", "Savings", "Emergency fund", "Cash accounts", 820_000),
+        PreviewAccount(
+            "sample:travel-card",
+            "Travel card",
+            "Statement closes ${formatShortDate(SampleDate(2026, 5, 22))}",
+            "Credit",
+            -64_280,
+        ),
+        PreviewAccount("sample:car-loan", "Car loan", "Off budget", "Tracking", -830_000, offBudget = true),
+    )
+
+internal fun previewAccountById(id: String): PreviewAccount = previewAccounts.firstOrNull { it.id == id } ?: previewAccounts.first()
+
 private data class LiveCategorySummary(
     val id: String,
     val name: String,
@@ -1683,7 +1708,12 @@ private fun AppHeader(
                     ?.categories
                     ?.firstOrNull { it.id == state.selectedCategoryId }
                     ?.name ?: route.title
-            AppRoute.ACCOUNT_DETAIL -> liveAccounts.firstOrNull { it.id == state.selectedAccountId }?.name ?: route.title
+            AppRoute.ACCOUNT_DETAIL ->
+                if (state.selectedBudgetId.isNotBlank()) {
+                    liveAccounts.firstOrNull { it.id == state.selectedAccountId }?.name ?: route.title
+                } else {
+                    previewAccountById(state.selectedAccountId).name
+                }
             AppRoute.TRANSACTION_DETAIL -> state.transactionPayee.ifBlank { route.title }
             else -> route.title
         }
@@ -2045,7 +2075,7 @@ private fun ScreenContent(
         AppRoute.CATEGORY_DETAIL -> CategoryDetailScreen(state, navigation, liveBudgetMonth)
         AppRoute.ACCOUNTS -> AccountsScreen(state, navigation, liveAccounts, liveTransactions)
         AppRoute.ACCOUNT_DETAIL -> AccountDetailScreen(state, navigation, liveAccounts, liveTransactions)
-        AppRoute.ACCOUNT_OPTIONS -> AccountOptionsScreen(state, navigation, liveAccounts)
+        AppRoute.ACCOUNT_OPTIONS -> AccountOptionsScreen(state, liveAccounts)
         AppRoute.RECONCILIATION -> ReconciliationScreen(state)
         AppRoute.ACTIVITY -> ActivityScreen(state, navigation, liveTransactions)
         AppRoute.ACTIVITY_SEARCH -> ActivitySearchScreen(state, navigation, liveTransactions)
@@ -4033,41 +4063,27 @@ private fun AccountsScreen(
     PageColumn {
         SampleBanner()
         Heading("Balances", "Review account balances and recent activity.")
-        AmountHero("Total on budget", state.formatCurrency(348_216), "Across 4 sample accounts")
-        SectionCard("Cash accounts", "2 accounts", "") {
-            ListRow(
-                "C",
-                "Checking",
-                "Everyday spending",
-                state.formatCurrency(348_216),
-                tandemPalette.text,
-            ) { navigation.open(AppRoute.ACCOUNT_DETAIL) }
-            DividerLine()
-            ListRow(
-                "S",
-                "Savings",
-                "Emergency fund",
-                state.formatCurrency(820_000),
-                tandemPalette.text,
-            ) { navigation.open(AppRoute.ACCOUNT_DETAIL) }
-        }
-        SectionCard("Credit", "1 account", "") {
-            ListRow(
-                "V",
-                "Travel card",
-                "Statement closes ${formatShortDate(SampleDate(2026, 5, 22))}",
-                state.formatCurrency(-64_280),
-                tandemPalette.text,
-            ) { navigation.open(AppRoute.ACCOUNT_DETAIL) }
-        }
-        SectionCard("Tracking", "1 account", "") {
-            ListRow(
-                "H",
-                "Car loan",
-                "Off budget",
-                state.formatCurrency(-830_000),
-                tandemPalette.muted,
-            ) { navigation.open(AppRoute.ACCOUNT_DETAIL) }
+        AmountHero(
+            "Total on budget",
+            state.formatCurrency(previewAccounts.filterNot { it.offBudget }.sumOf { it.balanceMinor }),
+            "Across ${previewAccounts.count { !it.offBudget }} sample accounts",
+        )
+        previewAccounts.groupBy { it.group }.forEach { (groupName, accounts) ->
+            SectionCard(groupName, "${accounts.size} ${if (accounts.size == 1) "account" else "accounts"}", "") {
+                accounts.forEachIndexed { index, account ->
+                    if (index > 0) DividerLine()
+                    ListRow(
+                        account.name.take(1),
+                        account.name,
+                        account.description,
+                        state.formatCurrency(account.balanceMinor),
+                        if (account.offBudget) tandemPalette.muted else tandemPalette.text,
+                    ) {
+                        state.selectedAccountId = account.id
+                        navigation.open(AppRoute.ACCOUNT_DETAIL)
+                    }
+                }
+            }
         }
         SecondaryButton("Account options") { navigation.open(AppRoute.ACCOUNT_OPTIONS) }
     }
@@ -4124,27 +4140,44 @@ private fun AccountDetailScreen(
         }
         return
     }
+    val account = previewAccountById(state.selectedAccountId)
+    val accountActivity = previewTransactions.filter { it.account == account.name }
     PageColumn {
         SampleBanner()
-        AmountHero("Available balance", state.formatCurrency(348_216), "Checking · Updated ${formatShortDate(SampleDate(2026, 5, 14))}")
+        AmountHero(
+            "Available balance",
+            state.formatCurrency(account.balanceMinor),
+            "${account.name} · ${if (account.offBudget) "off budget" else "Updated ${formatShortDate(SampleDate(2026, 5, 14))}"}",
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            PrimaryButton("Add transaction", modifier = Modifier.weight(1f)) { navigation.open(AppRoute.NEW_TRANSACTION) }
+            PrimaryButton(
+                if (account.offBudget) "New transaction unavailable" else "Add transaction",
+                enabled = !account.offBudget,
+                modifier = Modifier.weight(1f),
+            ) {
+                if (!account.offBudget) navigation.open(AppRoute.NEW_TRANSACTION)
+            }
             SecondaryButton("Reconcile", modifier = Modifier.weight(1f)) { navigation.open(AppRoute.RECONCILIATION) }
         }
-        SectionCard("Recent activity", "Checking", "See all", onClick = { navigation.selectTab(AppRoute.ACTIVITY) }) {
-            previewTransactions.take(4).forEachIndexed { index, item ->
-                if (index > 0) DividerLine()
-                TransactionRow(item) { navigation.open(AppRoute.TRANSACTION_DETAIL) }
+        if (accountActivity.isEmpty()) {
+            SurfaceCard {
+                Text("No recent activity for this account.", modifier = Modifier.padding(16.dp), color = tandemPalette.muted)
+            }
+        } else {
+            SectionCard(account.name, "Recent activity", "See all", onClick = { navigation.selectTab(AppRoute.ACTIVITY) }) {
+                accountActivity.take(4).forEachIndexed { index, item ->
+                    if (index > 0) DividerLine()
+                    TransactionRow(item) { navigation.open(AppRoute.TRANSACTION_DETAIL) }
+                }
             }
         }
-        SettingRow("•••", "Account options", "Rename, hide, or review details", onClick = { navigation.open(AppRoute.ACCOUNT_OPTIONS) })
+        SettingRow("•••", "Account options", "${account.name} settings", onClick = { navigation.open(AppRoute.ACCOUNT_OPTIONS) })
     }
 }
 
 @Composable
 private fun AccountOptionsScreen(
     state: AppState,
-    navigation: AppNavigation,
     liveAccounts: List<LiveAccountSummary>,
 ) {
     if (state.selectedBudgetId.isNotBlank()) {
@@ -4166,18 +4199,14 @@ private fun AccountOptionsScreen(
         }
         return
     }
+    val account = previewAccountById(state.selectedAccountId)
     PageColumn {
-        Heading("Checking", "Account options")
+        Heading(account.name, "Account options")
         ListRow("✎", "Edit account details", "Name and notes", "Unavailable")
-        SettingRow(
-            "◷",
-            "Reconcile balance",
-            "Compare the account against a statement",
-            onClick = { navigation.open(AppRoute.RECONCILIATION) },
-        )
+        ListRow("◷", "Reconcile balance", "Compare the account against a statement", "Unavailable")
         ListRow("⊖", "Hide from budget", "Keep historical activity available", "Unavailable")
         PreviewNote(
-            "Account changes are not available here. This screen cannot compare a balance with a statement.",
+            "Account changes and statement reconciliation are not available in this sample view.",
         )
     }
 }
