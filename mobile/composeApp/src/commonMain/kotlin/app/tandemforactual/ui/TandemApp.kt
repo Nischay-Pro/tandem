@@ -107,6 +107,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
+private const val SUPPORTED_ACTUAL_SERVER_VERSION = "26.11.0"
+
 private enum class AppRoute(
     val title: String,
 ) {
@@ -4633,7 +4635,12 @@ private fun AboutScreen() {
             DividerLine()
             ListRow("▣", "Open-source licenses", "AGPL-3.0-or-later")
             DividerLine()
-            ListRow("↗", "Server version", "The app checks that this version is supported", "26.10.0")
+            ListRow(
+                "↗",
+                "Supported server version",
+                "Required by this Tandem release",
+                SUPPORTED_ACTUAL_SERVER_VERSION,
+            )
         }
         PreviewNote("License notices, supported-version details, and help links will appear here.")
     }
