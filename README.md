@@ -12,11 +12,9 @@ Tandem is under active development and is not a production release. Android pair
 
 ## How sync works
 
-Actual remains the source of truth. The mobile apps connect to the self-hosted Tandem API, which uses the official [`@actual-app/api`](https://actualbudget.org/docs/api/) package to read and update Actual budgets. The Tandem API stores authorization, change-feed, and write-recovery state in PostgreSQL; it does not keep a second authoritative budget.
+Actual remains the source of truth. The Android and iOS apps sync through the Tandem API and keep budget snapshots in Room, so previously synced data remains readable offline. The API uses Actual's official Node.js package to read and update budgets, while PostgreSQL stores Tandem's budget projection, change-feed cursors, and write-recovery state.
 
-The mobile apps store snapshots in Room and refresh them through Tandem's snapshot and change-feed endpoints. Offline writes stay in a durable local outbox and are reconciled when the API is reachable. The app surfaces concurrent edits for review.
-
-Actual's [sync system includes a CRDT implementation](https://actualbudget.org/docs/contributing/project-details/) for multi-device synchronization. Tandem's mobile apps do **not** implement that protocol; native clients such as [Actuali](https://github.com/MattFaz/actuali) take that direct-client approach. Actual's public API is a Node.js package, so Tandem keeps it in the API service rather than porting Actual's synchronization internals to Kotlin and Swift. This gives Tandem one place to enforce device scopes and reconcile financial writes, at the cost of requiring the Tandem service for sync. Cached data remains readable offline, and queued local edits wait for the service to reconnect.
+Tandem uses this service because Actual does not provide a budget REST API and its official programmatic API is Node.js-only. The service gives both mobile platforms one supported Actual integration and centralizes device pairing, budget access, and write reconciliation. It must be trusted with readable budget data, including when an Actual budget is end-to-end encrypted. See [Architectural design](docs/architectural-design.md) for the rationale, tradeoffs, and a side-by-side diagram of unencrypted and encrypted budget flows.
 
 ## Requirements
 
