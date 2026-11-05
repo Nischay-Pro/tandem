@@ -42,15 +42,16 @@ the phone locale supplies separators. The `hideFraction` preference applies
 to displayed totals, while transaction edit fields retain the full editable
 precision so a notes-only edit cannot silently change an amount.
 
-The local Actual 26.10.0 load fixture contains a CAD budget with 2,182
-transaction records and a USD budget with 13,164 records. Across the two
-budgets, 15,000 rows are synthetic purchases spanning seven years. Pixel 10a
-first-sync verification confirmed both budgets reached the `READY` state and
-the records were stored locally. One first attempt for USD hit a transient
-connection error; retry completed successfully. This test data and its seed
-script live only under ignored `.dev-tmp/` paths.
+The local Actual 26.10.0 load fixture contains two budgets and 15,000 synthetic
+purchase rows spanning seven years. A fresh Actual readback after the
+2026-11-04 probe cleanup found 2,194 total CAD transaction records and 13,236
+total USD records; those totals include non-purchase rows. The earlier Android
+first-sync checkpoint had 2,182 CAD and 13,164 USD records, and both budgets
+reached the `READY` state. One first attempt for USD hit a transient connection
+error; retry completed successfully. This test data and its seed script live
+only under ignored `.dev-tmp/` paths.
 The compatibility server also retains a separate older synthetic fixture. The
-Pixel's current device credential is scoped only to the CAD and USD household
+The test device's current credential is scoped only to the CAD and USD household
 budget IDs, so the budget chooser shows exactly those two; the compatibility
 fixture is outside its authorized scope.
 
@@ -58,10 +59,10 @@ Editing the amount and notes of an existing transaction enqueues an optimistic
 local update and sends it through the sync coordinator. Conflict review can
 keep Actual's copy or rebase and submit the device edit; uncertain and rejected
 writes have explicit review, retry, and discard controls. These UI write flows
-are wired to the API and local outbox. On the Pixel, an existing synthetic
+are wired to the API and local outbox. On an Android device, an existing synthetic
 Safeway transaction was changed from -$95.58 to -$100.00, confirmed by Actual,
 then restored to -$95.58 and confirmed again. Conflict review was also tested:
-the official Actual client changed that same row by one cent while the Pixel
+the official Actual client changed that same row by one cent while the test device
 held the prior revision; the stale device edit produced a conflict showing
 both versions. Keeping Actual discarded the local draft, and the original
 -$95.58 value was restored through the app and confirmed. New transactions use
@@ -88,10 +89,10 @@ write as an interrupted process. Android Room builders enable multi-instance
 invalidation, and the open Compose session observes recent transactions, total
 transaction count, related budget records, outbox rows, and sync state as Room
 flows. Worker changes therefore appear in the open UI without a route reload.
-The Pixel's Android device regression verified updates across two independently
+An Android device regression verified updates across two independently
 opened database instances. The worker skips encrypted budgets because budget
 passwords are never persisted. WorkManager may defer periodic execution to meet
-system power and network rules. On 2026-11-04, Pixel 10a ran
+system power and network rules. On 2026-11-04, an Android device ran
 `BackgroundBudgetSyncWorker` against the original local Tandem/Actual API using
 the saved device credential. The actual six-hour periodic WorkManager job
 ran and returned `SUCCESS`; the selected CAD Room row remained `READY`, had no
@@ -202,7 +203,7 @@ ignored `.dev-tmp/` paths and must not be committed.
   review use the same coordinator.
 
 The Android host handles system Back through the shared route stack and uses
-safe drawing insets for the status and navigation bars. Pixel 10a review
+safe drawing insets for the status and navigation bars. Physical-device review
 confirmed that headers clear the status bar and that system-bar icon contrast
 tracks the selected light or dark theme. Screenshots are disposable review
 artifacts only when explicitly requested; they are not source assets and must

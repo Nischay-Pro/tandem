@@ -26,6 +26,6 @@ the Kotlin framework through
 The shared appearance preference is forwarded to SwiftUI, so iOS system chrome
 follows the selected light, dark, or system mode alongside the Compose screens.
 
-Android builds and Pixel 10a display checks run from Linux. The shared Kotlin
+Android builds and physical-device display checks run from Linux. The shared Kotlin
 targets compile for iOS here, but the native Swift host, Xcode asset catalog,
 and iOS launch screen need a macOS/Xcode build for verification.

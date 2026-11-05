@@ -40,15 +40,15 @@ x86_64); the SDK and system image are under `.dev-tmp/android-sdk/`. The AVD
 was created for the Docker mount path `/workspace`, so its metadata must be
 relocated or regenerated before running it directly from a differently rooted
 host checkout. The previous Linux/Docker emulator test attempt did not leave a
-connected emulator. A USB-authorized Pixel 10a is available for local app
-debugging when attached. The shared Compose app can pair through Tandem, load
+connected emulator. A connected Android device can be used for local app
+debugging. The shared Compose app can pair through Tandem, load
 the authorized budget catalog, and sync budget data locally. Budget, account,
 category, and activity views read that local copy. Editing an existing
 transaction, creating transactions with stable caller-owned IDs, and reviewing
 sync conflicts use the durable local write queue. For phone-to-host debug
 pairing, use `adb reverse` to forward the app's loopback port to the local API.
 
-### Android preview and Pixel debugging
+### Android preview and device debugging
 
 Build and install the debug app from the `mobile/` directory:
 
@@ -63,7 +63,7 @@ adb shell am start -n app.tandemforactual.android/.MainActivity --ez preview tru
 The project uses the pinned Gradle 9.8.2 / Java 27 toolchain documented in
 [`docs/mobile-api-client.md`](mobile-api-client.md). In this workspace, Gradle
 and the Android SDK run in the configured Docker environment. Use normal ADB
-touch, swipe, and Back inputs to inspect flows on the connected Pixel. Save
+touch, swipe, and Back inputs to inspect flows on the connected Android device. Save
 Do not commit wireframes or device captures; `.dev-tmp/` is ignored. The
 `preview` launch extra opens the synthetic budget overview; without it the app
 opens its welcome screen.
@@ -106,10 +106,11 @@ purchase rows, spanning apartment moves, rent changes, a four-year car loan,
 flights, insurance, a wedding, pet surgery, and a home purchase. The local-only
 seed script is `.dev-tmp/household-seed.mjs`; neither the script nor the budget
 data belongs in Git. The disposable compatibility gate uses separate
-`compat-gate-*` paths and does not clear this household server. The Pixel 10a
-full-sync check stored 2,182 transaction records for the CAD budget and 13,164
-for the USD budget in Room. Those totals include non-purchase transaction rows
-in addition to the 15,000 purchases.
+`compat-gate-*` paths and does not clear this household server. The initial Android
+first-sync checkpoint stored 2,182 transaction records for the CAD budget and
+13,164 for the USD budget in Room. A fresh Actual readback after the
+2026-11-04 probe cleanup found 2,194 CAD and 13,236 USD transaction rows. Those
+totals include non-purchase rows in addition to the 15,000 synthetic purchases.
 
 ## Code quality
 
