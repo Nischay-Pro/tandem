@@ -31,9 +31,8 @@ client approach. That can remove a separate middleware service from the sync
 path, but it moves protocol compatibility and release tracking into the client
 apps. Tandem chose the official API boundary because it fits the existing
 Kotlin Multiplatform apps and avoids maintaining separate synchronization
-implementations for Android and iOS. Neither architecture is universally
-better; a direct implementation is a valid alternative if removing the service
-trust boundary becomes more important than using Actual's supported Node API.
+implementations for Android and iOS. If you want fully encrypted sync, use
+Actuali.
 
 ## Unencrypted and encrypted budgets
 
