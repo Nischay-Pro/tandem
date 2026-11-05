@@ -41,6 +41,9 @@ jobs:
           accept-android-sdk-licenses: true
           log-accepted-android-sdk-licenses: false
 
+      - name: Check mobile UI apostrophes
+        run: python3 scripts/check-mobile-ui-apostrophes.py
+
       - name: Compile and test Android, JVM, and iOS data and client targets
         working-directory: mobile
         run: >-
