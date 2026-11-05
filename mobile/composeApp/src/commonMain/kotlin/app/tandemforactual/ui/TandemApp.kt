@@ -122,17 +122,23 @@ import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.allDrawableResources
 import com.composables.icons.lucide.BriefcaseBusiness
+import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.CarFront
+import com.composables.icons.lucide.CloudCheck
+import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.Coffee
 import com.composables.icons.lucide.HeartPulse
 import com.composables.icons.lucide.House
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.NotepadText
 import com.composables.icons.lucide.PawPrint
 import com.composables.icons.lucide.Plane
 import com.composables.icons.lucide.Receipt
 import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.ShoppingCart
+import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.Utensils
+import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.Zap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -219,6 +225,8 @@ private enum class SyncChipIndicator {
     ATTENTION,
     IDLE,
 }
+
+private val UNSYNCED_TRANSACTION_WRITE_STATUSES = setOf("queued", "sending", "uncertain", "conflict", "rejected")
 
 private data class TransactionItem(
     val payee: String,
@@ -919,7 +927,7 @@ fun TandemApp(
     var pendingAutomaticSync by remember { mutableStateOf(false) }
     var cacheDiscoveryComplete by remember { mutableStateOf(false) }
     var sessionRestoreComplete by remember { mutableStateOf(false) }
-    var routeTransitionDirection by remember { mutableStateOf(1f) }
+    var routeTransitionDirection by remember { mutableStateOf(0f) }
     var backGestureProgress by remember { mutableStateOf(0f) }
     var backGestureDirection by remember { mutableStateOf(1f) }
     var backGestureCommitPending by remember { mutableStateOf(false) }
@@ -1515,7 +1523,29 @@ fun TandemApp(
             onBack = handleBack,
             onBackProgress = updateBackGesture,
         )
-        val renderRoute: @Composable (AppRouteEntry, Modifier, Boolean) -> Unit = { visibleEntry, pageModifier, saveRouteState ->
+        val renderHeader: @Composable (AppRoute) -> Unit = { headerRoute ->
+            if (headerRoute != AppRoute.WELCOME && headerRoute != AppRoute.STARTUP) {
+                AppHeader(
+                    route = headerRoute,
+                    state = state,
+                    showBack = !headerRoute.isTab(),
+                    onBack = handleBack,
+                    onSync = { navigation.open(AppRoute.SYNC_CENTER) },
+                    syncNeedsAttention = state.syncReminders && mobileSession.syncError != null,
+                    syncInProgress = mobileSession.isSyncing,
+                    onBudget = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+                    actualConnected = mobileSession.isServerReachable,
+                    liveAccounts = liveAccounts,
+                    liveBudgetMonth = liveBudgetMonth,
+                )
+            }
+        }
+        val renderRoute: @Composable (
+            AppRouteEntry,
+            Modifier,
+            Boolean,
+            Boolean,
+        ) -> Unit = { visibleEntry, pageModifier, saveRouteState, includeChrome ->
             val visibleRoute = visibleEntry.route
             val routeScrollState =
                 remember(visibleEntry.stateKey) {
@@ -1540,21 +1570,7 @@ fun TandemApp(
             val routeContent: @Composable () -> Unit = {
                 CompositionLocalProvider(LocalRouteScrollState provides routeScrollState) {
                     Column(modifier = pageModifier.fillMaxSize()) {
-                        if (visibleRoute != AppRoute.WELCOME && visibleRoute != AppRoute.STARTUP) {
-                            AppHeader(
-                                route = visibleRoute,
-                                state = state,
-                                showBack = !visibleRoute.isTab(),
-                                onBack = handleBack,
-                                onSync = { navigation.open(AppRoute.SYNC_CENTER) },
-                                syncNeedsAttention = state.syncReminders && mobileSession.syncError != null,
-                                syncInProgress = mobileSession.isSyncing,
-                                onBudget = { navigation.open(AppRoute.BUDGET_CHOOSER) },
-                                actualConnected = mobileSession.isServerReachable,
-                                liveAccounts = liveAccounts,
-                                liveBudgetMonth = liveBudgetMonth,
-                            )
-                        }
+                        if (includeChrome) renderHeader(visibleRoute)
                         Box(Modifier.weight(1f).fillMaxWidth()) {
                             ScreenContent(
                                 route = visibleRoute,
@@ -1584,7 +1600,7 @@ fun TandemApp(
                                 onOpenNotificationSettings = onOpenNotificationSettings,
                             )
                         }
-                        if (visibleRoute.isTab()) BottomNavigation(visibleRoute, navigation.selectTab)
+                        if (includeChrome && visibleRoute.isTab()) BottomNavigation(visibleRoute, navigation.selectTab)
                     }
                 }
             }
@@ -1601,6 +1617,19 @@ fun TandemApp(
                     .background(appBackgroundBrush(state.backgroundStyle, palette))
                     .safeDrawingPadding(),
         ) {
+            val stationaryTabShell = route.isTab() && routeTransitionDirection == 0f
+            if (stationaryTabShell) {
+                AnimatedContent(
+                    targetState = route,
+                    modifier = Modifier.fillMaxWidth().clipToBounds(),
+                    transitionSpec = {
+                        val (enter, exit) = crossfadeTransitions(reduceMotion, TandemMotion.TAB_MILLIS)
+                        enter togetherWith exit using null
+                    },
+                    contentAlignment = Alignment.CenterStart,
+                    label = "tandem-tab-header-transition",
+                ) { headerRoute -> renderHeader(headerRoute) }
+            }
             Box(
                 modifier =
                     Modifier
@@ -1621,6 +1650,7 @@ fun TandemApp(
                                 translationX = -direction * size.width * (1f - progress)
                             },
                         false,
+                        !stationaryTabShell,
                     )
                 }
                 AnimatedContent(
@@ -1675,9 +1705,11 @@ fun TandemApp(
                             }
                         },
                         true,
+                        !stationaryTabShell,
                     )
                 }
             }
+            if (stationaryTabShell) BottomNavigation(route, navigation.selectTab)
         }
     }
 }
@@ -2079,7 +2111,7 @@ private fun ScreenContent(
         AppRoute.ACTIVITY -> ActivityScreen(state, navigation, liveTransactions)
         AppRoute.ACTIVITY_SEARCH -> ActivitySearchScreen(state, navigation, liveTransactions)
         AppRoute.ACTIVITY_FILTER -> ActivityFilterScreen()
-        AppRoute.TRANSACTION_DETAIL -> TransactionDetailScreen(state, navigation)
+        AppRoute.TRANSACTION_DETAIL -> TransactionDetailScreen(state, mobileSession, navigation)
         AppRoute.NEW_TRANSACTION, AppRoute.EDIT_TRANSACTION ->
             TransactionFormScreen(route, state, navigation, mobileSession, onSaveTransaction, onCreateTransaction)
         AppRoute.CHOOSE_ACCOUNT -> {
@@ -4441,32 +4473,57 @@ private fun ActivityFilterScreen() {
 @Composable
 private fun TransactionDetailScreen(
     state: AppState,
+    mobileSession: TandemMobileSession,
     navigation: AppNavigation,
 ) {
     val isLive = state.selectedTransactionIsLive
     val amount = state.selectedTransactionAmountMinor ?: -4_218L
-    PageColumn {
-        if (!isLive) SampleBanner() else Badge("Actual · synced", tandemPalette.positive)
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            Text(state.formatCurrency(amount), color = tandemPalette.text, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-            Text(state.transactionPayee, color = tandemPalette.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            Text("${state.transactionDate} · ${state.transactionAccount}", color = tandemPalette.muted, fontSize = 12.sp)
+    val hasUnsentTransactionChange =
+        mobileSession.pendingWrites.any { operation ->
+            operation.recordType == "transaction" &&
+                operation.recordId == state.selectedTransactionRecordId &&
+                operation.status in UNSYNCED_TRANSACTION_WRITE_STATUSES
         }
-        SectionCard("Transaction", if (isLive) "Stored in this device’s local budget" else "Sample details") {
-            ListRow("C", "Account", "Where money moved", state.transactionAccount)
+    val isSyncedToActual = isLive && state.selectedTransactionRecordId.isNotBlank() && !hasUnsentTransactionChange
+    val syncDescription =
+        when {
+            isSyncedToActual -> "Synced to Actual"
+            isLive -> "Changes not synced to Actual"
+            else -> "Sample transaction, not synced to Actual"
+        }
+    PageColumn(verticalSpacing = 12.dp) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Spacer(Modifier.size(28.dp))
+            Text(
+                state.formatCurrency(amount),
+                modifier = Modifier.weight(1f),
+                color = tandemPalette.text,
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Icon(
+                imageVector = if (isSyncedToActual) Lucide.CloudCheck else Lucide.CloudOff,
+                contentDescription = syncDescription,
+                modifier = Modifier.size(28.dp),
+                tint = if (isSyncedToActual) tandemPalette.positive else tandemPalette.muted,
+            )
+        }
+        SectionCard(title = "") {
+            ListRow("", "Account", trailing = state.transactionAccount, leadingVector = Lucide.WalletCards)
             DividerLine()
-            ListRow("G", "Category", "Budget category", state.transactionCategory)
+            ListRow("", "Category", trailing = state.transactionCategory, leadingVector = Lucide.Tags)
             DividerLine()
-            ListRow("◷", "Date", "Posted", state.transactionDate)
+            ListRow("", "Date", trailing = state.transactionDate, leadingVector = Lucide.CalendarDays)
             DividerLine()
-            ListRow("▤", "Notes", "Optional", state.transactionNotes.ifBlank { "No notes" })
+            ListRow("", "Notes", trailing = state.transactionNotes.ifBlank { "No notes" }, leadingVector = Lucide.NotepadText)
         }
         if (isLive) {
-            BodyText("Edit a transaction already in Actual. Changes are saved on this device first and then checked with the server.")
             PrimaryButton("Edit transaction", enabled = state.selectedTransactionRecordId.isNotBlank()) {
                 navigation.open(AppRoute.EDIT_TRANSACTION)
             }
@@ -4474,7 +4531,6 @@ private fun TransactionDetailScreen(
             PreviewNote("This sample transaction is read-only. Editing it will not change Actual Budget.")
             PrimaryButton("Edit transaction") { navigation.open(AppRoute.EDIT_TRANSACTION) }
         }
-        SecondaryButton("Review sync status") { navigation.open(AppRoute.SYNC_CENTER) }
     }
 }
 
