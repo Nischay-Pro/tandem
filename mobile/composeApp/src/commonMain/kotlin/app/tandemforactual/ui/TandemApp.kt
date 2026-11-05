@@ -886,7 +886,7 @@ fun TandemApp(
     deviceCredentialStore: DeviceCredentialStore? = null,
     nowEpochMillis: () -> Long = { 0L },
     allowInsecureLoopback: Boolean = false,
-    onBackgroundSyncSettingsChanged: ((enabled: Boolean, wifiOnly: Boolean, budgetId: String) -> Unit)? = null,
+    onBackgroundSyncSettingsChanged: ((enabled: Boolean, unmeteredOnly: Boolean, budgetId: String) -> Unit)? = null,
     onSystemAppearanceChanged: ((isDark: Boolean, followsSystem: Boolean) -> Unit)? = null,
     onRequestNotificationPermission: (() -> Unit)? = null,
     onOpenNotificationSettings: (() -> Unit)? = null,
@@ -5490,8 +5490,8 @@ private fun SyncPreferencesScreen(
                 ) { state.backgroundSyncEnabled = it }
                 DividerLine()
                 ToggleRow(
-                    "Background sync on Wi-Fi only",
-                    "Wait for Wi-Fi or another unmetered network",
+                    "Background sync on unmetered networks",
+                    "Wait until the system reports the connection as unmetered",
                     state.syncOnWifi,
                 ) { state.syncOnWifi = it }
                 BodyText("Encrypted budgets are skipped because budget passwords are never stored.")

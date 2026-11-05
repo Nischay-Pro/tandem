@@ -55,8 +55,8 @@ class MainActivity : ComponentActivity() {
     val database = openTandemDatabase(tandemDatabaseBuilder(applicationContext))
     setContent {
       val onBackgroundSyncSettingsChanged: (Boolean, Boolean, String) -> Unit = remember(applicationContext) {
-        { enabled, wifiOnly, budgetId ->
-          BackgroundBudgetSyncScheduler.update(applicationContext, enabled, wifiOnly, budgetId)
+        { enabled, unmeteredOnly, budgetId ->
+          BackgroundBudgetSyncScheduler.update(applicationContext, enabled, unmeteredOnly, budgetId)
         }
       }
       TandemApp(

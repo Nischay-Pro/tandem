@@ -9,7 +9,7 @@ final class IosBackgroundSyncScheduler {
     private let taskIdentifier = "app.tandemforactual.ios.background-sync"
     private let defaults = UserDefaults.standard
     private let enabledKey = "tandem.backgroundSyncEnabled"
-    private let wifiOnlyKey = "tandem.backgroundSyncWifiOnly"
+    private let unmeteredOnlyKey = "tandem.backgroundSyncWifiOnly"
 
     private init() {}
 
@@ -31,10 +31,10 @@ final class IosBackgroundSyncScheduler {
         scheduleIfEnabled()
     }
 
-    func update(enabled: Bool, wifiOnly: Bool, budgetId: String) {
+    func update(enabled: Bool, unmeteredOnly: Bool, budgetId: String) {
         let shouldSchedule = enabled && !budgetId.isEmpty
         defaults.set(shouldSchedule, forKey: enabledKey)
-        defaults.set(wifiOnly, forKey: wifiOnlyKey)
+        defaults.set(unmeteredOnly, forKey: unmeteredOnlyKey)
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: taskIdentifier)
         if shouldSchedule {
             schedule()
@@ -70,7 +70,7 @@ final class IosBackgroundSyncScheduler {
         let completion = BackgroundTaskCompletion(task: task)
         let runGate = BackgroundSyncRunGate()
         let handleSlot = BackgroundSyncHandleSlot()
-        let wifiOnly = defaults.bool(forKey: wifiOnlyKey)
+        let unmeteredOnly = defaults.bool(forKey: unmeteredOnlyKey)
 
         task.expirationHandler = {
             handleSlot.cancel()
@@ -85,7 +85,7 @@ final class IosBackgroundSyncScheduler {
                 completion.finish(success: false)
                 return
             }
-            if wifiOnly && !path.usesInterfaceType(.wifi) {
+            if unmeteredOnly && (path.isExpensive || path.isConstrained) {
                 monitor.cancel()
                 completion.finish(success: false)
                 return

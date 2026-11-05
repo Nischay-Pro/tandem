@@ -26,10 +26,10 @@ private struct ComposeRootView: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> UIViewController {
         MainViewControllerKt.MainViewController(
-            onBackgroundSyncSettingsChanged: { enabled, wifiOnly, budgetId in
+            onBackgroundSyncSettingsChanged: { enabled, unmeteredOnly, budgetId in
                 IosBackgroundSyncScheduler.shared.update(
                     enabled: enabled.boolValue,
-                    wifiOnly: wifiOnly.boolValue,
+                    unmeteredOnly: unmeteredOnly.boolValue,
                     budgetId: budgetId
                 )
                 return KotlinUnit()

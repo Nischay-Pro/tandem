@@ -7,8 +7,8 @@ import org.junit.Test
 
 class BackgroundBudgetSyncSchedulerTest {
     @Test
-    fun wifiOnlyUsesUnmeteredNetworkAndSixHourInterval() {
-        val request = BackgroundBudgetSyncScheduler.periodicRequest(wifiOnly = true)
+    fun unmeteredOnlyUsesUnmeteredNetworkAndSixHourInterval() {
+        val request = BackgroundBudgetSyncScheduler.periodicRequest(unmeteredOnly = true)
 
         assertEquals(NetworkType.UNMETERED, request.workSpec.constraints.requiredNetworkType)
         assertEquals(TimeUnit.HOURS.toMillis(6), request.workSpec.intervalDuration)
@@ -16,7 +16,7 @@ class BackgroundBudgetSyncSchedulerTest {
 
     @Test
     fun unrestrictedBackgroundSyncRequiresAConnectedNetwork() {
-        val request = BackgroundBudgetSyncScheduler.periodicRequest(wifiOnly = false)
+        val request = BackgroundBudgetSyncScheduler.periodicRequest(unmeteredOnly = false)
 
         assertEquals(NetworkType.CONNECTED, request.workSpec.constraints.requiredNetworkType)
     }

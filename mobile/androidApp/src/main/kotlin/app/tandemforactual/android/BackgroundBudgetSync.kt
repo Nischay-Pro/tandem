@@ -29,7 +29,7 @@ internal object BackgroundBudgetSyncScheduler {
     fun update(
         context: Context,
         enabled: Boolean,
-        wifiOnly: Boolean,
+        unmeteredOnly: Boolean,
         budgetId: String,
     ) {
         val workManager = WorkManager.getInstance(context.applicationContext)
@@ -40,16 +40,16 @@ internal object BackgroundBudgetSyncScheduler {
         workManager.enqueueUniquePeriodicWork(
             UNIQUE_WORK_NAME,
             ExistingPeriodicWorkPolicy.UPDATE,
-            periodicRequest(wifiOnly),
+            periodicRequest(unmeteredOnly),
         )
     }
 
-    internal fun periodicRequest(wifiOnly: Boolean): PeriodicWorkRequest =
+    internal fun periodicRequest(unmeteredOnly: Boolean): PeriodicWorkRequest =
         PeriodicWorkRequestBuilder<BackgroundBudgetSyncWorker>(INTERVAL_HOURS, TimeUnit.HOURS)
             .setConstraints(
                 Constraints
                     .Builder()
-                    .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
+                    .setRequiredNetworkType(if (unmeteredOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
                     .build(),
             ).build()
 }
