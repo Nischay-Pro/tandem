@@ -9,6 +9,7 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -132,6 +133,7 @@ import com.composables.icons.lucide.Utensils
 import com.composables.icons.lucide.Zap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
@@ -805,6 +807,7 @@ internal class AppState {
 
 private data class AppNavigation(
     val open: (AppRoute) -> Unit,
+    val newTransaction: (accountId: String?) -> Unit,
     val selectTab: (AppRoute) -> Unit,
     val back: () -> Unit,
 )
@@ -890,6 +893,7 @@ fun TandemApp(
     var backGestureProgress by remember { mutableStateOf(0f) }
     var backGestureDirection by remember { mutableStateOf(1f) }
     var backPreviewRoute by remember { mutableStateOf<AppRouteEntry?>(null) }
+    var backGestureCancelJob by remember { mutableStateOf<Job?>(null) }
     var skipNextRouteTransition by remember { mutableStateOf(false) }
     var nextRouteEntryId by rememberSaveable { mutableStateOf(2L) }
     val backStack =
@@ -1044,24 +1048,40 @@ fun TandemApp(
             state.cachedBudgetCatalogJson = encodeCachedBudgetCatalog(mobileSession.budgets)
         }
     }
+    val newTransaction: (String?) -> Unit = { requestedAccountId ->
+        routeTransitionDirection = 1f
+        val eligibleAccounts = liveAccountSummaries(mobileSession).filterNot { it.offBudget }
+        val defaultAccount =
+            if (state.selectedBudgetId.isNotBlank()) {
+                eligibleAccounts.firstOrNull { it.id == requestedAccountId } ?: eligibleAccounts.firstOrNull()
+            } else {
+                null
+            }
+        state.transactionAmount = ""
+        state.transactionAccount = defaultAccount?.name ?: "Checking"
+        state.newTransactionAccountId = defaultAccount?.id.orEmpty()
+        state.transactionPayee = ""
+        state.newTransactionPayeeId = ""
+        state.transactionCategory = ""
+        state.newTransactionCategoryId = ""
+        state.transactionDate = platformTodayIsoDate()
+        state.transactionNotes = ""
+        state.selectedTransactionRecordId = ""
+        state.selectedTransactionAmountMinor = null
+        state.selectedTransactionIsLive = false
+        backStack.add(newRouteEntry(AppRoute.NEW_TRANSACTION))
+    }
     val navigation =
         AppNavigation(
             open = { next ->
-                routeTransitionDirection = 1f
                 if (next == AppRoute.NEW_TRANSACTION) {
-                    state.transactionAmount = ""
-                    val defaultAccount = liveAccountSummaries(mobileSession).firstOrNull { !it.offBudget }
-                    state.transactionAccount = defaultAccount?.name.orEmpty()
-                    state.newTransactionAccountId = defaultAccount?.id.orEmpty()
-                    state.transactionPayee = ""
-                    state.newTransactionPayeeId = ""
-                    state.transactionCategory = ""
-                    state.newTransactionCategoryId = ""
-                    state.transactionDate = platformTodayIsoDate()
-                    state.transactionNotes = ""
+                    newTransaction(null)
+                } else {
+                    routeTransitionDirection = 1f
+                    backStack.add(newRouteEntry(next))
                 }
-                backStack.add(newRouteEntry(next))
             },
+            newTransaction = newTransaction,
             selectTab = {
                 if (backStack.lastOrNull()?.route != it) {
                     routeTransitionDirection = 0f
@@ -1386,6 +1406,8 @@ fun TandemApp(
         }
         TandemSystemBars(isDark, palette.background)
         val handleBack = {
+            backGestureCancelJob?.cancel()
+            backGestureCancelJob = null
             if (backGestureProgress > 0f) {
                 // Predictive back has already moved the outgoing route with the finger. Settle
                 // that gesture before popping so the restored route is composed at its origin,
@@ -1397,11 +1419,30 @@ fun TandemApp(
             navigation.back()
         }
         val updateBackGesture: (Float, Float) -> Unit = { progress, direction ->
-            backGestureProgress = progress
             backGestureDirection = direction
-            if (progress > 0f && backPreviewRoute == null) {
-                backPreviewRoute = backStack.getOrNull(backStack.lastIndex - 1)
-            } else if (progress <= 0f) {
+            if (progress > 0f) {
+                backGestureCancelJob?.cancel()
+                backGestureCancelJob = null
+                backGestureProgress = progress
+                if (backPreviewRoute == null) {
+                    backPreviewRoute = backStack.getOrNull(backStack.lastIndex - 1)
+                }
+            } else if (backGestureProgress > 0f) {
+                backGestureCancelJob?.cancel()
+                backGestureCancelJob =
+                    coroutineScope.launch {
+                        val returnAnimation = Animatable(backGestureProgress)
+                        returnAnimation.animateTo(
+                            targetValue = 0f,
+                            animationSpec = tandemMotionSpec(reduceMotion, TandemMotion.BACK_CANCEL_MILLIS),
+                        ) {
+                            backGestureProgress = value
+                        }
+                        backPreviewRoute = null
+                        backGestureCancelJob = null
+                    }
+            } else {
+                backGestureProgress = 0f
                 backPreviewRoute = null
             }
         }
@@ -1534,10 +1575,10 @@ fun TandemApp(
                                 (
                                     slideInHorizontally(
                                         tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                    ) { it / 5 } +
+                                    ) { it / 8 } +
                                         fadeIn(
                                             tween(
-                                                TandemMotion.STATUS_ENTER_MILLIS,
+                                                TandemMotion.ROUTE_MILLIS - TandemMotion.FADE_THROUGH_DELAY_MILLIS,
                                                 delayMillis = TandemMotion.FADE_THROUGH_DELAY_MILLIS,
                                                 easing = TandemMotion.enterEasing,
                                             ),
@@ -1546,17 +1587,22 @@ fun TandemApp(
                                     (
                                         slideOutHorizontally(
                                             tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                        ) { -it / 10 } +
-                                            fadeOut(tween(TandemMotion.STATUS_EXIT_MILLIS, easing = TandemMotion.exitEasing))
+                                        ) { -it / 16 } +
+                                            fadeOut(
+                                                tween(
+                                                    TandemMotion.FADE_THROUGH_DELAY_MILLIS,
+                                                    easing = TandemMotion.exitEasing,
+                                                ),
+                                            )
                                     )
                             routeTransitionDirection < 0f ->
                                 (
                                     slideInHorizontally(
                                         tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                    ) { -it / 10 } +
+                                    ) { -it / 16 } +
                                         fadeIn(
                                             tween(
-                                                TandemMotion.STATUS_ENTER_MILLIS,
+                                                TandemMotion.ROUTE_MILLIS - TandemMotion.FADE_THROUGH_DELAY_MILLIS,
                                                 delayMillis = TandemMotion.FADE_THROUGH_DELAY_MILLIS,
                                                 easing = TandemMotion.enterEasing,
                                             ),
@@ -1565,8 +1611,13 @@ fun TandemApp(
                                     (
                                         slideOutHorizontally(
                                             tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                        ) { it / 5 } +
-                                            fadeOut(tween(TandemMotion.STATUS_EXIT_MILLIS, easing = TandemMotion.exitEasing))
+                                        ) { it / 8 } +
+                                            fadeOut(
+                                                tween(
+                                                    TandemMotion.FADE_THROUGH_DELAY_MILLIS,
+                                                    easing = TandemMotion.exitEasing,
+                                                ),
+                                            )
                                     )
                             else ->
                                 fadeIn(
@@ -1577,7 +1628,7 @@ fun TandemApp(
                                     ),
                                 ) togetherWith
                                     fadeOut(
-                                        tween(TandemMotion.STATUS_EXIT_MILLIS, easing = TandemMotion.exitEasing),
+                                        tween(TandemMotion.FADE_THROUGH_DELAY_MILLIS, easing = TandemMotion.exitEasing),
                                     )
                         }
                     },
@@ -1735,10 +1786,16 @@ private fun AppHeader(
                                 fadeIn(
                                     tween(
                                         TandemMotion.STATUS_CHANGE_MILLIS,
+                                        delayMillis = TandemMotion.FADE_THROUGH_DELAY_MILLIS,
                                         easing = TandemMotion.enterEasing,
                                     ),
                                 ) togetherWith
-                                    fadeOut(tween(TandemMotion.STATUS_EXIT_MILLIS, easing = TandemMotion.exitEasing))
+                                    fadeOut(
+                                        tween(
+                                            TandemMotion.FADE_THROUGH_DELAY_MILLIS,
+                                            easing = TandemMotion.exitEasing,
+                                        ),
+                                    )
                             }
                         },
                         contentAlignment = Alignment.Center,
@@ -2065,7 +2122,7 @@ private fun ScreenContent(
         AppRoute.CONFLICT_INBOX -> ConflictInboxScreen(state, mobileSession, navigation)
         AppRoute.CONFLICT_REVIEW -> ConflictReviewScreen(state, mobileSession, onResolveConflict)
         AppRoute.UNCERTAIN_WRITE -> UncertainWriteScreen(state, mobileSession, onSyncNow, onRetryUncertainWrite, onDiscardWrite)
-        AppRoute.REJECTED_WRITE -> RejectedWriteScreen(state, mobileSession, onDiscardWrite)
+        AppRoute.REJECTED_WRITE -> RejectedWriteScreen(state, mobileSession, navigation, onDiscardWrite)
         AppRoute.SETTINGS -> SettingsScreen(state, navigation)
         AppRoute.APPEARANCE -> AppearanceScreen(state, navigation)
         AppRoute.THEME_MODE -> ThemeModeScreen(state)
@@ -2217,23 +2274,35 @@ private fun AnimatedStatusText(
 ) {
     val reduceMotion = tandemReduceMotion
     AnimatedContent(
-        targetState = text,
+        targetState = AnimatedTextContent(text, color),
         modifier = modifier,
         transitionSpec = {
             if (reduceMotion) {
                 EnterTransition.None togetherWith ExitTransition.None
             } else {
                 fadeIn(
-                    tween(TandemMotion.STATUS_CHANGE_MILLIS, easing = TandemMotion.enterEasing),
-                ) togetherWith fadeOut(tween(TandemMotion.STATUS_EXIT_MILLIS, easing = TandemMotion.exitEasing))
+                    tween(
+                        TandemMotion.STATUS_CHANGE_MILLIS,
+                        delayMillis = TandemMotion.FADE_THROUGH_DELAY_MILLIS,
+                        easing = TandemMotion.enterEasing,
+                    ),
+                ) togetherWith
+                    fadeOut(tween(TandemMotion.FADE_THROUGH_DELAY_MILLIS, easing = TandemMotion.exitEasing))
             }
         },
+        contentKey = { it.text },
         contentAlignment = Alignment.CenterStart,
         label = "sync-status-text-transition",
     ) { visibleText ->
+        val visibleColor by
+            animateColorAsState(
+                targetValue = visibleText.color,
+                animationSpec = tandemMotionSpec(reduceMotion, TandemMotion.COLOR_MILLIS),
+                label = "sync-status-text-color",
+            )
         Text(
-            visibleText,
-            color = color,
+            visibleText.text,
+            color = visibleColor,
             fontSize = fontSize,
             lineHeight = lineHeight,
             fontWeight = fontWeight,
@@ -2242,6 +2311,11 @@ private fun AnimatedStatusText(
         )
     }
 }
+
+private data class AnimatedTextContent(
+    val text: String,
+    val color: Color,
+)
 
 @Composable
 private fun LabelText(text: String) {
@@ -2280,6 +2354,7 @@ private fun PrimaryButton(
     label: String,
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
+    loading: Boolean = false,
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
@@ -2306,7 +2381,12 @@ private fun PrimaryButton(
                 .padding(horizontal = 18.dp, vertical = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = textColor, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (loading) {
+                TandemLoadingIndicator(Modifier.size(17.dp), textColor, 2.dp)
+            }
+            Text(label, color = textColor, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }
 
@@ -2826,6 +2906,19 @@ private fun Badge(
 }
 
 @Composable
+private fun TandemLoadingIndicator(
+    modifier: Modifier,
+    color: Color,
+    strokeWidth: androidx.compose.ui.unit.Dp,
+) {
+    if (tandemReduceMotion) {
+        Box(modifier.border(strokeWidth, color, CircleShape))
+    } else {
+        CircularProgressIndicator(modifier = modifier, color = color, strokeWidth = strokeWidth)
+    }
+}
+
+@Composable
 private fun AnimatedReveal(
     visible: Boolean,
     content: @Composable AnimatedVisibilityScope.() -> Unit,
@@ -2837,7 +2930,7 @@ private fun AnimatedReveal(
             fadeIn(tween(TandemMotion.STATUS_ENTER_MILLIS, easing = TandemMotion.enterEasing)) +
                 expandVertically(
                     animationSpec = tween(TandemMotion.REVEAL_MILLIS, easing = TandemMotion.movementEasing),
-                    clip = false,
+                    clip = true,
                 )
         }
     val exit =
@@ -2847,7 +2940,7 @@ private fun AnimatedReveal(
             fadeOut(tween(TandemMotion.STATUS_EXIT_MILLIS + 40, easing = TandemMotion.exitEasing)) +
                 shrinkVertically(
                     animationSpec = tween(TandemMotion.CONTROL_MILLIS, easing = TandemMotion.movementEasing),
-                    clip = false,
+                    clip = true,
                 )
         }
     AnimatedVisibility(visible = visible, enter = enter, exit = exit, content = content)
@@ -2879,7 +2972,7 @@ private fun StartupScreen() {
         AnimatedReveal(showLoadingIndicator) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Spacer(Modifier.height(24.dp))
-                CircularProgressIndicator(
+                TandemLoadingIndicator(
                     modifier = Modifier.size(24.dp),
                     color = palette.accent,
                     strokeWidth = 2.dp,
@@ -4001,8 +4094,18 @@ private fun AccountDetailScreen(
                     "${account.name} · ${if (account.offBudget) "off budget" else "on budget"}",
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                    PrimaryButton("New transaction unavailable", enabled = false, modifier = Modifier.weight(1f)) {}
-                    SecondaryButton("Reconcile preview", modifier = Modifier.weight(1f)) { navigation.open(AppRoute.RECONCILIATION) }
+                    if (account.offBudget) {
+                        PrimaryButton("New transaction unavailable", enabled = false, modifier = Modifier.weight(1f)) {}
+                    } else {
+                        PrimaryButton("Add transaction", modifier = Modifier.weight(1f)) {
+                            navigation.newTransaction(account.id)
+                        }
+                    }
+                    SecondaryButton(
+                        "Reconciliation unavailable",
+                        modifier = Modifier.weight(1f),
+                        enabled = false,
+                    ) {}
                 }
                 if (accountActivity.isEmpty()) {
                     SurfaceCard {
@@ -4065,14 +4168,14 @@ private fun AccountOptionsScreen(
     }
     PageColumn {
         Heading("Checking", "Account options")
-        SettingRow("✎", "Edit account details", "Name and notes", onClick = { })
+        ListRow("✎", "Edit account details", "Name and notes", "Unavailable")
         SettingRow(
             "◷",
             "Reconcile balance",
             "Compare the account against a statement",
             onClick = { navigation.open(AppRoute.RECONCILIATION) },
         )
-        SettingRow("⊖", "Hide from budget", "Keep historical activity available", onClick = { })
+        ListRow("⊖", "Hide from budget", "Keep historical activity available", "Unavailable")
         PreviewNote(
             "Account changes are not available here. This screen cannot compare a balance with a statement.",
         )
@@ -4148,8 +4251,8 @@ private fun ActivityScreen(
             }
         }
         if (isLiveBudget) {
-            BodyText("Live transaction creation and editing are not available yet.")
-            PrimaryButton("Add transaction", enabled = false) {}
+            BodyText("Tap a transaction to view or edit it. New entries are saved locally before syncing.")
+            PrimaryButton("Add transaction") { navigation.newTransaction(null) }
         } else {
             PreviewNote("Transactions use sample data. Search and filters do not change a live budget.")
             PrimaryButton("Add transaction") { navigation.open(AppRoute.NEW_TRANSACTION) }
@@ -4264,7 +4367,7 @@ private fun TransactionDetailScreen(
             DividerLine()
             ListRow("◷", "Date", "Posted", state.transactionDate)
             DividerLine()
-            ListRow("▤", "Notes", "Optional", if (isLive) "Not available" else "Weekly shop")
+            ListRow("▤", "Notes", "Optional", state.transactionNotes.ifBlank { "No notes" })
         }
         if (isLive) {
             BodyText("Edit a transaction already in Actual. Changes are saved on this device first and then checked with the server.")
@@ -4300,6 +4403,9 @@ private fun TransactionFormScreen(
                     { state.transactionAmount = it },
                     "For example, -42.18 for spending or 2500 for income",
                 )
+                if (state.newTransactionAccountId.isBlank()) {
+                    BodyText("Choose an on-budget account to save this transaction.")
+                }
                 ReadOnlyField("Account", state.transactionAccount, "A") { navigation.open(AppRoute.CHOOSE_ACCOUNT) }
                 ReadOnlyField("Payee", state.transactionPayee.ifBlank { "No payee" }, "P") { navigation.open(AppRoute.CHOOSE_PAYEE) }
                 ReadOnlyField("Category", state.transactionCategory.ifBlank { "Uncategorized" }, "C") {
@@ -4312,7 +4418,13 @@ private fun TransactionFormScreen(
                         Column(Modifier.padding(14.dp)) { BodyText(mobileSession.transactionWriteMessage.orEmpty()) }
                     }
                 }
-                PrimaryButton("Save transaction", enabled = !mobileSession.isSavingTransaction) { onCreateTransaction() }
+                PrimaryButton(
+                    "Save transaction",
+                    enabled =
+                        !mobileSession.isSavingTransaction &&
+                            state.newTransactionAccountId.isNotBlank() &&
+                            state.transactionAmount.isNotBlank(),
+                ) { onCreateTransaction() }
                 SecondaryButton("Cancel") { navigation.back() }
             }
             return
@@ -4579,7 +4691,11 @@ private fun SyncCenterScreen(
                     }
                 }
             }
-            PrimaryButton("Sync now", enabled = mobileSession.isAuthenticated && !mobileSession.isSyncing) { onSyncNow() }
+            PrimaryButton(
+                if (mobileSession.isSyncing) "Syncing…" else "Sync now",
+                enabled = mobileSession.isAuthenticated && !mobileSession.isSyncing,
+                loading = mobileSession.isSyncing,
+            ) { onSyncNow() }
             AnimatedReveal(visible = mobileSession.transactionWriteMessage != null) {
                 BodyText(mobileSession.transactionWriteMessage.orEmpty())
             }
@@ -4862,6 +4978,7 @@ private fun UncertainWriteScreen(
 private fun RejectedWriteScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
     onDiscard: (String) -> Unit,
 ) {
     if (state.selectedBudgetId.isNotBlank()) {
@@ -4905,7 +5022,7 @@ private fun RejectedWriteScreen(
         PreviewNote(
             "The change was not saved. The app keeps the reason and will offer a way to dismiss it.",
         )
-        PrimaryButton("Close details") {}
+        PrimaryButton("Close details") { navigation.back() }
     }
 }
 
@@ -5505,7 +5622,11 @@ private fun MerchantIconLicensesScreen(
             loadError != null -> BodyText(loadError)
             merchantIconPack == null -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(color = tandemPalette.accent, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                    TandemLoadingIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = tandemPalette.accent,
+                        strokeWidth = 2.dp,
+                    )
                     BodyText("Loading the bundled icon catalog…")
                 }
             }
@@ -5536,7 +5657,14 @@ private fun MerchantIconLicensesScreen(
                         verticalArrangement = Arrangement.spacedBy(9.dp),
                     ) {
                         items(filteredNotices, key = { it.resourceName }) { notice ->
-                            SurfaceCard(modifier = if (tandemReduceMotion) Modifier else Modifier.animateItem()) {
+                            SurfaceCard(
+                                modifier =
+                                    Modifier.animateItem(
+                                        fadeInSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.STATUS_ENTER_MILLIS),
+                                        placementSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS),
+                                        fadeOutSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.STATUS_EXIT_MILLIS),
+                                    ),
+                            ) {
                                 Column(
                                     Modifier.fillMaxWidth().padding(13.dp),
                                     verticalArrangement = Arrangement.spacedBy(7.dp),
