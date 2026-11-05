@@ -67,7 +67,7 @@ class AppStateTest {
                 selectedBudgetId = "household-budget-id"
                 selectedBudgetEncrypted = true
                 cachedBudgetCatalogJson = encodeCachedBudgetCatalog(listOf(BudgetCatalogItem("household-budget-id", "Household", true)))
-                reduceMotion = true
+                reduceMotionOverride = true
                 syncOnOpen = false
                 backgroundSyncEnabled = true
                 syncOnWifi = true

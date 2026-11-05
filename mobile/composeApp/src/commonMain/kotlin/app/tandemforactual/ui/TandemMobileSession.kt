@@ -38,6 +38,19 @@ import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import kotlin.uuid.Uuid
 
+internal data class SyncPresentationState(
+    val isSyncing: Boolean = false,
+    val error: String? = null,
+) {
+    fun begin(): SyncPresentationState = copy(isSyncing = true)
+
+    fun succeeded(): SyncPresentationState = SyncPresentationState()
+
+    fun failed(message: String): SyncPresentationState = SyncPresentationState(error = message)
+
+    fun stopped(): SyncPresentationState = copy(isSyncing = false)
+}
+
 /** In-memory session state. Device credentials use a platform store; budget passwords are never persisted. */
 internal class TandemMobileSession(
     private val apiClient: TandemApiClient,
@@ -100,14 +113,14 @@ internal class TandemMobileSession(
     var budgetError by mutableStateOf<String?>(null)
         private set
 
-    var isSyncing by mutableStateOf(false)
-        private set
+    private var syncPresentation by mutableStateOf(SyncPresentationState())
+
+    val isSyncing: Boolean get() = syncPresentation.isSyncing
 
     var syncComplete by mutableStateOf(false)
         private set
 
-    var syncError by mutableStateOf<String?>(null)
-        private set
+    val syncError: String? get() = syncPresentation.error
 
     var syncedTransactionCount by mutableStateOf(0)
     var cachedTransactionCount by mutableStateOf(0)
@@ -258,18 +271,18 @@ internal class TandemMobileSession(
         budgetId: String,
         encryptionPassword: String?,
     ): BudgetSyncSummary? {
-        syncError = null
         syncComplete = false
         syncedTransactionCount = 0
         lastSyncSummary = null
         val coordinator = syncCoordinator
         val localRepository = repository
         if (coordinator == null || localRepository == null) {
-            syncError = "Local storage is unavailable. Restart the app and try again."
+            syncPresentation = syncPresentation.failed("Local storage is unavailable. Restart the app and try again.")
             return null
         }
 
-        isSyncing = true
+        // Keep an earlier error visible while retrying; clear it only when the retry succeeds.
+        syncPresentation = syncPresentation.begin()
         try {
             val summary =
                 apiClient.withExclusiveSession {
@@ -281,31 +294,34 @@ internal class TandemMobileSession(
             syncedTransactionCount =
                 localRepository.countVisibleRecords(budgetId, "transaction").coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
             syncComplete = true
+            syncPresentation = syncPresentation.succeeded()
             return summary
         } catch (error: CancellationException) {
             throw error
         } catch (error: BudgetSyncRemoteException) {
             isServerReachable = error.httpStatus != null
-            syncError =
-                when (error.httpStatus) {
-                    401 -> "This device needs to be paired again."
-                    403 -> "This device is not authorized to open that budget."
-                    404 -> "The budget is no longer available on the server."
-                    400, 422 -> "Check the budget password and try again."
-                    in 500..599 -> "The server could not read this budget. Try again later."
-                    else -> "Could not sync this budget. Check the connection and try again."
-                }
+            syncPresentation =
+                syncPresentation.failed(
+                    when (error.httpStatus) {
+                        401 -> "This device needs to be paired again."
+                        403 -> "This device is not authorized to open that budget."
+                        404 -> "The budget is no longer available on the server."
+                        400, 422 -> "Check the budget password and try again."
+                        in 500..599 -> "The server could not read this budget. Try again later."
+                        else -> "Could not sync this budget. Check the connection and try again."
+                    },
+                )
             return null
         } catch (error: BudgetSyncProtocolException) {
             isServerReachable = true
-            syncError = "The server returned budget data the app could not read."
+            syncPresentation = syncPresentation.failed("The server returned budget data the app could not read.")
             return null
         } catch (error: Exception) {
             isServerReachable = false
-            syncError = "Could not sync this budget. Your local data is still available."
+            syncPresentation = syncPresentation.failed("Could not sync this budget. Your local data is still available.")
             return null
         } finally {
-            isSyncing = false
+            if (syncPresentation.isSyncing) syncPresentation = syncPresentation.stopped()
         }
     }
 

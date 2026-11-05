@@ -3,8 +3,6 @@
 package app.tandemforactual.ui
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -119,7 +117,11 @@ internal fun TandemTheme(
             )
         }
 
-    val colorSpec = if (reduceMotion || !animateThemeChanges) snap() else tween<Color>(durationMillis = 180)
+    val colorSpec =
+        tandemMotionSpec<Color>(
+            reduceMotion = reduceMotion || !animateThemeChanges,
+            durationMillis = TandemMotion.COLOR_MILLIS,
+        )
     val animatedPalette =
         TandemPalette(
             background = animateColorAsState(palette.background, colorSpec, label = "theme-background").value,

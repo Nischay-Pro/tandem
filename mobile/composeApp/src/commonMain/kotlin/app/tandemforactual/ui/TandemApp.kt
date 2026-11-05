@@ -12,14 +12,15 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -210,6 +211,12 @@ private enum class AppRoute(
     MERCHANT_ICON_LICENSES("Merchant icon licenses"),
 }
 
+private enum class SyncChipIndicator {
+    SYNCING,
+    ATTENTION,
+    IDLE,
+}
+
 private data class TransactionItem(
     val payee: String,
     val category: String,
@@ -224,13 +231,6 @@ private data class TransactionItem(
     val notes: String = "",
     val displaySettings: BudgetDisplaySettings? = null,
 )
-
-private class MerchantAliasNode {
-    val children = mutableMapOf<String, MerchantAliasNode>()
-    var icon: DrawableResource? = null
-    var titleMatch = false
-    var licensePriority = Int.MAX_VALUE
-}
 
 private fun merchantLicensePriority(license: String): Int =
     when (license) {
@@ -249,24 +249,8 @@ private data class MerchantIconNotice(
     val resource: DrawableResource,
 )
 
-private val storeNumberSuffix = Regex("(?:(?:store|location|branch) )?\\d+[a-z]?(?: (?:(?:store|location|branch) )?\\d+[a-z]?)*")
-
-private fun isStoreNumberSuffix(words: List<String>): Boolean = words.isNotEmpty() && storeNumberSuffix.matches(words.joinToString(" "))
-
-private fun MerchantAliasNode.findPayeeIcon(words: List<String>): DrawableResource? {
-    if (words.isEmpty()) return null
-    var node = this
-    var bestIcon: DrawableResource? = null
-    for (end in words.indices) {
-        node = node.children[words[end]] ?: break
-        val icon = node.icon ?: continue
-        if (end == words.lastIndex || isStoreNumberSuffix(words.drop(end + 1))) bestIcon = icon
-    }
-    return bestIcon
-}
-
 private data class MerchantIconPack(
-    private val root: MerchantAliasNode,
+    private val matcher: MerchantAliasMatcher<DrawableResource>,
     val notices: List<MerchantIconNotice>,
     val sourceVersion: String,
 ) {
@@ -274,13 +258,13 @@ private data class MerchantIconPack(
     val openSourceIconCount: Int get() = notices.count { it.license in setOf("CC0-1.0", "MIT", "Apache-2.0") }
     val fairUseIconCount: Int get() = notices.size - openSourceIconCount
 
-    fun iconFor(payee: String): DrawableResource? = root.findPayeeIcon(labelWords(payee))
+    fun iconFor(payee: String): DrawableResource? = matcher.findPayeeIcon(payee)
 }
 
 private suspend fun loadMerchantIconPack(): MerchantIconPack {
     val catalog = Json.parseToJsonElement(Res.readBytes("files/merchant-icon-catalog.json").decodeToString()).jsonObject
     val resources = Res.allDrawableResources
-    val root = MerchantAliasNode()
+    val matcher = MerchantAliasMatcher<DrawableResource>()
     val notices = mutableListOf<MerchantIconNotice>()
 
     for (element in catalog["icons"]?.jsonArray.orEmpty()) {
@@ -302,23 +286,12 @@ private suspend fun loadMerchantIconPack(): MerchantIconPack {
         for ((label, isTitle) in labels) {
             val words = labelWords(label)
             if (words.isEmpty()) continue
-            var node = root
-            for (word in words) node = node.children.getOrPut(word) { MerchantAliasNode() }
-            val licensePriority = merchantLicensePriority(license)
-            if (
-                node.icon == null ||
-                licensePriority < node.licensePriority ||
-                (licensePriority == node.licensePriority && isTitle && !node.titleMatch)
-            ) {
-                node.icon = resource
-                node.titleMatch = isTitle
-                node.licensePriority = licensePriority
-            }
+            matcher.add(label, resource, merchantLicensePriority(license), isTitle)
         }
     }
 
     return MerchantIconPack(
-        root = root,
+        matcher = matcher,
         notices = notices.sortedBy { it.title.lowercase() },
         sourceVersion = catalog["sourceVersion"]?.jsonPrimitive?.contentOrNull.orEmpty(),
     )
@@ -1465,6 +1438,7 @@ fun TandemApp(
                                 onBack = handleBack,
                                 onSync = { navigation.open(AppRoute.SYNC_CENTER) },
                                 syncNeedsAttention = state.syncReminders && mobileSession.syncError != null,
+                                syncInProgress = mobileSession.isSyncing,
                                 onBudget = { navigation.open(AppRoute.BUDGET_CHOOSER) },
                                 actualConnected = mobileSession.isServerReachable,
                                 liveAccounts = liveAccounts,
@@ -1552,12 +1526,54 @@ fun TandemApp(
                                 targetState.route == AppRoute.STARTUP ->
                                 EnterTransition.None togetherWith ExitTransition.None
                             routeTransitionDirection > 0f ->
-                                (slideInHorizontally(tween(220)) { it / 4 } + fadeIn(tween(180))) togetherWith
-                                    (slideOutHorizontally(tween(220)) { -it / 6 } + fadeOut(tween(180)))
+                                (
+                                    slideInHorizontally(
+                                        tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
+                                    ) { it / 5 } +
+                                        fadeIn(
+                                            tween(
+                                                TandemMotion.STATUS_ENTER_MILLIS,
+                                                delayMillis = TandemMotion.FADE_THROUGH_DELAY_MILLIS,
+                                                easing = TandemMotion.enterEasing,
+                                            ),
+                                        )
+                                ) togetherWith
+                                    (
+                                        slideOutHorizontally(
+                                            tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
+                                        ) { -it / 10 } +
+                                            fadeOut(tween(TandemMotion.STATUS_EXIT_MILLIS, easing = TandemMotion.exitEasing))
+                                    )
                             routeTransitionDirection < 0f ->
-                                (slideInHorizontally(tween(220)) { -it / 6 } + fadeIn(tween(180))) togetherWith
-                                    (slideOutHorizontally(tween(220)) { it / 4 } + fadeOut(tween(180)))
-                            else -> fadeIn(tween(160)) togetherWith fadeOut(tween(160))
+                                (
+                                    slideInHorizontally(
+                                        tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
+                                    ) { -it / 10 } +
+                                        fadeIn(
+                                            tween(
+                                                TandemMotion.STATUS_ENTER_MILLIS,
+                                                delayMillis = TandemMotion.FADE_THROUGH_DELAY_MILLIS,
+                                                easing = TandemMotion.enterEasing,
+                                            ),
+                                        )
+                                ) togetherWith
+                                    (
+                                        slideOutHorizontally(
+                                            tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
+                                        ) { it / 5 } +
+                                            fadeOut(tween(TandemMotion.STATUS_EXIT_MILLIS, easing = TandemMotion.exitEasing))
+                                    )
+                            else ->
+                                fadeIn(
+                                    tween(
+                                        TandemMotion.TAB_MILLIS - TandemMotion.FADE_THROUGH_DELAY_MILLIS,
+                                        delayMillis = TandemMotion.FADE_THROUGH_DELAY_MILLIS,
+                                        easing = TandemMotion.enterEasing,
+                                    ),
+                                ) togetherWith
+                                    fadeOut(
+                                        tween(TandemMotion.STATUS_EXIT_MILLIS, easing = TandemMotion.exitEasing),
+                                    )
                         }
                     },
                     label = "tandem-screen-transition",
@@ -1591,12 +1607,14 @@ private fun AppHeader(
     onBack: () -> Unit,
     onSync: () -> Unit,
     syncNeedsAttention: Boolean,
+    syncInProgress: Boolean,
     onBudget: () -> Unit,
     actualConnected: Boolean,
     liveAccounts: List<LiveAccountSummary>,
     liveBudgetMonth: LiveBudgetMonthSummary?,
 ) {
     val palette = tandemPalette
+    val reduceMotion = tandemReduceMotion
     val headerTitle =
         when (route) {
             AppRoute.BUDGET -> state.selectedBudget
@@ -1665,19 +1683,20 @@ private fun AppHeader(
         if (route.isTab()) {
             val syncChipBackground by animateColorAsState(
                 targetValue = if (syncNeedsAttention) palette.warning.copy(alpha = 0.16f) else palette.surface,
-                animationSpec = if (tandemReduceMotion) snap() else tween(180),
+                animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
                 label = "sync-chip-background",
             )
             val syncChipText by animateColorAsState(
                 targetValue = if (syncNeedsAttention) palette.warning else palette.accent,
-                animationSpec = if (tandemReduceMotion) snap() else tween(180),
+                animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
                 label = "sync-chip-text",
             )
-            val syncDotAlpha by animateFloatAsState(
-                targetValue = if (syncNeedsAttention) 1f else 0f,
-                animationSpec = if (tandemReduceMotion) snap() else tween(140),
-                label = "sync-attention-dot",
-            )
+            val syncIndicator =
+                when {
+                    syncInProgress -> SyncChipIndicator.SYNCING
+                    syncNeedsAttention -> SyncChipIndicator.ATTENTION
+                    else -> SyncChipIndicator.IDLE
+                }
             Box(
                 modifier =
                     Modifier
@@ -1686,23 +1705,63 @@ private fun AppHeader(
                         .clip(RoundedCornerShape(999.dp))
                         .background(syncChipBackground)
                         .semantics(mergeDescendants = true) {
-                            contentDescription = if (syncNeedsAttention) "Sync needs attention" else "Sync center"
+                            contentDescription =
+                                when {
+                                    syncInProgress && syncNeedsAttention -> "Sync in progress; attention still needed"
+                                    syncInProgress -> "Sync in progress"
+                                    syncNeedsAttention -> "Sync needs attention"
+                                    else -> "Sync center"
+                                }
                         }.clickable(
                             role = Role.Button,
-                            onClickLabel = if (syncNeedsAttention) "Review sync needs attention" else "Open sync center",
+                            onClickLabel = "Open sync center",
                             onClick = onSync,
                         ),
                 contentAlignment = Alignment.Center,
             ) {
                 Text("Sync", color = syncChipText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                Box(
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(3.dp)
-                        .size(7.dp)
-                        .graphicsLayer { alpha = syncDotAlpha }
-                        .background(palette.warning, CircleShape),
-                )
+                Box(Modifier.align(Alignment.TopEnd).padding(3.dp).size(11.dp), contentAlignment = Alignment.Center) {
+                    AnimatedContent(
+                        targetState = syncIndicator,
+                        transitionSpec = {
+                            if (reduceMotion) {
+                                EnterTransition.None togetherWith ExitTransition.None
+                            } else {
+                                fadeIn(
+                                    tween(
+                                        TandemMotion.CONTROL_MILLIS,
+                                        delayMillis = TandemMotion.FADE_THROUGH_DELAY_MILLIS,
+                                        easing = TandemMotion.enterEasing,
+                                    ),
+                                ) togetherWith
+                                    fadeOut(tween(TandemMotion.STATUS_EXIT_MILLIS, easing = TandemMotion.exitEasing))
+                            }
+                        },
+                        contentAlignment = Alignment.Center,
+                        label = "sync-chip-indicator-transition",
+                    ) { indicator ->
+                        when (indicator) {
+                            SyncChipIndicator.SYNCING -> {
+                                if (tandemReduceMotion) {
+                                    Box(
+                                        Modifier
+                                            .size(8.dp)
+                                            .border(1.3.dp, if (syncNeedsAttention) palette.warning else palette.accent, CircleShape),
+                                    )
+                                } else {
+                                    CircularProgressIndicator(
+                                        Modifier.size(9.dp),
+                                        color = if (syncNeedsAttention) palette.warning else palette.accent,
+                                        strokeWidth = 1.4.dp,
+                                    )
+                                }
+                            }
+                            SyncChipIndicator.ATTENTION ->
+                                Box(Modifier.size(7.dp).background(palette.warning, CircleShape))
+                            SyncChipIndicator.IDLE -> Spacer(Modifier.size(7.dp))
+                        }
+                    }
+                }
             }
         } else if (route == AppRoute.BUDGET_CHOOSER) {
             Text(
@@ -1740,6 +1799,18 @@ private fun BottomNavigation(
     ) {
         items.forEach { (route, label) ->
             val active = route == selected
+            val tabColor by
+                animateColorAsState(
+                    targetValue = if (active) palette.accent else palette.muted,
+                    animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+                    label = "tab-color-${route.name.lowercase()}",
+                )
+            val iconScale by
+                animateFloatAsState(
+                    targetValue = if (active) 1.08f else 1f,
+                    animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
+                    label = "tab-icon-scale-${route.name.lowercase()}",
+                )
             Column(
                 modifier =
                     Modifier
@@ -1756,10 +1827,10 @@ private fun BottomNavigation(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                NavigationGlyph(route, active)
+                NavigationGlyph(route, tabColor, iconScale)
                 Text(
                     label,
-                    color = if (active) palette.accent else palette.muted,
+                    color = tabColor,
                     fontSize = 10.sp,
                     fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                 )
@@ -1771,11 +1842,18 @@ private fun BottomNavigation(
 @Composable
 private fun NavigationGlyph(
     route: AppRoute,
-    active: Boolean,
+    color: Color,
+    scale: Float,
 ) {
-    val color = if (active) tandemPalette.accent else tandemPalette.muted
     val surface = tandemPalette.surface
-    Canvas(Modifier.size(20.dp).clearAndSetSemantics {}) {
+    Canvas(
+        Modifier
+            .size(20.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }.clearAndSetSemantics {},
+    ) {
         val stroke = 1.8.dp.toPx()
         val inset = 2.dp.toPx()
         when (route) {
@@ -2123,6 +2201,60 @@ private fun BodyText(text: String) {
 }
 
 @Composable
+private fun AnimatedStatusText(
+    text: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    fontSize: androidx.compose.ui.unit.TextUnit = 14.sp,
+    lineHeight: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
+    fontWeight: FontWeight = FontWeight.Normal,
+    maxLines: Int = Int.MAX_VALUE,
+    overflow: TextOverflow = TextOverflow.Clip,
+) {
+    val reduceMotion = tandemReduceMotion
+    AnimatedContent(
+        targetState = text,
+        modifier = modifier,
+        transitionSpec = {
+            if (reduceMotion) {
+                EnterTransition.None togetherWith ExitTransition.None
+            } else {
+                (
+                    fadeIn(
+                        tween(
+                            TandemMotion.STATUS_ENTER_MILLIS,
+                            delayMillis = TandemMotion.FADE_THROUGH_DELAY_MILLIS,
+                            easing = TandemMotion.enterEasing,
+                        ),
+                    ) +
+                        slideInVertically(
+                            tween(TandemMotion.STATUS_ENTER_MILLIS, easing = TandemMotion.movementEasing),
+                        ) { it / 8 }
+                ) togetherWith
+                    (
+                        fadeOut(tween(TandemMotion.STATUS_EXIT_MILLIS, easing = TandemMotion.exitEasing)) +
+                            slideOutVertically(
+                                tween(TandemMotion.STATUS_EXIT_MILLIS, easing = TandemMotion.movementEasing),
+                            ) { -it / 10 }
+                    )
+            }
+        },
+        contentAlignment = Alignment.CenterStart,
+        label = "sync-status-text-transition",
+    ) { visibleText ->
+        Text(
+            visibleText,
+            color = color,
+            fontSize = fontSize,
+            lineHeight = lineHeight,
+            fontWeight = fontWeight,
+            maxLines = maxLines,
+            overflow = overflow,
+        )
+    }
+}
+
+@Composable
 private fun LabelText(text: String) {
     Text(text, color = tandemPalette.muted, fontSize = 11.sp, letterSpacing = 0.2.sp, fontWeight = FontWeight.SemiBold)
 }
@@ -2138,7 +2270,7 @@ private fun SurfaceCard(
     Surface(
         modifier =
             modifier
-                .animateContentSize(animationSpec = if (tandemReduceMotion) snap() else tween(220))
+                .animateContentSize(animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS))
                 .then(
                     if (onClick != null) {
                         Modifier.clickable(role = Role.Button, onClickLabel = onClickLabel, onClick = onClick)
@@ -2162,18 +2294,30 @@ private fun PrimaryButton(
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
+    val backgroundColor by
+        animateColorAsState(
+            targetValue = if (enabled) palette.accent else palette.raised,
+            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+            label = "primary-button-background",
+        )
+    val textColor by
+        animateColorAsState(
+            targetValue = if (enabled) palette.accentContent else palette.muted,
+            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+            label = "primary-button-text",
+        )
     Box(
         modifier =
             modifier
                 .fillMaxWidth()
                 .heightIn(min = 52.dp)
                 .clip(RoundedCornerShape(15.dp))
-                .background(if (enabled) palette.accent else palette.raised)
+                .background(backgroundColor)
                 .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
                 .padding(horizontal = 18.dp, vertical = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = if (enabled) palette.accentContent else palette.muted, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = textColor, fontSize = 15.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -2185,18 +2329,30 @@ private fun SecondaryButton(
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
+    val borderColor by
+        animateColorAsState(
+            targetValue = if (enabled) palette.border else palette.raised,
+            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+            label = "secondary-button-border",
+        )
+    val textColor by
+        animateColorAsState(
+            targetValue = if (enabled) palette.text else palette.muted,
+            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+            label = "secondary-button-text",
+        )
     Box(
         modifier =
             modifier
                 .fillMaxWidth()
                 .heightIn(min = 50.dp)
                 .clip(RoundedCornerShape(15.dp))
-                .border(1.dp, palette.border, RoundedCornerShape(15.dp))
+                .border(1.dp, borderColor, RoundedCornerShape(15.dp))
                 .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
                 .padding(horizontal = 18.dp, vertical = 13.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = if (enabled) palette.text else palette.muted, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text(label, color = textColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -2317,6 +2473,7 @@ private fun ListRow(
     leadingVector: ImageVector? = null,
     fallbackVector: ImageVector? = null,
     leadingIconResource: DrawableResource? = null,
+    animateChanges: Boolean = false,
     onClick: (() -> Unit)? = null,
 ) {
     val palette = tandemPalette
@@ -2366,25 +2523,60 @@ private fun ListRow(
             }
         }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(
-                title,
-                color = palette.text,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (subtitle != null) Text(subtitle, color = palette.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (animateChanges) {
+                AnimatedStatusText(
+                    title,
+                    palette.text,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            } else {
+                Text(
+                    title,
+                    color = palette.text,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (subtitle != null) {
+                if (animateChanges) {
+                    AnimatedStatusText(
+                        subtitle,
+                        palette.muted,
+                        fontSize = 11.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                } else {
+                    Text(subtitle, color = palette.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
         }
         if (trailing != null) {
-            Text(trailing, color = trailingColor ?: palette.muted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            val effectiveColor = trailingColor ?: palette.muted
+            if (animateChanges) {
+                AnimatedStatusText(
+                    trailing,
+                    effectiveColor,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            } else {
+                Text(trailing, color = effectiveColor, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
         } else if (onClick != null) {
             Text("›", modifier = Modifier.clearAndSetSemantics {}, color = palette.muted, fontSize = 20.sp)
         }
     }
 }
 
-private fun financeIcon(label: String): ImageVector? {
+internal fun financeIcon(label: String): ImageVector? {
     val words = labelWords(label)
 
     fun matches(vararg phrases: String): Boolean = phrases.any { containsPhrase(words, it) }
@@ -2423,27 +2615,13 @@ private fun containsPhrase(
     return phraseWords.isNotEmpty() && words.windowed(phraseWords.size).any { it == phraseWords }
 }
 
-private fun labelWords(label: String): List<String> {
-    val words = mutableListOf<String>()
-    val word = StringBuilder()
-    label.lowercase().forEach { character ->
-        if (character.isLetterOrDigit()) {
-            word.append(character)
-        } else if (word.isNotEmpty()) {
-            words += word.toString()
-            word.clear()
-        }
-    }
-    if (word.isNotEmpty()) words += word.toString()
-    return words
-}
-
 @Composable
 private fun SectionCard(
     title: String,
     detail: String? = null,
     action: String? = null,
     onClick: (() -> Unit)? = null,
+    animateDetail: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val palette = tandemPalette
@@ -2456,7 +2634,13 @@ private fun SectionCard(
                 ) {
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(title, color = palette.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        if (detail != null) Text(detail, color = palette.muted, fontSize = 11.sp)
+                        if (detail != null) {
+                            if (animateDetail) {
+                                AnimatedStatusText(detail, palette.muted, fontSize = 11.sp, maxLines = 2)
+                            } else {
+                                Text(detail, color = palette.muted, fontSize = 11.sp)
+                            }
+                        }
                     }
                     if (action != null) Text(action, color = palette.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
@@ -2478,8 +2662,20 @@ private fun ToggleRow(
     val thumbOffset by
         animateDpAsState(
             targetValue = if (checked) 18.dp else 0.dp,
-            animationSpec = if (tandemReduceMotion) snap() else tween(160),
+            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
             label = "toggle-thumb-position",
+        )
+    val trackColor by
+        animateColorAsState(
+            targetValue = if (checked) palette.accent else palette.raised,
+            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+            label = "toggle-track-color",
+        )
+    val thumbColor by
+        animateColorAsState(
+            targetValue = if (checked) palette.accentContent else palette.muted,
+            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+            label = "toggle-thumb-color",
         )
     Row(
         modifier =
@@ -2502,7 +2698,7 @@ private fun ToggleRow(
                         42.dp,
                     ).height(24.dp)
                     .clip(CircleShape)
-                    .background(if (checked) palette.accent else palette.raised)
+                    .background(trackColor)
                     .padding(3.dp),
         ) {
             Box(
@@ -2510,7 +2706,7 @@ private fun ToggleRow(
                     .offset(x = thumbOffset)
                     .size(18.dp)
                     .clip(CircleShape)
-                    .background(if (checked) palette.accentContent else palette.muted),
+                    .background(thumbColor),
             )
         }
     }
@@ -2535,6 +2731,18 @@ private fun ChoiceRow(
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
+    val selectionColor by
+        animateColorAsState(
+            targetValue = if (selected) palette.accent else palette.muted,
+            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+            label = "choice-selection-color",
+        )
+    val selectionProgress by
+        animateFloatAsState(
+            targetValue = if (selected) 1f else 0f,
+            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
+            label = "choice-selection-progress",
+        )
     SurfaceCard(onClick = onClick) {
         Row(
             modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 64.dp).padding(horizontal = 15.dp, vertical = 12.dp),
@@ -2549,10 +2757,19 @@ private fun ChoiceRow(
                 Modifier
                     .size(22.dp)
                     .clip(CircleShape)
-                    .border(1.5.dp, if (selected) palette.accent else palette.muted, CircleShape)
+                    .border(1.5.dp, selectionColor, CircleShape)
                     .padding(5.dp),
             ) {
-                if (selected) Box(Modifier.fillMaxSize().clip(CircleShape).background(palette.accent))
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            alpha = selectionProgress
+                            scaleX = 0.75f + 0.25f * selectionProgress
+                            scaleY = 0.75f + 0.25f * selectionProgress
+                        }.clip(CircleShape)
+                        .background(palette.accent),
+                )
             }
         }
     }
@@ -2607,7 +2824,7 @@ private fun Badge(
     label: String,
     color: Color = tandemPalette.accent,
 ) {
-    val motionSpec: FiniteAnimationSpec<Color> = if (tandemReduceMotion) snap() else tween(160)
+    val motionSpec: FiniteAnimationSpec<Color> = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS)
     val animatedColor by androidx.compose.animation.animateColorAsState(color, motionSpec, label = "badge-color")
     Box(
         Modifier
@@ -2628,13 +2845,21 @@ private fun AnimatedReveal(
         if (tandemReduceMotion) {
             EnterTransition.None
         } else {
-            fadeIn(tween(200)) + expandVertically(animationSpec = tween(220), clip = false)
+            fadeIn(tween(TandemMotion.STATUS_ENTER_MILLIS, easing = TandemMotion.enterEasing)) +
+                expandVertically(
+                    animationSpec = tween(TandemMotion.REVEAL_MILLIS, easing = TandemMotion.movementEasing),
+                    clip = false,
+                )
         }
     val exit =
         if (tandemReduceMotion) {
             ExitTransition.None
         } else {
-            fadeOut(tween(180)) + shrinkVertically(animationSpec = tween(200), clip = false)
+            fadeOut(tween(TandemMotion.STATUS_EXIT_MILLIS + 40, easing = TandemMotion.exitEasing)) +
+                shrinkVertically(
+                    animationSpec = tween(TandemMotion.CONTROL_MILLIS, easing = TandemMotion.movementEasing),
+                    clip = false,
+                )
         }
     AnimatedVisibility(visible = visible, enter = enter, exit = exit, content = content)
 }
@@ -3013,14 +3238,28 @@ private fun FirstSyncScreen(
                 }
             }
         }
-        when {
-            mobileSession.isSyncing -> BodyText("Sync is running. Keep this screen open while the first local copy is prepared.")
-            mobileSession.syncComplete ->
-                BodyText(
-                    "Initial sync complete. ${mobileSession.syncedTransactionCount} transactions are available on this device.",
-                )
-            mobileSession.syncError != null -> {
-                Text(mobileSession.syncError.orEmpty(), color = palette.warning, fontSize = 13.sp, lineHeight = 19.sp)
+        val syncMessage =
+            when {
+                mobileSession.isSyncing -> "Sync is running. Keep this screen open while the first local copy is prepared."
+                mobileSession.syncComplete ->
+                    "Initial sync complete. ${mobileSession.syncedTransactionCount} transactions are available on this device."
+                mobileSession.syncError != null -> mobileSession.syncError.orEmpty()
+                else -> "Preparing your local budget copy."
+            }
+        val syncMessageColor by
+            animateColorAsState(
+                targetValue = if (mobileSession.syncError != null && !mobileSession.isSyncing) palette.warning else palette.muted,
+                animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+                label = "first-sync-status-color",
+            )
+        AnimatedStatusText(
+            syncMessage,
+            syncMessageColor,
+            fontSize = 13.sp,
+            lineHeight = 19.sp,
+        )
+        AnimatedReveal(visible = mobileSession.syncError != null && !mobileSession.isSyncing) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 SecondaryButton("Retry initial sync", onClick = onRetrySync)
                 if (mobileSession.cachedSnapshotBudgetId == state.selectedBudgetId && mobileSession.hasCachedSnapshot) {
                     BodyText("The last saved copy is still available on this phone.")
@@ -4187,13 +4426,25 @@ private fun DatePickerScreen(
                     } else {
                         val label = formatDate(SampleDate(year, month, day))
                         val selected = state.transactionDate == label
+                        val cellBackground by
+                            animateColorAsState(
+                                targetValue = if (selected) tandemPalette.accentSurface else Color.Transparent,
+                                animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+                                label = "date-selection-background",
+                            )
+                        val cellTextColor by
+                            animateColorAsState(
+                                targetValue = if (selected) tandemPalette.accent else tandemPalette.text,
+                                animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+                                label = "date-selection-text",
+                            )
                         Box(
                             modifier =
                                 Modifier
                                     .weight(1f)
                                     .height(44.dp)
                                     .clip(CircleShape)
-                                    .background(if (selected) tandemPalette.accentSurface else Color.Transparent)
+                                    .background(cellBackground)
                                     .semantics { contentDescription = label }
                                     .selectable(
                                         selected = selected,
@@ -4207,7 +4458,7 @@ private fun DatePickerScreen(
                         ) {
                             Text(
                                 formatInteger(day),
-                                color = if (selected) tandemPalette.accent else tandemPalette.text,
+                                color = cellTextColor,
                                 fontSize = 12.sp,
                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                             )
@@ -4260,16 +4511,45 @@ private fun SyncCenterScreen(
                 Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     LabelText(state.selectedBudget)
                     BodyText("${mobileSession.cachedTransactionCount} transactions · ${mobileSession.accountRecords.size} accounts cached")
-                    Text(
-                        mobileSession.syncError ?: if (mobileSession.isSyncing) "Sync in progress" else "Local data is available offline",
-                        color = if (mobileSession.syncError == null) tandemPalette.muted else tandemPalette.warning,
+                    val syncMessage =
+                        when {
+                            mobileSession.isSyncing -> "Sync in progress"
+                            mobileSession.syncError != null -> mobileSession.syncError.orEmpty()
+                            else -> "Local data is available offline"
+                        }
+                    val syncMessageColor by
+                        animateColorAsState(
+                            targetValue =
+                                if (mobileSession.syncError != null &&
+                                    !mobileSession.isSyncing
+                                ) {
+                                    tandemPalette.warning
+                                } else {
+                                    tandemPalette.muted
+                                },
+                            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+                            label = "sync-center-status-color",
+                        )
+                    AnimatedStatusText(
+                        syncMessage,
+                        syncMessageColor,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp),
                         fontSize = 12.sp,
+                        lineHeight = 17.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
-            SectionCard("Changes needing attention", "${attention.size} local operations") {
+            SectionCard("Changes needing attention", "${attention.size} local operations", animateDetail = true) {
                 if (attention.isEmpty()) {
-                    BodyText("No pending, uncertain, rejected, or conflicted changes.")
+                    Text(
+                        "No pending, uncertain, rejected, or conflicted changes.",
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                        color = tandemPalette.muted,
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                    )
                 } else {
                     attention.forEachIndexed { index, operation ->
                         if (index > 0) DividerLine()
@@ -4951,7 +5231,7 @@ private fun SyncPreferencesScreen(
                 "Manual sync and sync on open use the current connection.",
             )
         }
-        SectionCard("Current budget", if (hasSelectedBudget) state.selectedBudget else "Choose an Actual budget") {
+        SectionCard("Current budget", if (hasSelectedBudget) state.selectedBudget else "Choose an Actual budget", animateDetail = true) {
             ListRow(
                 "↻",
                 "Sync now",
@@ -4962,9 +5242,10 @@ private fun SyncPreferencesScreen(
                     else -> "Unavailable"
                 },
                 onClick = onSyncNow.takeIf { hasSelectedBudget && !mobileSession.isSyncing },
+                animateChanges = true,
             )
             DividerLine()
-            ListRow("◷", "Sync status", syncDescription, syncStatus)
+            ListRow("◷", "Sync status", syncDescription, syncStatus, animateChanges = true)
         }
         if (mobileSession.syncError != null) PreviewNote(mobileSession.syncError ?: "Sync failed")
     }
@@ -5163,7 +5444,7 @@ private fun LocalDataScreen(
             formatInteger(recordCount),
             "${formatInteger(mobileSession.cachedTransactionCount)} transactions in the selected budget",
         )
-        SectionCard("On this device", syncStatus) {
+        SectionCard("On this device", syncStatus, animateDetail = true) {
             ListRow(
                 "▤",
                 "Transactions",
@@ -5192,6 +5473,7 @@ private fun LocalDataScreen(
                     else -> "Unavailable"
                 },
                 onClick = onSyncNow.takeIf { hasSelectedBudget && !mobileSession.isSyncing },
+                animateChanges = true,
             )
             DividerLine()
             ListRow("×", "Clear local data", "Not available while local-first sync is active", "Unavailable")
@@ -5396,7 +5678,7 @@ private fun AboutScreen(
                     "Only CC0, MIT, Apache-2.0, and TheSVG entries marked Fair Use are bundled. Other per-icon license types are excluded. Each bundled mark keeps its reported license and source URL.",
                 )
                 BodyText(
-                    "Names, logos, and trademarks belong to their respective owners. Tandem displays a matched mark only to identify the payee and is not affiliated with those brands. Follow each brand's usage guidelines.",
+                    "Names, logos, and trademarks belong to their respective owners. Tandem displays a matched mark only to identify the payee and is not affiliated with those brands. Follow each brand’s usage guidelines.",
                 )
             }
         }

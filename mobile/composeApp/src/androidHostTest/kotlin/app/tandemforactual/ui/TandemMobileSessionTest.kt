@@ -10,6 +10,27 @@ import kotlin.test.assertTrue
 
 class TandemMobileSessionTest {
     @Test
+    fun retryKeepsSyncAttentionVisibleUntilSuccess() {
+        val previousFailure = SyncPresentationState().failed("Could not sync this budget.")
+
+        val retrying = previousFailure.begin()
+
+        assertTrue(retrying.isSyncing)
+        assertEquals("Could not sync this budget.", retrying.error)
+        assertEquals(SyncPresentationState(), retrying.succeeded())
+    }
+
+    @Test
+    fun stoppingACancelledRetryKeepsThePreviousSyncAttention() {
+        val previousFailure = SyncPresentationState().failed("Could not sync this budget.")
+
+        val stopped = previousFailure.begin().stopped()
+
+        assertFalse(stopped.isSyncing)
+        assertEquals(previousFailure.error, stopped.error)
+    }
+
+    @Test
     fun restoringStoredDeviceSessionDoesNotWaitForTheRemoteBudgetCatalog() =
         runBlocking {
             val savedSession =
