@@ -63,7 +63,7 @@ services:
     image: actualbudget/actual-server:26.10.0
     user: "${ACTUAL_COMPAT_UID:-1000}:${ACTUAL_COMPAT_GID:-1000}"
     volumes:
-      - ./.dev-tmp/actual/compat-server:/data
+      - ./.dev-tmp/actual/compat-gate-server:/data
     healthcheck:
       test:
         [

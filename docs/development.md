@@ -98,20 +98,18 @@ snapshot; the epoch must be backed up separately from PostgreSQL.
 
 ## Local household load fixture
 
-The ignored Actual 26.10.0 compatibility server at
-`.dev-tmp/actual/compat-server` contains two synthetic household budgets: one
+The ignored Actual 26.10.0 household server at
+`.dev-tmp/actual/household-server` contains two synthetic household budgets: one
 CAD budget for the first year in Canada and one USD budget for the following
 six years in the United States. Together they contain 15,000 synthetic
 purchase rows, spanning apartment moves, rent changes, a four-year car loan,
 flights, insurance, a wedding, pet surgery, and a home purchase. The local-only
 seed script is `.dev-tmp/household-seed.mjs`; neither the script nor the budget
-data belongs in Git. The Pixel 10a full-sync check stored 2,182 transaction
-records for the CAD budget and 13,164 for the USD budget in Room. Those totals
-include non-purchase transaction rows in addition to the 15,000 purchases. The
-compatibility server also retains a separate older synthetic fixture, but the
-Pixel test device is now scoped to the two household budget IDs and sees only
-those two entries. An all-budgets test pairing would also expose the older
-fixture; it is not part of the household dataset.
+data belongs in Git. The disposable compatibility gate uses separate
+`compat-gate-*` paths and does not clear this household server. The Pixel 10a
+full-sync check stored 2,182 transaction records for the CAD budget and 13,164
+for the USD budget in Room. Those totals include non-purchase transaction rows
+in addition to the 15,000 purchases.
 
 ## Code quality
 
