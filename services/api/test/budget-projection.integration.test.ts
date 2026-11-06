@@ -181,6 +181,57 @@ describe.skipIf(!integrationEnabled)(
       ).resolves.toBe(false);
     });
 
+    it("applies a refresh using record metadata without rereading bodies or locking every row", async () => {
+      const statements: string[] = [];
+      const database = getPool();
+      const trackingPool = {
+        connect: async () =>
+          new Proxy(await database.connect(), {
+            get(target, property) {
+              if (property === "query") {
+                return (queryText: string, ...args: unknown[]) => {
+                  statements.push(queryText.replace(/\s+/g, " ").trim());
+                  return Reflect.apply(
+                    Reflect.get(target, property, target),
+                    target,
+                    [queryText, ...args],
+                  );
+                };
+              }
+              const value = Reflect.get(target, property, target);
+              return typeof value === "function" ? value.bind(target) : value;
+            },
+          }),
+      } as unknown as Pool;
+      const store = createPostgresBudgetProjectionStore(trackingPool);
+
+      await expect(
+        store.applySnapshotForRefresh!("budget-refresh-checkpoint", "epoch", [
+          record("transaction", "transaction-1", { id: "transaction-1" }),
+        ]),
+      ).resolves.toMatchObject({
+        budgetId: "budget-refresh-checkpoint",
+        cursor: "1",
+      });
+
+      const currentRecordRead = statements.find((statement) =>
+        statement.startsWith(
+          "SELECT entity_type, entity_id, revision, is_deleted FROM companion_budget_records",
+        ),
+      );
+      expect(currentRecordRead).toBe(
+        "SELECT entity_type, entity_id, revision, is_deleted FROM companion_budget_records WHERE budget_id = $1",
+      );
+      expect(currentRecordRead).not.toMatch(/ORDER BY|FOR UPDATE/);
+      expect(
+        statements.some((statement) =>
+          statement.startsWith(
+            "SELECT entity_type, entity_id, revision, body, is_deleted FROM companion_budget_records",
+          ),
+        ),
+      ).toBe(false);
+    });
+
     it("writes large upsert and delete snapshots in bounded batches", async () => {
       const statementCounts = new Map<string, number>();
       const database = getPool();

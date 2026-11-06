@@ -43,6 +43,11 @@ export interface BudgetProjectionSnapshot {
   displaySettings?: BudgetDisplaySettings | null;
 }
 
+export type BudgetProjectionCheckpoint = Pick<
+  BudgetProjectionSnapshot,
+  "budgetId" | "generation" | "cursor"
+>;
+
 export interface BudgetProjectionChange {
   cursor: string;
   type: BudgetEntityType;
@@ -75,6 +80,11 @@ export interface BudgetProjectionStore {
     feedEpoch: string,
     records: readonly BudgetProjectionRecord[],
   ): Promise<BudgetProjectionSnapshot>;
+  applySnapshotForRefresh?(
+    budgetId: string,
+    feedEpoch: string,
+    records: readonly BudgetProjectionRecord[],
+  ): Promise<BudgetProjectionCheckpoint>;
   readSnapshot(budgetId: string): Promise<BudgetProjectionSnapshot | undefined>;
   readChanges(input: {
     budgetId: string;

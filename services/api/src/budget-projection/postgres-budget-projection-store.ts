@@ -6,6 +6,7 @@ import {
   type BudgetEntityType,
   type BudgetProjectionChange,
   type BudgetProjectionChangePage,
+  type BudgetProjectionCheckpoint,
   type BudgetProjectionRecord,
   type BudgetProjectionSnapshot,
   type BudgetProjectionStore,
@@ -28,6 +29,13 @@ interface CurrentRecordRow {
   entity_id: string;
   revision: string;
   body: Record<string, unknown> | null;
+  is_deleted: boolean;
+}
+
+interface CurrentRecordStateRow {
+  entity_type: BudgetEntityType;
+  entity_id: string;
+  revision: string;
   is_deleted: boolean;
 }
 
@@ -91,6 +99,35 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
     feedEpoch: string,
     records: readonly BudgetProjectionRecord[],
   ): Promise<BudgetProjectionSnapshot> {
+    return this.applySnapshotInternal(budgetId, feedEpoch, records, true);
+  }
+
+  async applySnapshotForRefresh(
+    budgetId: string,
+    feedEpoch: string,
+    records: readonly BudgetProjectionRecord[],
+  ): Promise<BudgetProjectionCheckpoint> {
+    return this.applySnapshotInternal(budgetId, feedEpoch, records, false);
+  }
+
+  private applySnapshotInternal(
+    budgetId: string,
+    feedEpoch: string,
+    records: readonly BudgetProjectionRecord[],
+    includeSnapshotRecords: true,
+  ): Promise<BudgetProjectionSnapshot>;
+  private applySnapshotInternal(
+    budgetId: string,
+    feedEpoch: string,
+    records: readonly BudgetProjectionRecord[],
+    includeSnapshotRecords: false,
+  ): Promise<BudgetProjectionCheckpoint>;
+  private async applySnapshotInternal(
+    budgetId: string,
+    feedEpoch: string,
+    records: readonly BudgetProjectionRecord[],
+    includeSnapshotRecords: boolean,
+  ): Promise<BudgetProjectionSnapshot | BudgetProjectionCheckpoint> {
     validateBudgetId(budgetId);
     validateFeedEpoch(feedEpoch);
     validateRecords(records);
@@ -140,15 +177,14 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
         );
       }
 
-      const currentResult = await client.query<CurrentRecordRow>(
-        `SELECT entity_type, entity_id, revision, body, is_deleted
+      const currentResult = await client.query<CurrentRecordStateRow>(
+        `SELECT entity_type, entity_id, revision, is_deleted
          FROM companion_budget_records
-         WHERE budget_id = $1
-         ORDER BY entity_type, entity_id
-         FOR UPDATE`,
+         WHERE budget_id = $1`,
         [budgetId],
       );
-      const current = new Map<string, CurrentRecordRow>();
+      const current = new Map<string, CurrentRecordStateRow>();
+      currentResult.rows.sort(compareCurrentRecordRows);
       for (const row of currentResult.rows) {
         current.set(recordKey(row.entity_type, row.entity_id), row);
       }
@@ -208,15 +244,20 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
         );
       }
 
-      const snapshot = await readSnapshotOnClient(client, budgetId);
-      if (!snapshot) {
-        throw new Error(
-          "Budget synchronization state disappeared during refresh",
+      let result: BudgetProjectionSnapshot | BudgetProjectionCheckpoint;
+      if (includeSnapshotRecords) {
+        result = await readSnapshotRecordsOnClient(
+          client,
+          budgetId,
+          generation,
+          cursor.toString(),
         );
+      } else {
+        result = { budgetId, generation, cursor: cursor.toString() };
       }
       await client.query("COMMIT");
       transactionOpen = false;
-      return snapshot;
+      return result;
     } catch (error) {
       primaryError = error;
       if (transactionOpen) {
@@ -499,6 +540,20 @@ async function readSnapshotOnClient(
   if (!state) {
     return undefined;
   }
+  return readSnapshotRecordsOnClient(
+    client,
+    budgetId,
+    state.generation,
+    state.cursor,
+  );
+}
+
+async function readSnapshotRecordsOnClient(
+  client: PoolClient,
+  budgetId: string,
+  generation: string,
+  cursor: string,
+): Promise<BudgetProjectionSnapshot> {
   const recordResult = await client.query<CurrentRecordRow>(
     `SELECT entity_type, entity_id, revision, body, is_deleted
      FROM companion_budget_records
@@ -508,8 +563,8 @@ async function readSnapshotOnClient(
   );
   return {
     budgetId,
-    generation: state.generation,
-    cursor: state.cursor,
+    generation,
+    cursor,
     records: recordResult.rows.map((row) => ({
       type: row.entity_type,
       id: row.entity_id,
@@ -648,6 +703,16 @@ function compareRecords(
     return left.type.localeCompare(right.type);
   }
   return left.id.localeCompare(right.id);
+}
+
+function compareCurrentRecordRows(
+  left: CurrentRecordStateRow,
+  right: CurrentRecordStateRow,
+): number {
+  if (left.entity_type !== right.entity_type) {
+    return left.entity_type.localeCompare(right.entity_type);
+  }
+  return left.entity_id.localeCompare(right.entity_id);
 }
 
 function recordKey(type: string, id: string): string {

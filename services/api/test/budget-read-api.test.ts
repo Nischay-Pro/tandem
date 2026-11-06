@@ -51,6 +51,14 @@ function createApi(
     events.push("apply");
     return snapshot;
   });
+  const applySnapshotForRefresh = vi.fn(async () => {
+    events.push("apply");
+    return {
+      budgetId: snapshot.budgetId,
+      generation: snapshot.generation,
+      cursor: snapshot.cursor,
+    };
+  });
   const queuedResults: Array<BudgetProjectionChangePage | undefined> = [];
   if (Object.hasOwn(overrides, "refreshPage")) {
     queuedResults.push(overrides.refreshPage);
@@ -66,6 +74,7 @@ function createApi(
   const store = {
     isSnapshotFresh,
     applySnapshot,
+    applySnapshotForRefresh,
     readChanges,
   } as unknown as BudgetProjectionStore;
   const api = new BudgetReadApi(
@@ -79,6 +88,7 @@ function createApi(
     lock,
     reader,
     applySnapshot,
+    applySnapshotForRefresh,
     readChanges,
     isSnapshotFresh,
     events,
@@ -123,6 +133,7 @@ describe("budget read API", () => {
       "feed-epoch-1",
       snapshot.records,
     );
+    expect(fake.applySnapshotForRefresh).not.toHaveBeenCalled();
   });
 
   it("returns Actual display settings on snapshots and the first change page", async () => {
@@ -179,6 +190,12 @@ describe("budget read API", () => {
       }),
     ).resolves.toEqual({ ...page, displaySettings: null });
     expect(fake.events).toEqual(["lock:budget-1", "read", "apply", "changes"]);
+    expect(fake.applySnapshotForRefresh).toHaveBeenCalledWith(
+      "budget-1",
+      "feed-epoch-1",
+      snapshot.records,
+    );
+    expect(fake.applySnapshot).not.toHaveBeenCalled();
     expect(fake.isSnapshotFresh).toHaveBeenCalledWith(
       "budget-1",
       "feed-epoch-1",
@@ -248,6 +265,8 @@ describe("budget read API", () => {
       "apply",
       "changes",
     ]);
+    expect(fake.applySnapshotForRefresh).toHaveBeenCalledOnce();
+    expect(fake.applySnapshot).not.toHaveBeenCalled();
     expect(fake.readChanges).toHaveBeenCalledTimes(2);
   });
 

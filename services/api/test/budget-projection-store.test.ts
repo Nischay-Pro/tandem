@@ -111,7 +111,7 @@ describe("PostgreSQL budget projection store failure handling", () => {
     expect(release).toHaveBeenCalledWith(false);
   });
 
-  it("fails clearly if synchronization state disappears during refresh", async () => {
+  it("reuses the locked synchronization state during refresh", async () => {
     let lockedStateRead = false;
     const query = vi.fn(async (sql: string) => {
       if (sql.includes("FROM companion_budget_sync_state")) {
@@ -142,12 +142,21 @@ describe("PostgreSQL budget projection store failure handling", () => {
     } as unknown as Pool;
     const store = createPostgresBudgetProjectionStore(pool);
 
-    await expect(store.applySnapshot("budget-1", "epoch", [])).rejects.toThrow(
-      "Budget synchronization state disappeared during refresh",
-    );
+    await expect(
+      store.applySnapshot("budget-1", "epoch", []),
+    ).resolves.toMatchObject({
+      budgetId: "budget-1",
+      generation: "d9d69fa5-45fb-48ee-9a8c-99bf49f873bd",
+      cursor: "0",
+      records: [],
+    });
 
     expect(lockedStateRead).toBe(true);
-    expect(query).toHaveBeenLastCalledWith("ROLLBACK");
+    expect(
+      query.mock.calls.filter(([sql]) =>
+        sql.includes("FROM companion_budget_sync_state"),
+      ),
+    ).toHaveLength(1);
     expect(release).toHaveBeenCalledWith(false);
   });
 

@@ -108,7 +108,15 @@ export class BudgetReadApi implements BudgetReadApiPort {
     encryptionPassword?: string,
   ): Promise<BudgetDisplaySettings | null> {
     const result = await this.readSnapshot(budgetId, encryptionPassword);
-    await this.store.applySnapshot(budgetId, this.feedEpoch, result.records);
+    if (this.store.applySnapshotForRefresh) {
+      await this.store.applySnapshotForRefresh(
+        budgetId,
+        this.feedEpoch,
+        result.records,
+      );
+    } else {
+      await this.store.applySnapshot(budgetId, this.feedEpoch, result.records);
+    }
     return result.displaySettings;
   }
 
