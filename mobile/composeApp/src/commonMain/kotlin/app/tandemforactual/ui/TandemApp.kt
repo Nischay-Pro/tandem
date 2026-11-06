@@ -4835,11 +4835,6 @@ private fun CategoryGroupScreen(
                     }
                 }
             }
-            if (!isLiveBudget) {
-                item(key = "category-group-sample-note") {
-                    PreviewNote("Category balances and activity use sample data.")
-                }
-            }
         }
     }
 }
@@ -4897,8 +4892,6 @@ private fun CategoryDetailScreen(
                 SecondaryButton(
                     if (state.isCategoryPinned(category.id)) "Unpin" else "Pin",
                 ) { state.togglePinnedCategory(category.id) }
-            } else {
-                PreviewNote("Sample category · read only")
             }
         }
     }
@@ -5077,69 +5070,64 @@ private fun AccountDetailScreen(
     liveAccounts: List<LiveAccountSummary>,
     liveTransactions: List<TransactionItem>,
 ) {
-    if (state.selectedBudgetId.isNotBlank()) {
-        val account = liveAccounts.firstOrNull { it.id == state.selectedAccountId }
-        val accountActivity = liveTransactions.filter { it.accountId == state.selectedAccountId }
-        PageColumn {
-            if (account == null) {
-                Heading("Account details", "This account isn’t saved on this device.")
-            } else {
-                AmountHero(
-                    "Available balance",
-                    account.balanceMinor?.let { state.formatCurrency(it) } ?: "Unavailable",
-                    "${account.name} · ${if (account.offBudget) "off budget" else "on budget"}",
-                )
-                AccountActionButtons(
-                    addEnabled = !account.offBudget && !state.readOnlyMode,
-                    reconciliationEnabled = false,
-                    onAddTransaction = { navigation.newTransaction(account.id) },
-                    onReconcile = {},
-                )
-                if (accountActivity.isEmpty()) {
-                    SurfaceCard {
-                        EmptyState("No recent activity", modifier = Modifier.padding(TandemSpacing.large))
-                    }
-                } else {
-                    SectionCard("Recent activity", account.name, "See all", onClick = { navigation.selectTab(AppRoute.ACTIVITY) }) {
-                        accountActivity.take(6).forEachIndexed { index, item ->
-                            if (index > 0) DividerLine()
-                            TransactionRow(item) { openTransaction(state, navigation, item, isLive = true) }
-                        }
-                    }
-                }
-                SettingRow("Account options", "Read-only account details", onClick = { navigation.open(AppRoute.ACCOUNT_OPTIONS) })
-            }
+    val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    val liveAccount = if (isLiveBudget) liveAccounts.firstOrNull { it.id == state.selectedAccountId } else null
+    val previewAccount = if (isLiveBudget) null else previewAccountById(state.selectedAccountId)
+    val accountName = liveAccount?.name ?: previewAccount?.name
+    val accountActivity =
+        when {
+            liveAccount != null -> liveTransactions.filter { it.accountId == liveAccount.id }
+            previewAccount != null -> previewTransactions.filter { it.account == previewAccount.name }
+            else -> emptyList()
         }
-        return
-    }
-    val account = previewAccountById(state.selectedAccountId)
-    val accountActivity = previewTransactions.filter { it.account == account.name }
+    val offBudget = liveAccount?.offBudget ?: previewAccount?.offBudget ?: false
+    val description =
+        when {
+            liveAccount != null -> if (liveAccount.offBudget) "Off budget" else "On budget"
+            previewAccount != null && previewAccount.offBudget -> "Off budget"
+            previewAccount != null -> "Updated ${formatShortDate(SampleDate(2026, 5, 14))}"
+            else -> ""
+        }
+    val balance =
+        liveAccount?.balanceMinor?.let(state::formatCurrency)
+            ?: previewAccount?.balanceMinor?.let(state::formatCurrency)
+            ?: "Unavailable"
     PageColumn {
-        SampleBanner()
-        AmountHero(
-            "Available balance",
-            state.formatCurrency(account.balanceMinor),
-            "${account.name} · ${if (account.offBudget) "off budget" else "Updated ${formatShortDate(SampleDate(2026, 5, 14))}"}",
-        )
-        AccountActionButtons(
-            addEnabled = !account.offBudget && !state.readOnlyMode,
-            reconciliationEnabled = true,
-            onAddTransaction = { navigation.open(AppRoute.NEW_TRANSACTION) },
-            onReconcile = { navigation.open(AppRoute.RECONCILIATION) },
-        )
-        if (accountActivity.isEmpty()) {
-            SurfaceCard {
-                EmptyState("No recent activity", modifier = Modifier.padding(TandemSpacing.large))
-            }
+        if (!isLiveBudget) SampleBanner()
+        if (accountName == null) {
+            Heading("Account details", "This account isn’t saved on this device.")
         } else {
-            SectionCard(account.name, "Recent activity", "See all", onClick = { navigation.selectTab(AppRoute.ACTIVITY) }) {
-                accountActivity.take(4).forEachIndexed { index, item ->
-                    if (index > 0) DividerLine()
-                    TransactionRow(item) { navigation.open(AppRoute.TRANSACTION_DETAIL) }
+            AmountHero("Available balance", balance, "$accountName · $description")
+            AccountActionButtons(
+                addEnabled = !offBudget && !state.readOnlyMode,
+                reconciliationEnabled = !isLiveBudget,
+                onAddTransaction = {
+                    if (isLiveBudget) {
+                        navigation.newTransaction(liveAccount!!.id)
+                    } else {
+                        navigation.open(AppRoute.NEW_TRANSACTION)
+                    }
+                },
+                onReconcile = { if (!isLiveBudget) navigation.open(AppRoute.RECONCILIATION) },
+            )
+            if (accountActivity.isEmpty()) {
+                SurfaceCard {
+                    EmptyState("No recent activity", modifier = Modifier.padding(TandemSpacing.large))
+                }
+            } else {
+                SectionCard("Recent activity", action = "See all", onClick = { navigation.selectTab(AppRoute.ACTIVITY) }) {
+                    accountActivity.take(6).forEachIndexed { index, item ->
+                        if (index > 0) DividerLine()
+                        TransactionRow(item) { openTransaction(state, navigation, item, isLive = isLiveBudget) }
+                    }
                 }
             }
+            SettingRow(
+                "Account options",
+                if (isLiveBudget) "Read-only account details" else "$accountName settings",
+                onClick = { navigation.open(AppRoute.ACCOUNT_OPTIONS) },
+            )
         }
-        SettingRow("Account options", "${account.name} settings", onClick = { navigation.open(AppRoute.ACCOUNT_OPTIONS) })
     }
 }
 
