@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -3001,48 +3002,7 @@ private fun PrimaryButton(
     loading: Boolean = false,
     onClick: () -> Unit,
 ) {
-    val palette = tandemPalette
-    val backgroundColor by
-        animateColorAsState(
-            targetValue = if (enabled) palette.accent else palette.raised,
-            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
-            label = "primary-button-background",
-        )
-    val textColor by
-        animateColorAsState(
-            targetValue = if (enabled) palette.accentContent else palette.muted,
-            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
-            label = "primary-button-text",
-        )
-    Box(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .heightIn(min = 52.dp)
-                .clip(RoundedCornerShape(TandemShapes.medium))
-                .background(backgroundColor)
-                .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
-                .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.medium),
-        contentAlignment = Alignment.Center,
-    ) {
-        Row(
-            modifier = Modifier.animateContentSize(tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS)),
-            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            AnimatedReveal(visible = loading, animateHeight = false) {
-                TandemLoadingIndicator(Modifier.size(17.dp), textColor, 2.dp)
-            }
-            AnimatedStatusText(
-                label,
-                textColor,
-                fontSize = TandemTypography.action,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
+    TandemButton(TandemButtonStyle.PRIMARY, label, enabled, modifier, loading, onClick)
 }
 
 @Composable
@@ -3052,38 +3012,88 @@ private fun SecondaryButton(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
+    TandemButton(TandemButtonStyle.SECONDARY, label, enabled, modifier, loading = false, onClick = onClick)
+}
+
+private enum class TandemButtonStyle {
+    PRIMARY,
+    SECONDARY,
+}
+
+@Composable
+private fun TandemButton(
+    style: TandemButtonStyle,
+    label: String,
+    enabled: Boolean,
+    modifier: Modifier,
+    loading: Boolean,
+    onClick: () -> Unit,
+) {
     val palette = tandemPalette
+    val primary = style == TandemButtonStyle.PRIMARY
+    val shape = RoundedCornerShape(TandemShapes.medium)
+    val backgroundColor by
+        animateColorAsState(
+            targetValue = if (primary && enabled) palette.accent else palette.raised,
+            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+            label = "tandem-button-background",
+        )
     val borderColor by
         animateColorAsState(
             targetValue = if (enabled) palette.border else palette.raised,
             animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
-            label = "secondary-button-border",
+            label = "tandem-button-border",
         )
     val textColor by
         animateColorAsState(
-            targetValue = if (enabled) palette.text else palette.muted,
+            targetValue =
+                when {
+                    !enabled -> palette.muted
+                    primary -> palette.accentContent
+                    else -> palette.text
+                },
             animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
-            label = "secondary-button-text",
+            label = "tandem-button-text",
         )
     Box(
         modifier =
             modifier
                 .fillMaxWidth()
                 .heightIn(min = 52.dp)
-                .clip(RoundedCornerShape(TandemShapes.medium))
-                .border(1.dp, borderColor, RoundedCornerShape(TandemShapes.medium))
+                .clip(shape)
+                .then(if (primary) Modifier.background(backgroundColor) else Modifier.border(1.dp, borderColor, shape))
                 .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
                 .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.medium),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            label,
-            color = textColor,
-            fontSize = TandemTypography.action,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (primary) {
+            Row(
+                modifier = Modifier.animateContentSize(tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS)),
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AnimatedReveal(visible = loading, animateHeight = false) {
+                    TandemLoadingIndicator(Modifier.size(17.dp), textColor, 2.dp)
+                }
+                AnimatedStatusText(
+                    label,
+                    textColor,
+                    fontSize = TandemTypography.action,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        } else {
+            Text(
+                label,
+                color = textColor,
+                fontSize = TandemTypography.action,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -3141,6 +3151,46 @@ private fun FieldLabel(label: String) {
 }
 
 @Composable
+private fun FieldFrame(
+    label: String,
+    modifier: Modifier = Modifier,
+    large: Boolean = false,
+    onClickLabel: String? = null,
+    onClick: (() -> Unit)? = null,
+    horizontalArrangement: Arrangement.Horizontal = Arrangement.spacedBy(TandemSpacing.medium),
+    content: @Composable RowScope.() -> Unit,
+) {
+    val palette = tandemPalette
+    val shape = RoundedCornerShape(TandemShapes.medium)
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+        FieldLabel(label)
+        Row(
+            modifier =
+                modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = if (large) 82.dp else 52.dp)
+                    .clip(shape)
+                    .background(palette.surface)
+                    .border(1.dp, palette.border, shape)
+                    .then(
+                        if (onClick != null) {
+                            Modifier.clickable(role = Role.Button, onClickLabel = onClickLabel, onClick = onClick)
+                        } else {
+                            Modifier
+                        },
+                    ).padding(
+                        horizontal = if (large) TandemSpacing.screen else TandemSpacing.large,
+                        vertical = if (large) TandemSpacing.screen else TandemSpacing.medium,
+                    ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = horizontalArrangement,
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
 private fun TextFieldCard(
     label: String,
     value: String,
@@ -3155,67 +3205,51 @@ private fun TextFieldCard(
     onFocusedChange: ((Boolean) -> Unit)? = null,
 ) {
     val palette = tandemPalette
-    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-        FieldLabel(label)
-        Row(
+    FieldFrame(label, large = large) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            singleLine = singleLine,
+            keyboardOptions =
+                keyboardOptions ?: if (isSecret) {
+                    KeyboardOptions(
+                        capitalization = KeyboardCapitalization.None,
+                        autoCorrectEnabled = false,
+                        keyboardType = secretKeyboardType,
+                    )
+                } else {
+                    KeyboardOptions.Default
+                },
+            visualTransformation = if (isSecret) PasswordVisualTransformation() else VisualTransformation.None,
+            textStyle =
+                TextStyle(
+                    color = palette.text,
+                    fontSize = if (large) TandemTypography.amount else TandemTypography.action,
+                    lineHeight = if (large) TandemTypography.largeInputLineHeight else TandemTypography.bodyLineHeight,
+                    fontWeight = if (large) FontWeight.SemiBold else FontWeight.Normal,
+                    textAlign = textAlign,
+                ),
+            cursorBrush = SolidColor(palette.accent),
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .defaultMinSize(minHeight = if (large) 82.dp else 52.dp)
-                    .clip(RoundedCornerShape(TandemShapes.medium))
-                    .background(palette.surface)
-                    .border(1.dp, palette.border, RoundedCornerShape(TandemShapes.medium))
-                    .padding(
-                        horizontal = if (large) TandemSpacing.screen else TandemSpacing.large,
-                        vertical = if (large) TandemSpacing.screen else TandemSpacing.medium,
-                    ),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                singleLine = singleLine,
-                keyboardOptions =
-                    keyboardOptions ?: if (isSecret) {
-                        KeyboardOptions(
-                            capitalization = KeyboardCapitalization.None,
-                            autoCorrectEnabled = false,
-                            keyboardType = secretKeyboardType,
+                    .onFocusChanged { focusState -> onFocusedChange?.invoke(focusState.isFocused) }
+                    .semantics { contentDescription = label },
+            decorationBox = { innerTextField ->
+                Box {
+                    if (value.isEmpty() && placeholder.isNotEmpty()) {
+                        Text(
+                            placeholder,
+                            modifier = Modifier.fillMaxWidth(),
+                            color = palette.muted,
+                            fontSize = if (large) TandemTypography.keypadNumber else TandemTypography.body,
+                            textAlign = textAlign,
                         )
-                    } else {
-                        KeyboardOptions.Default
-                    },
-                visualTransformation = if (isSecret) PasswordVisualTransformation() else VisualTransformation.None,
-                textStyle =
-                    TextStyle(
-                        color = palette.text,
-                        fontSize = if (large) TandemTypography.amount else TandemTypography.action,
-                        lineHeight = if (large) TandemTypography.largeInputLineHeight else TandemTypography.bodyLineHeight,
-                        fontWeight = if (large) FontWeight.SemiBold else FontWeight.Normal,
-                        textAlign = textAlign,
-                    ),
-                cursorBrush = SolidColor(palette.accent),
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .onFocusChanged { focusState -> onFocusedChange?.invoke(focusState.isFocused) }
-                        .semantics { contentDescription = label },
-                decorationBox = { innerTextField ->
-                    Box {
-                        if (value.isEmpty() && placeholder.isNotEmpty()) {
-                            Text(
-                                placeholder,
-                                modifier = Modifier.fillMaxWidth(),
-                                color = palette.muted,
-                                fontSize = if (large) TandemTypography.keypadNumber else TandemTypography.body,
-                                textAlign = textAlign,
-                            )
-                        }
-                        innerTextField()
                     }
-                },
-            )
-        }
+                    innerTextField()
+                }
+            },
+        )
     }
 }
 
@@ -3537,40 +3571,25 @@ private fun ReadOnlyField(
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
-    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-        FieldLabel(label)
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 52.dp)
-                    .clip(RoundedCornerShape(TandemShapes.medium))
-                    .background(palette.surface)
-                    .border(1.dp, palette.border, RoundedCornerShape(TandemShapes.medium))
-                    .clickable(role = Role.Button, onClickLabel = "$label, $value", onClick = onClick)
-                    .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-        ) {
-            if (leadingVector != null) {
-                Icon(leadingVector, contentDescription = null, modifier = Modifier.size(30.dp), tint = palette.accent)
-            } else if (leading.isNotEmpty()) {
-                Text(
-                    leading,
-                    modifier = Modifier.clearAndSetSemantics {},
-                    color = palette.accent,
-                    fontSize = TandemTypography.action,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-            Text(value, color = palette.text, fontSize = TandemTypography.body, modifier = Modifier.weight(1f))
-            Icon(
-                Lucide.ChevronRight,
-                contentDescription = null,
-                modifier = Modifier.size(22.dp).clearAndSetSemantics {},
-                tint = palette.muted,
+    FieldFrame(label, onClickLabel = "$label, $value", onClick = onClick) {
+        if (leadingVector != null) {
+            Icon(leadingVector, contentDescription = null, modifier = Modifier.size(30.dp), tint = palette.accent)
+        } else if (leading.isNotEmpty()) {
+            Text(
+                leading,
+                modifier = Modifier.clearAndSetSemantics {},
+                color = palette.accent,
+                fontSize = TandemTypography.action,
+                fontWeight = FontWeight.SemiBold,
             )
         }
+        Text(value, color = palette.text, fontSize = TandemTypography.body, modifier = Modifier.weight(1f))
+        Icon(
+            Lucide.ChevronRight,
+            contentDescription = null,
+            modifier = Modifier.size(22.dp).clearAndSetSemantics {},
+            tint = palette.muted,
+        )
     }
 }
 
@@ -3880,6 +3899,51 @@ private fun SectionCard(
 }
 
 @Composable
+private fun SettingRowLayout(
+    title: String,
+    subtitle: String?,
+    enabled: Boolean,
+    minHeightDp: Int,
+    compactTitle: Boolean = false,
+    semiboldTitle: Boolean = false,
+    interactionModifier: Modifier = Modifier,
+    control: @Composable RowScope.() -> Unit,
+) {
+    val palette = tandemPalette
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = minHeightDp.dp)
+                .then(interactionModifier)
+                .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+            Text(
+                title,
+                color = if (enabled) palette.text else palette.muted,
+                fontSize = if (compactTitle) TandemTypography.compactBody else TandemTypography.body,
+                fontWeight = if (semiboldTitle) FontWeight.SemiBold else FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (subtitle != null) {
+                Text(
+                    subtitle,
+                    color = palette.muted,
+                    fontSize = TandemTypography.caption,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        control()
+    }
+}
+
+@Composable
 private fun ToggleRow(
     title: String,
     subtitle: String? = null,
@@ -3888,7 +3952,6 @@ private fun ToggleRow(
     onChange: (Boolean) -> Unit,
 ) {
     val palette = tandemPalette
-    val controlColor = if (enabled) palette.accent else palette.muted
     val thumbOffset by
         animateDpAsState(
             targetValue = if (checked) 18.dp else 0.dp,
@@ -3907,44 +3970,21 @@ private fun ToggleRow(
             animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
             label = "toggle-thumb-color",
         )
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .defaultMinSize(minHeight = 66.dp)
-                .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange)
-                .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+    SettingRowLayout(
+        title = title,
+        subtitle = subtitle,
+        enabled = enabled,
+        minHeightDp = 66,
+        compactTitle = true,
+        interactionModifier = Modifier.toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange),
     ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-            Text(
-                title,
-                color = if (enabled) palette.text else palette.muted,
-                fontSize = TandemTypography.compactBody,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (subtitle != null) {
-                Text(
-                    subtitle,
-                    color = if (enabled) palette.muted else controlColor,
-                    fontSize = TandemTypography.caption,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
         Box(
-            modifier =
-                Modifier
-                    .width(
-                        42.dp,
-                    ).height(24.dp)
-                    .clip(CircleShape)
-                    .background(if (enabled) trackColor else palette.raised)
-                    .padding(TandemSpacing.extraSmall),
+            Modifier
+                .width(42.dp)
+                .height(24.dp)
+                .clip(CircleShape)
+                .background(if (enabled) trackColor else palette.raised)
+                .padding(TandemSpacing.extraSmall),
         ) {
             Box(
                 Modifier
@@ -3967,27 +4007,13 @@ private fun CheckBoxRow(
 ) {
     val palette = tandemPalette
     val accent = if (enabled) palette.accent else palette.muted
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .defaultMinSize(minHeight = 64.dp)
-                .toggleable(value = checked, enabled = enabled, role = Role.Checkbox, onValueChange = onChange)
-                .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+    SettingRowLayout(
+        title = title,
+        subtitle = subtitle,
+        enabled = enabled,
+        minHeightDp = 64,
+        interactionModifier = Modifier.toggleable(value = checked, enabled = enabled, role = Role.Checkbox, onValueChange = onChange),
     ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-            Text(
-                title,
-                color = if (enabled) palette.text else palette.muted,
-                fontSize = TandemTypography.body,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(subtitle, color = palette.muted, fontSize = TandemTypography.caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
         Box(
             Modifier
                 .size(24.dp)
@@ -4034,37 +4060,13 @@ private fun ChoiceRow(
             label = "choice-selection-progress",
         )
     SurfaceCard(onClick = onClick) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .defaultMinSize(
-                        minHeight = 64.dp,
-                    ).padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+        SettingRowLayout(
+            title = title,
+            subtitle = subtitle,
+            enabled = true,
+            minHeightDp = 64,
+            semiboldTitle = true,
         ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-                Text(
-                    title,
-                    color = palette.text,
-                    fontSize = TandemTypography.body,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (subtitle !=
-                    null
-                ) {
-                    Text(
-                        subtitle,
-                        color = palette.muted,
-                        fontSize = TandemTypography.caption,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
             Box(
                 Modifier
                     .size(22.dp)
