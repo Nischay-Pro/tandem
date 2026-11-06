@@ -129,6 +129,18 @@ internal class TandemMobileSession(
     var pendingWrites by mutableStateOf<List<OutboxOperationEntity>>(emptyList())
         private set
 
+    var checkedWriteOperation by mutableStateOf<OutboxOperationEntity?>(null)
+        private set
+
+    var checkedWriteOperationId by mutableStateOf<String?>(null)
+        private set
+
+    var uncertainWriteCheckError by mutableStateOf<String?>(null)
+        private set
+
+    var uncertainWriteCheckErrorOperationId by mutableStateOf<String?>(null)
+        private set
+
     var isSavingTransaction by mutableStateOf(false)
         private set
 
@@ -282,6 +294,8 @@ internal class TandemMobileSession(
     suspend fun synchronize(
         budgetId: String,
         encryptionPassword: String?,
+        sendQueuedWrites: Boolean = true,
+        reconcileUncertainOperationId: String? = null,
     ): BudgetSyncSummary? {
         syncComplete = false
         syncedTransactionCount = 0
@@ -298,7 +312,12 @@ internal class TandemMobileSession(
         try {
             val summary =
                 apiClient.withExclusiveSession {
-                    coordinator.synchronize(budgetId, encryptionPassword)
+                    coordinator.synchronize(
+                        budgetId,
+                        encryptionPassword,
+                        sendQueuedWrites,
+                        reconcileUncertainOperationId,
+                    )
                 }
             isServerReachable = true
             lastSyncSummary = summary
@@ -644,6 +663,7 @@ internal class TandemMobileSession(
         operationId: String,
     ) {
         transactionWriteMessage = null
+        clearUncertainWriteCheck()
         if (refuseWriteInReadOnlyMode()) return
         val localRepository = repository ?: return
         localRepository.discardWrite(operationId)
@@ -657,11 +677,65 @@ internal class TandemMobileSession(
         encryptionPassword: String?,
     ) {
         transactionWriteMessage = null
+        clearUncertainWriteCheck()
         if (refuseWriteInReadOnlyMode()) return
         val localRepository = repository ?: return
         localRepository.retryUncertainWrite(operationId)
         synchronize(budgetId, encryptionPassword)
         loadLocalRecords(budgetId)
+    }
+
+    suspend fun checkUncertainWriteStatus(
+        budgetId: String,
+        operationId: String,
+        encryptionPassword: String?,
+    ) {
+        if (isSyncing) return
+        clearUncertainWriteCheck()
+        val summary =
+            synchronize(
+                budgetId = budgetId,
+                encryptionPassword = encryptionPassword,
+                sendQueuedWrites = false,
+                reconcileUncertainOperationId = operationId,
+            )
+        if (summary == null) {
+            uncertainWriteCheckError = syncError ?: "Could not check the server. Try again."
+            uncertainWriteCheckErrorOperationId = operationId
+            return
+        }
+
+        checkedWriteOperationId = operationId
+        if (summary.operationStatusErrorCode != null && summary.operationStatusErrorCode != "http-404") {
+            uncertainWriteCheckError =
+                when (summary.operationStatusErrorCode) {
+                    "http-401" -> "Pair this device again to check the status."
+                    "http-403" -> "This device cannot access this budget."
+                    "http-503" -> "Tandem is temporarily unavailable. Try again shortly."
+                    "network-error" -> "Could not reach Tandem. Check the connection and try again."
+                    else -> "Could not confirm the server status. Try again."
+                }
+            uncertainWriteCheckErrorOperationId = operationId
+        }
+        try {
+            checkedWriteOperation = repository?.findWrite(operationId)
+            if (checkedWriteOperation == null) {
+                uncertainWriteCheckError = "This change is no longer in the local queue."
+                uncertainWriteCheckErrorOperationId = operationId
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            uncertainWriteCheckError = "Could not read this change’s local status."
+            uncertainWriteCheckErrorOperationId = operationId
+        }
+    }
+
+    private fun clearUncertainWriteCheck() {
+        checkedWriteOperation = null
+        checkedWriteOperationId = null
+        uncertainWriteCheckError = null
+        uncertainWriteCheckErrorOperationId = null
     }
 
     suspend fun loadLocalRecords(budgetId: String) {

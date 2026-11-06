@@ -240,7 +240,7 @@ private enum class AppRoute(
     SYNC_CENTER("Sync center"),
     CONFLICT_INBOX("Review changes"),
     CONFLICT_REVIEW("Review conflict"),
-    UNCERTAIN_WRITE("Status unknown"),
+    UNCERTAIN_WRITE("Sync status"),
     REJECTED_WRITE("Not applied"),
     SETTINGS("Settings"),
     APPEARANCE("Appearance"),
@@ -1587,6 +1587,17 @@ fun TandemApp(
             )
         }
     }
+    val checkUncertainWriteStatus: (String) -> Unit = { operationId ->
+        if (!mobileSession.isSyncing) {
+            coroutineScope.launch {
+                mobileSession.checkUncertainWriteStatus(
+                    state.selectedBudgetId,
+                    operationId,
+                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                )
+            }
+        }
+    }
 
     TandemTheme(
         state.theme,
@@ -1727,6 +1738,7 @@ fun TandemApp(
                                 onResolveConflict = resolveConflict,
                                 onDiscardWrite = discardWrite,
                                 onRetryUncertainWrite = retryUncertainWrite,
+                                onCheckUncertainWriteStatus = checkUncertainWriteStatus,
                                 onForgetDevice = { coroutineScope.launch { mobileSession.forgetDevice() } },
                                 onRequestNotificationPermission = onRequestNotificationPermission,
                                 onOpenNotificationSettings = onOpenNotificationSettings,
@@ -2245,6 +2257,7 @@ private fun ScreenContent(
     onResolveConflict: (String, Boolean) -> Unit,
     onDiscardWrite: (String) -> Unit,
     onRetryUncertainWrite: (String) -> Unit,
+    onCheckUncertainWriteStatus: (String) -> Unit,
     onForgetDevice: () -> Unit,
     onRequestNotificationPermission: (() -> Unit)?,
     onOpenNotificationSettings: (() -> Unit)?,
@@ -2354,7 +2367,16 @@ private fun ScreenContent(
         AppRoute.SYNC_CENTER -> SyncCenterScreen(state, mobileSession, navigation, onSyncNow)
         AppRoute.CONFLICT_INBOX -> ConflictInboxScreen(state, mobileSession, navigation)
         AppRoute.CONFLICT_REVIEW -> ConflictReviewScreen(state, mobileSession, onResolveConflict)
-        AppRoute.UNCERTAIN_WRITE -> UncertainWriteScreen(state, mobileSession, onSyncNow, onRetryUncertainWrite, onDiscardWrite)
+        AppRoute.UNCERTAIN_WRITE ->
+            UncertainWriteScreen(
+                state,
+                mobileSession,
+                navigation,
+                onCheckUncertainWriteStatus,
+                onSyncNow,
+                onRetryUncertainWrite,
+                onDiscardWrite,
+            )
         AppRoute.REJECTED_WRITE -> RejectedWriteScreen(state, mobileSession, navigation, onDiscardWrite)
         AppRoute.SETTINGS -> SettingsScreen(state, navigation)
         AppRoute.APPEARANCE -> AppearanceScreen(state, navigation)
@@ -6045,61 +6067,158 @@ private fun ConflictReviewScreen(
 private fun UncertainWriteScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
+    onCheckStatus: (String) -> Unit,
     onSyncNow: () -> Unit,
     onRetry: (String) -> Unit,
     onDiscard: (String) -> Unit,
 ) {
     if (state.selectedBudgetId.isNotBlank()) {
-        val operation =
-            mobileSession.pendingWrites.firstOrNull {
-                it.operationId == state.selectedConflictOperationId && it.status == "uncertain"
-            } ?: mobileSession.pendingWrites.firstOrNull { it.status == "uncertain" }
+        val pendingOperation =
+            if (state.selectedConflictOperationId.isNotBlank()) {
+                mobileSession.pendingWrites.firstOrNull { it.operationId == state.selectedConflictOperationId }
+            } else {
+                mobileSession.pendingWrites.firstOrNull { it.status == "uncertain" }
+            }
+        val checkedOperation =
+            mobileSession.checkedWriteOperation?.takeIf {
+                it.operationId == state.selectedConflictOperationId ||
+                    (state.selectedConflictOperationId.isBlank() && it.operationId == mobileSession.checkedWriteOperationId)
+            }
+        val operation = checkedOperation ?: pendingOperation
         PageColumn {
-            Badge("Status unknown", tandemPalette.warning)
-            Heading("Check before retrying", "The server has not confirmed whether this edit was applied.")
             if (operation == null) {
-                BodyText("There is no uncertain operation in the current local copy.")
+                Heading("No change to check")
+                InfoBubble("This change is no longer waiting for server confirmation.")
             } else {
                 val transaction = liveTransactionItems(mobileSession).firstOrNull { it.recordId == operation.recordId }
-                SectionCard(transaction?.payee ?: "Transaction", "${transaction?.dateLabel ?: "Local edit"} · ${operation.status}") {
-                    ListRow(
-                        "¤",
-                        "Requested amount",
-                        "Device edit",
-                        operation.optimisticAmountMinor?.let { state.formatSignedCurrency(it) } ?: "Unavailable",
-                    )
-                    DividerLine()
-                    ListRow(
-                        "?",
-                        "Server result",
-                        "Must be checked before retry",
-                        operation.lastErrorCode ?: "Unknown",
-                        tandemPalette.warning,
-                    )
+                val isChecked = mobileSession.checkedWriteOperationId == operation.operationId
+                val isNotFound = isChecked && operation.status == "uncertain" && operation.lastErrorCode == "http-404"
+                val checkError =
+                    mobileSession.uncertainWriteCheckError.takeIf {
+                        mobileSession.uncertainWriteCheckErrorOperationId == operation.operationId
+                    }
+                val heading =
+                    when {
+                        checkError != null -> "Couldn’t check status"
+                        operation.status == "committed" -> "Saved to Actual"
+                        operation.status == "conflict" -> "Needs your review"
+                        operation.status == "rejected" -> "Change not applied"
+                        operation.status == "discarded" -> "Change discarded"
+                        operation.status == "queued" -> "Waiting to sync"
+                        operation.status == "sending" -> "Sending to Actual"
+                        isNotFound -> "No server record found"
+                        isChecked -> "Still waiting for confirmation"
+                        mobileSession.isSyncing -> "Checking with Actual"
+                        else -> "Change not confirmed"
+                    }
+                val message =
+                    when {
+                        checkError != null -> checkError
+                        operation.status == "committed" -> "This change is saved in your budget."
+                        operation.status == "conflict" -> "Actual changed this transaction. Review both versions."
+                        operation.status == "rejected" -> "Actual kept the previous value."
+                        operation.status == "discarded" -> "The local edit was removed."
+                        operation.status == "queued" -> "This change is saved on this device."
+                        operation.status == "sending" && mobileSession.isSyncing -> "Sending this change to Actual."
+                        operation.status == "sending" -> "Check status before sending it again."
+                        isNotFound -> "Retrying will send this same change ID."
+                        isChecked -> "The server returned no final result. Check again before retrying."
+                        mobileSession.isSyncing -> "Checking the server before offering recovery actions."
+                        else -> "Check with Actual before retrying."
+                    }
+                Heading(heading)
+                SectionCard(
+                    transaction?.payee ?: "Transaction",
+                    transaction?.dateLabel ?: "Local change",
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Amount", color = tandemPalette.muted, fontSize = 14.sp)
+                        Text(
+                            operation.optimisticAmountMinor?.let { state.formatSignedCurrency(it) } ?: "Unavailable",
+                            color = tandemPalette.text,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
-                PreviewNote(
-                    "Checking status asks the server about the same operation without sending it again. Retry is a separate explicit action.",
-                )
-                PrimaryButton("Check status", enabled = !mobileSession.isSyncing) { onSyncNow() }
-                SecondaryButton("Retry the same operation", enabled = !state.readOnlyMode && !mobileSession.isSyncing) {
-                    onRetry(operation.operationId)
+                InfoBubble(message)
+                when {
+                    checkError != null -> {
+                        PrimaryButton(
+                            "Check again",
+                            enabled = !mobileSession.isSyncing,
+                            loading = mobileSession.isSyncing,
+                        ) { onCheckStatus(operation.operationId) }
+                    }
+                    operation.status == "uncertain" && isNotFound -> {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            PrimaryButton(
+                                "Retry change",
+                                enabled = !state.readOnlyMode && !mobileSession.isSyncing,
+                                modifier = Modifier.weight(1f),
+                            ) { onRetry(operation.operationId) }
+                            SecondaryButton(
+                                "Discard",
+                                modifier = Modifier.weight(1f),
+                                enabled = !state.readOnlyMode && !mobileSession.isSyncing,
+                            ) { onDiscard(operation.operationId) }
+                        }
+                    }
+                    operation.status == "uncertain" -> {
+                        PrimaryButton(
+                            if (isChecked) "Check again" else "Check status",
+                            enabled = !mobileSession.isSyncing,
+                            loading = mobileSession.isSyncing,
+                        ) { onCheckStatus(operation.operationId) }
+                    }
+                    operation.status == "queued" ->
+                        PrimaryButton("Sync now", enabled = !mobileSession.isSyncing, loading = mobileSession.isSyncing) {
+                            onSyncNow()
+                        }
+                    operation.status == "sending" ->
+                        PrimaryButton(
+                            if (mobileSession.isSyncing) "Sending…" else "Check status",
+                            enabled = !mobileSession.isSyncing,
+                            loading = mobileSession.isSyncing,
+                        ) {
+                            if (!mobileSession.isSyncing) onCheckStatus(operation.operationId)
+                        }
+                    operation.status == "conflict" ->
+                        PrimaryButton("Review conflict") {
+                            state.selectedConflictOperationId = operation.operationId
+                            navigation.open(AppRoute.CONFLICT_REVIEW)
+                        }
+                    operation.status == "rejected" ->
+                        PrimaryButton("Review change") {
+                            state.selectedConflictOperationId = operation.operationId
+                            navigation.open(AppRoute.REJECTED_WRITE)
+                        }
+                    else -> PrimaryButton("Done") { navigation.back() }
                 }
-                SecondaryButton("Discard local edit", enabled = !state.readOnlyMode) { onDiscard(operation.operationId) }
             }
         }
         return
     }
     PageColumn {
-        Badge("Status unknown", tandemPalette.warning)
-        Heading("Check before retrying", "The connection ended before this change could be confirmed.")
+        Heading("Change not confirmed")
         SectionCard("Corner Market", "${formatShortDate(SampleDate(2026, 5, 14))} · Groceries") {
-            ListRow("¤", "Requested amount", "Local change", state.formatCurrency(1_200))
-            DividerLine()
-            ListRow("?", "Server result", "The change has not been confirmed", "Unknown", tandemPalette.warning)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Amount", color = tandemPalette.muted, fontSize = 14.sp)
+                Text(state.formatCurrency(1_200), color = tandemPalette.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            }
         }
-        PreviewNote(
-            "Do not send the change again yet. Check its status first. Retry or discard options appear after the server confirms what happened.",
-        )
+        InfoBubble("Check with Actual before retrying.")
         PrimaryButton("Check status", enabled = false) {}
     }
 }

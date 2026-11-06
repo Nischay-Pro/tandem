@@ -142,6 +142,85 @@ class BudgetSyncCoordinatorTest {
         }
 
     @Test
+    fun statusOnlyCheckReconcilesOneUncertainWriteWithoutSendingQueuedWrites() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val remote =
+                    FakeBudgetSyncRemote(
+                        snapshot(records = listOf(transaction(), transaction("txn-2"))),
+                    )
+                val coordinator = BudgetSyncCoordinator(repository, remote)
+                coordinator.synchronize(BUDGET, sendQueuedWrites = false)
+                coordinator.synchronize(BUDGET, sendQueuedWrites = false)
+                val changeFeedReadsBeforeCheck = remote.changeRequests.size
+
+                val uncertainRequest = updateRequest()
+                val queuedRequest =
+                    updateRequest(
+                        operationId = "queued-operation",
+                        idempotencyKey = "queued-key",
+                        recordId = "txn-2",
+                    ).copy(createdAtEpochMs = 200L)
+                repository.enqueueWrite(uncertainRequest)
+                repository.enqueueWrite(queuedRequest)
+                assertEquals(uncertainRequest.operationId, repository.claimNextWrite(BUDGET)?.operationId)
+                repository.markWriteUncertain(uncertainRequest.operationId, "network-error")
+                remote.operationHandler = { operationId -> operationResult(operationId, RemoteOperationStatus.COMMITTED) }
+                remote.transactionHandler = { _, transactionId, _ -> remoteTransaction(transactionId, "revision-2", 1200L) }
+
+                val result =
+                    coordinator.synchronize(
+                        BUDGET,
+                        sendQueuedWrites = false,
+                        reconcileUncertainOperationId = uncertainRequest.operationId,
+                    )
+
+                assertEquals(1, result.writesCommitted)
+                assertEquals(1, remote.operationPolls)
+                assertEquals(changeFeedReadsBeforeCheck + 1, remote.changeRequests.size)
+                assertEquals(0, remote.submitCount)
+                assertEquals("committed", database.outboxDao().find(uncertainRequest.operationId)?.status)
+                assertEquals("queued", database.outboxDao().find(queuedRequest.operationId)?.status)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun statusOnlyCheckReportsLookupFailureAndKeepsTheOperationUncertain() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val remote = FakeBudgetSyncRemote(snapshot(records = listOf(transaction())))
+                val coordinator = BudgetSyncCoordinator(repository, remote)
+                coordinator.synchronize(BUDGET, sendQueuedWrites = false)
+                val request = updateRequest()
+                repository.enqueueWrite(request)
+                repository.claimNextWrite(BUDGET)
+                repository.markWriteUncertain(request.operationId, "network-error")
+                remote.readOperationError = BudgetSyncRemoteException("http-503", 503)
+
+                val result =
+                    coordinator.synchronize(
+                        BUDGET,
+                        sendQueuedWrites = false,
+                        reconcileUncertainOperationId = request.operationId,
+                    )
+
+                assertEquals(1, result.writesUncertain)
+                assertEquals("http-503", result.operationStatusErrorCode)
+                assertEquals("uncertain", database.outboxDao().find(request.operationId)?.status)
+                assertEquals(1, remote.operationPolls)
+                assertEquals(0, remote.submitCount)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun generationResetReplacesRemoteBaselineAndKeepsQueuedDraft() =
         runBlocking {
             val database = newDatabase()

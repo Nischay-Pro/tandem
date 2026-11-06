@@ -19,6 +19,7 @@ data class BudgetSyncSummary(
     val writesConflicted: Int,
     val writesRejected: Int,
     val writesUncertain: Int,
+    val operationStatusErrorCode: String? = null,
 )
 
 /** Coordinates one local budget with the Tandem snapshot, change feed, and durable write journal. */
@@ -26,20 +27,35 @@ class BudgetSyncCoordinator(
     private val repository: LocalBudgetRepository,
     private val remote: BudgetSyncRemote,
 ) {
-    /** Reconciles pending remote writes once and returns after the change feed is current. */
+    /** Refreshes budget access before syncing writes, or checks one uncertain operation without sending writes. */
     suspend fun synchronize(
         budgetId: String,
         encryptionPassword: String? = null,
         sendQueuedWrites: Boolean = true,
+        reconcileUncertainOperationId: String? = null,
     ): BudgetSyncSummary =
         processSyncMutex.withLock {
             try {
+                require(reconcileUncertainOperationId == null || reconcileUncertainOperationId.isNotBlank()) {
+                    "Operation ID must not be blank"
+                }
+                require(reconcileUncertainOperationId == null || !sendQueuedWrites) {
+                    "A status-only check cannot send queued writes"
+                }
                 repository.recoverInterruptedWrites()
-                repository.markSyncStarted(budgetId)
+                val isOperationStatusCheck = reconcileUncertainOperationId != null
+                if (!isOperationStatusCheck) repository.markSyncStarted(budgetId)
+                // Verify current budget access before treating an operation 404 as safe to retry.
                 val sync = refreshBudget(budgetId, encryptionPassword)
                 val writes =
-                    if (sendQueuedWrites) {
-                        synchronizeWrites(budgetId, encryptionPassword, sync.generation)
+                    if (sendQueuedWrites || reconcileUncertainOperationId != null) {
+                        synchronizeWrites(
+                            budgetId,
+                            encryptionPassword,
+                            sync.generation,
+                            reconcileUncertainOperationId = reconcileUncertainOperationId,
+                            sendQueuedWrites = sendQueuedWrites,
+                        )
                     } else {
                         WriteCounts()
                     }
@@ -51,18 +67,23 @@ class BudgetSyncCoordinator(
                     writesConflicted = writes.conflicted,
                     writesRejected = writes.rejected,
                     writesUncertain = writes.uncertain,
+                    operationStatusErrorCode = writes.operationStatusErrorCode,
                 )
             } catch (error: Exception) {
                 if (error is CancellationException) {
-                    withContext(NonCancellable) {
-                        runCatching { repository.markSyncFailed(budgetId, "sync-cancelled") }
+                    if (reconcileUncertainOperationId == null) {
+                        withContext(NonCancellable) {
+                            runCatching { repository.markSyncFailed(budgetId, "sync-cancelled") }
+                        }
                     }
                     throw error
                 }
-                try {
-                    repository.markSyncFailed(budgetId, error.syncErrorCode())
-                } catch (_: Exception) {
-                    // Keep the original sync failure as the caller-visible error.
+                if (reconcileUncertainOperationId == null) {
+                    try {
+                        repository.markSyncFailed(budgetId, error.syncErrorCode())
+                    } catch (_: Exception) {
+                        // Keep the original sync failure as the caller-visible error.
+                    }
                 }
                 throw error
             }
@@ -194,14 +215,25 @@ class BudgetSyncCoordinator(
         budgetId: String,
         encryptionPassword: String?,
         generation: String,
+        reconcileUncertainOperationId: String? = null,
+        sendQueuedWrites: Boolean = true,
     ): WriteCounts {
         val counts = WriteCounts()
-        repository
-            .readPendingWrites(budgetId)
-            .filter { it.status == "uncertain" }
-            .forEach { operation ->
-                counts.record(reconcileUncertain(operation, generation, encryptionPassword))
+        val pendingOperations = repository.readPendingWrites(budgetId)
+        val uncertainOperations =
+            pendingOperations.filter {
+                it.status == "uncertain" &&
+                    (reconcileUncertainOperationId == null || it.operationId == reconcileUncertainOperationId)
             }
+        uncertainOperations.forEach { operation ->
+            val resolution = reconcileUncertain(operation, generation, encryptionPassword)
+            counts.record(resolution.outcome)
+            if (operation.operationId == reconcileUncertainOperationId) {
+                counts.operationStatusErrorCode = resolution.errorCode
+            }
+        }
+
+        if (!sendQueuedWrites) return counts
 
         while (true) {
             val operation = repository.claimNextWrite(budgetId) ?: break
@@ -291,7 +323,7 @@ class BudgetSyncCoordinator(
         operation: OutboxOperationEntity,
         generation: String,
         encryptionPassword: String?,
-    ): WriteOutcome =
+    ): UncertainWriteResolution =
         try {
             val result = remote.readOperation(operation.operationId)
             val outcome = applyOperationResult(operation, result, generation, encryptionPassword)
@@ -300,14 +332,14 @@ class BudgetSyncCoordinator(
                     operation.operationId,
                     result.errorCode?.safeCode() ?: "remote-operation-pending",
                 )
-                WriteOutcome.UNCERTAIN
+                UncertainWriteResolution(WriteOutcome.UNCERTAIN)
             } else {
-                outcome
+                UncertainWriteResolution(outcome)
             }
         } catch (error: Exception) {
             if (error is CancellationException) throw error
             repository.markWriteUncertain(operation.operationId, error.syncErrorCode())
-            WriteOutcome.UNCERTAIN
+            UncertainWriteResolution(WriteOutcome.UNCERTAIN, error.syncErrorCode())
         }
 
     private suspend fun persistUncertainAfterCancellation(
@@ -406,11 +438,17 @@ class BudgetSyncCoordinator(
         val generation: String,
     )
 
+    private data class UncertainWriteResolution(
+        val outcome: WriteOutcome,
+        val errorCode: String? = null,
+    )
+
     private class WriteCounts {
         var committed = 0
         var conflicted = 0
         var rejected = 0
         var uncertain = 0
+        var operationStatusErrorCode: String? = null
 
         fun record(outcome: WriteOutcome) {
             when (outcome) {
