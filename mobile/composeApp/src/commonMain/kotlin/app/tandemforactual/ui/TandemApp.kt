@@ -324,7 +324,8 @@ private data class TransactionItem(
     val dateIso: String = "",
     val payeeId: String? = null,
     val categoryId: String? = null,
-    val clearedState: String? = null,
+    val cleared: Boolean? = null,
+    val reconciled: Boolean? = null,
     val approved: Boolean? = null,
     val matched: Boolean? = null,
     val isTransfer: Boolean = false,
@@ -488,9 +489,15 @@ private fun buildLiveTransactionItems(
         val categoryName = record.categoryId?.let(categories::get) ?: record.categoryId ?: "Uncategorized"
         val displayedPayee = payeeName ?: record.payeeId ?: "No payee"
         val body = record.recordBody()
-        val clearedState =
-            body?.stringValue("cleared")?.lowercase()
-                ?: body?.booleanValue("cleared")?.let { if (it) "cleared" else "uncleared" }
+        val legacyClearedState = body?.stringValue("cleared")?.lowercase()
+        val cleared =
+            body?.booleanValue("cleared")
+                ?: when (legacyClearedState) {
+                    "cleared", "reconciled" -> true
+                    "uncleared" -> false
+                    else -> null
+                }
+        val reconciled = body?.booleanValue("reconciled") ?: (legacyClearedState == "reconciled").takeIf { legacyClearedState != null }
         TransactionItem(
             payee = displayedPayee,
             category = categoryName,
@@ -507,7 +514,8 @@ private fun buildLiveTransactionItems(
             dateIso = record.recordDate.orEmpty(),
             payeeId = record.payeeId,
             categoryId = record.categoryId,
-            clearedState = clearedState,
+            cleared = cleared,
+            reconciled = reconciled,
             approved = body?.booleanValue("approved"),
             matched = body?.booleanValue("matched"),
             isTransfer =
@@ -3287,60 +3295,64 @@ private fun FieldFrame(
     }
 }
 
+private data class TextFieldOptions(
+    val placeholder: String = "",
+    val singleLine: Boolean = true,
+    val isSecret: Boolean = false,
+    val secretKeyboardType: KeyboardType = KeyboardType.Password,
+    val keyboardOptions: KeyboardOptions? = null,
+    val textAlign: TextAlign = TextAlign.Start,
+    val large: Boolean = false,
+    val onFocusedChange: ((Boolean) -> Unit)? = null,
+)
+
 @Composable
 private fun TextFieldCard(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
-    placeholder: String = "",
-    singleLine: Boolean = true,
-    isSecret: Boolean = false,
-    secretKeyboardType: KeyboardType = KeyboardType.Password,
-    keyboardOptions: KeyboardOptions? = null,
-    textAlign: TextAlign = TextAlign.Start,
-    large: Boolean = false,
-    onFocusedChange: ((Boolean) -> Unit)? = null,
+    options: TextFieldOptions = TextFieldOptions(),
 ) {
     val palette = tandemPalette
-    FieldFrame(label, large = large) {
+    FieldFrame(label, large = options.large) {
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
-            singleLine = singleLine,
+            singleLine = options.singleLine,
             keyboardOptions =
-                keyboardOptions ?: if (isSecret) {
+                options.keyboardOptions ?: if (options.isSecret) {
                     KeyboardOptions(
                         capitalization = KeyboardCapitalization.None,
                         autoCorrectEnabled = false,
-                        keyboardType = secretKeyboardType,
+                        keyboardType = options.secretKeyboardType,
                     )
                 } else {
                     KeyboardOptions.Default
                 },
-            visualTransformation = if (isSecret) PasswordVisualTransformation() else VisualTransformation.None,
+            visualTransformation = if (options.isSecret) PasswordVisualTransformation() else VisualTransformation.None,
             textStyle =
                 TextStyle(
                     color = palette.text,
-                    fontSize = if (large) TandemTypography.amount else TandemTypography.action,
-                    lineHeight = if (large) TandemTypography.largeInputLineHeight else TandemTypography.bodyLineHeight,
-                    fontWeight = if (large) FontWeight.SemiBold else FontWeight.Normal,
-                    textAlign = textAlign,
+                    fontSize = if (options.large) TandemTypography.amount else TandemTypography.action,
+                    lineHeight = if (options.large) TandemTypography.largeInputLineHeight else TandemTypography.bodyLineHeight,
+                    fontWeight = if (options.large) FontWeight.SemiBold else FontWeight.Normal,
+                    textAlign = options.textAlign,
                 ),
             cursorBrush = SolidColor(palette.accent),
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .onFocusChanged { focusState -> onFocusedChange?.invoke(focusState.isFocused) }
+                    .onFocusChanged { focusState -> options.onFocusedChange?.invoke(focusState.isFocused) }
                     .semantics { contentDescription = label },
             decorationBox = { innerTextField ->
                 Box {
-                    if (value.isEmpty() && placeholder.isNotEmpty()) {
+                    if (value.isEmpty() && options.placeholder.isNotEmpty()) {
                         Text(
-                            placeholder,
+                            options.placeholder,
                             modifier = Modifier.fillMaxWidth(),
                             color = palette.muted,
-                            fontSize = if (large) TandemTypography.keypadNumber else TandemTypography.body,
-                            textAlign = textAlign,
+                            fontSize = if (options.large) TandemTypography.keypadNumber else TandemTypography.body,
+                            textAlign = options.textAlign,
                         )
                     }
                     innerTextField()
@@ -4446,7 +4458,12 @@ private fun ServerAddressScreen(
 ) {
     PageColumn {
         Heading("Server address")
-        TextFieldCard("Server URL", state.serverUrl, { state.serverUrl = it }, "https://budget.example.com")
+        TextFieldCard(
+            "Server URL",
+            state.serverUrl,
+            { state.serverUrl = it },
+            TextFieldOptions(placeholder = "https://budget.example.com"),
+        )
         InfoBubble("Tandem uses the budget password only to unlock encrypted budgets.")
         if (serverAddressMayBeInsecure(state.serverUrl)) {
             val palette = tandemPalette
@@ -4529,14 +4546,16 @@ private fun PairingCodeScreen(
             "Pairing code",
             state.pairingCode,
             { state.pairingCode = sanitizePairingCodeInput(it) },
-            "For example, 4DF7-J1M9",
-            keyboardOptions =
-                KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Characters,
-                    autoCorrectEnabled = false,
-                    keyboardType = KeyboardType.Ascii,
-                ),
-            textAlign = TextAlign.Center,
+            TextFieldOptions(
+                placeholder = "For example, 4DF7-J1M9",
+                keyboardOptions =
+                    KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Characters,
+                        autoCorrectEnabled = false,
+                        keyboardType = KeyboardType.Ascii,
+                    ),
+                textAlign = TextAlign.Center,
+            ),
         )
         InfoBubble("This one-time code expires after five minutes. Tandem doesn’t save it or your budget password.")
         mobileSession.pairingError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
@@ -4692,8 +4711,7 @@ private fun UnlockBudgetScreen(
             "Budget password",
             state.encryptedPassword,
             { state.encryptedPassword = it },
-            "Enter password",
-            isSecret = true,
+            TextFieldOptions(placeholder = "Enter password", isSecret = true),
         )
         InfoBubble("Tandem uses this password only to unlock the encrypted budget. It’s cleared after the first sync and never saved.")
         PrimaryButton("Unlock budget", enabled = state.encryptedPassword.isNotBlank()) { navigation.open(AppRoute.FIRST_SYNC) }
@@ -5675,7 +5693,12 @@ private fun AccountOptionsScreen(
 private fun ReconciliationScreen(state: AppState) {
     PageColumn {
         Heading("Compare balances", "Compare cleared transactions with a statement.")
-        TextFieldCard("Statement balance", state.formatAmount(348_216), {}, state.formatAmount(0))
+        TextFieldCard(
+            "Statement balance",
+            state.formatAmount(348_216),
+            {},
+            TextFieldOptions(placeholder = state.formatAmount(0)),
+        )
         SectionCard("Difference", "Sample calculation") {
             ListRow("=", "Account balance", "Current sample balance", state.formatCurrency(348_216))
             DividerLine()
@@ -5758,7 +5781,8 @@ private fun TransactionItem.toActivitySearchRecord(): ActivitySearchRecord =
         dateLabel = dateLabel,
         amountMinorUnits = amountMinorUnits,
         amountText = formatSignedCurrency(amountMinorUnits, displaySettings),
-        clearedState = clearedState,
+        cleared = cleared,
+        reconciled = reconciled,
         approved = approved,
         matched = matched,
         transfer = isTransfer,
@@ -5829,9 +5853,11 @@ private fun ActivitySearchScreen(
     val quickFilters =
         remember(searchableRecords) {
             buildList {
-                if (searchableRecords.any { it.clearedState != null }) {
+                if (searchableRecords.any { it.cleared != null }) {
                     add(ActivitySearchFilter(ActivitySearchField.CLEARED, "", "Cleared"))
                     add(ActivitySearchFilter(ActivitySearchField.UNCLEARED, "", "Uncleared"))
+                }
+                if (searchableRecords.any { it.reconciled != null }) {
                     add(ActivitySearchFilter(ActivitySearchField.RECONCILED, "", "Reconciled"))
                     add(ActivitySearchFilter(ActivitySearchField.UNRECONCILED, "", "Unreconciled"))
                 }
@@ -5874,11 +5900,6 @@ private fun ActivitySearchScreen(
         suggestions = evaluation.second
         isEvaluatingSearch = false
     }
-    val resultTransactions =
-        remember(searchTransactions, resultIndices) {
-            resultIndices.take(100).mapNotNull(searchTransactions::getOrNull)
-        }
-
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = TandemSpacing.screen, vertical = TandemSpacing.medium),
         verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
@@ -5957,7 +5978,7 @@ private fun ActivitySearchScreen(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("Results", color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
             Text(
-                if (resultIndices.size > 100) "${formatInteger(resultIndices.size)} · showing 100" else formatInteger(resultIndices.size),
+                formatInteger(resultIndices.size),
                 color = tandemPalette.muted,
                 fontSize = TandemTypography.caption,
             )
@@ -5973,11 +5994,11 @@ private fun ActivitySearchScreen(
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = tandemPalette.accent)
             }
-        } else if (isEvaluatingSearch && resultTransactions.isEmpty()) {
+        } else if (isEvaluatingSearch && resultIndices.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = tandemPalette.accent)
             }
-        } else if (resultTransactions.isEmpty()) {
+        } else if (resultIndices.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 EmptyState(
                     if (filters.isEmpty() &&
@@ -5996,10 +6017,15 @@ private fun ActivitySearchScreen(
                 verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
             ) {
                 items(
-                    resultTransactions.take(100),
-                    key = { "search:${it.recordId ?: "${it.dateLabel}:${it.payee}:${it.amountMinorUnits}"}" },
-                ) { transaction ->
-                    TransactionRow(transaction) { openTransaction(state, navigation, transaction, isLive = isLiveBudget) }
+                    resultIndices,
+                    key = { index ->
+                        val transaction = searchTransactions.getOrNull(index)
+                        "search:${transaction?.recordId ?: index}"
+                    },
+                ) { index ->
+                    searchTransactions.getOrNull(index)?.let { transaction ->
+                        TransactionRow(transaction) { openTransaction(state, navigation, transaction, isLive = isLiveBudget) }
+                    }
                 }
             }
         }
@@ -6025,15 +6051,27 @@ private fun ActivitySearchInput(
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
-                textStyle = TextStyle(color = palette.text, fontSize = TandemTypography.body),
+                textStyle =
+                    TextStyle(
+                        color = palette.text,
+                        fontSize = TandemTypography.body,
+                        lineHeight = TandemTypography.bodyLineHeight,
+                        textAlign = TextAlign.Start,
+                    ),
                 cursorBrush = SolidColor(palette.accent),
                 decorationBox = { innerTextField ->
-                    Box {
+                    Box(
+                        Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
                         if (value.isEmpty()) {
                             Text(
                                 "Payee, category or amount",
                                 color = palette.muted,
                                 fontSize = TandemTypography.body,
+                                lineHeight = TandemTypography.bodyLineHeight,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                         innerTextField()
@@ -6442,9 +6480,11 @@ private fun TransactionFormScreen(
                         "Notes",
                         state.transactionNotes,
                         { state.transactionNotes = it },
-                        "Add a note",
-                        singleLine = false,
-                        onFocusedChange = { focused -> if (focused) keypadVisible = false },
+                        TextFieldOptions(
+                            placeholder = "Add a note",
+                            singleLine = false,
+                            onFocusedChange = { focused -> if (focused) keypadVisible = false },
+                        ),
                     )
                     AnimatedReveal(visible = mobileSession.transactionWriteMessage != null) {
                         SurfaceCard {
@@ -6509,8 +6549,18 @@ private fun TransactionFormScreen(
         Box(Modifier.fillMaxSize()) {
             PageColumn(modifier = Modifier.padding(bottom = 76.dp)) {
                 Heading("Edit transaction")
-                TextFieldCard("Amount", state.transactionAmount, { state.transactionAmount = it }, state.formatAmount(4_218))
-                TextFieldCard("Notes", state.transactionNotes, { state.transactionNotes = it }, "Add a note", singleLine = false)
+                TextFieldCard(
+                    "Amount",
+                    state.transactionAmount,
+                    { state.transactionAmount = it },
+                    TextFieldOptions(placeholder = state.formatAmount(4_218)),
+                )
+                TextFieldCard(
+                    "Notes",
+                    state.transactionNotes,
+                    { state.transactionNotes = it },
+                    TextFieldOptions(placeholder = "Add a note", singleLine = false),
+                )
                 SectionCard("Transaction details") {
                     ListRow("", "Account", state.transactionAccount, leadingVector = Lucide.WalletCards)
                     DividerLine()
@@ -6584,7 +6634,12 @@ private fun TransactionFormScreen(
     PageColumn {
         SampleBanner()
         Heading("Transaction details", "Record a change to the budget.")
-        TextFieldCard("Amount", state.transactionAmount, { state.transactionAmount = it }, "For example, ${state.formatAmount(1_250)}")
+        TextFieldCard(
+            "Amount",
+            state.transactionAmount,
+            { state.transactionAmount = it },
+            TextFieldOptions(placeholder = "For example, ${state.formatAmount(1_250)}"),
+        )
         ReadOnlyField("Type", state.transactionType, leadingVector = Lucide.Receipt) {
             navigation.open(AppRoute.CHOOSE_TRANSACTION_TYPE)
         }
@@ -6592,7 +6647,12 @@ private fun TransactionFormScreen(
         ReadOnlyField("Payee", state.transactionPayee, "P") { navigation.open(AppRoute.CHOOSE_PAYEE) }
         ReadOnlyField("Category", state.transactionCategory, "C") { navigation.open(AppRoute.CHOOSE_CATEGORY) }
         ReadOnlyField("Date", state.transactionDate, "▣") { navigation.open(AppRoute.CHOOSE_DATE) }
-        TextFieldCard("Notes", state.transactionNotes, { state.transactionNotes = it }, "Add a note (optional)", singleLine = false)
+        TextFieldCard(
+            "Notes",
+            state.transactionNotes,
+            { state.transactionNotes = it },
+            TextFieldOptions(placeholder = "Add a note (optional)", singleLine = false),
+        )
         PreviewNote(
             if (isNew) {
                 "New transactions aren’t available here yet. This sample form doesn’t save or sync changes."
@@ -6613,7 +6673,7 @@ private fun SelectorScreen(
 ) {
     var query by remember { mutableStateOf("") }
     PageColumn {
-        TextFieldCard("Search", query, { query = it }, "Start typing")
+        TextFieldCard("Search", query, { query = it }, TextFieldOptions(placeholder = "Start typing"))
         val filtered = values.filter { it.label.contains(query, ignoreCase = true) }
         if (filtered.isEmpty()) {
             SurfaceCard { EmptyState("No matches", modifier = Modifier.padding(TandemSpacing.large)) }
@@ -8044,7 +8104,12 @@ private fun MerchantIconLicensesScreen(
                 }
             }
             else -> {
-                TextFieldCard("Search", query, { query = it }, "Name, license, or source")
+                TextFieldCard(
+                    "Search",
+                    query,
+                    { query = it },
+                    TextFieldOptions(placeholder = "Name, license, or source"),
+                )
                 val filteredNotices =
                     remember(merchantIconCatalog, query) {
                         val normalizedQuery = query.trim()

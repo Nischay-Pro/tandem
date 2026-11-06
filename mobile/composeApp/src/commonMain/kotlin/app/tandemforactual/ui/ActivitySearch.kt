@@ -43,7 +43,8 @@ internal data class ActivitySearchRecord(
     val dateLabel: String,
     val amountMinorUnits: Long,
     val amountText: String,
-    val clearedState: String? = null,
+    val cleared: Boolean? = null,
+    val reconciled: Boolean? = null,
     val approved: Boolean? = null,
     val matched: Boolean? = null,
     val transfer: Boolean = false,
@@ -196,10 +197,10 @@ internal fun activitySearchSuggestions(
     }
 
     when (value.lowercase()) {
-        "cleared" -> add(ActivitySearchField.CLEARED, "", "Cleared")
-        "uncleared" -> add(ActivitySearchField.UNCLEARED, "", "Uncleared")
-        "reconciled" -> add(ActivitySearchField.RECONCILED, "", "Reconciled")
-        "unreconciled" -> add(ActivitySearchField.UNRECONCILED, "", "Unreconciled")
+        "cleared" -> if (records.any { it.cleared != null }) add(ActivitySearchField.CLEARED, "", "Cleared")
+        "uncleared" -> if (records.any { it.cleared != null }) add(ActivitySearchField.UNCLEARED, "", "Uncleared")
+        "reconciled" -> if (records.any { it.reconciled != null }) add(ActivitySearchField.RECONCILED, "", "Reconciled")
+        "unreconciled" -> if (records.any { it.reconciled != null }) add(ActivitySearchField.UNRECONCILED, "", "Unreconciled")
         "approved" -> add(ActivitySearchField.APPROVED, "", "Approved")
         "unapproved" -> add(ActivitySearchField.UNAPPROVED, "", "Unapproved")
         "matched" -> add(ActivitySearchField.MATCHED, "", "Matched")
@@ -269,10 +270,10 @@ private fun matchesFilter(
         ActivitySearchField.CATEGORY -> record.categoryId == filter.value || record.category.equals(filter.value, ignoreCase = true)
         ActivitySearchField.DATE_MONTH -> record.dateIso.startsWith(filter.value)
         ActivitySearchField.DATE_ON -> record.dateIso.startsWith(filter.value)
-        ActivitySearchField.CLEARED -> record.clearedState == "cleared"
-        ActivitySearchField.UNCLEARED -> record.clearedState == "uncleared"
-        ActivitySearchField.RECONCILED -> record.clearedState == "reconciled"
-        ActivitySearchField.UNRECONCILED -> record.clearedState != null && record.clearedState != "reconciled"
+        ActivitySearchField.CLEARED -> record.cleared == true
+        ActivitySearchField.UNCLEARED -> record.cleared == false
+        ActivitySearchField.RECONCILED -> record.reconciled == true
+        ActivitySearchField.UNRECONCILED -> record.reconciled == false
         ActivitySearchField.APPROVED -> record.approved == true
         ActivitySearchField.UNAPPROVED -> record.approved == false
         ActivitySearchField.MATCHED -> record.matched == true

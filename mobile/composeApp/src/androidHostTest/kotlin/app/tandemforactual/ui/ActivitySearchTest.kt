@@ -86,6 +86,22 @@ class ActivitySearchTest {
     }
 
     @Test
+    fun clearedAndReconciledFiltersUseActualsSeparateFlags() {
+        val clearedOnly = record(cleared = true, reconciled = false)
+        val uncleared = record(cleared = false, reconciled = false)
+        val reconciled = record(cleared = true, reconciled = true)
+
+        assertTrue(matchesActivitySearch(clearedOnly, "", listOf(filter(ActivitySearchField.CLEARED))))
+        assertTrue(matchesActivitySearch(reconciled, "", listOf(filter(ActivitySearchField.CLEARED))))
+        assertFalse(matchesActivitySearch(uncleared, "", listOf(filter(ActivitySearchField.CLEARED))))
+        assertTrue(matchesActivitySearch(uncleared, "", listOf(filter(ActivitySearchField.UNCLEARED))))
+        assertTrue(matchesActivitySearch(reconciled, "", listOf(filter(ActivitySearchField.RECONCILED))))
+        assertFalse(matchesActivitySearch(clearedOnly, "", listOf(filter(ActivitySearchField.RECONCILED))))
+        assertTrue(matchesActivitySearch(clearedOnly, "", listOf(filter(ActivitySearchField.UNRECONCILED))))
+        assertFalse(matchesActivitySearch(reconciled, "", listOf(filter(ActivitySearchField.UNRECONCILED))))
+    }
+
+    @Test
     fun serverAddressWarningAllowsHttpsAndPrivateLanAddresses() {
         assertFalse(serverAddressMayBeInsecure("https://budget.example.com"))
         assertFalse(serverAddressMayBeInsecure("http://192.168.1.40:5006"))
@@ -105,7 +121,8 @@ class ActivitySearchTest {
         notes: String = "",
         date: String = "2026-05-14",
         amount: Long = -4_200,
-        cleared: String? = null,
+        cleared: Boolean? = null,
+        reconciled: Boolean? = null,
     ): ActivitySearchRecord =
         ActivitySearchRecord(
             payee = payee,
@@ -119,6 +136,9 @@ class ActivitySearchTest {
             dateLabel = date,
             amountMinorUnits = amount,
             amountText = formatSignedCurrency(amount),
-            clearedState = cleared,
+            cleared = cleared,
+            reconciled = reconciled,
         )
+
+    private fun filter(field: ActivitySearchField) = ActivitySearchFilter(field, "", field.name)
 }
