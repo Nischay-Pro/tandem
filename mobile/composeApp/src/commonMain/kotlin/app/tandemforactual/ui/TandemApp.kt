@@ -543,6 +543,25 @@ private val previewTransactions =
         ),
     )
 
+private val previewCategoryGroups =
+    listOf(
+        LiveCategoryGroupSummary(
+            id = "sample-essentials",
+            name = "Essentials",
+            categories =
+                listOf(
+                    LiveCategorySummary("sample-rent", "Rent", 150_000, 0, 150_000),
+                    LiveCategorySummary("sample-groceries", "Groceries", 50_000, -18_400, 31_600),
+                    LiveCategorySummary("sample-utilities", "Utilities", 32_000, -11_200, 20_800),
+                ),
+        ),
+        LiveCategoryGroupSummary(
+            id = "sample-everyday",
+            name = "Everyday",
+            categories = listOf(LiveCategorySummary("sample-dining", "Dining", 35_000, -17_000, 18_000)),
+        ),
+    )
+
 private fun buildLiveTransactionItems(
     records: List<BudgetRecordEntity>,
     accountRecords: List<BudgetRecordEntity>,
@@ -4505,7 +4524,7 @@ private fun BudgetScreen(
             "Essentials",
             "${state.formatCurrency(232_000)} assigned · 3 categories",
             state.formatCurrency(232_000),
-            onClick = { navigation.open(AppRoute.CATEGORY_GROUP) },
+            onClick = { openPreviewCategoryGroup(state, navigation, "sample-essentials") },
             expanded = !state.isBudgetSectionCollapsed("sample:essentials"),
             onToggleExpanded = { state.toggleBudgetSection("sample:essentials") },
         ) {
@@ -4516,7 +4535,7 @@ private fun BudgetScreen(
                 leading = RowLeading.Icon(financeIcon("Rent")),
                 options = ListRowOptions(trailingColor = palette.positive, dense = compact),
             ) {
-                navigation.open(AppRoute.CATEGORY_DETAIL)
+                openPreviewCategory(state, navigation, "sample-essentials", "sample-rent")
             }
             DividerLine()
             ListRow(
@@ -4526,7 +4545,7 @@ private fun BudgetScreen(
                 leading = RowLeading.Icon(financeIcon("Groceries")),
                 options = ListRowOptions(trailingColor = palette.positive, dense = compact),
             ) {
-                navigation.open(AppRoute.CATEGORY_DETAIL)
+                openPreviewCategory(state, navigation, "sample-essentials", "sample-groceries")
             }
             DividerLine()
             ListRow(
@@ -4536,14 +4555,14 @@ private fun BudgetScreen(
                 leading = RowLeading.Icon(financeIcon("Utilities")),
                 options = ListRowOptions(trailingColor = palette.positive, dense = compact),
             ) {
-                navigation.open(AppRoute.CATEGORY_DETAIL)
+                openPreviewCategory(state, navigation, "sample-essentials", "sample-utilities")
             }
         }
         CollapsibleSectionCard(
             "Everyday",
             "Flexible spending",
             "${state.formatCurrency(18_000)} left",
-            onClick = { navigation.open(AppRoute.CATEGORY_GROUP) },
+            onClick = { openPreviewCategoryGroup(state, navigation, "sample-everyday") },
             expanded = !state.isBudgetSectionCollapsed("sample:everyday"),
             onToggleExpanded = { state.toggleBudgetSection("sample:everyday") },
         ) {
@@ -4553,7 +4572,7 @@ private fun BudgetScreen(
                 state.formatCurrency(18_000),
                 options = ListRowOptions(trailingColor = palette.positive, dense = compact),
             ) {
-                navigation.open(AppRoute.CATEGORY_DETAIL)
+                openPreviewCategory(state, navigation, "sample-everyday", "sample-dining")
             }
         }
         if (!essentialsFirst) UpcomingBillsCard(state, navigation)
@@ -4601,6 +4620,27 @@ private fun BudgetScreen(
     }
 }
 
+private fun openPreviewCategoryGroup(
+    state: AppState,
+    navigation: AppNavigation,
+    groupId: String,
+) {
+    state.selectedCategoryGroupId = groupId
+    state.selectedCategoryId = ""
+    navigation.open(AppRoute.CATEGORY_GROUP)
+}
+
+private fun openPreviewCategory(
+    state: AppState,
+    navigation: AppNavigation,
+    groupId: String,
+    categoryId: String,
+) {
+    state.selectedCategoryGroupId = groupId
+    state.selectedCategoryId = categoryId
+    navigation.open(AppRoute.CATEGORY_DETAIL)
+}
+
 private fun essentialGroupOrder(name: String): Int =
     if (listOf("essential", "housing", "fixed bill", "bill").any { it in name.lowercase() }) 0 else 1
 
@@ -4622,7 +4662,7 @@ private fun UpcomingBillsCard(
         "Upcoming",
         "Two bills before the end of the month",
         "View all",
-        onClick = { navigation.open(AppRoute.CATEGORY_GROUP) },
+        onClick = { openPreviewCategoryGroup(state, navigation, "sample-essentials") },
         expanded = !state.isBudgetSectionCollapsed("sample:upcoming"),
         onToggleExpanded = { state.toggleBudgetSection("sample:upcoming") },
     ) {
@@ -4751,82 +4791,56 @@ private fun CategoryGroupScreen(
     liveBudgetMonth: LiveBudgetMonthSummary?,
 ) {
     val palette = tandemPalette
-    if (state.selectedBudgetId.isNotBlank()) {
-        val group =
-            liveBudgetMonth?.groups?.firstOrNull { it.id == state.selectedCategoryGroupId }
-                ?: liveBudgetMonth?.groups?.firstOrNull()
-        PageLazyColumn {
-            if (group == null) {
-                item(key = "category-group-empty-message") {
-                    EmptyState(
-                        "No category group",
-                        "No category group is available for this month.",
-                        modifier = Modifier.padding(horizontal = TandemSpacing.large),
-                    )
-                }
-            } else {
-                item(key = "category-group-title:${group.id}") { Heading(group.name, state.selectedMonth) }
-                item(key = "category-group-summary:${group.id}") {
-                    AmountHero(
-                        "Assigned this month",
-                        state.formatCurrency(group.assignedMinor),
-                        "${state.formatCurrency(group.balanceMinor)} available across ${group.categories.size} categories",
-                    )
-                }
-                item(key = "category-group-list-title:${group.id}") {
-                    SectionCard("Categories", "${group.categories.size} synced categories", "") {}
-                }
-                items(group.categories, key = { "category-group:${group.id}:${it.id}" }) { category ->
-                    SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
-                        ListRow(
-                            category.name,
-                            "Spent ${state.formatCurrency(
-                                kotlin.math.abs(category.activityMinor),
-                            )} · ${state.formatCurrency(category.balanceMinor)} available",
-                            state.formatCurrency(category.assignedMinor),
-                            leading = RowLeading.Icon(financeIcon(category.name)),
-                            options = ListRowOptions(trailingColor = if (category.balanceMinor >= 0) palette.positive else palette.warning),
-                        ) {
-                            state.selectedCategoryGroupId = group.id
-                            state.selectedCategoryId = category.id
-                            navigation.open(AppRoute.CATEGORY_DETAIL)
-                        }
+    val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    val groups = if (isLiveBudget) liveBudgetMonth?.groups.orEmpty() else previewCategoryGroups
+    val group = groups.firstOrNull { it.id == state.selectedCategoryGroupId } ?: groups.firstOrNull()
+    PageLazyColumn {
+        if (!isLiveBudget) {
+            item(key = "category-group-sample-banner") { SampleBanner() }
+        }
+        if (group == null) {
+            item(key = "category-group-empty-message") {
+                EmptyState(
+                    "No category group",
+                    "No category group is available for this month.",
+                    modifier = Modifier.padding(horizontal = TandemSpacing.large),
+                )
+            }
+        } else {
+            item(key = "category-group-title:${group.id}") { Heading(group.name, state.selectedMonth) }
+            item(key = "category-group-summary:${group.id}") {
+                AmountHero(
+                    "Assigned this month",
+                    state.formatCurrency(group.assignedMinor),
+                    "${state.formatCurrency(group.balanceMinor)} available across ${group.categories.size} categories",
+                )
+            }
+            item(key = "category-group-list-title:${group.id}") {
+                SectionCard("Categories", "${group.categories.size} categories") {}
+            }
+            items(group.categories, key = { "category-group:${group.id}:${it.id}" }) { category ->
+                SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
+                    ListRow(
+                        category.name,
+                        "Spent ${state.formatCurrency(
+                            kotlin.math.abs(category.activityMinor),
+                        )} · ${state.formatCurrency(category.balanceMinor)} available",
+                        state.formatCurrency(category.assignedMinor),
+                        leading = RowLeading.Icon(financeIcon(category.name)),
+                        options = ListRowOptions(trailingColor = if (category.balanceMinor >= 0) palette.positive else palette.warning),
+                    ) {
+                        state.selectedCategoryGroupId = group.id
+                        state.selectedCategoryId = category.id
+                        navigation.open(AppRoute.CATEGORY_DETAIL)
                     }
                 }
             }
+            if (!isLiveBudget) {
+                item(key = "category-group-sample-note") {
+                    PreviewNote("Category balances and activity use sample data.")
+                }
+            }
         }
-        return
-    }
-    PageColumn {
-        SampleBanner()
-        Heading("Group overview", "Review the bills and needs planned first.")
-        AmountHero("Assigned this month", state.formatCurrency(232_000), "${state.formatCurrency(232_000)} available across 3 categories")
-        SectionCard("Categories", "3 plans", "Edit group") {
-            ListRow(
-                "Rent",
-                "Assigned ${state.formatCurrency(150_000)} · Available ${state.formatCurrency(150_000)}",
-                state.formatCurrency(150_000),
-                leading = RowLeading.Icon(financeIcon("Rent")),
-                options = ListRowOptions(trailingColor = palette.positive),
-            ) { navigation.open(AppRoute.CATEGORY_DETAIL) }
-            DividerLine()
-            ListRow(
-                "Groceries",
-                "Assigned ${state.formatCurrency(50_000)} · Available ${state.formatCurrency(50_000)}",
-                state.formatCurrency(50_000),
-                leading = RowLeading.Icon(financeIcon("Groceries")),
-                options = ListRowOptions(trailingColor = palette.positive),
-            ) { navigation.open(AppRoute.CATEGORY_DETAIL) }
-            DividerLine()
-            ListRow(
-                "Utilities",
-                "Assigned ${state.formatCurrency(32_000)} · Available ${state.formatCurrency(32_000)}",
-                state.formatCurrency(32_000),
-                leading = RowLeading.Icon(financeIcon("Utilities")),
-                options = ListRowOptions(trailingColor = palette.positive),
-            ) { navigation.open(AppRoute.CATEGORY_DETAIL) }
-        }
-        PreviewNote("Category balances and activity use sample data.")
     }
 }
 
@@ -4836,54 +4850,57 @@ private fun CategoryDetailScreen(
     navigation: AppNavigation,
     liveBudgetMonth: LiveBudgetMonthSummary?,
 ) {
-    if (state.selectedBudgetId.isNotBlank()) {
-        val category =
+    val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    val category =
+        if (isLiveBudget) {
             liveBudgetMonth
                 ?.groups
                 ?.firstOrNull { it.id == state.selectedCategoryGroupId }
                 ?.categories
                 ?.firstOrNull { it.id == state.selectedCategoryId }
-        PageColumn {
-            if (category == null) {
-                Heading("Category details", state.selectedMonth)
-                BodyText("This category isn’t in the saved plan for this month.")
-            } else {
-                Heading(category.name, state.selectedMonth)
-                AmountHero(
-                    "Available",
-                    state.formatCurrency(category.balanceMinor),
-                    "${state.formatCurrency(category.assignedMinor)} assigned",
+        } else {
+            previewCategoryGroups
+                .firstOrNull { it.id == state.selectedCategoryGroupId }
+                ?.categories
+                ?.firstOrNull { it.id == state.selectedCategoryId }
+                ?: previewCategoryGroups.first().categories.first()
+        }
+    PageColumn {
+        if (!isLiveBudget) SampleBanner()
+        if (category == null) {
+            Heading("Category details", state.selectedMonth)
+            BodyText("This category isn’t in the saved plan for this month.")
+        } else {
+            Heading(category.name, state.selectedMonth)
+            AmountHero(
+                "Available",
+                state.formatCurrency(category.balanceMinor),
+                "${state.formatCurrency(category.assignedMinor)} assigned",
+            )
+            SectionCard("This month") {
+                ListRow(
+                    "Assigned",
+                    if (isLiveBudget) "Budgeted in Actual" else "Monthly target",
+                    state.formatCurrency(category.assignedMinor),
                 )
-                SectionCard("This month", "Actual plan and activity") {
-                    ListRow("Assigned", "Budgeted in Actual", state.formatCurrency(category.assignedMinor))
-                    DividerLine()
-                    ListRow(
-                        "Activity",
-                        "${state.selectedMonth} · ${state.formatCurrency(kotlin.math.abs(category.activityMinor))}",
-                        leading = RowLeading.Icon(Lucide.Receipt),
-                        onClick = { openCategoryActivity(state, navigation, category.id, category.name) },
-                    )
-                    DividerLine()
-                    ListRow("Available", "Assigned plus activity", state.formatCurrency(category.balanceMinor))
-                }
+                DividerLine()
+                ListRow(
+                    "Activity",
+                    "${state.selectedMonth} · ${state.formatCurrency(kotlin.math.abs(category.activityMinor))}",
+                    leading = RowLeading.Icon(Lucide.Receipt),
+                    onClick = { openCategoryActivity(state, navigation, category.id, category.name) },
+                )
+                DividerLine()
+                ListRow("Available", "Assigned plus activity", state.formatCurrency(category.balanceMinor))
+            }
+            if (isLiveBudget) {
                 SecondaryButton(
                     if (state.isCategoryPinned(category.id)) "Unpin" else "Pin",
                 ) { state.togglePinnedCategory(category.id) }
+            } else {
+                PreviewNote("Sample category · read only")
             }
         }
-        return
-    }
-    PageColumn {
-        SampleBanner()
-        Heading("Category details", "Essentials · monthly plan")
-        AmountHero("Available", state.formatCurrency(150_000), "Fully funded for ${formatMonth(2026, 5)}")
-        SectionCard("This month", "Assigned ${state.formatCurrency(150_000)} · Spent ${state.formatCurrency(0)}") {
-            ListRow("Planned amount", "Monthly target", state.formatCurrency(150_000))
-            DividerLine()
-            ListRow("Next due date", "Scheduled payment", formatShortDate(SampleDate(2026, 6, 1)))
-        }
-        PrimaryButton("View activity this month") { openCategoryActivity(state, navigation, "Personal", "Personal") }
-        PreviewNote("This category uses sample data and is read-only. The app keeps a local budget copy for offline use.")
     }
 }
 
