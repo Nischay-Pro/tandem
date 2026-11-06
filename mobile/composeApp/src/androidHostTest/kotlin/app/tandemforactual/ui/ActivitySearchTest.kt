@@ -3,6 +3,7 @@ package app.tandemforactual.ui
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ActivitySearchTest {
@@ -38,10 +39,27 @@ class ActivitySearchTest {
     @Test
     fun amountSearchSupportsCurrencyAndGroupingSeparators() {
         assertEquals(5_000L, parseActivitySearchAmount("$50.00"))
-        assertEquals(123_456L, parseActivitySearchAmount("1,234.56 USD"))
-        assertEquals(123_456L, parseActivitySearchAmount("1.234,56 EUR"))
-        assertEquals(5_000L, parseActivitySearchAmount("50,00 CAD"))
+        assertEquals(123_456L, parseActivitySearchAmount("1,234.56 USD", "USD"))
+        assertEquals(123_456L, parseActivitySearchAmount("1.234,56 EUR", "EUR"))
+        assertEquals(5_000L, parseActivitySearchAmount("50,00 CAD", "CAD"))
+        assertEquals(5_000L, parseActivitySearchAmount("USD 50", "USD"))
         assertEquals(75L, parseActivitySearchAmount(".75"))
+    }
+
+    @Test
+    fun wordsThatContainThreeLettersAreNotTreatedAsCurrencyCodes() {
+        assertNull(parseActivitySearchAmount("Gas 20", "USD"))
+        assertNull(parseActivitySearchAmount("mar 2026", "USD"))
+    }
+
+    @Test
+    fun suggestionsUseTheAppTermsForNotesSpendingAndIncome() {
+        val labels = activitySearchSuggestions("12", listOf(record())).map(ActivitySearchFilter::label)
+
+        assertTrue("Notes contain: 12" in labels)
+        assertTrue(labels.any { it.startsWith("Spending is:") })
+        assertTrue(labels.any { it.startsWith("Income at least:") })
+        assertTrue(labels.none { it.contains("Memo") || it.contains("Outflow") || it.contains("Inflow") })
     }
 
     @Test

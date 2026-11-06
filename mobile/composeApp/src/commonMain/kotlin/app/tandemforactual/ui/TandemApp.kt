@@ -5784,7 +5784,7 @@ private fun ActivitySearchScreen(
         val displaySettings = state.budgetDisplaySettings
         val evaluation =
             withContext(Dispatchers.Default) {
-                val preparedSearch = prepareActivitySearch(search, filters)
+                val preparedSearch = prepareActivitySearch(search, filters, displaySettings?.currencyCode)
                 val matchedIndices =
                     searchableRecords.mapIndexedNotNull { index, record ->
                         index.takeIf { matchesActivitySearch(record, preparedSearch) }
@@ -5793,7 +5793,9 @@ private fun ActivitySearchScreen(
                     if (search.isBlank()) {
                         quickFilters
                     } else {
-                        activitySearchSuggestions(search, searchableRecords) { formatCurrency(it, displaySettings) }
+                        activitySearchSuggestions(search, searchableRecords, displaySettings?.currencyCode) {
+                            formatCurrency(it, displaySettings)
+                        }
                     }
                 matchedIndices to refinements
             }

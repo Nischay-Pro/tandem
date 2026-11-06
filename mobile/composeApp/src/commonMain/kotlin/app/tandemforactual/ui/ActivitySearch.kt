@@ -81,16 +81,22 @@ internal data class PreparedActivitySearch(
 internal fun prepareActivitySearch(
     query: String,
     filters: List<ActivitySearchFilter>,
+    currencyCode: String? = null,
 ): PreparedActivitySearch =
     PreparedActivitySearch(
         normalizedQuery = query.trim().lowercase(),
-        queryAmount = parseActivitySearchAmount(query),
+        queryAmount = parseActivitySearchAmount(query, currencyCode),
         filters =
             filters.map { filter ->
                 PreparedActivitySearchFilter(
                     filter = filter,
                     expectedAmount = filter.value.toLongOrNull(),
-                    textAmount = if (filter.field == ActivitySearchField.ANY_CONTAINS) parseActivitySearchAmount(filter.value) else null,
+                    textAmount =
+                        if (filter.field == ActivitySearchField.ANY_CONTAINS) {
+                            parseActivitySearchAmount(filter.value, currencyCode)
+                        } else {
+                            null
+                        },
                 )
             },
     )
@@ -112,6 +118,7 @@ internal fun matchesActivitySearch(
 internal fun activitySearchSuggestions(
     query: String,
     records: List<ActivitySearchRecord>,
+    currencyCode: String? = null,
     formatAmount: (Long) -> String = { formatCurrency(it) },
 ): List<ActivitySearchFilter> {
     val value = query.trim()
@@ -131,7 +138,7 @@ internal fun activitySearchSuggestions(
 
     add(ActivitySearchField.ANY_CONTAINS, value, "Anything contains: $value")
     add(ActivitySearchField.PAYEE_CONTAINS, value, "Payee contains: $value")
-    add(ActivitySearchField.NOTES_CONTAIN, value, "Memo contains: $value")
+    add(ActivitySearchField.NOTES_CONTAIN, value, "Notes contain: $value")
 
     records
         .map { it.account to it.accountId }
@@ -178,14 +185,14 @@ internal fun activitySearchSuggestions(
             }
     }
 
-    parseActivitySearchAmount(value)?.let { amount ->
+    parseActivitySearchAmount(value, currencyCode)?.let { amount ->
         val amountText = formatAmount(amount)
-        add(ActivitySearchField.OUTFLOW_IS, amount.toString(), "Outflow is: $amountText")
-        add(ActivitySearchField.OUTFLOW_AT_LEAST, amount.toString(), "Outflow ≥ $amountText")
-        add(ActivitySearchField.OUTFLOW_AT_MOST, amount.toString(), "Outflow ≤ $amountText")
-        add(ActivitySearchField.INFLOW_IS, amount.toString(), "Inflow is: $amountText")
-        add(ActivitySearchField.INFLOW_AT_LEAST, amount.toString(), "Inflow ≥ $amountText")
-        add(ActivitySearchField.INFLOW_AT_MOST, amount.toString(), "Inflow ≤ $amountText")
+        add(ActivitySearchField.OUTFLOW_IS, amount.toString(), "Spending is: $amountText")
+        add(ActivitySearchField.OUTFLOW_AT_LEAST, amount.toString(), "Spending at least: $amountText")
+        add(ActivitySearchField.OUTFLOW_AT_MOST, amount.toString(), "Spending at most: $amountText")
+        add(ActivitySearchField.INFLOW_IS, amount.toString(), "Income is: $amountText")
+        add(ActivitySearchField.INFLOW_AT_LEAST, amount.toString(), "Income at least: $amountText")
+        add(ActivitySearchField.INFLOW_AT_MOST, amount.toString(), "Income at most: $amountText")
     }
 
     when (value.lowercase()) {
@@ -203,15 +210,18 @@ internal fun activitySearchSuggestions(
     return suggestions
 }
 
-internal fun parseActivitySearchAmount(value: String): Long? {
+internal fun parseActivitySearchAmount(
+    value: String,
+    currencyCode: String? = null,
+): Long? {
+    val code = currencyCode?.uppercase()?.takeIf { it.matches(Regex("[A-Z]{3}")) }
+    val codePattern =
+        code?.let {
+            Regex("(?i)^(?:${Regex.escape(it)}\\s*)|(?:\\s*${Regex.escape(it)})$")
+        }
     val ungrouped =
-        value
-            .trim()
-            .replace("$", "")
-            .replace("€", "")
-            .replace("£", "")
-            .replace("¥", "")
-            .replace(Regex("[A-Za-z]{3}"), "")
+        (codePattern?.replace(value.trim(), "") ?: value.trim())
+            .replace(Regex("[$€£¥]"), "")
             .replace(Regex("\\s"), "")
             .trim()
     val decimalSeparator =
