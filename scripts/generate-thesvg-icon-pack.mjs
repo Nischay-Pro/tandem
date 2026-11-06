@@ -205,18 +205,34 @@ await mkdir(filesDirectory, { recursive: true });
 const records = [];
 const failures = [];
 let outputBytes = 0;
+const tandemSquirclePath =
+  "M312 0h624c172 0 312 140 312 312v624c0 172-140 312-312 312H312C140 1248 0 1108 0 936V312C0 140 140 0 312 0z";
 
-const tandemLogoSvg = await readFile(
-  join(repositoryDirectory, "mobile/branding/tandem-logo-squircle.svg"),
-  "utf8",
-);
-const tandemLogoPng = new Resvg(tandemLogoSvg, {
-  fitTo: { mode: "width", value: 512 },
-})
-  .render()
-  .asPng();
-await writeFile(join(drawableDirectory, "tandem_logo_squircle.png"), tandemLogoPng);
-outputBytes += tandemLogoPng.byteLength;
+function clipTandemMarkToSquircle(svg) {
+  const openTagEnd = svg.indexOf(">") + 1;
+  const closeTagStart = svg.lastIndexOf("</svg>");
+  if (openTagEnd === 0 || closeTagStart < openTagEnd) {
+    throw new Error("Tandem mark SVG has an invalid root element.");
+  }
+  return `${svg.slice(0, openTagEnd)}<defs><clipPath id="app-mark-mask"><path d="${tandemSquirclePath}"/></clipPath></defs><g clip-path="url(#app-mark-mask)">${svg.slice(openTagEnd, closeTagStart)}</g>${svg.slice(closeTagStart)}`;
+}
+
+for (const [source, resource] of [
+  ["tandem-mark.svg", "tandem_mark.png"],
+  ["tandem-mark-light.svg", "tandem_mark_light.png"],
+]) {
+  const svg = await readFile(
+    join(repositoryDirectory, "mobile/branding", source),
+    "utf8",
+  );
+  const png = new Resvg(clipTandemMarkToSquircle(svg), {
+    fitTo: { mode: "width", value: 512 },
+  })
+    .render()
+    .asPng();
+  await writeFile(join(drawableDirectory, resource), png);
+  outputBytes += png.byteLength;
+}
 
 for (const icon of icons) {
   try {

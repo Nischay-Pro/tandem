@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1248" height="1248" viewBox="0 0 1248 1248">
+  <title>Tandem — Parallel T</title>
+  <desc>Two equal-length, parallel, offset white slanted bars and a white stem, all thick and square-ended, on solid #805AD5 purple. Stem length is exactly 1.2 times either bar.</desc>
+  <rect width="1248" height="1248" fill="#805AD5"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="100" stroke-linecap="butt" stroke-linejoin="miter">
+    <path d="M 180,365 L 880,165"/>
+    <path d="M 360.00000000,469.57378334 L 1060.00000000,269.57378334"/>
+    <path d="M 620,239.28571429 L 620,1112.89890100"/>
+  </g>
+</svg>

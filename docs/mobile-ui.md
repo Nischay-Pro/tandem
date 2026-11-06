@@ -16,14 +16,14 @@ a selection mark; Background and Motion keeps a style sample and three
 selectable background choices. Visual Settings has no decorative live-preview
 card.
 
-Tandem's supplied `tandem-ratio-1point2.svg` and inverted variant are the active
-logo sources. The iOS app icon uses the inverted purple-field/white-mark
-treatment with its native squircle mask. Android's adaptive launcher icon uses
-the purple field as its background and the white mark as a separate, inset
-foreground, so Android's launcher and task-switcher masks shape the tile once.
-The shared Compose logo is rendered from the canonical squircle SVG during the
-offline icon-resource generation step. The in-app logo and Android system
-splash use the purple squircle tile on the dark app background.
+The active logo sources are `mobile/branding/tandem-mark.svg` and its light
+background variant, `mobile/branding/tandem-mark-light.svg`. Shared Compose
+screens choose the purple tile on dark surfaces and the purple mark on white
+for light surfaces; both are clipped to the same squircle. Android uses the
+purple field as its adaptive-icon background with the white mark inset as the
+foreground. iOS uses the purple-field mark as its app icon and applies its
+native squircle mask. The Android system splash and in-app loading mark use the
+purple squircle tile on the navy splash background.
 
 Android uses an adaptive icon and a navy system splash; the first system splash
 shows an inset squircle tile without the mask cutting through the tile or mark.

@@ -37,7 +37,8 @@ val generateTheSvgIconPack =
     }
     inputs.files(
       repositoryRoot.resolve("scripts/generate-thesvg-icon-pack.mjs"),
-      repositoryRoot.resolve("mobile/branding/tandem-logo-squircle.svg"),
+      repositoryRoot.resolve("mobile/branding/tandem-mark.svg"),
+      repositoryRoot.resolve("mobile/branding/tandem-mark-light.svg"),
       repositoryRoot.resolve("mobile/composeApp/third_party/merchant-icons/panera-bread-wordmark.svg"),
       repositoryRoot.resolve("mobile/composeApp/third_party/Apache-2.0.txt"),
       repositoryRoot.resolve("package.json"),

@@ -12,7 +12,7 @@
                     <view key="view" contentMode="scaleToFill" id="tandem-launch-view">
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <subviews>
-                            <imageView opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="TandemLogoSquircle" translatesAutoresizingMaskIntoConstraints="NO" id="tandem-launch-logo">
+                            <imageView opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="TandemMark" translatesAutoresizingMaskIntoConstraints="NO" id="tandem-launch-logo">
                                 <rect key="frame" x="144.5" y="374.0" width="104" height="104"/>
                             </imageView>
                         </subviews>
@@ -31,6 +31,6 @@
         </scene>
     </scenes>
     <resources>
-        <image name="TandemLogoSquircle" width="1248" height="1248"/>
+        <image name="TandemMark" width="1248" height="1248"/>
     </resources>
 </document>
