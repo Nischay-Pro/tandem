@@ -52,7 +52,11 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyItemScope
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
@@ -746,6 +750,7 @@ internal fun resolveAppStartupDestination(
 private const val AUTOMATIC_SYNC_COOLDOWN_MS = 30_000L
 
 private val LocalRouteScrollState = staticCompositionLocalOf<ScrollState?> { null }
+private val LocalRouteLazyListState = staticCompositionLocalOf<LazyListState?> { null }
 
 private fun decodeScrollPositions(serialized: String?): Map<String, Int> =
     serialized
@@ -756,6 +761,26 @@ private fun decodeScrollPositions(serialized: String?): Map<String, Int> =
                 null
             } else {
                 entry.substring(delimiter + 1).toIntOrNull()?.let { entry.substring(0, delimiter) to it }
+            }
+        }?.toMap()
+        ?: emptyMap()
+
+private fun decodeLazyScrollPositions(serialized: String?): Map<String, Pair<Int, Int>> =
+    serialized
+        ?.split('|')
+        ?.mapNotNull { entry ->
+            val delimiter = entry.lastIndexOf(':')
+            if (delimiter < 1) {
+                null
+            } else {
+                val values = entry.substring(delimiter + 1).split(',', limit = 2)
+                val index = values.getOrNull(0)?.toIntOrNull()
+                val offset = values.getOrNull(1)?.toIntOrNull()
+                if (index == null || offset == null || index < 0 || offset < 0) {
+                    null
+                } else {
+                    entry.substring(0, delimiter) to (index to offset)
+                }
             }
         }?.toMap()
         ?: emptyMap()
@@ -812,6 +837,7 @@ internal class AppState {
     var settingsStorageRetry by mutableStateOf(0)
     var settingsStorageReady by mutableStateOf(false)
     val scrollPositions = mutableMapOf<String, Int>()
+    val lazyScrollPositions = mutableMapOf<String, Pair<Int, Int>>()
 
     fun persistentSettings(): Map<String, String> =
         mapOf(
@@ -911,6 +937,8 @@ internal class AppState {
                         "conflictReviewAlerts" to state.conflictReviewAlerts,
                         "rejectedEditAlerts" to state.rejectedEditAlerts,
                         "scrollPositions" to state.scrollPositions.entries.joinToString("|") { "${it.key}:${it.value}" },
+                        "lazyScrollPositions" to
+                            state.lazyScrollPositions.entries.joinToString("|") { "${it.key}:${it.value.first},${it.value.second}" },
                     )
                 },
                 restore = { saved ->
@@ -963,6 +991,7 @@ internal class AppState {
                         rejectedEditAlerts =
                             saved["rejectedEditAlerts"] as? Boolean ?: legacyNotifications ?: rejectedEditAlerts
                         scrollPositions.putAll(decodeScrollPositions(saved["scrollPositions"] as? String))
+                        lazyScrollPositions.putAll(decodeLazyScrollPositions(saved["lazyScrollPositions"] as? String))
                     }
                 },
             )
@@ -1055,6 +1084,7 @@ fun TandemApp(
     val state = rememberSaveable(saver = AppState.Saver) { AppState() }
     val saveableStateHolder = rememberSaveableStateHolder()
     val routeScrollStates = remember { mutableMapOf<String, ScrollState>() }
+    val routeLazyListStates = remember { mutableMapOf<String, LazyListState>() }
     SideEffect { state.systemReduceMotionEnabled = systemReduceMotion }
     val reduceMotion = state.reduceMotionOverride ?: systemReduceMotion
     val apiClient = remember(allowInsecureLoopback) { TandemApiClient(allowInsecureLoopback) }
@@ -1798,22 +1828,41 @@ fun TandemApp(
                         ScrollState(state.scrollPositions[visibleEntry.stateKey] ?: 0)
                     }
                 }
+            val routeLazyListState =
+                remember(visibleEntry.stateKey) {
+                    routeLazyListStates.getOrPut(visibleEntry.stateKey) {
+                        val (index, offset) = state.lazyScrollPositions[visibleEntry.stateKey] ?: (0 to 0)
+                        LazyListState(index, offset)
+                    }
+                }
             LaunchedEffect(visibleEntry.stateKey, routeScrollState) {
                 snapshotFlow { routeScrollState.value }.collect { state.scrollPositions[visibleEntry.stateKey] = it }
             }
+            LaunchedEffect(visibleEntry.stateKey, routeLazyListState) {
+                snapshotFlow {
+                    routeLazyListState.firstVisibleItemIndex to routeLazyListState.firstVisibleItemScrollOffset
+                }.collect { state.lazyScrollPositions[visibleEntry.stateKey] = it }
+            }
             if (saveRouteState) {
-                DisposableEffect(visibleEntry.stateKey, routeScrollState) {
+                DisposableEffect(visibleEntry.stateKey, routeScrollState, routeLazyListState) {
                     onDispose {
                         state.scrollPositions[visibleEntry.stateKey] = routeScrollState.value
+                        state.lazyScrollPositions[visibleEntry.stateKey] =
+                            routeLazyListState.firstVisibleItemIndex to routeLazyListState.firstVisibleItemScrollOffset
                         if (!visibleRoute.isTab() && backStack.none { it.stateKey == visibleEntry.stateKey }) {
                             state.scrollPositions.remove(visibleEntry.stateKey)
+                            state.lazyScrollPositions.remove(visibleEntry.stateKey)
+                            routeLazyListStates.remove(visibleEntry.stateKey)
                         }
                         routeScrollStates.remove(visibleEntry.stateKey)
                     }
                 }
             }
             val routeContent: @Composable () -> Unit = {
-                CompositionLocalProvider(LocalRouteScrollState provides routeScrollState) {
+                CompositionLocalProvider(
+                    LocalRouteScrollState provides routeScrollState,
+                    LocalRouteLazyListState provides routeLazyListState,
+                ) {
                     Column(modifier = pageModifier.fillMaxSize()) {
                         if (includeChrome) renderHeader(visibleRoute)
                         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -1852,8 +1901,12 @@ fun TandemApp(
                             )
                             if (visibleRoute == AppRoute.BUDGET) {
                                 val transactionActionCompact by
-                                    remember(routeScrollState) {
-                                        derivedStateOf { routeScrollState.value > 72 }
+                                    remember(routeScrollState, routeLazyListState) {
+                                        derivedStateOf {
+                                            routeScrollState.value > 72 ||
+                                                routeLazyListState.firstVisibleItemIndex > 0 ||
+                                                routeLazyListState.firstVisibleItemScrollOffset > 72
+                                        }
                                     }
                                 FloatingTransactionAction(
                                     compact = transactionActionCompact,
@@ -2614,6 +2667,30 @@ private fun PageColumn(
         content = content,
     )
 }
+
+@Composable
+private fun PageLazyColumn(
+    verticalSpacing: androidx.compose.ui.unit.Dp = TandemSpacing.large,
+    horizontalPadding: androidx.compose.ui.unit.Dp = TandemSpacing.screen,
+    modifier: Modifier = Modifier,
+    content: LazyListScope.() -> Unit,
+) {
+    val routeListState = LocalRouteLazyListState.current ?: rememberLazyListState()
+    LazyColumn(
+        state = routeListState,
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = TandemSpacing.medium),
+        verticalArrangement = Arrangement.spacedBy(verticalSpacing),
+        content = content,
+    )
+}
+
+private fun LazyItemScope.tandemListItemModifier(reduceMotion: Boolean): Modifier =
+    Modifier.animateItem(
+        fadeInSpec = tandemMotionSpec(reduceMotion, TandemMotion.REVEAL_MILLIS),
+        placementSpec = tandemMotionSpec(reduceMotion, TandemMotion.CONTENT_SIZE_MILLIS),
+        fadeOutSpec = tandemMotionSpec(reduceMotion, TandemMotion.REVEAL_MILLIS),
+    )
 
 private fun appBackgroundBrush(
     style: String,
@@ -4638,99 +4715,127 @@ private fun BudgetScreen(
     val compact = state.homeLayout == "Compact"
     val essentialsFirst = state.homeLayout == "Essentials"
     if (state.selectedBudgetId.isNotBlank()) {
-        PageColumn(verticalSpacing = if (compact) 10.dp else 16.dp, horizontalPadding = if (compact) 16.dp else 20.dp) {
+        PageLazyColumn(verticalSpacing = if (compact) 10.dp else 16.dp, horizontalPadding = if (compact) 16.dp else 20.dp) {
             val conflictCount = mobileSession.pendingWrites.count { it.status == "conflict" }
-            AnimatedReveal(visible = state.conflictReviewAlerts && conflictCount > 0) {
-                AttentionBanner(
-                    "$conflictCount change${if (conflictCount == 1) "" else "s"} need${if (conflictCount == 1) "s" else ""} review",
-                    "Choose which version of the budget change to keep.",
-                    "Review changes",
-                ) { navigation.open(AppRoute.CONFLICT_INBOX) }
+            item(key = "budget-conflict-alert") {
+                AnimatedReveal(visible = state.conflictReviewAlerts && conflictCount > 0) {
+                    AttentionBanner(
+                        "$conflictCount change${if (conflictCount == 1) "" else "s"} need${if (conflictCount == 1) "s" else ""} review",
+                        "Choose which version of the budget change to keep.",
+                        "Review changes",
+                    ) { navigation.open(AppRoute.CONFLICT_INBOX) }
+                }
             }
             val rejectedCount = mobileSession.pendingWrites.count { it.status == "rejected" }
-            AnimatedReveal(visible = state.rejectedEditAlerts && rejectedCount > 0) {
-                AttentionBanner(
-                    "$rejectedCount edit${if (rejectedCount == 1) "" else "s"} not applied",
-                    "Review the reason and dismiss or correct the local edit.",
-                    "View rejected edits",
-                ) { navigation.open(AppRoute.REJECTED_WRITE) }
+            item(key = "budget-rejected-alert") {
+                AnimatedReveal(visible = state.rejectedEditAlerts && rejectedCount > 0) {
+                    AttentionBanner(
+                        "$rejectedCount edit${if (rejectedCount == 1) "" else "s"} not applied",
+                        "Review the reason and dismiss or correct the local edit.",
+                        "View rejected edits",
+                    ) { navigation.open(AppRoute.REJECTED_WRITE) }
+                }
             }
-            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-                Text("Budget overview", color = palette.text, fontSize = TandemTypography.pageTitle, fontWeight = FontWeight.Bold)
-                Text(
-                    "Review the synced plan and recent activity for the selected month.",
-                    color = palette.muted,
-                    fontSize = TandemTypography.compactBody,
-                )
+            item(key = "budget-overview-title") {
+                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+                    Text("Budget overview", color = palette.text, fontSize = TandemTypography.pageTitle, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Review the synced plan and recent activity for the selected month.",
+                        color = palette.muted,
+                        fontSize = TandemTypography.compactBody,
+                    )
+                }
             }
-            SurfaceCard(onClick = { navigation.open(AppRoute.MONTH_PICKER) }) {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        LabelText("Planning period")
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            state.selectedMonth,
-                            color = palette.text,
-                            fontSize = TandemTypography.action,
-                            fontWeight = FontWeight.SemiBold,
+            item(key = "budget-month-picker") {
+                SurfaceCard(onClick = { navigation.open(AppRoute.MONTH_PICKER) }) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            LabelText("Planning period")
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                state.selectedMonth,
+                                color = palette.text,
+                                fontSize = TandemTypography.action,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                        Icon(
+                            Lucide.ChevronDown,
+                            contentDescription = "Choose month",
+                            modifier = Modifier.size(22.dp),
+                            tint = palette.accent,
                         )
                     }
-                    Icon(Lucide.ChevronDown, contentDescription = "Choose month", modifier = Modifier.size(22.dp), tint = palette.accent)
                 }
             }
             if (liveBudgetMonth == null) {
-                SurfaceCard {
-                    Column(
-                        Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                    ) {
-                        Text("No plan for this month is cached", color = palette.text, fontWeight = FontWeight.SemiBold)
-                        BodyText("Sync a month available in Actual, or choose a different planning period.")
+                item(key = "budget-month-empty") {
+                    SurfaceCard {
+                        Column(
+                            Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                            verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                        ) {
+                            Text("No plan for this month is cached", color = palette.text, fontWeight = FontWeight.SemiBold)
+                            BodyText("Sync a month available in Actual, or choose a different planning period.")
+                        }
                     }
                 }
             } else {
                 val summaryKey = "live:${state.selectedBudgetId}:summary:${state.selectedMonthId}"
-                SectionCard(
-                    "${state.selectedMonth} Summary",
-                    "${liveBudgetMonth.groups.sumOf { it.categories.size }} categories",
-                    state.formatCurrency(liveBudgetMonth.toBudgetMinor ?: 0),
-                    expanded = !state.isBudgetSectionCollapsed(summaryKey),
-                    onToggleExpanded = { state.toggleBudgetSection(summaryKey) },
-                ) {
-                    ListRow(
-                        "¤",
-                        "Ready to assign",
-                        state.selectedMonth,
+                item(key = summaryKey) {
+                    SectionCard(
+                        "${state.selectedMonth} Summary",
+                        "${liveBudgetMonth.groups.sumOf { it.categories.size }} categories",
                         state.formatCurrency(liveBudgetMonth.toBudgetMinor ?: 0),
-                        leadingVector = Lucide.WalletCards,
-                    )
+                        expanded = !state.isBudgetSectionCollapsed(summaryKey),
+                        onToggleExpanded = { state.toggleBudgetSection(summaryKey) },
+                    ) {
+                        ListRow(
+                            "¤",
+                            "Ready to assign",
+                            state.selectedMonth,
+                            state.formatCurrency(liveBudgetMonth.toBudgetMinor ?: 0),
+                            leadingVector = Lucide.WalletCards,
+                        )
+                    }
                 }
                 val pinnedCategories =
                     liveBudgetMonth.groups.flatMap { group ->
                         group.categories.filter { state.isCategoryPinned(it.id) }.map { group to it }
                     }
                 if (pinnedCategories.isNotEmpty()) {
-                    SectionCard(
-                        "Pinned",
-                        "${pinnedCategories.size} categories",
-                        expanded = !state.isBudgetSectionCollapsed("live:${state.selectedBudgetId}:pinned"),
-                        onToggleExpanded = { state.toggleBudgetSection("live:${state.selectedBudgetId}:pinned") },
-                    ) {
-                        pinnedCategories.forEachIndexed { index, (group, category) ->
-                            if (index > 0) DividerLine()
-                            ListRow(
-                                category.name.take(1).uppercase(),
-                                category.name,
-                                group.name,
-                                state.formatCurrency(category.balanceMinor),
-                                leadingVector = financeIcon(category.name),
-                            ) {
-                                state.selectedCategoryGroupId = group.id
-                                state.selectedCategoryId = category.id
-                                navigation.open(AppRoute.CATEGORY_DETAIL)
+                    val pinnedSectionKey = "live:${state.selectedBudgetId}:pinned"
+                    val pinnedExpanded = !state.isBudgetSectionCollapsed(pinnedSectionKey)
+                    item(key = "$pinnedSectionKey:header") {
+                        SectionCard(
+                            "Pinned",
+                            "${pinnedCategories.size} categories",
+                            expanded = pinnedExpanded,
+                            onToggleExpanded = { state.toggleBudgetSection(pinnedSectionKey) },
+                        ) {}
+                    }
+                    items(pinnedCategories, key = { "pinned:${it.second.id}" }) { (group, category) ->
+                        AnimatedVisibility(
+                            modifier = tandemListItemModifier(tandemReduceMotion),
+                            visible = pinnedExpanded,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut(),
+                        ) {
+                            SurfaceCard {
+                                ListRow(
+                                    category.name.take(1).uppercase(),
+                                    category.name,
+                                    group.name,
+                                    state.formatCurrency(category.balanceMinor),
+                                    leadingVector = financeIcon(category.name),
+                                ) {
+                                    state.selectedCategoryGroupId = group.id
+                                    state.selectedCategoryId = category.id
+                                    navigation.open(AppRoute.CATEGORY_DETAIL)
+                                }
                             }
                         }
                     }
@@ -4749,67 +4854,89 @@ private fun BudgetScreen(
                         liveBudgetMonth.groups
                     }
                 displayGroups.forEach { group ->
-                    SectionCard(
-                        group.name,
-                        "${state.formatCurrency(group.assignedMinor)} assigned · ${group.categories.size} categories",
-                        state.formatCurrency(group.balanceMinor),
-                        expanded = !state.isBudgetSectionCollapsed("live:${state.selectedBudgetId}:group:${group.id}"),
-                        onToggleExpanded = { state.toggleBudgetSection("live:${state.selectedBudgetId}:group:${group.id}") },
-                        onClick = {
-                            state.selectedCategoryGroupId = group.id
-                            navigation.open(AppRoute.CATEGORY_GROUP)
-                        },
-                    ) {
-                        val displayCategories =
-                            if (essentialsFirst) {
-                                group.categories
-                                    .withIndex()
-                                    .sortedWith(
-                                        compareBy<IndexedValue<LiveCategorySummary>>(
-                                            { essentialCategoryOrder(it.value.name) },
-                                            { it.index },
-                                        ),
-                                    ).map { it.value }
-                            } else {
-                                group.categories
-                            }
-                        displayCategories.forEachIndexed { index, category ->
-                            if (index > 0) DividerLine()
-                            ListRow(
-                                category.name.take(1).uppercase(),
-                                category.name,
-                                "Spent ${state.formatCurrency(
-                                    kotlin.math.abs(category.activityMinor),
-                                )} · ${state.formatCurrency(category.balanceMinor)} left",
-                                state.formatCurrency(category.assignedMinor),
-                                if (category.balanceMinor >= 0) palette.positive else palette.warning,
-                                dense = compact,
-                                leadingVector = financeIcon(category.name),
-                            ) {
+                    val groupSectionKey = "live:${state.selectedBudgetId}:group:${group.id}"
+                    val groupExpanded = !state.isBudgetSectionCollapsed(groupSectionKey)
+                    item(key = "$groupSectionKey:header") {
+                        SectionCard(
+                            group.name,
+                            "${state.formatCurrency(group.assignedMinor)} assigned · ${group.categories.size} categories",
+                            state.formatCurrency(group.balanceMinor),
+                            expanded = groupExpanded,
+                            onToggleExpanded = { state.toggleBudgetSection(groupSectionKey) },
+                            onClick = {
                                 state.selectedCategoryGroupId = group.id
-                                state.selectedCategoryId = category.id
-                                navigation.open(AppRoute.CATEGORY_DETAIL)
+                                navigation.open(AppRoute.CATEGORY_GROUP)
+                            },
+                        ) {}
+                    }
+                    val displayCategories =
+                        if (essentialsFirst) {
+                            group.categories
+                                .withIndex()
+                                .sortedWith(
+                                    compareBy<IndexedValue<LiveCategorySummary>>(
+                                        { essentialCategoryOrder(it.value.name) },
+                                        { it.index },
+                                    ),
+                                ).map { it.value }
+                        } else {
+                            group.categories
+                        }
+                    items(displayCategories, key = { "$groupSectionKey:${it.id}" }) { category ->
+                        AnimatedVisibility(
+                            modifier = tandemListItemModifier(tandemReduceMotion),
+                            visible = groupExpanded,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut(),
+                        ) {
+                            SurfaceCard {
+                                ListRow(
+                                    category.name.take(1).uppercase(),
+                                    category.name,
+                                    "Spent ${state.formatCurrency(
+                                        kotlin.math.abs(category.activityMinor),
+                                    )} · ${state.formatCurrency(category.balanceMinor)} left",
+                                    state.formatCurrency(category.assignedMinor),
+                                    if (category.balanceMinor >= 0) palette.positive else palette.warning,
+                                    dense = compact,
+                                    leadingVector = financeIcon(category.name),
+                                ) {
+                                    state.selectedCategoryGroupId = group.id
+                                    state.selectedCategoryId = category.id
+                                    navigation.open(AppRoute.CATEGORY_DETAIL)
+                                }
                             }
                         }
                     }
                 }
             }
             if (liveTransactions.isNotEmpty()) {
-                SectionCard(
-                    "Recent activity",
-                    "${liveTransactions.size} synced transactions",
-                    "See all",
-                    onClick = { navigation.selectTab(AppRoute.ACTIVITY) },
-                    expanded = !state.isBudgetSectionCollapsed("live:${state.selectedBudgetId}:recent-activity"),
-                    onToggleExpanded = { state.toggleBudgetSection("live:${state.selectedBudgetId}:recent-activity") },
-                ) {
-                    liveTransactions.take(3).forEachIndexed { index, item ->
-                        if (index > 0) DividerLine()
-                        TransactionRow(item) { openTransaction(state, navigation, item, isLive = true) }
+                val recentSectionKey = "live:${state.selectedBudgetId}:recent-activity"
+                val recentExpanded = !state.isBudgetSectionCollapsed(recentSectionKey)
+                item(key = "$recentSectionKey:header") {
+                    SectionCard(
+                        "Recent activity",
+                        "${liveTransactions.size} synced transactions",
+                        "See all",
+                        onClick = { navigation.selectTab(AppRoute.ACTIVITY) },
+                        expanded = recentExpanded,
+                        onToggleExpanded = { state.toggleBudgetSection(recentSectionKey) },
+                    ) {}
+                }
+                items(liveTransactions.take(3), key = { "recent:${it.recordId}" }) { item ->
+                    AnimatedVisibility(
+                        modifier = tandemListItemModifier(tandemReduceMotion),
+                        visible = recentExpanded,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
+                        SurfaceCard {
+                            TransactionRow(item) { openTransaction(state, navigation, item, isLive = true) }
+                        }
                     }
                 }
             }
-            Spacer(Modifier.height(72.dp))
+            item(key = "budget-bottom-spacer") { Spacer(Modifier.height(72.dp)) }
         }
         return
     }
@@ -5155,20 +5282,24 @@ private fun CategoryGroupScreen(
         val group =
             liveBudgetMonth?.groups?.firstOrNull { it.id == state.selectedCategoryGroupId }
                 ?: liveBudgetMonth?.groups?.firstOrNull()
-        PageColumn {
+        PageLazyColumn {
             if (group == null) {
-                Heading("Category group", state.selectedMonth)
-                BodyText("No synced category group is available for this month.")
+                item(key = "category-group-empty-title") { Heading("Category group", state.selectedMonth) }
+                item(key = "category-group-empty-message") { BodyText("No synced category group is available for this month.") }
             } else {
-                Heading(group.name, state.selectedMonth)
-                AmountHero(
-                    "Assigned this month",
-                    state.formatCurrency(group.assignedMinor),
-                    "${state.formatCurrency(group.balanceMinor)} available across ${group.categories.size} categories",
-                )
-                SectionCard("Categories", "${group.categories.size} synced categories", "") {
-                    group.categories.forEachIndexed { index, category ->
-                        if (index > 0) DividerLine()
+                item(key = "category-group-title:${group.id}") { Heading(group.name, state.selectedMonth) }
+                item(key = "category-group-summary:${group.id}") {
+                    AmountHero(
+                        "Assigned this month",
+                        state.formatCurrency(group.assignedMinor),
+                        "${state.formatCurrency(group.balanceMinor)} available across ${group.categories.size} categories",
+                    )
+                }
+                item(key = "category-group-list-title:${group.id}") {
+                    SectionCard("Categories", "${group.categories.size} synced categories", "") {}
+                }
+                items(group.categories, key = { "category-group:${group.id}:${it.id}" }) { category ->
+                    SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
                         ListRow(
                             category.name.take(1).uppercase(),
                             category.name,
@@ -5320,24 +5451,30 @@ private fun AccountsScreen(
                     }
                 groupName.takeIf { accounts.isNotEmpty() }?.let { it to accounts }
             }
-        PageColumn {
-            Heading("Balances", "Synced account balances from Actual.")
-            AmountHero("Total on budget", state.formatCurrency(totalOnBudget), "Across ${onBudgetAccounts.size} on-budget accounts")
+        PageLazyColumn {
+            item(key = "accounts-title") { Heading("Balances", "Synced account balances from Actual.") }
+            item(key = "accounts-summary") {
+                AmountHero("Total on budget", state.formatCurrency(totalOnBudget), "Across ${onBudgetAccounts.size} on-budget accounts")
+            }
             if (liveAccounts.isEmpty()) {
-                SurfaceCard {
-                    Column(
-                        Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                    ) {
-                        Text("No accounts are cached", color = tandemPalette.text, fontWeight = FontWeight.SemiBold)
-                        BodyText("Sync this budget to load its Actual account list and balances.")
+                item(key = "accounts-empty") {
+                    SurfaceCard {
+                        Column(
+                            Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                            verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                        ) {
+                            Text("No accounts are cached", color = tandemPalette.text, fontWeight = FontWeight.SemiBold)
+                            BodyText("Sync this budget to load its Actual account list and balances.")
+                        }
                     }
                 }
             } else {
                 groupedAccounts.forEach { (groupName, accounts) ->
-                    SectionCard(groupName, "${accounts.size} Actual accounts", "") {
-                        accounts.forEachIndexed { index, account ->
-                            if (index > 0) DividerLine()
+                    item(key = "account-group:$groupName") {
+                        SectionCard(groupName, "${accounts.size} Actual accounts", "") {}
+                    }
+                    items(accounts, key = { "account:${it.id}" }) { account ->
+                        SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
                             ListRow(
                                 account.name.take(1).uppercase(),
                                 account.name,
@@ -5352,7 +5489,9 @@ private fun AccountsScreen(
                     }
                 }
             }
-            Text("Balances are read-only in this build.", color = tandemPalette.muted, fontSize = TandemTypography.label)
+            item(key = "accounts-read-only-note") {
+                Text("Balances are read-only in this build.", color = tandemPalette.muted, fontSize = TandemTypography.label)
+            }
         }
         return
     }
@@ -5522,44 +5661,53 @@ private fun ActivityScreen(
     liveTransactions: List<TransactionItem>,
 ) {
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
-    PageColumn {
-        if (!isLiveBudget) SampleBanner()
-        SurfaceCard(onClick = { navigation.open(AppRoute.ACTIVITY_SEARCH) }) {
-            Row(
-                Modifier.fillMaxWidth().padding(TandemSpacing.medium),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-            ) {
-                Icon(Lucide.Search, contentDescription = null, modifier = Modifier.size(22.dp), tint = tandemPalette.accent)
-                Text(
-                    "Search transactions",
-                    color = tandemPalette.muted,
-                    fontSize = TandemTypography.compactBody,
-                    modifier = Modifier.weight(1f),
-                )
-                Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp), tint = tandemPalette.muted)
+    PageLazyColumn {
+        if (!isLiveBudget) item(key = "activity-preview-banner") { SampleBanner() }
+        item(key = "activity-search-entry") {
+            SurfaceCard(onClick = { navigation.open(AppRoute.ACTIVITY_SEARCH) }) {
+                Row(
+                    Modifier.fillMaxWidth().padding(TandemSpacing.medium),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                ) {
+                    Icon(Lucide.Search, contentDescription = null, modifier = Modifier.size(22.dp), tint = tandemPalette.accent)
+                    Text(
+                        "Search transactions",
+                        color = tandemPalette.muted,
+                        fontSize = TandemTypography.compactBody,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp), tint = tandemPalette.muted)
+                }
             }
         }
         if (isLiveBudget) {
-            SectionCard("Recent transactions", "Newest first") {
-                if (liveTransactions.isEmpty()) {
-                    BodyText("No transactions are available in the local copy yet. Sync the budget to refresh it.")
-                } else {
-                    liveTransactions.forEachIndexed { index, item ->
-                        if (index > 0) DividerLine()
+            if (liveTransactions.isEmpty()) {
+                item(key = "activity-empty") {
+                    SectionCard("Recent transactions", "Newest first") {
+                        BodyText("No transactions are available in the local copy yet. Sync the budget to refresh it.")
+                    }
+                }
+            } else {
+                item(key = "activity-recent-title") { SectionCard("Recent transactions", "Newest first") {} }
+                items(
+                    liveTransactions,
+                    key = { "activity:${it.recordId ?: "${it.dateLabel}:${it.payee}:${it.amountMinorUnits}"}" },
+                ) { item ->
+                    SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
                         TransactionRow(item) { openTransaction(state, navigation, item, isLive = true) }
                     }
                 }
             }
         } else {
-            SectionCard("Recent transactions", "${previewTransactions.size} sample entries") {
-                previewTransactions.forEachIndexed { index, item ->
-                    if (index > 0) DividerLine()
+            item(key = "activity-sample-title") { SectionCard("Recent transactions", "${previewTransactions.size} sample entries") {} }
+            items(previewTransactions, key = { "sample:${it.recordId ?: "${it.dateLabel}:${it.payee}:${it.amountMinorUnits}"}" }) { item ->
+                SurfaceCard {
                     TransactionRow(item) { openTransaction(state, navigation, item, isLive = false) }
                 }
             }
         }
-        if (!isLiveBudget) PreviewNote("Transactions use sample data.")
+        if (!isLiveBudget) item(key = "activity-sample-note") { PreviewNote("Transactions use sample data.") }
     }
 }
 
@@ -5810,7 +5958,10 @@ private fun ActivitySearchScreen(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
             ) {
-                items(resultTransactions.take(100)) { transaction ->
+                items(
+                    resultTransactions.take(100),
+                    key = { "search:${it.recordId ?: "${it.dateLabel}:${it.payee}:${it.amountMinorUnits}"}" },
+                ) { transaction ->
                     TransactionRow(transaction) { openTransaction(state, navigation, transaction, isLive = isLiveBudget) }
                 }
             }
@@ -6623,82 +6774,55 @@ private fun SyncCenterScreen(
 ) {
     if (state.selectedBudgetId.isNotBlank()) {
         val attention = mobileSession.pendingWrites.filter { it.status in setOf("queued", "conflict", "uncertain", "rejected") }
-        PageColumn {
-            Badge(if (mobileSession.isServerReachable) "Actual · connected" else "Offline copy", tandemPalette.positive)
-            Heading("Sync center", "Review the local budget copy and any changes that need attention.")
-            SurfaceCard {
-                Column(
-                    Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                ) {
-                    LabelText(state.selectedBudget)
-                    BodyText("${mobileSession.cachedTransactionCount} transactions · ${mobileSession.accountRecords.size} accounts cached")
-                    val syncMessage =
-                        when {
-                            mobileSession.isSyncing && mobileSession.syncError != null ->
-                                "Retrying sync · ${mobileSession.syncError}"
-                            mobileSession.isSyncing -> "Sync in progress"
-                            mobileSession.syncError != null -> mobileSession.syncError.orEmpty()
-                            else -> "Local data is available offline"
-                        }
-                    val syncMessageColor by
-                        animateColorAsState(
-                            targetValue = if (mobileSession.syncError != null) tandemPalette.warning else tandemPalette.muted,
-                            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
-                            label = "sync-center-status-color",
+        PageLazyColumn {
+            item(key = "sync-center-status") {
+                Badge(if (mobileSession.isServerReachable) "Actual · connected" else "Offline copy", tandemPalette.positive)
+            }
+            item(key = "sync-center-title") {
+                Heading("Sync center", "Review the local budget copy and any changes that need attention.")
+            }
+            item(key = "sync-center-budget-summary") {
+                SurfaceCard {
+                    Column(
+                        Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                    ) {
+                        LabelText(state.selectedBudget)
+                        BodyText(
+                            "${mobileSession.cachedTransactionCount} transactions · ${mobileSession.accountRecords.size} accounts cached",
                         )
-                    AnimatedStatusText(
-                        syncMessage,
-                        syncMessageColor,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp),
-                        fontSize = TandemTypography.label,
-                        lineHeight = TandemTypography.compactLineHeight,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                        val syncMessage =
+                            when {
+                                mobileSession.isSyncing && mobileSession.syncError != null ->
+                                    "Retrying sync · ${mobileSession.syncError}"
+                                mobileSession.isSyncing -> "Sync in progress"
+                                mobileSession.syncError != null -> mobileSession.syncError.orEmpty()
+                                else -> "Local data is available offline"
+                            }
+                        val syncMessageColor by
+                            animateColorAsState(
+                                targetValue = if (mobileSession.syncError != null) tandemPalette.warning else tandemPalette.muted,
+                                animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+                                label = "sync-center-status-color",
+                            )
+                        AnimatedStatusText(
+                            syncMessage,
+                            syncMessageColor,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp),
+                            fontSize = TandemTypography.label,
+                            lineHeight = TandemTypography.compactLineHeight,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
-            SectionCard("Pending Changes", "${attention.size} local operations", animateDetail = true) {
-                AnimatedAttentionContent(showingAttention = attention.isNotEmpty()) { showingAttention ->
-                    if (showingAttention) {
-                        Column {
-                            attention.forEachIndexed { index, operation ->
-                                if (index > 0) DividerLine()
-                                val transaction =
-                                    liveTransactions.firstOrNull { it.recordId == operation.recordId }
-                                ListRow(
-                                    "",
-                                    transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
-                                    "${operation.status.replaceFirstChar {
-                                        it.uppercase()
-                                    }} · ${transaction?.category ?: "Transaction edit"}",
-                                    "Review",
-                                    trailingColor =
-                                        when (operation.status) {
-                                            "conflict", "uncertain", "rejected" -> tandemPalette.warning
-                                            else -> tandemPalette.syncing
-                                        },
-                                    leadingVector =
-                                        when (operation.status) {
-                                            "conflict", "uncertain", "rejected" -> Lucide.CloudAlert
-                                            "queued", "sending" -> Lucide.CloudSync
-                                            else -> Lucide.Cloud
-                                        },
-                                    onClick = {
-                                        state.selectedConflictOperationId = operation.operationId
-                                        navigation.open(
-                                            when (operation.status) {
-                                                "conflict" -> AppRoute.CONFLICT_REVIEW
-                                                "uncertain" -> AppRoute.UNCERTAIN_WRITE
-                                                "rejected" -> AppRoute.REJECTED_WRITE
-                                                else -> AppRoute.UNCERTAIN_WRITE
-                                            },
-                                        )
-                                    },
-                                )
-                            }
-                        }
-                    } else {
+            item(key = "pending-changes-title") {
+                SectionCard("Pending Changes", "${attention.size} local operations", animateDetail = true) {}
+            }
+            if (attention.isEmpty()) {
+                item(key = "pending-changes-empty") {
+                    AnimatedAttentionContent(showingAttention = false) { _ ->
                         Text(
                             "No pending, uncertain, rejected, or conflicted changes.",
                             modifier = Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
@@ -6708,11 +6832,47 @@ private fun SyncCenterScreen(
                         )
                     }
                 }
+            } else {
+                items(attention, key = { "pending:${it.operationId}" }) { operation ->
+                    val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
+                    SurfaceCard {
+                        ListRow(
+                            "",
+                            transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
+                            "${operation.status.replaceFirstChar { it.uppercase() }} · ${transaction?.category ?: "Transaction edit"}",
+                            "Review",
+                            trailingColor =
+                                when (operation.status) {
+                                    "conflict", "uncertain", "rejected" -> tandemPalette.warning
+                                    else -> tandemPalette.syncing
+                                },
+                            leadingVector =
+                                when (operation.status) {
+                                    "conflict", "uncertain", "rejected" -> Lucide.CloudAlert
+                                    "queued", "sending" -> Lucide.CloudSync
+                                    else -> Lucide.Cloud
+                                },
+                            onClick = {
+                                state.selectedConflictOperationId = operation.operationId
+                                navigation.open(
+                                    when (operation.status) {
+                                        "conflict" -> AppRoute.CONFLICT_REVIEW
+                                        "uncertain" -> AppRoute.UNCERTAIN_WRITE
+                                        "rejected" -> AppRoute.REJECTED_WRITE
+                                        else -> AppRoute.UNCERTAIN_WRITE
+                                    },
+                                )
+                            },
+                        )
+                    }
+                }
             }
-            AnimatedReveal(visible = mobileSession.transactionWriteMessage != null) {
-                BodyText(mobileSession.transactionWriteMessage.orEmpty())
+            item(key = "sync-write-message") {
+                AnimatedReveal(visible = mobileSession.transactionWriteMessage != null) {
+                    BodyText(mobileSession.transactionWriteMessage.orEmpty())
+                }
             }
-            Spacer(Modifier.height(72.dp))
+            item(key = "sync-center-bottom-spacer") { Spacer(Modifier.height(72.dp)) }
         }
         return
     }
@@ -6772,34 +6932,42 @@ private fun ConflictInboxScreen(
 ) {
     if (state.selectedBudgetId.isNotBlank()) {
         val conflicts = mobileSession.pendingWrites.filter { it.status == "conflict" }
-        PageColumn {
-            Badge("Actual · review required", tandemPalette.warning)
-            Heading("Changes to review", "Choose whether to keep the device edit or the latest Actual version.")
-            AnimatedAttentionContent(showingAttention = conflicts.isNotEmpty(), animateSizeChanges = true) { showingConflicts ->
-                if (showingConflicts) {
-                    SectionCard("Conflicts", "${conflicts.size} transaction changes") {
-                        conflicts.forEachIndexed { index, operation ->
-                            if (index > 0) DividerLine()
-                            val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
-                            ListRow(
-                                "!",
-                                transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
-                                "${transaction?.dateLabel ?: "Actual changed"} · ${transaction?.category ?: "Transaction"}",
-                                "Review",
-                                tandemPalette.warning,
-                            ) {
-                                state.selectedConflictOperationId = operation.operationId
-                                navigation.open(AppRoute.CONFLICT_REVIEW)
-                            }
+        PageLazyColumn {
+            item(key = "conflicts-status") { Badge("Actual · review required", tandemPalette.warning) }
+            item(key = "conflicts-title") {
+                Heading("Changes to review", "Choose whether to keep the device edit or the latest Actual version.")
+            }
+            if (conflicts.isEmpty()) {
+                item(key = "conflicts-empty") {
+                    AnimatedAttentionContent(showingAttention = false, animateSizeChanges = true) { _ ->
+                        SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
+                            Column(Modifier.padding(TandemSpacing.large)) { BodyText("There are no conflicts in the current local copy.") }
                         }
                     }
-                } else {
-                    SurfaceCard {
-                        Column(Modifier.padding(TandemSpacing.large)) { BodyText("There are no conflicts in the current local copy.") }
+                }
+            } else {
+                item(key = "conflicts-section-title") {
+                    SectionCard("Conflicts", "${conflicts.size} transaction changes") {}
+                }
+                items(conflicts, key = { "conflict:${it.operationId}" }) { operation ->
+                    val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
+                    SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
+                        ListRow(
+                            "!",
+                            transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
+                            "${transaction?.dateLabel ?: "Actual changed"} · ${transaction?.category ?: "Transaction"}",
+                            "Review",
+                            tandemPalette.warning,
+                        ) {
+                            state.selectedConflictOperationId = operation.operationId
+                            navigation.open(AppRoute.CONFLICT_REVIEW)
+                        }
                     }
                 }
             }
-            mobileSession.transactionWriteMessage?.let { BodyText(it) }
+            mobileSession.transactionWriteMessage?.let { message ->
+                item(key = "conflicts-write-message") { BodyText(message) }
+            }
         }
         return
     }
