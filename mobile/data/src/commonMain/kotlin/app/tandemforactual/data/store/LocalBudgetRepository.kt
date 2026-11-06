@@ -1,10 +1,13 @@
 package app.tandemforactual.data.store
 
 import androidx.room3.withWriteTransaction
+import app.tandemforactual.data.database.AccountDayAggregate
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.BudgetSnapshotProgressEntity
 import app.tandemforactual.data.database.BudgetSnapshotRecordEntity
 import app.tandemforactual.data.database.BudgetSyncStateEntity
+import app.tandemforactual.data.database.CategoryMonthAggregate
+import app.tandemforactual.data.database.MonthlyIncomeSpendingAggregate
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.RemoteBudgetRecordKey
 import app.tandemforactual.data.database.SearchableBudgetTransaction
@@ -218,6 +221,25 @@ class LocalBudgetRepository(
 
     fun observeSearchableTransactions(budgetId: String): Flow<List<SearchableBudgetTransaction>> =
         database.budgetRecordDao().observeSearchableTransactions(budgetId).stabilized()
+
+    fun observeCategoryMonthAggregates(
+        budgetId: String,
+        fromDate: String?,
+        throughDate: String?,
+    ): Flow<List<CategoryMonthAggregate>> =
+        database.budgetRecordDao().observeCategoryMonthAggregates(budgetId, fromDate, throughDate).stabilized()
+
+    fun observeMonthlyIncomeAndSpending(
+        budgetId: String,
+        fromDate: String?,
+        throughDate: String?,
+    ): Flow<List<MonthlyIncomeSpendingAggregate>> =
+        database.budgetRecordDao().observeMonthlyIncomeAndSpending(budgetId, fromDate, throughDate).stabilized()
+
+    fun observeAccountDailyActivity(
+        budgetId: String,
+        throughDate: String,
+    ): Flow<List<AccountDayAggregate>> = database.budgetRecordDao().observeAccountDailyActivity(budgetId, throughDate).stabilized()
 
     fun observeRecordIds(
         budgetId: String,

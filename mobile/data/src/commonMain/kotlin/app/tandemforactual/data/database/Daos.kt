@@ -79,6 +79,69 @@ interface BudgetRecordDao {
     )
     fun observeSearchableTransactions(budgetId: String): Flow<List<SearchableBudgetTransaction>>
 
+    @Query(
+        """
+    SELECT substr(recordDate, 1, 7) AS monthId, categoryId, SUM(-amountMinor) AS spendingMinor
+    FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = 'transaction'
+      AND recordDate IS NOT NULL AND length(recordDate) >= 10
+      AND categoryId IS NOT NULL AND amountMinor < 0 AND transfer = 0
+      AND localDeleted = 0 AND remoteDeleted = 0
+      AND (localJson IS NOT NULL OR remoteJson IS NOT NULL)
+      AND (:fromDate IS NULL OR recordDate >= :fromDate)
+      AND (:throughDate IS NULL OR recordDate <= :throughDate)
+    GROUP BY substr(recordDate, 1, 7), categoryId
+    ORDER BY monthId ASC, categoryId ASC
+    """,
+    )
+    fun observeCategoryMonthAggregates(
+        budgetId: String,
+        fromDate: String?,
+        throughDate: String?,
+    ): Flow<List<CategoryMonthAggregate>>
+
+    @Query(
+        """
+    SELECT substr(recordDate, 1, 7) AS monthId,
+           SUM(CASE WHEN amountMinor > 0 THEN amountMinor ELSE 0 END) AS incomeMinor,
+           SUM(CASE WHEN amountMinor < 0 THEN -amountMinor ELSE 0 END) AS spendingMinor
+    FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = 'transaction'
+      AND recordDate IS NOT NULL AND length(recordDate) >= 10
+      AND amountMinor IS NOT NULL AND transfer = 0
+      AND localDeleted = 0 AND remoteDeleted = 0
+      AND (localJson IS NOT NULL OR remoteJson IS NOT NULL)
+      AND (:fromDate IS NULL OR recordDate >= :fromDate)
+      AND (:throughDate IS NULL OR recordDate <= :throughDate)
+    GROUP BY substr(recordDate, 1, 7)
+    ORDER BY monthId ASC
+    """,
+    )
+    fun observeMonthlyIncomeAndSpending(
+        budgetId: String,
+        fromDate: String?,
+        throughDate: String?,
+    ): Flow<List<MonthlyIncomeSpendingAggregate>>
+
+    @Query(
+        """
+    SELECT accountId, recordDate AS date, SUM(amountMinor) AS amountMinor
+    FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = 'transaction'
+      AND accountId IS NOT NULL AND recordDate IS NOT NULL AND length(recordDate) >= 10
+      AND amountMinor IS NOT NULL
+      AND localDeleted = 0 AND remoteDeleted = 0
+      AND (localJson IS NOT NULL OR remoteJson IS NOT NULL)
+      AND recordDate <= :throughDate
+    GROUP BY accountId, recordDate
+    ORDER BY recordDate DESC, accountId ASC
+    """,
+    )
+    fun observeAccountDailyActivity(
+        budgetId: String,
+        throughDate: String,
+    ): Flow<List<AccountDayAggregate>>
+
     @Query("SELECT recordType, recordId FROM budget_records WHERE budgetId = :budgetId AND remoteJson IS NOT NULL")
     suspend fun findRemoteRecordKeys(budgetId: String): List<RemoteBudgetRecordKey>
 
