@@ -1,5 +1,6 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.data.database.SearchableBudgetTransaction
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -7,6 +8,87 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ActivitySearchTest {
+    @Test
+    fun buildsSearchRowsDirectlyFromSlimTransactionProjections() {
+        val indexed =
+            buildSearchActivityRecords(
+                records =
+                    listOf(
+                        SearchableBudgetTransaction(
+                            recordId = "transaction-1",
+                            recordDate = "2026-05-14",
+                            accountId = "account-1",
+                            categoryId = "category-1",
+                            payeeId = "payee-1",
+                            amountMinor = -1_170,
+                            notes = "House supplies",
+                            cleared = true,
+                            reconciled = false,
+                            approved = true,
+                            matched = false,
+                            transfer = false,
+                        ),
+                    ),
+                accounts = mapOf("account-1" to "Checking"),
+                payees = mapOf("payee-1" to "Home Store"),
+                categories = mapOf("category-1" to "Home Maintenance"),
+            )
+
+        assertEquals(1, indexed.size)
+        assertEquals("transaction-1", indexed.single().recordId)
+        assertEquals("Home Store", indexed.single().payee)
+        assertEquals("Checking", indexed.single().account)
+        assertEquals("Home Maintenance", indexed.single().category)
+        assertEquals("House supplies", indexed.single().notes)
+        assertEquals(-1_170L, indexed.single().amountMinorUnits)
+        assertEquals(true, indexed.single().cleared)
+        assertEquals(false, indexed.single().reconciled)
+        assertEquals(true, indexed.single().approved)
+        assertEquals(false, indexed.single().matched)
+    }
+
+    @Test
+    fun generalSearchOffersRecentMonthFiltersAndKeepsOnlyOneDateFilter() {
+        val records =
+            listOf(
+                record(date = "2026-05-14"),
+                record(date = "2025-12-14"),
+                record(date = "2026-04-14"),
+                record(date = "2024-08-14"),
+            )
+        val monthFilters = recentActivitySearchMonthFilters(records)
+        val category = ActivitySearchFilter(ActivitySearchField.CATEGORY, "rent", "Category: Rent")
+        val may = monthFilters.first { it.value == "2026-05" }
+        val april = monthFilters.first { it.value == "2026-04" }
+        val filters = toggleActivitySearchFilter(listOf(category, may), april)
+
+        assertEquals(listOf("2026-05", "2026-04", "2025-12"), monthFilters.map { it.value })
+        assertEquals(listOf(category, april), filters)
+        assertEquals(listOf(category), toggleActivitySearchFilter(filters, april))
+        assertFalse(isActivitySearchMonthId("2026-13"))
+    }
+
+    @Test
+    fun generalSearchMatchesPartialIsoDatesButDoesNotFuzzyMatchTypos() {
+        val november = record(date = "2026-11-06")
+
+        assertTrue(matchesActivitySearch(november, "2026-11", emptyList()))
+        assertTrue(matchesActivitySearch(november, "11/6/26", emptyList()))
+        assertFalse(matchesActivitySearch(november, "Noveber 6", emptyList()))
+        assertEquals(listOf("2026-11-06"), parseActivitySearchDatePrefixes("11/6/26"))
+        assertTrue(parseActivitySearchDatePrefixes("11/31/26").isEmpty())
+        assertTrue(
+            activitySearchSuggestions("Nov", listOf(november)).any {
+                it.field == ActivitySearchField.DATE_MONTH && it.value == "2026-11"
+            },
+        )
+        assertTrue(
+            activitySearchSuggestions("11/6/26", listOf(november)).any {
+                it.field == ActivitySearchField.DATE_ON && it.value == "2026-11-06"
+            },
+        )
+    }
+
     @Test
     fun categoryAndMonthFiltersCombineForCategoryActivity() {
         val groceriesMay = record(category = "Groceries", categoryId = "cat-grocery", date = "2026-05-14")
@@ -133,9 +215,7 @@ class ActivitySearchTest {
             categoryId = categoryId,
             notes = notes,
             dateIso = date,
-            dateLabel = date,
             amountMinorUnits = amount,
-            amountText = formatSignedCurrency(amount),
             cleared = cleared,
             reconciled = reconciled,
         )

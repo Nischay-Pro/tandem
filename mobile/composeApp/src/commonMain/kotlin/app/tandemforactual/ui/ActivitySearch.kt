@@ -25,11 +25,51 @@ internal enum class ActivitySearchField {
     INFLOW_AT_MOST,
 }
 
+private val activitySearchMonthIdPattern = Regex("\\d{4}-\\d{2}")
+
+internal fun isActivitySearchMonthId(value: String): Boolean {
+    if (!activitySearchMonthIdPattern.matches(value)) return false
+    val month = value.takeLast(2).toIntOrNull() ?: return false
+    return month in 1..12
+}
+
 internal data class ActivitySearchFilter(
     val field: ActivitySearchField,
     val value: String,
     val label: String,
 )
+
+internal fun recentActivitySearchMonthFilters(records: List<ActivitySearchRecord>): List<ActivitySearchFilter> =
+    records
+        .asSequence()
+        .map { it.dateIso.take(7) }
+        .filter(::isActivitySearchMonthId)
+        .distinct()
+        .sortedDescending()
+        .take(3)
+        .map { monthId ->
+            val year = monthId.substringBefore('-').toInt()
+            val month = monthId.substringAfter('-').toInt()
+            ActivitySearchFilter(ActivitySearchField.DATE_MONTH, monthId, "Date: ${formatMonth(year, month)}")
+        }.toList()
+
+internal fun toggleActivitySearchFilter(
+    filters: List<ActivitySearchFilter>,
+    selected: ActivitySearchFilter,
+): List<ActivitySearchFilter> {
+    val existing = filters.firstOrNull { it.field == selected.field && it.value == selected.value }
+    if (existing != null) return filters - existing
+
+    val retained =
+        if (selected.field == ActivitySearchField.DATE_MONTH || selected.field == ActivitySearchField.DATE_ON) {
+            filters.filterNot {
+                it.field == ActivitySearchField.DATE_MONTH || it.field == ActivitySearchField.DATE_ON
+            }
+        } else {
+            filters
+        }
+    return retained + selected
+}
 
 internal data class ActivitySearchRecord(
     val payee: String,
@@ -40,14 +80,13 @@ internal data class ActivitySearchRecord(
     val categoryId: String?,
     val notes: String,
     val dateIso: String,
-    val dateLabel: String,
     val amountMinorUnits: Long,
-    val amountText: String,
     val cleared: Boolean? = null,
     val reconciled: Boolean? = null,
     val approved: Boolean? = null,
     val matched: Boolean? = null,
     val transfer: Boolean = false,
+    val recordId: String? = null,
 ) {
     val normalizedSearchText: String =
         buildString {
@@ -60,10 +99,6 @@ internal data class ActivitySearchRecord(
             append(notes.lowercase())
             append('\u0000')
             append(dateIso.lowercase())
-            append('\u0000')
-            append(dateLabel.lowercase())
-            append('\u0000')
-            append(amountText.lowercase())
         }
 }
 
@@ -71,11 +106,13 @@ internal data class PreparedActivitySearchFilter(
     val filter: ActivitySearchFilter,
     val expectedAmount: Long?,
     val textAmount: Long?,
+    val textDatePrefixes: List<String>,
 )
 
 internal data class PreparedActivitySearch(
     val normalizedQuery: String,
     val queryAmount: Long?,
+    val queryDatePrefixes: List<String>,
     val filters: List<PreparedActivitySearchFilter>,
 )
 
@@ -87,6 +124,7 @@ internal fun prepareActivitySearch(
     PreparedActivitySearch(
         normalizedQuery = query.trim().lowercase(),
         queryAmount = parseActivitySearchAmount(query, currencyCode),
+        queryDatePrefixes = parseActivitySearchDatePrefixes(query),
         filters =
             filters.map { filter ->
                 PreparedActivitySearchFilter(
@@ -97,6 +135,12 @@ internal fun prepareActivitySearch(
                             parseActivitySearchAmount(filter.value, currencyCode)
                         } else {
                             null
+                        },
+                    textDatePrefixes =
+                        if (filter.field == ActivitySearchField.ANY_CONTAINS) {
+                            parseActivitySearchDatePrefixes(filter.value)
+                        } else {
+                            emptyList()
                         },
                 )
             },
@@ -112,7 +156,12 @@ internal fun matchesActivitySearch(
     record: ActivitySearchRecord,
     prepared: PreparedActivitySearch,
 ): Boolean {
-    if (prepared.normalizedQuery.isNotEmpty() && !matchesAnyText(record, prepared.normalizedQuery, prepared.queryAmount)) return false
+    if (
+        prepared.normalizedQuery.isNotEmpty() &&
+        !matchesAnyText(record, prepared.normalizedQuery, prepared.queryAmount, prepared.queryDatePrefixes)
+    ) {
+        return false
+    }
     return prepared.filters.all { filter -> matchesFilter(record, filter) }
 }
 
@@ -142,6 +191,7 @@ internal fun activitySearchSuggestions(
     add(ActivitySearchField.NOTES_CONTAIN, value, "Notes contain: $value")
 
     records
+        .asSequence()
         .map { it.account to it.accountId }
         .distinct()
         .filter { it.first.contains(value, ignoreCase = true) }
@@ -150,6 +200,7 @@ internal fun activitySearchSuggestions(
             add(ActivitySearchField.ACCOUNT, id ?: name, "Account is: $name")
         }
     records
+        .asSequence()
         .map { it.category to it.categoryId }
         .distinct()
         .filter { it.first.contains(value, ignoreCase = true) }
@@ -158,6 +209,7 @@ internal fun activitySearchSuggestions(
             add(ActivitySearchField.CATEGORY, id ?: name, "Category is: $name")
         }
     records
+        .asSequence()
         .map { it.payee to it.payeeId }
         .distinct()
         .filter { it.first.contains(value, ignoreCase = true) }
@@ -166,12 +218,18 @@ internal fun activitySearchSuggestions(
             add(ActivitySearchField.PAYEE_CONTAINS, id ?: name, "Payee is: $name")
         }
 
-    val month = value.takeIf { it.matches(Regex("\\d{4}-\\d{2}")) }
+    val month = value.takeIf(::isActivitySearchMonthId)
     val date = value.takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
     if (month != null) add(ActivitySearchField.DATE_MONTH, month, "Date is: $month")
     if (date != null) add(ActivitySearchField.DATE_ON, date, "Date is: $date")
+    parseActivitySearchDatePrefixes(value)
+        .filterNot { it == date }
+        .forEach { datePrefix ->
+            add(ActivitySearchField.DATE_ON, datePrefix, "Date is: $datePrefix")
+        }
     if (month == null && date == null) {
         records
+            .asSequence()
             .map { it.dateIso.take(7) }
             .distinct()
             .filter { monthId ->
@@ -245,13 +303,49 @@ internal fun parseActivitySearchAmount(
     return kotlin.math.round(kotlin.math.abs(amount) * 100.0).toLong()
 }
 
+internal fun parseActivitySearchDatePrefixes(value: String): List<String> {
+    val trimmed = value.trim()
+    val iso = Regex("^(\\d{4})-(\\d{1,2})-(\\d{1,2})$").matchEntire(trimmed)
+    if (iso != null) {
+        val year = iso.groupValues[1].toIntOrNull() ?: return emptyList()
+        val month = iso.groupValues[2].toIntOrNull() ?: return emptyList()
+        val day = iso.groupValues[3].toIntOrNull() ?: return emptyList()
+        return validIsoDate(year, month, day)?.let(::listOf) ?: emptyList()
+    }
+
+    val numeric = Regex("^(\\d{1,2})/(\\d{1,2})/(\\d{2}|\\d{4})$").matchEntire(trimmed) ?: return emptyList()
+    val month = numeric.groupValues[1].toIntOrNull() ?: return emptyList()
+    val day = numeric.groupValues[2].toIntOrNull() ?: return emptyList()
+    val rawYear = numeric.groupValues[3].toIntOrNull() ?: return emptyList()
+    val year = if (numeric.groupValues[3].length == 2) 2000 + rawYear else rawYear
+    return validIsoDate(year, month, day)?.let(::listOf) ?: emptyList()
+}
+
+private fun validIsoDate(
+    year: Int,
+    month: Int,
+    day: Int,
+): String? {
+    if (year < 1 || month !in 1..12) return null
+    val daysInMonth =
+        when (month) {
+            2 -> if (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) 29 else 28
+            4, 6, 9, 11 -> 30
+            else -> 31
+        }
+    if (day !in 1..daysInMonth) return null
+    return "${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}"
+}
+
 private fun matchesAnyText(
     record: ActivitySearchRecord,
     normalizedQuery: String,
     queryAmount: Long?,
+    queryDatePrefixes: List<String> = emptyList(),
 ): Boolean {
     val amountMatches = queryAmount != null && kotlin.math.abs(record.amountMinorUnits) == queryAmount
-    return amountMatches || record.normalizedSearchText.contains(normalizedQuery)
+    val dateMatches = queryDatePrefixes.any(record.dateIso::startsWith)
+    return amountMatches || dateMatches || record.normalizedSearchText.contains(normalizedQuery)
 }
 
 private fun matchesFilter(
@@ -262,7 +356,13 @@ private fun matchesFilter(
     val expectedAmount = prepared.expectedAmount
     val absoluteAmount = kotlin.math.abs(record.amountMinorUnits)
     return when (filter.field) {
-        ActivitySearchField.ANY_CONTAINS -> matchesAnyText(record, filter.value.trim().lowercase(), prepared.textAmount)
+        ActivitySearchField.ANY_CONTAINS ->
+            matchesAnyText(
+                record,
+                filter.value.trim().lowercase(),
+                prepared.textAmount,
+                prepared.textDatePrefixes,
+            )
         ActivitySearchField.PAYEE_CONTAINS ->
             record.payee.contains(filter.value, ignoreCase = true) || record.payeeId == filter.value
         ActivitySearchField.NOTES_CONTAIN -> record.notes.contains(filter.value, ignoreCase = true)
