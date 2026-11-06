@@ -4065,7 +4065,7 @@ private fun PairingCodeScreen(
                 textAlign = TextAlign.Center,
             ),
         )
-        InfoBubble("This one-time code expires after five minutes. Tandem doesn’t save it or your budget password.")
+        InfoBubble("This pairing code expires after five minutes. Tandem doesn’t save it or your budget password.")
         mobileSession.pairingError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
         mobileSession.credentialStorageError?.let { error ->
             InlineMessage(error, InlineMessageKind.ERROR)

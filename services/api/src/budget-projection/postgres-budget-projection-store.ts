@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { Buffer } from "node:buffer";
 import type { Pool, PoolClient } from "pg";
 import {
   BUDGET_ENTITY_TYPES,
@@ -391,7 +392,7 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
               `SELECT entity_type, entity_id, revision, body, is_deleted
                FROM companion_budget_records
                WHERE budget_id = $1 AND is_deleted = false
-               ORDER BY entity_type, entity_id
+               ORDER BY entity_type COLLATE "C", entity_id COLLATE "C"
                LIMIT $2`,
               [input.budgetId, input.limit + 1],
             )
@@ -399,8 +400,9 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
               `SELECT entity_type, entity_id, revision, body, is_deleted
                FROM companion_budget_records
                WHERE budget_id = $1 AND is_deleted = false
-                 AND (entity_type, entity_id) > ($2::text, $3::text)
-               ORDER BY entity_type, entity_id
+                 AND (entity_type COLLATE "C", entity_id COLLATE "C") >
+                     ($2::text COLLATE "C", $3::text COLLATE "C")
+               ORDER BY entity_type COLLATE "C", entity_id COLLATE "C"
                LIMIT $4`,
               [input.budgetId, input.afterType, input.afterId, input.limit + 1],
             );
@@ -733,7 +735,7 @@ async function readSnapshotRecordsOnClient(
     `SELECT entity_type, entity_id, revision, body, is_deleted
      FROM companion_budget_records
      WHERE budget_id = $1 AND is_deleted = false
-     ORDER BY entity_type, entity_id`,
+     ORDER BY entity_type COLLATE "C", entity_id COLLATE "C"`,
     [budgetId],
   );
   return {
@@ -875,9 +877,9 @@ function compareRecords(
   right: BudgetProjectionRecord,
 ): number {
   if (left.type !== right.type) {
-    return left.type.localeCompare(right.type);
+    return compareUtf8Binary(left.type, right.type);
   }
-  return left.id.localeCompare(right.id);
+  return compareUtf8Binary(left.id, right.id);
 }
 
 function compareCurrentRecordRows(
@@ -885,9 +887,13 @@ function compareCurrentRecordRows(
   right: CurrentRecordStateRow,
 ): number {
   if (left.entity_type !== right.entity_type) {
-    return left.entity_type.localeCompare(right.entity_type);
+    return compareUtf8Binary(left.entity_type, right.entity_type);
   }
-  return left.entity_id.localeCompare(right.entity_id);
+  return compareUtf8Binary(left.entity_id, right.entity_id);
+}
+
+function compareUtf8Binary(left: string, right: string): number {
+  return Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8"));
 }
 
 function recordKey(type: string, id: string): string {

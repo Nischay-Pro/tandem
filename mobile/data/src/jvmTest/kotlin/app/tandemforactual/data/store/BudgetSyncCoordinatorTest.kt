@@ -116,6 +116,37 @@ class BudgetSyncCoordinatorTest {
         }
 
     @Test
+    fun snapshotPageValidationMatchesPostgresUtf8OrderingForUnicodeIds() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val ids = listOf("B", "a", "a-b", "ab", "\uE000", "😄")
+                val records = ids.map(::transaction)
+                val remote = FakeBudgetSyncRemote(snapshot(records = records))
+                remote.snapshotPageHandler = { budgetId, generation, cursor, _, _, _, _ ->
+                    RemoteBudgetSnapshotPage(
+                        budgetId = budgetId,
+                        generation = generation ?: GENERATION,
+                        cursor = cursor ?: ids.size.toString(),
+                        records = records,
+                        hasMore = false,
+                        resetRequired = false,
+                        nextAfterType = null,
+                        nextAfterId = null,
+                    )
+                }
+
+                val result = BudgetSyncCoordinator(repository, remote).synchronize(BUDGET, sendQueuedWrites = false)
+
+                assertTrue(result.fullSnapshotApplied)
+                assertEquals(ids.size, repository.findRecords(BUDGET, "transaction").size)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun twoLocalDevicesApplyTheSameSharedChangeFeed() =
         runBlocking {
             val firstDatabase = newDatabase()

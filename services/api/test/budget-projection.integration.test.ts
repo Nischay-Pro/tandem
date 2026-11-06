@@ -310,7 +310,10 @@ describe.skipIf(!integrationEnabled)(
 
     it("upgrades, reverses, and reapplies body deduplication without losing feed bodies", async () => {
       const connectionString = process.env.DATABASE_URL;
-      const migration = MIGRATIONS[2];
+      const migrationIndex = MIGRATIONS.findIndex(
+        ({ name }) => name === "20261106170000-projection-body-deduplication",
+      );
+      const migration = MIGRATIONS[migrationIndex];
       if (!connectionString || !migration || !adminPool) {
         throw new Error("Migration test configuration is incomplete");
       }
@@ -323,7 +326,8 @@ describe.skipIf(!integrationEnabled)(
       });
 
       try {
-        const earlier = MIGRATIONS.slice(0, 2);
+        const migrationSequence = MIGRATIONS.slice(0, migrationIndex + 1);
+        const earlier = migrationSequence.slice(0, -1);
         await applyMigrations(
           migrationPool,
           earlier,
@@ -355,7 +359,11 @@ describe.skipIf(!integrationEnabled)(
           ],
         );
 
-        await applyMigrations(migrationPool);
+        await applyMigrations(
+          migrationPool,
+          migrationSequence,
+          migrationSequence.map(({ name }) => name),
+        );
         const deduplicated = await migrationPool.query<{
           cursor: string;
           body: Record<string, unknown> | null;
@@ -392,7 +400,11 @@ describe.skipIf(!integrationEnabled)(
           amount: -20,
         });
 
-        await applyMigrations(migrationPool);
+        await applyMigrations(
+          migrationPool,
+          migrationSequence,
+          migrationSequence.map(({ name }) => name),
+        );
         const reapplied = await migrationPool.query<{ body: unknown }>(
           `SELECT body FROM companion_budget_changes
            WHERE budget_id = 'budget-legacy' AND cursor = 2`,
@@ -479,6 +491,115 @@ describe.skipIf(!integrationEnabled)(
         hasMore: false,
       });
       expect(MAX_BUDGET_SNAPSHOT_PAGE_SIZE).toBe(2_000);
+    });
+
+    it("pages snapshot IDs in deterministic UTF-8 byte order", async () => {
+      const store = createPostgresBudgetProjectionStore(getPool());
+      const budgetId = `budget-snapshot-order-${randomUUID()}`;
+      const expectedIds = ["B", "a", "a-b", "ab", "\uE000", "😄"];
+      const snapshot = await store.applySnapshot(
+        budgetId,
+        "epoch",
+        expectedIds.map((id) => record("transaction", id, { id })),
+      );
+      const actualIds: string[] = [];
+      let afterType: BudgetEntityType | undefined;
+      let afterId: string | undefined;
+
+      while (true) {
+        const page = await store.readSnapshotPage({
+          budgetId,
+          generation: snapshot.generation,
+          cursor: snapshot.cursor,
+          ...(afterType === undefined ? {} : { afterType }),
+          ...(afterId === undefined ? {} : { afterId }),
+          limit: 2,
+        });
+        expect(page?.resetRequired).toBe(false);
+        actualIds.push(...(page?.records.map(({ id }) => id) ?? []));
+        if (!page?.hasMore) break;
+        afterType = page.nextAfterType!;
+        afterId = page.nextAfterId!;
+      }
+
+      expect(actualIds).toEqual(expectedIds);
+
+      const client = await getPool().connect();
+      try {
+        await client.query("BEGIN");
+        await client.query("SET LOCAL enable_seqscan = off");
+        const plan = await client.query<{ "QUERY PLAN": string }>(
+          `EXPLAIN (COSTS OFF)
+           SELECT entity_type, entity_id, revision, body, is_deleted
+           FROM companion_budget_records
+           WHERE budget_id = $1 AND is_deleted = false
+             AND (entity_type COLLATE "C", entity_id COLLATE "C") >
+                 ($2::text COLLATE "C", $3::text COLLATE "C")
+           ORDER BY entity_type COLLATE "C", entity_id COLLATE "C"
+           LIMIT 3`,
+          [budgetId, "transaction", "B"],
+        );
+        expect(plan.rows.map((row) => row["QUERY PLAN"]).join("\n")).toContain(
+          "companion_budget_records_snapshot_keyset",
+        );
+        const keysetMigration = MIGRATIONS.find(
+          ({ name }) => name === "20261106180000-snapshot-keyset-order",
+        );
+        if (!keysetMigration) {
+          throw new Error("Snapshot keyset migration is not registered");
+        }
+        await keysetMigration.down(client);
+        await keysetMigration.up(client);
+        await client.query("ROLLBACK");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    });
+
+    it("reads change-feed cursors numerically across decimal boundaries", async () => {
+      const store = createPostgresBudgetProjectionStore(getPool());
+      const budgetId = `budget-feed-order-${randomUUID()}`;
+      const snapshot = await store.applySnapshot(
+        budgetId,
+        "epoch",
+        Array.from({ length: 120 }, (_, index) => {
+          const id = `txn-${index + 1}`;
+          return record("transaction", id, { id });
+        }),
+      );
+
+      const aroundTen = await store.readChanges({
+        budgetId,
+        generation: snapshot.generation,
+        cursor: "8",
+        throughCursor: snapshot.cursor,
+        limit: 4,
+      });
+      expect(aroundTen?.changes.map(({ cursor }) => cursor)).toEqual([
+        "9",
+        "10",
+        "11",
+        "12",
+      ]);
+      expect(aroundTen?.nextCursor).toBe("12");
+
+      const aroundHundred = await store.readChanges({
+        budgetId,
+        generation: snapshot.generation,
+        cursor: "98",
+        throughCursor: snapshot.cursor,
+        limit: 4,
+      });
+      expect(aroundHundred?.changes.map(({ cursor }) => cursor)).toEqual([
+        "99",
+        "100",
+        "101",
+        "102",
+      ]);
+      expect(aroundHundred?.nextCursor).toBe("102");
     });
 
     it("uses the database refresh timestamp and epoch for snapshot freshness", async () => {

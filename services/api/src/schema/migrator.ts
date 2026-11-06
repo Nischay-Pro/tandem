@@ -9,6 +9,10 @@ import {
   down as downProjectionBodyDeduplication,
   up as upProjectionBodyDeduplication,
 } from "./migrations/20261106170000-projection-body-deduplication.js";
+import {
+  down as downSnapshotKeysetOrder,
+  up as upSnapshotKeysetOrder,
+} from "./migrations/20261106180000-snapshot-keyset-order.js";
 import { OperatorMessageError } from "../operator-message-error.js";
 
 export interface Migration {
@@ -32,6 +36,11 @@ export const MIGRATIONS: readonly Migration[] = [
     name: "20261106170000-projection-body-deduplication",
     up: upProjectionBodyDeduplication,
     down: downProjectionBodyDeduplication,
+  },
+  {
+    name: "20261106180000-snapshot-keyset-order",
+    up: upSnapshotKeysetOrder,
+    down: downSnapshotKeysetOrder,
   },
 ];
 

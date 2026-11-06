@@ -195,10 +195,12 @@ class BudgetSyncCoordinator(
                 for (record in page.records) {
                     if (record.generation != generation ||
                         pagePreviousType != null &&
-                        (
-                            record.recordType < pagePreviousType ||
-                                (record.recordType == pagePreviousType && record.recordId <= pagePreviousId.orEmpty())
-                        )
+                        compareSnapshotRecordKeys(
+                            record.recordType,
+                            record.recordId,
+                            pagePreviousType,
+                            pagePreviousId.orEmpty(),
+                        ) <= 0
                     ) {
                         throw BudgetSyncProtocolException("Snapshot page records are out of order")
                     }
@@ -555,6 +557,29 @@ class BudgetSyncCoordinator(
 private fun String.compareDecimalCursors(other: String): Int {
     if (length != other.length) return length.compareTo(other.length)
     return compareTo(other)
+}
+
+private fun compareSnapshotRecordKeys(
+    type: String,
+    id: String,
+    otherType: String,
+    otherId: String,
+): Int {
+    val typeOrder = compareUtf8Binary(type, otherType)
+    return if (typeOrder != 0) typeOrder else compareUtf8Binary(id, otherId)
+}
+
+private fun compareUtf8Binary(
+    left: String,
+    right: String,
+): Int {
+    val leftBytes = left.encodeToByteArray()
+    val rightBytes = right.encodeToByteArray()
+    for (index in 0 until minOf(leftBytes.size, rightBytes.size)) {
+        val difference = (leftBytes[index].toInt() and 0xff) - (rightBytes[index].toInt() and 0xff)
+        if (difference != 0) return difference
+    }
+    return leftBytes.size.compareTo(rightBytes.size)
 }
 
 private fun String.isDecimalCursor() =
