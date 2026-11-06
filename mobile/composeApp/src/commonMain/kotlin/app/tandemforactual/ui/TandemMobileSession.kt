@@ -135,6 +135,18 @@ internal class TandemMobileSession(
     var transactionWriteMessage by mutableStateOf<String?>(null)
         private set
 
+    private var readOnlyMode = false
+
+    fun setReadOnlyMode(enabled: Boolean) {
+        readOnlyMode = enabled
+    }
+
+    private fun refuseWriteInReadOnlyMode(): Boolean {
+        if (!readOnlyMode) return false
+        transactionWriteMessage = "Read-only mode is on. Turn it off before changing this data."
+        return true
+    }
+
     var lastSyncSummary by mutableStateOf<BudgetSyncSummary?>(null)
         private set
 
@@ -335,6 +347,7 @@ internal class TandemMobileSession(
         displaySettings: BudgetDisplaySettings? = null,
     ) {
         transactionWriteMessage = null
+        if (refuseWriteInReadOnlyMode()) return
         val enteredAmount = parseAmountMinorUnits(amountText, displaySettings)
         if (enteredAmount == null || enteredAmount < 0) {
             transactionWriteMessage = "Enter a valid positive amount using this device’s number format."
@@ -425,6 +438,7 @@ internal class TandemMobileSession(
         displaySettings: BudgetDisplaySettings? = null,
     ): Boolean {
         transactionWriteMessage = null
+        if (refuseWriteInReadOnlyMode()) return false
         val amount = parseAmountMinorUnits(amountText, displaySettings)
         if (amount == null || amount == 0L) {
             transactionWriteMessage = "Enter an amount greater than zero."
@@ -553,6 +567,7 @@ internal class TandemMobileSession(
         encryptionPassword: String?,
     ) {
         transactionWriteMessage = null
+        if (refuseWriteInReadOnlyMode()) return
         val localRepository = repository
         if (localRepository == null) {
             transactionWriteMessage = "Local storage is unavailable. Restart the app and try again."
@@ -628,6 +643,8 @@ internal class TandemMobileSession(
         budgetId: String,
         operationId: String,
     ) {
+        transactionWriteMessage = null
+        if (refuseWriteInReadOnlyMode()) return
         val localRepository = repository ?: return
         localRepository.discardWrite(operationId)
         loadLocalRecords(budgetId)
@@ -639,6 +656,8 @@ internal class TandemMobileSession(
         operationId: String,
         encryptionPassword: String?,
     ) {
+        transactionWriteMessage = null
+        if (refuseWriteInReadOnlyMode()) return
         val localRepository = repository ?: return
         localRepository.retryUncertainWrite(operationId)
         synchronize(budgetId, encryptionPassword)

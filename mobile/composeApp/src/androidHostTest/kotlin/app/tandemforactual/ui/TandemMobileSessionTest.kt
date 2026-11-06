@@ -10,6 +10,45 @@ import kotlin.test.assertTrue
 
 class TandemMobileSessionTest {
     @Test
+    fun readOnlyModeBlocksEveryTransactionWriteEntryPoint() =
+        runBlocking {
+            val session =
+                TandemMobileSession(
+                    apiClient = TandemApiClient(),
+                    database = null,
+                    nowEpochMillis = { 0L },
+                )
+            session.setReadOnlyMode(true)
+            val readOnlyMessage = "Read-only mode is on. Turn it off before changing this data."
+
+            session.updateTransaction("budget-1", "transaction-1", "1.00", "note", -100, null)
+            assertEquals(readOnlyMessage, session.transactionWriteMessage)
+
+            assertFalse(
+                session.createTransaction(
+                    "budget-1",
+                    "account-1",
+                    null,
+                    null,
+                    "1.00",
+                    "2026-05-14",
+                    "note",
+                    null,
+                ),
+            )
+            assertEquals(readOnlyMessage, session.transactionWriteMessage)
+
+            session.resolveConflict("budget-1", "operation-1", true, null)
+            assertEquals(readOnlyMessage, session.transactionWriteMessage)
+
+            session.discardWrite("budget-1", "operation-1")
+            assertEquals(readOnlyMessage, session.transactionWriteMessage)
+
+            session.retryUncertainWrite("budget-1", "operation-1", null)
+            assertEquals(readOnlyMessage, session.transactionWriteMessage)
+        }
+
+    @Test
     fun retryKeepsSyncAttentionVisibleUntilSuccess() {
         val previousFailure = SyncPresentationState().failed("Could not sync this budget.")
 

@@ -1014,6 +1014,7 @@ fun TandemApp(
         remember(apiClient, database, deviceCredentialStore) {
             TandemMobileSession(apiClient, database, nowEpochMillis, deviceCredentialStore)
         }
+    SideEffect { mobileSession.setReadOnlyMode(state.readOnlyMode) }
     val appPreferencesStore = remember(database) { database?.let(::AppPreferencesStore) }
     val coroutineScope = rememberCoroutineScope()
     var merchantIconPack by remember { mutableStateOf<MerchantIconPack?>(null) }
@@ -6000,9 +6001,9 @@ private fun ConflictReviewScreen(
                 mobileSession.transactionWriteMessage?.let { BodyText(it) }
                 PrimaryButton(
                     "Keep device version",
-                    enabled = !mobileSession.isSavingTransaction && record?.remoteDeleted != true,
+                    enabled = !state.readOnlyMode && !mobileSession.isSavingTransaction && record?.remoteDeleted != true,
                 ) { onResolveConflict(operation.operationId, true) }
-                SecondaryButton("Keep latest Actual version", enabled = !mobileSession.isSavingTransaction) {
+                SecondaryButton("Keep latest Actual version", enabled = !state.readOnlyMode && !mobileSession.isSavingTransaction) {
                     onResolveConflict(operation.operationId, false)
                 }
             }
@@ -6080,8 +6081,10 @@ private fun UncertainWriteScreen(
                     "Checking status asks the server about the same operation without sending it again. Retry is a separate explicit action.",
                 )
                 PrimaryButton("Check status", enabled = !mobileSession.isSyncing) { onSyncNow() }
-                SecondaryButton("Retry the same operation", enabled = !mobileSession.isSyncing) { onRetry(operation.operationId) }
-                SecondaryButton("Discard local edit") { onDiscard(operation.operationId) }
+                SecondaryButton("Retry the same operation", enabled = !state.readOnlyMode && !mobileSession.isSyncing) {
+                    onRetry(operation.operationId)
+                }
+                SecondaryButton("Discard local edit", enabled = !state.readOnlyMode) { onDiscard(operation.operationId) }
             }
         }
         return
@@ -6133,7 +6136,7 @@ private fun RejectedWriteScreen(
                 PreviewNote(
                     "The data layer removed the rejected optimistic overlay and retained the local audit entry until you dismiss it.",
                 )
-                PrimaryButton("Dismiss rejected edit") { onDiscard(operation.operationId) }
+                PrimaryButton("Dismiss rejected edit", enabled = !state.readOnlyMode) { onDiscard(operation.operationId) }
             }
         }
         return
