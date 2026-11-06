@@ -12,7 +12,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FiniteAnimationSpec
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -23,7 +22,6 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
@@ -138,6 +136,14 @@ import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetDisplaySettings
+import app.tandemforactual.ui.components.AnimatedStatusText
+import app.tandemforactual.ui.components.CollapsibleSectionCard
+import app.tandemforactual.ui.components.ListRow
+import app.tandemforactual.ui.components.ListRowOptions
+import app.tandemforactual.ui.components.RowLeading
+import app.tandemforactual.ui.components.SectionCard
+import app.tandemforactual.ui.components.SurfaceCard
+import app.tandemforactual.ui.components.crossfadeTransitions
 import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.allDrawableResources
 import com.composables.icons.lucide.Bell
@@ -2905,76 +2911,6 @@ private fun EmptyState(
 }
 
 @Composable
-private fun AnimatedStatusText(
-    text: String,
-    color: Color,
-    modifier: Modifier = Modifier,
-    fontSize: androidx.compose.ui.unit.TextUnit = TandemTypography.body,
-    lineHeight: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
-    fontWeight: FontWeight = FontWeight.Normal,
-    maxLines: Int = Int.MAX_VALUE,
-    overflow: TextOverflow = TextOverflow.Clip,
-    animateSizeChanges: Boolean = false,
-) {
-    val reduceMotion = tandemReduceMotion
-    AnimatedContent(
-        targetState = AnimatedTextContent(text, color),
-        modifier =
-            modifier.then(
-                if (animateSizeChanges) {
-                    Modifier.animateContentSize(
-                        animationSpec = tandemMotionSpec(reduceMotion, TandemMotion.CONTENT_SIZE_MILLIS),
-                    )
-                } else {
-                    Modifier
-                },
-            ),
-        transitionSpec = {
-            val (enter, exit) = crossfadeTransitions(reduceMotion, TandemMotion.STATUS_CHANGE_MILLIS)
-            enter togetherWith exit using null
-        },
-        contentKey = { it.text },
-        contentAlignment = Alignment.CenterStart,
-        label = "sync-status-text-transition",
-    ) { visibleText ->
-        val visibleColor by
-            animateColorAsState(
-                targetValue = visibleText.color,
-                animationSpec = tandemMotionSpec(reduceMotion, TandemMotion.COLOR_MILLIS),
-                label = "sync-status-text-color",
-            )
-        Text(
-            visibleText.text,
-            color = visibleColor,
-            fontSize = fontSize,
-            lineHeight = lineHeight,
-            fontWeight = fontWeight,
-            maxLines = maxLines,
-            overflow = overflow,
-        )
-    }
-}
-
-private data class AnimatedTextContent(
-    val text: String,
-    val color: Color,
-)
-
-private fun crossfadeTransitions(
-    reduceMotion: Boolean,
-    durationMillis: Int,
-): Pair<EnterTransition, ExitTransition> =
-    if (reduceMotion) {
-        EnterTransition.None to ExitTransition.None
-    } else {
-        val fadeMillis = minOf(TandemMotion.CROSSFADE_MILLIS, durationMillis)
-        Pair(
-            fadeIn(tween(fadeMillis, easing = LinearEasing)),
-            fadeOut(tween(fadeMillis, easing = LinearEasing)),
-        )
-    }
-
-@Composable
 private fun LabelText(text: String) {
     Text(
         text,
@@ -2983,33 +2919,6 @@ private fun LabelText(text: String) {
         letterSpacing = TandemTypography.captionLetterSpacing,
         fontWeight = FontWeight.SemiBold,
     )
-}
-
-@Composable
-private fun SurfaceCard(
-    modifier: Modifier = Modifier,
-    onClick: (() -> Unit)? = null,
-    onClickLabel: String? = null,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    val palette = tandemPalette
-    Surface(
-        modifier =
-            modifier
-                .animateContentSize(animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS))
-                .then(
-                    if (onClick != null) {
-                        Modifier.clickable(role = Role.Button, onClickLabel = onClickLabel, onClick = onClick)
-                    } else {
-                        Modifier
-                    },
-                ),
-        shape = RoundedCornerShape(TandemShapes.large),
-        color = palette.surface,
-        border = BorderStroke(1.dp, palette.border),
-    ) {
-        Column(content = content)
-    }
 }
 
 @Composable
@@ -3702,180 +3611,6 @@ private fun ReadOnlyField(
     }
 }
 
-private data class ListRowOptions(
-    val trailingColor: Color? = null,
-    val dense: Boolean = false,
-    val animateChanges: Boolean = false,
-)
-
-private sealed interface RowLeading {
-    data object Automatic : RowLeading
-
-    data object None : RowLeading
-
-    data class Icon(
-        val imageVector: ImageVector?,
-    ) : RowLeading
-
-    data class Merchant(
-        val resource: DrawableResource?,
-        val fallback: ImageVector? = null,
-    ) : RowLeading
-
-    data class Letter(
-        val value: String,
-    ) : RowLeading
-}
-
-@Composable
-private fun ListRow(
-    title: String,
-    subtitle: String? = null,
-    trailing: String? = null,
-    leading: RowLeading = RowLeading.Automatic,
-    options: ListRowOptions = ListRowOptions(),
-    onClick: (() -> Unit)? = null,
-) {
-    val palette = tandemPalette
-    val merchantResource = (leading as? RowLeading.Merchant)?.resource
-    val resolvedPainter = merchantResource?.let { painterResource(it) }
-    val resolvedVector =
-        when (leading) {
-            RowLeading.Automatic -> financeIcon(title) ?: Lucide.CircleDot
-            RowLeading.None, is RowLeading.Letter -> null
-            is RowLeading.Icon -> leading.imageVector ?: financeIcon(title) ?: Lucide.CircleDot
-            is RowLeading.Merchant -> leading.fallback ?: financeIcon(title) ?: Lucide.CircleDot
-        }
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .defaultMinSize(minHeight = if (options.dense) 56.dp else 64.dp)
-                .then(
-                    if (onClick != null) {
-                        Modifier.clickable(role = Role.Button, onClickLabel = title, onClick = onClick)
-                    } else {
-                        Modifier
-                    },
-                ).padding(
-                    horizontal = TandemSpacing.large,
-                    vertical =
-                        if (options.dense) {
-                            TandemSpacing.extraSmall + TandemSpacing.xxSmall
-                        } else {
-                            TandemSpacing.small +
-                                TandemSpacing.xxSmall
-                        },
-                ),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-    ) {
-        if (leading != RowLeading.None) {
-            Box(
-                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(TandemShapes.medium)).background(palette.raised),
-                contentAlignment = Alignment.Center,
-            ) {
-                when {
-                    resolvedPainter != null -> {
-                        Image(
-                            painter = resolvedPainter,
-                            contentDescription = null,
-                            modifier = Modifier.size(32.dp).padding(TandemSpacing.xxSmall),
-                            contentScale = ContentScale.Fit,
-                        )
-                    }
-                    resolvedVector != null -> {
-                        Icon(
-                            imageVector = resolvedVector,
-                            contentDescription = null,
-                            modifier = Modifier.size(30.dp),
-                            tint = palette.accent,
-                        )
-                    }
-                    leading is RowLeading.Letter -> {
-                        Text(
-                            leading.value,
-                            modifier = Modifier.clearAndSetSemantics {},
-                            color = palette.accent,
-                            fontSize = if (options.dense) TandemTypography.action else TandemTypography.cardTitle,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                }
-            }
-        }
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-            if (options.animateChanges) {
-                AnimatedStatusText(
-                    title,
-                    palette.text,
-                    fontSize = TandemTypography.body,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            } else {
-                Text(
-                    title,
-                    color = palette.text,
-                    fontSize = TandemTypography.body,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (subtitle != null) {
-                if (options.animateChanges) {
-                    AnimatedStatusText(
-                        subtitle,
-                        palette.muted,
-                        fontSize = TandemTypography.caption,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                } else {
-                    Text(
-                        subtitle,
-                        color = palette.muted,
-                        fontSize = TandemTypography.caption,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        }
-        if (trailing != null) {
-            val effectiveColor = options.trailingColor ?: palette.muted
-            if (options.animateChanges) {
-                AnimatedStatusText(
-                    trailing,
-                    effectiveColor,
-                    fontSize = TandemTypography.compactBody,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            } else {
-                Text(
-                    trailing,
-                    color = effectiveColor,
-                    fontSize = TandemTypography.compactBody,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        } else if (onClick != null) {
-            Icon(
-                Lucide.ChevronRight,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp).clearAndSetSemantics {},
-                tint = palette.muted,
-            )
-        }
-    }
-}
-
 internal fun financeIcon(label: String): ImageVector? {
     val words = labelWords(label)
 
@@ -3947,133 +3682,6 @@ private fun containsPhrase(
 ): Boolean {
     val phraseWords = labelWords(phrase)
     return phraseWords.isNotEmpty() && words.windowed(phraseWords.size).any { it == phraseWords }
-}
-
-@Composable
-private fun SectionCard(
-    title: String,
-    detail: String? = null,
-    action: String? = null,
-    onClick: (() -> Unit)? = null,
-    animateDetail: Boolean = false,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    SectionCardLayout(title, detail, action, onClick, animateDetail, null, content)
-}
-
-private data class SectionCollapse(
-    val expanded: Boolean,
-    val onToggle: () -> Unit,
-)
-
-@Composable
-private fun CollapsibleSectionCard(
-    title: String,
-    detail: String? = null,
-    action: String? = null,
-    expanded: Boolean,
-    onToggleExpanded: () -> Unit,
-    onClick: (() -> Unit)? = null,
-    animateDetail: Boolean = false,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    SectionCardLayout(title, detail, action, onClick, animateDetail, SectionCollapse(expanded, onToggleExpanded), content)
-}
-
-@Composable
-private fun SectionCardLayout(
-    title: String,
-    detail: String?,
-    action: String?,
-    onClick: (() -> Unit)?,
-    animateDetail: Boolean,
-    collapse: SectionCollapse?,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    val palette = tandemPalette
-    SurfaceCard(onClick = onClick) {
-        Column {
-            if (title.isNotEmpty()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-                        Text(
-                            title,
-                            color = palette.text,
-                            fontSize = TandemTypography.body,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (detail != null) {
-                            if (animateDetail) {
-                                AnimatedStatusText(
-                                    detail,
-                                    palette.muted,
-                                    fontSize = TandemTypography.caption,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            } else {
-                                Text(
-                                    detail,
-                                    color = palette.muted,
-                                    fontSize = TandemTypography.caption,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                    }
-                    if (action != null) {
-                        Text(
-                            action,
-                            color = palette.accent,
-                            fontSize = TandemTypography.label,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    if (collapse != null) {
-                        val arrowRotation by
-                            animateFloatAsState(
-                                targetValue = if (!collapse.expanded) -90f else 0f,
-                                animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
-                                label = "section-chevron-$title",
-                            )
-                        Icon(
-                            imageVector = Lucide.ChevronDown,
-                            contentDescription = if (!collapse.expanded) "Expand $title" else "Collapse $title",
-                            modifier =
-                                Modifier
-                                    .padding(start = TandemSpacing.extraSmall)
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .clickable(role = Role.Button, onClick = collapse.onToggle)
-                                    .padding(TandemSpacing.small)
-                                    .graphicsLayer { rotationZ = arrowRotation },
-                            tint = palette.muted,
-                        )
-                    }
-                }
-                Box(Modifier.fillMaxWidth().height(1.dp).background(palette.border.copy(alpha = 0.75f)))
-            }
-            if (collapse == null) {
-                content()
-            } else {
-                AnimatedVisibility(
-                    visible = collapse.expanded,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut(),
-                ) {
-                    Column(content = content)
-                }
-            }
-        }
-    }
 }
 
 @Composable
