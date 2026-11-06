@@ -379,6 +379,7 @@ internal data class TransactionItem(
     val approved: Boolean? = null,
     val matched: Boolean? = null,
     val isTransfer: Boolean = false,
+    val isSplitParent: Boolean = false,
 )
 
 private data class MerchantIconNotice(
@@ -612,6 +613,7 @@ private fun buildLiveTransactionItems(
             approved = record.approved,
             matched = record.matched,
             isTransfer = record.transfer == true,
+            isSplitParent = record.isParent,
         )
     }
 }
@@ -4341,7 +4343,12 @@ private fun BudgetScreen(
     val essentialsFirst = state.homeLayout == "Essentials"
     val sectionSpacing = if (compact) 10.dp else 16.dp
     val groups = if (isLiveBudget) liveBudgetMonth?.groups.orEmpty() else previewCategoryGroups
-    val recentTransactions = if (isLiveBudget) liveTransactions else liveTransactions.takeIf { it.isNotEmpty() } ?: previewTransactions
+    val recentTransactions =
+        if (isLiveBudget) {
+            liveTransactions.filterNot(TransactionItem::isSplitParent)
+        } else {
+            liveTransactions.takeIf { it.isNotEmpty() } ?: previewTransactions
+        }
     val conflictCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "conflict" } else 0
     val rejectedCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "rejected" } else 0
     val readyToAssignMinor = if (isLiveBudget) liveBudgetMonth?.toBudgetMinor ?: 0 else 124_000L
@@ -5160,7 +5167,7 @@ private fun AccountDetailScreen(
     val accountName = liveAccount?.name ?: previewAccount?.name
     val accountActivity =
         when {
-            liveAccount != null -> liveTransactions.filter { it.accountId == liveAccount.id }
+            liveAccount != null -> liveTransactions.filter { it.accountId == liveAccount.id && !it.isSplitParent }
             previewAccount != null -> previewTransactions.filter { it.account == previewAccount.name }
             else -> emptyList()
         }
@@ -5254,7 +5261,7 @@ private fun ActivityScreen(
     onSyncNow: () -> Unit,
 ) {
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
-    val transactions = if (isLiveBudget) liveTransactions else previewTransactions
+    val transactions = if (isLiveBudget) liveTransactions.filterNot(TransactionItem::isSplitParent) else previewTransactions
     val selectedSortOrder = state.activitySortOrder
     var sortedTransactions by remember(state.selectedBudgetId) { mutableStateOf(transactions) }
     LaunchedEffect(transactions, selectedSortOrder) {
@@ -5392,7 +5399,7 @@ internal fun buildSearchActivityRecords(
     payees: Map<String, String>,
     categories: Map<String, String>,
 ): List<ActivitySearchRecord> =
-    records.mapNotNull { record ->
+    records.filterNot(SearchableBudgetTransaction::isParent).mapNotNull { record ->
         val amount = record.amountMinor ?: return@mapNotNull null
         val payee = record.payeeId?.let(payees::get) ?: record.payeeId ?: "No payee"
         val category = record.categoryId?.let(categories::get) ?: record.categoryId ?: "Uncategorized"

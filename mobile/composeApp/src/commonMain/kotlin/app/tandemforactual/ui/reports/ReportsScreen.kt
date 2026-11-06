@@ -132,7 +132,7 @@ internal fun ReportsScreen(
                 SurfaceCard {
                     EmptyState(
                         "Choose a report period",
-                        "Select a valid month to see your reports.",
+                        "Choose a month to see your reports.",
                         Modifier.padding(TandemSpacing.large),
                     )
                 }
@@ -172,7 +172,7 @@ internal fun ReportDetailScreen(
     val window = createReportWindow(state.reportsMonthId, periodMode, state.reportsRangeMonths)
     if (window == null) {
         Column(Modifier.fillMaxSize().padding(TandemSpacing.screen), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-            EmptyState("Choose a report period", "Select a valid month to see this report.")
+            EmptyState("Choose a report period", "Choose a month to see this report.")
         }
         return
     }

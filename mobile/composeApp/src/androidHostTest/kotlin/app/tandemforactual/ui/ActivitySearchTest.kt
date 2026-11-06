@@ -15,6 +15,21 @@ class ActivitySearchTest {
                 records =
                     listOf(
                         SearchableBudgetTransaction(
+                            recordId = "split-parent",
+                            recordDate = "2026-05-14",
+                            accountId = "account-1",
+                            categoryId = null,
+                            payeeId = "payee-1",
+                            amountMinor = -1_170,
+                            notes = "House supplies",
+                            cleared = null,
+                            reconciled = null,
+                            approved = null,
+                            matched = null,
+                            transfer = false,
+                            isParent = true,
+                        ),
+                        SearchableBudgetTransaction(
                             recordId = "transaction-1",
                             recordDate = "2026-05-14",
                             accountId = "account-1",
