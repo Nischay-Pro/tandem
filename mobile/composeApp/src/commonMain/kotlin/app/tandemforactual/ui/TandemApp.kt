@@ -34,6 +34,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -105,6 +106,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -2103,14 +2105,28 @@ fun TandemApp(
 private fun AppRoute.isTab(): Boolean =
     this == AppRoute.BUDGET || this == AppRoute.ACCOUNTS || this == AppRoute.ACTIVITY || this == AppRoute.SETTINGS
 
+private fun AppRoute.tabOrder(): Int =
+    when (this) {
+        AppRoute.BUDGET -> 0
+        AppRoute.ACCOUNTS -> 1
+        AppRoute.ACTIVITY -> 2
+        AppRoute.SETTINGS -> 3
+        else -> -1
+    }
+
 @Composable
-private fun FloatingTransactionAction(
+private fun FloatingAction(
     compact: Boolean,
     enabled: Boolean,
+    label: String,
+    contentDescription: String,
+    icon: ImageVector,
+    loading: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val palette = tandemPalette
+    val actionColor = if (enabled) palette.accentContent else palette.muted
     Row(
         modifier =
             modifier
@@ -2119,29 +2135,45 @@ private fun FloatingTransactionAction(
                 .defaultMinSize(minWidth = 56.dp)
                 .clip(if (compact) CircleShape else RoundedCornerShape(TandemShapes.large))
                 .background(if (enabled) palette.accent else palette.raised)
-                .semantics(mergeDescendants = true) {
-                    contentDescription = if (enabled) "Add transaction" else "Read-only mode is on"
-                }.clickable(enabled = enabled, role = Role.Button, onClickLabel = "Add transaction", onClick = onClick)
+                .semantics(mergeDescendants = true) { this.contentDescription = contentDescription }
+                .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
                 .padding(horizontal = if (compact) TandemSpacing.large else TandemSpacing.extraLarge),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(if (compact) 0.dp else TandemSpacing.small),
     ) {
-        Icon(
-            Lucide.Plus,
-            contentDescription = null,
-            modifier = Modifier.size(24.dp),
-            tint = if (enabled) palette.accentContent else palette.muted,
-        )
+        if (loading) {
+            CircularProgressIndicator(Modifier.size(22.dp), color = actionColor, strokeWidth = 2.dp)
+        } else {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp), tint = actionColor)
+        }
         AnimatedVisibility(visible = !compact, enter = fadeIn(), exit = fadeOut()) {
             Text(
-                "Add transaction",
-                color = if (enabled) palette.accentContent else palette.muted,
+                label,
+                color = actionColor,
                 fontSize = TandemTypography.body,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
             )
         }
     }
+}
+
+@Composable
+private fun FloatingTransactionAction(
+    compact: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FloatingAction(
+        compact = compact,
+        enabled = enabled,
+        label = "Add transaction",
+        contentDescription = if (enabled) "Add transaction" else "Read-only mode is on",
+        icon = Lucide.Plus,
+        onClick = onClick,
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -2152,50 +2184,17 @@ private fun FloatingSyncAction(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val palette = tandemPalette
-    Row(
-        modifier =
-            modifier
-                .animateContentSize(tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS))
-                .height(56.dp)
-                .defaultMinSize(minWidth = 56.dp)
-                .clip(if (compact) CircleShape else RoundedCornerShape(TandemShapes.large))
-                .background(if (enabled) palette.accent else palette.raised)
-                .semantics(mergeDescendants = true) { contentDescription = "Sync" }
-                .clickable(enabled = enabled, role = Role.Button, onClickLabel = "Sync", onClick = onClick)
-                .padding(horizontal = if (compact) TandemSpacing.large else TandemSpacing.extraLarge),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(if (compact) 0.dp else TandemSpacing.small),
-    ) {
-        if (syncing) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(22.dp),
-                color = if (enabled) palette.accentContent else palette.muted,
-                strokeWidth = 2.dp,
-            )
-        } else {
-            Icon(Lucide.CloudSync, contentDescription = null, modifier = Modifier.size(24.dp), tint = palette.accentContent)
-        }
-        AnimatedVisibility(visible = !compact, enter = fadeIn(), exit = fadeOut()) {
-            Text(
-                "Sync",
-                color = if (enabled) palette.accentContent else palette.muted,
-                fontSize = TandemTypography.body,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-            )
-        }
-    }
+    FloatingAction(
+        compact = compact,
+        enabled = enabled,
+        label = "Sync",
+        contentDescription = "Sync",
+        icon = Lucide.CloudSync,
+        loading = syncing,
+        onClick = onClick,
+        modifier = modifier,
+    )
 }
-
-private fun AppRoute.tabOrder(): Int =
-    when (this) {
-        AppRoute.BUDGET -> 0
-        AppRoute.ACCOUNTS -> 1
-        AppRoute.ACTIVITY -> 2
-        AppRoute.SETTINGS -> 3
-        else -> -1
-    }
 
 @Composable
 private fun AppHeader(
@@ -2238,17 +2237,11 @@ private fun AppHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showBack) {
-            Icon(
-                imageVector = if (route == AppRoute.NEW_TRANSACTION) Lucide.X else Lucide.ChevronLeft,
-                contentDescription = null,
-                modifier =
-                    Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .semantics(mergeDescendants = true) { contentDescription = "Back" }
-                        .clickable(role = Role.Button, onClickLabel = "Back", onClick = onBack)
-                        .padding(TandemSpacing.medium),
-                tint = palette.text,
+            TandemIconButton(
+                icon = if (route == AppRoute.NEW_TRANSACTION) Lucide.X else Lucide.ChevronLeft,
+                contentDescription = "Back",
+                onClick = onBack,
+                iconSizeDp = 24,
             )
             Spacer(Modifier.width(6.dp))
         }
@@ -2291,38 +2284,25 @@ private fun AppHeader(
                     MainCloudStatus.SYNCING -> palette.syncing
                     MainCloudStatus.ERROR -> palette.negative
                 }
-            Box(
-                modifier =
-                    Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .semantics(mergeDescendants = true) {
-                            contentDescription =
-                                when (syncStatus) {
-                                    MainCloudStatus.OFF -> "Sync is off"
-                                    MainCloudStatus.SYNCED -> "Everything synced"
-                                    MainCloudStatus.SYNCING -> "Syncing changes"
-                                    MainCloudStatus.ERROR -> "Sync needs attention"
-                                }
-                        }.clickable(
-                            role = Role.Button,
-                            onClickLabel = "Open sync center",
-                            onClick = onSync,
-                        ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector =
-                        when (syncStatus) {
-                            MainCloudStatus.OFF -> Lucide.CloudOff
-                            MainCloudStatus.ERROR -> Lucide.CloudAlert
-                            else -> Lucide.Cloud
-                        },
-                    contentDescription = null,
-                    modifier = Modifier.size(25.dp),
-                    tint = cloudTint,
-                )
-            }
+            TandemIconButton(
+                icon =
+                    when (syncStatus) {
+                        MainCloudStatus.OFF -> Lucide.CloudOff
+                        MainCloudStatus.ERROR -> Lucide.CloudAlert
+                        else -> Lucide.Cloud
+                    },
+                contentDescription =
+                    when (syncStatus) {
+                        MainCloudStatus.OFF -> "Sync is off"
+                        MainCloudStatus.SYNCED -> "Everything synced"
+                        MainCloudStatus.SYNCING -> "Syncing changes"
+                        MainCloudStatus.ERROR -> "Sync needs attention"
+                    },
+                onClickLabel = "Open sync center",
+                onClick = onSync,
+                iconSizeDp = 25,
+                tint = cloudTint,
+            )
         } else if (route == AppRoute.BUDGET_CHOOSER) {
             Text(
                 when {
@@ -3013,6 +2993,93 @@ private fun SecondaryButton(
     onClick: () -> Unit,
 ) {
     TandemButton(TandemButtonStyle.SECONDARY, label, enabled, modifier, loading = false, onClick = onClick)
+}
+
+@Composable
+private fun TandemIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClickLabel: String = contentDescription,
+    modifier: Modifier = Modifier,
+    sizeDp: Int = 44,
+    iconSizeDp: Int = 22,
+    enabled: Boolean = true,
+    tint: Color? = null,
+    containerColor: Color? = null,
+    shape: Shape = CircleShape,
+    borderColor: Color? = null,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    Box(
+        modifier =
+            modifier
+                .size(sizeDp.dp)
+                .clip(shape)
+                .then(containerColor?.let { Modifier.background(it) } ?: Modifier)
+                .then(borderColor?.let { Modifier.border(1.dp, it, shape) } ?: Modifier)
+                .semantics(mergeDescendants = true) { this.contentDescription = contentDescription }
+                .clickable(enabled = enabled, role = Role.Button, onClickLabel = onClickLabel, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(iconSizeDp.dp), tint = tint ?: palette.text)
+    }
+}
+
+@Composable
+private fun PeriodStepper(
+    title: String,
+    previousLabel: String,
+    nextLabel: String,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        TandemIconButton(Lucide.ChevronLeft, previousLabel, onClick = onPrevious)
+        Text(
+            title,
+            modifier = Modifier.weight(1f),
+            color = tandemPalette.text,
+            fontSize = TandemTypography.periodTitle,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+        )
+        TandemIconButton(Lucide.ChevronRight, nextLabel, onClick = onNext)
+    }
+}
+
+@Composable
+private fun SelectableTile(
+    selected: Boolean,
+    contentDescription: String,
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(TandemShapes.medium),
+    selectedBackground: Color = tandemPalette.accentSurface,
+    unselectedBackground: Color = tandemPalette.surface,
+    selectedBorder: Color? = null,
+    unselectedBorder: Color? = null,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val background by
+        animateColorAsState(
+            targetValue = if (selected) selectedBackground else unselectedBackground,
+            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+            label = "selectable-tile-background",
+        )
+    val border = if (selected) selectedBorder else unselectedBorder
+    Box(
+        modifier =
+            modifier
+                .animateContentSize(animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS))
+                .clip(shape)
+                .background(background)
+                .then(border?.let { Modifier.border(1.dp, it, shape) } ?: Modifier)
+                .semantics { this.contentDescription = contentDescription }
+                .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect),
+        contentAlignment = Alignment.Center,
+        content = content,
+    )
 }
 
 private enum class TandemButtonStyle {
@@ -4059,7 +4126,17 @@ private fun ChoiceRow(
             animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
             label = "choice-selection-progress",
         )
-    SurfaceCard(onClick = onClick) {
+    SelectableTile(
+        selected = selected,
+        contentDescription = title,
+        onSelect = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(TandemShapes.large),
+        selectedBackground = palette.surface,
+        unselectedBackground = palette.surface,
+        selectedBorder = palette.border,
+        unselectedBorder = palette.border,
+    ) {
         SettingRowLayout(
             title = title,
             subtitle = subtitle,
@@ -5195,61 +5272,32 @@ private fun MonthPickerScreen(
         var selectedYear by remember {
             mutableStateOf(state.selectedMonthId.substringBefore('-').toIntOrNull() ?: 2026)
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Lucide.ChevronLeft,
-                contentDescription = "Previous year",
-                modifier =
-                    Modifier
-                        .size(44.dp)
-                        .semantics { contentDescription = "Previous year" }
-                        .clickable(role = Role.Button, onClickLabel = "Previous year") {
-                            selectedYear -= 1
-                        }.padding(TandemSpacing.medium),
-                tint = tandemPalette.text,
-            )
-            Text(selectedYear.toString(), color = tandemPalette.text, fontSize = TandemTypography.periodTitle, fontWeight = FontWeight.Bold)
-            Icon(
-                Lucide.ChevronRight,
-                contentDescription = "Next year",
-                modifier =
-                    Modifier
-                        .size(44.dp)
-                        .semantics { contentDescription = "Next year" }
-                        .clickable(role = Role.Button, onClickLabel = "Next year") {
-                            selectedYear += 1
-                        }.padding(TandemSpacing.medium),
-                tint = tandemPalette.text,
-            )
-        }
+        PeriodStepper(
+            title = selectedYear.toString(),
+            previousLabel = "Previous year",
+            nextLabel = "Next year",
+            onPrevious = { selectedYear -= 1 },
+            onNext = { selectedYear += 1 },
+        )
         val months = (1..12).map { month -> month to formatShortMonth(selectedYear, month) }
         months.chunked(3).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                 row.forEach { (monthNumber, monthLabel) ->
                     val full = formatMonth(selectedYear, monthNumber)
                     val chosen = state.selectedMonth == full
-                    Box(
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .height(72.dp)
-                                .clip(RoundedCornerShape(TandemShapes.medium))
-                                .background(if (chosen) tandemPalette.accentSurface else tandemPalette.surface)
-                                .border(
-                                    1.dp,
-                                    if (chosen) tandemPalette.accent else tandemPalette.border,
-                                    RoundedCornerShape(TandemShapes.medium),
-                                ).semantics { contentDescription = full }
-                                .selectable(
-                                    selected = chosen,
-                                    role = Role.RadioButton,
-                                    onClick = {
-                                        state.selectedMonth = full
-                                        state.selectedMonthId = "$selectedYear-${monthNumber.toString().padStart(2, '0')}"
-                                        navigation.back()
-                                    },
-                                ),
-                        contentAlignment = Alignment.Center,
+                    SelectableTile(
+                        selected = chosen,
+                        contentDescription = full,
+                        onSelect = {
+                            state.selectedMonth = full
+                            state.selectedMonthId = "$selectedYear-${monthNumber.toString().padStart(2, '0')}"
+                            navigation.back()
+                        },
+                        modifier = Modifier.weight(1f).height(72.dp),
+                        selectedBackground = tandemPalette.accentSurface,
+                        unselectedBackground = tandemPalette.surface,
+                        selectedBorder = tandemPalette.accent,
+                        unselectedBorder = tandemPalette.border,
                     ) {
                         Text(
                             monthLabel,
@@ -6603,50 +6651,27 @@ private fun DatePickerScreen(
     val daysInVisibleMonth = daysInMonth(visibleYear, visibleMonth)
     val dayCells = List<Int?>(firstDayOffset) { null } + (1..daysInVisibleMonth).map { it }
     PageColumn {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Lucide.ChevronLeft,
-                contentDescription = "Previous month",
-                modifier =
-                    Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .clickable(role = Role.Button, onClickLabel = "Previous month") {
-                            if (visibleMonth == 1) {
-                                visibleMonth = 12
-                                visibleYear -= 1
-                            } else {
-                                visibleMonth -= 1
-                            }
-                        }.padding(TandemSpacing.medium),
-                tint = tandemPalette.text,
-            )
-            Text(
-                formatMonth(visibleYear, visibleMonth),
-                modifier = Modifier.weight(1f),
-                color = tandemPalette.text,
-                fontSize = TandemTypography.periodTitle,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center,
-            )
-            Icon(
-                Lucide.ChevronRight,
-                contentDescription = "Next month",
-                modifier =
-                    Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .clickable(role = Role.Button, onClickLabel = "Next month") {
-                            if (visibleMonth == 12) {
-                                visibleMonth = 1
-                                visibleYear += 1
-                            } else {
-                                visibleMonth += 1
-                            }
-                        }.padding(TandemSpacing.medium),
-                tint = tandemPalette.text,
-            )
-        }
+        PeriodStepper(
+            title = formatMonth(visibleYear, visibleMonth),
+            previousLabel = "Previous month",
+            nextLabel = "Next month",
+            onPrevious = {
+                if (visibleMonth == 1) {
+                    visibleMonth = 12
+                    visibleYear -= 1
+                } else {
+                    visibleMonth -= 1
+                }
+            },
+            onNext = {
+                if (visibleMonth == 12) {
+                    visibleMonth = 1
+                    visibleYear += 1
+                } else {
+                    visibleMonth += 1
+                }
+            },
+        )
         Row(Modifier.fillMaxWidth()) {
             (0..6).forEach { column ->
                 val representativeDay = 1 + ((column - firstDayOffset + 7) % 7)
@@ -6667,35 +6692,23 @@ private fun DatePickerScreen(
                     } else {
                         val isoDate = transactionIsoDate(visibleYear, visibleMonth, day)
                         val selected = state.transactionDate == isoDate
-                        val cellBackground by
-                            animateColorAsState(
-                                targetValue = if (selected) tandemPalette.accentSurface else Color.Transparent,
-                                animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
-                                label = "date-selection-background",
-                            )
                         val cellTextColor by
                             animateColorAsState(
                                 targetValue = if (selected) tandemPalette.accent else tandemPalette.text,
                                 animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
                                 label = "date-selection-text",
                             )
-                        Box(
-                            modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .height(44.dp)
-                                    .clip(CircleShape)
-                                    .background(cellBackground)
-                                    .semantics { contentDescription = displayTransactionDate(isoDate) }
-                                    .selectable(
-                                        selected = selected,
-                                        role = Role.RadioButton,
-                                        onClick = {
-                                            state.transactionDate = isoDate
-                                            navigation.back()
-                                        },
-                                    ),
-                            contentAlignment = Alignment.Center,
+                        SelectableTile(
+                            selected = selected,
+                            contentDescription = displayTransactionDate(isoDate),
+                            onSelect = {
+                                state.transactionDate = isoDate
+                                navigation.back()
+                            },
+                            modifier = Modifier.weight(1f).height(44.dp),
+                            shape = CircleShape,
+                            selectedBackground = tandemPalette.accentSurface,
+                            unselectedBackground = Color.Transparent,
                         ) {
                             Text(
                                 day.toString(),
@@ -7463,7 +7476,18 @@ private fun AccentColorScreen(state: AppState) {
     PageColumn {
         AccentChoice.entries.forEach { accent ->
             val palette = tandemPalette
-            SurfaceCard(onClick = { state.accent = accent }) {
+            val selected = state.accent == accent
+            SelectableTile(
+                selected = selected,
+                contentDescription = "${accent.label} accent",
+                onSelect = { state.accent = accent },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(TandemShapes.large),
+                selectedBackground = palette.surface,
+                unselectedBackground = palette.surface,
+                selectedBorder = palette.border,
+                unselectedBorder = palette.border,
+            ) {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
                     verticalAlignment = Alignment.CenterVertically,
@@ -7477,8 +7501,8 @@ private fun AccentColorScreen(state: AppState) {
                         fontSize = TandemTypography.body,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    if (state.accent == accent) {
-                        Text("✓", color = palette.accent, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.Bold)
+                    if (selected) {
+                        Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.accent)
                     }
                 }
             }
