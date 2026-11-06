@@ -264,6 +264,33 @@ if (failures.length > Math.max(20, Math.ceil(icons.length * 0.01))) {
 const licenseSummary = [...licenseCounts.entries()].sort(([left], [right]) =>
   left.localeCompare(right),
 );
+const matchPriority = (license) => {
+  if (license === "CC0-1.0") return 0;
+  if (license === "MIT") return 1;
+  if (license === "Apache-2.0") return 2;
+  return 3;
+};
+const matcherField = (value) => String(value).replace(/[\t\r\n]+/g, " ");
+const matcherIndex = [];
+for (const icon of records) {
+  const shared = [
+    icon.slug,
+    icon.resourceName,
+    String(matchPriority(icon.license)),
+  ];
+  matcherIndex.push(
+    [...shared, "1", matcherField(icon.title)].join("\t"),
+  );
+  for (const alias of icon.aliases.filter((value) => value.trim().length > 0)) {
+    matcherIndex.push(
+      [...shared, "0", matcherField(alias)].join("\t"),
+    );
+  }
+}
+await writeFile(
+  join(outputDirectory, "files", "merchant-icon-matcher.tsv"),
+  `${matcherIndex.join("\n")}\n`,
+);
 const packageJson = JSON.parse(
   await readFile(join(packageDirectory, "..", "package.json"), "utf8"),
 );

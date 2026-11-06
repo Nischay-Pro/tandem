@@ -316,14 +316,6 @@ private data class TransactionItem(
     val isTransfer: Boolean = false,
 )
 
-private fun merchantLicensePriority(license: String): Int =
-    when (license) {
-        "CC0-1.0" -> 0
-        "MIT" -> 1
-        "Apache-2.0" -> 2
-        else -> 3
-    }
-
 private data class MerchantIconNotice(
     val title: String,
     val license: String,
@@ -333,54 +325,69 @@ private data class MerchantIconNotice(
     val resource: DrawableResource,
 )
 
-private data class MerchantIconPack(
+private data class MerchantIconMatcherPack(
     private val matcher: MerchantAliasMatcher<DrawableResource>,
-    val notices: List<MerchantIconNotice>,
-    val sourceSummary: String,
 ) {
-    val iconCount: Int get() = notices.size
-    val openSourceIconCount: Int get() = notices.count { it.license in setOf("CC0-1.0", "MIT", "Apache-2.0", "Public domain") }
-    val fairUseIconCount: Int get() = notices.size - openSourceIconCount
-
     fun iconFor(payee: String): DrawableResource? = matcher.findPayeeIcon(payee)
 }
 
-private suspend fun loadMerchantIconPack(): MerchantIconPack {
-    val catalog = Json.parseToJsonElement(Res.readBytes("files/merchant-icon-catalog.json").decodeToString()).jsonObject
+private data class MerchantIconCatalog(
+    val notices: List<MerchantIconNotice>,
+)
+
+private suspend fun loadMerchantIconMatcherPack(): MerchantIconMatcherPack {
+    val index = Res.readBytes("files/merchant-icon-matcher.tsv").decodeToString()
     val resources = Res.allDrawableResources
     val matcher = MerchantAliasMatcher<DrawableResource>()
-    val notices = mutableListOf<MerchantIconNotice>()
+    val resourcesBySlug = mutableMapOf<String, DrawableResource>()
+    val prioritiesBySlug = mutableMapOf<String, Int>()
 
-    for (element in catalog["icons"]?.jsonArray.orEmpty()) {
-        val icon = element.jsonObject
-        val resourceName = icon["resourceName"]?.jsonPrimitive?.contentOrNull ?: continue
+    for (line in index.lineSequence()) {
+        if (line.isBlank()) continue
+        val fields = line.split('\t', limit = 5)
+        if (fields.size != 5) continue
+        val slug = fields[0]
+        val resourceName = fields[1]
+        val licensePriority = fields[2].toIntOrNull() ?: continue
+        val isTitle = fields[3] == "1"
+        val label = fields[4]
         val resource = resources[resourceName] ?: continue
-        val title = icon["title"]?.jsonPrimitive?.contentOrNull ?: continue
-        val license = icon["license"]?.jsonPrimitive?.contentOrNull ?: continue
-        val slug = icon["slug"]?.jsonPrimitive?.contentOrNull.orEmpty()
-        val registryUrl =
-            icon["registryUrl"]?.jsonPrimitive?.contentOrNull
-                ?: "https://thesvg.org/icon/${icon["slug"]?.jsonPrimitive?.contentOrNull.orEmpty()}"
-        val brandUrl = icon["url"]?.jsonPrimitive?.contentOrNull.orEmpty()
-        notices += MerchantIconNotice(title, license, registryUrl, brandUrl, resourceName, resource)
-        val labels =
-            buildList {
-                add(title to true)
-                icon["aliases"]?.jsonArray?.forEach { alias -> alias.jsonPrimitive.contentOrNull?.let { add(it to false) } }
-                supplementaryMerchantAliases[slug]?.forEach { add(it to false) }
-            }
-        for ((label, isTitle) in labels) {
-            val words = labelWords(label)
-            if (words.isEmpty()) continue
-            matcher.add(label, resource, merchantLicensePriority(license), isTitle)
-        }
+        resourcesBySlug[slug] = resource
+        prioritiesBySlug[slug] = licensePriority
+        matcher.add(label, resource, licensePriority, isTitle)
     }
 
-    return MerchantIconPack(
-        matcher = matcher,
-        notices = notices.sortedBy { it.title.lowercase() },
-        sourceSummary = catalog["sourceSummary"]?.jsonPrimitive?.contentOrNull.orEmpty(),
-    )
+    for ((slug, aliases) in supplementaryMerchantAliases) {
+        val resource = resourcesBySlug[slug] ?: continue
+        val licensePriority = prioritiesBySlug[slug] ?: continue
+        aliases.forEach { alias -> matcher.add(alias, resource, licensePriority, isTitle = false) }
+    }
+
+    return MerchantIconMatcherPack(matcher)
+}
+
+private suspend fun loadMerchantIconCatalog(): MerchantIconCatalog {
+    val catalog = Json.parseToJsonElement(Res.readBytes("files/merchant-icon-catalog.json").decodeToString()).jsonObject
+    val resources = Res.allDrawableResources
+    val notices =
+        catalog["icons"]
+            ?.jsonArray
+            .orEmpty()
+            .mapNotNull { element ->
+                val icon = element.jsonObject
+                val resourceName = icon["resourceName"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                val resource = resources[resourceName] ?: return@mapNotNull null
+                val title = icon["title"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                val license = icon["license"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                val slug = icon["slug"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val registryUrl =
+                    icon["registryUrl"]?.jsonPrimitive?.contentOrNull
+                        ?: "https://thesvg.org/icon/$slug"
+                val brandUrl = icon["url"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                MerchantIconNotice(title, license, registryUrl, brandUrl, resourceName, resource)
+            }.sortedBy { it.title.lowercase() }
+
+    return MerchantIconCatalog(notices)
 }
 
 private fun AppState.formatCurrency(minorUnits: Long): String = formatCurrency(minorUnits, budgetDisplaySettings)
@@ -455,7 +462,7 @@ private fun buildLiveTransactionItems(
     payeeRecords: List<BudgetRecordEntity>,
     categoryRecords: List<BudgetRecordEntity>,
     displaySettings: BudgetDisplaySettings?,
-    merchantIconPack: MerchantIconPack?,
+    merchantIconMatcher: MerchantIconMatcherPack?,
 ): List<TransactionItem> {
     val accounts = accountRecords.mapNotNull { record -> record.recordName()?.let { record.recordId to it } }.toMap()
     val payees = payeeRecords.mapNotNull { record -> record.recordName()?.let { record.recordId to it } }.toMap()
@@ -477,7 +484,7 @@ private fun buildLiveTransactionItems(
             amountMinorUnits = amount,
             icon = displayedPayee.take(1).uppercase(),
             categoryIcon = financeIcon(categoryName),
-            merchantIcon = payeeIconCache.getOrPut(displayedPayee) { merchantIconPack?.iconFor(displayedPayee) },
+            merchantIcon = payeeIconCache.getOrPut(displayedPayee) { merchantIconMatcher?.iconFor(displayedPayee) },
             account = record.accountId?.let(accounts::get) ?: record.accountId ?: "No account",
             accountId = record.accountId,
             recordId = record.recordId,
@@ -1095,8 +1102,10 @@ fun TandemApp(
     SideEffect { mobileSession.setReadOnlyMode(state.readOnlyMode) }
     val appPreferencesStore = remember(database) { database?.let(::AppPreferencesStore) }
     val coroutineScope = rememberCoroutineScope()
-    var merchantIconPack by remember { mutableStateOf<MerchantIconPack?>(null) }
-    var merchantIconPackLoadError by remember { mutableStateOf<String?>(null) }
+    var merchantIconMatcher by remember { mutableStateOf<MerchantIconMatcherPack?>(null) }
+    var merchantIconMatcherLoadError by remember { mutableStateOf<String?>(null) }
+    var merchantIconCatalog by remember { mutableStateOf<MerchantIconCatalog?>(null) }
+    var merchantIconCatalogLoadError by remember { mutableStateOf<String?>(null) }
     val cachedBudgetCatalog =
         remember(state.cachedBudgetCatalogJson, mobileSession.cachedBudgets) {
             cachedBudgetsWithLocalSnapshots(
@@ -1376,17 +1385,29 @@ fun TandemApp(
         )
     val routeEntry = backStack.last()
     val route = routeEntry.route
-    val merchantCatalogNeeded =
-        route == AppRoute.ABOUT || route == AppRoute.MERCHANT_ICON_LICENSES || mobileSession.transactionRecords.isNotEmpty()
-    LaunchedEffect(mobileSession, merchantCatalogNeeded) {
-        if (merchantIconPack == null && merchantIconPackLoadError == null && merchantCatalogNeeded) {
+    val merchantMatcherNeeded = mobileSession.transactionRecords.isNotEmpty()
+    LaunchedEffect(mobileSession, merchantMatcherNeeded) {
+        if (merchantIconMatcher == null && merchantIconMatcherLoadError == null && merchantMatcherNeeded) {
             try {
-                merchantIconPack = withContext(Dispatchers.Default) { loadMerchantIconPack() }
+                merchantIconMatcher = withContext(Dispatchers.Default) { loadMerchantIconMatcherPack() }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
                 val cause = failure.message?.take(160) ?: "unknown error"
-                merchantIconPackLoadError = "The bundled merchant icon catalog or artwork could not be loaded ($cause)."
+                merchantIconMatcherLoadError = "Bundled merchant icons could not be loaded ($cause)."
+            }
+        }
+    }
+    val merchantCatalogNeeded = route == AppRoute.MERCHANT_ICON_LICENSES
+    LaunchedEffect(mobileSession, merchantCatalogNeeded) {
+        if (merchantIconCatalog == null && merchantIconCatalogLoadError == null && merchantCatalogNeeded) {
+            try {
+                merchantIconCatalog = withContext(Dispatchers.Default) { loadMerchantIconCatalog() }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                val cause = failure.message?.take(160) ?: "unknown error"
+                merchantIconCatalogLoadError = "The bundled icon license catalog could not be loaded ($cause)."
             }
         }
     }
@@ -1538,7 +1559,7 @@ fun TandemApp(
         payeeRecords,
         categoryRecords,
         displaySettings,
-        merchantIconPack,
+        merchantIconMatcher,
     ) {
         liveTransactions =
             withContext(Dispatchers.Default) {
@@ -1548,7 +1569,7 @@ fun TandemApp(
                     payeeRecords,
                     categoryRecords,
                     displaySettings,
-                    merchantIconPack,
+                    merchantIconMatcher,
                 )
             }
     }
@@ -1879,8 +1900,10 @@ fun TandemApp(
                                 onOpenSelectedBudget = openSelectedBudget,
                                 onRetrySync = { syncRetryCounter += 1 },
                                 backgroundSyncSupported = onBackgroundSyncSettingsChanged != null,
-                                merchantIconPack = merchantIconPack,
-                                merchantIconPackLoadError = merchantIconPackLoadError,
+                                merchantIconMatcher = merchantIconMatcher,
+                                merchantIconMatcherLoadError = merchantIconMatcherLoadError,
+                                merchantIconCatalog = merchantIconCatalog,
+                                merchantIconCatalogLoadError = merchantIconCatalogLoadError,
                                 liveTransactions = liveTransactions,
                                 liveAccounts = liveAccounts,
                                 liveBudgetMonth = liveBudgetMonth,
@@ -2484,8 +2507,10 @@ private fun ScreenContent(
     onOpenSelectedBudget: () -> Unit,
     onRetrySync: () -> Unit,
     backgroundSyncSupported: Boolean,
-    merchantIconPack: MerchantIconPack?,
-    merchantIconPackLoadError: String?,
+    merchantIconMatcher: MerchantIconMatcherPack?,
+    merchantIconMatcherLoadError: String?,
+    merchantIconCatalog: MerchantIconCatalog?,
+    merchantIconCatalogLoadError: String?,
     liveTransactions: List<TransactionItem>,
     liveAccounts: List<LiveAccountSummary>,
     liveBudgetMonth: LiveBudgetMonthSummary?,
@@ -2525,9 +2550,9 @@ private fun ScreenContent(
         AppRoute.ACCOUNT_OPTIONS -> AccountOptionsScreen(state, liveAccounts)
         AppRoute.RECONCILIATION -> ReconciliationScreen(state)
         AppRoute.ACTIVITY -> ActivityScreen(state, navigation, liveTransactions)
-        AppRoute.ACTIVITY_SEARCH -> ActivitySearchScreen(state, mobileSession, navigation, merchantIconPack)
-        AppRoute.ACTIVITY_FILTER -> ActivitySearchScreen(state, mobileSession, navigation, merchantIconPack)
-        AppRoute.TRANSACTION_DETAIL -> TransactionDetailScreen(state, mobileSession, navigation, merchantIconPack)
+        AppRoute.ACTIVITY_SEARCH -> ActivitySearchScreen(state, mobileSession, navigation, merchantIconMatcher)
+        AppRoute.ACTIVITY_FILTER -> ActivitySearchScreen(state, mobileSession, navigation, merchantIconMatcher)
+        AppRoute.TRANSACTION_DETAIL -> TransactionDetailScreen(state, mobileSession, navigation, merchantIconMatcher)
         AppRoute.NEW_TRANSACTION, AppRoute.EDIT_TRANSACTION ->
             TransactionFormScreen(route, state, navigation, mobileSession, onSaveTransaction, onDeleteTransaction, onCreateTransaction)
         AppRoute.CHOOSE_ACCOUNT -> {
@@ -2644,8 +2669,8 @@ private fun ScreenContent(
                 onToggleNotificationPermission,
             )
         AppRoute.LOCAL_DATA -> LocalDataScreen(state, mobileSession, onSyncNow)
-        AppRoute.ABOUT -> AboutScreen(merchantIconPackLoadError, navigation)
-        AppRoute.MERCHANT_ICON_LICENSES -> MerchantIconLicensesScreen(merchantIconPack, merchantIconPackLoadError)
+        AppRoute.ABOUT -> AboutScreen(merchantIconMatcherLoadError, navigation)
+        AppRoute.MERCHANT_ICON_LICENSES -> MerchantIconLicensesScreen(merchantIconCatalog, merchantIconCatalogLoadError)
     }
 }
 
@@ -5735,7 +5760,7 @@ private fun ActivitySearchScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
-    merchantIconPack: MerchantIconPack?,
+    merchantIconMatcher: MerchantIconMatcherPack?,
 ) {
     var search by rememberSaveable { mutableStateOf(state.activitySearchQuery) }
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
@@ -5754,7 +5779,7 @@ private fun ActivitySearchScreen(
         mobileSession.payeeRecords,
         mobileSession.categoryRecords,
         mobileSession.budgetDisplaySettings,
-        merchantIconPack,
+        merchantIconMatcher,
     ) {
         if (!isLiveBudget) {
             searchTransactions = previewTransactions
@@ -5781,7 +5806,7 @@ private fun ActivitySearchScreen(
                         payeeRecords = payeeRecords,
                         categoryRecords = categoryRecords,
                         displaySettings = displaySettings,
-                        merchantIconPack = merchantIconPack,
+                        merchantIconMatcher = merchantIconMatcher,
                     )
                 }
             val indexed = withContext(Dispatchers.Default) { items.map(TransactionItem::toActivitySearchRecord) }
@@ -6128,11 +6153,11 @@ private fun TransactionDetailScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
-    merchantIconPack: MerchantIconPack?,
+    merchantIconMatcher: MerchantIconMatcherPack?,
 ) {
     val isLive = state.selectedTransactionIsLive
     val amount = state.selectedTransactionAmountMinor ?: -4_218L
-    val merchantIcon = remember(merchantIconPack, state.transactionPayee) { merchantIconPack?.iconFor(state.transactionPayee) }
+    val merchantIcon = remember(merchantIconMatcher, state.transactionPayee) { merchantIconMatcher?.iconFor(state.transactionPayee) }
     val categoryIcon = remember(state.transactionCategory) { financeIcon(state.transactionCategory) ?: Lucide.Receipt }
     val hasUnsentTransactionChange =
         mobileSession.pendingWrites.any { operation ->
@@ -8029,7 +8054,7 @@ private fun LocalDataScreen(
 
 @Composable
 private fun MerchantIconLicensesScreen(
-    merchantIconPack: MerchantIconPack?,
+    merchantIconCatalog: MerchantIconCatalog?,
     loadError: String?,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -8040,7 +8065,7 @@ private fun MerchantIconLicensesScreen(
         Heading("Icon licenses and sources")
         when {
             loadError != null -> BodyText(loadError)
-            merchantIconPack == null -> {
+            merchantIconCatalog == null -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium), verticalAlignment = Alignment.CenterVertically) {
                     TandemLoadingIndicator(
                         modifier = Modifier.size(20.dp),
@@ -8053,9 +8078,9 @@ private fun MerchantIconLicensesScreen(
             else -> {
                 TextFieldCard("Search", query, { query = it }, "Name, license, or source")
                 val filteredNotices =
-                    remember(merchantIconPack, query) {
+                    remember(merchantIconCatalog, query) {
                         val normalizedQuery = query.trim()
-                        merchantIconPack.notices.filter { notice ->
+                        merchantIconCatalog.notices.filter { notice ->
                             normalizedQuery.isEmpty() ||
                                 notice.title.contains(normalizedQuery, ignoreCase = true) ||
                                 notice.license.contains(normalizedQuery, ignoreCase = true) ||
@@ -8064,7 +8089,7 @@ private fun MerchantIconLicensesScreen(
                         }
                     }
                 Text(
-                    "${filteredNotices.size} of ${merchantIconPack.notices.size} icons",
+                    "${filteredNotices.size} of ${merchantIconCatalog.notices.size} icons",
                     color = tandemPalette.muted,
                     fontSize = TandemTypography.label,
                 )
@@ -8136,7 +8161,7 @@ private fun MerchantIconLicensesScreen(
 
 @Composable
 private fun AboutScreen(
-    merchantIconPackLoadError: String?,
+    merchantIconMatcherLoadError: String?,
     navigation: AppNavigation,
 ) {
     PageColumn {
@@ -8199,6 +8224,6 @@ private fun AboutScreen(
                 onClick = { navigation.open(AppRoute.MERCHANT_ICON_LICENSES) },
             )
         }
-        AnimatedPreviewNote(merchantIconPackLoadError)
+        AnimatedPreviewNote(merchantIconMatcherLoadError)
     }
 }
