@@ -51,10 +51,10 @@ class TandemApiException(
             httpStatus == 400 -> "Check the pairing code and try again."
             errorCode == "invalid_pairing_code" -> "The pairing code is invalid, expired, or already used."
             errorCode == "invalid_device_credential" -> "This device needs to be paired again."
-            httpStatus == 401 -> "The server could not verify this request. Check server access and try again."
-            httpStatus == 403 -> "This device is not allowed to access that budget."
-            httpStatus in 500..599 -> "The Tandem server could not read Actual. Try again later."
-            else -> "Could not connect to the Tandem server. Check the address and connection."
+            httpStatus == 401 -> "The server couldn’t verify this request. Check the server address and try again."
+            httpStatus == 403 -> "This device can’t open that budget."
+            httpStatus in 500..599 -> "The Tandem server couldn’t read Actual. Try again later."
+            else -> "Couldn’t reach the Tandem server. Check the address and connection."
         },
         cause,
     )

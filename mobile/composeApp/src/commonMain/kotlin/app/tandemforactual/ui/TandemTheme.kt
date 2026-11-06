@@ -27,7 +27,7 @@ internal enum class AccentChoice(
     val label: String,
     val color: Color,
 ) {
-    ACTUAL_PURPLE("Actual Purple", Color(0xFF8719E0)),
+    ACTUAL_PURPLE("Actual purple", Color(0xFF8719E0)),
     TEAL("Lagoon", Color(0xFF31D4C7)),
     BLUE("Cobalt", Color(0xFF73A7FF)),
     VIOLET("Orchid", Color(0xFFB49AFF)),

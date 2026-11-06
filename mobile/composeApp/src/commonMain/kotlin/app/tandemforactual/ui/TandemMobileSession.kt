@@ -219,7 +219,7 @@ internal class TandemMobileSession(
                 } catch (error: CancellationException) {
                     throw error
                 } catch (_: Exception) {
-                    credentialStorageError = "Secure storage is temporarily unavailable. Retry, or pair this device again."
+                    credentialStorageError = "Couldn’t access this device’s saved pairing. Retry or pair this device again."
                     return null
                 } ?: return null
 
@@ -232,7 +232,7 @@ internal class TandemMobileSession(
                     apiClient.forgetSession()
                     pairedDevice = null
                     budgets = emptyList()
-                    credentialStorageError = "The saved device credential is invalid. Pair this device again."
+                    credentialStorageError = "This device’s saved pairing is invalid. Pair this device again."
                     clearStoredCredential()
                     return null
                 }
@@ -289,10 +289,10 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
-            pairingError = error.message ?: "Could not pair this device. Check the server and pairing code."
+            pairingError = error.message ?: "Couldn’t pair this device. Check the server and pairing code."
             pairedDevice = null
         } catch (error: Exception) {
-            pairingError = "Could not pair this device. Check the server address and connection."
+            pairingError = "Couldn’t pair this device. Check the server address and connection."
             pairedDevice = null
         } finally {
             isPairing = false
@@ -311,7 +311,7 @@ internal class TandemMobileSession(
             throw error
         } catch (error: TandemApiException) {
             isServerReachable = error.httpStatus != null
-            budgetError = error.message ?: "Could not load budgets from this server."
+            budgetError = error.message ?: "Couldn’t load budgets from this server."
             if (error.errorCode == "invalid_device_credential") {
                 apiClient.forgetSession()
                 pairedDevice = null
@@ -321,7 +321,7 @@ internal class TandemMobileSession(
             }
         } catch (error: Exception) {
             isServerReachable = false
-            budgetError = "Could not load budgets from this server. Check the connection and try again."
+            budgetError = "Couldn’t load budgets from this server. Check the connection and try again."
         } finally {
             isLoadingBudgets = false
         }
@@ -371,21 +371,21 @@ internal class TandemMobileSession(
                 syncPresentation.failed(
                     when (error.httpStatus) {
                         401 -> "This device needs to be paired again."
-                        403 -> "This device is not authorized to open that budget."
+                        403 -> "This device can’t open that budget."
                         404 -> "The budget is no longer available on the server."
                         400, 422 -> "Check the budget password and try again."
-                        in 500..599 -> "The server could not read this budget. Try again later."
-                        else -> "Could not sync this budget. Check the connection and try again."
+                        in 500..599 -> "The server couldn’t read this budget. Try again later."
+                        else -> "Couldn’t sync this budget. Check the connection and try again."
                     },
                 )
             return null
         } catch (error: BudgetSyncProtocolException) {
             isServerReachable = true
-            syncPresentation = syncPresentation.failed("The server returned budget data the app could not read.")
+            syncPresentation = syncPresentation.failed("Tandem couldn’t read this budget. Check the server and try again.")
             return null
         } catch (error: Exception) {
             isServerReachable = false
-            syncPresentation = syncPresentation.failed("Could not sync this budget. Your local data is still available.")
+            syncPresentation = syncPresentation.failed("Couldn’t sync this budget. Your saved data is still available.")
             return null
         } finally {
             if (syncPresentation.isSyncing) syncPresentation = syncPresentation.stopped()
@@ -425,7 +425,7 @@ internal class TandemMobileSession(
         }
         val base = runCatching { Json.parseToJsonElement(baseJson).jsonObject }.getOrNull()
         if (base == null) {
-            transactionWriteMessage = "The saved transaction could not be read. Sync the budget before editing."
+            transactionWriteMessage = "Couldn’t read this transaction. Sync the budget before editing."
             return false
         }
         val signedAmount = if (originalAmountMinor < 0) -enteredAmount else enteredAmount
@@ -468,7 +468,7 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            transactionWriteMessage = "The edit could not be saved on this device. Try again."
+            transactionWriteMessage = "Couldn’t save this edit on this device. Try again."
             loadLocalRecords(budgetId)
             return false
         } finally {
@@ -502,7 +502,7 @@ internal class TandemMobileSession(
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                transactionWriteMessage = "The pending transaction could not be removed. Review Pending Changes."
+                transactionWriteMessage = "Couldn’t remove this transaction. Review Pending Changes."
                 loadLocalRecords(budgetId)
                 return false
             } finally {
@@ -546,7 +546,7 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            transactionWriteMessage = "The transaction could not be deleted. Review Pending Changes."
+            transactionWriteMessage = "Couldn’t delete this transaction. Review Pending Changes."
             loadLocalRecords(budgetId)
             return false
         } finally {
@@ -669,12 +669,12 @@ internal class TandemMobileSession(
             transactionWriteMessage =
                 when (savedWrite?.status) {
                     "committed" -> "Transaction added to Actual."
-                    "conflict" -> "This transaction ID already exists. Sync and try again."
-                    "uncertain", "sending" -> "Actual has not confirmed this transaction yet. Check its status before retrying."
-                    "rejected" -> "Actual did not add this transaction. Your previous budget data was kept."
+                    "conflict" -> "This transaction is already in Actual. Sync and try again."
+                    "uncertain", "sending" -> "Status unknown. Check before retrying."
+                    "rejected" -> "Actual didn’t add this transaction. The previous value was kept."
                     else ->
                         if (summary == null) {
-                            "Saved on this device. The server has not confirmed it; check sync status before retrying."
+                            "Saved on this device. Status unknown; check before retrying."
                         } else {
                             "The transaction is saved on this device and is waiting to sync."
                         }
@@ -684,7 +684,7 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            transactionWriteMessage = "The transaction remains on this device. Check sync status before retrying."
+            transactionWriteMessage = "The transaction is saved on this device. Status unknown; check before retrying."
             loadLocalRecords(budgetId)
             return false
         } finally {
@@ -707,27 +707,27 @@ internal class TandemMobileSession(
         }
         val operation = localRepository.readPendingWrites(budgetId).firstOrNull { it.operationId == operationId }
         if (operation == null || operation.status != "conflict") {
-            transactionWriteMessage = "This conflict is no longer available. Refresh the sync status."
+            transactionWriteMessage = "This edit no longer needs review. Sync and try again."
             loadLocalRecords(budgetId)
             return
         }
         if (!keepDeviceVersion) {
             localRepository.discardWrite(operationId)
             loadLocalRecords(budgetId)
-            transactionWriteMessage = "Kept the latest Actual version. The local draft was discarded."
+            transactionWriteMessage = "Kept the latest Actual version and discarded your edit."
             return
         }
         val current = localRepository.findRecord(budgetId, operation.recordType, operation.recordId)
         val baseJson = current?.remoteJson
         val revision = current?.remoteRevision
         if (current == null || current.remoteDeleted || baseJson == null || revision.isNullOrBlank()) {
-            transactionWriteMessage = "Actual deleted this transaction. Keep Actual and discard the local draft."
+            transactionWriteMessage = "This transaction was deleted in Actual. Keep Actual to discard your edit."
             return
         }
         val base = runCatching { Json.parseToJsonElement(baseJson).jsonObject }.getOrNull()
         val patch = runCatching { Json.parseToJsonElement(operation.patchJson).jsonObject }.getOrNull()
         if (base == null || patch == null || operation.action != "UPDATE") {
-            transactionWriteMessage = "This change cannot be safely rebased. Keep Actual and discard the local draft."
+            transactionWriteMessage = "This edit can’t be applied to the latest Actual version. Keep Actual and discard your edit."
             return
         }
         isSavingTransaction = true
@@ -753,18 +753,18 @@ internal class TandemMobileSession(
             val summary = synchronize(budgetId, encryptionPassword)
             transactionWriteMessage =
                 when {
-                    summary == null -> "The selected version is saved on this device. Check sync status before retrying."
-                    summary.writesCommitted > 0 -> "Your selected version was synced to Actual."
-                    summary.writesConflicted > 0 -> "Actual changed again. Review the updated conflict."
-                    summary.writesUncertain > 0 -> "Actual has not confirmed the selected version yet. Check its status."
-                    summary.writesRejected > 0 -> "Actual did not apply the selected version. The latest value was restored."
-                    else -> "Your selected version is waiting to sync."
+                    summary == null -> "Your edit is saved on this device. Status unknown; check before retrying."
+                    summary.writesCommitted > 0 -> "Your edit was synced to Actual."
+                    summary.writesConflicted > 0 -> "Actual changed this transaction again. Review the latest versions."
+                    summary.writesUncertain > 0 -> "Status unknown. Check before retrying."
+                    summary.writesRejected > 0 -> "Actual didn’t apply your edit. The previous value was restored."
+                    else -> "Your edit is waiting to sync."
                 }
             loadLocalRecords(budgetId)
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            transactionWriteMessage = "The selected version remains on this device. Check sync status before retrying."
+            transactionWriteMessage = "Your edit is saved on this device. Status unknown; check before retrying."
             loadLocalRecords(budgetId)
         } finally {
             isSavingTransaction = false
@@ -781,7 +781,7 @@ internal class TandemMobileSession(
         val localRepository = repository ?: return
         localRepository.discardWrite(operationId)
         loadLocalRecords(budgetId)
-        transactionWriteMessage = "The local change was discarded. Actual was not changed by this action."
+        transactionWriteMessage = "Your edit was discarded. Actual wasn’t changed."
     }
 
     suspend fun retryUncertainWrite(
@@ -813,7 +813,7 @@ internal class TandemMobileSession(
                 reconcileUncertainOperationId = operationId,
             )
         if (summary == null) {
-            uncertainWriteCheckError = syncError ?: "Could not check the server. Try again."
+            uncertainWriteCheckError = syncError ?: "Couldn’t check the server. Try again."
             uncertainWriteCheckErrorOperationId = operationId
             return
         }
@@ -823,23 +823,23 @@ internal class TandemMobileSession(
             uncertainWriteCheckError =
                 when (summary.operationStatusErrorCode) {
                     "http-401" -> "Pair this device again to check the status."
-                    "http-403" -> "This device cannot access this budget."
+                    "http-403" -> "This device can’t open this budget."
                     "http-503" -> "Tandem is temporarily unavailable. Try again shortly."
-                    "network-error" -> "Could not reach Tandem. Check the connection and try again."
-                    else -> "Could not confirm the server status. Try again."
+                    "network-error" -> "Couldn’t reach Tandem. Check the connection and try again."
+                    else -> "Couldn’t confirm the server status. Try again."
                 }
             uncertainWriteCheckErrorOperationId = operationId
         }
         try {
             checkedWriteOperation = repository?.findWrite(operationId)
             if (checkedWriteOperation == null) {
-                uncertainWriteCheckError = "This change is no longer in the local queue."
+                uncertainWriteCheckError = "This edit is no longer waiting to sync."
                 uncertainWriteCheckErrorOperationId = operationId
             }
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            uncertainWriteCheckError = "Could not read this change’s local status."
+            uncertainWriteCheckError = "Couldn’t check this edit’s status on this device."
             uncertainWriteCheckErrorOperationId = operationId
         }
     }
@@ -947,7 +947,7 @@ internal class TandemMobileSession(
             throw error
         } catch (_: Exception) {
             isCredentialStored = false
-            credentialStorageError = "Secure storage is unavailable. This pairing will end when the app closes."
+            credentialStorageError = "This pairing will end when the app closes because saved access is unavailable."
         }
     }
 
@@ -959,7 +959,7 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            credentialStorageError = "The saved device credential could not be removed."
+            credentialStorageError = "Couldn’t remove this device’s saved access."
         }
     }
 

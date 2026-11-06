@@ -257,7 +257,7 @@ class TandemApiClientTest {
                 val unauthorized = captureApiException { client.listBudgets() }
                 assertEquals("http-401", unauthorized.errorCode)
                 assertEquals(401, unauthorized.httpStatus)
-                assertEquals("The server could not verify this request. Check server access and try again.", unauthorized.message)
+                assertEquals("The server couldn’t verify this request. Check the server address and try again.", unauthorized.message)
                 assertFalse(unauthorized.message.orEmpty().contains("private server detail"))
 
                 responseBody = """{"error":{"code":"invalid_device_credential","message":"private server detail"}}"""
@@ -271,12 +271,12 @@ class TandemApiClientTest {
                 val forbidden = captureApiException { client.listBudgets() }
                 assertEquals("http-403", forbidden.errorCode)
                 assertEquals(403, forbidden.httpStatus)
-                assertEquals("This device is not allowed to access that budget.", forbidden.message)
+                assertEquals("This device can’t open that budget.", forbidden.message)
 
                 status = HttpStatusCode.BadGateway
                 val unavailable = captureApiException { client.listBudgets() }
                 assertEquals(502, unavailable.httpStatus)
-                assertEquals("The Tandem server could not read Actual. Try again later.", unavailable.message)
+                assertEquals("The Tandem server couldn’t read Actual. Try again later.", unavailable.message)
             } finally {
                 cleanup()
                 Api.baseUrl = previousBaseUrl
@@ -394,7 +394,7 @@ class TandemApiClientTest {
                 client.restoreSession("https://tandem.example", "device-token")
                 val failure = captureApiException { client.listBudgets() }
                 assertEquals("network-error", failure.errorCode)
-                assertEquals("Could not connect to the Tandem server. Check the address and connection.", failure.message)
+                assertEquals("Couldn’t reach the Tandem server. Check the address and connection.", failure.message)
                 assertFalse(failure.message.orEmpty().contains("private transport detail"))
             } finally {
                 cleanup()

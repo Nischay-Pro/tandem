@@ -218,10 +218,9 @@ private enum class AppRoute(
     STARTUP("Tandem"),
     WELCOME("Tandem"),
     SERVER_ADDRESS("Server address"),
-    PAIRING_OPTIONS("Pair a device"),
-    SCAN_QR("Scan pairing QR"),
-    PAIRING_CODE("Pairing code"),
-    PAIRING_RESULT("Device pairing"),
+    PAIRING_OPTIONS("Pair this device"),
+    PAIRING_CODE("Enter pairing code"),
+    PAIRING_RESULT("Device paired"),
     BUDGET_CHOOSER("Budgets"),
     UNLOCK_BUDGET("Unlock budget"),
     FIRST_SYNC("Preparing budget"),
@@ -247,8 +246,8 @@ private enum class AppRoute(
     SAVE_RESULT("Transaction status"),
     SYNC_CENTER("Sync center"),
     CONFLICT_INBOX("Review changes"),
-    CONFLICT_REVIEW("Review conflict"),
-    UNCERTAIN_WRITE("Sync status"),
+    CONFLICT_REVIEW("Review changes"),
+    UNCERTAIN_WRITE("Status unknown"),
     REJECTED_WRITE("Not applied"),
     SETTINGS("Settings"),
     APPEARANCE("Appearance"),
@@ -263,7 +262,7 @@ private enum class AppRoute(
     NOTIFICATIONS("Notifications"),
     LOCAL_DATA("Local data and storage"),
     ABOUT("About and help"),
-    MERCHANT_ICON_LICENSES("Merchant icon licenses"),
+    MERCHANT_ICON_LICENSES("Icon licenses and sources"),
 }
 
 internal enum class MainCloudStatus {
@@ -293,6 +292,18 @@ internal fun resolveMainCloudStatus(
 }
 
 private val UNSYNCED_TRANSACTION_WRITE_STATUSES = setOf("queued", "sending", "uncertain", "conflict", "rejected")
+
+private fun writeStatusLabel(status: String): String =
+    when (status) {
+        "queued" -> "Waiting to sync"
+        "sending" -> "Syncing"
+        "uncertain" -> "Status unknown"
+        "conflict" -> "Needs your review"
+        "rejected" -> "Not applied"
+        "committed" -> "Saved"
+        "discarded" -> "Discarded"
+        else -> "Change"
+    }
 
 private data class TransactionItem(
     val payee: String,
@@ -1233,7 +1244,7 @@ fun TandemApp(
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                state.settingsStorageError = "App settings could not be loaded. Retry to load saved preferences."
+                state.settingsStorageError = "App settings couldn’t be loaded. Retry to load saved preferences."
                 snapshotFlow { state.settingsStorageRetry }.first { it != retryAtRead }
             }
         }
@@ -1260,9 +1271,9 @@ fun TandemApp(
                 } catch (_: Exception) {
                     state.settingsStorageError =
                         if (retryRequested) {
-                            "App settings still could not be saved. Check local storage and retry."
+                            "App settings still couldn’t be saved. Check local storage and retry."
                         } else {
-                            "App settings could not be saved. Retry to save your changes."
+                            "App settings couldn’t be saved. Retry to save your changes."
                         }
                 }
             }
@@ -1392,9 +1403,8 @@ fun TandemApp(
                 merchantIconMatcher = withContext(Dispatchers.Default) { loadMerchantIconMatcherPack() }
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (failure: Exception) {
-                val cause = failure.message?.take(160) ?: "unknown error"
-                merchantIconMatcherLoadError = "Bundled merchant icons could not be loaded ($cause)."
+            } catch (_: Exception) {
+                merchantIconMatcherLoadError = "Couldn’t load merchant icons."
             }
         }
     }
@@ -1405,9 +1415,8 @@ fun TandemApp(
                 merchantIconCatalog = withContext(Dispatchers.Default) { loadMerchantIconCatalog() }
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (failure: Exception) {
-                val cause = failure.message?.take(160) ?: "unknown error"
-                merchantIconCatalogLoadError = "The bundled icon license catalog could not be loaded ($cause)."
+            } catch (_: Exception) {
+                merchantIconCatalogLoadError = "Couldn’t load icon sources."
             }
         }
     }
@@ -2534,7 +2543,6 @@ private fun ScreenContent(
         AppRoute.WELCOME -> WelcomeScreen(navigation)
         AppRoute.SERVER_ADDRESS -> ServerAddressScreen(state, navigation)
         AppRoute.PAIRING_OPTIONS -> PairingOptionsScreen(navigation)
-        AppRoute.SCAN_QR -> ScanQrScreen(navigation)
         AppRoute.PAIRING_CODE -> PairingCodeScreen(state, mobileSession, navigation, onPairDevice, onRetryStoredSession)
         AppRoute.PAIRING_RESULT -> PairingResultScreen(mobileSession, navigation)
         AppRoute.BUDGET_CHOOSER ->
@@ -2558,7 +2566,7 @@ private fun ScreenContent(
         AppRoute.CHOOSE_ACCOUNT -> {
             val values =
                 if (state.selectedBudgetId.isBlank()) {
-                    listOf("Checking", "Savings", "Credit Card", "Cash").map { SelectorItem(it, it) }
+                    listOf("Checking", "Savings", "Credit card", "Cash").map { SelectorItem(it, it) }
                 } else {
                     liveAccounts
                         .filterNot { it.offBudget }
@@ -2728,7 +2736,7 @@ private fun appBackgroundBrush(
     }
 
 @Composable
-private fun SampleBanner(message: String = "This screen remains a preview") {
+private fun SampleBanner(message: String = "Sample data") {
     val palette = tandemPalette
     Row(
         modifier =
@@ -2742,7 +2750,6 @@ private fun SampleBanner(message: String = "This screen remains a preview") {
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
     ) {
         Text("●", color = palette.accent, fontSize = TandemTypography.indicator)
-        Text("Sample data", color = palette.accent, fontSize = TandemTypography.micro, fontWeight = FontWeight.Bold)
         Text(message, color = palette.muted, fontSize = TandemTypography.caption)
     }
 }
@@ -4254,27 +4261,19 @@ private fun WelcomeScreen(navigation: AppNavigation) {
         Heading("Budget and account overview", "Plan spending, review accounts, and follow recent changes.")
         SurfaceCard {
             Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.large)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                    Badge("Private by design")
-                    Text("Actual Budget remains the source of truth", color = palette.muted, fontSize = TandemTypography.caption)
-                }
                 Text(
-                    "Review plans, account balances, and recent activity.",
+                    "Tandem saves a copy on this device. Actual Budget remains the source of truth.",
                     color = palette.text,
                     fontSize = TandemTypography.action,
                     lineHeight = TandemTypography.actionLineHeight,
                     fontWeight = FontWeight.Medium,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    Badge("Offline ready", palette.positive)
-                    Badge("Conflict review", palette.warning)
-                }
             }
         }
         Spacer(Modifier.weight(1f, fill = false))
         PrimaryButton("Get started") { navigation.open(AppRoute.SERVER_ADDRESS) }
         SecondaryButton("View sample budget") { navigation.selectTab(AppRoute.BUDGET) }
-        PreviewNote("Names and amounts are sample data. This screen does not contact a server.")
+        PreviewNote("Names and amounts are sample data. This screen isn’t connected to a server.")
     }
 }
 
@@ -4284,7 +4283,7 @@ private fun ServerAddressScreen(
     navigation: AppNavigation,
 ) {
     PageColumn {
-        Heading("Connect to server", "Enter the server address used to pair this device.")
+        Heading("Server address")
         TextFieldCard("Server URL", state.serverUrl, { state.serverUrl = it }, "https://budget.example.com")
         InfoBubble("Tandem uses the budget password only to unlock encrypted budgets.")
         if (serverAddressMayBeInsecure(state.serverUrl)) {
@@ -4301,7 +4300,7 @@ private fun ServerAddressScreen(
             ) {
                 Icon(Lucide.CircleAlert, contentDescription = null, modifier = Modifier.size(23.dp), tint = palette.warning)
                 Text(
-                    "This address may not be secure on a public network. Use HTTPS when connecting over the internet.",
+                    "This address may not be secure on a public network. Use HTTPS over the internet.",
                     color = palette.text,
                     fontSize = TandemTypography.compactBody,
                     lineHeight = TandemTypography.bodyLineHeight,
@@ -4349,51 +4348,8 @@ internal fun serverAddressMayBeInsecure(value: String): Boolean {
 @Composable
 private fun PairingOptionsScreen(navigation: AppNavigation) {
     PageColumn {
-        Heading("Choose a pairing method", "Use the pairing code shown in server setup.")
-        SettingRow("▦", "Scan pairing QR", "Scan the code shown on the server", onClick = { navigation.open(AppRoute.SCAN_QR) })
-            .let { }
-        SettingRow(
-            "⌗",
-            "Enter pairing code",
-            "Enter the 8-character one-time pairing code",
-            onClick = { navigation.open(AppRoute.PAIRING_CODE) },
-        ).let { }
-        PreviewNote("Pairing codes work once and expire after five minutes.")
-    }
-}
-
-@Composable
-private fun ScanQrScreen(navigation: AppNavigation) {
-    val palette = tandemPalette
-    PageColumn {
-        Heading("Align the camera", "Point it at the pairing QR code shown on the server.")
-        SurfaceCard {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(270.dp)
-                    .padding(TandemSpacing.large)
-                    .clip(RoundedCornerShape(TandemShapes.panel))
-                    .background(palette.raised),
-                contentAlignment = Alignment.Center,
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                ) {
-                    Text("⌗", color = palette.accent, fontSize = TandemTypography.illustration)
-                    Text("Camera view", color = palette.text, fontSize = TandemTypography.action, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        "Camera scanning is not available here yet.",
-                        color = palette.muted,
-                        fontSize = TandemTypography.label,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            }
-        }
-        PrimaryButton("Enter code instead") { navigation.open(AppRoute.PAIRING_CODE) }
-        PreviewNote("Camera access is not requested on this screen.")
+        Heading("Pair this device")
+        PrimaryButton("Enter pairing code") { navigation.open(AppRoute.PAIRING_CODE) }
     }
 }
 
@@ -4406,7 +4362,7 @@ private fun PairingCodeScreen(
     onRetryStoredSession: () -> Unit,
 ) {
     PageColumn {
-        Heading("Enter the code", "Use the 8-character pairing code shown in server setup.")
+        Heading("Enter pairing code")
         TextFieldCard(
             "Pairing code",
             state.pairingCode,
@@ -4420,7 +4376,7 @@ private fun PairingCodeScreen(
                 ),
             textAlign = TextAlign.Center,
         )
-        BodyText("The code works once and expires after five minutes. It is sent securely to the server only when you pair.")
+        InfoBubble("This one-time code expires after five minutes. Tandem doesn’t save it or your budget password.")
         mobileSession.pairingError?.let { error ->
             Text(
                 error,
@@ -4437,13 +4393,13 @@ private fun PairingCodeScreen(
                 lineHeight = TandemTypography.bodyLineHeight,
             )
             SecondaryButton(
-                if (mobileSession.isRestoringStoredSession) "Checking secure storage…" else "Retry saved pairing",
+                if (mobileSession.isRestoringStoredSession) "Checking storage" else "Retry saved pairing",
                 enabled = !mobileSession.isRestoringStoredSession,
                 onClick = onRetryStoredSession,
             )
         }
         PrimaryButton(
-            if (mobileSession.isPairing) "Pairing securely…" else "Pair this device",
+            if (mobileSession.isPairing) "Pairing" else "Pair this device",
             enabled = !mobileSession.isPairing && state.pairingCode.filter(Char::isLetterOrDigit).length == 8,
             onClick = onPairDevice,
         )
@@ -4461,7 +4417,7 @@ private fun PairingResultScreen(
         Box(Modifier.size(60.dp).clip(CircleShape).background(palette.accentSurface), contentAlignment = Alignment.Center) {
             Text("✓", color = palette.accent, fontSize = TandemTypography.heroTitle, fontWeight = FontWeight.Bold)
         }
-        Heading("Device paired", "Choose an Actual budget to open on this phone.")
+        Heading("Device paired")
         mobileSession.pairedDevice?.let { device ->
             SurfaceCard {
                 Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
@@ -4469,18 +4425,9 @@ private fun PairingResultScreen(
                     BodyText(
                         "This device can open ${device.budgetIds.size} budget${if (device.budgetIds.size == 1) "" else "s"}.",
                     )
-                    BodyText(
-                        when {
-                            mobileSession.isCredentialStored ->
-                                "The device credential is saved in this phone’s secure storage. Pairing codes and budget passwords are never saved."
-                            mobileSession.credentialStorageError != null ->
-                                "Secure storage is unavailable, so this pairing lasts only until the app closes. Pairing codes and budget passwords are never saved."
-                            else ->
-                                "This pairing lasts only until the app closes. Pairing codes and budget passwords are never saved."
-                        },
-                    )
                 }
             }
+            InfoBubble("Pairing codes and budget passwords are never saved.")
         }
         mobileSession.budgetError?.let { error ->
             Text(error, color = palette.warning, fontSize = TandemTypography.compactBody, lineHeight = TandemTypography.bodyLineHeight)
@@ -4518,19 +4465,19 @@ private fun BudgetChooserScreen(
             if (usingCachedCatalog || (mobileSession.budgets.isEmpty() && cachedCatalog.isNotEmpty())) {
                 "Saved budgets"
             } else {
-                "Select a budget"
+                "Choose a budget"
             },
             if (usingCachedCatalog) {
                 "Open a budget already saved on this phone. You can sync again when the server is available."
             } else if (hasCachedOnlyBudgets) {
                 "Choose a server budget or open one of the saved copies on this phone."
             } else {
-                "Choose one of the budgets authorized for this device."
+                "Choose a budget this device can open."
             },
         )
         when {
             usingCachedCatalog || (mobileSession.budgets.isEmpty() && cachedCatalog.isNotEmpty()) -> {
-                BodyText("The live budget list is unavailable. These copies stay on this phone.")
+                BodyText("The server budget list is unavailable. Saved copies stay on this phone.")
                 selectableBudgets.forEach { budget ->
                     ChoiceRow(
                         budget.name,
@@ -4554,7 +4501,7 @@ private fun BudgetChooserScreen(
                     }
                 }
             }
-            mobileSession.isLoadingBudgets -> BodyText("Loading budgets from the Tandem server…")
+            mobileSession.isLoadingBudgets -> BodyText("Loading budgets")
             mobileSession.budgets.isEmpty() && mobileSession.isAuthenticated -> {
                 mobileSession.budgetError?.let { error ->
                     Text(
@@ -4597,17 +4544,15 @@ private fun UnlockBudgetScreen(
     navigation: AppNavigation,
 ) {
     PageColumn {
-        Heading("Encrypted budget", "Enter its password to continue.")
+        Heading("Unlock budget")
         TextFieldCard(
             "Budget password",
             state.encryptedPassword,
             { state.encryptedPassword = it },
-            "Enter to unlock this encrypted budget",
+            "Enter password",
             isSecret = true,
         )
-        BodyText(
-            "This password is sent only to unlock the selected budget and is cleared after the initial sync. It is not saved in app state.",
-        )
+        InfoBubble("Tandem uses this password only to unlock the encrypted budget. It’s cleared after the first sync and never saved.")
         PrimaryButton("Unlock budget", enabled = state.encryptedPassword.isNotBlank()) { navigation.open(AppRoute.FIRST_SYNC) }
     }
 }
@@ -4621,23 +4566,15 @@ private fun FirstSyncScreen(
 ) {
     val palette = tandemPalette
     PageColumn {
-        Heading("Initial setup", "A private local copy keeps this budget available offline.")
+        Heading("First sync")
         SurfaceCard {
             Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.large)) {
-                listOf("Connecting to Tandem", "Reading the Actual budget", "Saving a local copy").forEachIndexed { index, title ->
+                listOf("Connecting", "Downloading budget", "Saving on this device").forEachIndexed { index, title ->
                     val complete = mobileSession.syncComplete || (!mobileSession.isSyncing && mobileSession.syncError != null && index == 0)
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        val icon =
-                            if (complete) {
-                                "✓"
-                            } else if (mobileSession.isSyncing && index == 0) {
-                                "…"
-                            } else {
-                                "${index + 1}"
-                            }
                         val color =
                             if (complete) {
                                 palette.positive
@@ -4648,7 +4585,11 @@ private fun FirstSyncScreen(
                             } else {
                                 palette.accent
                             }
-                        Badge(icon, color)
+                        if (mobileSession.isSyncing && index == 0 && !complete) {
+                            TandemLoadingIndicator(Modifier.size(20.dp), color, 2.dp)
+                        } else {
+                            Badge(if (complete) "✓" else "${index + 1}", color)
+                        }
                         Text(title, color = palette.text, fontSize = TandemTypography.compactBody)
                     }
                 }
@@ -4657,12 +4598,12 @@ private fun FirstSyncScreen(
         val syncMessage =
             when {
                 mobileSession.isSyncing && mobileSession.syncError != null ->
-                    "Retrying initial sync · ${mobileSession.syncError}"
-                mobileSession.isSyncing -> "Sync is running. Keep this screen open while the first local copy is prepared."
+                    "Retrying · ${mobileSession.syncError}"
+                mobileSession.isSyncing -> "Syncing the budget."
                 mobileSession.syncComplete ->
-                    "Initial sync complete. ${mobileSession.syncedTransactionCount} transactions are available on this device."
+                    "${mobileSession.syncedTransactionCount} transactions saved on this device."
                 mobileSession.syncError != null -> mobileSession.syncError.orEmpty()
-                else -> "Preparing your local budget copy."
+                else -> "Preparing budget."
             }
         val syncMessageColor by
             animateColorAsState(
@@ -4679,7 +4620,7 @@ private fun FirstSyncScreen(
         )
         AnimatedReveal(visible = mobileSession.syncError != null && !mobileSession.isSyncing) {
             Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                SecondaryButton("Retry initial sync", onClick = onRetrySync)
+                SecondaryButton("Retry sync", onClick = onRetrySync)
                 if (mobileSession.cachedSnapshotBudgetId == state.selectedBudgetId && mobileSession.hasCachedSnapshot) {
                     BodyText("The last saved copy is still available on this phone.")
                     SecondaryButton("Open saved copy") {
@@ -4746,7 +4687,7 @@ private fun BudgetScreen(
                 AnimatedReveal(visible = state.conflictReviewAlerts && conflictCount > 0) {
                     AttentionBanner(
                         "$conflictCount change${if (conflictCount == 1) "" else "s"} need${if (conflictCount == 1) "s" else ""} review",
-                        "Choose which version of the budget change to keep.",
+                        "Choose which version of the edit to keep.",
                         "Review changes",
                     ) { navigation.open(AppRoute.CONFLICT_INBOX) }
                 }
@@ -4756,8 +4697,8 @@ private fun BudgetScreen(
                 AnimatedReveal(visible = state.rejectedEditAlerts && rejectedCount > 0) {
                     AttentionBanner(
                         "$rejectedCount edit${if (rejectedCount == 1) "" else "s"} not applied",
-                        "Review the reason and dismiss or correct the local edit.",
-                        "View rejected edits",
+                        "Review the edit.",
+                        "Review edits",
                     ) { navigation.open(AppRoute.REJECTED_WRITE) }
                 }
             }
@@ -4812,7 +4753,7 @@ private fun BudgetScreen(
                 val summaryKey = "live:${state.selectedBudgetId}:summary:${state.selectedMonthId}"
                 item(key = summaryKey) {
                     SectionCard(
-                        "${state.selectedMonth} Summary",
+                        "${state.selectedMonth} summary",
                         "${liveBudgetMonth.groups.sumOf { it.categories.size }} categories",
                         state.formatCurrency(liveBudgetMonth.toBudgetMinor ?: 0),
                         expanded = !state.isBudgetSectionCollapsed(summaryKey),
@@ -4968,9 +4909,9 @@ private fun BudgetScreen(
     PageColumn(verticalSpacing = if (compact) 10.dp else 16.dp, horizontalPadding = if (compact) 16.dp else 20.dp) {
         SampleBanner(
             if (liveTransactions.isNotEmpty()) {
-                "Category plan is preview; recent activity is live"
+                "Categories use sample data; activity is synced"
             } else {
-                "Budget categories are a sample preview"
+                "Categories use sample data"
             },
         )
         Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
@@ -4996,7 +4937,7 @@ private fun BudgetScreen(
         }
         val summaryKey = "summary:${state.selectedMonthId}"
         SectionCard(
-            "${state.selectedMonth} Summary",
+            "${state.selectedMonth} summary",
             "Ready to assign",
             state.formatCurrency(124_000),
             expanded = !state.isBudgetSectionCollapsed(summaryKey),
@@ -5216,7 +5157,7 @@ private fun MonthPickerScreen(
     navigation: AppNavigation,
 ) {
     PageColumn {
-        Heading("Select a month")
+        Heading("Choose a month")
         var selectedYear by remember {
             mutableStateOf(state.selectedMonthId.substringBefore('-').toIntOrNull() ?: 2026)
         }
@@ -5397,7 +5338,7 @@ private fun CategoryDetailScreen(
         PageColumn {
             if (category == null) {
                 Heading("Category details", state.selectedMonth)
-                BodyText("This category is not included in the cached plan for this month.")
+                BodyText("This category isn’t in the saved plan for this month.")
             } else {
                 Heading(category.name, state.selectedMonth)
                 AmountHero(
@@ -5514,9 +5455,6 @@ private fun AccountsScreen(
                     }
                 }
             }
-            item(key = "accounts-read-only-note") {
-                Text("Balances are read-only in this build.", color = tandemPalette.muted, fontSize = TandemTypography.label)
-            }
         }
         return
     }
@@ -5561,7 +5499,7 @@ private fun AccountDetailScreen(
         val accountActivity = liveTransactions.filter { it.accountId == state.selectedAccountId }
         PageColumn {
             if (account == null) {
-                Heading("Account details", "Actual account not found in the local copy.")
+                Heading("Account details", "This account isn’t saved on this device.")
             } else {
                 AmountHero(
                     "Available balance",
@@ -5636,7 +5574,7 @@ private fun AccountOptionsScreen(
         PageColumn {
             Heading(account?.name ?: "Account options", "Actual account details")
             if (account == null) {
-                BodyText("This account is not available in the local copy.")
+                BodyText("This account isn’t saved on this device.")
             } else {
                 SectionCard("Account", "Read-only Actual data") {
                     ListRow("A", "Name", "Account name", account.name)
@@ -5645,7 +5583,7 @@ private fun AccountOptionsScreen(
                     DividerLine()
                     ListRow("◷", "Budget status", "Account scope", if (account.offBudget) "Off budget" else "On budget")
                 }
-                PreviewNote("Renaming and hiding accounts are not available here. No Actual account settings are changed.")
+                PreviewNote("Account names and settings can only be changed in Actual.")
             }
         }
         return
@@ -5657,7 +5595,7 @@ private fun AccountOptionsScreen(
         ListRow("◷", "Reconcile balance", "Compare the account against a statement", "Unavailable")
         ListRow("⊖", "Hide from budget", "Keep historical activity available", "Unavailable")
         PreviewNote(
-            "Account changes and statement reconciliation are not available in this sample view.",
+            "Account changes and reconciliation aren’t available in this sample view.",
         )
     }
 }
@@ -5673,7 +5611,7 @@ private fun ReconciliationScreen(state: AppState) {
             ListRow("Δ", "Out of balance", "No cleared transactions compared", state.formatCurrency(0), tandemPalette.positive)
         }
         PreviewNote(
-            "Reconciliation is display-only. Do not treat the sample balance as verified, and no statement or transaction will be changed.",
+            "This sample balance isn’t verified. No statement or transaction will be changed.",
         )
         PrimaryButton("Reconcile account", enabled = false) {}
     }
@@ -5710,7 +5648,7 @@ private fun ActivityScreen(
             if (liveTransactions.isEmpty()) {
                 item(key = "activity-empty") {
                     SectionCard("Recent transactions", "Newest first") {
-                        BodyText("No transactions are available in the local copy yet. Sync the budget to refresh it.")
+                        BodyText("No transactions are saved on this device yet. Sync the budget to refresh.")
                     }
                 }
             } else {
@@ -6239,7 +6177,7 @@ private fun TransactionDetailScreen(
                 navigation.open(AppRoute.EDIT_TRANSACTION)
             }
         } else {
-            PreviewNote("This sample transaction is read-only. Editing it will not change Actual Budget.")
+            PreviewNote("This sample transaction is read-only. Editing it won’t change Actual Budget.")
             PrimaryButton("Edit transaction", enabled = !state.readOnlyMode) { navigation.open(AppRoute.EDIT_TRANSACTION) }
         }
     }
@@ -6547,7 +6485,7 @@ private fun TransactionFormScreen(
             AlertDialog(
                 onDismissRequest = { if (!mobileSession.isSavingTransaction) confirmDelete = false },
                 title = { Text("Delete transaction?", color = tandemPalette.text) },
-                text = { Text("It will be removed from this device and queued for sync.", color = tandemPalette.muted) },
+                text = { Text("It’ll be removed from this device. The removal will sync later.", color = tandemPalette.muted) },
                 confirmButton = {
                     TextButton(
                         enabled = !mobileSession.isSavingTransaction,
@@ -6585,9 +6523,9 @@ private fun TransactionFormScreen(
         TextFieldCard("Notes", state.transactionNotes, { state.transactionNotes = it }, "Add a note (optional)", singleLine = false)
         PreviewNote(
             if (isNew) {
-                "New transactions are not available here yet. This sample form does not save or sync changes."
+                "New transactions aren’t available here yet. This sample form doesn’t save or sync changes."
             } else {
-                "This sample form is not connected. Changes will not be saved or synced."
+                "This sample form isn’t connected. Changes won’t be saved or synced."
             },
         )
         PrimaryButton("Review save status") { navigation.open(AppRoute.SAVE_RESULT) }
@@ -6779,14 +6717,14 @@ private fun SaveResultScreen(
     PageColumn {
         Spacer(Modifier.height(16.dp))
         Badge("Not saved", palette.warning)
-        Heading("No change was made", "This sample form cannot save a transaction yet.")
-        SectionCard("Transaction draft", "Sample data") {
+        Heading("No change was made", "This sample form can’t save a transaction yet.")
+        SectionCard("Transaction", "Sample data") {
             ListRow("¤", "Amount", "Corner Market", state.formatCurrency(-4_218))
             DividerLine()
             ListRow("C", "Account and category", "Checking · Groceries")
         }
         PreviewNote(
-            "Actual Budget is unchanged. New transactions are not available here yet, and this screen does not send changes.",
+            "Actual Budget is unchanged. New transactions aren’t available here yet, and this screen doesn’t send changes.",
         )
         PrimaryButton("Return to activity") { navigation.selectTab(AppRoute.ACTIVITY) }
         SecondaryButton("Open sync center") { navigation.open(AppRoute.SYNC_CENTER) }
@@ -6803,11 +6741,8 @@ private fun SyncCenterScreen(
     if (state.selectedBudgetId.isNotBlank()) {
         val attention = mobileSession.pendingWrites.filter { it.status in setOf("queued", "conflict", "uncertain", "rejected") }
         PageLazyColumn {
-            item(key = "sync-center-status") {
-                Badge(if (mobileSession.isServerReachable) "Actual · connected" else "Offline copy", tandemPalette.positive)
-            }
             item(key = "sync-center-title") {
-                Heading("Sync center", "Review the local budget copy and any changes that need attention.")
+                Heading("Sync")
             }
             item(key = "sync-center-budget-summary") {
                 SurfaceCard {
@@ -6846,13 +6781,13 @@ private fun SyncCenterScreen(
                 }
             }
             item(key = "pending-changes-title") {
-                SectionCard("Pending Changes", "${attention.size} local operations", animateDetail = true) {}
+                SectionCard("Pending Changes", "${attention.size} edits", animateDetail = true) {}
             }
             if (attention.isEmpty()) {
                 item(key = "pending-changes-empty") {
                     AnimatedAttentionContent(showingAttention = false) { _ ->
                         Text(
-                            "No pending, uncertain, rejected, or conflicted changes.",
+                            "No pending changes.",
                             modifier = Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
                             color = tandemPalette.muted,
                             fontSize = TandemTypography.body,
@@ -6867,7 +6802,7 @@ private fun SyncCenterScreen(
                         ListRow(
                             "",
                             transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
-                            "${operation.status.replaceFirstChar { it.uppercase() }} · ${transaction?.category ?: "Transaction edit"}",
+                            "${writeStatusLabel(operation.status)} · ${transaction?.category ?: "Transaction edit"}",
                             "Review",
                             trailingColor =
                                 when (operation.status) {
@@ -6922,7 +6857,7 @@ private fun SyncCenterScreen(
             }
         }
         SectionCard("Attention needed", "Sample recovery states") {
-            ListRow("!", "Conflict to review", "Corner Market · two versions", "1", tandemPalette.warning) {
+            ListRow("!", "Needs your review", "Corner Market · two versions", "1", tandemPalette.warning) {
                 navigation.open(AppRoute.CONFLICT_INBOX)
             }
             DividerLine()
@@ -6937,7 +6872,7 @@ private fun SyncCenterScreen(
             ListRow(
                 "×",
                 "Not applied",
-                "New transactions are not available yet",
+                "New transactions aren’t available yet",
                 "1",
                 tandemPalette.negative,
             ) { navigation.open(AppRoute.REJECTED_WRITE) }
@@ -6947,7 +6882,7 @@ private fun SyncCenterScreen(
             DividerLine()
             ListRow("↑", "Local edits", "None in sample data", "0")
         }
-        SecondaryButton("Review all conflicts") { navigation.open(AppRoute.CONFLICT_INBOX) }
+        SecondaryButton("Review changes") { navigation.open(AppRoute.CONFLICT_INBOX) }
     }
 }
 
@@ -6961,21 +6896,20 @@ private fun ConflictInboxScreen(
     if (state.selectedBudgetId.isNotBlank()) {
         val conflicts = mobileSession.pendingWrites.filter { it.status == "conflict" }
         PageLazyColumn {
-            item(key = "conflicts-status") { Badge("Actual · review required", tandemPalette.warning) }
             item(key = "conflicts-title") {
-                Heading("Changes to review", "Choose whether to keep the device edit or the latest Actual version.")
+                Heading("Changes to review", "Choose whether to keep your edit or the latest Actual version.")
             }
             if (conflicts.isEmpty()) {
                 item(key = "conflicts-empty") {
                     AnimatedAttentionContent(showingAttention = false, animateSizeChanges = true) { _ ->
                         SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
-                            Column(Modifier.padding(TandemSpacing.large)) { BodyText("There are no conflicts in the current local copy.") }
+                            Column(Modifier.padding(TandemSpacing.large)) { BodyText("No changes need review.") }
                         }
                     }
                 }
             } else {
                 item(key = "conflicts-section-title") {
-                    SectionCard("Conflicts", "${conflicts.size} transaction changes") {}
+                    SectionCard("Needs your review", "${conflicts.size} edits") {}
                 }
                 items(conflicts, key = { "conflict:${it.operationId}" }) { operation ->
                     val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
@@ -7001,11 +6935,11 @@ private fun ConflictInboxScreen(
     }
     PageColumn {
         SampleBanner()
-        Heading("Changes to review", "Choose which version to keep before a change is sent.")
+        Heading("Changes to review", "Choose which version to keep.")
         SurfaceCard(onClick = { navigation.open(AppRoute.CONFLICT_REVIEW) }) {
             Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                    Badge("1 conflict", tandemPalette.warning)
+                    Badge("Needs your review", tandemPalette.warning)
                     Text("Corner Market", color = tandemPalette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
                 }
                 Text(
@@ -7014,7 +6948,7 @@ private fun ConflictInboxScreen(
                     fontSize = TandemTypography.caption,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    ConflictValueCard("On this device", state.formatCurrency(1_200), Modifier.weight(1f))
+                    ConflictValueCard("Your edit", state.formatCurrency(1_200), Modifier.weight(1f))
                     ConflictValueCard("In Actual", state.formatCurrency(1_500), Modifier.weight(1f))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
@@ -7028,7 +6962,6 @@ private fun ConflictInboxScreen(
                 }
             }
         }
-        PreviewNote("This conflict is sample data. No resolution is sent or applied.")
     }
 }
 
@@ -7066,15 +6999,14 @@ private fun ConflictReviewScreen(
         val deviceAmount = deviceVersion?.longValue("amount")
         val actualAmount = actualVersion?.longValue("amount")
         PageColumn {
-            Badge("Actual · conflict", tandemPalette.warning)
             if (operation == null) {
-                Heading("Conflict is no longer available", "Refresh the sync center to see the current state.")
+                Heading("No change to review")
             } else {
                 val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
-                Heading("Two versions differ", transaction?.payee ?: "Review this transaction before continuing.")
+                Heading("Two versions differ")
                 Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     ConflictValueCard(
-                        "On this device",
+                        "Your edit",
                         deviceAmount?.let(::formatSignedCurrency) ?: "Deleted",
                         Modifier.weight(1f),
                     )
@@ -7084,25 +7016,16 @@ private fun ConflictReviewScreen(
                         Modifier.weight(1f),
                     )
                 }
-                SectionCard("Details", "Latest cached transaction") {
+                SectionCard("Details") {
                     ListRow("A", "Account", "Actual account", transaction?.account ?: "Unavailable")
                     DividerLine()
                     ListRow("C", "Category", "Actual category", transaction?.category ?: "Unavailable")
                     DividerLine()
                     ListRow("◷", "Date", "Actual date", transaction?.dateLabel ?: "Unavailable")
                 }
-                if (record?.remoteDeleted == true) {
-                    PreviewNote(
-                        "Actual deleted this transaction. The device version cannot be rebased; keep Actual to discard the local draft.",
-                    )
-                } else {
-                    PreviewNote(
-                        "Keeping the device version rebases the edit on the latest Actual revision, then submits it through the normal sync queue.",
-                    )
-                }
                 mobileSession.transactionWriteMessage?.let { BodyText(it) }
                 PrimaryButton(
-                    "Keep device",
+                    "Keep your edit",
                     enabled = !state.readOnlyMode && !mobileSession.isSavingTransaction && record?.remoteDeleted != true,
                 ) { onResolveConflict(operation.operationId, true) }
                 SecondaryButton("Keep Actual", enabled = !state.readOnlyMode && !mobileSession.isSavingTransaction) {
@@ -7113,10 +7036,9 @@ private fun ConflictReviewScreen(
         return
     }
     PageColumn {
-        Badge("Conflict · sample data", tandemPalette.warning)
         Heading("Two versions differ", "Review the two sample amounts for Corner Market.")
         Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-            ConflictValueCard("On this device", state.formatCurrency(1_200), Modifier.weight(1f))
+            ConflictValueCard("Your edit", state.formatCurrency(1_200), Modifier.weight(1f))
             ConflictValueCard("In Actual", state.formatCurrency(1_500), Modifier.weight(1f))
         }
         SectionCard("Other details", "Review before choosing") {
@@ -7168,8 +7090,8 @@ private fun UncertainWriteScreen(
         val operation = checkedOperation ?: pendingOperation
         PageColumn {
             if (operation == null) {
-                Heading("No change to check")
-                InfoBubble("This change is no longer waiting for server confirmation.")
+                Heading("Nothing to check")
+                InfoBubble("This edit no longer needs confirmation.")
             } else {
                 val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
                 val isChecked = mobileSession.checkedWriteOperationId == operation.operationId
@@ -7185,12 +7107,13 @@ private fun UncertainWriteScreen(
                         operation.status == "conflict" -> "Needs your review"
                         operation.status == "rejected" -> "Change not applied"
                         operation.status == "discarded" -> "Change discarded"
-                        operation.status == "queued" -> "Pending Changes"
-                        operation.status == "sending" -> "Sending to Actual"
+                        operation.status == "queued" -> "Waiting to sync"
+                        operation.status == "sending" -> "Syncing"
+                        operation.status == "uncertain" -> "Status unknown"
                         isNotFound -> "No server record found"
-                        isChecked -> "Still waiting for confirmation"
-                        mobileSession.isSyncing -> "Checking with Actual"
-                        else -> "Change not confirmed"
+                        isChecked -> "Status unknown"
+                        mobileSession.isSyncing -> "Checking status"
+                        else -> "Status unknown"
                     }
                 val message =
                     when {
@@ -7198,19 +7121,19 @@ private fun UncertainWriteScreen(
                         operation.status == "committed" -> "This change is saved in your budget."
                         operation.status == "conflict" -> "Actual changed this transaction. Review both versions."
                         operation.status == "rejected" -> "Actual kept the previous value."
-                        operation.status == "discarded" -> "The local edit was removed."
-                        operation.status == "queued" -> "This change is saved on this device."
-                        operation.status == "sending" && mobileSession.isSyncing -> "Sending this change to Actual."
-                        operation.status == "sending" -> "Check status before sending it again."
-                        isNotFound -> "Retrying will send this same change ID."
-                        isChecked -> "The server returned no final result. Check again before retrying."
-                        mobileSession.isSyncing -> "Checking the server before offering recovery actions."
-                        else -> "Check with Actual before retrying."
+                        operation.status == "discarded" -> "Your edit was removed."
+                        operation.status == "queued" -> "Your edit is saved on this device and is waiting to sync."
+                        operation.status == "sending" && mobileSession.isSyncing -> "Syncing this edit with Actual."
+                        operation.status == "sending" -> "Status unknown. Check before retrying."
+                        isNotFound -> "No matching edit is on the server. Retrying sends it once."
+                        isChecked -> "Actual hasn’t confirmed whether it saved this edit. Check again before retrying."
+                        mobileSession.isSyncing -> "Checking Actual for this edit."
+                        else -> "Tandem couldn’t confirm whether Actual saved this edit. Check its status before retrying."
                     }
                 Heading(heading)
                 SectionCard(
                     transaction?.payee ?: "Transaction",
-                    transaction?.dateLabel ?: "Local change",
+                    transaction?.dateLabel ?: "Saved on this device",
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.large),
@@ -7240,7 +7163,7 @@ private fun UncertainWriteScreen(
                     operation.status == "uncertain" && isNotFound -> {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                             PrimaryButton(
-                                "Retry change",
+                                "Retry edit",
                                 enabled = !state.readOnlyMode && !mobileSession.isSyncing,
                                 modifier = Modifier.weight(1f),
                             ) { onRetry(operation.operationId) }
@@ -7261,14 +7184,14 @@ private fun UncertainWriteScreen(
                     operation.status == "queued" -> Spacer(Modifier.height(72.dp))
                     operation.status == "sending" ->
                         PrimaryButton(
-                            if (mobileSession.isSyncing) "Sending…" else "Check status",
+                            if (mobileSession.isSyncing) "Syncing" else "Check status",
                             enabled = !mobileSession.isSyncing,
                             loading = mobileSession.isSyncing,
                         ) {
                             if (!mobileSession.isSyncing) onCheckStatus(operation.operationId)
                         }
                     operation.status == "conflict" ->
-                        PrimaryButton("Review conflict") {
+                        PrimaryButton("Review changes") {
                             state.selectedConflictOperationId = operation.operationId
                             navigation.open(AppRoute.CONFLICT_REVIEW)
                         }
@@ -7284,7 +7207,7 @@ private fun UncertainWriteScreen(
         return
     }
     PageColumn {
-        Heading("Change not confirmed")
+        Heading("Status unknown")
         SectionCard("Corner Market", "${formatShortDate(SampleDate(2026, 5, 14))} · Groceries") {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.large),
@@ -7300,7 +7223,7 @@ private fun UncertainWriteScreen(
                 )
             }
         }
-        InfoBubble("Check with Actual before retrying.")
+        InfoBubble("Tandem couldn’t confirm whether Actual saved this edit. Check its status before retrying.")
         PrimaryButton("Check status", enabled = false) {}
     }
 }
@@ -7320,39 +7243,34 @@ private fun RejectedWriteScreen(
             } ?: mobileSession.pendingWrites.firstOrNull { it.status == "rejected" }
         PageColumn {
             Badge("Not applied", tandemPalette.negative)
-            Heading("Previous value kept", "Actual rejected this change. The remote value remains in the budget.")
+            Heading("Change not applied")
             if (operation == null) {
-                BodyText("There are no rejected edits in the current local copy.")
+                BodyText("No unapplied edits need review.")
             } else {
                 val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
-                SectionCard(transaction?.payee ?: "Transaction", transaction?.dateLabel ?: "Rejected edit") {
+                SectionCard(transaction?.payee ?: "Transaction", transaction?.dateLabel ?: "Not applied") {
                     ListRow(
                         "¤",
-                        "Requested amount",
-                        "Local draft",
+                        "Your edit",
+                        "Not applied",
                         operation.optimisticAmountMinor?.let { state.formatSignedCurrency(it) } ?: "Unavailable",
                     )
-                    DividerLine()
-                    ListRow("!", "Reason", "The update was not applied", operation.lastErrorCode ?: "Rejected", tandemPalette.warning)
                 }
-                PreviewNote(
-                    "The data layer removed the rejected optimistic overlay and retained the local audit entry until you dismiss it.",
-                )
-                PrimaryButton("Dismiss rejected edit", enabled = !state.readOnlyMode) { onDiscard(operation.operationId) }
+                PrimaryButton("Dismiss", enabled = !state.readOnlyMode) { onDiscard(operation.operationId) }
             }
         }
         return
     }
     PageColumn {
         Badge("Not applied", tandemPalette.negative)
-        Heading("Previous value kept", "This change was not applied in Actual Budget.")
+        Heading("Change not applied")
         SectionCard("Sample edit", "Corner Market · ${formatShortDate(SampleDate(2026, 5, 14))}") {
-            ListRow("¤", "Requested amount", "Device draft", state.formatCurrency(1_200))
+            ListRow("¤", "Your edit", "Not applied", state.formatCurrency(1_200))
             DividerLine()
-            ListRow("!", "Reason", "New transactions are not available yet", "Unavailable", tandemPalette.warning)
+            ListRow("!", "Reason", "New transactions aren’t available yet", "Unavailable", tandemPalette.warning)
         }
         PreviewNote(
-            "The change was not saved. The app keeps the reason and will offer a way to dismiss it.",
+            "The change wasn’t saved. You can dismiss this message.",
         )
         PrimaryButton("Close details") { navigation.back() }
     }
@@ -7371,7 +7289,7 @@ private fun SettingsScreen(
                 SecondaryButton("Retry settings storage") { state.settingsStorageRetry += 1 }
             }
         }
-        SectionCard("Personalize", "Appearance and budget") {
+        SectionCard("Appearance") {
             ListRow(
                 "",
                 "Appearance",
@@ -7427,7 +7345,7 @@ private fun SettingsScreen(
             ListRow(
                 "",
                 "Security and privacy",
-                "Credentials and local protection",
+                "Access and local data",
                 leadingVector = Lucide.ShieldCheck,
                 onClick = { navigation.open(AppRoute.SECURITY_PRIVACY) },
             )
@@ -7473,7 +7391,7 @@ private fun AppearanceScreen(
             ListRow(
                 "",
                 "Accent color",
-                "Selected across every app page",
+                "Applies to every screen",
                 state.accent.label,
                 leadingVector = Lucide.PaintbrushVertical,
                 onClick = { navigation.open(AppRoute.ACCENT_COLOR) },
@@ -7500,15 +7418,14 @@ private fun ThemeModeScreen(state: AppState) {
                 mode.label,
                 when (mode) {
                     ThemeMode.SYSTEM -> "Follow this device’s light or dark setting"
-                    ThemeMode.LIGHT -> "Bright surfaces with the Tandem color system"
+                    ThemeMode.LIGHT -> "Light appearance"
                     ThemeMode.DARK -> "The default low-glare Tandem palette"
-                    ThemeMode.PURE_BLACK -> "Black canvas with clear raised cards for OLED screens"
+                    ThemeMode.PURE_BLACK -> "Black background"
                 },
                 selected = state.theme == mode,
                 onClick = { state.theme = mode },
             )
         }
-        PreviewNote("Theme choices and colors stay consistent across Android and iOS.")
     }
 }
 
@@ -7561,7 +7478,7 @@ private fun BackgroundScreen(state: AppState) {
         ).forEach { (style, description) ->
             ChoiceRow(style, description, selected = state.backgroundStyle == style, onClick = { state.backgroundStyle = style })
         }
-        SectionCard("Motion", "Animation should never get in the way") {
+        SectionCard("Motion") {
             ToggleRow(
                 "Reduce motion",
                 "Fewer animations",
@@ -7580,7 +7497,6 @@ private fun BackgroundScreen(state: AppState) {
                 )
             }
         }
-        PreviewNote("Tandem follows the device motion preference unless you choose an override here.")
     }
 }
 
@@ -7589,7 +7505,7 @@ private fun HomeLayoutScreen(state: AppState) {
     PageColumn {
         Heading("Budget layout", "Set the amount of detail shown on the budget page.")
         listOf(
-            "Comfortable" to "Roomy cards and extra context",
+            "Comfortable" to "More detail and context",
             "Compact" to "More categories visible at once",
             "Essentials" to "Keep upcoming bills near the top",
         ).forEach { (label, description) ->
@@ -7602,7 +7518,7 @@ private fun HomeLayoutScreen(state: AppState) {
                     when (state.homeLayout) {
                         "Compact" -> "Compact rows and tighter spacing"
                         "Essentials" -> "Upcoming bills and essentials appear first"
-                        else -> "Roomy category rows with more breathing space"
+                        else -> "More space between categories"
                     },
                     color = tandemPalette.muted,
                     fontSize = TandemTypography.label,
@@ -7694,7 +7610,7 @@ private fun SyncPreferencesScreen(
             mobileSession.syncError != null -> mobileSession.syncError.orEmpty()
             mobileSession.isSyncing -> "Reading changes from Actual"
             syncState?.lastSyncedAtEpochMs != null -> "Last successful sync for ${state.selectedBudget}"
-            else -> "Open a budget and sync it to start keeping a local copy"
+            else -> "Open a budget and sync to save it on this device"
         }
     PageColumn {
         SectionCard("When to sync") {
@@ -7707,7 +7623,7 @@ private fun SyncPreferencesScreen(
                 ToggleRow(
                     "Schedule background sync",
                     if (state.selectedBudgetEncrypted) {
-                        "Encrypted budgets cannot sync in background."
+                        "Encrypted budgets can’t sync in the background."
                     } else {
                         "Refresh the selected budget about every six hours"
                     },
@@ -7786,7 +7702,7 @@ private fun ServerDeviceScreen(
             ListRow(
                 "",
                 "Connection status",
-                if (mobileSession.isServerReachable) "Server is reachable" else "Server cannot be reached",
+                if (mobileSession.isServerReachable) "Server is reachable" else "Server can’t be reached",
                 if (mobileSession.isServerReachable) "Connected" else "Disconnected",
                 if (mobileSession.isServerReachable) tandemPalette.positive else tandemPalette.negative,
                 leadingVector = Lucide.Wifi,
@@ -7795,7 +7711,7 @@ private fun ServerDeviceScreen(
         SectionCard(
             "This device",
             when {
-                device == null -> "Pairing is not active"
+                device == null -> "No device is paired"
                 mobileSession.isCredentialStored -> "Pairing is saved on this phone"
                 else -> "Pairing is active until the app closes"
             },
@@ -7816,8 +7732,8 @@ private fun ServerDeviceScreen(
             DividerLine()
             ListRow(
                 "",
-                "Device credential",
-                if (mobileSession.isCredentialStored) "Encrypted in system secure storage" else "In-memory for this app session",
+                "Saved pairing",
+                if (mobileSession.isCredentialStored) "Protected on this phone" else "Available until the app closes",
                 when {
                     mobileSession.isCredentialStored -> "Saved"
                     device != null -> "Active"
@@ -7873,17 +7789,23 @@ private fun SecurityScreen(
             DividerLine()
             CheckBoxRow(
                 title = "Read-only mode",
-                subtitle = if (canChangeReadOnly) "Block transaction edits and notes" else "Connect and sync pending changes first",
+                subtitle =
+                    when {
+                        canChangeReadOnly -> "Block transaction edits and notes"
+                        !mobileSession.isAuthenticated -> "Pair this device first"
+                        !mobileSession.isServerReachable -> "Connect to the server first"
+                        else -> "Sync pending edits first"
+                    },
                 checked = state.readOnlyMode,
                 enabled = canChangeReadOnly,
                 onChange = { state.readOnlyMode = it },
             )
         }
-        SectionCard("Credentials") {
+        SectionCard("Access") {
             ListRow(
                 "",
-                "Device credential",
-                if (mobileSession.isCredentialStored) "Protected by system storage" else "Active for this session",
+                "Saved pairing",
+                if (mobileSession.isCredentialStored) "Protected on this phone" else "Available until the app closes",
                 when {
                     mobileSession.isCredentialStored -> "Saved"
                     mobileSession.isAuthenticated -> "Active"
@@ -7900,7 +7822,7 @@ private fun SecurityScreen(
                 leadingVector = Lucide.LockKeyhole,
             )
         }
-        PreviewNote("Budget passwords are not stored.")
+        PreviewNote("Budget passwords aren’t stored.")
         AnimatedPreviewNote(mobileSession.credentialStorageError)
     }
 }
@@ -7958,7 +7880,7 @@ private fun NotificationsScreen(
             }
             DividerLine()
             ToggleRow(
-                "Conflict review alerts",
+                "Review alerts",
                 "When a change needs review",
                 state.conflictReviewAlerts,
             ) {
@@ -7967,8 +7889,8 @@ private fun NotificationsScreen(
             }
             DividerLine()
             ToggleRow(
-                "Rejected edit alerts",
-                "When an edit cannot be applied",
+                "Not applied alerts",
+                "When an edit isn’t applied",
                 state.rejectedEditAlerts,
             ) {
                 state.rejectedEditAlerts = it
@@ -8026,7 +7948,7 @@ private fun LocalDataScreen(
             DividerLine()
             ListRow("", "Pending Changes", trailing = formatInteger(queuedCount), leadingVector = Lucide.CloudSync)
             DividerLine()
-            ListRow("", "Conflicts to review", "Choose a version", formatInteger(conflictCount), leadingVector = Lucide.CloudAlert)
+            ListRow("", "Needs your review", "Choose a version", formatInteger(conflictCount), leadingVector = Lucide.CloudAlert)
             AnimatedReveal(visible = attentionCount > 0, animateHeight = false) {
                 Column {
                     DividerLine()
@@ -8075,7 +7997,7 @@ private fun MerchantIconLicensesScreen(
                         color = tandemPalette.accent,
                         strokeWidth = 2.dp,
                     )
-                    BodyText("Loading the bundled icon catalog…")
+                    BodyText("Loading icons")
                 }
             }
             else -> {
@@ -8097,7 +8019,7 @@ private fun MerchantIconLicensesScreen(
                     fontSize = TandemTypography.label,
                 )
                 if (filteredNotices.isEmpty()) {
-                    BodyText("No bundled icons match that search.")
+                    BodyText("No icons match that search.")
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxWidth().weight(1f),
@@ -8134,7 +8056,11 @@ private fun MerchantIconLicensesScreen(
                                                 fontSize = TandemTypography.body,
                                                 fontWeight = FontWeight.SemiBold,
                                             )
-                                            Text(notice.license, color = tandemPalette.muted, fontSize = TandemTypography.label)
+                                            Text(
+                                                notice.license.replace("Fair Use", "fair use", ignoreCase = true),
+                                                color = tandemPalette.muted,
+                                                fontSize = TandemTypography.label,
+                                            )
                                         }
                                     }
                                     Text(
@@ -8168,7 +8094,7 @@ private fun AboutScreen(
     navigation: AppNavigation,
 ) {
     PageColumn {
-        Heading("About Tandem", "An independent, local-first companion for Actual Budget.")
+        Heading("About Tandem", "An independent, local-first mobile companion for Actual Budget.")
         SurfaceCard {
             Column(
                 Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.extraLarge, vertical = TandemSpacing.extraLarge),
@@ -8193,7 +8119,7 @@ private fun AboutScreen(
                 )
             }
         }
-        SectionCard("Project", "Independent companion for Actual Budget") {
+        SectionCard("Project") {
             ListRow("A", "Supported Actual server", "Required by this Tandem release", SUPPORTED_ACTUAL_SERVER_VERSION)
             DividerLine()
             ListRow("⌘", "Open-source license", "GNU AGPL-3.0-or-later")
