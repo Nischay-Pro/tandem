@@ -11,6 +11,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 internal enum class ThemeMode(
     val label: String,
@@ -31,6 +33,57 @@ internal enum class AccentChoice(
     VIOLET("Orchid", Color(0xFFB49AFF)),
     AMBER("Saffron", Color(0xFFFFC56E)),
     ROSE("Rose", Color(0xFFFF91A9)),
+}
+
+internal object TandemTypography {
+    val indicator = 9.sp
+    val micro = 10.sp
+    val caption = 11.sp
+    val label = 12.sp
+    val compactBody = 13.sp
+    val body = 14.sp
+    val action = 15.sp
+    val keypadOperator = 16.sp
+    val periodTitle = 17.sp
+    val cardTitle = 18.sp
+    val sectionTitle = 20.sp
+    val keypadNumber = 22.sp
+    val pageTitle = 24.sp
+    val heroTitle = 28.sp
+    val amount = 32.sp
+    val amountField = 40.sp
+    val illustration = 62.sp
+    val microLineHeight = 13.sp
+    val tightLineHeight = 14.sp
+    val compactLineHeight = 17.sp
+    val bodyLineHeight = 20.sp
+    val actionLineHeight = 22.sp
+    val largeInputLineHeight = 38.sp
+    val headingLineHeight = 29.sp
+    val amountLineHeight = 36.sp
+    val amountFieldLineHeight = 48.sp
+    val captionLetterSpacing = 0.2.sp
+}
+
+internal object TandemShapes {
+    val small = 6.dp
+    val control = 12.dp
+    val medium = 14.dp
+    val roomy = 16.dp
+    val large = 18.dp
+    val panel = 20.dp
+    val capsule = 28.dp
+    val pill = 999.dp
+}
+
+internal object TandemSpacing {
+    val xxSmall = 2.dp
+    val extraSmall = 4.dp
+    val small = 8.dp
+    val medium = 12.dp
+    val large = 16.dp
+    val extraLarge = 24.dp
+    val screen = 20.dp
 }
 
 internal data class TandemPalette(

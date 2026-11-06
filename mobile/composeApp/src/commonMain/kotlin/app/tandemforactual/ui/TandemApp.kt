@@ -61,10 +61,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.AlertDialog
 import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Icon
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
+import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -123,7 +125,6 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.data.database.BudgetRecordEntity
@@ -166,12 +167,14 @@ import com.composables.icons.lucide.PawPrint
 import com.composables.icons.lucide.Plane
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Receipt
+import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.Server
 import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.ShoppingCart
 import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.SunMoon
 import com.composables.icons.lucide.Tags
+import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.Utensils
 import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.Wallpaper
@@ -227,7 +230,7 @@ private enum class AppRoute(
     ACCOUNT_OPTIONS("Account options"),
     RECONCILIATION("Reconcile account"),
     ACTIVITY("Activity"),
-    ACTIVITY_SEARCH("Search activity"),
+    ACTIVITY_SEARCH("Search transactions"),
     ACTIVITY_FILTER("Filter and sort"),
     TRANSACTION_DETAIL("Transaction details"),
     NEW_TRANSACTION("Add transaction"),
@@ -300,6 +303,13 @@ private data class TransactionItem(
     val recordId: String? = null,
     val notes: String = "",
     val displaySettings: BudgetDisplaySettings? = null,
+    val dateIso: String = "",
+    val payeeId: String? = null,
+    val categoryId: String? = null,
+    val clearedState: String? = null,
+    val approved: Boolean? = null,
+    val matched: Boolean? = null,
+    val isTransfer: Boolean = false,
 )
 
 private fun merchantLicensePriority(license: String): Int =
@@ -386,6 +396,7 @@ private val previewTransactions =
             -4_218,
             "G",
             categoryIcon = financeIcon("Groceries"),
+            dateIso = "2026-05-14",
         ),
         TransactionItem(
             "Electric Company",
@@ -394,6 +405,7 @@ private val previewTransactions =
             -12_000,
             "E",
             categoryIcon = financeIcon("Utilities"),
+            dateIso = "2026-05-12",
         ),
         TransactionItem(
             "Acme Corp",
@@ -402,6 +414,7 @@ private val previewTransactions =
             250_000,
             "A",
             categoryIcon = financeIcon("Paycheck"),
+            dateIso = "2026-05-10",
         ),
         TransactionItem(
             "Riverside Cafe",
@@ -410,6 +423,7 @@ private val previewTransactions =
             -2_840,
             "R",
             categoryIcon = financeIcon("Dining"),
+            dateIso = "2026-05-08",
         ),
         TransactionItem(
             "City Transit",
@@ -418,23 +432,54 @@ private val previewTransactions =
             -1_650,
             "C",
             categoryIcon = financeIcon("Transport"),
+            dateIso = "2026-05-06",
         ),
-        TransactionItem("Book Nook", "Personal", formatShortDate(SampleDate(2026, 5, 4)), -2_399, "B", categoryIcon = Lucide.Receipt),
+        TransactionItem(
+            "Book Nook",
+            "Personal",
+            formatShortDate(SampleDate(2026, 5, 4)),
+            -2_399,
+            "B",
+            categoryIcon = Lucide.Receipt,
+            dateIso = "2026-05-04",
+        ),
     )
 
 private fun liveTransactionItems(
     session: TandemMobileSession,
     merchantIconPack: MerchantIconPack? = null,
+    records: List<BudgetRecordEntity> = session.transactionRecords,
+): List<TransactionItem> =
+    buildLiveTransactionItems(
+        records = records,
+        accountRecords = session.accountRecords,
+        payeeRecords = session.payeeRecords,
+        categoryRecords = session.categoryRecords,
+        displaySettings = session.budgetDisplaySettings,
+        merchantIconPack = merchantIconPack,
+    )
+
+private fun buildLiveTransactionItems(
+    records: List<BudgetRecordEntity>,
+    accountRecords: List<BudgetRecordEntity>,
+    payeeRecords: List<BudgetRecordEntity>,
+    categoryRecords: List<BudgetRecordEntity>,
+    displaySettings: BudgetDisplaySettings?,
+    merchantIconPack: MerchantIconPack?,
 ): List<TransactionItem> {
-    val accounts = session.accountRecords.mapNotNull { record -> record.recordName()?.let { record.recordId to it } }.toMap()
-    val payees = session.payeeRecords.mapNotNull { record -> record.recordName()?.let { record.recordId to it } }.toMap()
-    val categories = session.categoryRecords.mapNotNull { record -> record.recordName()?.let { record.recordId to it } }.toMap()
+    val accounts = accountRecords.mapNotNull { record -> record.recordName()?.let { record.recordId to it } }.toMap()
+    val payees = payeeRecords.mapNotNull { record -> record.recordName()?.let { record.recordId to it } }.toMap()
+    val categories = categoryRecords.mapNotNull { record -> record.recordName()?.let { record.recordId to it } }.toMap()
     val payeeIconCache = mutableMapOf<String, DrawableResource?>()
-    return session.transactionRecords.mapNotNull { record ->
+    return records.mapNotNull { record ->
         val amount = record.amountMinor ?: return@mapNotNull null
         val payeeName = record.payeeId?.let(payees::get)
         val categoryName = record.categoryId?.let(categories::get) ?: record.categoryId ?: "Uncategorized"
         val displayedPayee = payeeName ?: record.payeeId ?: "No payee"
+        val body = record.recordBody()
+        val clearedState =
+            body?.stringValue("cleared")?.lowercase()
+                ?: body?.booleanValue("cleared")?.let { if (it) "cleared" else "uncleared" }
         TransactionItem(
             payee = displayedPayee,
             category = categoryName,
@@ -446,8 +491,19 @@ private fun liveTransactionItems(
             account = record.accountId?.let(accounts::get) ?: record.accountId ?: "No account",
             accountId = record.accountId,
             recordId = record.recordId,
-            notes = record.recordBody()?.stringValue("notes") ?: "",
-            displaySettings = session.budgetDisplaySettings,
+            notes = body?.stringValue("notes") ?: "",
+            displaySettings = displaySettings,
+            dateIso = record.recordDate.orEmpty(),
+            payeeId = record.payeeId,
+            categoryId = record.categoryId,
+            clearedState = clearedState,
+            approved = body?.booleanValue("approved"),
+            matched = body?.booleanValue("matched"),
+            isTransfer =
+                body?.stringValue("transfer_id") != null ||
+                    body?.stringValue("transferId") != null ||
+                    body?.booleanValue("is_transfer") == true ||
+                    body?.booleanValue("isTransfer") == true,
         )
     }
 }
@@ -727,6 +783,8 @@ internal class AppState {
     var budgetDisplaySettings by mutableStateOf<BudgetDisplaySettings?>(null)
     var selectedMonth by mutableStateOf(formatMonth(2026, 5))
     var selectedMonthId by mutableStateOf("2026-05")
+    var activitySearchQuery by mutableStateOf("")
+    var activitySearchFilters by mutableStateOf<List<ActivitySearchFilter>>(emptyList())
     var selectedAccountId by mutableStateOf("")
     var selectedCategoryGroupId by mutableStateOf("")
     var selectedCategoryId by mutableStateOf("")
@@ -746,6 +804,7 @@ internal class AppState {
     var transactionType by mutableStateOf("Spending")
     var transactionNotes by mutableStateOf("")
     var selectedTransactionAmountMinor by mutableStateOf<Long?>(null)
+    var selectedTransactionNotes by mutableStateOf("")
     var selectedTransactionIsLive by mutableStateOf(false)
     var conflictChoice by mutableStateOf("")
     var backgroundStyle by mutableStateOf("Solid surface")
@@ -954,6 +1013,7 @@ private data class AppNavigation(
     val newTransaction: (accountId: String?) -> Unit,
     val selectTab: (AppRoute) -> Unit,
     val back: () -> Unit,
+    val backToList: () -> Unit,
 )
 
 private data class AppRouteEntry(
@@ -1286,6 +1346,15 @@ fun TandemApp(
                 }
             },
             back = handleBack,
+            backToList = {
+                if (backStack.size > 2) {
+                    routeTransitionDirection = -1f
+                    backStack.removeAt(backStack.lastIndex)
+                    backStack.removeAt(backStack.lastIndex)
+                } else {
+                    handleBack()
+                }
+            },
         )
     val routeEntry = backStack.last()
     val route = routeEntry.route
@@ -1522,21 +1591,39 @@ fun TandemApp(
             }
         }
     }
-    val saveTransaction: () -> Unit = {
+    val saveTransaction: ((Boolean) -> Unit) -> Unit = { onComplete ->
         val transactionId = state.selectedTransactionRecordId
         val originalAmount = state.selectedTransactionAmountMinor
         if (!state.readOnlyMode && transactionId.isNotBlank() && originalAmount != null && !mobileSession.isSavingTransaction) {
             coroutineScope.launch {
-                mobileSession.updateTransaction(
-                    budgetId = state.selectedBudgetId,
-                    transactionId = transactionId,
-                    amountText = state.transactionAmount,
-                    notes = state.transactionNotes,
-                    originalAmountMinor = originalAmount,
-                    encryptionPassword = state.encryptedPassword.takeIf { it.isNotBlank() },
-                    displaySettings = state.budgetDisplaySettings,
-                )
+                val saved =
+                    mobileSession.updateTransaction(
+                        budgetId = state.selectedBudgetId,
+                        transactionId = transactionId,
+                        amountText = state.transactionAmount,
+                        notes = state.transactionNotes,
+                        originalAmountMinor = originalAmount,
+                        displaySettings = state.budgetDisplaySettings,
+                    )
+                if (saved) {
+                    val amount = state.parseAmountMinorUnits(state.transactionAmount) ?: kotlin.math.abs(originalAmount)
+                    state.selectedTransactionAmountMinor = if (originalAmount < 0) -amount else amount
+                    state.selectedTransactionNotes = state.transactionNotes
+                }
+                onComplete(saved)
             }
+        } else {
+            onComplete(false)
+        }
+    }
+    val deleteTransaction: ((Boolean) -> Unit) -> Unit = { onComplete ->
+        val transactionId = state.selectedTransactionRecordId
+        if (!state.readOnlyMode && transactionId.isNotBlank() && !mobileSession.isSavingTransaction) {
+            coroutineScope.launch {
+                onComplete(mobileSession.deleteTransaction(state.selectedBudgetId, transactionId))
+            }
+        } else {
+            onComplete(false)
         }
     }
     val createTransaction: () -> Unit = {
@@ -1735,6 +1822,7 @@ fun TandemApp(
                                 liveBudgetMonth = liveBudgetMonth,
                                 onSyncNow = syncNow,
                                 onSaveTransaction = saveTransaction,
+                                onDeleteTransaction = deleteTransaction,
                                 onCreateTransaction = createTransaction,
                                 onResolveConflict = resolveConflict,
                                 onDiscardWrite = discardWrite,
@@ -1762,7 +1850,38 @@ fun TandemApp(
                                             navigation.open(AppRoute.NEW_TRANSACTION)
                                         }
                                     },
-                                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = 14.dp),
+                                    modifier =
+                                        Modifier
+                                            .align(
+                                                Alignment.BottomEnd,
+                                            ).padding(end = TandemSpacing.large, bottom = TandemSpacing.large),
+                                )
+                            }
+                            val pendingSyncOperation =
+                                mobileSession.pendingWrites.firstOrNull {
+                                    it.operationId == state.selectedConflictOperationId &&
+                                        (it.status == "queued" || (it.status == "sending" && mobileSession.isSyncing))
+                                }
+                            val showSyncAction =
+                                (visibleRoute == AppRoute.SYNC_CENTER && state.selectedBudgetId.isNotBlank()) ||
+                                    (visibleRoute == AppRoute.UNCERTAIN_WRITE && pendingSyncOperation != null)
+                            if (showSyncAction) {
+                                val syncActionCompact by
+                                    remember(routeScrollState) {
+                                        derivedStateOf { routeScrollState.value > 72 }
+                                    }
+                                val syncActionEnabled =
+                                    !mobileSession.isSyncing &&
+                                        (visibleRoute != AppRoute.SYNC_CENTER || mobileSession.isAuthenticated)
+                                FloatingSyncAction(
+                                    compact = syncActionCompact,
+                                    syncing = mobileSession.isSyncing,
+                                    enabled = syncActionEnabled,
+                                    onClick = syncNow,
+                                    modifier =
+                                        Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .padding(end = TandemSpacing.large, bottom = TandemSpacing.large),
                                 )
                             }
                         }
@@ -1897,14 +2016,14 @@ private fun FloatingTransactionAction(
                 .animateContentSize(tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS))
                 .height(56.dp)
                 .defaultMinSize(minWidth = 56.dp)
-                .clip(if (compact) CircleShape else RoundedCornerShape(18.dp))
+                .clip(if (compact) CircleShape else RoundedCornerShape(TandemShapes.large))
                 .background(if (enabled) palette.accent else palette.raised)
                 .semantics(mergeDescendants = true) {
                     contentDescription = if (enabled) "Add transaction" else "Read-only mode is on"
                 }.clickable(enabled = enabled, role = Role.Button, onClickLabel = "Add transaction", onClick = onClick)
-                .padding(horizontal = if (compact) 16.dp else 18.dp),
+                .padding(horizontal = if (compact) TandemSpacing.large else TandemSpacing.extraLarge),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 9.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 0.dp else TandemSpacing.small),
     ) {
         Icon(
             Lucide.Plus,
@@ -1916,7 +2035,51 @@ private fun FloatingTransactionAction(
             Text(
                 "Add transaction",
                 color = if (enabled) palette.accentContent else palette.muted,
-                fontSize = 14.sp,
+                fontSize = TandemTypography.body,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FloatingSyncAction(
+    compact: Boolean,
+    syncing: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val palette = tandemPalette
+    Row(
+        modifier =
+            modifier
+                .animateContentSize(tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS))
+                .height(56.dp)
+                .defaultMinSize(minWidth = 56.dp)
+                .clip(if (compact) CircleShape else RoundedCornerShape(TandemShapes.large))
+                .background(if (enabled) palette.accent else palette.raised)
+                .semantics(mergeDescendants = true) { contentDescription = "Sync" }
+                .clickable(enabled = enabled, role = Role.Button, onClickLabel = "Sync", onClick = onClick)
+                .padding(horizontal = if (compact) TandemSpacing.large else TandemSpacing.extraLarge),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 0.dp else TandemSpacing.small),
+    ) {
+        if (syncing) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(22.dp),
+                color = if (enabled) palette.accentContent else palette.muted,
+                strokeWidth = 2.dp,
+            )
+        } else {
+            Icon(Lucide.CloudSync, contentDescription = null, modifier = Modifier.size(24.dp), tint = palette.accentContent)
+        }
+        AnimatedVisibility(visible = !compact, enter = fadeIn(), exit = fadeOut()) {
+            Text(
+                "Sync",
+                color = if (enabled) palette.accentContent else palette.muted,
+                fontSize = TandemTypography.body,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
             )
@@ -1970,7 +2133,7 @@ private fun AppHeader(
             else -> route.title
         }
     Row(
-        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 18.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showBack) {
@@ -1983,7 +2146,7 @@ private fun AppHeader(
                         .clip(CircleShape)
                         .semantics(mergeDescendants = true) { contentDescription = "Back" }
                         .clickable(role = Role.Button, onClickLabel = "Back", onClick = onBack)
-                        .padding(11.dp),
+                        .padding(TandemSpacing.medium),
                 tint = palette.text,
             )
             Spacer(Modifier.width(6.dp))
@@ -2001,7 +2164,7 @@ private fun AppHeader(
                 Text(
                     text = headerTitle,
                     color = palette.text,
-                    fontSize = 17.sp,
+                    fontSize = TandemTypography.periodTitle,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -2014,7 +2177,7 @@ private fun AppHeader(
                             "${state.selectedMonth} · Sample budget"
                         },
                         color = palette.muted,
-                        fontSize = 11.sp,
+                        fontSize = TandemTypography.caption,
                     )
                 }
             }
@@ -2067,7 +2230,7 @@ private fun AppHeader(
                     else -> "Sample data"
                 },
                 color = palette.muted,
-                fontSize = 10.sp,
+                fontSize = TandemTypography.micro,
                 fontWeight = FontWeight.Bold,
             )
         }
@@ -2090,7 +2253,12 @@ private fun BottomNavigation(
             AppRoute.SETTINGS to "Settings",
         )
     Row(
-        modifier = Modifier.fillMaxWidth().background(palette.surface).padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 9.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(
+                    palette.surface,
+                ).padding(start = TandemSpacing.small, end = TandemSpacing.small, top = TandemSpacing.small, bottom = TandemSpacing.small),
         horizontalArrangement = Arrangement.SpaceAround,
     ) {
         items.forEach { (route, label) ->
@@ -2111,7 +2279,7 @@ private fun BottomNavigation(
                 modifier =
                     Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(13.dp))
+                        .clip(RoundedCornerShape(TandemShapes.medium))
                         .selectable(
                             selected = active,
                             role = Role.Tab,
@@ -2119,15 +2287,15 @@ private fun BottomNavigation(
                         ).semantics(mergeDescendants = true) {
                             contentDescription = label
                             this.selected = active
-                        }.padding(vertical = 4.dp),
+                        }.padding(vertical = TandemSpacing.extraSmall),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
             ) {
                 NavigationGlyph(route, tabColor, iconScale)
                 Text(
                     label,
                     color = tabColor,
-                    fontSize = 10.sp,
+                    fontSize = TandemTypography.micro,
                     fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                 )
             }
@@ -2254,7 +2422,8 @@ private fun ScreenContent(
     liveAccounts: List<LiveAccountSummary>,
     liveBudgetMonth: LiveBudgetMonthSummary?,
     onSyncNow: () -> Unit,
-    onSaveTransaction: () -> Unit,
+    onSaveTransaction: ((Boolean) -> Unit) -> Unit,
+    onDeleteTransaction: ((Boolean) -> Unit) -> Unit,
     onCreateTransaction: () -> Unit,
     onResolveConflict: (String, Boolean) -> Unit,
     onDiscardWrite: (String) -> Unit,
@@ -2288,11 +2457,11 @@ private fun ScreenContent(
         AppRoute.ACCOUNT_OPTIONS -> AccountOptionsScreen(state, liveAccounts)
         AppRoute.RECONCILIATION -> ReconciliationScreen(state)
         AppRoute.ACTIVITY -> ActivityScreen(state, navigation, liveTransactions)
-        AppRoute.ACTIVITY_SEARCH -> ActivitySearchScreen(state, navigation, liveTransactions)
-        AppRoute.ACTIVITY_FILTER -> ActivityFilterScreen()
+        AppRoute.ACTIVITY_SEARCH -> ActivitySearchScreen(state, mobileSession, navigation, merchantIconPack)
+        AppRoute.ACTIVITY_FILTER -> ActivitySearchScreen(state, mobileSession, navigation, merchantIconPack)
         AppRoute.TRANSACTION_DETAIL -> TransactionDetailScreen(state, mobileSession, navigation, merchantIconPack)
         AppRoute.NEW_TRANSACTION, AppRoute.EDIT_TRANSACTION ->
-            TransactionFormScreen(route, state, navigation, mobileSession, onSaveTransaction, onCreateTransaction)
+            TransactionFormScreen(route, state, navigation, mobileSession, onSaveTransaction, onDeleteTransaction, onCreateTransaction)
         AppRoute.CHOOSE_ACCOUNT -> {
             val values =
                 if (state.selectedBudgetId.isBlank()) {
@@ -2367,7 +2536,7 @@ private fun ScreenContent(
             }
         AppRoute.CHOOSE_DATE -> DatePickerScreen(state, navigation)
         AppRoute.SAVE_RESULT -> SaveResultScreen(state, navigation)
-        AppRoute.SYNC_CENTER -> SyncCenterScreen(state, mobileSession, navigation, onSyncNow)
+        AppRoute.SYNC_CENTER -> SyncCenterScreen(state, mobileSession, navigation)
         AppRoute.CONFLICT_INBOX -> ConflictInboxScreen(state, mobileSession, navigation)
         AppRoute.CONFLICT_REVIEW -> ConflictReviewScreen(state, mobileSession, onResolveConflict)
         AppRoute.UNCERTAIN_WRITE ->
@@ -2376,7 +2545,6 @@ private fun ScreenContent(
                 mobileSession,
                 navigation,
                 onCheckUncertainWriteStatus,
-                onSyncNow,
                 onRetryUncertainWrite,
                 onDiscardWrite,
             )
@@ -2407,15 +2575,15 @@ private fun ScreenContent(
                 onToggleNotificationPermission,
             )
         AppRoute.LOCAL_DATA -> LocalDataScreen(state, mobileSession, onSyncNow)
-        AppRoute.ABOUT -> AboutScreen(merchantIconPack, merchantIconPackLoadError, navigation)
+        AppRoute.ABOUT -> AboutScreen(merchantIconPackLoadError, navigation)
         AppRoute.MERCHANT_ICON_LICENSES -> MerchantIconLicensesScreen(merchantIconPack, merchantIconPackLoadError)
     }
 }
 
 @Composable
 private fun PageColumn(
-    verticalSpacing: androidx.compose.ui.unit.Dp = 16.dp,
-    horizontalPadding: androidx.compose.ui.unit.Dp = 20.dp,
+    verticalSpacing: androidx.compose.ui.unit.Dp = TandemSpacing.large,
+    horizontalPadding: androidx.compose.ui.unit.Dp = TandemSpacing.screen,
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -2425,7 +2593,7 @@ private fun PageColumn(
             modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
-                .padding(horizontal = horizontalPadding, vertical = 12.dp),
+                .padding(horizontal = horizontalPadding, vertical = TandemSpacing.medium),
         verticalArrangement = Arrangement.spacedBy(verticalSpacing),
         content = content,
     )
@@ -2449,15 +2617,15 @@ private fun SampleBanner(message: String = "This screen remains a preview") {
             Modifier
                 .fillMaxWidth()
                 .clip(
-                    RoundedCornerShape(12.dp),
+                    RoundedCornerShape(TandemShapes.control),
                 ).background(palette.accentSurface)
-                .padding(horizontal = 12.dp, vertical = 9.dp),
+                .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
     ) {
-        Text("●", color = palette.accent, fontSize = 9.sp)
-        Text("Sample data", color = palette.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-        Text(message, color = palette.muted, fontSize = 11.sp)
+        Text("●", color = palette.accent, fontSize = TandemTypography.indicator)
+        Text("Sample data", color = palette.accent, fontSize = TandemTypography.micro, fontWeight = FontWeight.Bold)
+        Text(message, color = palette.muted, fontSize = TandemTypography.caption)
     }
 }
 
@@ -2471,31 +2639,38 @@ private fun AttentionBanner(
     val palette = tandemPalette
     SurfaceCard(onClick = onClick, onClickLabel = action) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(9.dp),
+            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
         ) {
             Box(
                 Modifier.size(28.dp).clip(CircleShape).background(palette.warning.copy(alpha = 0.16f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("!", color = palette.warning, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("!", color = palette.warning, fontSize = TandemTypography.label, fontWeight = FontWeight.Bold)
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
                 Text(
                     title,
                     color = palette.text,
-                    fontSize = 12.sp,
+                    fontSize = TandemTypography.label,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Text(detail, color = palette.muted, fontSize = 10.sp, lineHeight = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    detail,
+                    color = palette.muted,
+                    fontSize = TandemTypography.micro,
+                    lineHeight = TandemTypography.microLineHeight,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             Text(
                 action,
                 color = palette.accent,
-                fontSize = 10.sp,
+                fontSize = TandemTypography.micro,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 fontWeight = FontWeight.SemiBold,
@@ -2511,15 +2686,25 @@ private fun Heading(
     subtitle: String? = null,
 ) {
     val palette = tandemPalette
-    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Text(title, color = palette.text, fontSize = 24.sp, lineHeight = 29.sp, fontWeight = FontWeight.Bold)
-        if (subtitle != null) Text(subtitle, color = palette.muted, fontSize = 14.sp, lineHeight = 20.sp)
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+        Text(
+            title,
+            color = palette.text,
+            fontSize = TandemTypography.pageTitle,
+            lineHeight = TandemTypography.headingLineHeight,
+            fontWeight = FontWeight.Bold,
+        )
+        if (subtitle !=
+            null
+        ) {
+            Text(subtitle, color = palette.muted, fontSize = TandemTypography.body, lineHeight = TandemTypography.bodyLineHeight)
+        }
     }
 }
 
 @Composable
 private fun BodyText(text: String) {
-    Text(text, color = tandemPalette.muted, fontSize = 14.sp, lineHeight = 20.sp)
+    Text(text, color = tandemPalette.muted, fontSize = TandemTypography.body, lineHeight = TandemTypography.bodyLineHeight)
 }
 
 @Composable
@@ -2527,7 +2712,7 @@ private fun AnimatedStatusText(
     text: String,
     color: Color,
     modifier: Modifier = Modifier,
-    fontSize: androidx.compose.ui.unit.TextUnit = 14.sp,
+    fontSize: androidx.compose.ui.unit.TextUnit = TandemTypography.body,
     lineHeight: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
     fontWeight: FontWeight = FontWeight.Normal,
     maxLines: Int = Int.MAX_VALUE,
@@ -2594,7 +2779,13 @@ private fun crossfadeTransitions(
 
 @Composable
 private fun LabelText(text: String) {
-    Text(text, color = tandemPalette.muted, fontSize = 11.sp, letterSpacing = 0.2.sp, fontWeight = FontWeight.SemiBold)
+    Text(
+        text,
+        color = tandemPalette.muted,
+        fontSize = TandemTypography.caption,
+        letterSpacing = TandemTypography.captionLetterSpacing,
+        fontWeight = FontWeight.SemiBold,
+    )
 }
 
 @Composable
@@ -2616,7 +2807,7 @@ private fun SurfaceCard(
                         Modifier
                     },
                 ),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(TandemShapes.large),
         color = palette.surface,
         border = BorderStroke(1.dp, palette.border),
     ) {
@@ -2650,15 +2841,15 @@ private fun PrimaryButton(
             modifier
                 .fillMaxWidth()
                 .heightIn(min = 52.dp)
-                .clip(RoundedCornerShape(15.dp))
+                .clip(RoundedCornerShape(TandemShapes.medium))
                 .background(backgroundColor)
                 .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 12.dp),
+                .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.medium),
         contentAlignment = Alignment.Center,
     ) {
         Row(
             modifier = Modifier.animateContentSize(tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS)),
-            horizontalArrangement = Arrangement.spacedBy(9.dp),
+            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             AnimatedReveal(visible = loading, animateHeight = false) {
@@ -2667,7 +2858,7 @@ private fun PrimaryButton(
             AnimatedStatusText(
                 label,
                 textColor,
-                fontSize = 15.sp,
+                fontSize = TandemTypography.action,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -2701,13 +2892,20 @@ private fun SecondaryButton(
             modifier
                 .fillMaxWidth()
                 .heightIn(min = 52.dp)
-                .clip(RoundedCornerShape(15.dp))
-                .border(1.dp, borderColor, RoundedCornerShape(15.dp))
+                .clip(RoundedCornerShape(TandemShapes.medium))
+                .border(1.dp, borderColor, RoundedCornerShape(TandemShapes.medium))
                 .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 12.dp),
+                .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.medium),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = textColor, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            label,
+            color = textColor,
+            fontSize = TandemTypography.action,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -2720,12 +2918,12 @@ private fun AccountActionButtons(
 ) {
     val useFullWidthButtons = shouldStackActionButtons(LocalDensity.current.fontScale)
     if (useFullWidthButtons) {
-        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
             PrimaryButton("Add transaction", enabled = addEnabled, onClick = onAddTransaction)
             SecondaryButton("Reconcile", enabled = reconciliationEnabled, onClick = onReconcile)
         }
     } else {
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
             PrimaryButton("Add transaction", enabled = addEnabled, modifier = Modifier.weight(1f), onClick = onAddTransaction)
             SecondaryButton("Reconcile", enabled = reconciliationEnabled, modifier = Modifier.weight(1f), onClick = onReconcile)
         }
@@ -2742,16 +2940,16 @@ private fun CompactActionButton(
     Box(
         modifier
             .height(40.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .border(1.dp, palette.border, RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(TandemShapes.control))
+            .border(1.dp, palette.border, RoundedCornerShape(TandemShapes.control))
             .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 8.dp),
+            .padding(horizontal = TandemSpacing.small, vertical = TandemSpacing.small),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
             color = palette.text,
-            fontSize = 12.sp,
+            fontSize = TandemTypography.label,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -2761,7 +2959,7 @@ private fun CompactActionButton(
 
 @Composable
 private fun FieldLabel(label: String) {
-    Text(label, color = tandemPalette.muted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+    Text(label, color = tandemPalette.muted, fontSize = TandemTypography.label, fontWeight = FontWeight.Medium)
 }
 
 @Composable
@@ -2779,17 +2977,20 @@ private fun TextFieldCard(
     onFocusedChange: ((Boolean) -> Unit)? = null,
 ) {
     val palette = tandemPalette
-    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
         FieldLabel(label)
         Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .defaultMinSize(minHeight = if (large) 82.dp else 52.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(TandemShapes.medium))
                     .background(palette.surface)
-                    .border(1.dp, palette.border, RoundedCornerShape(14.dp))
-                    .padding(horizontal = if (large) 18.dp else 14.dp, vertical = if (large) 20.dp else 14.dp),
+                    .border(1.dp, palette.border, RoundedCornerShape(TandemShapes.medium))
+                    .padding(
+                        horizontal = if (large) TandemSpacing.screen else TandemSpacing.large,
+                        vertical = if (large) TandemSpacing.screen else TandemSpacing.medium,
+                    ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             BasicTextField(
@@ -2810,8 +3011,8 @@ private fun TextFieldCard(
                 textStyle =
                     TextStyle(
                         color = palette.text,
-                        fontSize = if (large) 32.sp else 15.sp,
-                        lineHeight = if (large) 38.sp else 20.sp,
+                        fontSize = if (large) TandemTypography.amount else TandemTypography.action,
+                        lineHeight = if (large) TandemTypography.largeInputLineHeight else TandemTypography.bodyLineHeight,
                         fontWeight = if (large) FontWeight.SemiBold else FontWeight.Normal,
                         textAlign = textAlign,
                     ),
@@ -2828,7 +3029,7 @@ private fun TextFieldCard(
                                 placeholder,
                                 modifier = Modifier.fillMaxWidth(),
                                 color = palette.muted,
-                                fontSize = if (large) 22.sp else 14.sp,
+                                fontSize = if (large) TandemTypography.keypadNumber else TandemTypography.body,
                                 textAlign = textAlign,
                             )
                         }
@@ -2864,11 +3065,11 @@ private fun TransactionAmountField(
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = 88.dp)
-                .clip(RoundedCornerShape(18.dp))
+                .clip(RoundedCornerShape(TandemShapes.large))
                 .background(fill)
-                .border(1.5.dp, outline, RoundedCornerShape(18.dp))
+                .border(1.5.dp, outline, RoundedCornerShape(TandemShapes.large))
                 .clickable(role = Role.Button, onClickLabel = "Enter amount", onClick = onShowKeypad)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BasicTextField(
@@ -2879,8 +3080,8 @@ private fun TransactionAmountField(
             textStyle =
                 TextStyle(
                     color = if (entered) amountColor else palette.muted,
-                    fontSize = 40.sp,
-                    lineHeight = 48.sp,
+                    fontSize = TandemTypography.amountField,
+                    lineHeight = TandemTypography.amountFieldLineHeight,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                 ),
@@ -2910,12 +3111,12 @@ private fun TransactionTypeChip(
                 .clip(CircleShape)
                 .background(palette.raised)
                 .clickable(role = Role.Button, onClickLabel = "Choose transaction type", onClick = onClick)
-                .padding(horizontal = 18.dp, vertical = 11.dp),
+                .padding(horizontal = TandemSpacing.screen, vertical = TandemSpacing.medium),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(9.dp),
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
     ) {
         Icon(Lucide.Receipt, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.text)
-        Text(type, color = palette.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text(type, color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
         Icon(Lucide.ChevronDown, contentDescription = null, modifier = Modifier.size(19.dp), tint = palette.muted)
     }
 }
@@ -2936,12 +3137,12 @@ private fun TransactionPickerRow(
                 .heightIn(min = 62.dp)
                 .clickable(role = Role.Button, onClickLabel = placeholder, onClick = onClick)
                 .semantics { contentDescription = "$placeholder: $label" }
-                .padding(horizontal = 14.dp, vertical = 9.dp),
+                .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
     ) {
         Box(
-            Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(palette.raised),
+            Modifier.size(36.dp).clip(RoundedCornerShape(TandemShapes.control)).background(palette.raised),
             contentAlignment = Alignment.Center,
         ) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp), tint = palette.accent)
@@ -2950,7 +3151,7 @@ private fun TransactionPickerRow(
             label,
             modifier = Modifier.weight(1f),
             color = if (value.isBlank()) palette.muted else palette.text,
-            fontSize = 14.sp,
+            fontSize = TandemTypography.body,
             fontWeight = if (value.isBlank()) FontWeight.Normal else FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -2989,15 +3190,15 @@ private fun AmountPadKey(
         }
     val shape =
         when (style) {
-            AmountPadKeyStyle.NUMBER -> RoundedCornerShape(16.dp)
+            AmountPadKeyStyle.NUMBER -> RoundedCornerShape(TandemShapes.roomy)
             AmountPadKeyStyle.OPERATOR -> CircleShape
-            else -> RoundedCornerShape(28.dp)
+            else -> RoundedCornerShape(TandemShapes.capsule)
         }
     Box(
         modifier =
             modifier
                 .fillMaxSize()
-                .padding(2.dp)
+                .padding(TandemSpacing.xxSmall)
                 .clip(shape)
                 .background(background)
                 .semantics(mergeDescendants = true) { contentDescription = accessibilityLabel }
@@ -3007,7 +3208,7 @@ private fun AmountPadKey(
         Text(
             label,
             color = color,
-            fontSize = if (style == AmountPadKeyStyle.NUMBER) 22.sp else 16.sp,
+            fontSize = if (style == AmountPadKeyStyle.NUMBER) TandemTypography.keypadNumber else TandemTypography.keypadOperator,
             fontWeight = if (style == AmountPadKeyStyle.DONE) FontWeight.SemiBold else FontWeight.Medium,
             maxLines = 1,
         )
@@ -3026,21 +3227,21 @@ private fun TransactionAmountKeypad(
     val palette = tandemPalette
     Surface(modifier = modifier.fillMaxWidth().height(AMOUNT_KEYPAD_HEIGHT), color = palette.surface) {
         Row(
-            Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            Modifier.fillMaxSize().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
         ) {
             Column(
                 Modifier.weight(3.15f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(5.dp),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
             ) {
                 listOf(listOf(7, 8, 9), listOf(4, 5, 6), listOf(1, 2, 3)).forEach { row ->
-                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
                         row.forEach { digit ->
                             AmountPadKey(digit.toString(), Modifier.weight(1f)) { onDigit(digit) }
                         }
                     }
                 }
-                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
                     Spacer(Modifier.weight(1f).fillMaxSize())
                     AmountPadKey("0", Modifier.weight(1f)) { onDigit(0) }
                     AmountPadKey("⌫", Modifier.weight(1f), accessibilityLabel = "Delete last digit", onClick = onDelete)
@@ -3048,10 +3249,10 @@ private fun TransactionAmountKeypad(
             }
             Column(
                 Modifier.weight(1f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(5.dp),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
             ) {
                 listOf(listOf("×", "÷"), listOf("+", "−")).forEach { row ->
-                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
                         row.forEach { operator ->
                             AmountPadKey(operator, Modifier.weight(1f), AmountPadKeyStyle.OPERATOR) { onOperator(operator) }
                         }
@@ -3070,6 +3271,7 @@ private val AMOUNT_KEYPAD_HEIGHT = 252.dp
 private fun FloatingTransactionSave(
     compact: Boolean,
     enabled: Boolean,
+    saved: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -3079,26 +3281,72 @@ private fun FloatingTransactionSave(
             modifier
                 .animateContentSize(tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS))
                 .height(56.dp)
-                .clip(if (compact) CircleShape else RoundedCornerShape(18.dp))
-                .background(if (enabled) palette.accent else palette.raised)
-                .semantics(mergeDescendants = true) { contentDescription = "Save transaction" }
-                .clickable(enabled = enabled, role = Role.Button, onClickLabel = "Save transaction", onClick = onClick)
-                .padding(horizontal = if (compact) 16.dp else 18.dp),
+                .clip(if (compact) CircleShape else RoundedCornerShape(TandemShapes.large))
+                .background(
+                    if (saved) {
+                        palette.positive
+                    } else if (enabled) {
+                        palette.accent
+                    } else {
+                        palette.raised
+                    },
+                ).semantics(mergeDescendants = true) {
+                    contentDescription = if (saved) "Saved on this device" else "Save transaction"
+                }.clickable(enabled = enabled && !saved, role = Role.Button, onClickLabel = "Save transaction", onClick = onClick)
+                .padding(horizontal = if (compact) TandemSpacing.large else TandemSpacing.extraLarge),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 9.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 0.dp else TandemSpacing.small),
     ) {
-        Box(Modifier.size(23.dp).clip(CircleShape).background(palette.accentContent), contentAlignment = Alignment.Center) {
-            Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(15.dp), tint = palette.accent)
+        Box(
+            Modifier
+                .size(23.dp)
+                .clip(CircleShape)
+                .background(if (saved) Color.Transparent else palette.accentContent),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Lucide.Check,
+                contentDescription = null,
+                modifier = Modifier.size(if (saved) 23.dp else 15.dp),
+                tint = if (saved) palette.background else palette.accent,
+            )
         }
         AnimatedVisibility(visible = !compact, enter = fadeIn(), exit = fadeOut()) {
             Text(
-                "Save",
-                color = if (enabled) palette.accentContent else palette.muted,
-                fontSize = 15.sp,
+                if (saved) "Saved" else "Save",
+                color = if (saved || enabled) palette.accentContent else palette.muted,
+                fontSize = TandemTypography.action,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
             )
         }
+    }
+}
+
+@Composable
+private fun FloatingTransactionDeleteAction(
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val palette = tandemPalette
+    Box(
+        modifier =
+            modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(palette.negative.copy(alpha = if (enabled) 0.15f else 0.08f))
+                .border(1.dp, palette.negative.copy(alpha = if (enabled) 0.75f else 0.32f), CircleShape)
+                .semantics(mergeDescendants = true) { contentDescription = "Delete transaction" }
+                .clickable(enabled = enabled, role = Role.Button, onClickLabel = "Delete transaction", onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            Lucide.Trash2,
+            contentDescription = null,
+            modifier = Modifier.size(23.dp),
+            tint = if (enabled) palette.negative else palette.muted,
+        )
     }
 }
 
@@ -3111,20 +3359,20 @@ private fun ReadOnlyField(
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
-    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
         FieldLabel(label)
         Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .heightIn(min = 52.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(TandemShapes.medium))
                     .background(palette.surface)
-                    .border(1.dp, palette.border, RoundedCornerShape(14.dp))
+                    .border(1.dp, palette.border, RoundedCornerShape(TandemShapes.medium))
                     .clickable(role = Role.Button, onClickLabel = "$label, $value", onClick = onClick)
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                    .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
         ) {
             if (leadingVector != null) {
                 Icon(leadingVector, contentDescription = null, modifier = Modifier.size(30.dp), tint = palette.accent)
@@ -3133,11 +3381,11 @@ private fun ReadOnlyField(
                     leading,
                     modifier = Modifier.clearAndSetSemantics {},
                     color = palette.accent,
-                    fontSize = 15.sp,
+                    fontSize = TandemTypography.action,
                     fontWeight = FontWeight.SemiBold,
                 )
             }
-            Text(value, color = palette.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
+            Text(value, color = palette.text, fontSize = TandemTypography.body, modifier = Modifier.weight(1f))
             Icon(
                 Lucide.ChevronRight,
                 contentDescription = null,
@@ -3176,19 +3424,22 @@ private fun ListRow(
                     } else {
                         Modifier
                     },
-                ).padding(horizontal = 14.dp, vertical = if (dense) 6.dp else 10.dp),
+                ).padding(
+                    horizontal = TandemSpacing.large,
+                    vertical = if (dense) TandemSpacing.extraSmall + TandemSpacing.xxSmall else TandemSpacing.small + TandemSpacing.xxSmall,
+                ),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
     ) {
         Box(
-            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(palette.raised),
+            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(TandemShapes.medium)).background(palette.raised),
             contentAlignment = Alignment.Center,
         ) {
             if (resolvedPainter != null) {
                 Image(
                     painter = resolvedPainter,
                     contentDescription = null,
-                    modifier = Modifier.size(32.dp).padding(2.dp),
+                    modifier = Modifier.size(32.dp).padding(TandemSpacing.xxSmall),
                     contentScale = ContentScale.Fit,
                 )
             } else if (resolvedVector != null) {
@@ -3203,17 +3454,17 @@ private fun ListRow(
                     icon,
                     modifier = Modifier.clearAndSetSemantics {},
                     color = palette.accent,
-                    fontSize = if (dense) 15.sp else 18.sp,
+                    fontSize = if (dense) TandemTypography.action else TandemTypography.cardTitle,
                     fontWeight = FontWeight.Bold,
                 )
             }
         }
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
             if (animateChanges) {
                 AnimatedStatusText(
                     title,
                     palette.text,
-                    fontSize = 14.sp,
+                    fontSize = TandemTypography.body,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -3222,7 +3473,7 @@ private fun ListRow(
                 Text(
                     title,
                     color = palette.text,
-                    fontSize = 14.sp,
+                    fontSize = TandemTypography.body,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -3233,12 +3484,18 @@ private fun ListRow(
                     AnimatedStatusText(
                         subtitle,
                         palette.muted,
-                        fontSize = 11.sp,
+                        fontSize = TandemTypography.caption,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 } else {
-                    Text(subtitle, color = palette.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        subtitle,
+                        color = palette.muted,
+                        fontSize = TandemTypography.caption,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
@@ -3248,7 +3505,7 @@ private fun ListRow(
                 AnimatedStatusText(
                     trailing,
                     effectiveColor,
-                    fontSize = 13.sp,
+                    fontSize = TandemTypography.compactBody,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -3257,7 +3514,7 @@ private fun ListRow(
                 Text(
                     trailing,
                     color = effectiveColor,
-                    fontSize = 13.sp,
+                    fontSize = TandemTypography.compactBody,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -3363,23 +3620,35 @@ private fun SectionCard(
         Column {
             if (title.isNotEmpty()) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 13.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
                         Text(
                             title,
                             color = palette.text,
-                            fontSize = 14.sp,
+                            fontSize = TandemTypography.body,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                         if (detail != null) {
                             if (animateDetail) {
-                                AnimatedStatusText(detail, palette.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                AnimatedStatusText(
+                                    detail,
+                                    palette.muted,
+                                    fontSize = TandemTypography.caption,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                             } else {
-                                Text(detail, color = palette.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    detail,
+                                    color = palette.muted,
+                                    fontSize = TandemTypography.caption,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                             }
                         }
                     }
@@ -3387,7 +3656,7 @@ private fun SectionCard(
                         Text(
                             action,
                             color = palette.accent,
-                            fontSize = 12.sp,
+                            fontSize = TandemTypography.label,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -3405,11 +3674,11 @@ private fun SectionCard(
                             contentDescription = if (expanded == false) "Expand $title" else "Collapse $title",
                             modifier =
                                 Modifier
-                                    .padding(start = 6.dp)
+                                    .padding(start = TandemSpacing.extraSmall)
                                     .size(36.dp)
                                     .clip(CircleShape)
                                     .clickable(role = Role.Button, onClick = onToggleExpanded)
-                                    .padding(8.dp)
+                                    .padding(TandemSpacing.small)
                                     .graphicsLayer { rotationZ = arrowRotation },
                             tint = palette.muted,
                         )
@@ -3466,15 +3735,15 @@ private fun ToggleRow(
                 .fillMaxWidth()
                 .defaultMinSize(minHeight = 66.dp)
                 .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange)
-                .padding(horizontal = 15.dp, vertical = 10.dp),
+                .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
     ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
             Text(
                 title,
                 color = if (enabled) palette.text else palette.muted,
-                fontSize = 13.sp,
+                fontSize = TandemTypography.compactBody,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -3483,7 +3752,7 @@ private fun ToggleRow(
                 Text(
                     subtitle,
                     color = if (enabled) palette.muted else controlColor,
-                    fontSize = 11.sp,
+                    fontSize = TandemTypography.caption,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -3497,7 +3766,7 @@ private fun ToggleRow(
                     ).height(24.dp)
                     .clip(CircleShape)
                     .background(if (enabled) trackColor else palette.raised)
-                    .padding(3.dp),
+                    .padding(TandemSpacing.extraSmall),
         ) {
             Box(
                 Modifier
@@ -3526,27 +3795,27 @@ private fun CheckBoxRow(
                 .fillMaxWidth()
                 .defaultMinSize(minHeight = 64.dp)
                 .toggleable(value = checked, enabled = enabled, role = Role.Checkbox, onValueChange = onChange)
-                .padding(horizontal = 15.dp, vertical = 10.dp),
+                .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
     ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
             Text(
                 title,
                 color = if (enabled) palette.text else palette.muted,
-                fontSize = 14.sp,
+                fontSize = TandemTypography.body,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(subtitle, color = palette.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, color = palette.muted, fontSize = TandemTypography.caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Box(
             Modifier
                 .size(24.dp)
-                .clip(RoundedCornerShape(6.dp))
+                .clip(RoundedCornerShape(TandemShapes.small))
                 .background(if (checked) accent else Color.Transparent)
-                .border(1.5.dp, accent, RoundedCornerShape(6.dp))
+                .border(1.5.dp, accent, RoundedCornerShape(TandemShapes.small))
                 .clearAndSetSemantics {},
             contentAlignment = Alignment.Center,
         ) {
@@ -3588,15 +3857,20 @@ private fun ChoiceRow(
         )
     SurfaceCard(onClick = onClick) {
         Row(
-            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 64.dp).padding(horizontal = 15.dp, vertical = 12.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(
+                        minHeight = 64.dp,
+                    ).padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
         ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
                 Text(
                     title,
                     color = palette.text,
-                    fontSize = 14.sp,
+                    fontSize = TandemTypography.body,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -3604,7 +3878,13 @@ private fun ChoiceRow(
                 if (subtitle !=
                     null
                 ) {
-                    Text(subtitle, color = palette.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        subtitle,
+                        color = palette.muted,
+                        fontSize = TandemTypography.caption,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
             Box(
@@ -3612,7 +3892,7 @@ private fun ChoiceRow(
                     .size(22.dp)
                     .clip(CircleShape)
                     .border(1.5.dp, selectionColor, CircleShape)
-                    .padding(5.dp),
+                    .padding(TandemSpacing.extraSmall),
             ) {
                 Box(
                     Modifier
@@ -3636,18 +3916,18 @@ private fun PreviewNote(text: String) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(TandemShapes.medium))
                 .background(palette.raised)
-                .padding(13.dp),
-        horizontalArrangement = Arrangement.spacedBy(9.dp),
+                .padding(TandemSpacing.medium),
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
         verticalAlignment = Alignment.Top,
     ) {
-        Text("i", color = palette.accent, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        Text("i", color = palette.accent, fontWeight = FontWeight.Bold, fontSize = TandemTypography.body)
         AnimatedStatusText(
             text,
             palette.muted,
-            fontSize = 12.sp,
-            lineHeight = 17.sp,
+            fontSize = TandemTypography.label,
+            lineHeight = TandemTypography.compactLineHeight,
             animateSizeChanges = true,
         )
     }
@@ -3659,14 +3939,14 @@ private fun InfoBubble(text: String) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(TandemShapes.medium))
             .background(palette.syncing.copy(alpha = 0.14f))
-            .padding(horizontal = 13.dp, vertical = 11.dp),
+            .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.medium),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(9.dp),
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
     ) {
         Icon(Lucide.Info, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.syncing)
-        Text(text, color = palette.text, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(text, color = palette.text, fontSize = TandemTypography.label, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -3680,13 +3960,19 @@ private fun AmountHero(
     val palette = tandemPalette
     SurfaceCard(onClick = action) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.large),
+            verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
             horizontalAlignment = Alignment.Start,
         ) {
             LabelText(label)
-            Text(amount, color = palette.text, fontSize = 31.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold)
-            Text(supporting, color = palette.muted, fontSize = 12.sp)
+            Text(
+                amount,
+                color = palette.text,
+                fontSize = TandemTypography.amount,
+                lineHeight = TandemTypography.amountLineHeight,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(supporting, color = palette.muted, fontSize = TandemTypography.label)
         }
     }
 }
@@ -3706,11 +3992,11 @@ private fun Badge(
     Box(
         Modifier
             .animateContentSize(tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS))
-            .clip(RoundedCornerShape(999.dp))
+            .clip(RoundedCornerShape(TandemShapes.pill))
             .background(animatedColor.copy(alpha = 0.13f))
-            .padding(horizontal = 9.dp, vertical = 5.dp),
+            .padding(horizontal = TandemSpacing.small, vertical = TandemSpacing.extraSmall),
     ) {
-        AnimatedStatusText(label, color, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        AnimatedStatusText(label, color, fontSize = TandemTypography.micro, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
@@ -3813,7 +4099,7 @@ private fun StartupScreen() {
         showLoadingIndicator = true
     }
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier.fillMaxSize().padding(TandemSpacing.extraLarge),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -3827,7 +4113,7 @@ private fun StartupScreen() {
                     strokeWidth = 2.dp,
                 )
                 Spacer(Modifier.height(16.dp))
-                Text("Opening your budget", color = palette.muted, fontSize = 14.sp)
+                Text("Opening your budget", color = palette.muted, fontSize = TandemTypography.body)
             }
         }
     }
@@ -3837,26 +4123,31 @@ private fun StartupScreen() {
 private fun WelcomeScreen(navigation: AppNavigation) {
     val palette = tandemPalette
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(
+                    rememberScrollState(),
+                ).padding(horizontal = TandemSpacing.extraLarge, vertical = TandemSpacing.extraLarge),
+        verticalArrangement = Arrangement.spacedBy(TandemSpacing.large),
     ) {
         Spacer(Modifier.height(14.dp))
         TandemBrandMark(Modifier.size(72.dp))
         Heading("Budget and account overview", "Plan spending, review accounts, and follow recent changes.")
         SurfaceCard {
-            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.large)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                     Badge("Private by design")
-                    Text("Actual Budget remains the source of truth", color = palette.muted, fontSize = 11.sp)
+                    Text("Actual Budget remains the source of truth", color = palette.muted, fontSize = TandemTypography.caption)
                 }
                 Text(
                     "Review plans, account balances, and recent activity.",
                     color = palette.text,
-                    fontSize = 15.sp,
-                    lineHeight = 22.sp,
+                    fontSize = TandemTypography.action,
+                    lineHeight = TandemTypography.actionLineHeight,
                     fontWeight = FontWeight.Medium,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     Badge("Offline ready", palette.positive)
                     Badge("Conflict review", palette.warning)
                 }
@@ -3877,16 +4168,64 @@ private fun ServerAddressScreen(
     PageColumn {
         Heading("Connect to server", "Enter the server address used to pair this device.")
         TextFieldCard("Server URL", state.serverUrl, { state.serverUrl = it }, "https://budget.example.com")
-        SurfaceCard {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                LabelText("Before you continue")
-                BodyText(
-                    "Use the HTTPS address provided by the server administrator. The budget password only unlocks an encrypted budget; it is never used to pair this device.",
+        InfoBubble("Tandem uses the budget password only to unlock encrypted budgets.")
+        if (serverAddressMayBeInsecure(state.serverUrl)) {
+            val palette = tandemPalette
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(TandemShapes.medium))
+                    .background(palette.warning.copy(alpha = 0.12f))
+                    .border(1.dp, palette.warning.copy(alpha = 0.38f), RoundedCornerShape(TandemShapes.medium))
+                    .padding(TandemSpacing.large),
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Lucide.CircleAlert, contentDescription = null, modifier = Modifier.size(23.dp), tint = palette.warning)
+                Text(
+                    "This address may not be secure on a public network. Use HTTPS when connecting over the internet.",
+                    color = palette.text,
+                    fontSize = TandemTypography.compactBody,
+                    lineHeight = TandemTypography.bodyLineHeight,
                 )
             }
         }
-        PrimaryButton("Continue securely", enabled = state.serverUrl.isNotBlank()) { navigation.open(AppRoute.PAIRING_OPTIONS) }
+        PrimaryButton("Continue", enabled = state.serverUrl.isNotBlank()) { navigation.open(AppRoute.PAIRING_OPTIONS) }
     }
+}
+
+internal fun serverAddressMayBeInsecure(value: String): Boolean {
+    val address = value.trim().lowercase()
+    if (address.isBlank() || address.startsWith("https://")) return false
+    val hasHttpScheme = address.startsWith("http://")
+    val authority =
+        address
+            .removePrefix("http://")
+            .removePrefix("https://")
+            .substringBefore('/')
+            .substringBefore('?')
+            .substringBefore('#')
+    val host =
+        (if (authority.startsWith("[")) authority.substringAfter('[').substringBefore(']') else authority.substringBefore(':'))
+            .removePrefix("www.")
+            .trim()
+    if (host.isBlank()) return false
+    if (host == "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".lan") || host.endsWith(".home")) {
+        return false
+    }
+    val octets = host.split('.').mapNotNull(String::toIntOrNull)
+    if (octets.size == 4 && octets.all { it in 0..255 }) {
+        val (first, second) = octets
+        val isPrivate =
+            first == 10 ||
+                (first == 172 && second in 16..31) ||
+                (first == 192 && second == 168) ||
+                first == 127 ||
+                (first == 169 && second == 254)
+        return hasHttpScheme && !isPrivate
+    }
+    if (host == "::1" || host.startsWith("fe80:") || host.startsWith("fc") || host.startsWith("fd")) return false
+    return hasHttpScheme || host.startsWith("www.") || host.contains('.')
 }
 
 @Composable
@@ -3915,18 +4254,21 @@ private fun ScanQrScreen(navigation: AppNavigation) {
                 Modifier
                     .fillMaxWidth()
                     .height(270.dp)
-                    .padding(18.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .padding(TandemSpacing.large)
+                    .clip(RoundedCornerShape(TandemShapes.panel))
                     .background(palette.raised),
                 contentAlignment = Alignment.Center,
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("⌗", color = palette.accent, fontSize = 62.sp)
-                    Text("Camera view", color = palette.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                ) {
+                    Text("⌗", color = palette.accent, fontSize = TandemTypography.illustration)
+                    Text("Camera view", color = palette.text, fontSize = TandemTypography.action, fontWeight = FontWeight.SemiBold)
                     Text(
                         "Camera scanning is not available here yet.",
                         color = palette.muted,
-                        fontSize = 12.sp,
+                        fontSize = TandemTypography.label,
                         textAlign = TextAlign.Center,
                     )
                 }
@@ -3962,10 +4304,20 @@ private fun PairingCodeScreen(
         )
         BodyText("The code works once and expires after five minutes. It is sent securely to the server only when you pair.")
         mobileSession.pairingError?.let { error ->
-            Text(error, color = tandemPalette.warning, fontSize = 13.sp, lineHeight = 19.sp)
+            Text(
+                error,
+                color = tandemPalette.warning,
+                fontSize = TandemTypography.compactBody,
+                lineHeight = TandemTypography.bodyLineHeight,
+            )
         }
         mobileSession.credentialStorageError?.let { error ->
-            Text(error, color = tandemPalette.warning, fontSize = 13.sp, lineHeight = 19.sp)
+            Text(
+                error,
+                color = tandemPalette.warning,
+                fontSize = TandemTypography.compactBody,
+                lineHeight = TandemTypography.bodyLineHeight,
+            )
             SecondaryButton(
                 if (mobileSession.isRestoringStoredSession) "Checking secure storage…" else "Retry saved pairing",
                 enabled = !mobileSession.isRestoringStoredSession,
@@ -3989,12 +4341,12 @@ private fun PairingResultScreen(
     PageColumn {
         Spacer(Modifier.height(24.dp))
         Box(Modifier.size(60.dp).clip(CircleShape).background(palette.accentSurface), contentAlignment = Alignment.Center) {
-            Text("✓", color = palette.accent, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Text("✓", color = palette.accent, fontSize = TandemTypography.heroTitle, fontWeight = FontWeight.Bold)
         }
         Heading("Device paired", "Choose an Actual budget to open on this phone.")
         mobileSession.pairedDevice?.let { device ->
             SurfaceCard {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
                     LabelText("Device access")
                     BodyText(
                         "This device can open ${device.budgetIds.size} budget${if (device.budgetIds.size == 1) "" else "s"}.",
@@ -4013,7 +4365,7 @@ private fun PairingResultScreen(
             }
         }
         mobileSession.budgetError?.let { error ->
-            Text(error, color = palette.warning, fontSize = 13.sp, lineHeight = 19.sp)
+            Text(error, color = palette.warning, fontSize = TandemTypography.compactBody, lineHeight = TandemTypography.bodyLineHeight)
         }
         PrimaryButton("Choose a budget", enabled = mobileSession.pairedDevice != null) {
             navigation.open(AppRoute.BUDGET_CHOOSER)
@@ -4087,13 +4439,18 @@ private fun BudgetChooserScreen(
             mobileSession.isLoadingBudgets -> BodyText("Loading budgets from the Tandem server…")
             mobileSession.budgets.isEmpty() && mobileSession.isAuthenticated -> {
                 mobileSession.budgetError?.let { error ->
-                    Text(error, color = tandemPalette.warning, fontSize = 13.sp, lineHeight = 19.sp)
+                    Text(
+                        error,
+                        color = tandemPalette.warning,
+                        fontSize = TandemTypography.compactBody,
+                        lineHeight = TandemTypography.bodyLineHeight,
+                    )
                 } ?: BodyText("No budgets are available to this paired device.")
                 SecondaryButton("Retry loading budgets", onClick = onRefreshBudgets)
             }
             mobileSession.budgets.isEmpty() -> {
                 SurfaceCard {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                         LabelText("Pair this device first")
                         BodyText("The budget list comes from the server after a device is paired.")
                     }
@@ -4102,7 +4459,7 @@ private fun BudgetChooserScreen(
             }
         }
         mobileSession.budgetError?.takeIf { selectableBudgets.isNotEmpty() }?.let { error ->
-            Text(error, color = tandemPalette.warning, fontSize = 12.sp)
+            Text(error, color = tandemPalette.warning, fontSize = TandemTypography.label)
         }
         PrimaryButton(
             if (state.selectedBudgetEncrypted && state.encryptedPassword.isBlank() && !cachedBudgetSelected) {
@@ -4148,10 +4505,13 @@ private fun FirstSyncScreen(
     PageColumn {
         Heading("Initial setup", "A private local copy keeps this budget available offline.")
         SurfaceCard {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(15.dp)) {
+            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.large)) {
                 listOf("Connecting to Tandem", "Reading the Actual budget", "Saving a local copy").forEachIndexed { index, title ->
                     val complete = mobileSession.syncComplete || (!mobileSession.isSyncing && mobileSession.syncError != null && index == 0)
-                    Row(horizontalArrangement = Arrangement.spacedBy(11.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         val icon =
                             if (complete) {
                                 "✓"
@@ -4171,7 +4531,7 @@ private fun FirstSyncScreen(
                                 palette.accent
                             }
                         Badge(icon, color)
-                        Text(title, color = palette.text, fontSize = 13.sp)
+                        Text(title, color = palette.text, fontSize = TandemTypography.compactBody)
                     }
                 }
             }
@@ -4195,12 +4555,12 @@ private fun FirstSyncScreen(
         AnimatedStatusText(
             syncMessage,
             syncMessageColor,
-            fontSize = 13.sp,
-            lineHeight = 19.sp,
+            fontSize = TandemTypography.compactBody,
+            lineHeight = TandemTypography.bodyLineHeight,
             animateSizeChanges = true,
         )
         AnimatedReveal(visible = mobileSession.syncError != null && !mobileSession.isSyncing) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 SecondaryButton("Retry initial sync", onClick = onRetrySync)
                 if (mobileSession.cachedSnapshotBudgetId == state.selectedBudgetId && mobileSession.hasCachedSnapshot) {
                     BodyText("The last saved copy is still available on this phone.")
@@ -4278,24 +4638,38 @@ private fun BudgetScreen(
                     "View rejected edits",
                 ) { navigation.open(AppRoute.REJECTED_WRITE) }
             }
-            Badge("Actual · read only", palette.positive)
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Budget overview", color = palette.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                Text("Review the synced plan and recent activity for the selected month.", color = palette.muted, fontSize = 13.sp)
+            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+                Text("Budget overview", color = palette.text, fontSize = TandemTypography.pageTitle, fontWeight = FontWeight.Bold)
+                Text(
+                    "Review the synced plan and recent activity for the selected month.",
+                    color = palette.muted,
+                    fontSize = TandemTypography.compactBody,
+                )
             }
             SurfaceCard(onClick = { navigation.open(AppRoute.MONTH_PICKER) }) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Column(modifier = Modifier.weight(1f)) {
                         LabelText("Planning period")
                         Spacer(Modifier.height(4.dp))
-                        Text(state.selectedMonth, color = palette.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            state.selectedMonth,
+                            color = palette.text,
+                            fontSize = TandemTypography.action,
+                            fontWeight = FontWeight.SemiBold,
+                        )
                     }
                     Icon(Lucide.ChevronDown, contentDescription = "Choose month", modifier = Modifier.size(22.dp), tint = palette.accent)
                 }
             }
             if (liveBudgetMonth == null) {
                 SurfaceCard {
-                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                    ) {
                         Text("No plan for this month is cached", color = palette.text, fontWeight = FontWeight.SemiBold)
                         BodyText("Sync a month available in Actual, or choose a different planning period.")
                     }
@@ -4430,16 +4804,23 @@ private fun BudgetScreen(
                 "Budget categories are a sample preview"
             },
         )
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Budget overview", color = palette.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Text("Review category balances and spending for the selected month.", color = palette.muted, fontSize = 13.sp)
+        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+            Text("Budget overview", color = palette.text, fontSize = TandemTypography.pageTitle, fontWeight = FontWeight.Bold)
+            Text(
+                "Review category balances and spending for the selected month.",
+                color = palette.muted,
+                fontSize = TandemTypography.compactBody,
+            )
         }
         SurfaceCard(onClick = { navigation.open(AppRoute.MONTH_PICKER) }) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Column(modifier = Modifier.weight(1f)) {
                     LabelText("Planning period")
                     Spacer(Modifier.height(4.dp))
-                    Text(state.selectedMonth, color = palette.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text(state.selectedMonth, color = palette.text, fontSize = TandemTypography.action, fontWeight = FontWeight.SemiBold)
                 }
                 Icon(Lucide.ChevronDown, contentDescription = "Choose month", modifier = Modifier.size(22.dp), tint = palette.accent)
             }
@@ -4541,13 +4922,18 @@ private fun BudgetScreen(
         }
         SurfaceCard(onClick = { navigation.open(AppRoute.SYNC_CENTER) }) {
             Row(
-                Modifier.fillMaxWidth().padding(15.dp),
+                Modifier.fillMaxWidth().padding(TandemSpacing.large),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
             ) {
                 Badge("✓", palette.positive)
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("All changes accounted for", color = palette.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "All changes accounted for",
+                        color = palette.text,
+                        fontSize = TandemTypography.compactBody,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                     Text(
                         if (liveTransactions.isNotEmpty()) {
                             "${liveTransactions.size} recent Actual transactions cached"
@@ -4555,7 +4941,7 @@ private fun BudgetScreen(
                             "Sample data · nothing has synced"
                         },
                         color = palette.muted,
-                        fontSize = 11.sp,
+                        fontSize = TandemTypography.caption,
                     )
                 }
                 Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.muted)
@@ -4619,9 +5005,9 @@ private fun TransactionRow(
     Column {
         Text(
             transaction.dateLabel,
-            modifier = Modifier.padding(start = 14.dp, top = 11.dp),
+            modifier = Modifier.padding(start = TandemSpacing.large, top = TandemSpacing.medium),
             color = palette.muted,
-            fontSize = 10.sp,
+            fontSize = TandemTypography.micro,
         )
         ListRow(
             transaction.icon,
@@ -4649,6 +5035,7 @@ private fun openTransaction(
     state.transactionNotes = transaction.notes
     state.transactionAmount = formatAmount(kotlin.math.abs(transaction.amountMinorUnits), state.budgetDisplaySettings)
     state.selectedTransactionAmountMinor = transaction.amountMinorUnits
+    state.selectedTransactionNotes = transaction.notes
     state.selectedTransactionRecordId = transaction.recordId.orEmpty()
     state.selectedTransactionIsLive = isLive
     navigation.open(AppRoute.TRANSACTION_DETAIL)
@@ -4674,10 +5061,10 @@ private fun MonthPickerScreen(
                         .semantics { contentDescription = "Previous year" }
                         .clickable(role = Role.Button, onClickLabel = "Previous year") {
                             selectedYear -= 1
-                        }.padding(10.dp),
+                        }.padding(TandemSpacing.medium),
                 tint = tandemPalette.text,
             )
-            Text(selectedYear.toString(), color = tandemPalette.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Text(selectedYear.toString(), color = tandemPalette.text, fontSize = TandemTypography.periodTitle, fontWeight = FontWeight.Bold)
             Icon(
                 Lucide.ChevronRight,
                 contentDescription = "Next year",
@@ -4687,13 +5074,13 @@ private fun MonthPickerScreen(
                         .semantics { contentDescription = "Next year" }
                         .clickable(role = Role.Button, onClickLabel = "Next year") {
                             selectedYear += 1
-                        }.padding(10.dp),
+                        }.padding(TandemSpacing.medium),
                 tint = tandemPalette.text,
             )
         }
         val months = (1..12).map { month -> month to formatShortMonth(selectedYear, month) }
         months.chunked(3).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                 row.forEach { (monthNumber, monthLabel) ->
                     val full = formatMonth(selectedYear, monthNumber)
                     val chosen = state.selectedMonth == full
@@ -4702,10 +5089,13 @@ private fun MonthPickerScreen(
                             Modifier
                                 .weight(1f)
                                 .height(72.dp)
-                                .clip(RoundedCornerShape(15.dp))
+                                .clip(RoundedCornerShape(TandemShapes.medium))
                                 .background(if (chosen) tandemPalette.accentSurface else tandemPalette.surface)
-                                .border(1.dp, if (chosen) tandemPalette.accent else tandemPalette.border, RoundedCornerShape(15.dp))
-                                .semantics { contentDescription = full }
+                                .border(
+                                    1.dp,
+                                    if (chosen) tandemPalette.accent else tandemPalette.border,
+                                    RoundedCornerShape(TandemShapes.medium),
+                                ).semantics { contentDescription = full }
                                 .selectable(
                                     selected = chosen,
                                     role = Role.RadioButton,
@@ -4721,7 +5111,7 @@ private fun MonthPickerScreen(
                             monthLabel,
                             color = if (chosen) tandemPalette.accent else tandemPalette.text,
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp,
+                            fontSize = TandemTypography.body,
                         )
                     }
                 }
@@ -4749,7 +5139,6 @@ private fun CategoryGroupScreen(
             liveBudgetMonth?.groups?.firstOrNull { it.id == state.selectedCategoryGroupId }
                 ?: liveBudgetMonth?.groups?.firstOrNull()
         PageColumn {
-            Badge("Actual · read only", palette.positive)
             if (group == null) {
                 Heading("Category group", state.selectedMonth)
                 BodyText("No synced category group is available for this month.")
@@ -4833,7 +5222,6 @@ private fun CategoryDetailScreen(
                 ?.categories
                 ?.firstOrNull { it.id == state.selectedCategoryId }
         PageColumn {
-            Badge("Actual · read only", tandemPalette.positive)
             if (category == null) {
                 Heading("Category details", state.selectedMonth)
                 BodyText("This category is not included in the cached plan for this month.")
@@ -4847,14 +5235,19 @@ private fun CategoryDetailScreen(
                 SectionCard("This month", "Actual plan and activity") {
                     ListRow("↗", "Assigned", "Budgeted in Actual", state.formatCurrency(category.assignedMinor))
                     DividerLine()
-                    ListRow("◷", "Activity", "Transactions in this category", state.formatCurrency(kotlin.math.abs(category.activityMinor)))
+                    ListRow(
+                        "",
+                        "Activity",
+                        "${state.selectedMonth} · ${state.formatCurrency(kotlin.math.abs(category.activityMinor))}",
+                        leadingVector = Lucide.Receipt,
+                        onClick = { openCategoryActivity(state, navigation, category.id, category.name) },
+                    )
                     DividerLine()
                     ListRow("=", "Available", "Assigned plus activity", state.formatCurrency(category.balanceMinor))
                 }
                 SecondaryButton(
                     if (state.isCategoryPinned(category.id)) "Unpin" else "Pin",
                 ) { state.togglePinnedCategory(category.id) }
-                PrimaryButton("View all activity") { navigation.selectTab(AppRoute.ACTIVITY) }
             }
         }
         return
@@ -4868,9 +5261,24 @@ private fun CategoryDetailScreen(
             DividerLine()
             ListRow("◷", "Next due date", "Scheduled payment", formatShortDate(SampleDate(2026, 6, 1)))
         }
-        PrimaryButton("View related activity") { navigation.selectTab(AppRoute.ACTIVITY) }
+        PrimaryButton("View activity this month") { openCategoryActivity(state, navigation, "Personal", "Personal") }
         PreviewNote("This category uses sample data and is read-only. The app keeps a local budget copy for offline use.")
     }
+}
+
+private fun openCategoryActivity(
+    state: AppState,
+    navigation: AppNavigation,
+    categoryId: String,
+    categoryName: String,
+) {
+    state.activitySearchQuery = ""
+    state.activitySearchFilters =
+        listOf(
+            ActivitySearchFilter(ActivitySearchField.CATEGORY, categoryId.ifBlank { categoryName }, "Category: $categoryName"),
+            ActivitySearchFilter(ActivitySearchField.DATE_MONTH, state.selectedMonthId, "Date: ${state.selectedMonth}"),
+        )
+    navigation.open(AppRoute.ACTIVITY_SEARCH)
 }
 
 @Composable
@@ -4896,12 +5304,14 @@ private fun AccountsScreen(
                 groupName.takeIf { accounts.isNotEmpty() }?.let { it to accounts }
             }
         PageColumn {
-            Badge("Actual · read only", tandemPalette.positive)
             Heading("Balances", "Synced account balances from Actual.")
             AmountHero("Total on budget", state.formatCurrency(totalOnBudget), "Across ${onBudgetAccounts.size} on-budget accounts")
             if (liveAccounts.isEmpty()) {
                 SurfaceCard {
-                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                    ) {
                         Text("No accounts are cached", color = tandemPalette.text, fontWeight = FontWeight.SemiBold)
                         BodyText("Sync this budget to load its Actual account list and balances.")
                     }
@@ -4925,7 +5335,7 @@ private fun AccountsScreen(
                     }
                 }
             }
-            Text("Balances are read-only in this build.", color = tandemPalette.muted, fontSize = 12.sp)
+            Text("Balances are read-only in this build.", color = tandemPalette.muted, fontSize = TandemTypography.label)
         }
         return
     }
@@ -4969,7 +5379,6 @@ private fun AccountDetailScreen(
         val account = liveAccounts.firstOrNull { it.id == state.selectedAccountId }
         val accountActivity = liveTransactions.filter { it.accountId == state.selectedAccountId }
         PageColumn {
-            Badge("Actual · read only", tandemPalette.positive)
             if (account == null) {
                 Heading("Account details", "Actual account not found in the local copy.")
             } else {
@@ -4986,7 +5395,11 @@ private fun AccountDetailScreen(
                 )
                 if (accountActivity.isEmpty()) {
                     SurfaceCard {
-                        Text("No recent activity for this account.", modifier = Modifier.padding(16.dp), color = tandemPalette.muted)
+                        Text(
+                            "No recent activity for this account.",
+                            modifier = Modifier.padding(TandemSpacing.large),
+                            color = tandemPalette.muted,
+                        )
                     }
                 } else {
                     SectionCard("Recent activity", account.name, "See all", onClick = { navigation.selectTab(AppRoute.ACTIVITY) }) {
@@ -5018,7 +5431,7 @@ private fun AccountDetailScreen(
         )
         if (accountActivity.isEmpty()) {
             SurfaceCard {
-                Text("No recent activity for this account.", modifier = Modifier.padding(16.dp), color = tandemPalette.muted)
+                Text("No recent activity for this account.", modifier = Modifier.padding(TandemSpacing.large), color = tandemPalette.muted)
             }
         } else {
             SectionCard(account.name, "Recent activity", "See all", onClick = { navigation.selectTab(AppRoute.ACTIVITY) }) {
@@ -5094,31 +5507,24 @@ private fun ActivityScreen(
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     PageColumn {
         if (!isLiveBudget) SampleBanner()
-        Heading(
-            "Recent transactions",
-            if (isLiveBudget) "Recent Actual transactions saved on this device." else "Search activity and filter the sample transactions.",
-        )
         SurfaceCard(onClick = { navigation.open(AppRoute.ACTIVITY_SEARCH) }) {
             Row(
-                Modifier.fillMaxWidth().padding(13.dp),
+                Modifier.fillMaxWidth().padding(TandemSpacing.medium),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
             ) {
-                Text("⌕", color = tandemPalette.accent, fontSize = 20.sp)
-                Text("Search transactions", color = tandemPalette.muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                Text("⌘ K", color = tandemPalette.muted, fontSize = 10.sp)
-            }
-        }
-        if (!isLiveBudget) {
-            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("All", "Income", "Spending", "Transfers").forEachIndexed { index, filter ->
-                    Badge(filter, if (index == 0) tandemPalette.accent else tandemPalette.muted)
-                }
-                Badge("Filter · 2", tandemPalette.accent)
+                Icon(Lucide.Search, contentDescription = null, modifier = Modifier.size(22.dp), tint = tandemPalette.accent)
+                Text(
+                    "Search transactions",
+                    color = tandemPalette.muted,
+                    fontSize = TandemTypography.compactBody,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp), tint = tandemPalette.muted)
             }
         }
         if (isLiveBudget) {
-            SectionCard("All transactions", "${liveTransactions.size} synced transactions · newest first") {
+            SectionCard("Recent transactions", "Newest first") {
                 if (liveTransactions.isEmpty()) {
                     BodyText("No transactions are available in the local copy yet. Sync the budget to refresh it.")
                 } else {
@@ -5129,75 +5535,266 @@ private fun ActivityScreen(
                 }
             }
         } else {
-            SectionCard(state.selectedMonth, "6 sample transactions", "Filter", onClick = { navigation.open(AppRoute.ACTIVITY_FILTER) }) {
+            SectionCard("Recent transactions", "${previewTransactions.size} sample entries") {
                 previewTransactions.forEachIndexed { index, item ->
                     if (index > 0) DividerLine()
                     TransactionRow(item) { openTransaction(state, navigation, item, isLive = false) }
                 }
             }
         }
-        if (isLiveBudget) {
-            PrimaryButton("Add transaction", enabled = !state.readOnlyMode) { navigation.newTransaction(null) }
-        } else {
-            PreviewNote("Transactions use sample data. Search and filters do not change a live budget.")
-            PrimaryButton("Add transaction", enabled = !state.readOnlyMode) { navigation.open(AppRoute.NEW_TRANSACTION) }
-        }
+        if (!isLiveBudget) PreviewNote("Transactions use sample data.")
     }
 }
+
+private fun TransactionItem.toActivitySearchRecord(): ActivitySearchRecord =
+    ActivitySearchRecord(
+        payee = payee,
+        payeeId = payeeId,
+        account = account,
+        accountId = accountId,
+        category = category,
+        categoryId = categoryId,
+        notes = notes,
+        dateIso = dateIso,
+        dateLabel = dateLabel,
+        amountMinorUnits = amountMinorUnits,
+        amountText = formatSignedCurrency(amountMinorUnits, displaySettings),
+        clearedState = clearedState,
+        approved = approved,
+        matched = matched,
+        transfer = isTransfer,
+    )
 
 @Composable
 private fun ActivitySearchScreen(
     state: AppState,
+    mobileSession: TandemMobileSession,
     navigation: AppNavigation,
-    liveTransactions: List<TransactionItem>,
+    merchantIconPack: MerchantIconPack?,
 ) {
-    var search by remember { mutableStateOf("") }
+    var search by rememberSaveable { mutableStateOf(state.activitySearchQuery) }
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
-    val searchTransactions = if (isLiveBudget) liveTransactions else previewTransactions
-    val results =
-        searchTransactions.filter { transaction ->
-            search.isBlank() ||
-                listOf(
-                    transaction.payee,
-                    transaction.category,
-                    transaction.account,
-                    transaction.dateLabel,
-                    state.formatCurrency(kotlin.math.abs(transaction.amountMinorUnits)),
-                    state.formatSignedCurrency(transaction.amountMinorUnits),
-                ).any { it.contains(search.trim(), ignoreCase = true) }
+    LaunchedEffect(state.selectedBudgetId, mobileSession) {
+        if (isLiveBudget) mobileSession.observeActivitySearchRecords(state.selectedBudgetId)
+    }
+    var searchTransactions by remember { mutableStateOf(previewTransactions) }
+    var searchableRecords by remember { mutableStateOf(previewTransactions.map(TransactionItem::toActivitySearchRecord)) }
+    var loadedSearchBudgetId by remember { mutableStateOf("") }
+    var isBuildingSearchRecords by remember { mutableStateOf(false) }
+    LaunchedEffect(
+        state.selectedBudgetId,
+        mobileSession.activitySearchRecordsBudgetId,
+        mobileSession.activitySearchRecords,
+        mobileSession.accountRecords,
+        mobileSession.payeeRecords,
+        mobileSession.categoryRecords,
+        mobileSession.budgetDisplaySettings,
+        merchantIconPack,
+    ) {
+        if (!isLiveBudget) {
+            searchTransactions = previewTransactions
+            searchableRecords = previewTransactions.map(TransactionItem::toActivitySearchRecord)
+            loadedSearchBudgetId = ""
+            isBuildingSearchRecords = false
+        } else if (mobileSession.activitySearchRecordsBudgetId != state.selectedBudgetId) {
+            searchTransactions = emptyList()
+            searchableRecords = emptyList()
+            loadedSearchBudgetId = ""
+            isBuildingSearchRecords = false
+        } else {
+            isBuildingSearchRecords = true
+            val records = mobileSession.activitySearchRecords
+            val accountRecords = mobileSession.accountRecords
+            val payeeRecords = mobileSession.payeeRecords
+            val categoryRecords = mobileSession.categoryRecords
+            val displaySettings = mobileSession.budgetDisplaySettings
+            val items =
+                withContext(Dispatchers.Default) {
+                    buildLiveTransactionItems(
+                        records = records,
+                        accountRecords = accountRecords,
+                        payeeRecords = payeeRecords,
+                        categoryRecords = categoryRecords,
+                        displaySettings = displaySettings,
+                        merchantIconPack = merchantIconPack,
+                    )
+                }
+            val indexed = withContext(Dispatchers.Default) { items.map(TransactionItem::toActivitySearchRecord) }
+            searchTransactions = items
+            searchableRecords = indexed
+            loadedSearchBudgetId = state.selectedBudgetId
+            isBuildingSearchRecords = false
         }
-    PageColumn {
-        Heading(
-            "Find transactions",
-            if (isLiveBudget) {
-                "Search synced transactions by payee, account, category, date, or amount."
-            } else {
-                "Search the sample activity by payee, amount, or category."
+    }
+    val filters = state.activitySearchFilters
+    val quickFilters =
+        remember(searchableRecords) {
+            buildList {
+                if (searchableRecords.any { it.clearedState != null }) {
+                    add(ActivitySearchFilter(ActivitySearchField.CLEARED, "", "Cleared"))
+                    add(ActivitySearchFilter(ActivitySearchField.UNCLEARED, "", "Uncleared"))
+                    add(ActivitySearchFilter(ActivitySearchField.RECONCILED, "", "Reconciled"))
+                    add(ActivitySearchFilter(ActivitySearchField.UNRECONCILED, "", "Unreconciled"))
+                }
+                if (searchableRecords.any { it.approved != null }) {
+                    add(ActivitySearchFilter(ActivitySearchField.APPROVED, "", "Approved"))
+                    add(ActivitySearchFilter(ActivitySearchField.UNAPPROVED, "", "Unapproved"))
+                }
+                if (searchableRecords.any { it.matched != null }) {
+                    add(ActivitySearchFilter(ActivitySearchField.MATCHED, "", "Matched"))
+                    add(ActivitySearchFilter(ActivitySearchField.UNMATCHED, "", "Unmatched"))
+                }
+                if (searchableRecords.any { it.transfer }) add(ActivitySearchFilter(ActivitySearchField.TRANSFER, "", "Transfer"))
+            }
+        }
+    var suggestions by remember { mutableStateOf<List<ActivitySearchFilter>>(emptyList()) }
+    var resultIndices by remember { mutableStateOf<List<Int>>(emptyList()) }
+    var isEvaluatingSearch by remember { mutableStateOf(true) }
+    LaunchedEffect(search, filters, searchableRecords, quickFilters, state.budgetDisplaySettings) {
+        isEvaluatingSearch = true
+        val displaySettings = state.budgetDisplaySettings
+        val evaluation =
+            withContext(Dispatchers.Default) {
+                val matchedIndices =
+                    searchableRecords.mapIndexedNotNull { index, record ->
+                        index.takeIf { matchesActivitySearch(record, search, filters) }
+                    }
+                val refinements =
+                    if (search.isBlank()) {
+                        quickFilters
+                    } else {
+                        activitySearchSuggestions(search, searchableRecords) { formatCurrency(it, displaySettings) }
+                    }
+                matchedIndices to refinements
+            }
+        resultIndices = evaluation.first
+        suggestions = evaluation.second
+        isEvaluatingSearch = false
+    }
+    val resultTransactions =
+        remember(searchTransactions, resultIndices) {
+            resultIndices.take(100).mapNotNull(searchTransactions::getOrNull)
+        }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(horizontal = TandemSpacing.screen, vertical = TandemSpacing.medium),
+        verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+    ) {
+        ActivitySearchInput(
+            value = search,
+            onValueChange = {
+                search = it
+                state.activitySearchQuery = it
             },
         )
-        TextFieldCard("Search", search, { search = it }, "Try “groceries” or “${state.formatCurrency(4_200)}”")
-        if (isLiveBudget) {
-            SectionCard("Matches", "${results.size} transactions in this device’s local copy") {
-                if (results.isEmpty()) {
-                    BodyText("No matching transactions were found in the local copy.")
-                } else {
-                    results.forEachIndexed { index, transaction ->
-                        if (index > 0) DividerLine()
-                        TransactionRow(transaction) { openTransaction(state, navigation, transaction, isLive = true) }
+        if (filters.isNotEmpty()) {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+            ) {
+                filters.forEach { filter ->
+                    ActivitySearchFilterChip(filter) { state.activitySearchFilters = filters - filter }
+                }
+            }
+        }
+        val shownSuggestions = if (search.isBlank()) quickFilters else suggestions
+        if (shownSuggestions.isNotEmpty()) {
+            Text(
+                if (search.isBlank()) "Filter by" else "Suggestions",
+                color = tandemPalette.muted,
+                fontSize = TandemTypography.caption,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (search.isBlank()) {
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                ) {
+                    shownSuggestions.take(8).forEach { suggestion ->
+                        ActivitySearchQuickFilter(suggestion) {
+                            val existing =
+                                state.activitySearchFilters.firstOrNull {
+                                    it.field == suggestion.field &&
+                                        it.value == suggestion.value
+                                }
+                            state.activitySearchFilters =
+                                if (existing != null) {
+                                    state.activitySearchFilters - existing
+                                } else {
+                                    state.activitySearchFilters + suggestion
+                                }
+                        }
+                    }
+                }
+            } else {
+                Column(
+                    Modifier.fillMaxWidth().heightIn(max = 176.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+                ) {
+                    shownSuggestions.take(8).forEach { suggestion ->
+                        ActivitySearchSuggestion(suggestion) {
+                            val existing =
+                                state.activitySearchFilters.firstOrNull {
+                                    it.field == suggestion.field &&
+                                        it.value == suggestion.value
+                                }
+                            state.activitySearchFilters =
+                                if (existing != null) {
+                                    state.activitySearchFilters - existing
+                                } else {
+                                    state.activitySearchFilters + suggestion
+                                }
+                            search = ""
+                            state.activitySearchQuery = ""
+                        }
                     }
                 }
             }
-        } else {
-            SectionCard("Suggested", "Recent sample searches", "") {
-                listOf("Groceries", "Electric Company", "Paycheck").forEachIndexed { index, value ->
-                    if (index > 0) DividerLine()
-                    ListRow("⌕", value, "Sample results", onClick = { navigation.open(AppRoute.TRANSACTION_DETAIL) })
-                }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("Results", color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
+            Text(
+                if (resultIndices.size > 100) "${formatInteger(resultIndices.size)} · showing 100" else formatInteger(resultIndices.size),
+                color = tandemPalette.muted,
+                fontSize = TandemTypography.caption,
+            )
+        }
+        if (
+            isLiveBudget &&
+            (
+                mobileSession.activitySearchRecordsBudgetId != state.selectedBudgetId ||
+                    loadedSearchBudgetId != state.selectedBudgetId ||
+                    isBuildingSearchRecords
+            )
+        ) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = tandemPalette.accent)
             }
-            SectionCard("Results", "${results.size} matching sample transactions", "") {
-                results.forEachIndexed { index, item ->
-                    if (index > 0) DividerLine()
-                    TransactionRow(item) { openTransaction(state, navigation, item, isLive = false) }
+        } else if (isEvaluatingSearch && resultTransactions.isEmpty()) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = tandemPalette.accent)
+            }
+        } else if (resultTransactions.isEmpty()) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text(
+                    if (filters.isEmpty() &&
+                        search.isBlank()
+                    ) {
+                        "No transactions are available in this local budget."
+                    } else {
+                        "No matching transactions."
+                    },
+                    color = tandemPalette.muted,
+                    fontSize = TandemTypography.body,
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+            ) {
+                items(resultTransactions.take(100)) { transaction ->
+                    TransactionRow(transaction) { openTransaction(state, navigation, transaction, isLive = isLiveBudget) }
                 }
             }
         }
@@ -5205,25 +5802,156 @@ private fun ActivitySearchScreen(
 }
 
 @Composable
-private fun ActivityFilterScreen() {
-    PageColumn {
-        Heading("Filter results", "Narrow the activity list by type, date, or amount.")
-        SectionCard("Transaction type", "Choose one or more") {
-            listOf("Income", "Spending", "Transfers").forEachIndexed { index, item -> ToggleRow(item, checked = index != 1, onChange = {}) }
-        }
-        SectionCard(
-            "Date range",
-            "${formatDate(SampleDate(2026, 5, 1))} – ${formatDate(SampleDate(2026, 5, 31))}",
+private fun ActivitySearchInput(
+    value: String,
+    onValueChange: (String) -> Unit,
+) {
+    val palette = tandemPalette
+    SurfaceCard {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 54.dp).padding(horizontal = TandemSpacing.medium),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
         ) {
-            ListRow("▣", "Start date", formatDate(SampleDate(2026, 5, 1)), onClick = {})
-            DividerLine()
-            ListRow("▣", "End date", formatDate(SampleDate(2026, 5, 31)), onClick = {})
+            Icon(Lucide.Search, contentDescription = null, modifier = Modifier.size(21.dp), tint = palette.muted)
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                textStyle = TextStyle(color = palette.text, fontSize = TandemTypography.body),
+                cursorBrush = SolidColor(palette.accent),
+                decorationBox = { innerTextField ->
+                    Box {
+                        if (value.isEmpty()) {
+                            Text(
+                                "Payee, category or amount",
+                                color = palette.muted,
+                                fontSize = TandemTypography.body,
+                            )
+                        }
+                        innerTextField()
+                    }
+                },
+            )
+            if (value.isNotEmpty()) {
+                Box(
+                    Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .clickable(role = Role.Button, onClickLabel = "Clear search", onClick = { onValueChange("") }),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Lucide.X, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.muted)
+                }
+            }
         }
-        SectionCard("Sort order", "Most recent first") {
-            ChoiceRow("Newest first", selected = true, onClick = {})
-            ChoiceRow("Oldest first", selected = false, onClick = {})
+    }
+}
+
+@Composable
+private fun ActivitySearchFilterChip(
+    filter: ActivitySearchFilter,
+    onRemove: () -> Unit,
+) {
+    val palette = tandemPalette
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(TandemShapes.pill))
+            .background(palette.accentSurface)
+            .heightIn(min = 44.dp)
+            .clickable(
+                role = Role.Button,
+                onClickLabel = "Remove ${filter.label}",
+                onClick = onRemove,
+            ).padding(
+                start = TandemSpacing.medium,
+                end = TandemSpacing.small,
+                top = TandemSpacing.small,
+                bottom = TandemSpacing.small,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+    ) {
+        Text(
+            filter.label,
+            color = palette.accent,
+            fontSize = TandemTypography.caption,
+            maxLines = 1,
+        )
+        Icon(
+            Lucide.X,
+            contentDescription = null,
+            modifier = Modifier.size(15.dp),
+            tint = palette.accent,
+        )
+    }
+}
+
+@Composable
+private fun ActivitySearchSuggestion(
+    suggestion: ActivitySearchFilter,
+    onClick: () -> Unit,
+) {
+    SurfaceCard(onClick = onClick) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 42.dp).padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+        ) {
+            Icon(
+                when (suggestion.field) {
+                    ActivitySearchField.DATE_MONTH, ActivitySearchField.DATE_ON -> Lucide.CalendarDays
+                    ActivitySearchField.ACCOUNT -> Lucide.WalletCards
+                    ActivitySearchField.CATEGORY -> Lucide.Tags
+                    ActivitySearchField.TRANSFER -> Lucide.Zap
+                    ActivitySearchField.CLEARED,
+                    ActivitySearchField.RECONCILED,
+                    ActivitySearchField.APPROVED,
+                    ActivitySearchField.MATCHED,
+                    -> Lucide.Check
+                    ActivitySearchField.UNCLEARED,
+                    ActivitySearchField.UNRECONCILED,
+                    ActivitySearchField.UNAPPROVED,
+                    ActivitySearchField.UNMATCHED,
+                    -> Lucide.CircleDot
+                    ActivitySearchField.OUTFLOW_IS, ActivitySearchField.OUTFLOW_AT_LEAST, ActivitySearchField.OUTFLOW_AT_MOST,
+                    ActivitySearchField.INFLOW_IS, ActivitySearchField.INFLOW_AT_LEAST, ActivitySearchField.INFLOW_AT_MOST,
+                    -> Lucide.Receipt
+                    else -> Lucide.Search
+                },
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = tandemPalette.accent,
+            )
+            Text(
+                suggestion.label,
+                color = tandemPalette.text,
+                fontSize = TandemTypography.compactBody,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
-        PreviewNote("Filters are not saved or applied to a live activity list.")
+    }
+}
+
+@Composable
+private fun ActivitySearchQuickFilter(
+    filter: ActivitySearchFilter,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(TandemShapes.pill))
+            .background(palette.raised)
+            .clickable(role = Role.Button, onClickLabel = "Filter by ${filter.label}", onClick = onClick)
+            .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+    ) {
+        Icon(Lucide.Plus, contentDescription = null, modifier = Modifier.size(14.dp), tint = palette.accent)
+        Text(filter.label, color = palette.text, fontSize = TandemTypography.caption, maxLines = 1)
     }
 }
 
@@ -5252,12 +5980,12 @@ private fun TransactionDetailScreen(
             else -> "Sample transaction, not synced to Actual"
         }
     PageColumn(verticalSpacing = 12.dp) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Box(
                     Modifier
                         .size(46.dp)
-                        .clip(RoundedCornerShape(15.dp))
+                        .clip(RoundedCornerShape(TandemShapes.medium))
                         .background(tandemPalette.raised),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -5265,7 +5993,7 @@ private fun TransactionDetailScreen(
                         Image(
                             painter = painterResource(merchantIcon),
                             contentDescription = null,
-                            modifier = Modifier.size(38.dp).padding(3.dp),
+                            modifier = Modifier.size(38.dp).padding(TandemSpacing.extraSmall),
                             contentScale = ContentScale.Fit,
                         )
                     } else {
@@ -5287,7 +6015,7 @@ private fun TransactionDetailScreen(
                     state.formatCurrency(amount),
                     modifier = Modifier.weight(1f),
                     color = tandemPalette.text,
-                    fontSize = 32.sp,
+                    fontSize = TandemTypography.amount,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
@@ -5327,7 +6055,8 @@ private fun TransactionFormScreen(
     state: AppState,
     navigation: AppNavigation,
     mobileSession: TandemMobileSession,
-    onSaveTransaction: () -> Unit,
+    onSaveTransaction: ((Boolean) -> Unit) -> Unit,
+    onDeleteTransaction: ((Boolean) -> Unit) -> Unit,
     onCreateTransaction: () -> Unit,
 ) {
     if (state.readOnlyMode) {
@@ -5453,7 +6182,7 @@ private fun TransactionFormScreen(
                         onShowKeypad = { keypadVisible = true },
                     )
                     AnimatedReveal(visible = amountEntryMessage != null) {
-                        Text(amountEntryMessage.orEmpty(), color = tandemPalette.warning, fontSize = 13.sp)
+                        Text(amountEntryMessage.orEmpty(), color = tandemPalette.warning, fontSize = TandemTypography.compactBody)
                     }
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         TransactionTypeChip(state.transactionType) {
@@ -5513,7 +6242,7 @@ private fun TransactionFormScreen(
                     )
                     AnimatedReveal(visible = mobileSession.transactionWriteMessage != null) {
                         SurfaceCard {
-                            Column(Modifier.padding(14.dp)) { BodyText(mobileSession.transactionWriteMessage.orEmpty()) }
+                            Column(Modifier.padding(TandemSpacing.large)) { BodyText(mobileSession.transactionWriteMessage.orEmpty()) }
                         }
                     }
                 }
@@ -5554,26 +6283,95 @@ private fun TransactionFormScreen(
             }
             return
         }
-        PageColumn {
-            Heading("Edit transaction", "Changes stay local until the sync confirms them.")
-            TextFieldCard("Amount", state.transactionAmount, { state.transactionAmount = it }, state.formatAmount(4_218))
-            TextFieldCard("Notes", state.transactionNotes, { state.transactionNotes = it }, "Add a note (optional)", singleLine = false)
-            SectionCard("Transaction details", "Other fields are read-only in this build") {
-                ListRow("A", "Account", "Account is unchanged", state.transactionAccount)
-                DividerLine()
-                ListRow("P", "Payee", "Payee is unchanged", state.transactionPayee)
-                DividerLine()
-                ListRow("C", "Category", "Category is unchanged", state.transactionCategory)
-                DividerLine()
-                ListRow("◷", "Date", "Date is unchanged", state.transactionDate)
+        var originalAmountMinor by remember(state.selectedTransactionRecordId) { mutableStateOf(state.selectedTransactionAmountMinor) }
+        var originalNotes by remember(state.selectedTransactionRecordId) { mutableStateOf(state.selectedTransactionNotes) }
+        var savedFeedback by remember(state.selectedTransactionRecordId) { mutableStateOf(false) }
+        var confirmDelete by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf(false) }
+        val parsedAmount = state.parseAmountMinorUnits(state.transactionAmount)
+        val baselineAmount = originalAmountMinor?.let { kotlin.math.abs(it) }
+        val hasChanges = parsedAmount != baselineAmount || state.transactionNotes != originalNotes
+        val routeScrollState = LocalRouteScrollState.current
+        val compactSave by remember(routeScrollState) {
+            derivedStateOf { (routeScrollState?.value ?: 0) > 72 }
+        }
+        LaunchedEffect(savedFeedback) {
+            if (savedFeedback) {
+                delay(900)
+                savedFeedback = false
             }
-            mobileSession.transactionWriteMessage?.let { message ->
-                SurfaceCard {
-                    Column(Modifier.padding(14.dp)) { BodyText(message) }
+        }
+        Box(Modifier.fillMaxSize()) {
+            PageColumn(modifier = Modifier.padding(bottom = 76.dp)) {
+                Heading("Edit transaction")
+                TextFieldCard("Amount", state.transactionAmount, { state.transactionAmount = it }, state.formatAmount(4_218))
+                TextFieldCard("Notes", state.transactionNotes, { state.transactionNotes = it }, "Add a note", singleLine = false)
+                SectionCard("Transaction details") {
+                    ListRow("", "Account", state.transactionAccount, leadingVector = Lucide.WalletCards)
+                    DividerLine()
+                    ListRow("", "Payee", state.transactionPayee, leadingVector = Lucide.Receipt)
+                    DividerLine()
+                    ListRow("", "Category", state.transactionCategory, leadingVector = Lucide.Tags)
+                    DividerLine()
+                    ListRow("", "Date", state.transactionDate, leadingVector = Lucide.CalendarDays)
+                }
+                mobileSession.transactionWriteMessage?.let { message ->
+                    SurfaceCard {
+                        Column(Modifier.padding(TandemSpacing.large)) { BodyText(message) }
+                    }
                 }
             }
-            PrimaryButton("Save changes", enabled = !mobileSession.isSavingTransaction) { onSaveTransaction() }
-            SecondaryButton("Cancel") { navigation.back() }
+            Row(
+                Modifier.align(Alignment.BottomEnd).imePadding().padding(end = 18.dp, bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AnimatedVisibility(visible = hasChanges || savedFeedback, enter = fadeIn(), exit = fadeOut()) {
+                    FloatingTransactionSave(
+                        compact = compactSave || savedFeedback,
+                        enabled = hasChanges && !mobileSession.isSavingTransaction && parsedAmount != null,
+                        saved = savedFeedback,
+                        onClick = {
+                            onSaveTransaction { saved ->
+                                if (saved) {
+                                    originalAmountMinor = state.selectedTransactionAmountMinor
+                                    originalNotes = state.selectedTransactionNotes
+                                    savedFeedback = true
+                                }
+                            }
+                        },
+                    )
+                }
+                FloatingTransactionDeleteAction(
+                    enabled = !mobileSession.isSavingTransaction,
+                    onClick = { confirmDelete = true },
+                )
+            }
+        }
+        if (confirmDelete) {
+            AlertDialog(
+                onDismissRequest = { if (!mobileSession.isSavingTransaction) confirmDelete = false },
+                title = { Text("Delete transaction?", color = tandemPalette.text) },
+                text = { Text("It will be removed from this device and queued for sync.", color = tandemPalette.muted) },
+                confirmButton = {
+                    TextButton(
+                        enabled = !mobileSession.isSavingTransaction,
+                        onClick = {
+                            onDeleteTransaction { deleted ->
+                                confirmDelete = false
+                                if (deleted) navigation.backToList()
+                            }
+                        },
+                    ) {
+                        Text("Delete", color = tandemPalette.negative)
+                    }
+                },
+                dismissButton = {
+                    TextButton(enabled = !mobileSession.isSavingTransaction, onClick = { confirmDelete = false }) {
+                        Text("Keep", color = tandemPalette.muted)
+                    }
+                },
+                backgroundColor = tandemPalette.surface,
+            )
         }
         return
     }
@@ -5613,7 +6411,7 @@ private fun SelectorScreen(
         val filtered = values.filter { it.label.contains(query, ignoreCase = true) }
         if (filtered.isEmpty()) {
             SurfaceCard {
-                Text("No matches", modifier = Modifier.padding(14.dp), color = tandemPalette.muted)
+                Text("No matches", modifier = Modifier.padding(TandemSpacing.large), color = tandemPalette.muted)
             }
         }
         filtered.forEach { item ->
@@ -5654,14 +6452,14 @@ private fun DatePickerScreen(
                             } else {
                                 visibleMonth -= 1
                             }
-                        }.padding(10.dp),
+                        }.padding(TandemSpacing.medium),
                 tint = tandemPalette.text,
             )
             Text(
                 formatMonth(visibleYear, visibleMonth),
                 modifier = Modifier.weight(1f),
                 color = tandemPalette.text,
-                fontSize = 17.sp,
+                fontSize = TandemTypography.periodTitle,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
             )
@@ -5679,7 +6477,7 @@ private fun DatePickerScreen(
                             } else {
                                 visibleMonth += 1
                             }
-                        }.padding(10.dp),
+                        }.padding(TandemSpacing.medium),
                 tint = tandemPalette.text,
             )
         }
@@ -5691,12 +6489,12 @@ private fun DatePickerScreen(
                     modifier = Modifier.weight(1f),
                     color = tandemPalette.muted,
                     textAlign = TextAlign.Center,
-                    fontSize = 11.sp,
+                    fontSize = TandemTypography.caption,
                 )
             }
         }
         dayCells.chunked(7).forEach { week ->
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
                 week.forEach { day ->
                     if (day == null) {
                         Spacer(Modifier.weight(1f).height(44.dp))
@@ -5736,7 +6534,7 @@ private fun DatePickerScreen(
                             Text(
                                 day.toString(),
                                 color = cellTextColor,
-                                fontSize = 12.sp,
+                                fontSize = TandemTypography.label,
                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                             )
                         }
@@ -5804,7 +6602,6 @@ private fun SyncCenterScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
-    onSyncNow: () -> Unit,
 ) {
     if (state.selectedBudgetId.isNotBlank()) {
         val attention = mobileSession.pendingWrites.filter { it.status in setOf("queued", "conflict", "uncertain", "rejected") }
@@ -5812,7 +6609,10 @@ private fun SyncCenterScreen(
             Badge(if (mobileSession.isServerReachable) "Actual · connected" else "Offline copy", tandemPalette.positive)
             Heading("Sync center", "Review the local budget copy and any changes that need attention.")
             SurfaceCard {
-                Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                ) {
                     LabelText(state.selectedBudget)
                     BodyText("${mobileSession.cachedTransactionCount} transactions · ${mobileSession.accountRecords.size} accounts cached")
                     val syncMessage =
@@ -5833,14 +6633,14 @@ private fun SyncCenterScreen(
                         syncMessage,
                         syncMessageColor,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp),
-                        fontSize = 12.sp,
-                        lineHeight = 17.sp,
+                        fontSize = TandemTypography.label,
+                        lineHeight = TandemTypography.compactLineHeight,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
-            SectionCard("Changes needing attention", "${attention.size} local operations", animateDetail = true) {
+            SectionCard("Pending Changes", "${attention.size} local operations", animateDetail = true) {
                 AnimatedAttentionContent(showingAttention = attention.isNotEmpty()) { showingAttention ->
                     if (showingAttention) {
                         Column {
@@ -5849,17 +6649,23 @@ private fun SyncCenterScreen(
                                 val transaction =
                                     liveTransactionItems(mobileSession).firstOrNull { it.recordId == operation.recordId }
                                 ListRow(
-                                    when (operation.status) {
-                                        "conflict" -> "!"
-                                        "uncertain" -> "?"
-                                        "rejected" -> "×"
-                                        else -> "↻"
-                                    },
+                                    "",
                                     transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
                                     "${operation.status.replaceFirstChar {
                                         it.uppercase()
                                     }} · ${transaction?.category ?: "Transaction edit"}",
                                     "Review",
+                                    trailingColor =
+                                        when (operation.status) {
+                                            "conflict", "uncertain", "rejected" -> tandemPalette.warning
+                                            else -> tandemPalette.syncing
+                                        },
+                                    leadingVector =
+                                        when (operation.status) {
+                                            "conflict", "uncertain", "rejected" -> Lucide.CloudAlert
+                                            "queued", "sending" -> Lucide.CloudSync
+                                            else -> Lucide.Cloud
+                                        },
                                     onClick = {
                                         state.selectedConflictOperationId = operation.operationId
                                         navigation.open(
@@ -5877,34 +6683,35 @@ private fun SyncCenterScreen(
                     } else {
                         Text(
                             "No pending, uncertain, rejected, or conflicted changes.",
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
                             color = tandemPalette.muted,
-                            fontSize = 14.sp,
-                            lineHeight = 20.sp,
+                            fontSize = TandemTypography.body,
+                            lineHeight = TandemTypography.bodyLineHeight,
                         )
                     }
                 }
             }
-            PrimaryButton(
-                if (mobileSession.isSyncing) "Syncing…" else "Sync now",
-                enabled = mobileSession.isAuthenticated && !mobileSession.isSyncing,
-                loading = mobileSession.isSyncing,
-            ) { onSyncNow() }
             AnimatedReveal(visible = mobileSession.transactionWriteMessage != null) {
                 BodyText(mobileSession.transactionWriteMessage.orEmpty())
             }
+            Spacer(Modifier.height(72.dp))
         }
         return
     }
     PageColumn {
         Heading("Connection status", "Review device data, pending edits, and server activity.")
         SurfaceCard {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small), verticalAlignment = Alignment.CenterVertically) {
                     Badge("Sample data")
-                    Text("No server connection", color = tandemPalette.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "No server connection",
+                        color = tandemPalette.text,
+                        fontSize = TandemTypography.compactBody,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                 }
-                Text("Last sync · sample only", color = tandemPalette.muted, fontSize = 12.sp)
+                Text("Last sync · sample only", color = tandemPalette.muted, fontSize = TandemTypography.label)
                 PreviewNote("No data has been uploaded or downloaded.")
             }
         }
@@ -5969,7 +6776,7 @@ private fun ConflictInboxScreen(
                     }
                 } else {
                     SurfaceCard {
-                        Column(Modifier.padding(15.dp)) { BodyText("There are no conflicts in the current local copy.") }
+                        Column(Modifier.padding(TandemSpacing.large)) { BodyText("There are no conflicts in the current local copy.") }
                     }
                 }
             }
@@ -5981,18 +6788,27 @@ private fun ConflictInboxScreen(
         SampleBanner()
         Heading("Changes to review", "Choose which version to keep before a change is sent.")
         SurfaceCard(onClick = { navigation.open(AppRoute.CONFLICT_REVIEW) }) {
-            Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                     Badge("1 conflict", tandemPalette.warning)
-                    Text("Corner Market", color = tandemPalette.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Corner Market", color = tandemPalette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
                 }
-                Text("${formatDate(SampleDate(2026, 5, 14))} · Groceries · Checking", color = tandemPalette.muted, fontSize = 11.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "${formatDate(SampleDate(2026, 5, 14))} · Groceries · Checking",
+                    color = tandemPalette.muted,
+                    fontSize = TandemTypography.caption,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     ConflictValueCard("On this device", state.formatCurrency(1_200), Modifier.weight(1f))
                     ConflictValueCard("In Actual", state.formatCurrency(1_500), Modifier.weight(1f))
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("Review both versions", color = tandemPalette.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+                    Text(
+                        "Review both versions",
+                        color = tandemPalette.accent,
+                        fontSize = TandemTypography.label,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                     Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(16.dp), tint = tandemPalette.accent)
                 }
             }
@@ -6008,11 +6824,11 @@ private fun ConflictValueCard(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.clip(RoundedCornerShape(13.dp)).background(tandemPalette.raised).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp),
+        modifier = modifier.clip(RoundedCornerShape(TandemShapes.medium)).background(tandemPalette.raised).padding(TandemSpacing.medium),
+        verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
     ) {
-        Text(label, color = tandemPalette.muted, fontSize = 10.sp)
-        Text(amount, color = tandemPalette.text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = tandemPalette.muted, fontSize = TandemTypography.micro)
+        Text(amount, color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -6040,7 +6856,7 @@ private fun ConflictReviewScreen(
             } else {
                 val transaction = liveTransactionItems(mobileSession).firstOrNull { it.recordId == operation.recordId }
                 Heading("Two versions differ", transaction?.payee ?: "Review this transaction before continuing.")
-                Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     ConflictValueCard(
                         "On this device",
                         deviceAmount?.let(::formatSignedCurrency) ?: "Deleted",
@@ -6083,7 +6899,7 @@ private fun ConflictReviewScreen(
     PageColumn {
         Badge("Conflict · sample data", tandemPalette.warning)
         Heading("Two versions differ", "Review the two sample amounts for Corner Market.")
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
             ConflictValueCard("On this device", state.formatCurrency(1_200), Modifier.weight(1f))
             ConflictValueCard("In Actual", state.formatCurrency(1_500), Modifier.weight(1f))
         }
@@ -6117,7 +6933,6 @@ private fun UncertainWriteScreen(
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
     onCheckStatus: (String) -> Unit,
-    onSyncNow: () -> Unit,
     onRetry: (String) -> Unit,
     onDiscard: (String) -> Unit,
 ) {
@@ -6153,7 +6968,7 @@ private fun UncertainWriteScreen(
                         operation.status == "conflict" -> "Needs your review"
                         operation.status == "rejected" -> "Change not applied"
                         operation.status == "discarded" -> "Change discarded"
-                        operation.status == "queued" -> "Waiting to sync"
+                        operation.status == "queued" -> "Pending Changes"
                         operation.status == "sending" -> "Sending to Actual"
                         isNotFound -> "No server record found"
                         isChecked -> "Still waiting for confirmation"
@@ -6181,15 +6996,15 @@ private fun UncertainWriteScreen(
                     transaction?.dateLabel ?: "Local change",
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 14.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.large),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Amount", color = tandemPalette.muted, fontSize = 14.sp)
+                        Text("Amount", color = tandemPalette.muted, fontSize = TandemTypography.body)
                         Text(
                             operation.optimisticAmountMinor?.let { state.formatSignedCurrency(it) } ?: "Unavailable",
                             color = tandemPalette.text,
-                            fontSize = 18.sp,
+                            fontSize = TandemTypography.cardTitle,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -6206,7 +7021,7 @@ private fun UncertainWriteScreen(
                         ) { onCheckStatus(operation.operationId) }
                     }
                     operation.status == "uncertain" && isNotFound -> {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                             PrimaryButton(
                                 "Retry change",
                                 enabled = !state.readOnlyMode && !mobileSession.isSyncing,
@@ -6226,10 +7041,7 @@ private fun UncertainWriteScreen(
                             loading = mobileSession.isSyncing,
                         ) { onCheckStatus(operation.operationId) }
                     }
-                    operation.status == "queued" ->
-                        PrimaryButton("Sync now", enabled = !mobileSession.isSyncing, loading = mobileSession.isSyncing) {
-                            onSyncNow()
-                        }
+                    operation.status == "queued" -> Spacer(Modifier.height(72.dp))
                     operation.status == "sending" ->
                         PrimaryButton(
                             if (mobileSession.isSyncing) "Sending…" else "Check status",
@@ -6258,12 +7070,17 @@ private fun UncertainWriteScreen(
         Heading("Change not confirmed")
         SectionCard("Corner Market", "${formatShortDate(SampleDate(2026, 5, 14))} · Groceries") {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 14.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.large),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Amount", color = tandemPalette.muted, fontSize = 14.sp)
-                Text(state.formatCurrency(1_200), color = tandemPalette.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text("Amount", color = tandemPalette.muted, fontSize = TandemTypography.body)
+                Text(
+                    state.formatCurrency(1_200),
+                    color = tandemPalette.text,
+                    fontSize = TandemTypography.cardTitle,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
         InfoBubble("Check with Actual before retrying.")
@@ -6331,7 +7148,7 @@ private fun SettingsScreen(
     PageColumn {
         Heading("Preferences", "Adjust appearance, sync, privacy, and app behavior.")
         AnimatedReveal(visible = state.settingsStorageError != null) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 PreviewNote(state.settingsStorageError.orEmpty())
                 SecondaryButton("Retry settings storage") { state.settingsStorageRetry += 1 }
             }
@@ -6484,20 +7301,20 @@ private fun AccentColorScreen(state: AppState) {
             val palette = tandemPalette
             SurfaceCard(onClick = { state.accent = accent }) {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 13.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
                 ) {
                     Box(Modifier.size(22.dp).clip(CircleShape).background(accent.color))
                     Text(
                         accent.label,
                         modifier = Modifier.weight(1f),
                         color = palette.text,
-                        fontSize = 14.sp,
+                        fontSize = TandemTypography.body,
                         fontWeight = FontWeight.SemiBold,
                     )
                     if (state.accent == accent) {
-                        Text("✓", color = palette.accent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Text("✓", color = palette.accent, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -6513,7 +7330,7 @@ private fun BackgroundScreen(state: AppState) {
                 Modifier
                     .fillMaxWidth()
                     .height(88.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(TandemShapes.medium))
                     .background(appBackgroundBrush(state.backgroundStyle, tandemPalette)),
                 contentAlignment = Alignment.Center,
             ) {
@@ -6561,7 +7378,7 @@ private fun HomeLayoutScreen(state: AppState) {
             ChoiceRow(label, description, selected = state.homeLayout == label, onClick = { state.homeLayout = label })
         }
         SurfaceCard {
-            Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 LabelText("Layout preview")
                 Text(
                     when (state.homeLayout) {
@@ -6570,7 +7387,7 @@ private fun HomeLayoutScreen(state: AppState) {
                         else -> "Roomy category rows with more breathing space"
                     },
                     color = tandemPalette.muted,
-                    fontSize = 12.sp,
+                    fontSize = TandemTypography.label,
                 )
                 if (state.homeLayout == "Essentials") {
                     ListRow(
@@ -6742,7 +7559,8 @@ private fun ServerDeviceScreen(
                 "",
                 "Server URL",
                 state.serverUrl,
-                if (device != null) "Paired" else "Add",
+                if (mobileSession.isServerReachable) "Connected" else "Disconnected",
+                if (mobileSession.isServerReachable) tandemPalette.positive else tandemPalette.negative,
                 leadingVector = Lucide.Server,
                 onClick = { navigation.open(AppRoute.SERVER_ADDRESS) },
             )
@@ -6750,9 +7568,9 @@ private fun ServerDeviceScreen(
             ListRow(
                 "",
                 "Connection status",
-                if (mobileSession.isAuthenticated) "Device credential is active" else "Pair this device to access budgets",
-                if (mobileSession.isAuthenticated) "Paired" else "Offline",
-                if (mobileSession.isAuthenticated) tandemPalette.positive else tandemPalette.warning,
+                if (mobileSession.isServerReachable) "Server is reachable" else "Server cannot be reached",
+                if (mobileSession.isServerReachable) "Connected" else "Disconnected",
+                if (mobileSession.isServerReachable) tandemPalette.positive else tandemPalette.negative,
                 leadingVector = Lucide.Wifi,
             )
         }
@@ -6892,15 +7710,15 @@ private fun NotificationsScreen(
                 )
             } else {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 10.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                 ) {
                     Text(
                         "Notifications",
                         modifier = Modifier.weight(1f),
                         color = tandemPalette.text,
-                        fontSize = 13.sp,
+                        fontSize = TandemTypography.compactBody,
                         fontWeight = FontWeight.Medium,
                     )
                     if (onRequestNotificationPermission != null) {
@@ -6988,9 +7806,9 @@ private fun LocalDataScreen(
             DividerLine()
             ListRow("▣", "Accounts", "Cached accounts", formatInteger(mobileSession.accountRecords.size))
             DividerLine()
-            ListRow("↑", "Queued changes", "Waiting to sync", formatInteger(queuedCount))
+            ListRow("", "Pending Changes", trailing = formatInteger(queuedCount), leadingVector = Lucide.CloudSync)
             DividerLine()
-            ListRow("!", "Conflicts to review", "Choose a version", formatInteger(conflictCount))
+            ListRow("", "Conflicts to review", "Choose a version", formatInteger(conflictCount), leadingVector = Lucide.CloudAlert)
             AnimatedReveal(visible = attentionCount > 0, animateHeight = false) {
                 Column {
                     DividerLine()
@@ -7026,14 +7844,14 @@ private fun MerchantIconLicensesScreen(
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = TandemSpacing.screen, vertical = TandemSpacing.medium),
+        verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
     ) {
         Heading("Merchant icon licenses", "Each bundled mark, its reported license, and its source.")
         when {
             loadError != null -> BodyText(loadError)
             merchantIconPack == null -> {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium), verticalAlignment = Alignment.CenterVertically) {
                     TandemLoadingIndicator(
                         modifier = Modifier.size(20.dp),
                         color = tandemPalette.accent,
@@ -7058,7 +7876,7 @@ private fun MerchantIconLicensesScreen(
                 Text(
                     "${filteredNotices.size} of ${merchantIconPack.notices.size} bundled icons",
                     color = tandemPalette.muted,
-                    fontSize = 12.sp,
+                    fontSize = TandemTypography.label,
                 )
                 if (filteredNotices.isEmpty()) {
                     BodyText("No bundled icons match that search.")
@@ -7066,7 +7884,7 @@ private fun MerchantIconLicensesScreen(
                     LazyColumn(
                         modifier = Modifier.fillMaxWidth().weight(1f),
                         contentPadding = PaddingValues(bottom = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(9.dp),
+                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                     ) {
                         items(filteredNotices, key = { it.resourceName }) { notice ->
                             SurfaceCard(
@@ -7078,11 +7896,11 @@ private fun MerchantIconLicensesScreen(
                                     ),
                             ) {
                                 Column(
-                                    Modifier.fillMaxWidth().padding(13.dp),
-                                    verticalArrangement = Arrangement.spacedBy(7.dp),
+                                    Modifier.fillMaxWidth().padding(TandemSpacing.medium),
+                                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                                 ) {
                                     Row(
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
                                         Image(
@@ -7091,29 +7909,29 @@ private fun MerchantIconLicensesScreen(
                                             modifier = Modifier.size(34.dp),
                                             contentScale = ContentScale.Fit,
                                         )
-                                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
                                             Text(
                                                 notice.title,
                                                 color = tandemPalette.text,
-                                                fontSize = 14.sp,
+                                                fontSize = TandemTypography.body,
                                                 fontWeight = FontWeight.SemiBold,
                                             )
-                                            Text(notice.license, color = tandemPalette.muted, fontSize = 12.sp)
+                                            Text(notice.license, color = tandemPalette.muted, fontSize = TandemTypography.label)
                                         }
                                     }
                                     Text(
                                         "Registry source: ${notice.registryUrl}",
                                         color = tandemPalette.muted,
-                                        fontSize = 10.sp,
-                                        lineHeight = 14.sp,
+                                        fontSize = TandemTypography.micro,
+                                        lineHeight = TandemTypography.tightLineHeight,
                                         modifier = Modifier.semantics { contentDescription = "Registry source URL: ${notice.registryUrl}" },
                                     )
                                     if (notice.brandUrl.isNotBlank()) {
                                         Text(
                                             "Brand site: ${notice.brandUrl}",
                                             color = tandemPalette.muted,
-                                            fontSize = 10.sp,
-                                            lineHeight = 14.sp,
+                                            fontSize = TandemTypography.micro,
+                                            lineHeight = TandemTypography.tightLineHeight,
                                         )
                                     }
                                 }
@@ -7128,7 +7946,6 @@ private fun MerchantIconLicensesScreen(
 
 @Composable
 private fun AboutScreen(
-    merchantIconPack: MerchantIconPack?,
     merchantIconPackLoadError: String?,
     navigation: AppNavigation,
 ) {
@@ -7136,24 +7953,24 @@ private fun AboutScreen(
         Heading("About Tandem", "An independent, local-first companion for Actual Budget.")
         SurfaceCard {
             Column(
-                Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(11.dp),
+                Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.extraLarge, vertical = TandemSpacing.extraLarge),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 TandemBrandMark(Modifier.size(84.dp), contentDescription = "Tandem app icon")
-                Text("Tandem", color = tandemPalette.text, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                Text("Tandem", color = tandemPalette.text, fontSize = TandemTypography.pageTitle, fontWeight = FontWeight.Bold)
                 Badge("Version 0.1.0")
                 Text(
                     "Your budget stays on this device and remains available when the server is offline.",
                     color = tandemPalette.muted,
-                    fontSize = 13.sp,
-                    lineHeight = 19.sp,
+                    fontSize = TandemTypography.compactBody,
+                    lineHeight = TandemTypography.bodyLineHeight,
                     textAlign = TextAlign.Center,
                 )
                 Text(
                     "Not affiliated with, endorsed by, or supported by Actual Budget.",
                     color = tandemPalette.muted,
-                    fontSize = 11.sp,
+                    fontSize = TandemTypography.caption,
                     textAlign = TextAlign.Center,
                 )
             }
@@ -7183,52 +8000,15 @@ private fun AboutScreen(
             ListRow("L", "Lucide icon artwork", "ISC")
             DividerLine()
             ListRow("T", "TheSVG icon package", "Build-time catalog and tooling · MIT")
-            DividerLine()
-            ListRow("T", "TheSVG merchant artwork", "Per-icon licenses and source links are bundled")
-            DividerLine()
-            ListRow("R", "REI Cedar icons", "MIT · REI merchant artwork")
-            DividerLine()
-            ListRow("W", "Panera Bread wordmark", "Public domain · Wikimedia Commons source")
         }
-        SectionCard("Merchant artwork", "License-approved marks are bundled for offline matching") {
+        SectionCard("Merchant artwork") {
             ListRow(
-                "M",
-                "Bundled merchant icons",
-                merchantIconPack?.let { "${it.iconCount} icons · ${it.sourceSummary}" }
-                    ?: if (merchantIconPackLoadError == null) "Catalog details load when opened" else "Unavailable",
-            )
-            DividerLine()
-            ListRow(
-                "CC",
-                "Artwork license scope",
-                merchantIconPack?.let { "${it.openSourceIconCount} open license / public domain · ${it.fairUseIconCount} Fair Use" }
-                    ?: "CC0, MIT, Apache-2.0, public domain, and Fair Use entries",
-            )
-            DividerLine()
-            ListRow(
-                "©",
+                "",
                 "View icon licenses and sources",
-                "Search the license and source record for every bundled mark",
-                trailing = merchantIconPack?.iconCount?.toString(),
+                leadingVector = Lucide.Info,
                 onClick = { navigation.open(AppRoute.MERCHANT_ICON_LICENSES) },
             )
-            DividerLine()
-            Column(
-                Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                BodyText(
-                    "Tandem matches merchant names and aliases against this local catalog. The match runs on this device and does not request an icon from a service.",
-                )
-                BodyText(
-                    "The full TheSVG catalog is checked and every CC0, MIT, Apache-2.0, public-domain, or Fair Use mark is included. REI artwork is from REI Cedar (MIT), and the Panera Bread wordmark is public domain. Other license types are excluded. Every mark keeps its license and source URL.",
-                )
-                BodyText(
-                    "Names, logos, and trademarks belong to their respective owners. Tandem displays a matched mark only to identify the payee and is not affiliated with those brands. Follow each brand’s usage guidelines.",
-                )
-            }
         }
         AnimatedPreviewNote(merchantIconPackLoadError)
-        PreviewNote("TheSVG package license and the per-icon license and source list are bundled with the app resources.")
     }
 }

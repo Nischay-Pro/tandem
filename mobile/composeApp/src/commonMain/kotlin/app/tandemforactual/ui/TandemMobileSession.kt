@@ -180,6 +180,12 @@ internal class TandemMobileSession(
     var transactionRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
         private set
 
+    var activitySearchRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
+        private set
+
+    var activitySearchRecordsBudgetId by mutableStateOf("")
+        private set
+
     var payeeRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
         private set
 
@@ -389,37 +395,35 @@ internal class TandemMobileSession(
         amountText: String,
         notes: String,
         originalAmountMinor: Long,
-        encryptionPassword: String?,
         displaySettings: BudgetDisplaySettings? = null,
-    ) {
+    ): Boolean {
         transactionWriteMessage = null
-        if (refuseWriteInReadOnlyMode()) return
+        if (refuseWriteInReadOnlyMode()) return false
         val enteredAmount = parseAmountMinorUnits(amountText, displaySettings)
         if (enteredAmount == null || enteredAmount < 0) {
             transactionWriteMessage = "Enter a valid positive amount using this device’s number format."
-            return
+            return false
         }
         if (enteredAmount > MAX_TRANSACTION_AMOUNT_MINOR_UNITS) {
             transactionWriteMessage = "Largest amount is ${formatCurrency(MAX_TRANSACTION_AMOUNT_MINOR_UNITS, displaySettings)}."
-            return
+            return false
         }
         val localRepository = repository
-        val coordinator = syncCoordinator
-        if (localRepository == null || coordinator == null || !isAuthenticated) {
-            transactionWriteMessage = "Pair this device and open a budget before editing a transaction."
-            return
+        if (localRepository == null) {
+            transactionWriteMessage = "Local budget storage is unavailable. Reopen the budget and try again."
+            return false
         }
         val current = localRepository.findRecord(budgetId, "transaction", transactionId)
         val baseJson = current?.remoteJson
         val revision = current?.remoteRevision
         if (current == null || current.remoteDeleted || baseJson == null || revision.isNullOrBlank()) {
             transactionWriteMessage = "The latest Actual transaction is unavailable. Sync the budget before editing."
-            return
+            return false
         }
         val base = runCatching { Json.parseToJsonElement(baseJson).jsonObject }.getOrNull()
         if (base == null) {
             transactionWriteMessage = "The saved transaction could not be read. Sync the budget before editing."
-            return
+            return false
         }
         val signedAmount = if (originalAmountMinor < 0) -enteredAmount else enteredAmount
         val currentAmount = base.longValue("amount") ?: current.amountMinor
@@ -431,7 +435,7 @@ internal class TandemMobileSession(
             }
         if (patch.isEmpty()) {
             transactionWriteMessage = "There are no transaction changes to save."
-            return
+            return false
         }
 
         isSavingTransaction = true
@@ -455,22 +459,93 @@ internal class TandemMobileSession(
                     optimisticProjection = optimistic.toProjection(),
                 ),
             )
-            val summary = synchronize(budgetId, encryptionPassword)
-            transactionWriteMessage =
-                when {
-                    summary == null -> "Saved on this device. The server has not confirmed it; check sync status before retrying."
-                    summary.writesCommitted > 0 -> "Changes synced to Actual."
-                    summary.writesConflicted > 0 -> "The Actual version changed too. Review both versions before continuing."
-                    summary.writesUncertain > 0 -> "Actual has not confirmed this change. Check its status before retrying."
-                    summary.writesRejected > 0 -> "Actual did not apply this edit. The previous value was restored."
-                    else -> "The change is saved on this device and is waiting to sync."
-                }
+            transactionWriteMessage = null
             loadLocalRecords(budgetId)
+            return true
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            transactionWriteMessage = "The edit remains on this device. Check sync status before retrying."
+            transactionWriteMessage = "The edit could not be saved on this device. Try again."
             loadLocalRecords(budgetId)
+            return false
+        } finally {
+            isSavingTransaction = false
+        }
+    }
+
+    suspend fun deleteTransaction(
+        budgetId: String,
+        transactionId: String,
+    ): Boolean {
+        transactionWriteMessage = null
+        if (refuseWriteInReadOnlyMode()) return false
+        val localRepository = repository
+        if (localRepository == null) {
+            transactionWriteMessage = "Local budget storage is unavailable. Reopen the budget and try again."
+            return false
+        }
+        val pendingForRecord =
+            localRepository
+                .readPendingWrites(budgetId)
+                .filter { it.recordType == "transaction" && it.recordId == transactionId }
+                .maxByOrNull { it.updatedAtEpochMs }
+        if (pendingForRecord?.action == LocalWriteAction.CREATE.name && pendingForRecord.status == "queued") {
+            isSavingTransaction = true
+            try {
+                localRepository.discardWrite(pendingForRecord.operationId)
+                transactionWriteMessage = null
+                loadLocalRecords(budgetId)
+                return true
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                transactionWriteMessage = "The pending transaction could not be removed. Review Pending Changes."
+                loadLocalRecords(budgetId)
+                return false
+            } finally {
+                isSavingTransaction = false
+            }
+        }
+        if (pendingForRecord != null && pendingForRecord.status != "queued") {
+            transactionWriteMessage = "Review this transaction in Pending Changes before deleting it."
+            return false
+        }
+        val current = localRepository.findRecord(budgetId, "transaction", transactionId)
+        val baseJson = current?.remoteJson
+        val revision = current?.remoteRevision
+        if (current == null || current.remoteDeleted || baseJson == null || revision.isNullOrBlank()) {
+            transactionWriteMessage = "The latest Actual transaction is unavailable. Sync the budget before deleting it."
+            return false
+        }
+
+        isSavingTransaction = true
+        try {
+            val operationId = Uuid.random().toString()
+            localRepository.enqueueWrite(
+                LocalWriteRequest(
+                    operationId = operationId,
+                    idempotencyKey = operationId,
+                    budgetId = budgetId,
+                    recordType = "transaction",
+                    recordId = transactionId,
+                    action = LocalWriteAction.DELETE,
+                    baseRevision = revision,
+                    baseSnapshotJson = baseJson,
+                    patchJson = "{}",
+                    optimisticJson = null,
+                    createdAtEpochMs = nowEpochMillis(),
+                    optimisticProjection = null,
+                ),
+            )
+            transactionWriteMessage = null
+            loadLocalRecords(budgetId)
+            return true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            transactionWriteMessage = "The transaction could not be deleted. Review Pending Changes."
+            loadLocalRecords(budgetId)
+            return false
         } finally {
             isSavingTransaction = false
         }
@@ -813,6 +888,20 @@ internal class TandemMobileSession(
             launch { localRepository.observeRecords(budgetId, "budget-month").collect { budgetMonthRecords = it } }
             launch { localRepository.observePendingWrites(budgetId).collect { pendingWrites = it } }
             launch { localRepository.observeSyncState(budgetId).collect { localSyncState = it } }
+        }
+    }
+
+    suspend fun observeActivitySearchRecords(budgetId: String) {
+        val localRepository = repository
+        if (localRepository == null || budgetId.isBlank()) {
+            activitySearchRecords = emptyList()
+            activitySearchRecordsBudgetId = budgetId
+            return
+        }
+        activitySearchRecords = emptyList()
+        activitySearchRecordsBudgetId = budgetId
+        localRepository.observeRecords(budgetId, "transaction").collect { records ->
+            activitySearchRecords = records
         }
     }
 
