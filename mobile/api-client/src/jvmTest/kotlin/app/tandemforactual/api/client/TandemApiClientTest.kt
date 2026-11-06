@@ -28,6 +28,15 @@ import kotlin.test.assertTrue
 
 class TandemApiClientTest {
     @Test
+    fun deviceNamesAreTrimmedSanitizedAndLimitedToOneHundredCharacters() {
+        assertEquals("Pixel 10a", normalizeDeviceName("\u0000 Pixel\n10a\u007f "))
+        assertEquals(100, normalizeDeviceName("A".repeat(120)).length)
+        val emojiName = normalizeDeviceName("😀".repeat(120))
+        assertEquals(100, emojiName.codePointCount(0, emojiName.length))
+        assertEquals("Mobile device", normalizeDeviceName("\u0000\u009f\uFEFF"))
+    }
+
+    @Test
     fun forgettingSessionWaitsForAnActiveMultiRequestSync() =
         runBlocking {
             val client = TandemApiClient()

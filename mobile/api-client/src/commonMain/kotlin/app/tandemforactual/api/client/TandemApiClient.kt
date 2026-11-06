@@ -146,7 +146,7 @@ class TandemApiClient(
             val body =
                 buildJsonObject {
                     put("code", code.trim())
-                    put("deviceName", deviceName.trim())
+                    put("deviceName", normalizeDeviceName(deviceName))
                 }.toMap()
             GeneratedApiAccess.mutex.withLock {
                 clearGeneratedAuthProvider()
@@ -270,6 +270,40 @@ class TandemApiClient(
         } catch (_: Exception) {
             null
         }
+}
+
+internal fun normalizeDeviceName(value: String): String {
+    val normalized = StringBuilder()
+    var index = 0
+    var codePoints = 0
+    var pendingSpace = false
+    while (index < value.length && codePoints < 100) {
+        val character = value[index]
+        val hasSurrogatePair =
+            character.isHighSurrogate() && index + 1 < value.length && value[index + 1].isLowSurrogate()
+        val unitCount = if (hasSurrogatePair) 2 else 1
+        val isControl = character.code in 0..31 || character.code in 127..159
+        val isSeparator = isControl || character == '\uFEFF' || character.isWhitespace() || (character.isSurrogate() && !hasSurrogatePair)
+        when {
+            isSeparator -> {
+                if (normalized.isNotEmpty()) pendingSpace = true
+                index += unitCount
+            }
+            else -> {
+                if (pendingSpace) {
+                    normalized.append(' ')
+                    codePoints += 1
+                    pendingSpace = false
+                    if (codePoints == 100) break
+                }
+                normalized.append(character)
+                if (hasSurrogatePair) normalized.append(value[index + 1])
+                codePoints += 1
+                index += unitCount
+            }
+        }
+    }
+    return normalized.toString().trim().ifBlank { "Mobile device" }
 }
 
 /** The generated OpenAPI package stores its URL and auth provider in process-wide state. */
