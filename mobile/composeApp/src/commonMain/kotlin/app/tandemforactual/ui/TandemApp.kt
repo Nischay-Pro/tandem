@@ -323,7 +323,7 @@ private fun writeStatusLabel(status: String): String =
         else -> "Change"
     }
 
-private data class TransactionItem(
+internal data class TransactionItem(
     val payee: String,
     val category: String,
     val dateLabel: String,
@@ -355,11 +355,49 @@ private data class MerchantIconNotice(
     val resource: DrawableResource,
 )
 
-private data class MerchantIconMatcherPack(
+internal data class MerchantIconMatcherPack(
     private val matcher: MerchantAliasMatcher<DrawableResource>,
 ) {
     fun iconFor(payee: String): DrawableResource? = matcher.findPayeeIcon(payee)
 }
+
+internal data class ActivitySearchCache(
+    val budgetId: String,
+    val sourceTransactions: List<BudgetRecordEntity>,
+    val sourceAccounts: List<BudgetRecordEntity>,
+    val sourcePayees: List<BudgetRecordEntity>,
+    val sourceCategories: List<BudgetRecordEntity>,
+    val displaySettings: BudgetDisplaySettings?,
+    val merchantIconMatcher: MerchantIconMatcherPack?,
+    val transactions: List<TransactionItem>,
+    val searchableRecords: List<ActivitySearchRecord>,
+) {
+    fun matches(
+        budgetId: String,
+        transactions: List<BudgetRecordEntity>,
+        accounts: List<BudgetRecordEntity>,
+        payees: List<BudgetRecordEntity>,
+        categories: List<BudgetRecordEntity>,
+        displaySettings: BudgetDisplaySettings?,
+        merchantIconMatcher: MerchantIconMatcherPack?,
+    ): Boolean =
+        this.budgetId == budgetId &&
+            sourceTransactions === transactions &&
+            sourceAccounts === accounts &&
+            sourcePayees === payees &&
+            sourceCategories === categories &&
+            this.displaySettings == displaySettings &&
+            this.merchantIconMatcher === merchantIconMatcher
+}
+
+internal data class ActivitySearchResultCache(
+    val budgetId: String,
+    val query: String,
+    val filters: List<ActivitySearchFilter>,
+    val sourceRecords: List<ActivitySearchRecord>,
+    val indices: List<Int>,
+    val suggestions: List<ActivitySearchFilter>,
+)
 
 private data class MerchantIconCatalog(
     val notices: List<MerchantIconNotice>,
@@ -841,6 +879,8 @@ internal class AppState {
     var selectedMonthId by mutableStateOf("2026-05")
     var activitySearchQuery by mutableStateOf("")
     var activitySearchFilters by mutableStateOf<List<ActivitySearchFilter>>(emptyList())
+    var activitySearchCache: ActivitySearchCache? = null
+    var activitySearchResultCache: ActivitySearchResultCache? = null
     var selectedAccountId by mutableStateOf("")
     var selectedCategoryGroupId by mutableStateOf("")
     var selectedCategoryId by mutableStateOf("")
@@ -5205,13 +5245,28 @@ private fun ActivitySearchScreen(
 ) {
     var search by rememberSaveable { mutableStateOf(state.activitySearchQuery) }
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    val filters = state.activitySearchFilters
+    val cachedSearch = state.activitySearchCache?.takeIf { it.budgetId == state.selectedBudgetId }
+    val cachedEvaluation =
+        state.activitySearchResultCache?.takeIf { cached ->
+            cached.budgetId == state.selectedBudgetId &&
+                cached.query == search &&
+                cached.filters == filters &&
+                cached.sourceRecords === cachedSearch?.searchableRecords
+        }
     LaunchedEffect(state.selectedBudgetId, mobileSession) {
         if (isLiveBudget) mobileSession.observeActivitySearchRecords(state.selectedBudgetId)
     }
-    var searchTransactions by remember { mutableStateOf(previewTransactions) }
-    var searchableRecords by remember { mutableStateOf(previewTransactions.map(TransactionItem::toActivitySearchRecord)) }
-    var loadedSearchBudgetId by remember { mutableStateOf("") }
-    var isBuildingSearchRecords by remember { mutableStateOf(false) }
+    var searchTransactions by remember(state.selectedBudgetId) {
+        mutableStateOf(cachedSearch?.transactions ?: previewTransactions)
+    }
+    var searchableRecords by remember(state.selectedBudgetId) {
+        mutableStateOf(cachedSearch?.searchableRecords ?: previewTransactions.map(TransactionItem::toActivitySearchRecord))
+    }
+    var loadedSearchBudgetId by remember(state.selectedBudgetId) {
+        mutableStateOf(cachedSearch?.budgetId ?: "")
+    }
+    var isBuildingSearchRecords by remember(state.selectedBudgetId) { mutableStateOf(isLiveBudget && cachedSearch == null) }
     LaunchedEffect(
         state.selectedBudgetId,
         mobileSession.activitySearchRecordsBudgetId,
@@ -5233,31 +5288,60 @@ private fun ActivitySearchScreen(
             loadedSearchBudgetId = ""
             isBuildingSearchRecords = false
         } else {
-            isBuildingSearchRecords = true
             val records = mobileSession.activitySearchRecords
             val accountRecords = mobileSession.accountRecords
             val payeeRecords = mobileSession.payeeRecords
             val categoryRecords = mobileSession.categoryRecords
             val displaySettings = mobileSession.budgetDisplaySettings
-            val items =
-                withContext(Dispatchers.Default) {
-                    buildLiveTransactionItems(
-                        records = records,
-                        accountRecords = accountRecords,
-                        payeeRecords = payeeRecords,
-                        categoryRecords = categoryRecords,
-                        displaySettings = displaySettings,
-                        merchantIconMatcher = merchantIconMatcher,
+            val currentCache = state.activitySearchCache
+            if (
+                currentCache?.matches(
+                    state.selectedBudgetId,
+                    records,
+                    accountRecords,
+                    payeeRecords,
+                    categoryRecords,
+                    displaySettings,
+                    merchantIconMatcher,
+                ) == true
+            ) {
+                searchTransactions = currentCache.transactions
+                searchableRecords = currentCache.searchableRecords
+                loadedSearchBudgetId = state.selectedBudgetId
+                isBuildingSearchRecords = false
+            } else {
+                isBuildingSearchRecords = true
+                val items =
+                    withContext(Dispatchers.Default) {
+                        buildLiveTransactionItems(
+                            records = records,
+                            accountRecords = accountRecords,
+                            payeeRecords = payeeRecords,
+                            categoryRecords = categoryRecords,
+                            displaySettings = displaySettings,
+                            merchantIconMatcher = merchantIconMatcher,
+                        )
+                    }
+                val indexed = withContext(Dispatchers.Default) { items.map(TransactionItem::toActivitySearchRecord) }
+                state.activitySearchCache =
+                    ActivitySearchCache(
+                        state.selectedBudgetId,
+                        records,
+                        accountRecords,
+                        payeeRecords,
+                        categoryRecords,
+                        displaySettings,
+                        merchantIconMatcher,
+                        items,
+                        indexed,
                     )
-                }
-            val indexed = withContext(Dispatchers.Default) { items.map(TransactionItem::toActivitySearchRecord) }
-            searchTransactions = items
-            searchableRecords = indexed
-            loadedSearchBudgetId = state.selectedBudgetId
-            isBuildingSearchRecords = false
+                searchTransactions = items
+                searchableRecords = indexed
+                loadedSearchBudgetId = state.selectedBudgetId
+                isBuildingSearchRecords = false
+            }
         }
     }
-    val filters = state.activitySearchFilters
     val quickFilters =
         remember(searchableRecords) {
             buildList {
@@ -5280,10 +5364,26 @@ private fun ActivitySearchScreen(
                 if (searchableRecords.any { it.transfer }) add(ActivitySearchFilter(ActivitySearchField.TRANSFER, "", "Transfer"))
             }
         }
-    var suggestions by remember { mutableStateOf<List<ActivitySearchFilter>>(emptyList()) }
-    var resultIndices by remember { mutableStateOf<List<Int>>(emptyList()) }
-    var isEvaluatingSearch by remember { mutableStateOf(true) }
-    LaunchedEffect(search, filters, searchableRecords, quickFilters, state.budgetDisplaySettings) {
+    var suggestions by remember(state.selectedBudgetId) {
+        mutableStateOf(cachedEvaluation?.suggestions ?: emptyList())
+    }
+    var resultIndices by remember(state.selectedBudgetId) {
+        mutableStateOf(cachedEvaluation?.indices ?: emptyList())
+    }
+    var isEvaluatingSearch by remember(state.selectedBudgetId) { mutableStateOf(cachedEvaluation == null) }
+    LaunchedEffect(state.selectedBudgetId, search, filters, searchableRecords, quickFilters, state.budgetDisplaySettings) {
+        val currentEvaluation = state.activitySearchResultCache
+        if (
+            currentEvaluation?.budgetId == state.selectedBudgetId &&
+            currentEvaluation.query == search &&
+            currentEvaluation.filters == filters &&
+            currentEvaluation.sourceRecords === searchableRecords
+        ) {
+            resultIndices = currentEvaluation.indices
+            suggestions = currentEvaluation.suggestions
+            isEvaluatingSearch = false
+            return@LaunchedEffect
+        }
         isEvaluatingSearch = true
         if (search.isNotBlank()) delay(150)
         val displaySettings = state.budgetDisplaySettings
@@ -5291,8 +5391,12 @@ private fun ActivitySearchScreen(
             withContext(Dispatchers.Default) {
                 val preparedSearch = prepareActivitySearch(search, filters, displaySettings?.currencyCode)
                 val matchedIndices =
-                    searchableRecords.mapIndexedNotNull { index, record ->
-                        index.takeIf { matchesActivitySearch(record, preparedSearch) }
+                    if (search.isBlank() && filters.isEmpty()) {
+                        searchableRecords.indices.toList()
+                    } else {
+                        searchableRecords.mapIndexedNotNull { index, record ->
+                            index.takeIf { matchesActivitySearch(record, preparedSearch) }
+                        }
                     }
                 val refinements =
                     if (search.isBlank()) {
@@ -5304,6 +5408,15 @@ private fun ActivitySearchScreen(
                     }
                 matchedIndices to refinements
             }
+        state.activitySearchResultCache =
+            ActivitySearchResultCache(
+                state.selectedBudgetId,
+                search,
+                filters,
+                searchableRecords,
+                evaluation.first,
+                evaluation.second,
+            )
         resultIndices = evaluation.first
         suggestions = evaluation.second
         isEvaluatingSearch = false

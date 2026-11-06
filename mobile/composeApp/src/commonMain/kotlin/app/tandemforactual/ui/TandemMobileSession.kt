@@ -912,10 +912,12 @@ internal class TandemMobileSession(
             activitySearchRecordsBudgetId = budgetId
             return
         }
-        activitySearchRecords = emptyList()
-        activitySearchRecordsBudgetId = budgetId
+        if (activitySearchRecordsBudgetId != budgetId) {
+            activitySearchRecords = emptyList()
+            activitySearchRecordsBudgetId = budgetId
+        }
         localRepository.observeRecords(budgetId, "transaction").collect { records ->
-            activitySearchRecords = records
+            if (records != activitySearchRecords) activitySearchRecords = records
         }
     }
 
