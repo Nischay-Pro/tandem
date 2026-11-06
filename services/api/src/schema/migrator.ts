@@ -5,6 +5,10 @@ import {
   down as downJournalRetention,
   up as upJournalRetention,
 } from "./migrations/20261106160000-journal-retention.js";
+import {
+  down as downProjectionBodyDeduplication,
+  up as upProjectionBodyDeduplication,
+} from "./migrations/20261106170000-projection-body-deduplication.js";
 import { OperatorMessageError } from "../operator-message-error.js";
 
 export interface Migration {
@@ -23,6 +27,11 @@ export const MIGRATIONS: readonly Migration[] = [
     name: "20261106160000-journal-retention",
     up: upJournalRetention,
     down: downJournalRetention,
+  },
+  {
+    name: "20261106170000-projection-body-deduplication",
+    up: upProjectionBodyDeduplication,
+    down: downProjectionBodyDeduplication,
   },
 ];
 

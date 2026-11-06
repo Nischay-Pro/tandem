@@ -141,7 +141,9 @@ and `hasMore`. While `hasMore` is true, request the next page with the same
 generation and `throughCursor`, and set `cursor` to `nextCursor`. Once the page
 is complete, omit `throughCursor` on the next poll so the API refreshes Actual
 again. Upserts carry the full current record body; deletions carry a tombstone
-with a null body.
+with a null body. The latest upsert body is stored with the current projection
+and joined into its feed event; when a later update replaces it, the previous
+body moves to that historical event until it leaves retention.
 
 If `resetRequired` is true, or the returned generation differs from the local
 generation, discard the local remote-data baseline and fetch a complete

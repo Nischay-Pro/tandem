@@ -517,10 +517,26 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
       }
 
       const changeResult = await client.query<ChangeRow>(
-        `SELECT cursor::text, entity_type, entity_id, operation, revision, body
-         FROM companion_budget_changes
-         WHERE budget_id = $1 AND cursor > $2::bigint AND cursor <= $3::bigint
-         ORDER BY cursor ASC
+        `SELECT change.cursor::text, change.entity_type, change.entity_id,
+                change.operation, change.revision,
+                CASE
+                  WHEN change.body IS NOT NULL THEN change.body
+                  WHEN change.operation = 'upsert'
+                       AND current.updated_cursor = change.cursor
+                       AND current.revision = change.revision
+                       AND current.is_deleted = false
+                    THEN current.body
+                  ELSE NULL
+                END AS body
+         FROM companion_budget_changes AS change
+         LEFT JOIN companion_budget_records AS current
+           ON current.budget_id = change.budget_id
+          AND current.entity_type = change.entity_type
+          AND current.entity_id = change.entity_id
+         WHERE change.budget_id = $1
+           AND change.cursor > $2::bigint
+           AND change.cursor <= $3::bigint
+         ORDER BY change.cursor ASC
          LIMIT $4`,
         [
           input.budgetId,
@@ -583,6 +599,7 @@ async function writeUpsertBatches(
     const bodies = batch.map(({ record }) => JSON.stringify(record.body));
     const cursors = batch.map(({ cursor }) => cursor.toString());
 
+    await preserveSupersededBodies(client, budgetId, types, ids);
     await client.query(
       `INSERT INTO companion_budget_records
         (budget_id, entity_type, entity_id, revision, body, is_deleted, updated_cursor)
@@ -603,11 +620,11 @@ async function writeUpsertBatches(
       `INSERT INTO companion_budget_changes
         (budget_id, cursor, entity_type, entity_id, operation, revision, body)
        SELECT $1, incoming.cursor, incoming.entity_type, incoming.entity_id,
-              'upsert', incoming.revision, incoming.body::jsonb
+              'upsert', incoming.revision, NULL
        FROM unnest(
-         $2::bigint[], $3::text[], $4::text[], $5::text[], $6::text[]
-       ) AS incoming(cursor, entity_type, entity_id, revision, body)`,
-      [budgetId, cursors, types, ids, revisions, bodies],
+         $2::bigint[], $3::text[], $4::text[], $5::text[]
+       ) AS incoming(cursor, entity_type, entity_id, revision)`,
+      [budgetId, cursors, types, ids, revisions],
     );
   }
 }
@@ -631,6 +648,7 @@ async function writeDeleteBatches(
     const revisions = batch.map(({ revision }) => revision);
     const cursors = batch.map(({ cursor }) => cursor.toString());
 
+    await preserveSupersededBodies(client, budgetId, types, ids);
     await client.query(
       `UPDATE companion_budget_records AS existing
        SET revision = incoming.revision,
@@ -657,6 +675,31 @@ async function writeDeleteBatches(
       [budgetId, cursors, types, ids, revisions],
     );
   }
+}
+
+async function preserveSupersededBodies(
+  client: PoolClient,
+  budgetId: string,
+  entityTypes: readonly BudgetEntityType[],
+  entityIds: readonly string[],
+): Promise<void> {
+  await client.query(
+    `UPDATE companion_budget_changes AS change
+     SET body = current.body
+     FROM companion_budget_records AS current,
+          unnest($2::text[], $3::text[]) AS incoming(entity_type, entity_id)
+     WHERE current.budget_id = $1
+       AND current.entity_type = incoming.entity_type
+       AND current.entity_id = incoming.entity_id
+       AND current.is_deleted = false
+       AND change.budget_id = current.budget_id
+       AND change.cursor = current.updated_cursor
+       AND change.entity_type = current.entity_type
+       AND change.entity_id = current.entity_id
+       AND change.operation = 'upsert'
+       AND change.body IS NULL`,
+    [budgetId, entityTypes, entityIds],
+  );
 }
 
 async function readSnapshotOnClient(

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
-import { applyMigrations } from "../src/schema/migrator.js";
+import { applyMigrations, MIGRATIONS } from "../src/schema/migrator.js";
 import {
   BudgetProjectionInputError,
   type BudgetEntityType,
@@ -155,6 +155,253 @@ describe.skipIf(!integrationEnabled)(
       await expect(restartedStore.readSnapshot("budget-1")).resolves.toEqual(
         changed,
       );
+    });
+
+    it("stores each current record body once and preserves historical page bodies", async () => {
+      const store = createPostgresBudgetProjectionStore(getPool());
+      const budgetId = `budget-body-dedup-${randomUUID()}`;
+      const first = record("transaction", "txn-body", {
+        id: "txn-body",
+        amount: -10,
+      });
+      const initial = await store.applySnapshot(budgetId, "epoch", [first]);
+
+      const initialChange = await store.readChanges({
+        budgetId,
+        generation: initial.generation,
+        cursor: "0",
+        limit: 1,
+      });
+      expect(initialChange?.changes).toEqual([
+        {
+          cursor: "1",
+          type: "transaction",
+          id: "txn-body",
+          operation: "upsert",
+          revision: first.revision,
+          body: first.body,
+        },
+      ]);
+
+      const second = record("transaction", "txn-body", {
+        id: "txn-body",
+        amount: -20,
+      });
+      const updated = await store.applySnapshot(budgetId, "epoch", [second]);
+      const beforeDelete = await getPool().query<{
+        cursor: string;
+        body: Record<string, unknown> | null;
+      }>(
+        `SELECT cursor::text, body FROM companion_budget_changes
+         WHERE budget_id = $1 ORDER BY cursor`,
+        [budgetId],
+      );
+      expect(beforeDelete.rows).toEqual([
+        { cursor: "1", body: first.body },
+        { cursor: "2", body: null },
+      ]);
+
+      const oldRevision = await store.readChanges({
+        budgetId,
+        generation: updated.generation,
+        cursor: "0",
+        throughCursor: "2",
+        limit: 1,
+      });
+      expect(oldRevision?.changes).toMatchObject([
+        { cursor: "1", body: first.body },
+      ]);
+      expect(oldRevision?.hasMore).toBe(true);
+      const currentRevision = await store.readChanges({
+        budgetId,
+        generation: updated.generation,
+        cursor: oldRevision!.nextCursor,
+        throughCursor: oldRevision!.throughCursor,
+        limit: 1,
+      });
+      expect(currentRevision?.changes).toMatchObject([
+        { cursor: "2", body: second.body },
+      ]);
+
+      await store.applySnapshot(budgetId, "epoch", []);
+      const afterDelete = await getPool().query<{
+        cursor: string;
+        body: Record<string, unknown> | null;
+      }>(
+        `SELECT cursor::text, body FROM companion_budget_changes
+         WHERE budget_id = $1 ORDER BY cursor`,
+        [budgetId],
+      );
+      expect(afterDelete.rows).toEqual([
+        { cursor: "1", body: first.body },
+        { cursor: "2", body: second.body },
+        { cursor: "3", body: null },
+      ]);
+    });
+
+    it("reduces retained feed storage for 100,000 current transaction bodies", async () => {
+      const scopedPool = getPool();
+      const budgetId = `budget-body-size-${randomUUID()}`;
+      const recordCount = 100_000;
+      await scopedPool.query(
+        `INSERT INTO companion_budget_sync_state
+         (budget_id, generation, feed_epoch, cursor)
+         VALUES ($1, $2, 'epoch', $3)`,
+        [budgetId, randomUUID(), recordCount],
+      );
+      await scopedPool.query(
+        `INSERT INTO companion_budget_records
+         (budget_id, entity_type, entity_id, revision, body, is_deleted, updated_cursor)
+         SELECT $1, 'transaction', 'txn-' || item.id, repeat('a', 64),
+                jsonb_build_object(
+                  'id', 'txn-' || item.id,
+                  'amount', -item.id,
+                  'memo', md5(item.id::text) || md5('m1:' || item.id::text)
+                    || md5('m2:' || item.id::text) || md5('m3:' || item.id::text)
+                    || md5('m4:' || item.id::text) || md5('m5:' || item.id::text)
+                    || md5('m6:' || item.id::text) || md5('m7:' || item.id::text)
+                ), false, item.id
+         FROM generate_series(1, $2::integer) AS item(id)`,
+        [budgetId, recordCount],
+      );
+      await scopedPool.query(
+        `INSERT INTO companion_budget_changes
+         (budget_id, cursor, entity_type, entity_id, operation, revision, body)
+         SELECT $1, item.id, 'transaction', 'txn-' || item.id,
+                'upsert', repeat('a', 64), NULL
+         FROM generate_series(1, $2::integer) AS item(id)`,
+        [budgetId, recordCount],
+      );
+      await scopedPool.query(
+        `CREATE TABLE legacy_change_body_benchmark
+         (LIKE companion_budget_changes INCLUDING ALL)`,
+      );
+      await scopedPool.query(
+        `INSERT INTO legacy_change_body_benchmark
+         (budget_id, cursor, entity_type, entity_id, operation, revision, body)
+         SELECT change.budget_id, change.cursor, change.entity_type,
+                change.entity_id, change.operation, change.revision, record.body
+         FROM companion_budget_changes AS change
+         JOIN companion_budget_records AS record
+           ON record.budget_id = change.budget_id
+          AND record.entity_type = change.entity_type
+          AND record.entity_id = change.entity_id
+         WHERE change.budget_id = $1`,
+        [budgetId],
+      );
+      await scopedPool.query(
+        `VACUUM (ANALYZE) companion_budget_changes, legacy_change_body_benchmark`,
+      );
+      const sizes = await scopedPool.query<{
+        compact_bytes: string;
+        duplicate_bytes: string;
+      }>(
+        `SELECT pg_total_relation_size('companion_budget_changes')::text AS compact_bytes,
+                pg_total_relation_size('legacy_change_body_benchmark')::text AS duplicate_bytes`,
+      );
+      const compactBytes = Number(sizes.rows[0]?.compact_bytes);
+      const duplicateBytes = Number(sizes.rows[0]?.duplicate_bytes);
+      console.log("B197 change table bytes for 100,000 records", {
+        compactBytes,
+        duplicateBytes,
+      });
+      expect(compactBytes).toBeLessThan(duplicateBytes * 0.8);
+    }, 20_000);
+
+    it("upgrades, reverses, and reapplies body deduplication without losing feed bodies", async () => {
+      const connectionString = process.env.DATABASE_URL;
+      const migration = MIGRATIONS[2];
+      if (!connectionString || !migration || !adminPool) {
+        throw new Error("Migration test configuration is incomplete");
+      }
+      const schemaName = `projection_body_migration_${randomUUID().replaceAll("-", "")}`;
+      await adminPool.query(`CREATE SCHEMA ${schemaName}`);
+      const migrationPool = new Pool({
+        connectionString,
+        max: 2,
+        options: `-c search_path=${schemaName}`,
+      });
+
+      try {
+        const earlier = MIGRATIONS.slice(0, 2);
+        await applyMigrations(
+          migrationPool,
+          earlier,
+          earlier.map(({ name }) => name),
+        );
+        await migrationPool.query(
+          `INSERT INTO companion_budget_sync_state
+           (budget_id, generation, feed_epoch, cursor)
+           VALUES ('budget-legacy', $1, 'epoch', 2)`,
+          [randomUUID()],
+        );
+        await migrationPool.query(
+          `INSERT INTO companion_budget_records
+           (budget_id, entity_type, entity_id, revision, body, is_deleted, updated_cursor)
+           VALUES ('budget-legacy', 'transaction', 'txn-legacy', $1, $2::jsonb, false, 2)`,
+          ["b".repeat(64), JSON.stringify({ id: "txn-legacy", amount: -20 })],
+        );
+        await migrationPool.query(
+          `INSERT INTO companion_budget_changes
+           (budget_id, cursor, entity_type, entity_id, operation, revision, body)
+           VALUES
+             ('budget-legacy', 1, 'transaction', 'txn-legacy', 'upsert', $1, $2::jsonb),
+             ('budget-legacy', 2, 'transaction', 'txn-legacy', 'upsert', $3, $4::jsonb)`,
+          [
+            "a".repeat(64),
+            JSON.stringify({ id: "txn-legacy", amount: -10 }),
+            "b".repeat(64),
+            JSON.stringify({ id: "txn-legacy", amount: -20 }),
+          ],
+        );
+
+        await applyMigrations(migrationPool);
+        const deduplicated = await migrationPool.query<{
+          cursor: string;
+          body: Record<string, unknown> | null;
+        }>(
+          `SELECT cursor::text, body FROM companion_budget_changes
+           WHERE budget_id = 'budget-legacy' ORDER BY cursor`,
+        );
+        expect(deduplicated.rows).toEqual([
+          { cursor: "1", body: { id: "txn-legacy", amount: -10 } },
+          { cursor: "2", body: null },
+        ]);
+
+        const client = await migrationPool.connect();
+        try {
+          await client.query("BEGIN");
+          await migration.down(client);
+          await client.query(
+            "DELETE FROM companion_migrations WHERE name = $1",
+            [migration.name],
+          );
+          await client.query("COMMIT");
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        } finally {
+          client.release();
+        }
+        const restored = await migrationPool.query<{ body: unknown }>(
+          `SELECT body FROM companion_budget_changes
+           WHERE budget_id = 'budget-legacy' AND cursor = 2`,
+        );
+        expect(restored.rows[0]?.body).toEqual({
+          id: "txn-legacy",
+          amount: -20,
+        });
+
+        await applyMigrations(migrationPool);
+        const reapplied = await migrationPool.query<{ body: unknown }>(
+          `SELECT body FROM companion_budget_changes
+           WHERE budget_id = 'budget-legacy' AND cursor = 2`,
+        );
+        expect(reapplied.rows[0]?.body).toBeNull();
+      } finally {
+        await migrationPool.end();
+        await adminPool.query(`DROP SCHEMA ${schemaName} CASCADE`);
+      }
     });
 
     it("reads keyset snapshot pages from one generation and requests a reset after changes", async () => {

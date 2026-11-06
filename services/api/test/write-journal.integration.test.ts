@@ -211,7 +211,13 @@ describe("durable write journal integration", () => {
     });
 
     try {
-      await applyMigrations(isolatedPool);
+      const migrationsThroughRetention = MIGRATIONS.slice(0, 2);
+      const migrationOrder = migrationsThroughRetention.map(({ name }) => name);
+      await applyMigrations(
+        isolatedPool,
+        migrationsThroughRetention,
+        migrationOrder,
+      );
       const before = await isolatedPool.query<{ column_name: string }>(
         `SELECT column_name FROM information_schema.columns
          WHERE table_schema = current_schema()
@@ -244,7 +250,11 @@ describe("durable write journal integration", () => {
            AND column_name = 'payload_compacted_at'`,
       );
       expect(after.rows).toEqual([]);
-      await applyMigrations(isolatedPool);
+      await applyMigrations(
+        isolatedPool,
+        migrationsThroughRetention,
+        migrationOrder,
+      );
       const reapplied = await isolatedPool.query<{ column_name: string }>(
         `SELECT column_name FROM information_schema.columns
          WHERE table_schema = current_schema()

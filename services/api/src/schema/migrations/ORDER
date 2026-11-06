@@ -1,3 +1,4 @@
 # Migration apply order. Append additive migrations in deployment order.
 20261101155148-companion-schema-v2
 20261106160000-journal-retention
+20261106170000-projection-body-deduplication
