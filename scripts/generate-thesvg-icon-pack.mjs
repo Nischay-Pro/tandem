@@ -205,6 +205,19 @@ await mkdir(filesDirectory, { recursive: true });
 const records = [];
 const failures = [];
 let outputBytes = 0;
+
+const tandemLogoSvg = await readFile(
+  join(repositoryDirectory, "mobile/branding/tandem-logo-squircle.svg"),
+  "utf8",
+);
+const tandemLogoPng = new Resvg(tandemLogoSvg, {
+  fitTo: { mode: "width", value: 512 },
+})
+  .render()
+  .asPng();
+await writeFile(join(drawableDirectory, "tandem_logo_squircle.png"), tandemLogoPng);
+outputBytes += tandemLogoPng.byteLength;
+
 for (const icon of icons) {
   try {
     const rendered = new Resvg(icon.svg, {

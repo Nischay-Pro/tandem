@@ -3,7 +3,7 @@
     android:height="1248dp"
     android:viewportWidth="1248"
     android:viewportHeight="1248">
-  <group android:scaleX="0.45" android:scaleY="0.45" android:pivotX="624" android:pivotY="624">
+  <group android:scaleX="0.75" android:scaleY="0.75" android:pivotX="624" android:pivotY="624">
     <path
         android:fillColor="#00000000"
         android:strokeColor="#FFFFFFFF"

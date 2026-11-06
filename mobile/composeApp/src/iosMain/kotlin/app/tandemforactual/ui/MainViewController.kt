@@ -5,6 +5,7 @@ package app.tandemforactual.ui
 import androidx.compose.ui.window.ComposeUIViewController
 import app.tandemforactual.data.database.openTandemDatabase
 import app.tandemforactual.data.database.tandemDatabaseBuilder
+import platform.UIKit.UIDevice
 import platform.UIKit.UIViewController
 import kotlin.time.Clock
 
@@ -33,6 +34,7 @@ private fun createTandemViewController(
     val syncEvents = IosSyncEventSource()
     return ComposeUIViewController {
         TandemApp(
+            deviceName = UIDevice.currentDevice.name.ifBlank { "iPhone" },
             database = database,
             deviceCredentialStore = IosDeviceCredentialStore(),
             nowEpochMillis = { Clock.System.now().toEpochMilliseconds() },

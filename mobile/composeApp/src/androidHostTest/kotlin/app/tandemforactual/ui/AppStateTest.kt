@@ -8,6 +8,34 @@ import kotlin.test.assertTrue
 
 class AppStateTest {
     @Test
+    fun mainCloudIndicatorDistinguishesOffSyncedSyncingAndAttentionStates() {
+        fun status(
+            syncEnabled: Boolean = true,
+            isSyncing: Boolean = false,
+            hasSyncError: Boolean = false,
+            persistedSyncStatus: String? = "READY",
+            pendingWriteStatuses: Collection<String> = emptyList(),
+            hasSuccessfulSync: Boolean = true,
+        ) = resolveMainCloudStatus(
+            syncEnabled = syncEnabled,
+            isSyncing = isSyncing,
+            hasSyncError = hasSyncError,
+            persistedSyncStatus = persistedSyncStatus,
+            pendingWriteStatuses = pendingWriteStatuses,
+            hasSuccessfulSync = hasSuccessfulSync,
+        )
+
+        assertEquals(MainCloudStatus.OFF, status(syncEnabled = false, hasSyncError = true))
+        assertEquals(MainCloudStatus.SYNCED, status())
+        assertEquals(MainCloudStatus.SYNCING, status(isSyncing = true, hasSyncError = true))
+        assertEquals(MainCloudStatus.SYNCING, status(pendingWriteStatuses = listOf("queued")))
+        assertEquals(MainCloudStatus.ERROR, status(hasSyncError = true))
+        assertEquals(MainCloudStatus.ERROR, status(persistedSyncStatus = "FAILED"))
+        assertEquals(MainCloudStatus.ERROR, status(pendingWriteStatuses = listOf("conflict")))
+        assertEquals(MainCloudStatus.ERROR, status(persistedSyncStatus = "IDLE", hasSuccessfulSync = false))
+    }
+
+    @Test
     fun startupOpensCachedBudgetWithoutWaitingForDeviceCredentialRestore() {
         assertEquals(
             AppStartupDestination.CACHED_BUDGET,

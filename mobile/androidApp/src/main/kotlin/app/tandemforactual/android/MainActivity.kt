@@ -61,6 +61,9 @@ class MainActivity : ComponentActivity() {
       }
       TandemApp(
         startInPreview = openPreview,
+        deviceName =
+          Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME)
+            ?.takeIf { it.isNotBlank() } ?: Build.MODEL ?: "Android device",
         database = database,
         deviceCredentialStore = if (openPreview) null else AndroidDeviceCredentialStore(applicationContext),
         nowEpochMillis = { System.currentTimeMillis() },

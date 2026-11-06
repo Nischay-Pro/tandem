@@ -121,24 +121,37 @@ import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.allDrawableResources
+import app.tandemforactual.ui.generated.resources.tandem_logo_squircle
+import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.BriefcaseBusiness
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.CarFront
+import com.composables.icons.lucide.Cloud
 import com.composables.icons.lucide.CloudCheck
 import com.composables.icons.lucide.CloudOff
+import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Coffee
+import com.composables.icons.lucide.Database
+import com.composables.icons.lucide.FolderKey
 import com.composables.icons.lucide.HeartPulse
 import com.composables.icons.lucide.House
+import com.composables.icons.lucide.Info
+import com.composables.icons.lucide.KeyRound
+import com.composables.icons.lucide.LayoutDashboard
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.NotepadText
+import com.composables.icons.lucide.Palette
 import com.composables.icons.lucide.PawPrint
 import com.composables.icons.lucide.Plane
 import com.composables.icons.lucide.Receipt
+import com.composables.icons.lucide.Server
 import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.ShoppingCart
+import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.Utensils
 import com.composables.icons.lucide.WalletCards
+import com.composables.icons.lucide.Wifi
 import com.composables.icons.lucide.Zap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -220,10 +233,30 @@ private enum class AppRoute(
     MERCHANT_ICON_LICENSES("Merchant icon licenses"),
 }
 
-private enum class SyncChipIndicator {
+internal enum class MainCloudStatus {
+    OFF,
+    SYNCED,
     SYNCING,
-    ATTENTION,
-    IDLE,
+    ERROR,
+}
+
+internal fun resolveMainCloudStatus(
+    syncEnabled: Boolean,
+    isSyncing: Boolean,
+    hasSyncError: Boolean,
+    persistedSyncStatus: String?,
+    pendingWriteStatuses: Collection<String>,
+    hasSuccessfulSync: Boolean,
+): MainCloudStatus {
+    if (!syncEnabled) return MainCloudStatus.OFF
+    if (isSyncing || persistedSyncStatus == "SYNCING") return MainCloudStatus.SYNCING
+
+    val hasWriteNeedingReview = pendingWriteStatuses.any { it in setOf("conflict", "uncertain", "rejected") }
+    if (hasSyncError || persistedSyncStatus in setOf("FAILED", "NEEDS_FULL_SYNC") || hasWriteNeedingReview) {
+        return MainCloudStatus.ERROR
+    }
+    if (pendingWriteStatuses.any { it in setOf("queued", "sending") }) return MainCloudStatus.SYNCING
+    return if (hasSuccessfulSync) MainCloudStatus.SYNCED else MainCloudStatus.ERROR
 }
 
 private val UNSYNCED_TRANSACTION_WRITE_STATUSES = setOf("queued", "sending", "uncertain", "conflict", "rejected")
@@ -882,6 +915,7 @@ private val appRouteStackSaver =
 @Composable
 fun TandemApp(
     startInPreview: Boolean = false,
+    deviceName: String = "This device",
     database: TandemDatabase? = null,
     deviceCredentialStore: DeviceCredentialStore? = null,
     nowEpochMillis: () -> Long = { 0L },
@@ -1345,7 +1379,7 @@ fun TandemApp(
     val pairDevice = {
         if (!mobileSession.isPairing) {
             coroutineScope.launch {
-                mobileSession.pair(state.serverUrl, state.pairingCode, "Tandem mobile")
+                mobileSession.pair(state.serverUrl, state.pairingCode, deviceName)
                 if (mobileSession.pairedDevice != null) {
                     state.pairingCode = ""
                     backStack.add(newRouteEntry(AppRoute.PAIRING_RESULT))
@@ -1531,8 +1565,15 @@ fun TandemApp(
                     showBack = !headerRoute.isTab(),
                     onBack = handleBack,
                     onSync = { navigation.open(AppRoute.SYNC_CENTER) },
-                    syncNeedsAttention = state.syncReminders && mobileSession.syncError != null,
-                    syncInProgress = mobileSession.isSyncing,
+                    syncStatus =
+                        resolveMainCloudStatus(
+                            syncEnabled = state.selectedBudgetId.isNotBlank() && mobileSession.isAuthenticated,
+                            isSyncing = mobileSession.isSyncing,
+                            hasSyncError = mobileSession.syncError != null,
+                            persistedSyncStatus = mobileSession.localSyncState?.status,
+                            pendingWriteStatuses = mobileSession.pendingWrites.map { it.status },
+                            hasSuccessfulSync = mobileSession.localSyncState?.lastSyncedAtEpochMs != null,
+                        ),
                     onBudget = { navigation.open(AppRoute.BUDGET_CHOOSER) },
                     actualConnected = mobileSession.isServerReachable,
                     liveAccounts = liveAccounts,
@@ -1575,6 +1616,7 @@ fun TandemApp(
                             ScreenContent(
                                 route = visibleRoute,
                                 state = state,
+                                deviceName = deviceName,
                                 navigation = navigation,
                                 mobileSession = mobileSession,
                                 onPairDevice = pairDevice,
@@ -1733,15 +1775,13 @@ private fun AppHeader(
     showBack: Boolean,
     onBack: () -> Unit,
     onSync: () -> Unit,
-    syncNeedsAttention: Boolean,
-    syncInProgress: Boolean,
+    syncStatus: MainCloudStatus,
     onBudget: () -> Unit,
     actualConnected: Boolean,
     liveAccounts: List<LiveAccountSummary>,
     liveBudgetMonth: LiveBudgetMonthSummary?,
 ) {
     val palette = tandemPalette
-    val reduceMotion = tandemReduceMotion
     val headerTitle =
         when (route) {
             AppRoute.BUDGET -> state.selectedBudget
@@ -1813,36 +1853,29 @@ private fun AppHeader(
             }
         }
         if (route.isTab()) {
-            val syncChipBackground by animateColorAsState(
-                targetValue = if (syncNeedsAttention) palette.warning.copy(alpha = 0.16f) else palette.surface,
+            val cloudTint by animateColorAsState(
+                targetValue =
+                    when (syncStatus) {
+                        MainCloudStatus.OFF -> palette.muted
+                        MainCloudStatus.SYNCED -> palette.positive
+                        MainCloudStatus.SYNCING -> palette.syncing
+                        MainCloudStatus.ERROR -> palette.negative
+                    },
                 animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
-                label = "sync-chip-background",
+                label = "main-cloud-status-color",
             )
-            val syncChipText by animateColorAsState(
-                targetValue = if (syncNeedsAttention) palette.warning else palette.accent,
-                animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
-                label = "sync-chip-text",
-            )
-            val syncIndicator =
-                when {
-                    syncInProgress -> SyncChipIndicator.SYNCING
-                    syncNeedsAttention -> SyncChipIndicator.ATTENTION
-                    else -> SyncChipIndicator.IDLE
-                }
             Box(
                 modifier =
                     Modifier
-                        .width(56.dp)
-                        .height(36.dp)
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(syncChipBackground)
+                        .size(44.dp)
+                        .clip(CircleShape)
                         .semantics(mergeDescendants = true) {
                             contentDescription =
-                                when {
-                                    syncInProgress && syncNeedsAttention -> "Sync in progress; attention still needed"
-                                    syncInProgress -> "Sync in progress"
-                                    syncNeedsAttention -> "Sync needs attention"
-                                    else -> "Sync center"
+                                when (syncStatus) {
+                                    MainCloudStatus.OFF -> "Sync is off"
+                                    MainCloudStatus.SYNCED -> "Everything synced"
+                                    MainCloudStatus.SYNCING -> "Syncing changes"
+                                    MainCloudStatus.ERROR -> "Sync needs attention"
                                 }
                         }.clickable(
                             role = Role.Button,
@@ -1851,39 +1884,12 @@ private fun AppHeader(
                         ),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("Sync", color = syncChipText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                Box(Modifier.align(Alignment.TopEnd).padding(3.dp).size(11.dp), contentAlignment = Alignment.Center) {
-                    AnimatedContent(
-                        targetState = syncIndicator,
-                        transitionSpec = {
-                            val (enter, exit) = crossfadeTransitions(reduceMotion, TandemMotion.STATUS_CHANGE_MILLIS)
-                            enter togetherWith exit using null
-                        },
-                        contentAlignment = Alignment.Center,
-                        label = "sync-chip-indicator-transition",
-                    ) { indicator ->
-                        when (indicator) {
-                            SyncChipIndicator.SYNCING -> {
-                                if (tandemReduceMotion) {
-                                    Box(
-                                        Modifier
-                                            .size(8.dp)
-                                            .border(1.3.dp, if (syncNeedsAttention) palette.warning else palette.accent, CircleShape),
-                                    )
-                                } else {
-                                    CircularProgressIndicator(
-                                        Modifier.size(9.dp),
-                                        color = if (syncNeedsAttention) palette.warning else palette.accent,
-                                        strokeWidth = 1.4.dp,
-                                    )
-                                }
-                            }
-                            SyncChipIndicator.ATTENTION ->
-                                Box(Modifier.size(7.dp).background(palette.warning, CircleShape))
-                            SyncChipIndicator.IDLE -> Spacer(Modifier.size(7.dp))
-                        }
-                    }
-                }
+                Icon(
+                    imageVector = if (syncStatus == MainCloudStatus.OFF) Lucide.CloudOff else Lucide.Cloud,
+                    contentDescription = null,
+                    modifier = Modifier.size(25.dp),
+                    tint = cloudTint,
+                )
             }
         } else if (route == AppRoute.BUDGET_CHOOSER) {
             Text(
@@ -2064,6 +2070,7 @@ private fun NavigationGlyph(
 private fun ScreenContent(
     route: AppRoute,
     state: AppState,
+    deviceName: String,
     navigation: AppNavigation,
     mobileSession: TandemMobileSession,
     onPairDevice: () -> Unit,
@@ -2199,7 +2206,7 @@ private fun ScreenContent(
                 backgroundSyncSupported,
             )
         AppRoute.SERVER_DEVICE ->
-            ServerDeviceScreen(state, mobileSession, navigation, onForgetDevice)
+            ServerDeviceScreen(state, deviceName, mobileSession, navigation, onForgetDevice)
         AppRoute.SECURITY_PRIVACY -> SecurityScreen(mobileSession)
         AppRoute.NOTIFICATIONS ->
             NotificationsScreen(
@@ -5221,31 +5228,82 @@ private fun SettingsScreen(
             }
         }
         SectionCard("Personalize", "Appearance and budget") {
-            ListRow("◐", "Appearance", "Theme, accent, and background", state.theme.label) { navigation.open(AppRoute.APPEARANCE) }
+            ListRow(
+                "",
+                "Appearance",
+                "Theme, accent, and background",
+                state.theme.label,
+                leadingVector = Lucide.Palette,
+                onClick = { navigation.open(AppRoute.APPEARANCE) },
+            )
             DividerLine()
-            ListRow("⌂", "Home screen layout", "Choose how much detail to show", state.homeLayout) { navigation.open(AppRoute.HOME_LAYOUT) }
+            ListRow(
+                "",
+                "Home screen layout",
+                "Choose how much detail to show",
+                state.homeLayout,
+                leadingVector = Lucide.LayoutDashboard,
+                onClick = { navigation.open(AppRoute.HOME_LAYOUT) },
+            )
             DividerLine()
-            ListRow("¤", "Budget preferences", "Currency and planning choices") { navigation.open(AppRoute.BUDGET_PREFERENCES) }
+            ListRow(
+                "",
+                "Budget preferences",
+                "Currency and planning choices",
+                leadingVector = Lucide.WalletCards,
+                onClick = { navigation.open(AppRoute.BUDGET_PREFERENCES) },
+            )
         }
         SectionCard("Connection", "Sync and paired device") {
-            ListRow("↻", "Sync preferences", "Refresh and network behavior", onClick = { navigation.open(AppRoute.SYNC_PREFERENCES) })
+            ListRow(
+                "",
+                "Sync preferences",
+                "Refresh and network behavior",
+                leadingVector = Lucide.CloudSync,
+                onClick = { navigation.open(AppRoute.SYNC_PREFERENCES) },
+            )
             DividerLine()
-            ListRow("◎", "Server and paired device", "Connection details and access", onClick = { navigation.open(AppRoute.SERVER_DEVICE) })
+            ListRow(
+                "",
+                "Server and paired device",
+                "Connection details and access",
+                leadingVector = Lucide.Smartphone,
+                onClick = { navigation.open(AppRoute.SERVER_DEVICE) },
+            )
             DividerLine()
-            ListRow("♧", "Notifications", "Sync reminders and review alerts", onClick = { navigation.open(AppRoute.NOTIFICATIONS) })
+            ListRow(
+                "",
+                "Notifications",
+                "Sync reminders and review alerts",
+                leadingVector = Lucide.Bell,
+                onClick = { navigation.open(AppRoute.NOTIFICATIONS) },
+            )
         }
         SectionCard("Privacy", "Device data and security") {
             ListRow(
-                "⌑",
+                "",
                 "Security and privacy",
                 "Credentials and local protection",
+                leadingVector = Lucide.ShieldCheck,
                 onClick = { navigation.open(AppRoute.SECURITY_PRIVACY) },
             )
             DividerLine()
-            ListRow("▣", "Local data and storage", "Cached budget and pending edits", onClick = { navigation.open(AppRoute.LOCAL_DATA) })
+            ListRow(
+                "",
+                "Local data and storage",
+                "Cached budget and pending edits",
+                leadingVector = Lucide.Database,
+                onClick = { navigation.open(AppRoute.LOCAL_DATA) },
+            )
         }
         SectionCard("Support", "Help and project details") {
-            ListRow("?", "About, help, and licenses", "Version and open-source licenses", onClick = { navigation.open(AppRoute.ABOUT) })
+            ListRow(
+                "",
+                "About, help, and licenses",
+                "Version and open-source licenses",
+                leadingVector = Lucide.Info,
+                onClick = { navigation.open(AppRoute.ABOUT) },
+            )
         }
     }
 }
@@ -5255,48 +5313,8 @@ private fun AppearanceScreen(
     state: AppState,
     navigation: AppNavigation,
 ) {
-    val palette = tandemPalette
     PageColumn {
         Heading("Visual settings", "The same appearance choices work on Android and iOS.")
-        SurfaceCard {
-            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                LabelText("Live preview")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(
-                        Modifier
-                            .weight(
-                                1f,
-                            ).height(
-                                55.dp,
-                            ).clip(RoundedCornerShape(13.dp))
-                            .background(palette.background)
-                            .border(1.dp, palette.border, RoundedCornerShape(13.dp)),
-                    )
-                    Box(
-                        Modifier
-                            .weight(
-                                1f,
-                            ).height(
-                                55.dp,
-                            ).clip(RoundedCornerShape(13.dp))
-                            .background(palette.surface)
-                            .border(1.dp, palette.border, RoundedCornerShape(13.dp)),
-                    )
-                    Box(
-                        Modifier
-                            .weight(
-                                1f,
-                            ).height(
-                                55.dp,
-                            ).clip(RoundedCornerShape(13.dp))
-                            .background(palette.accentSurface)
-                            .border(1.dp, palette.accent, RoundedCornerShape(13.dp)),
-                    )
-                }
-                Text(state.formatCurrency(124_000), color = palette.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                Text("Available to assign · ${state.selectedMonth}", color = palette.muted, fontSize = 11.sp)
-            }
-        }
         SectionCard("Theme", "${state.theme.label} appearance", "") {
             ListRow("◐", "Theme mode", "System, light, dark, or pure black", state.theme.label) { navigation.open(AppRoute.THEME_MODE) }
         }
@@ -5311,9 +5329,6 @@ private fun AppearanceScreen(
                 onClick = { navigation.open(AppRoute.BACKGROUND_MOTION) },
             )
         }
-        PreviewNote(
-            "Appearance choices share the same visual system on Android and iOS. Only system bars, safe areas, and keyboards follow the device.",
-        )
     }
 }
 
@@ -5341,7 +5356,7 @@ private fun ThemeModeScreen(state: AppState) {
 @Composable
 private fun AccentColorScreen(state: AppState) {
     PageColumn {
-        Heading("Accent choices", "Choose a highlight color for actions and selected items.")
+        Heading("Accent color")
         AccentChoice.entries.forEach { accent ->
             val palette = tandemPalette
             SurfaceCard(onClick = { state.accent = accent }) {
@@ -5350,16 +5365,20 @@ private fun AccentColorScreen(state: AppState) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Box(Modifier.size(30.dp).clip(CircleShape).background(accent.color))
-                    Column(Modifier.weight(1f)) {
-                        Text(accent.label, color = palette.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Preview across buttons, badges, and selection states", color = palette.muted, fontSize = 11.sp)
+                    Box(Modifier.size(22.dp).clip(CircleShape).background(accent.color))
+                    Text(
+                        accent.label,
+                        modifier = Modifier.weight(1f),
+                        color = palette.text,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    if (state.accent == accent) {
+                        Text("✓", color = palette.accent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     }
-                    if (state.accent == accent) Text("✓", color = palette.accent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
-        PreviewNote("The selected accent is shared between the Android and iOS app surfaces.")
     }
 }
 
@@ -5379,14 +5398,12 @@ private fun BackgroundScreen(state: AppState) {
                 Text("${state.backgroundStyle} preview", color = tandemPalette.text, fontWeight = FontWeight.SemiBold)
             }
         }
-        SectionCard("Background style", state.backgroundStyle) {
-            listOf(
-                "Soft gradient" to "A subtle vertical blend behind the cards",
-                "Solid surface" to "A single steady canvas color",
-                "Low-motion glow" to "A static accent glow behind the content",
-            ).forEach { (style, description) ->
-                ChoiceRow(style, description, selected = state.backgroundStyle == style, onClick = { state.backgroundStyle = style })
-            }
+        listOf(
+            "Soft gradient" to "A subtle vertical blend behind the cards",
+            "Solid surface" to "A single steady canvas color",
+            "Low-motion glow" to "A static accent glow behind the content",
+        ).forEach { (style, description) ->
+            ChoiceRow(style, description, selected = state.backgroundStyle == style, onClick = { state.backgroundStyle = style })
         }
         SectionCard("Motion", "Animation should never get in the way") {
             ToggleRow(
@@ -5562,6 +5579,7 @@ private fun SyncPreferencesScreen(
 @Composable
 private fun ServerDeviceScreen(
     state: AppState,
+    deviceName: String,
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
     onForgetDevice: () -> Unit,
@@ -5577,16 +5595,22 @@ private fun ServerDeviceScreen(
                 else -> "Paired for this app session"
             },
         ) {
-            ListRow("◎", "Server URL", state.serverUrl, if (device != null) "Paired" else "Add") {
-                navigation.open(AppRoute.SERVER_ADDRESS)
-            }
+            ListRow(
+                "",
+                "Server URL",
+                state.serverUrl,
+                if (device != null) "Paired" else "Add",
+                leadingVector = Lucide.Server,
+                onClick = { navigation.open(AppRoute.SERVER_ADDRESS) },
+            )
             DividerLine()
             ListRow(
-                "↻",
+                "",
                 "Connection status",
                 if (mobileSession.isAuthenticated) "Device credential is active" else "Pair this device to access budgets",
                 if (mobileSession.isAuthenticated) "Paired" else "Offline",
                 if (mobileSession.isAuthenticated) tandemPalette.positive else tandemPalette.warning,
+                leadingVector = Lucide.Wifi,
             )
         }
         SectionCard(
@@ -5597,20 +5621,31 @@ private fun ServerDeviceScreen(
                 else -> "Pairing is active until the app closes"
             },
         ) {
-            ListRow("▣", "Device name", if (device != null) "Tandem mobile" else "Not paired")
-            DividerLine()
             ListRow(
-                "⌑",
-                "Authorized budget scope",
-                if (device != null) {
-                    "${device.budgetIds.size} scope${if (device.budgetIds.size == 1) "" else "s"} from the server"
-                } else {
-                    "No device credential"
-                },
+                "",
+                "Device name",
+                if (device != null) deviceName else "Not paired",
+                leadingIconResource = if (device != null) Res.drawable.tandem_logo_squircle else null,
+                leadingVector = Lucide.Smartphone,
             )
             DividerLine()
             ListRow(
-                "⌑",
+                "",
+                "Budget access",
+                if (device == null) {
+                    "No device pairing"
+                } else {
+                    when (device.budgetIds.size) {
+                        0 -> "No budgets available to this device"
+                        1 -> "1 budget available to this device"
+                        else -> "${device.budgetIds.size} budgets available to this device"
+                    }
+                },
+                leadingVector = Lucide.FolderKey,
+            )
+            DividerLine()
+            ListRow(
+                "",
                 "Device credential",
                 if (mobileSession.isCredentialStored) "Encrypted in system secure storage" else "In-memory for this app session",
                 when {
@@ -5618,6 +5653,7 @@ private fun ServerDeviceScreen(
                     device != null -> "Active"
                     else -> "None"
                 },
+                leadingVector = Lucide.KeyRound,
             )
         }
         BodyText(

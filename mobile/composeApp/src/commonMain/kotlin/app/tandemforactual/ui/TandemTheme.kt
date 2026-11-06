@@ -44,6 +44,7 @@ internal data class TandemPalette(
     val accentContent: Color,
     val accentSurface: Color,
     val positive: Color,
+    val syncing: Color,
     val warning: Color,
     val negative: Color,
 )
@@ -61,6 +62,7 @@ private val LocalTandemPalette =
             accentContent = Color.White,
             accentSurface = Color(0xFF2B2440),
             positive = Color(0xFF73D9A4),
+            syncing = Color(0xFF73B7FF),
             warning = Color(0xFFFFC56E),
             negative = Color(0xFFFF8C98),
         )
@@ -97,6 +99,7 @@ internal fun TandemTheme(
                 accentContent = accentContent,
                 accentSurface = selectedAccent.copy(alpha = 0.18f),
                 positive = Color(0xFF73D9A4),
+                syncing = Color(0xFF73B7FF),
                 warning = Color(0xFFFFC56E),
                 negative = Color(0xFFFF8C98),
             )
@@ -112,6 +115,7 @@ internal fun TandemTheme(
                 accentContent = accentContent,
                 accentSurface = selectedAccent.copy(alpha = 0.10f),
                 positive = Color(0xFF147D64),
+                syncing = Color(0xFF1557B0),
                 warning = Color(0xFFB88115),
                 negative = Color(0xFFE12D39),
             )
@@ -134,6 +138,7 @@ internal fun TandemTheme(
             accentContent = animateColorAsState(palette.accentContent, colorSpec, label = "theme-accent-content").value,
             accentSurface = animateColorAsState(palette.accentSurface, colorSpec, label = "theme-accent-surface").value,
             positive = animateColorAsState(palette.positive, colorSpec, label = "theme-positive").value,
+            syncing = animateColorAsState(palette.syncing, colorSpec, label = "theme-syncing").value,
             warning = animateColorAsState(palette.warning, colorSpec, label = "theme-warning").value,
             negative = animateColorAsState(palette.negative, colorSpec, label = "theme-negative").value,
         )
