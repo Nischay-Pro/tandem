@@ -2557,7 +2557,7 @@ private fun ScreenContent(
         AppRoute.MONTH_PICKER -> MonthPickerScreen(state, navigation)
         AppRoute.CATEGORY_GROUP -> CategoryGroupScreen(state, navigation, liveBudgetMonth)
         AppRoute.CATEGORY_DETAIL -> CategoryDetailScreen(state, navigation, liveBudgetMonth)
-        AppRoute.ACCOUNTS -> AccountsScreen(state, navigation, liveAccounts, liveTransactions)
+        AppRoute.ACCOUNTS -> AccountsScreen(state, navigation, liveAccounts)
         AppRoute.ACCOUNT_DETAIL -> AccountDetailScreen(state, navigation, liveAccounts, liveTransactions)
         AppRoute.ACCOUNT_OPTIONS -> AccountOptionsScreen(state, liveAccounts)
         AppRoute.RECONCILIATION -> ReconciliationScreen(state)
@@ -4835,94 +4835,149 @@ private fun openCategoryActivity(
     navigation.open(AppRoute.ACTIVITY_SEARCH)
 }
 
+private data class AccountListItemUi(
+    val id: String,
+    val name: String,
+    val description: String,
+    val balance: String,
+    val offBudget: Boolean,
+)
+
+private data class AccountListGroupUi(
+    val name: String,
+    val description: String,
+    val accounts: List<AccountListItemUi>,
+)
+
+private data class AccountListUi(
+    val subtitle: String,
+    val totalOnBudget: String,
+    val onBudgetCount: Int,
+    val groups: List<AccountListGroupUi>,
+    val isSample: Boolean,
+    val showAccountOptions: Boolean,
+)
+
 @Composable
 private fun AccountsScreen(
     state: AppState,
     navigation: AppNavigation,
     liveAccounts: List<LiveAccountSummary>,
-    liveTransactions: List<TransactionItem>,
 ) {
-    if (state.selectedBudgetId.isNotBlank()) {
-        val onBudgetAccounts = liveAccounts.filterNot { it.offBudget }
-        val totalOnBudget = onBudgetAccounts.sumOf { it.balanceMinor ?: 0L }
-        val groupedAccounts =
-            listOf("Cash", "Credit", "Tracking").mapNotNull { groupName ->
-                val accounts =
-                    liveAccounts.filter { account ->
-                        when (groupName) {
-                            "Tracking" -> account.offBudget
-                            "Credit" -> !account.offBudget && account.type.orEmpty().contains("credit", ignoreCase = true)
-                            else -> !account.offBudget && !account.type.orEmpty().contains("credit", ignoreCase = true)
+    val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    val model =
+        if (isLiveBudget) {
+            val onBudgetAccounts = liveAccounts.filterNot { it.offBudget }
+            val groupedAccounts =
+                listOf("Cash", "Credit", "Tracking").mapNotNull { groupName ->
+                    val accounts =
+                        liveAccounts.filter { account ->
+                            when (groupName) {
+                                "Tracking" -> account.offBudget
+                                "Credit" -> !account.offBudget && account.type.orEmpty().contains("credit", ignoreCase = true)
+                                else -> !account.offBudget && !account.type.orEmpty().contains("credit", ignoreCase = true)
+                            }
                         }
-                    }
-                groupName.takeIf { accounts.isNotEmpty() }?.let { it to accounts }
-            }
-        PageLazyColumn {
-            item(key = "accounts-title") { Heading("Balances", "Synced account balances from Actual.") }
-            item(key = "accounts-summary") {
-                AmountHero("Total on budget", state.formatCurrency(totalOnBudget), "Across ${onBudgetAccounts.size} on-budget accounts")
-            }
-            if (liveAccounts.isEmpty()) {
-                item(key = "accounts-empty") {
-                    SurfaceCard {
-                        EmptyState(
-                            "No accounts yet",
-                            "Sync this budget to load its account list and balances.",
-                            modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                    groupName.takeIf { accounts.isNotEmpty() }?.let { name ->
+                        AccountListGroupUi(
+                            name,
+                            "${accounts.size} Actual accounts",
+                            accounts.map { account ->
+                                AccountListItemUi(
+                                    account.id,
+                                    account.name,
+                                    if (account.offBudget) "Tracking · off budget" else account.type ?: "On budget",
+                                    account.balanceMinor?.let(state::formatCurrency) ?: "Unavailable",
+                                    account.offBudget,
+                                )
+                            },
                         )
                     }
                 }
-            } else {
-                groupedAccounts.forEach { (groupName, accounts) ->
-                    item(key = "account-group:$groupName") {
-                        SectionCard(groupName, "${accounts.size} Actual accounts", "") {}
-                    }
-                    items(accounts, key = { "account:${it.id}" }) { account ->
-                        SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
-                            ListRow(
+            AccountListUi(
+                "Synced account balances from Actual.",
+                state.formatCurrency(onBudgetAccounts.sumOf { it.balanceMinor ?: 0L }),
+                onBudgetAccounts.size,
+                groupedAccounts,
+                isSample = false,
+                showAccountOptions = false,
+            )
+        } else {
+            val onBudgetAccounts = previewAccounts.filterNot { it.offBudget }
+            val groupedAccounts =
+                previewAccounts.groupBy { it.group }.map { (groupName, accounts) ->
+                    AccountListGroupUi(
+                        groupName,
+                        "${accounts.size} ${if (accounts.size == 1) "account" else "accounts"}",
+                        accounts.map { account ->
+                            AccountListItemUi(
+                                account.id,
                                 account.name,
-                                if (account.offBudget) "Tracking · off budget" else account.type ?: "On budget",
-                                account.balanceMinor?.let { state.formatCurrency(it) } ?: "Unavailable",
-                                options =
-                                    ListRowOptions(
-                                        trailingColor = if (account.offBudget) tandemPalette.muted else tandemPalette.text,
-                                    ),
-                            ) {
-                                state.selectedAccountId = account.id
-                                navigation.open(AppRoute.ACCOUNT_DETAIL)
-                            }
+                                account.description,
+                                state.formatCurrency(account.balanceMinor),
+                                account.offBudget,
+                            )
+                        },
+                    )
+                }
+            AccountListUi(
+                "Review account balances and recent activity.",
+                state.formatCurrency(onBudgetAccounts.sumOf { it.balanceMinor }),
+                onBudgetAccounts.size,
+                groupedAccounts,
+                isSample = true,
+                showAccountOptions = true,
+            )
+        }
+
+    PageLazyColumn {
+        if (model.isSample) item(key = "accounts-preview-banner") { SampleBanner() }
+        item(key = "accounts-title") { Heading("Balances", model.subtitle) }
+        item(key = "accounts-summary") {
+            AmountHero(
+                "Total on budget",
+                model.totalOnBudget,
+                "Across ${model.onBudgetCount} ${if (model.isSample) "sample accounts" else "on-budget accounts"}",
+            )
+        }
+        if (model.groups.isEmpty()) {
+            item(key = "accounts-empty") {
+                SurfaceCard {
+                    EmptyState(
+                        "No accounts yet",
+                        if (model.isSample) null else "Sync this budget to load its account list and balances.",
+                        modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                    )
+                }
+            }
+        } else {
+            model.groups.forEach { group ->
+                item(key = "account-group:${group.name}") {
+                    SectionCard(group.name, group.description, "") {}
+                }
+                items(group.accounts, key = { "account:${it.id}" }) { account ->
+                    SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
+                        ListRow(
+                            account.name,
+                            account.description,
+                            account.balance,
+                            options =
+                                ListRowOptions(
+                                    trailingColor = if (account.offBudget) tandemPalette.muted else tandemPalette.text,
+                                ),
+                        ) {
+                            state.selectedAccountId = account.id
+                            navigation.open(AppRoute.ACCOUNT_DETAIL)
                         }
                     }
                 }
             }
         }
-        return
-    }
-    PageColumn {
-        SampleBanner()
-        Heading("Balances", "Review account balances and recent activity.")
-        AmountHero(
-            "Total on budget",
-            state.formatCurrency(previewAccounts.filterNot { it.offBudget }.sumOf { it.balanceMinor }),
-            "Across ${previewAccounts.count { !it.offBudget }} sample accounts",
-        )
-        previewAccounts.groupBy { it.group }.forEach { (groupName, accounts) ->
-            SectionCard(groupName, "${accounts.size} ${if (accounts.size == 1) "account" else "accounts"}", "") {
-                accounts.forEachIndexed { index, account ->
-                    if (index > 0) DividerLine()
-                    ListRow(
-                        account.name,
-                        account.description,
-                        state.formatCurrency(account.balanceMinor),
-                        options = ListRowOptions(trailingColor = if (account.offBudget) tandemPalette.muted else tandemPalette.text),
-                    ) {
-                        state.selectedAccountId = account.id
-                        navigation.open(AppRoute.ACCOUNT_DETAIL)
-                    }
-                }
+        if (model.showAccountOptions) {
+            item(key = "account-options") {
+                SecondaryButton("Account options") { navigation.open(AppRoute.ACCOUNT_OPTIONS) }
             }
         }
-        SecondaryButton("Account options") { navigation.open(AppRoute.ACCOUNT_OPTIONS) }
     }
 }
 
