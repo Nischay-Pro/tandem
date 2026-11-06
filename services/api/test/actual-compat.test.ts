@@ -31,6 +31,9 @@ const serverURL = process.env.ACTUAL_SERVER_URL;
 const serverPassword = process.env.ACTUAL_SERVER_PASSWORD;
 const firstDataDir = process.env.ACTUAL_API_DATA_DIR;
 const databaseUrl = process.env.DATABASE_URL;
+const pairingCodeHashKey =
+  process.env.PAIRING_CODE_HASH_KEY ??
+  "synthetic-pairing-code-hash-key-32-bytes";
 const compatibilityTestEnabled = Boolean(
   serverURL && serverPassword && firstDataDir && databaseUrl,
 );
@@ -110,7 +113,10 @@ describe.skipIf(!compatibilityTestEnabled)(
         `-c search_path=${compatibilitySchema}`,
       );
       compatibilityDatabaseUrl = isolatedUrl.toString();
-      database = createPostgresDatabase(isolatedUrl.toString());
+      database = createPostgresDatabase(
+        isolatedUrl.toString(),
+        pairingCodeHashKey,
+      );
       await database.migrate();
     }, 30_000);
 
@@ -849,6 +855,7 @@ describe.skipIf(!compatibilityTestEnabled)(
         const productionApp = await runApi(
           {
             DATABASE_URL: compatibilityDatabaseUrl,
+            PAIRING_CODE_HASH_KEY: pairingCodeHashKey,
             ACTUAL_SERVER_URL: serverURL,
             ACTUAL_SERVER_PASSWORD: serverPassword,
             ACTUAL_API_DATA_DIR: runtimeDataDir,
@@ -1119,6 +1126,7 @@ describe.skipIf(!compatibilityTestEnabled)(
       const encryptedApp = await runApi(
         {
           DATABASE_URL: compatibilityDatabaseUrl,
+          PAIRING_CODE_HASH_KEY: pairingCodeHashKey,
           ACTUAL_SERVER_URL: serverURL,
           ACTUAL_SERVER_PASSWORD: serverPassword,
           ACTUAL_API_DATA_DIR: apiDataDir,

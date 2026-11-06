@@ -15,7 +15,7 @@ let pool: PoolType | undefined;
 let adminPool: PoolType | undefined;
 let schemaName: string | undefined;
 let authorization: DeviceAuthorization;
-let pairingCodeHashKey: string;
+const pairingCodeHashKey = "synthetic-pairing-code-hash-key-32-bytes";
 
 describe("PostgreSQL device authorization integration", () => {
   beforeAll(async () => {
@@ -25,7 +25,6 @@ describe("PostgreSQL device authorization integration", () => {
         "DATABASE_URL is required; run this test with docker compose",
       );
     }
-    pairingCodeHashKey = connectionString;
     schemaName = `device_auth_${randomUUID().replaceAll("-", "")}`;
     adminPool = new Pool({ connectionString, max: 2 });
     await adminPool.query(`CREATE SCHEMA ${schemaName}`);

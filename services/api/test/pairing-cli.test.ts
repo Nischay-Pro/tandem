@@ -13,6 +13,10 @@ const pairingResult: PairingCode = {
   principalId: "owner",
   budgetIds: ["budget-one"],
 };
+const testEnvironment = {
+  DATABASE_URL: "postgres://local/test",
+  PAIRING_CODE_HASH_KEY: "synthetic-pairing-code-hash-key-32-bytes",
+};
 
 function createDatabase(overrides: Partial<PairingCliDatabase> = {}) {
   const createPairingCode = vi.fn(async () => pairingResult);
@@ -95,11 +99,14 @@ describe("pairing code command", () => {
     await expect(
       runPairingCommand(
         ["--budget-id", "budget-one"],
-        { DATABASE_URL: "postgres://local/test" },
+        testEnvironment,
         createDatabaseFactory,
       ),
     ).resolves.toEqual(pairingResult);
-    expect(createDatabaseFactory).toHaveBeenCalledWith("postgres://local/test");
+    expect(createDatabaseFactory).toHaveBeenCalledWith(
+      "postgres://local/test",
+      testEnvironment.PAIRING_CODE_HASH_KEY,
+    );
     expect(migrate).toHaveBeenCalledOnce();
     expect(createPairingCode).toHaveBeenCalledWith({
       principalId: "owner",
@@ -124,7 +131,7 @@ describe("pairing code command", () => {
     await expect(
       runPairingCommand(
         ["--budget-id", "budget-one"],
-        { DATABASE_URL: "postgres://local/test" },
+        testEnvironment,
         () => database,
       ),
     ).rejects.toBe(migrationError);
@@ -151,7 +158,7 @@ describe("pairing code command", () => {
     await expect(
       runPairingCommand(
         ["--budget-id", "budget-one"],
-        { DATABASE_URL: "postgres://local/test" },
+        testEnvironment,
         () => database,
       ),
     ).rejects.toBe(migrationError);
@@ -172,7 +179,7 @@ describe("pairing code command", () => {
     await expect(
       runPairingCommand(
         ["--budget-id", "budget-one"],
-        { DATABASE_URL: "postgres://local/test" },
+        testEnvironment,
         () => database,
       ),
     ).rejects.toBe("migration failed");
@@ -192,7 +199,7 @@ describe("pairing code command", () => {
     await expect(
       runPairingCommand(
         ["--budget-id", "budget-one"],
-        { DATABASE_URL: "postgres://local/test" },
+        testEnvironment,
         () => database,
       ),
     ).rejects.toBe(closeError);

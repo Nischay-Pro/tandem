@@ -23,6 +23,7 @@ const actualApi = vi.hoisted(() => ({
   sync: vi.fn(async () => undefined),
   shutdown: vi.fn(async () => undefined),
 }));
+const testPairingCodeHashKey = "synthetic-pairing-code-hash-key-32-bytes";
 
 vi.mock("@actual-app/api", () => actualApi);
 
@@ -114,6 +115,7 @@ describe("API bootstrap integration", () => {
     const port = await findAvailablePort();
     const environment = {
       DATABASE_URL: isolatedDatabaseUrl,
+      PAIRING_CODE_HASH_KEY: testPairingCodeHashKey,
       HOST: "127.0.0.1",
       PORT: String(port),
     };
@@ -145,6 +147,7 @@ describe("API bootstrap integration", () => {
     const port = await findAvailablePort();
     const environment = {
       DATABASE_URL: isolatedDatabaseUrl,
+      PAIRING_CODE_HASH_KEY: testPairingCodeHashKey,
       HOST: "127.0.0.1",
       PORT: String(port),
       ACTUAL_SERVER_URL: "http://actual.example",
@@ -157,6 +160,7 @@ describe("API bootstrap integration", () => {
     try {
       const pairing = await runPairingCommand(["--all-budgets"], {
         DATABASE_URL: isolatedDatabaseUrl,
+        PAIRING_CODE_HASH_KEY: testPairingCodeHashKey,
       });
       const pairedResponse = await app.inject({
         method: "POST",
@@ -222,6 +226,7 @@ describe("API bootstrap integration", () => {
       const startup = runProductionApi(
         {
           DATABASE_URL: isolatedUrl.toString(),
+          PAIRING_CODE_HASH_KEY: testPairingCodeHashKey,
           HOST: "127.0.0.1",
           PORT: String(port),
         },
@@ -263,6 +268,7 @@ describe("API bootstrap integration", () => {
     const app = await runApi(
       {
         DATABASE_URL: "postgres://local/test",
+        PAIRING_CODE_HASH_KEY: testPairingCodeHashKey,
         HOST: "127.0.0.1",
         PORT: String(port),
         ACTUAL_SERVER_URL: "http://127.0.0.1:5006",
@@ -298,6 +304,7 @@ describe("API bootstrap integration", () => {
     const port = await findAvailablePort();
     const environment = {
       DATABASE_URL: isolatedDatabaseUrl,
+      PAIRING_CODE_HASH_KEY: testPairingCodeHashKey,
       HOST: "127.0.0.1",
       PORT: String(port),
     };

@@ -70,11 +70,15 @@ export async function runPairingCommand(
   environment: Environment,
   createDatabase: (
     connectionString: string,
+    pairingCodeHashKey: string,
   ) => PairingCliDatabase = createPostgresDatabase,
 ): Promise<PairingCode> {
   const options = parsePairingOptions(args);
   const config = parseApiConfig(environment);
-  const database = createDatabase(config.databaseUrl);
+  const database = createDatabase(
+    config.databaseUrl,
+    config.pairingCodeHashKey,
+  );
   let pairing: PairingCode;
   try {
     await database.migrate();

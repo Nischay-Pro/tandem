@@ -1,10 +1,12 @@
 import { isAbsolute } from "node:path";
 import { isIP } from "node:net";
+import { Buffer } from "node:buffer";
 import type { ActualConnectionConfig } from "./actual/actual-session.js";
 import { OperatorMessageError } from "./operator-message-error.js";
 
 export interface ApiConfig {
   databaseUrl: string;
+  pairingCodeHashKey: string;
   host: string;
   port: number;
   trustProxy: false | string[];
@@ -40,6 +42,16 @@ export function parseApiConfig(environment: Environment): ApiConfig {
     );
   }
 
+  const pairingCodeHashKey = environment.PAIRING_CODE_HASH_KEY?.trim();
+  if (!pairingCodeHashKey) {
+    throw new OperatorMessageError("PAIRING_CODE_HASH_KEY is required");
+  }
+  if (Buffer.byteLength(pairingCodeHashKey, "utf8") < 32) {
+    throw new OperatorMessageError(
+      "PAIRING_CODE_HASH_KEY must contain at least 32 bytes",
+    );
+  }
+
   const host = environment.HOST?.trim() || "0.0.0.0";
   const rawPort = environment.PORT?.trim() || "19753";
   const port = Number(rawPort);
@@ -62,6 +74,7 @@ export function parseApiConfig(environment: Environment): ApiConfig {
 
   return {
     databaseUrl,
+    pairingCodeHashKey,
     host,
     port,
     trustProxy: trustedProxyAddresses,

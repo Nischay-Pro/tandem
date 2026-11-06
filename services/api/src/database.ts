@@ -26,7 +26,10 @@ export interface Database extends ServerDatabase {
   withBudgetLock<T>(budgetId: string, work: () => Promise<T>): Promise<T>;
 }
 
-export function createPostgresDatabase(connectionString: string): Database {
+export function createPostgresDatabase(
+  connectionString: string,
+  pairingCodeHashKey: string,
+): Database {
   const pool = new Pool({
     connectionString,
     max: 10,
@@ -48,7 +51,7 @@ export function createPostgresDatabase(connectionString: string): Database {
     undefined,
     undefined,
     undefined,
-    { pairingCodeHashKey: connectionString },
+    { pairingCodeHashKey },
   );
   let readinessCheck: Promise<void> | undefined;
 

@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { parseApiConfig } from "../src/config.js";
+import {
+  parseApiConfig as parseRawApiConfig,
+  type Environment,
+} from "../src/config.js";
 import type { ServerDatabase } from "../src/database.js";
 import type { DeviceAuthorization } from "../src/auth/device-auth.js";
 import { startApiServer } from "../src/server.js";
@@ -7,6 +10,14 @@ import { WRITE_LEASE_SWEEP_INTERVAL_MS } from "../src/write-journal/lease-reaper
 import { ActualCompatibilityError } from "../src/actual/actual-session.js";
 
 const deviceAuth = {} as DeviceAuthorization;
+const testPairingCodeHashKey = "synthetic-pairing-code-hash-key-32-bytes";
+
+function parseApiConfig(environment: Environment) {
+  return parseRawApiConfig({
+    PAIRING_CODE_HASH_KEY: testPairingCodeHashKey,
+    ...environment,
+  });
+}
 
 describe("API server lifecycle integration", () => {
   afterEach(() => {

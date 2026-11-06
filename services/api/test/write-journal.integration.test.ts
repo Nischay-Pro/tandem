@@ -85,7 +85,11 @@ describe("durable write journal integration", () => {
     const searchPath = `-c search_path=${writeJournalSchema}`;
     const isolatedConnection = new URL(connectionString);
     isolatedConnection.searchParams.set("options", searchPath);
-    database = createPostgresDatabase(isolatedConnection.toString());
+    database = createPostgresDatabase(
+      isolatedConnection.toString(),
+      process.env.PAIRING_CODE_HASH_KEY ??
+        "synthetic-pairing-code-hash-key-32-bytes",
+    );
     inspectionPool = new Pool({
       connectionString,
       max: 3,
@@ -389,14 +393,22 @@ describe("durable write journal integration", () => {
       "options",
       `-c search_path=${writeJournalSchema}`,
     );
-    const beforeRestart = createPostgresDatabase(isolatedConnection.toString());
+    const beforeRestart = createPostgresDatabase(
+      isolatedConnection.toString(),
+      process.env.PAIRING_CODE_HASH_KEY ??
+        "synthetic-pairing-code-hash-key-32-bytes",
+    );
     try {
       await beforeRestart.journal.enqueue(input);
     } finally {
       await beforeRestart.close();
     }
 
-    const afterRestart = createPostgresDatabase(isolatedConnection.toString());
+    const afterRestart = createPostgresDatabase(
+      isolatedConnection.toString(),
+      process.env.PAIRING_CODE_HASH_KEY ??
+        "synthetic-pairing-code-hash-key-32-bytes",
+    );
     try {
       await expect(
         afterRestart.journal.get(input.operationId),

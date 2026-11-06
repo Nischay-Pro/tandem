@@ -84,7 +84,10 @@ Then fetch `http://localhost:19753/api/v1/openapi.json`.
 
 To enable the Actual-backed budget routes, provide `ACTUAL_SERVER_URL` and
 `ACTUAL_SERVER_PASSWORD` to Compose, for example in an ignored local `.env`
-file. The API accepts only the server release pinned in
+file. Set `PAIRING_CODE_HASH_KEY` in that file when running the API or pairing
+CLI directly; generate it with `openssl rand -hex 32` and use the same value
+for both processes. The Docker development Compose file supplies a
+development-only default. The API accepts only the server release pinned in
 `services/api/src/actual/actual-session.ts`. The API's local Actual workspace is
 persisted under `.dev-tmp/actual/api-workspace`; it may hold decrypted budget
 data. The server password stays in the API container. Encrypted budgets may
@@ -118,7 +121,7 @@ current adapter baseline until the household fixture is upgraded.
 
 ## Code quality
 
-Run the Compose integration-test command above for the per-change gate. Running `pnpm check:all` directly also requires `DATABASE_URL` to point to a disposable PostgreSQL database. Run `pnpm test:mutation` for incremental mutation testing or `pnpm test:mutation:full` to force the full configured set.
+Run the Compose integration-test command above for the per-change gate. Running `pnpm check:all` directly also requires `DATABASE_URL` to point to a disposable PostgreSQL database and `PAIRING_CODE_HASH_KEY` to contain at least 32 bytes. Run `pnpm test:mutation` for incremental mutation testing or `pnpm test:mutation:full` to force the full configured set.
 
 ## Database migrations
 

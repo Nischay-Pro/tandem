@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { parseApiConfig } from "../src/config.js";
+import { parseApiConfig as parseRawApiConfig } from "../src/config.js";
 
 const databaseUrl =
   "postgresql://companion:local-test@localhost:5432/companion";
+const testPairingCodeHashKey = "synthetic-pairing-code-hash-key-32-bytes";
+
+function parseApiConfig(environment: Record<string, string | undefined>) {
+  return parseRawApiConfig({
+    PAIRING_CODE_HASH_KEY: testPairingCodeHashKey,
+    ...environment,
+  });
+}
 
 describe("parseApiConfig", () => {
   it("treats empty optional Actual settings as unconfigured", () => {
@@ -18,6 +26,7 @@ describe("parseApiConfig", () => {
   it("uses safe development defaults", () => {
     expect(parseApiConfig({ DATABASE_URL: databaseUrl })).toEqual({
       databaseUrl,
+      pairingCodeHashKey: testPairingCodeHashKey,
       host: "0.0.0.0",
       port: 19753,
       trustProxy: false,
@@ -106,6 +115,7 @@ describe("parseApiConfig", () => {
       }),
     ).toEqual({
       databaseUrl,
+      pairingCodeHashKey: testPairingCodeHashKey,
       host: "127.0.0.1",
       port: 8090,
       trustProxy: false,
@@ -183,6 +193,24 @@ describe("parseApiConfig", () => {
 
   it("rejects a missing database URL", () => {
     expect(() => parseApiConfig({})).toThrow("DATABASE_URL is required");
+  });
+
+  it("requires an independent pairing-code hash key with at least 32 bytes", () => {
+    expect(() => parseRawApiConfig({ DATABASE_URL: databaseUrl })).toThrow(
+      "PAIRING_CODE_HASH_KEY is required",
+    );
+    expect(() =>
+      parseApiConfig({
+        DATABASE_URL: databaseUrl,
+        PAIRING_CODE_HASH_KEY: "x".repeat(31),
+      }),
+    ).toThrow("PAIRING_CODE_HASH_KEY must contain at least 32 bytes");
+    expect(
+      parseApiConfig({
+        DATABASE_URL: databaseUrl,
+        PAIRING_CODE_HASH_KEY: "x".repeat(32),
+      }).pairingCodeHashKey,
+    ).toBe("x".repeat(32));
   });
 
   it("rejects malformed database URLs", () => {

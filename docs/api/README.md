@@ -56,8 +56,10 @@ trusted channel.
 the opaque bearer token once. The short code is only a bootstrap credential;
 the resulting device token has 256 bits of random
 entropy; only its SHA-256 hash is stored in PostgreSQL. Pairing code hashes use
-HMAC with SHA-256 and the `DATABASE_URL` value as the key, so the CLI and API
-must use the same value. Device tokens expire after 90 days without an
+HMAC with SHA-256 and the independent `PAIRING_CODE_HASH_KEY`. Set it to at
+least 32 random bytes and provide the same value to the API and pairing CLI.
+Rotating the key invalidates pending pairing codes but does not affect paired
+devices. Device tokens expire after 90 days without an
 authenticated request; each successful request refreshes that idle window.
 Invalid pairing codes are limited to 10 per client address per minute.
 Successful pairings and other request-validation errors do not consume this

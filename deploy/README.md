@@ -19,7 +19,10 @@ chmod 600 deploy/compose/.env
 
 Set `POSTGRES_PASSWORD` to a long random value. `DATABASE_URL` must use the
 same database, username, and password; URL-encode any reserved password
-characters. Set `CHANGE_FEED_EPOCH` to a random stable value. Keep it unchanged
+characters. Set `PAIRING_CODE_HASH_KEY` to the output of `openssl rand -hex
+32` and provide the same value to the API and pairing CLI. Rotating it
+invalidates pending pairing codes but leaves paired devices working. Set
+`CHANGE_FEED_EPOCH` to a random stable value. Keep it unchanged
 for ordinary restarts. Use a new value after restoring a database backup so
 mobile devices discard cursors from the pre-restore history. Leave
 `ACTUAL_SERVER_URL` and `ACTUAL_SERVER_PASSWORD` empty to start without Actual

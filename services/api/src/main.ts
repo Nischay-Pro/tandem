@@ -15,11 +15,17 @@ import { OperatorMessageError } from "./operator-message-error.js";
 
 export async function runApi(
   environment: Environment,
-  createDatabase: (connectionString: string) => Database,
+  createDatabase: (
+    connectionString: string,
+    pairingCodeHashKey: string,
+  ) => Database,
   registerSignalHandler: SignalRegistrar,
 ) {
   const config = parseApiConfig(environment);
-  const database = createDatabase(config.databaseUrl);
+  const database = createDatabase(
+    config.databaseUrl,
+    config.pairingCodeHashKey,
+  );
   const runtime = createActualRuntime(
     config.actual,
     database,

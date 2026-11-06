@@ -57,7 +57,11 @@ describe("transaction request validation integration", () => {
       "options",
       `-c search_path=${schemaName}`,
     );
-    database = createPostgresDatabase(isolatedConnection.toString());
+    database = createPostgresDatabase(
+      isolatedConnection.toString(),
+      process.env.PAIRING_CODE_HASH_KEY ??
+        "synthetic-pairing-code-hash-key-32-bytes",
+    );
     await database.migrate();
   }, 30_000);
 

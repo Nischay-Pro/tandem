@@ -79,6 +79,7 @@ services:
       - no-new-privileges:true
     environment:
       DATABASE_URL: postgresql://tandem:${TANDEM_DB_PASSWORD:?Set TANDEM_DB_PASSWORD in .env.tandem}@tandem-postgres:5432/tandem
+      PAIRING_CODE_HASH_KEY: ${PAIRING_CODE_HASH_KEY:?Set PAIRING_CODE_HASH_KEY in .env.tandem}
       HOST: 0.0.0.0
       PORT: 19753
       CHANGE_FEED_EPOCH: ${CHANGE_FEED_EPOCH:?Set CHANGE_FEED_EPOCH in .env.tandem}
@@ -108,17 +109,18 @@ networks:
 
 The API joins the Compose project's `default` network so it can reach Actual and a proxy in the same project. PostgreSQL is isolated on `tandem-data`. If Actual or the proxy uses a named network, replace `default` under `tandem-api` with the shared network name and ensure the Actual service and proxy join it too. `expose` makes the API available to containers on that network without publishing a host port. If the reverse proxy runs directly on the host, add `ports: ["127.0.0.1:19753:19753"]` to `tandem-api` and point the proxy at `127.0.0.1:19753`.
 
-Keep Tandem's credentials in a separate, private `.env.tandem` file beside your Compose file. Generate a URL-safe database password with `openssl rand -hex 32` and a stable change-feed value with `openssl rand -hex 24`:
+Keep Tandem's credentials in a separate, private `.env.tandem` file beside your Compose file. Generate a database password and pairing-code hash key with `openssl rand -hex 32`, and a stable change-feed value with `openssl rand -hex 24`:
 
 ```dotenv
 TANDEM_DB_PASSWORD=<paste-the-generated-database-password>
+PAIRING_CODE_HASH_KEY=<paste-a-separate-openssl-rand-hex-32-value>
 CHANGE_FEED_EPOCH=<paste-the-generated-change-feed-value>
 ACTUAL_SERVER_URL=http://actual-server:5006
 ACTUAL_SERVER_PASSWORD=<your-Actual-server-password>
 TRUST_PROXY=
 ```
 
-Replace the example Actual service name and password with the values for your server. Restrict this file to the deployment account with `chmod 600 .env.tandem`. Keep `CHANGE_FEED_EPOCH` stable across normal restarts; see [deployment and restore guidance](deploy/README.md) before changing it or restoring a backup. If the existing Actual stack has an `.env` file, pass both files so its current settings remain available and Tandem's values are added:
+Replace the example Actual service name and password with the values for your server. Keep the pairing-code hash key the same for the API and pairing CLI; rotating it invalidates pending pairing codes but leaves paired devices working. Restrict this file to the deployment account with `chmod 600 .env.tandem`. Keep `CHANGE_FEED_EPOCH` stable across normal restarts; see [deployment and restore guidance](deploy/README.md) before changing it or restoring a backup. If the existing Actual stack has an `.env` file, pass both files so its current settings remain available and Tandem's values are added:
 
 ```sh
 docker compose \
@@ -166,8 +168,8 @@ You can run Tandem in its own production Compose project. Clone this repository 
 docker network create tandem-edge
 cp deploy/compose/.env.example deploy/compose/.env
 chmod 600 deploy/compose/.env
-# Edit deploy/compose/.env: set the DB credentials, stable change-feed epoch,
-# Actual URL/password, and the external network name.
+# Edit deploy/compose/.env: set the DB credentials, pairing-code hash key,
+# stable change-feed epoch, Actual URL/password, and external network name.
 docker compose \
   --project-directory "$PWD" \
   --env-file deploy/compose/.env \
@@ -191,6 +193,7 @@ sudo -u postgres createdb --owner=tandem tandem
 sudo install -d -o tandem -g tandem -m 0700 /var/lib/tandem/actual-api
 
 export DATABASE_URL='postgresql://tandem:<url-safe-password>@127.0.0.1:5432/tandem'
+export PAIRING_CODE_HASH_KEY='<at-least-32-byte-random-value>'
 export CHANGE_FEED_EPOCH='<stable-random-value>'
 export HOST=127.0.0.1
 export PORT=19753

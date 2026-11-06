@@ -28,6 +28,7 @@ POSTGRES_DB=tandem_release_check
 POSTGRES_USER=tandem_release_check
 POSTGRES_PASSWORD=$test_secret
 DATABASE_URL=postgresql://tandem_release_check:$test_secret@postgres:5432/tandem_release_check
+PAIRING_CODE_HASH_KEY=release-check-pairing-code-hash-key-32-bytes
 CHANGE_FEED_EPOCH=$test_epoch
 TRUST_PROXY=
 TANDEM_EDGE_NETWORK=$edge_network

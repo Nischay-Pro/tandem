@@ -25,6 +25,7 @@ services:
       dockerfile: services/api/Dockerfile.dev
     environment:
       DATABASE_URL: postgresql://companion:${POSTGRES_PASSWORD:-development-only-password}@postgres:5432/companion
+      PAIRING_CODE_HASH_KEY: ${PAIRING_CODE_HASH_KEY:-development-only-pairing-code-hash-key}
       HOST: 0.0.0.0
       PORT: 19753
       CHANGE_FEED_EPOCH: ${CHANGE_FEED_EPOCH:-default}
@@ -50,6 +51,7 @@ services:
     command: ["pnpm", "check:all"]
     environment:
       DATABASE_URL: postgresql://companion:${POSTGRES_PASSWORD:-development-only-password}@postgres:5432/companion
+      PAIRING_CODE_HASH_KEY: ${PAIRING_CODE_HASH_KEY:-development-only-pairing-code-hash-key}
     volumes:
       - ./.dev-tmp/stryker:/workspace/.dev-tmp/stryker
     depends_on:
@@ -88,6 +90,7 @@ services:
     environment:
       HOME: /home/node
       DATABASE_URL: postgresql://companion:${POSTGRES_PASSWORD:-development-only-password}@postgres:5432/companion
+      PAIRING_CODE_HASH_KEY: ${PAIRING_CODE_HASH_KEY:-development-only-pairing-code-hash-key}
       ACTUAL_SERVER_URL: http://actual-compat-server:5006
       ACTUAL_SERVER_PASSWORD: compatibility-test-only-password
       ACTUAL_API_DATA_DIR: /actual-api-data/device-one
