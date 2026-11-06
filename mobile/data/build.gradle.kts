@@ -13,7 +13,7 @@ kotlin {
   jvm()
   android {
     namespace = "app.tandemforactual.data"
-    compileSdk = 36
+    compileSdk = 37
     minSdk = 26
 
     withHostTest {

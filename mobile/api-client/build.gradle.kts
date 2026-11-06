@@ -11,7 +11,7 @@ kotlin {
   jvm()
   android {
     namespace = "app.tandemforactual.api.client"
-    compileSdk = 36
+    compileSdk = 37
     minSdk = 26
   }
   iosArm64()
