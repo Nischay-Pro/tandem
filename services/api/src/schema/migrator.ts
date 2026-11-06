@@ -1,6 +1,10 @@
 import { readFile } from "node:fs/promises";
 import type { Pool, PoolClient } from "pg";
 import { down, up } from "./migrations/20261101155148-companion-schema-v2.js";
+import {
+  down as downJournalRetention,
+  up as upJournalRetention,
+} from "./migrations/20261106160000-journal-retention.js";
 import { OperatorMessageError } from "../operator-message-error.js";
 
 export interface Migration {
@@ -14,6 +18,11 @@ export const MIGRATIONS: readonly Migration[] = [
     name: "20261101155148-companion-schema-v2",
     up,
     down,
+  },
+  {
+    name: "20261106160000-journal-retention",
+    up: upJournalRetention,
+    down: downJournalRetention,
   },
 ];
 

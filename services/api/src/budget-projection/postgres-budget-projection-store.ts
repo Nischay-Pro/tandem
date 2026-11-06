@@ -173,6 +173,11 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
           [budgetId],
         );
         await client.query(
+          `DELETE FROM companion_budget_records
+           WHERE budget_id = $1 AND is_deleted = true`,
+          [budgetId],
+        );
+        await client.query(
           `UPDATE companion_budget_sync_state
            SET generation = $2, feed_epoch = $3, cursor = 0
            WHERE budget_id = $1`,
@@ -243,6 +248,12 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
         await client.query(
           `DELETE FROM companion_budget_changes
            WHERE budget_id = $1 AND cursor <= $2::bigint`,
+          [budgetId, oldestRetainedCursor.toString()],
+        );
+        await client.query(
+          `DELETE FROM companion_budget_records
+           WHERE budget_id = $1 AND is_deleted = true
+             AND updated_cursor <= $2::bigint`,
           [budgetId, oldestRetainedCursor.toString()],
         );
       }

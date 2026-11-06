@@ -1,2 +1,3 @@
-# Migration apply order. Keep the current point release to one migration.
+# Migration apply order. Append additive migrations in deployment order.
 20261101155148-companion-schema-v2
+20261106160000-journal-retention

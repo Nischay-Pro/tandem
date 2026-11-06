@@ -474,6 +474,80 @@ describe.skipIf(!integrationEnabled)(
       expect(MAX_BUDGET_CHANGE_PAGE_SIZE).toBe(500);
     });
 
+    it("purges tombstones only after their delete leaves retained change history", async () => {
+      const store = createPostgresBudgetProjectionStore(getPool(), 2);
+      const budgetId = `budget-tombstone-retention-${randomUUID()}`;
+      const keeper = (amount: number) =>
+        record("account", "retained-account", {
+          id: "retained-account",
+          balance_current: amount,
+        });
+      const deletedPayee = record("payee", "deleted-payee", {
+        id: "deleted-payee",
+        name: "Old merchant",
+      });
+
+      const initial = await store.applySnapshot(budgetId, "epoch-a", [
+        keeper(100),
+        deletedPayee,
+      ]);
+      await store.applySnapshot(budgetId, "epoch-a", [keeper(100)]);
+      const retainedTombstone = await getPool().query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM companion_budget_records
+         WHERE budget_id = $1 AND entity_type = 'payee' AND is_deleted = true`,
+        [budgetId],
+      );
+      expect(retainedTombstone.rows[0]?.count).toBe("1");
+
+      await store.applySnapshot(budgetId, "epoch-a", [keeper(200)]);
+      const stillRetainedTombstone = await getPool().query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM companion_budget_records
+         WHERE budget_id = $1 AND entity_type = 'payee' AND is_deleted = true`,
+        [budgetId],
+      );
+      expect(stillRetainedTombstone.rows[0]?.count).toBe("1");
+
+      await store.applySnapshot(budgetId, "epoch-a", [keeper(300)]);
+      const purgedTombstone = await getPool().query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM companion_budget_records
+         WHERE budget_id = $1 AND entity_type = 'payee' AND is_deleted = true`,
+        [budgetId],
+      );
+      expect(purgedTombstone.rows[0]?.count).toBe("0");
+      await expect(
+        store.readChanges({
+          budgetId,
+          generation: initial.generation,
+          cursor: "2",
+          limit: 10,
+        }),
+      ).resolves.toMatchObject({ resetRequired: true, changes: [] });
+
+      await store.applySnapshot(budgetId, "epoch-a", [
+        keeper(300),
+        deletedPayee,
+      ]);
+      await store.applySnapshot(budgetId, "epoch-a", [keeper(300)]);
+      const beforeEpochReset = await getPool().query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM companion_budget_records
+         WHERE budget_id = $1 AND is_deleted = true`,
+        [budgetId],
+      );
+      expect(beforeEpochReset.rows[0]?.count).toBe("1");
+
+      const reset = await store.applySnapshot(budgetId, "epoch-b", [
+        keeper(300),
+      ]);
+      const afterEpochReset = await getPool().query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM companion_budget_records
+         WHERE budget_id = $1 AND is_deleted = true`,
+        [budgetId],
+      );
+      expect(reset.generation).not.toBe(initial.generation);
+      expect(reset.cursor).toBe("0");
+      expect(afterEpochReset.rows[0]?.count).toBe("0");
+    });
+
     it("rolls back the complete snapshot when the change append fails", async () => {
       const scoped = getPool();
       await scoped.query(`

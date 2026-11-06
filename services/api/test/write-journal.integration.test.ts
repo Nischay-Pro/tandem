@@ -26,7 +26,11 @@ import type {
   WriteOperationInput,
 } from "../src/write-journal/contracts.js";
 import { WriteLeaseReaper } from "../src/write-journal/lease-reaper.js";
-import { PostgresWriteJournal } from "../src/write-journal/postgres-write-journal.js";
+import {
+  MAX_TERMINAL_OPERATION_PAYLOADS_PER_BATCH,
+  MAX_TERMINAL_OPERATION_PAYLOAD_BATCHES_PER_SWEEP,
+  PostgresWriteJournal,
+} from "../src/write-journal/postgres-write-journal.js";
 
 let database: Database;
 let inspectionPool: Pool;
@@ -105,15 +109,24 @@ describe("durable write journal integration", () => {
     await adminPool?.end();
   });
 
-  it("keeps one current schema migration and applies it idempotently", async () => {
+  it("applies ordered schema migrations idempotently", async () => {
     await database.migrate();
     const order = await readMigrationOrder();
     const result = await inspectionPool.query<{ count: string }>(
       "SELECT count(*)::text AS count FROM companion_migrations",
     );
-    expect(order).toHaveLength(1);
+    expect(order).toHaveLength(MIGRATIONS.length);
     expect(order).toEqual(MIGRATIONS.map(({ name }) => name));
-    expect(result.rows[0]?.count).toBe("1");
+    expect(result.rows[0]?.count).toBe(String(MIGRATIONS.length));
+    const retentionColumn = await inspectionPool.query<{
+      found_column: string | null;
+    }>(
+      `SELECT column_name AS found_column FROM information_schema.columns
+       WHERE table_schema = current_schema()
+         AND table_name = 'companion_operations'
+         AND column_name = 'payload_compacted_at'`,
+    );
+    expect(retentionColumn.rows[0]?.found_column).toBe("payload_compacted_at");
   });
 
   it("rejects an earlier pre-release identity without skipping the expanded schema", async () => {
@@ -161,10 +174,10 @@ describe("durable write journal integration", () => {
     }
   });
 
-  it("validates a single ordered migration manifest", async () => {
+  it("validates migration manifest ordering", async () => {
     const migration = MIGRATIONS[0];
     if (!migration) {
-      throw new Error("The point release requires exactly one migration");
+      throw new Error("Migration test configuration is incomplete");
     }
     expect(() =>
       validateMigrationOrder([migration], [migration.name]),
@@ -181,6 +194,70 @@ describe("durable write journal integration", () => {
     expect(() => validateMigrationOrder([migration], ["unexpected"])).toThrow(
       "ORDER mismatch",
     );
+  });
+
+  it("reverses and reapplies the journal retention migration", async () => {
+    const connectionString = process.env.DATABASE_URL;
+    const migration = MIGRATIONS[1];
+    if (!connectionString || !migration) {
+      throw new Error("Migration test configuration is incomplete");
+    }
+    const schemaName = `migration_retention_${randomUUID().replaceAll("-", "")}`;
+    await inspectionPool.query(`CREATE SCHEMA ${schemaName}`);
+    const isolatedPool = new Pool({
+      connectionString,
+      max: 2,
+      options: `-c search_path=${schemaName}`,
+    });
+
+    try {
+      await applyMigrations(isolatedPool);
+      const before = await isolatedPool.query<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_schema = current_schema()
+           AND table_name = 'companion_operations'
+           AND column_name = 'payload_compacted_at'`,
+      );
+      expect(before.rows.map(({ column_name }) => column_name)).toEqual([
+        "payload_compacted_at",
+      ]);
+
+      const client = await isolatedPool.connect();
+      try {
+        await client.query("BEGIN");
+        await migration.down(client);
+        await client.query("DELETE FROM companion_migrations WHERE name = $1", [
+          migration.name,
+        ]);
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+
+      const after = await isolatedPool.query<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_schema = current_schema()
+           AND table_name = 'companion_operations'
+           AND column_name = 'payload_compacted_at'`,
+      );
+      expect(after.rows).toEqual([]);
+      await applyMigrations(isolatedPool);
+      const reapplied = await isolatedPool.query<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_schema = current_schema()
+           AND table_name = 'companion_operations'
+           AND column_name = 'payload_compacted_at'`,
+      );
+      expect(reapplied.rows.map(({ column_name }) => column_name)).toEqual([
+        "payload_compacted_at",
+      ]);
+    } finally {
+      await isolatedPool.end();
+      await inspectionPool.query(`DROP SCHEMA ${schemaName} CASCADE`);
+    }
   });
 
   it("runs and rolls back an ordered migration transactionally in an isolated schema", async () => {
@@ -522,6 +599,144 @@ describe("durable write journal integration", () => {
         actualTransactionId: "actual-synthetic-id",
       }),
     ).resolves.toMatchObject({ status: "committed" });
+  });
+
+  it("compacts old terminal payloads while preserving idempotency and live work", async () => {
+    const committedInput = createOperation({
+      principalId: `compact-device-${randomUUID()}`,
+      budgetId: `compact-budget-${randomUUID()}`,
+    });
+    await database.journal.enqueue(committedInput);
+    await database.journal.claim(committedInput.operationId);
+    await database.journal.markCommitted(committedInput.operationId, {
+      transaction: { id: committedInput.entityId, notes: "old result" },
+    });
+
+    const rejectedInput = createOperation({
+      principalId: committedInput.principalId,
+      budgetId: committedInput.budgetId,
+    });
+    await database.journal.enqueue(rejectedInput);
+    await database.journal.claim(rejectedInput.operationId);
+    await database.journal.markRejected(rejectedInput.operationId, "bad-input");
+
+    const queuedInput = createOperation({
+      principalId: committedInput.principalId,
+      budgetId: committedInput.budgetId,
+    });
+    await database.journal.enqueue(queuedInput);
+
+    const uncertainInput = createOperation({
+      principalId: committedInput.principalId,
+      budgetId: committedInput.budgetId,
+    });
+    await database.journal.enqueue(uncertainInput);
+    await database.journal.claim(uncertainInput.operationId);
+    await database.journal.markUncertain(
+      uncertainInput.operationId,
+      "actual-timeout",
+      { kind: "transaction-create-returned" },
+    );
+
+    const conflictInput = createOperation({
+      principalId: committedInput.principalId,
+      budgetId: committedInput.budgetId,
+    });
+    await database.journal.enqueue(conflictInput);
+    await database.journal.claim(conflictInput.operationId);
+    await database.journal.recordConflict(
+      conflictInput.operationId,
+      createConflict(),
+    );
+
+    await inspectionPool.query(
+      `UPDATE companion_operations
+       SET created_at = clock_timestamp() - interval '91 days',
+           completed_at = clock_timestamp() - interval '91 days'
+       WHERE operation_id = ANY($1::uuid[])`,
+      [
+        [
+          committedInput.operationId,
+          rejectedInput.operationId,
+          queuedInput.operationId,
+          uncertainInput.operationId,
+          conflictInput.operationId,
+        ],
+      ],
+    );
+
+    const compactTerminalPayloads = database.journal.compactTerminalPayloads;
+    if (!compactTerminalPayloads) {
+      throw new Error("Journal payload compaction is unavailable");
+    }
+    await expect(compactTerminalPayloads.call(database.journal)).resolves.toBe(
+      2,
+    );
+    const compacted = await database.journal.get(committedInput.operationId);
+    expect(compacted).toMatchObject({
+      operationId: committedInput.operationId,
+      status: "committed",
+      requestHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      baseSnapshot: {},
+      patch: {},
+      actualResult: null,
+    });
+    await expect(
+      database.journal.get(rejectedInput.operationId),
+    ).resolves.toMatchObject({
+      status: "rejected",
+      baseSnapshot: {},
+      patch: {},
+      actualResult: null,
+    });
+    await expect(
+      database.journal.get(queuedInput.operationId),
+    ).resolves.toMatchObject({
+      status: "queued",
+      patch: { amount: 1200 },
+    });
+    await expect(
+      database.journal.get(uncertainInput.operationId),
+    ).resolves.toMatchObject({
+      status: "uncertain",
+      writeEvidence: { kind: "transaction-create-returned" },
+    });
+    await expect(
+      database.journal.get(conflictInput.operationId),
+    ).resolves.toMatchObject({
+      status: "conflict",
+      patch: { amount: 1200 },
+    });
+
+    const retry = await database.journal.enqueue(committedInput);
+    expect(retry).toMatchObject({
+      replayed: true,
+      operation: {
+        operationId: committedInput.operationId,
+        status: "committed",
+        patch: {},
+      },
+    });
+    await expect(compactTerminalPayloads.call(database.journal)).resolves.toBe(
+      0,
+    );
+  });
+
+  it("caps each journal compaction sweep to a bounded number of batches", async () => {
+    const rows = Array.from(
+      { length: MAX_TERMINAL_OPERATION_PAYLOADS_PER_BATCH },
+      (_, index) => ({ operation_id: String(index) }),
+    );
+    const query = vi.fn().mockResolvedValue({ rows });
+    const journal = new PostgresWriteJournal({ query } as unknown as PoolType);
+
+    await expect(journal.compactTerminalPayloads()).resolves.toBe(
+      MAX_TERMINAL_OPERATION_PAYLOADS_PER_BATCH *
+        MAX_TERMINAL_OPERATION_PAYLOAD_BATCHES_PER_SWEEP,
+    );
+    expect(query).toHaveBeenCalledTimes(
+      MAX_TERMINAL_OPERATION_PAYLOAD_BATCHES_PER_SWEEP,
+    );
   });
 
   it("releases only pre-write claims back to the durable queue", async () => {

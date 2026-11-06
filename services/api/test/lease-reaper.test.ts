@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  WRITE_JOURNAL_COMPACTION_INTERVAL_MS,
   WRITE_LEASE_SWEEP_INTERVAL_MS,
   WriteLeaseReaper,
 } from "../src/write-journal/lease-reaper.js";
@@ -36,6 +37,50 @@ describe("write lease reaper", () => {
     await reaper.stop();
     await vi.advanceTimersByTimeAsync(WRITE_LEASE_SWEEP_INTERVAL_MS);
     expect(expireLeases).toHaveBeenCalledTimes(2);
+  });
+
+  it("compacts terminal operation payloads on start and once per hour", async () => {
+    vi.useFakeTimers();
+    const expireLeases = vi.fn<() => Promise<number>>().mockResolvedValue(0);
+    const compactTerminalPayloads = vi
+      .fn<() => Promise<number>>()
+      .mockResolvedValue(0);
+    const reaper = new WriteLeaseReaper({
+      expireLeases,
+      compactTerminalPayloads,
+    });
+
+    await reaper.start();
+    expect(compactTerminalPayloads).toHaveBeenCalledOnce();
+
+    await vi.advanceTimersByTimeAsync(
+      WRITE_JOURNAL_COMPACTION_INTERVAL_MS - WRITE_LEASE_SWEEP_INTERVAL_MS,
+    );
+    expect(compactTerminalPayloads).toHaveBeenCalledOnce();
+
+    await vi.advanceTimersByTimeAsync(WRITE_LEASE_SWEEP_INTERVAL_MS);
+    expect(compactTerminalPayloads).toHaveBeenCalledTimes(2);
+    await reaper.stop();
+  });
+
+  it("reports compaction errors without exposing their message", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const reaper = new WriteLeaseReaper({
+      expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
+      compactTerminalPayloads: vi
+        .fn<() => Promise<number>>()
+        .mockRejectedValue(new Error("synthetic database detail")),
+    });
+
+    await expect(reaper.start()).resolves.toBeUndefined();
+    expect(consoleError).toHaveBeenCalledWith(
+      "Terminal journal payload compaction failed",
+      { errorType: "Error" },
+    );
+    expect(consoleError.mock.calls[0]?.[1]).not.toHaveProperty("message");
+    await reaper.stop();
   });
 
   it("coalesces overlapping sweeps and waits for one in flight during stop", async () => {

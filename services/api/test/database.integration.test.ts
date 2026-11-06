@@ -282,11 +282,15 @@ describe("PostgreSQL connection integration", () => {
     } as unknown as Pool;
     const migrationName = MIGRATIONS[0]?.name;
     if (!migrationName) {
-      throw new Error("Expected the single point-release migration");
+      throw new Error("Expected at least one ordered schema migration");
     }
 
     await expect(
-      applyMigrations(pool, MIGRATIONS, [migrationName]),
+      applyMigrations(
+        pool,
+        MIGRATIONS,
+        MIGRATIONS.map(({ name }) => name),
+      ),
     ).rejects.toBe(lockError);
     expect(query).toHaveBeenCalledOnce();
     expect(release).toHaveBeenCalledWith(true);

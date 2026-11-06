@@ -201,6 +201,12 @@ requests from applying twice. Reusing a key or operation ID with a different
 payload returns HTTP 409. Device budget scope is checked before the Actual API
 is called.
 
+After 90 days, the service compacts the JSON payloads for committed and
+rejected operations. It keeps the operation ID, idempotency key, request hash,
+and final status, so an old retry remains idempotent. The original snapshots,
+patch, and result are no longer available after compaction. Queued, applying,
+uncertain, and conflict operations are retained with their payloads.
+
 The operation response distinguishes `queued`, `applying`, `committed`,
 `conflict`, `uncertain`, and `rejected`. A conflict is a durable operation that
 includes the base snapshot, local patch, latest remote snapshot, and overlapping

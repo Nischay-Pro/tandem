@@ -22,6 +22,10 @@ import type {
   WriteOperationInput,
 } from "./contracts.js";
 
+export const TERMINAL_OPERATION_PAYLOAD_RETENTION_DAYS = 90;
+export const MAX_TERMINAL_OPERATION_PAYLOADS_PER_BATCH = 1_000;
+export const MAX_TERMINAL_OPERATION_PAYLOAD_BATCHES_PER_SWEEP = 10;
+
 interface OperationRow {
   operation_id: string;
   principal_id: string;
@@ -450,6 +454,45 @@ export class PostgresWriteJournal implements DurableWriteJournal {
       WHERE status = 'applying' AND lease_expires_at <= clock_timestamp()`,
     );
     return result.rowCount ?? 0;
+  }
+
+  async compactTerminalPayloads(): Promise<number> {
+    let compacted = 0;
+    for (
+      let batch = 0;
+      batch < MAX_TERMINAL_OPERATION_PAYLOAD_BATCHES_PER_SWEEP;
+      batch += 1
+    ) {
+      const result = await this.pool.query(
+        `WITH expired AS (
+          SELECT operation_id
+          FROM companion_operations
+          WHERE status IN ('committed', 'rejected')
+            AND completed_at <= clock_timestamp() - ($1 * interval '1 day')
+            AND payload_compacted_at IS NULL
+          ORDER BY completed_at, operation_id
+          LIMIT $2
+          FOR UPDATE SKIP LOCKED
+        )
+        UPDATE companion_operations AS operation
+        SET base_snapshot = '{}'::jsonb,
+            patch = '{}'::jsonb,
+            actual_result = NULL,
+            payload_compacted_at = clock_timestamp()
+        FROM expired
+        WHERE operation.operation_id = expired.operation_id
+        RETURNING operation.operation_id`,
+        [
+          TERMINAL_OPERATION_PAYLOAD_RETENTION_DAYS,
+          MAX_TERMINAL_OPERATION_PAYLOADS_PER_BATCH,
+        ],
+      );
+      compacted += result.rows.length;
+      if (result.rows.length < MAX_TERMINAL_OPERATION_PAYLOADS_PER_BATCH) {
+        break;
+      }
+    }
+    return compacted;
   }
 
   async #finish(

@@ -95,6 +95,7 @@ export interface DurableWriteJournal {
     conflict: ConflictInput,
   ): Promise<OperationConflict>;
   expireLeases(): Promise<number>;
+  compactTerminalPayloads?(): Promise<number>;
 }
 
 export class IdempotencyKeyReuseError extends Error {
