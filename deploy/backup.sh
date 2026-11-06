@@ -19,8 +19,34 @@ backup_prefix="$1"
 backup_dir="$(dirname "$backup_prefix")"
 mkdir -p "$backup_dir"
 umask 077
-postgres_tmp="${backup_prefix}.postgres.dump.$$"
-workspace_tmp="${backup_prefix}.actual-workspace.tar.gz.$$"
+backup_gpg_passphrase_file="${TANDEM_BACKUP_GPG_PASSPHRASE_FILE:-}"
+if [[ -n "$backup_gpg_passphrase_file" ]]; then
+  if [[ ! -f "$backup_gpg_passphrase_file" || ! -r "$backup_gpg_passphrase_file" || ! -s "$backup_gpg_passphrase_file" ]]; then
+    echo "TANDEM_BACKUP_GPG_PASSPHRASE_FILE must name a non-empty, readable passphrase file." >&2
+    exit 2
+  fi
+  if ! command -v gpg >/dev/null 2>&1; then
+    echo "Install GnuPG on this host to create encrypted backups." >&2
+    exit 2
+  fi
+  if [[ -e "${backup_prefix}.postgres.dump" || -e "${backup_prefix}.actual-workspace.tar.gz" ]]; then
+    echo "Plaintext backups already exist for this prefix; choose a new prefix or move them first." >&2
+    exit 2
+  fi
+  postgres_tmp="${backup_prefix}.postgres.dump.gpg.$$"
+  workspace_tmp="${backup_prefix}.actual-workspace.tar.gz.gpg.$$"
+  postgres_output="${backup_prefix}.postgres.dump.gpg"
+  workspace_output="${backup_prefix}.actual-workspace.tar.gz.gpg"
+else
+  if [[ -e "${backup_prefix}.postgres.dump.gpg" || -e "${backup_prefix}.actual-workspace.tar.gz.gpg" ]]; then
+    echo "Encrypted backups already exist for this prefix; choose a new prefix or move them first." >&2
+    exit 2
+  fi
+  postgres_tmp="${backup_prefix}.postgres.dump.$$"
+  workspace_tmp="${backup_prefix}.actual-workspace.tar.gz.$$"
+  postgres_output="${backup_prefix}.postgres.dump"
+  workspace_output="${backup_prefix}.actual-workspace.tar.gz"
+fi
 
 compose=(docker compose -p "$compose_project" --project-directory "$project_root" --env-file "$env_file" -f "$compose_file")
 api_id="$("${compose[@]}" ps -q api)"
@@ -45,14 +71,32 @@ trap restart_api EXIT
 if [[ "$api_was_running" == true ]]; then
   "${compose[@]}" stop api
 fi
-"${compose[@]}" exec -T postgres sh -ec \
-  'pg_dump --format=custom --no-owner --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' \
-  > "$postgres_tmp"
+if [[ -n "$backup_gpg_passphrase_file" ]]; then
+  "${compose[@]}" exec -T postgres sh -ec \
+    'pg_dump --format=custom --no-owner --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' \
+    | gpg --batch --yes --pinentry-mode loopback --passphrase-file "$backup_gpg_passphrase_file" \
+      --symmetric --cipher-algo AES256 --output "$postgres_tmp"
+else
+  "${compose[@]}" exec -T postgres sh -ec \
+    'pg_dump --format=custom --no-owner --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' \
+    > "$postgres_tmp"
+fi
 chmod 600 "$postgres_tmp"
-docker run --rm --volumes-from "$api_id":ro --entrypoint tar \
-  node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 -czf - -C /data/actual-api . \
-  > "$workspace_tmp"
+if [[ -n "$backup_gpg_passphrase_file" ]]; then
+  docker run --rm --volumes-from "$api_id":ro --entrypoint tar \
+    node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 -czf - -C /data/actual-api . \
+    | gpg --batch --yes --pinentry-mode loopback --passphrase-file "$backup_gpg_passphrase_file" \
+      --symmetric --cipher-algo AES256 --output "$workspace_tmp"
+else
+  docker run --rm --volumes-from "$api_id":ro --entrypoint tar \
+    node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 -czf - -C /data/actual-api . \
+    > "$workspace_tmp"
+fi
 chmod 600 "$workspace_tmp"
-mv -f "$postgres_tmp" "${backup_prefix}.postgres.dump"
-mv -f "$workspace_tmp" "${backup_prefix}.actual-workspace.tar.gz"
-echo "Wrote PostgreSQL and Actual workspace backups with mode 600; protect them as financial data."
+mv -f "$postgres_tmp" "$postgres_output"
+mv -f "$workspace_tmp" "$workspace_output"
+if [[ -n "$backup_gpg_passphrase_file" ]]; then
+  echo "Wrote encrypted PostgreSQL and Actual workspace backups with mode 600. Keep the passphrase separate from the backups."
+else
+  echo "Wrote plaintext PostgreSQL and Actual workspace backups with mode 600; protect them as financial data."
+fi

@@ -60,7 +60,11 @@ reads with the password succeed. The Actual API opens a local working copy for
 these operations, while Tandem stores readable projected records in
 PostgreSQL. Actual's encryption therefore protects the budget on Actual's sync
 server, but does not make the Tandem API service an encrypted relay; deployers
-must trust and protect the service and its storage.
+must trust and protect the service, its readable PostgreSQL projection, local
+Actual working copy, and the phones' offline caches. Production backups also
+contain these files: the backup script writes mode-600 plaintext by default,
+or can encrypt the exported files with GnuPG when configured. File permissions
+limit access to the operator account but do not encrypt backup contents.
 
 The adapter must be the only owner of the package singleton in its Node.js
 process. This queue coordinates one Tandem API process. Cross-process and

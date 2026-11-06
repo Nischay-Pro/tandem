@@ -100,11 +100,24 @@ docker compose --project-directory "$PWD" \
 
 Backups contain PostgreSQL coordination records and the API's Actual workspace.
 They may contain transaction data, notes, and decrypted Actual budget files.
-Store them encrypted at rest, restrict access, and keep them off the deployment
-host. Back up `deploy/compose/.env` and `deploy/compose/secrets/` separately in
-an approved secrets manager. The `.env` contains the change-feed epoch and
-secret file paths; the secret files contain the database and pairing
-credentials.
+By default, `backup.sh` writes plaintext files with mode 600; file permissions
+do not encrypt them. Store the output on encrypted storage and keep it off the
+deployment host. For end-to-end encryption of the exported files, install GnuPG
+from your operating system's package manager and create a passphrase file
+outside the repository and backup directory:
+
+```sh
+install -d -m 700 /secure/tandem-backup-keys
+openssl rand -hex 32 > /secure/tandem-backup-keys/passphrase
+chmod 600 /secure/tandem-backup-keys/passphrase
+```
+
+Keep that passphrase in a password manager or another protected location,
+separate from the backup files. Do not put it in `.env`, the backup directory,
+or the same storage account as the backups. Back up `deploy/compose/.env` and
+`deploy/compose/secrets/` separately in an approved secrets manager. The `.env`
+contains the change-feed epoch and secret file paths; the secret files contain
+the database and pairing credentials.
 
 Run a backup to a protected prefix in a directory accessible only to the
 operator; output files are created with mode 600. The API is briefly stopped while its Actual
@@ -114,17 +127,29 @@ workspace is archived and is restarted afterward.
 deploy/backup.sh /secure/tandem-backups/tandem-2026-11-01
 ```
 
-Restore both paired files during a maintenance window. The script validates the
-PostgreSQL dump and workspace archive before stopping the API. PostgreSQL
-restore runs in a single transaction with errors enabled, so a failed database
-restore rolls back its changes. A rejected archive leaves the existing database
-and workspace in place and the API running. A successful restore replaces the
+To write encrypted `.gpg` files instead, pass the passphrase-file path to the
+backup script. The backup stream is encrypted before it is written to disk:
+
+```sh
+TANDEM_BACKUP_GPG_PASSPHRASE_FILE=/secure/tandem-backup-keys/passphrase \
+  deploy/backup.sh /secure/tandem-backups/tandem-2026-11-01-encrypted
+```
+
+Restore either a plaintext pair or an encrypted `.gpg` pair during a
+maintenance window. Encrypted restore requires the same passphrase file and
+decrypts into temporary mode-600 files that the script removes when it exits.
+The script validates both files before stopping the API. PostgreSQL restore
+runs in a single transaction with errors enabled, so a failed database restore
+rolls back its changes. A rejected archive leaves the existing database and
+workspace in place and the API running. A successful restore replaces the
 current PostgreSQL contents and Actual workspace. Afterward, set a new random
 `CHANGE_FEED_EPOCH` in `deploy/compose/.env` before starting the API. The
 restore script leaves the API stopped until that explicit step is complete.
 
 ```sh
-deploy/restore.sh /secure/tandem-backups/tandem-2026-11-01 new-random-epoch-20261101
+TANDEM_BACKUP_GPG_PASSPHRASE_FILE=/secure/tandem-backup-keys/passphrase \
+  deploy/restore.sh /secure/tandem-backups/tandem-2026-11-01-encrypted \
+  new-random-epoch-20261101
 ```
 
 Then start and verify the API using the commands above. Confirm that an

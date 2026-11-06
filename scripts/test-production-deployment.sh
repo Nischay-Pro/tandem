@@ -10,6 +10,7 @@ secret_dir="$scratch_root/secrets"
 mkdir -p "$secret_dir"
 chmod 700 "$secret_dir"
 project="tandem-release-check"
+restore_tmp_dir="$scratch_root/restore-tmp"
 edge_network="${project}-edge"
 compose=(docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml")
 
@@ -21,19 +22,27 @@ cleanup() {
   rm -f \
     "$scratch_root/tandem-backup.postgres.dump" \
     "$scratch_root/tandem-backup.actual-workspace.tar.gz" \
+    "$scratch_root/tandem-encrypted-backup.postgres.dump.gpg" \
+    "$scratch_root/tandem-encrypted-backup.actual-workspace.tar.gz.gpg" \
+    "$scratch_root/release-check-wrong-backup-passphrase" \
     "$scratch_root"/corrupt-restore-*
+  rm -f "$restore_tmp_dir"/*
+  rmdir "$restore_tmp_dir" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
 test_secret="release-check-$(date +%s)-synthetic"
 test_epoch="release-check-$(date +%s)"
 pairing_key="release-check-pairing-code-hash-key-32-bytes"
+backup_passphrase_file="$secret_dir/backup_passphrase"
 printf '%s' "$test_secret" > "$secret_dir/postgres_password"
 printf 'postgresql://tandem_release_check:%s@postgres:5432/tandem_release_check' \
   "$test_secret" > "$secret_dir/database_url"
 printf '%s' "$pairing_key" > "$secret_dir/pairing_code_hash_key"
+printf '%s' "release-check-gpg-passphrase-$test_epoch" > "$backup_passphrase_file"
 : > "$secret_dir/actual_server_password"
 chmod 444 "$secret_dir"/*
+chmod 600 "$backup_passphrase_file"
 cat > "$env_file" <<EOF
 POSTGRES_DB=tandem_release_check
 POSTGRES_USER=tandem_release_check
@@ -252,6 +261,51 @@ assert_corrupt_restore_is_rejected postgres header
 assert_corrupt_restore_is_rejected postgres mid-file
 assert_corrupt_restore_is_rejected workspace header
 
+docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml" exec -T api node --input-type=module -e "import { writeFileSync } from 'node:fs'; writeFileSync('/data/actual-api/release-check.txt', 'before encrypted backup');"
+TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" TANDEM_BACKUP_GPG_PASSPHRASE_FILE="$backup_passphrase_file" "$project_root/deploy/backup.sh" "$scratch_root/tandem-encrypted-backup"
+wait_for_api
+if [[ ! -f "$scratch_root/tandem-encrypted-backup.postgres.dump.gpg" || ! -f "$scratch_root/tandem-encrypted-backup.actual-workspace.tar.gz.gpg" || -e "$scratch_root/tandem-encrypted-backup.postgres.dump" || -e "$scratch_root/tandem-encrypted-backup.actual-workspace.tar.gz" ]]; then
+  echo "Encrypted backup did not produce exactly the expected ciphertext files." >&2
+  exit 1
+fi
+wrong_passphrase_file="$scratch_root/release-check-wrong-backup-passphrase"
+mkdir -m 700 -p "$restore_tmp_dir"
+printf '%s' 'incorrect synthetic passphrase' > "$wrong_passphrase_file"
+chmod 600 "$wrong_passphrase_file"
+if TMPDIR="$restore_tmp_dir" TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" TANDEM_BACKUP_GPG_PASSPHRASE_FILE="$wrong_passphrase_file" "$project_root/deploy/restore.sh" "$scratch_root/tandem-encrypted-backup" "$test_epoch-wrong-passphrase" >/dev/null 2>&1; then
+  echo "Encrypted restore accepted an incorrect passphrase." >&2
+  exit 1
+fi
+if [[ -n "$(find "$restore_tmp_dir" -mindepth 1 -maxdepth 1 -type f -print -quit)" ]]; then
+  echo "A rejected encrypted restore left decrypted temporary files." >&2
+  exit 1
+fi
+wait_for_api 15
+encrypted_post_backup_token="$(pair_device 'Post-encrypted-backup tablet')"
+docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml" exec -T api node --input-type=module -e "import { writeFileSync } from 'node:fs'; writeFileSync('/data/actual-api/release-check.txt', 'after encrypted backup');"
+TMPDIR="$restore_tmp_dir" TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" TANDEM_BACKUP_GPG_PASSPHRASE_FILE="$backup_passphrase_file" "$project_root/deploy/restore.sh" "$scratch_root/tandem-encrypted-backup" "$test_epoch-after-encrypted-restore"
+if [[ -n "$(find "$restore_tmp_dir" -mindepth 1 -maxdepth 1 -type f -print -quit)" ]]; then
+  echo "A successful encrypted restore left decrypted temporary files." >&2
+  exit 1
+fi
+docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml" up --detach api
+wait_for_api
+encrypted_device_list="$(curl --silent --show-error --fail http://127.0.0.1:19754/api/v1/devices --header "Authorization: Bearer $phone_token")"
+if [[ "$encrypted_device_list" != *'Release check phone'* || "$encrypted_device_list" != *'Release check tablet'* || "$encrypted_device_list" == *'Post-encrypted-backup tablet'* ]]; then
+  echo "Encrypted production restore did not reinstate its PostgreSQL backup." >&2
+  exit 1
+fi
+encrypted_workspace_value="$(docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml" exec -T api node --input-type=module -e "import { readFileSync } from 'node:fs'; process.stdout.write(readFileSync('/data/actual-api/release-check.txt', 'utf8'));")"
+if [[ "$encrypted_workspace_value" != "before encrypted backup" ]]; then
+  echo "Encrypted production restore did not reinstate its Actual workspace." >&2
+  exit 1
+fi
+encrypted_token_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --header "Authorization: Bearer $encrypted_post_backup_token" http://127.0.0.1:19754/api/v1/devices)"
+if [[ "$encrypted_token_status" != 401 ]]; then
+  echo "Encrypted restore kept a device created after the backup (HTTP $encrypted_token_status)." >&2
+  exit 1
+fi
+
 # Simulate an in-container process crash after both credentials are durably stored.
 api_id="$("${compose[@]}" ps -q api)"
 sleep 11
@@ -265,4 +319,4 @@ if [[ "$device_list" != *'Release check phone'* || "$device_list" != *'Release c
   exit 1
 fi
 
-echo "Production image passed health, pairing, multi-device authorization, unauthenticated denial, paired backup/restore, corrupt-restore safety, and crash-recovery checks."
+echo "Production image passed health, pairing, authorization, plaintext and encrypted backup/restore, wrong-passphrase and corrupt-restore safety, and crash-recovery checks."

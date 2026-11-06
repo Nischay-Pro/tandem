@@ -104,7 +104,9 @@ container to enable Actual integration. The server must be the exact version
 supported by the API build; the API fails startup if it cannot verify that
 version. `ACTUAL_API_DATA_DIR` defaults to `/data/actual-api` and must be mounted
 on persistent storage. This workspace belongs to the official Node.js API and
-can contain decrypted budget data; protect it and its backups as financial data.
+contains decrypted Actual budget files; protect it and its backups as financial
+data. PostgreSQL stores a readable projection of budget records, including
+records from encrypted budgets. Device Room caches also contain readable data.
 The server password authenticates the Tandem service to Actual. It is never
 sent to mobile devices.
 

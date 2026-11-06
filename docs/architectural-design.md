@@ -95,6 +95,11 @@ Actual also documents that local budget data is unencrypted, even when the
 remote budget uses end-to-end encryption ([Actual sync and encryption
 guide](https://actualbudget.org/docs/getting-started/sync/)).
 
+The same protection boundary applies to exported backups. `deploy/backup.sh`
+writes mode-600 plaintext files by default; for an encrypted export, it can
+stream both files through GnuPG using a passphrase stored separately from the
+backup. See the [backup and restore instructions](../deploy/README.md#backups-and-restore).
+
 ## Related documentation
 
 - [Actual compatibility and adapter boundary](actual-compatibility.md)
