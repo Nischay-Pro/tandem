@@ -57,6 +57,11 @@ data class SearchableBudgetTransaction(
     val transfer: Boolean?,
 )
 
+data class RemoteBudgetRecordKey(
+    val recordType: String,
+    val recordId: String,
+)
+
 @Entity(tableName = "budget_sync_state")
 data class BudgetSyncStateEntity(
     @PrimaryKey val budgetId: String,

@@ -4,6 +4,7 @@ import androidx.room3.withWriteTransaction
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.BudgetSyncStateEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.data.database.RemoteBudgetRecordKey
 import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.database.TandemDatabase
 import kotlinx.coroutines.Dispatchers
@@ -408,7 +409,6 @@ class LocalBudgetRepository(
             }
             val recordDao = database.budgetRecordDao()
             val localOverlays = recordDao.findLocalOverlays(budgetId).associateBy { it.recordType to it.recordId }
-            recordDao.tombstoneAllRemoteRecords(budgetId)
             if (records.isNotEmpty()) {
                 recordDao.putAll(
                     records.map { record ->
@@ -416,6 +416,15 @@ class LocalBudgetRepository(
                     },
                 )
             }
+            recordDao
+                .findRemoteRecordKeys(budgetId)
+                .filterNot { (it.recordType to it.recordId) in recordKeys }
+                .groupBy(RemoteBudgetRecordKey::recordType)
+                .forEach { (recordType, staleKeys) ->
+                    staleKeys.map(RemoteBudgetRecordKey::recordId).chunked(500).forEach { recordIds ->
+                        recordDao.tombstoneRemoteRecords(budgetId, recordType, recordIds)
+                    }
+                }
             displaySettings?.let { storeBudgetDisplaySettings(budgetId, generation, it) }
             markEditsForDeletedRecords(budgetId)
             syncStateDao.put(

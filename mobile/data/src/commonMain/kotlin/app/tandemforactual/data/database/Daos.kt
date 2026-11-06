@@ -79,6 +79,9 @@ interface BudgetRecordDao {
     )
     fun observeSearchableTransactions(budgetId: String): Flow<List<SearchableBudgetTransaction>>
 
+    @Query("SELECT recordType, recordId FROM budget_records WHERE budgetId = :budgetId AND remoteJson IS NOT NULL")
+    suspend fun findRemoteRecordKeys(budgetId: String): List<RemoteBudgetRecordKey>
+
     @Query(
         """
     SELECT * FROM budget_records
@@ -205,9 +208,13 @@ interface BudgetRecordDao {
     ): Int
 
     @Query(
-        "UPDATE budget_records SET remoteDeleted = 1, remoteJson = NULL, remoteRevision = NULL WHERE budgetId = :budgetId AND remoteJson IS NOT NULL",
+        "UPDATE budget_records SET remoteDeleted = 1, remoteJson = NULL, remoteRevision = NULL WHERE budgetId = :budgetId AND recordType = :recordType AND recordId IN (:recordIds) AND remoteJson IS NOT NULL",
     )
-    suspend fun tombstoneAllRemoteRecords(budgetId: String)
+    suspend fun tombstoneRemoteRecords(
+        budgetId: String,
+        recordType: String,
+        recordIds: List<String>,
+    ): Int
 }
 
 @Dao

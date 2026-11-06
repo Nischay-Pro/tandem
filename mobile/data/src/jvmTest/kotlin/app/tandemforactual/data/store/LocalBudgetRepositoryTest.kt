@@ -1336,6 +1336,48 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
+    fun fullSnapshotTombstonesMissingRowsWithinTheSameGeneration() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val staleTransactions = (0..500).map { index -> transaction(recordId = "txn-stale-$index") }
+                repository.applySnapshot(
+                    BUDGET,
+                    GENERATION,
+                    "c1",
+                    listOf(transaction(recordId = "txn-kept"), transaction(recordId = "txn-removed")) + staleTransactions,
+                )
+                repository.enqueueWrite(
+                    updateRequest(
+                        operationId = "edit-removed",
+                        idempotencyKey = "edit-removed-key",
+                        recordId = "txn-removed",
+                    ),
+                )
+
+                repository.applySnapshot(
+                    BUDGET,
+                    GENERATION,
+                    "c2",
+                    listOf(transaction(recordId = "txn-kept", revision = "revision-2")),
+                )
+
+                val removed = assertNotNull(repository.findRecord(BUDGET, "transaction", "txn-removed"))
+                assertTrue(removed.remoteDeleted)
+                assertNull(removed.remoteJson)
+                assertNotNull(removed.localJson)
+                assertEquals("conflict", repository.readPendingWrites(BUDGET).single().status)
+                assertEquals("revision-2", repository.findRecord(BUDGET, "transaction", "txn-kept")?.remoteRevision)
+                assertTrue(assertNotNull(repository.findRecord(BUDGET, "transaction", "txn-stale-0")).remoteDeleted)
+                assertTrue(assertNotNull(repository.findRecord(BUDGET, "transaction", "txn-stale-500")).remoteDeleted)
+                assertEquals(listOf("txn-kept", "txn-removed"), repository.findRecords(BUDGET, "transaction").map { it.recordId })
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun syncIndicatorsPreserveTheLastSuccessfulCursorAndRecordErrors() =
         runBlocking {
             val database = newDatabase()
