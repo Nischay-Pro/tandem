@@ -278,13 +278,9 @@ for (const icon of records) {
     icon.resourceName,
     String(matchPriority(icon.license)),
   ];
-  matcherIndex.push(
-    [...shared, "1", matcherField(icon.title)].join("\t"),
-  );
+  matcherIndex.push([...shared, "1", matcherField(icon.title)].join("\t"));
   for (const alias of icon.aliases.filter((value) => value.trim().length > 0)) {
-    matcherIndex.push(
-      [...shared, "0", matcherField(alias)].join("\t"),
-    );
+    matcherIndex.push([...shared, "0", matcherField(alias)].join("\t"));
   }
 }
 await writeFile(
