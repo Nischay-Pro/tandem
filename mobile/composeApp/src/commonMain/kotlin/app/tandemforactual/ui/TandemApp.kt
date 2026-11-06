@@ -272,7 +272,6 @@ private enum class AppRoute(
     ACCOUNTS("Accounts"),
     ACCOUNT_DETAIL("Checking"),
     ACCOUNT_OPTIONS("Account options"),
-    RECONCILIATION("Reconcile account"),
     ACTIVITY("Activity"),
     ACTIVITY_SEARCH("Search transactions"),
     ACTIVITY_FILTER("Filter and sort"),
@@ -2513,7 +2512,6 @@ private fun ScreenContent(
         AppRoute.ACCOUNTS -> AccountsScreen(state, navigation, liveAccounts, mobileSession.isSyncing, onSyncNow)
         AppRoute.ACCOUNT_DETAIL -> AccountDetailScreen(state, navigation, liveAccounts, liveTransactions)
         AppRoute.ACCOUNT_OPTIONS -> AccountOptionsScreen(state, liveAccounts)
-        AppRoute.RECONCILIATION -> ReconciliationScreen(state)
         AppRoute.ACTIVITY -> ActivityScreen(state, navigation, liveTransactions, mobileSession.isSyncing, onSyncNow)
         AppRoute.ACTIVITY_SEARCH -> ActivitySearchScreen(state, mobileSession, navigation, merchantIconMatcher)
         AppRoute.ACTIVITY_FILTER -> ActivitySearchScreen(state, mobileSession, navigation, merchantIconMatcher)
@@ -2924,27 +2922,6 @@ private fun MonthSelectorCard(
                 modifier = Modifier.size(22.dp),
                 tint = palette.accent,
             )
-        }
-    }
-}
-
-@Composable
-private fun AccountActionButtons(
-    addEnabled: Boolean,
-    reconciliationEnabled: Boolean,
-    onAddTransaction: () -> Unit,
-    onReconcile: () -> Unit,
-) {
-    val useFullWidthButtons = shouldStackActionButtons(LocalDensity.current.fontScale)
-    if (useFullWidthButtons) {
-        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-            PrimaryButton("Add transaction", enabled = addEnabled, onClick = onAddTransaction)
-            SecondaryButton("Reconcile", enabled = reconciliationEnabled, onClick = onReconcile)
-        }
-    } else {
-        Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-            PrimaryButton("Add transaction", enabled = addEnabled, modifier = Modifier.weight(1f), onClick = onAddTransaction)
-            SecondaryButton("Reconcile", enabled = reconciliationEnabled, modifier = Modifier.weight(1f), onClick = onReconcile)
         }
     }
 }
@@ -4263,17 +4240,57 @@ private fun BudgetScreen(
     onSyncNow: () -> Unit,
 ) {
     val palette = tandemPalette
+    val isLiveBudget = state.selectedBudgetId.isNotBlank()
     val compact = state.homeLayout == "Compact"
     val essentialsFirst = state.homeLayout == "Essentials"
     val sectionSpacing = if (compact) 10.dp else 16.dp
-    if (state.selectedBudgetId.isNotBlank()) {
-        PageLazyColumn(
-            verticalSpacing = sectionSpacing,
-            horizontalPadding = if (compact) 16.dp else 20.dp,
-            isRefreshing = mobileSession.isSyncing,
-            onRefresh = onSyncNow.takeIf { state.selectedBudgetId.isNotBlank() },
-        ) {
-            val conflictCount = mobileSession.pendingWrites.count { it.status == "conflict" }
+    val groups = if (isLiveBudget) liveBudgetMonth?.groups.orEmpty() else previewCategoryGroups
+    val recentTransactions = if (isLiveBudget) liveTransactions else liveTransactions.takeIf { it.isNotEmpty() } ?: previewTransactions
+    val conflictCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "conflict" } else 0
+    val rejectedCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "rejected" } else 0
+    val readyToAssignMinor = if (isLiveBudget) liveBudgetMonth?.toBudgetMinor ?: 0 else 124_000L
+    val summaryKey =
+        if (isLiveBudget) {
+            "live:${state.selectedBudgetId}:summary:${state.selectedMonthId}"
+        } else {
+            "summary:${state.selectedMonthId}"
+        }
+    val displayGroups =
+        if (essentialsFirst) {
+            groups
+                .withIndex()
+                .sortedWith(
+                    compareBy<IndexedValue<LiveCategoryGroupSummary>>(
+                        { essentialGroupOrder(it.value.name) },
+                        { it.index },
+                    ),
+                ).map { it.value }
+        } else {
+            groups
+        }
+    val pinnedCategories =
+        groups.flatMap { group ->
+            group.categories.filter { state.isCategoryPinned(it.id) }.map { group to it }
+        }
+
+    PageLazyColumn(
+        verticalSpacing = sectionSpacing,
+        horizontalPadding = if (compact) 16.dp else 20.dp,
+        isRefreshing = isLiveBudget && mobileSession.isSyncing,
+        onRefresh = onSyncNow.takeIf { isLiveBudget },
+    ) {
+        if (!isLiveBudget) {
+            item(key = "budget-sample-banner") {
+                SampleBanner(
+                    if (liveTransactions.isNotEmpty()) {
+                        "Categories use sample data; activity is synced"
+                    } else {
+                        "Categories use sample data"
+                    },
+                )
+            }
+        }
+        if (isLiveBudget) {
             item(key = "budget-conflict-alert") {
                 AnimatedReveal(visible = state.conflictReviewAlerts && conflictCount > 0) {
                     AttentionBanner(
@@ -4283,7 +4300,6 @@ private fun BudgetScreen(
                     ) { navigation.open(AppRoute.CONFLICT_INBOX) }
                 }
             }
-            val rejectedCount = mobileSession.pendingWrites.count { it.status == "rejected" }
             item(key = "budget-rejected-alert") {
                 AnimatedReveal(visible = state.rejectedEditAlerts && rejectedCount > 0) {
                     AttentionBanner(
@@ -4293,181 +4309,65 @@ private fun BudgetScreen(
                     ) { navigation.open(AppRoute.REJECTED_WRITE) }
                 }
             }
-            item(key = "budget-overview-title") {
-                Heading(
-                    "Budget overview",
-                    "Review the synced plan and recent activity for the selected month.",
-                    compactSubtitle = true,
-                )
-            }
-            item(key = "budget-month-picker") {
-                MonthSelectorCard(state.selectedMonth) { navigation.open(AppRoute.MONTH_PICKER) }
-            }
-            if (liveBudgetMonth == null) {
-                item(key = "budget-month-empty") {
-                    SurfaceCard {
-                        EmptyState(
-                            "No plan for this month",
-                            "Sync a month available in Actual, or choose a different planning period.",
-                            modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                        )
-                    }
-                }
-            } else {
-                val summaryKey = "live:${state.selectedBudgetId}:summary:${state.selectedMonthId}"
-                item(key = summaryKey) {
-                    CollapsibleSectionCard(
-                        "${state.selectedMonth} summary",
-                        "${liveBudgetMonth.groups.sumOf { it.categories.size }} categories",
-                        state.formatCurrency(liveBudgetMonth.toBudgetMinor ?: 0),
-                        expanded = !state.isBudgetSectionCollapsed(summaryKey),
-                        onToggleExpanded = { state.toggleBudgetSection(summaryKey) },
-                    ) {
-                        ListRow(
-                            "Ready to assign",
-                            state.selectedMonth,
-                            state.formatCurrency(liveBudgetMonth.toBudgetMinor ?: 0),
-                            leading = RowLeading.Icon(Lucide.WalletCards),
-                        )
-                    }
-                }
-                val pinnedCategories =
-                    liveBudgetMonth.groups.flatMap { group ->
-                        group.categories.filter { state.isCategoryPinned(it.id) }.map { group to it }
-                    }
-                if (pinnedCategories.isNotEmpty()) {
-                    val pinnedSectionKey = "live:${state.selectedBudgetId}:pinned"
-                    val pinnedExpanded = !state.isBudgetSectionCollapsed(pinnedSectionKey)
-                    item(key = "$pinnedSectionKey:section") {
-                        Column {
-                            CollapsibleSectionCard(
-                                "Pinned",
-                                "${pinnedCategories.size} categories",
-                                expanded = pinnedExpanded,
-                                onToggleExpanded = { state.toggleBudgetSection(pinnedSectionKey) },
-                            ) {}
-                            AnimatedVisibility(
-                                visible = pinnedExpanded,
-                                enter = expandVertically() + fadeIn(),
-                                exit = shrinkVertically() + fadeOut(),
-                            ) {
-                                Column(
-                                    Modifier.padding(top = sectionSpacing),
-                                    verticalArrangement = Arrangement.spacedBy(sectionSpacing),
-                                ) {
-                                    pinnedCategories.forEach { (group, category) ->
-                                        SurfaceCard {
-                                            ListRow(
-                                                category.name,
-                                                group.name,
-                                                state.formatCurrency(category.balanceMinor),
-                                                leading = RowLeading.Icon(financeIcon(category.name)),
-                                            ) {
-                                                state.selectedCategoryGroupId = group.id
-                                                state.selectedCategoryId = category.id
-                                                navigation.open(AppRoute.CATEGORY_DETAIL)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                val displayGroups =
-                    if (essentialsFirst) {
-                        liveBudgetMonth.groups
-                            .withIndex()
-                            .sortedWith(
-                                compareBy<IndexedValue<LiveCategoryGroupSummary>>(
-                                    { essentialGroupOrder(it.value.name) },
-                                    { it.index },
-                                ),
-                            ).map { it.value }
-                    } else {
-                        liveBudgetMonth.groups
-                    }
-                displayGroups.forEach { group ->
-                    val groupSectionKey = "live:${state.selectedBudgetId}:group:${group.id}"
-                    val groupExpanded = !state.isBudgetSectionCollapsed(groupSectionKey)
-                    val displayCategories =
-                        if (essentialsFirst) {
-                            group.categories
-                                .withIndex()
-                                .sortedWith(
-                                    compareBy<IndexedValue<LiveCategorySummary>>(
-                                        { essentialCategoryOrder(it.value.name) },
-                                        { it.index },
-                                    ),
-                                ).map { it.value }
-                        } else {
-                            group.categories
-                        }
-                    item(key = "$groupSectionKey:section") {
-                        Column {
-                            CollapsibleSectionCard(
-                                group.name,
-                                "${state.formatCurrency(group.assignedMinor)} assigned · ${group.categories.size} categories",
-                                state.formatCurrency(group.balanceMinor),
-                                expanded = groupExpanded,
-                                onToggleExpanded = { state.toggleBudgetSection(groupSectionKey) },
-                                onClick = {
-                                    state.selectedCategoryGroupId = group.id
-                                    navigation.open(AppRoute.CATEGORY_GROUP)
-                                },
-                            ) {}
-                            AnimatedVisibility(
-                                visible = groupExpanded,
-                                enter = expandVertically() + fadeIn(),
-                                exit = shrinkVertically() + fadeOut(),
-                            ) {
-                                Column(
-                                    Modifier.padding(top = sectionSpacing),
-                                    verticalArrangement = Arrangement.spacedBy(sectionSpacing),
-                                ) {
-                                    displayCategories.forEach { category ->
-                                        SurfaceCard {
-                                            ListRow(
-                                                category.name,
-                                                "Spent ${state.formatCurrency(
-                                                    kotlin.math.abs(category.activityMinor),
-                                                )} · ${state.formatCurrency(category.balanceMinor)} left",
-                                                state.formatCurrency(category.assignedMinor),
-                                                leading = RowLeading.Icon(financeIcon(category.name)),
-                                                options =
-                                                    ListRowOptions(
-                                                        trailingColor =
-                                                            if (category.balanceMinor >= 0) palette.positive else palette.warning,
-                                                        dense = compact,
-                                                    ),
-                                            ) {
-                                                state.selectedCategoryGroupId = group.id
-                                                state.selectedCategoryId = category.id
-                                                navigation.open(AppRoute.CATEGORY_DETAIL)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+        }
+        item(key = "budget-overview-title") {
+            Heading(
+                "Budget overview",
+                if (isLiveBudget) {
+                    "Review the synced plan and recent activity for the selected month."
+                } else {
+                    "Review category balances and spending for the selected month."
+                },
+                compactSubtitle = true,
+            )
+        }
+        item(key = "budget-month-picker") {
+            MonthSelectorCard(state.selectedMonth) { navigation.open(AppRoute.MONTH_PICKER) }
+        }
+        if (isLiveBudget && liveBudgetMonth == null) {
+            item(key = "budget-month-empty") {
+                SurfaceCard {
+                    EmptyState(
+                        "No plan for this month",
+                        "Sync a month available in Actual, or choose a different planning period.",
+                        modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                    )
                 }
             }
-            if (liveTransactions.isNotEmpty()) {
-                val recentSectionKey = "live:${state.selectedBudgetId}:recent-activity"
-                val recentExpanded = !state.isBudgetSectionCollapsed(recentSectionKey)
-                item(key = "$recentSectionKey:section") {
+        } else {
+            item(key = summaryKey) {
+                CollapsibleSectionCard(
+                    "${state.selectedMonth} summary",
+                    if (isLiveBudget) "${groups.sumOf { it.categories.size }} categories" else "Ready to assign",
+                    state.formatCurrency(readyToAssignMinor),
+                    expanded = !state.isBudgetSectionCollapsed(summaryKey),
+                    onToggleExpanded = { state.toggleBudgetSection(summaryKey) },
+                ) {
+                    ListRow(
+                        if (isLiveBudget) "Ready to assign" else "Available this month",
+                        if (isLiveBudget) state.selectedMonth else "On track",
+                        state.formatCurrency(readyToAssignMinor),
+                        leading = RowLeading.Icon(Lucide.WalletCards),
+                        options = ListRowOptions(trailingColor = palette.positive),
+                    )
+                }
+            }
+            if (!isLiveBudget && essentialsFirst) {
+                item(key = "sample-upcoming-before-groups") { UpcomingBillsCard(state, navigation) }
+            }
+            if (pinnedCategories.isNotEmpty()) {
+                val pinnedSectionKey = if (isLiveBudget) "live:${state.selectedBudgetId}:pinned" else "sample:pinned"
+                val pinnedExpanded = !state.isBudgetSectionCollapsed(pinnedSectionKey)
+                item(key = "$pinnedSectionKey:section") {
                     Column {
                         CollapsibleSectionCard(
-                            "Recent activity",
-                            "${liveTransactions.size} synced transactions",
-                            "See all",
-                            onClick = { navigation.selectTab(AppRoute.ACTIVITY) },
-                            expanded = recentExpanded,
-                            onToggleExpanded = { state.toggleBudgetSection(recentSectionKey) },
+                            "Pinned",
+                            "${pinnedCategories.size} categories",
+                            expanded = pinnedExpanded,
+                            onToggleExpanded = { state.toggleBudgetSection(pinnedSectionKey) },
                         ) {}
                         AnimatedVisibility(
-                            visible = recentExpanded,
+                            visible = pinnedExpanded,
                             enter = expandVertically() + fadeIn(),
                             exit = shrinkVertically() + fadeOut(),
                         ) {
@@ -4475,9 +4375,18 @@ private fun BudgetScreen(
                                 Modifier.padding(top = sectionSpacing),
                                 verticalArrangement = Arrangement.spacedBy(sectionSpacing),
                             ) {
-                                liveTransactions.take(3).forEach { item ->
+                                pinnedCategories.forEach { (group, category) ->
                                     SurfaceCard {
-                                        TransactionRow(item) { openTransaction(state, navigation, item, isLive = true) }
+                                        ListRow(
+                                            category.name,
+                                            group.name,
+                                            state.formatCurrency(category.balanceMinor),
+                                            leading = RowLeading.Icon(financeIcon(category.name)),
+                                        ) {
+                                            state.selectedCategoryGroupId = group.id
+                                            state.selectedCategoryId = category.id
+                                            navigation.open(AppRoute.CATEGORY_DETAIL)
+                                        }
                                     }
                                 }
                             }
@@ -4485,138 +4394,159 @@ private fun BudgetScreen(
                     }
                 }
             }
-            item(key = "budget-bottom-spacer") { Spacer(Modifier.height(72.dp)) }
-        }
-        return
-    }
-    PageColumn(verticalSpacing = if (compact) 10.dp else 16.dp, horizontalPadding = if (compact) 16.dp else 20.dp) {
-        SampleBanner(
-            if (liveTransactions.isNotEmpty()) {
-                "Categories use sample data; activity is synced"
-            } else {
-                "Categories use sample data"
-            },
-        )
-        Heading(
-            "Budget overview",
-            "Review category balances and spending for the selected month.",
-            compactSubtitle = true,
-        )
-        MonthSelectorCard(state.selectedMonth) { navigation.open(AppRoute.MONTH_PICKER) }
-        val summaryKey = "summary:${state.selectedMonthId}"
-        CollapsibleSectionCard(
-            "${state.selectedMonth} summary",
-            "Ready to assign",
-            state.formatCurrency(124_000),
-            expanded = !state.isBudgetSectionCollapsed(summaryKey),
-            onToggleExpanded = { state.toggleBudgetSection(summaryKey) },
-        ) {
-            ListRow(
-                "Available this month",
-                "On track",
-                state.formatCurrency(124_000),
-                leading = RowLeading.Icon(Lucide.WalletCards),
-                options = ListRowOptions(trailingColor = palette.positive),
-            )
-        }
-        if (essentialsFirst) UpcomingBillsCard(state, navigation)
-        CollapsibleSectionCard(
-            "Essentials",
-            "${state.formatCurrency(232_000)} assigned · 3 categories",
-            state.formatCurrency(232_000),
-            onClick = { openPreviewCategoryGroup(state, navigation, "sample-essentials") },
-            expanded = !state.isBudgetSectionCollapsed("sample:essentials"),
-            onToggleExpanded = { state.toggleBudgetSection("sample:essentials") },
-        ) {
-            ListRow(
-                "Rent",
-                "Due ${formatShortDate(SampleDate(2026, 5, 1))}",
-                state.formatCurrency(150_000),
-                leading = RowLeading.Icon(financeIcon("Rent")),
-                options = ListRowOptions(trailingColor = palette.positive, dense = compact),
-            ) {
-                openPreviewCategory(state, navigation, "sample-essentials", "sample-rent")
-            }
-            DividerLine()
-            ListRow(
-                "Groceries",
-                "Spent ${state.formatCurrency(18_400)} this month",
-                state.formatCurrency(50_000),
-                leading = RowLeading.Icon(financeIcon("Groceries")),
-                options = ListRowOptions(trailingColor = palette.positive, dense = compact),
-            ) {
-                openPreviewCategory(state, navigation, "sample-essentials", "sample-groceries")
-            }
-            DividerLine()
-            ListRow(
-                "Utilities",
-                "Spent ${state.formatCurrency(11_200)} this month",
-                state.formatCurrency(32_000),
-                leading = RowLeading.Icon(financeIcon("Utilities")),
-                options = ListRowOptions(trailingColor = palette.positive, dense = compact),
-            ) {
-                openPreviewCategory(state, navigation, "sample-essentials", "sample-utilities")
-            }
-        }
-        CollapsibleSectionCard(
-            "Everyday",
-            "Flexible spending",
-            "${state.formatCurrency(18_000)} left",
-            onClick = { openPreviewCategoryGroup(state, navigation, "sample-everyday") },
-            expanded = !state.isBudgetSectionCollapsed("sample:everyday"),
-            onToggleExpanded = { state.toggleBudgetSection("sample:everyday") },
-        ) {
-            ListRow(
-                "Dining",
-                "Spent ${state.formatCurrency(17_000)} this month",
-                state.formatCurrency(18_000),
-                options = ListRowOptions(trailingColor = palette.positive, dense = compact),
-            ) {
-                openPreviewCategory(state, navigation, "sample-everyday", "sample-dining")
-            }
-        }
-        if (!essentialsFirst) UpcomingBillsCard(state, navigation)
-        CollapsibleSectionCard(
-            "Recent activity",
-            "Latest budget changes",
-            "See all",
-            onClick = { navigation.selectTab(AppRoute.ACTIVITY) },
-            expanded = !state.isBudgetSectionCollapsed("sample:recent-activity"),
-            onToggleExpanded = { state.toggleBudgetSection("sample:recent-activity") },
-        ) {
-            (liveTransactions.takeIf { it.isNotEmpty() } ?: previewTransactions).take(2).forEachIndexed { index, item ->
-                if (index > 0) DividerLine()
-                TransactionRow(item) { openTransaction(state, navigation, item, liveTransactions.isNotEmpty()) }
-            }
-        }
-        SurfaceCard(onClick = { navigation.open(AppRoute.SYNC_CENTER) }) {
-            Row(
-                Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-            ) {
-                Badge("✓", palette.positive)
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "All changes accounted for",
-                        color = palette.text,
-                        fontSize = TandemTypography.compactBody,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        if (liveTransactions.isNotEmpty()) {
-                            "${liveTransactions.size} recent Actual transactions cached"
-                        } else {
-                            "Sample data · nothing has synced"
-                        },
-                        color = palette.muted,
-                        fontSize = TandemTypography.caption,
-                    )
+            displayGroups.forEach { group ->
+                val groupSectionKey =
+                    if (isLiveBudget) {
+                        "live:${state.selectedBudgetId}:group:${group.id}"
+                    } else {
+                        "sample:${group.id.removePrefix("sample-")}"
+                    }
+                val groupExpanded = !state.isBudgetSectionCollapsed(groupSectionKey)
+                val displayCategories =
+                    if (essentialsFirst) {
+                        group.categories
+                            .withIndex()
+                            .sortedWith(
+                                compareBy<IndexedValue<LiveCategorySummary>>(
+                                    { essentialCategoryOrder(it.value.name) },
+                                    { it.index },
+                                ),
+                            ).map { it.value }
+                    } else {
+                        group.categories
+                    }
+                item(key = "$groupSectionKey:section") {
+                    Column {
+                        CollapsibleSectionCard(
+                            group.name,
+                            "${state.formatCurrency(group.assignedMinor)} assigned · ${group.categories.size} categories",
+                            state.formatCurrency(group.balanceMinor),
+                            expanded = groupExpanded,
+                            onToggleExpanded = { state.toggleBudgetSection(groupSectionKey) },
+                            onClick = {
+                                if (isLiveBudget) {
+                                    state.selectedCategoryGroupId = group.id
+                                    navigation.open(AppRoute.CATEGORY_GROUP)
+                                } else {
+                                    openPreviewCategoryGroup(state, navigation, group.id)
+                                }
+                            },
+                        ) {}
+                        AnimatedVisibility(
+                            visible = groupExpanded,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut(),
+                        ) {
+                            Column(
+                                Modifier.padding(top = sectionSpacing),
+                                verticalArrangement = Arrangement.spacedBy(sectionSpacing),
+                            ) {
+                                displayCategories.forEach { category ->
+                                    SurfaceCard {
+                                        ListRow(
+                                            category.name,
+                                            "Spent ${state.formatCurrency(
+                                                kotlin.math.abs(category.activityMinor),
+                                            )} · ${state.formatCurrency(category.balanceMinor)} available",
+                                            state.formatCurrency(category.assignedMinor),
+                                            leading = RowLeading.Icon(financeIcon(category.name)),
+                                            options =
+                                                ListRowOptions(
+                                                    trailingColor = if (category.balanceMinor >= 0) palette.positive else palette.warning,
+                                                    dense = compact,
+                                                ),
+                                        ) {
+                                            if (isLiveBudget) {
+                                                state.selectedCategoryGroupId = group.id
+                                                state.selectedCategoryId = category.id
+                                                navigation.open(AppRoute.CATEGORY_DETAIL)
+                                            } else {
+                                                openPreviewCategory(state, navigation, group.id, category.id)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
-                Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.muted)
+            }
+            if (!isLiveBudget && !essentialsFirst) {
+                item(key = "sample-upcoming-after-groups") { UpcomingBillsCard(state, navigation) }
             }
         }
-        Spacer(Modifier.height(72.dp))
+        if (recentTransactions.isNotEmpty()) {
+            val recentSectionKey =
+                if (isLiveBudget) "live:${state.selectedBudgetId}:recent-activity" else "sample:recent-activity"
+            val recentExpanded = !state.isBudgetSectionCollapsed(recentSectionKey)
+            item(key = "$recentSectionKey:section") {
+                Column {
+                    CollapsibleSectionCard(
+                        "Recent activity",
+                        if (isLiveBudget) "${liveTransactions.size} synced transactions" else "Latest budget changes",
+                        "See all",
+                        onClick = { navigation.selectTab(AppRoute.ACTIVITY) },
+                        expanded = recentExpanded,
+                        onToggleExpanded = { state.toggleBudgetSection(recentSectionKey) },
+                    ) {}
+                    AnimatedVisibility(
+                        visible = recentExpanded,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
+                        Column(
+                            Modifier.padding(top = sectionSpacing),
+                            verticalArrangement = Arrangement.spacedBy(sectionSpacing),
+                        ) {
+                            recentTransactions.take(if (isLiveBudget) 3 else 2).forEach { transaction ->
+                                SurfaceCard {
+                                    TransactionRow(transaction) {
+                                        openTransaction(
+                                            state,
+                                            navigation,
+                                            transaction,
+                                            isLive = isLiveBudget || liveTransactions.isNotEmpty(),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (!isLiveBudget) {
+            item(key = "sample-sync-summary") {
+                SurfaceCard(onClick = { navigation.open(AppRoute.SYNC_CENTER) }) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                    ) {
+                        Badge("✓", palette.positive)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "All changes accounted for",
+                                color = palette.text,
+                                fontSize = TandemTypography.compactBody,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                if (liveTransactions.isNotEmpty()) {
+                                    "${liveTransactions.size} recent Actual transactions cached"
+                                } else {
+                                    "Sample data · nothing has synced"
+                                },
+                                color = palette.muted,
+                                fontSize = TandemTypography.caption,
+                            )
+                        }
+                        Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.muted)
+                    }
+                }
+            }
+        }
+        item(key = "budget-bottom-spacer") { Spacer(Modifier.height(72.dp)) }
     }
 }
 
@@ -5098,18 +5028,16 @@ private fun AccountDetailScreen(
             Heading("Account details", "This account isn’t saved on this device.")
         } else {
             AmountHero("Available balance", balance, "$accountName · $description")
-            AccountActionButtons(
-                addEnabled = !offBudget && !state.readOnlyMode,
-                reconciliationEnabled = !isLiveBudget,
-                onAddTransaction = {
-                    if (isLiveBudget) {
-                        navigation.newTransaction(liveAccount!!.id)
-                    } else {
-                        navigation.open(AppRoute.NEW_TRANSACTION)
-                    }
-                },
-                onReconcile = { if (!isLiveBudget) navigation.open(AppRoute.RECONCILIATION) },
-            )
+            PrimaryButton(
+                "Add transaction",
+                enabled = !offBudget && !state.readOnlyMode,
+            ) {
+                if (isLiveBudget) {
+                    navigation.newTransaction(liveAccount!!.id)
+                } else {
+                    navigation.open(AppRoute.NEW_TRANSACTION)
+                }
+            }
             if (accountActivity.isEmpty()) {
                 SurfaceCard {
                     EmptyState("No recent activity", modifier = Modifier.padding(TandemSpacing.large))
@@ -5159,38 +5087,7 @@ private fun AccountOptionsScreen(
     PageColumn {
         Heading(account.name, "Account options")
         ListRow("Edit account details", "Name and notes", "Unavailable")
-        ListRow("Reconcile balance", "Compare the account against a statement", "Unavailable")
         ListRow("Hide from budget", "Keep historical activity available", "Unavailable")
-        PreviewNote(
-            "Account changes and reconciliation aren’t available in this sample view.",
-        )
-    }
-}
-
-@Composable
-private fun ReconciliationScreen(state: AppState) {
-    PageColumn {
-        Heading("Compare balances", "Compare cleared transactions with a statement.")
-        TextFieldCard(
-            "Statement balance",
-            state.formatAmount(348_216),
-            {},
-            TextFieldOptions(placeholder = state.formatAmount(0)),
-        )
-        SectionCard("Difference", "Sample calculation") {
-            ListRow("Account balance", "Current sample balance", state.formatCurrency(348_216))
-            DividerLine()
-            ListRow(
-                "Out of balance",
-                "No cleared transactions compared",
-                state.formatCurrency(0),
-                options = ListRowOptions(trailingColor = tandemPalette.positive),
-            )
-        }
-        PreviewNote(
-            "This sample balance isn’t verified. No statement or transaction will be changed.",
-        )
-        PrimaryButton("Reconcile account", enabled = false) {}
     }
 }
 
