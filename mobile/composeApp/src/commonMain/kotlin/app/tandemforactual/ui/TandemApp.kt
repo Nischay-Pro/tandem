@@ -3702,28 +3702,55 @@ private fun ReadOnlyField(
     }
 }
 
+private data class ListRowOptions(
+    val trailingColor: Color? = null,
+    val dense: Boolean = false,
+    val animateChanges: Boolean = false,
+)
+
+private sealed interface RowLeading {
+    data object Automatic : RowLeading
+
+    data object None : RowLeading
+
+    data class Icon(
+        val imageVector: ImageVector?,
+    ) : RowLeading
+
+    data class Merchant(
+        val resource: DrawableResource?,
+        val fallback: ImageVector? = null,
+    ) : RowLeading
+
+    data class Letter(
+        val value: String,
+    ) : RowLeading
+}
+
 @Composable
 private fun ListRow(
-    icon: String,
     title: String,
     subtitle: String? = null,
     trailing: String? = null,
-    trailingColor: Color? = null,
-    dense: Boolean = false,
-    leadingVector: ImageVector? = null,
-    fallbackVector: ImageVector? = null,
-    leadingIconResource: DrawableResource? = null,
-    animateChanges: Boolean = false,
+    leading: RowLeading = RowLeading.Automatic,
+    options: ListRowOptions = ListRowOptions(),
     onClick: (() -> Unit)? = null,
 ) {
     val palette = tandemPalette
-    val resolvedPainter = leadingIconResource?.let { painterResource(it) }
-    val resolvedVector = if (resolvedPainter == null) leadingVector ?: fallbackVector ?: financeIcon(title) ?: Lucide.CircleDot else null
+    val merchantResource = (leading as? RowLeading.Merchant)?.resource
+    val resolvedPainter = merchantResource?.let { painterResource(it) }
+    val resolvedVector =
+        when (leading) {
+            RowLeading.Automatic -> financeIcon(title) ?: Lucide.CircleDot
+            RowLeading.None, is RowLeading.Letter -> null
+            is RowLeading.Icon -> leading.imageVector ?: financeIcon(title) ?: Lucide.CircleDot
+            is RowLeading.Merchant -> leading.fallback ?: financeIcon(title) ?: Lucide.CircleDot
+        }
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .defaultMinSize(minHeight = if (dense) 56.dp else 64.dp)
+                .defaultMinSize(minHeight = if (options.dense) 56.dp else 64.dp)
                 .then(
                     if (onClick != null) {
                         Modifier.clickable(role = Role.Button, onClickLabel = title, onClick = onClick)
@@ -3732,41 +3759,53 @@ private fun ListRow(
                     },
                 ).padding(
                     horizontal = TandemSpacing.large,
-                    vertical = if (dense) TandemSpacing.extraSmall + TandemSpacing.xxSmall else TandemSpacing.small + TandemSpacing.xxSmall,
+                    vertical =
+                        if (options.dense) {
+                            TandemSpacing.extraSmall + TandemSpacing.xxSmall
+                        } else {
+                            TandemSpacing.small +
+                                TandemSpacing.xxSmall
+                        },
                 ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
     ) {
-        Box(
-            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(TandemShapes.medium)).background(palette.raised),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (resolvedPainter != null) {
-                Image(
-                    painter = resolvedPainter,
-                    contentDescription = null,
-                    modifier = Modifier.size(32.dp).padding(TandemSpacing.xxSmall),
-                    contentScale = ContentScale.Fit,
-                )
-            } else if (resolvedVector != null) {
-                Icon(
-                    imageVector = resolvedVector,
-                    contentDescription = null,
-                    modifier = Modifier.size(30.dp),
-                    tint = palette.accent,
-                )
-            } else {
-                Text(
-                    icon,
-                    modifier = Modifier.clearAndSetSemantics {},
-                    color = palette.accent,
-                    fontSize = if (dense) TandemTypography.action else TandemTypography.cardTitle,
-                    fontWeight = FontWeight.Bold,
-                )
+        if (leading != RowLeading.None) {
+            Box(
+                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(TandemShapes.medium)).background(palette.raised),
+                contentAlignment = Alignment.Center,
+            ) {
+                when {
+                    resolvedPainter != null -> {
+                        Image(
+                            painter = resolvedPainter,
+                            contentDescription = null,
+                            modifier = Modifier.size(32.dp).padding(TandemSpacing.xxSmall),
+                            contentScale = ContentScale.Fit,
+                        )
+                    }
+                    resolvedVector != null -> {
+                        Icon(
+                            imageVector = resolvedVector,
+                            contentDescription = null,
+                            modifier = Modifier.size(30.dp),
+                            tint = palette.accent,
+                        )
+                    }
+                    leading is RowLeading.Letter -> {
+                        Text(
+                            leading.value,
+                            modifier = Modifier.clearAndSetSemantics {},
+                            color = palette.accent,
+                            fontSize = if (options.dense) TandemTypography.action else TandemTypography.cardTitle,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
             }
         }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-            if (animateChanges) {
+            if (options.animateChanges) {
                 AnimatedStatusText(
                     title,
                     palette.text,
@@ -3786,7 +3825,7 @@ private fun ListRow(
                 )
             }
             if (subtitle != null) {
-                if (animateChanges) {
+                if (options.animateChanges) {
                     AnimatedStatusText(
                         subtitle,
                         palette.muted,
@@ -3806,8 +3845,8 @@ private fun ListRow(
             }
         }
         if (trailing != null) {
-            val effectiveColor = trailingColor ?: palette.muted
-            if (animateChanges) {
+            val effectiveColor = options.trailingColor ?: palette.muted
+            if (options.animateChanges) {
                 AnimatedStatusText(
                     trailing,
                     effectiveColor,
@@ -3917,8 +3956,38 @@ private fun SectionCard(
     action: String? = null,
     onClick: (() -> Unit)? = null,
     animateDetail: Boolean = false,
-    expanded: Boolean? = null,
-    onToggleExpanded: (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    SectionCardLayout(title, detail, action, onClick, animateDetail, null, content)
+}
+
+private data class SectionCollapse(
+    val expanded: Boolean,
+    val onToggle: () -> Unit,
+)
+
+@Composable
+private fun CollapsibleSectionCard(
+    title: String,
+    detail: String? = null,
+    action: String? = null,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    onClick: (() -> Unit)? = null,
+    animateDetail: Boolean = false,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    SectionCardLayout(title, detail, action, onClick, animateDetail, SectionCollapse(expanded, onToggleExpanded), content)
+}
+
+@Composable
+private fun SectionCardLayout(
+    title: String,
+    detail: String?,
+    action: String?,
+    onClick: (() -> Unit)?,
+    animateDetail: Boolean,
+    collapse: SectionCollapse?,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val palette = tandemPalette
@@ -3968,22 +4037,22 @@ private fun SectionCard(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    if (onToggleExpanded != null) {
+                    if (collapse != null) {
                         val arrowRotation by
                             animateFloatAsState(
-                                targetValue = if (expanded == false) -90f else 0f,
+                                targetValue = if (!collapse.expanded) -90f else 0f,
                                 animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
                                 label = "section-chevron-$title",
                             )
                         Icon(
                             imageVector = Lucide.ChevronDown,
-                            contentDescription = if (expanded == false) "Expand $title" else "Collapse $title",
+                            contentDescription = if (!collapse.expanded) "Expand $title" else "Collapse $title",
                             modifier =
                                 Modifier
                                     .padding(start = TandemSpacing.extraSmall)
                                     .size(36.dp)
                                     .clip(CircleShape)
-                                    .clickable(role = Role.Button, onClick = onToggleExpanded)
+                                    .clickable(role = Role.Button, onClick = collapse.onToggle)
                                     .padding(TandemSpacing.small)
                                     .graphicsLayer { rotationZ = arrowRotation },
                             tint = palette.muted,
@@ -3992,11 +4061,11 @@ private fun SectionCard(
                 }
                 Box(Modifier.fillMaxWidth().height(1.dp).background(palette.border.copy(alpha = 0.75f)))
             }
-            if (onToggleExpanded == null) {
+            if (collapse == null) {
                 content()
             } else {
                 AnimatedVisibility(
-                    visible = expanded != false,
+                    visible = collapse.expanded,
                     enter = expandVertically() + fadeIn(),
                     exit = shrinkVertically() + fadeOut(),
                 ) {
@@ -4139,13 +4208,12 @@ private fun CheckBoxRow(
 
 @Composable
 private fun SettingRow(
-    icon: String,
     title: String,
     subtitle: String? = null,
     value: String? = null,
     onClick: () -> Unit,
 ) {
-    ListRow(icon, title, subtitle, value, onClick = onClick)
+    ListRow(title, subtitle, value, onClick = onClick)
 }
 
 @Composable
@@ -4886,7 +4954,7 @@ private fun BudgetScreen(
             } else {
                 val summaryKey = "live:${state.selectedBudgetId}:summary:${state.selectedMonthId}"
                 item(key = summaryKey) {
-                    SectionCard(
+                    CollapsibleSectionCard(
                         "${state.selectedMonth} summary",
                         "${liveBudgetMonth.groups.sumOf { it.categories.size }} categories",
                         state.formatCurrency(liveBudgetMonth.toBudgetMinor ?: 0),
@@ -4894,11 +4962,10 @@ private fun BudgetScreen(
                         onToggleExpanded = { state.toggleBudgetSection(summaryKey) },
                     ) {
                         ListRow(
-                            "¤",
                             "Ready to assign",
                             state.selectedMonth,
                             state.formatCurrency(liveBudgetMonth.toBudgetMinor ?: 0),
-                            leadingVector = Lucide.WalletCards,
+                            leading = RowLeading.Icon(Lucide.WalletCards),
                         )
                     }
                 }
@@ -4910,7 +4977,7 @@ private fun BudgetScreen(
                     val pinnedSectionKey = "live:${state.selectedBudgetId}:pinned"
                     val pinnedExpanded = !state.isBudgetSectionCollapsed(pinnedSectionKey)
                     item(key = "$pinnedSectionKey:header") {
-                        SectionCard(
+                        CollapsibleSectionCard(
                             "Pinned",
                             "${pinnedCategories.size} categories",
                             expanded = pinnedExpanded,
@@ -4926,11 +4993,10 @@ private fun BudgetScreen(
                         ) {
                             SurfaceCard {
                                 ListRow(
-                                    category.name.take(1).uppercase(),
                                     category.name,
                                     group.name,
                                     state.formatCurrency(category.balanceMinor),
-                                    leadingVector = financeIcon(category.name),
+                                    leading = RowLeading.Icon(financeIcon(category.name)),
                                 ) {
                                     state.selectedCategoryGroupId = group.id
                                     state.selectedCategoryId = category.id
@@ -4957,7 +5023,7 @@ private fun BudgetScreen(
                     val groupSectionKey = "live:${state.selectedBudgetId}:group:${group.id}"
                     val groupExpanded = !state.isBudgetSectionCollapsed(groupSectionKey)
                     item(key = "$groupSectionKey:header") {
-                        SectionCard(
+                        CollapsibleSectionCard(
                             group.name,
                             "${state.formatCurrency(group.assignedMinor)} assigned · ${group.categories.size} categories",
                             state.formatCurrency(group.balanceMinor),
@@ -4991,15 +5057,24 @@ private fun BudgetScreen(
                         ) {
                             SurfaceCard {
                                 ListRow(
-                                    category.name.take(1).uppercase(),
                                     category.name,
                                     "Spent ${state.formatCurrency(
                                         kotlin.math.abs(category.activityMinor),
                                     )} · ${state.formatCurrency(category.balanceMinor)} left",
                                     state.formatCurrency(category.assignedMinor),
-                                    if (category.balanceMinor >= 0) palette.positive else palette.warning,
-                                    dense = compact,
-                                    leadingVector = financeIcon(category.name),
+                                    leading = RowLeading.Icon(financeIcon(category.name)),
+                                    options =
+                                        ListRowOptions(
+                                            trailingColor =
+                                                if (category.balanceMinor >=
+                                                    0
+                                                ) {
+                                                    palette.positive
+                                                } else {
+                                                    palette.warning
+                                                },
+                                            dense = compact,
+                                        ),
                                 ) {
                                     state.selectedCategoryGroupId = group.id
                                     state.selectedCategoryId = category.id
@@ -5014,7 +5089,7 @@ private fun BudgetScreen(
                 val recentSectionKey = "live:${state.selectedBudgetId}:recent-activity"
                 val recentExpanded = !state.isBudgetSectionCollapsed(recentSectionKey)
                 item(key = "$recentSectionKey:header") {
-                    SectionCard(
+                    CollapsibleSectionCard(
                         "Recent activity",
                         "${liveTransactions.size} synced transactions",
                         "See all",
@@ -5055,7 +5130,7 @@ private fun BudgetScreen(
         )
         MonthSelectorCard(state.selectedMonth) { navigation.open(AppRoute.MONTH_PICKER) }
         val summaryKey = "summary:${state.selectedMonthId}"
-        SectionCard(
+        CollapsibleSectionCard(
             "${state.selectedMonth} summary",
             "Ready to assign",
             state.formatCurrency(124_000),
@@ -5063,16 +5138,15 @@ private fun BudgetScreen(
             onToggleExpanded = { state.toggleBudgetSection(summaryKey) },
         ) {
             ListRow(
-                "¤",
                 "Available this month",
                 "On track",
                 state.formatCurrency(124_000),
-                palette.positive,
-                leadingVector = Lucide.WalletCards,
+                leading = RowLeading.Icon(Lucide.WalletCards),
+                options = ListRowOptions(trailingColor = palette.positive),
             )
         }
         if (essentialsFirst) UpcomingBillsCard(state, navigation)
-        SectionCard(
+        CollapsibleSectionCard(
             "Essentials",
             "${state.formatCurrency(232_000)} assigned · 3 categories",
             state.formatCurrency(232_000),
@@ -5081,42 +5155,36 @@ private fun BudgetScreen(
             onToggleExpanded = { state.toggleBudgetSection("sample:essentials") },
         ) {
             ListRow(
-                "H",
                 "Rent",
                 "Due ${formatShortDate(SampleDate(2026, 5, 1))}",
                 state.formatCurrency(150_000),
-                palette.positive,
-                dense = compact,
-                leadingVector = financeIcon("Rent"),
+                leading = RowLeading.Icon(financeIcon("Rent")),
+                options = ListRowOptions(trailingColor = palette.positive, dense = compact),
             ) {
                 navigation.open(AppRoute.CATEGORY_DETAIL)
             }
             DividerLine()
             ListRow(
-                "G",
                 "Groceries",
                 "Spent ${state.formatCurrency(18_400)} this month",
                 state.formatCurrency(50_000),
-                palette.positive,
-                dense = compact,
-                leadingVector = financeIcon("Groceries"),
+                leading = RowLeading.Icon(financeIcon("Groceries")),
+                options = ListRowOptions(trailingColor = palette.positive, dense = compact),
             ) {
                 navigation.open(AppRoute.CATEGORY_DETAIL)
             }
             DividerLine()
             ListRow(
-                "U",
                 "Utilities",
                 "Spent ${state.formatCurrency(11_200)} this month",
                 state.formatCurrency(32_000),
-                palette.positive,
-                dense = compact,
-                leadingVector = financeIcon("Utilities"),
+                leading = RowLeading.Icon(financeIcon("Utilities")),
+                options = ListRowOptions(trailingColor = palette.positive, dense = compact),
             ) {
                 navigation.open(AppRoute.CATEGORY_DETAIL)
             }
         }
-        SectionCard(
+        CollapsibleSectionCard(
             "Everyday",
             "Flexible spending",
             "${state.formatCurrency(18_000)} left",
@@ -5125,18 +5193,16 @@ private fun BudgetScreen(
             onToggleExpanded = { state.toggleBudgetSection("sample:everyday") },
         ) {
             ListRow(
-                "D",
                 "Dining",
                 "Spent ${state.formatCurrency(17_000)} this month",
                 state.formatCurrency(18_000),
-                palette.positive,
-                dense = compact,
+                options = ListRowOptions(trailingColor = palette.positive, dense = compact),
             ) {
                 navigation.open(AppRoute.CATEGORY_DETAIL)
             }
         }
         if (!essentialsFirst) UpcomingBillsCard(state, navigation)
-        SectionCard(
+        CollapsibleSectionCard(
             "Recent activity",
             "Latest budget changes",
             "See all",
@@ -5197,7 +5263,7 @@ private fun UpcomingBillsCard(
     navigation: AppNavigation,
 ) {
     val palette = tandemPalette
-    SectionCard(
+    CollapsibleSectionCard(
         "Upcoming",
         "Two bills before the end of the month",
         "View all",
@@ -5206,21 +5272,19 @@ private fun UpcomingBillsCard(
         onToggleExpanded = { state.toggleBudgetSection("sample:upcoming") },
     ) {
         ListRow(
-            "↗",
             "Electric Company",
             "Utilities · due ${formatShortDate(SampleDate(2026, 5, 18))}",
             state.formatCurrency(12_000),
-            palette.text,
-            leadingVector = financeIcon("Utilities"),
+            leading = RowLeading.Icon(financeIcon("Utilities")),
+            options = ListRowOptions(trailingColor = palette.text),
         )
         DividerLine()
         ListRow(
-            "H",
             "Rent",
             "Essentials · due ${formatShortDate(SampleDate(2026, 6, 1))}",
             state.formatCurrency(150_000),
-            palette.text,
-            leadingVector = financeIcon("Rent"),
+            leading = RowLeading.Icon(financeIcon("Rent")),
+            options = ListRowOptions(trailingColor = palette.text),
         )
     }
 }
@@ -5239,13 +5303,11 @@ private fun TransactionRow(
             fontSize = TandemTypography.micro,
         )
         ListRow(
-            transaction.icon,
             transaction.payee,
             transaction.category,
             formatSignedCurrency(transaction.amountMinorUnits, transaction.displaySettings),
-            if (transaction.amountMinorUnits > 0) palette.positive else palette.text,
-            leadingVector = transaction.categoryIcon ?: Lucide.Receipt,
-            leadingIconResource = transaction.merchantIcon,
+            leading = RowLeading.Merchant(transaction.merchantIcon, fallback = transaction.categoryIcon ?: Lucide.Receipt),
+            options = ListRowOptions(trailingColor = if (transaction.amountMinorUnits > 0) palette.positive else palette.text),
             onClick = onClick,
         )
     }
@@ -5362,14 +5424,13 @@ private fun CategoryGroupScreen(
                 items(group.categories, key = { "category-group:${group.id}:${it.id}" }) { category ->
                     SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
                         ListRow(
-                            category.name.take(1).uppercase(),
                             category.name,
                             "Spent ${state.formatCurrency(
                                 kotlin.math.abs(category.activityMinor),
                             )} · ${state.formatCurrency(category.balanceMinor)} available",
                             state.formatCurrency(category.assignedMinor),
-                            if (category.balanceMinor >= 0) palette.positive else palette.warning,
-                            leadingVector = financeIcon(category.name),
+                            leading = RowLeading.Icon(financeIcon(category.name)),
+                            options = ListRowOptions(trailingColor = if (category.balanceMinor >= 0) palette.positive else palette.warning),
                         ) {
                             state.selectedCategoryGroupId = group.id
                             state.selectedCategoryId = category.id
@@ -5387,30 +5448,27 @@ private fun CategoryGroupScreen(
         AmountHero("Assigned this month", state.formatCurrency(232_000), "${state.formatCurrency(232_000)} available across 3 categories")
         SectionCard("Categories", "3 plans", "Edit group") {
             ListRow(
-                "H",
                 "Rent",
                 "Assigned ${state.formatCurrency(150_000)} · Available ${state.formatCurrency(150_000)}",
                 state.formatCurrency(150_000),
-                palette.positive,
-                leadingVector = financeIcon("Rent"),
+                leading = RowLeading.Icon(financeIcon("Rent")),
+                options = ListRowOptions(trailingColor = palette.positive),
             ) { navigation.open(AppRoute.CATEGORY_DETAIL) }
             DividerLine()
             ListRow(
-                "G",
                 "Groceries",
                 "Assigned ${state.formatCurrency(50_000)} · Available ${state.formatCurrency(50_000)}",
                 state.formatCurrency(50_000),
-                palette.positive,
-                leadingVector = financeIcon("Groceries"),
+                leading = RowLeading.Icon(financeIcon("Groceries")),
+                options = ListRowOptions(trailingColor = palette.positive),
             ) { navigation.open(AppRoute.CATEGORY_DETAIL) }
             DividerLine()
             ListRow(
-                "U",
                 "Utilities",
                 "Assigned ${state.formatCurrency(32_000)} · Available ${state.formatCurrency(32_000)}",
                 state.formatCurrency(32_000),
-                palette.positive,
-                leadingVector = financeIcon("Utilities"),
+                leading = RowLeading.Icon(financeIcon("Utilities")),
+                options = ListRowOptions(trailingColor = palette.positive),
             ) { navigation.open(AppRoute.CATEGORY_DETAIL) }
         }
         PreviewNote("Category balances and activity use sample data.")
@@ -5442,17 +5500,16 @@ private fun CategoryDetailScreen(
                     "${state.formatCurrency(category.assignedMinor)} assigned",
                 )
                 SectionCard("This month", "Actual plan and activity") {
-                    ListRow("↗", "Assigned", "Budgeted in Actual", state.formatCurrency(category.assignedMinor))
+                    ListRow("Assigned", "Budgeted in Actual", state.formatCurrency(category.assignedMinor))
                     DividerLine()
                     ListRow(
-                        "",
                         "Activity",
                         "${state.selectedMonth} · ${state.formatCurrency(kotlin.math.abs(category.activityMinor))}",
-                        leadingVector = Lucide.Receipt,
+                        leading = RowLeading.Icon(Lucide.Receipt),
                         onClick = { openCategoryActivity(state, navigation, category.id, category.name) },
                     )
                     DividerLine()
-                    ListRow("=", "Available", "Assigned plus activity", state.formatCurrency(category.balanceMinor))
+                    ListRow("Available", "Assigned plus activity", state.formatCurrency(category.balanceMinor))
                 }
                 SecondaryButton(
                     if (state.isCategoryPinned(category.id)) "Unpin" else "Pin",
@@ -5466,9 +5523,9 @@ private fun CategoryDetailScreen(
         Heading("Category details", "Essentials · monthly plan")
         AmountHero("Available", state.formatCurrency(150_000), "Fully funded for ${formatMonth(2026, 5)}")
         SectionCard("This month", "Assigned ${state.formatCurrency(150_000)} · Spent ${state.formatCurrency(0)}") {
-            ListRow("↗", "Planned amount", "Monthly target", state.formatCurrency(150_000))
+            ListRow("Planned amount", "Monthly target", state.formatCurrency(150_000))
             DividerLine()
-            ListRow("◷", "Next due date", "Scheduled payment", formatShortDate(SampleDate(2026, 6, 1)))
+            ListRow("Next due date", "Scheduled payment", formatShortDate(SampleDate(2026, 6, 1)))
         }
         PrimaryButton("View activity this month") { openCategoryActivity(state, navigation, "Personal", "Personal") }
         PreviewNote("This category uses sample data and is read-only. The app keeps a local budget copy for offline use.")
@@ -5535,11 +5592,13 @@ private fun AccountsScreen(
                     items(accounts, key = { "account:${it.id}" }) { account ->
                         SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
                             ListRow(
-                                account.name.take(1).uppercase(),
                                 account.name,
                                 if (account.offBudget) "Tracking · off budget" else account.type ?: "On budget",
                                 account.balanceMinor?.let { state.formatCurrency(it) } ?: "Unavailable",
-                                if (account.offBudget) tandemPalette.muted else tandemPalette.text,
+                                options =
+                                    ListRowOptions(
+                                        trailingColor = if (account.offBudget) tandemPalette.muted else tandemPalette.text,
+                                    ),
                             ) {
                                 state.selectedAccountId = account.id
                                 navigation.open(AppRoute.ACCOUNT_DETAIL)
@@ -5564,11 +5623,10 @@ private fun AccountsScreen(
                 accounts.forEachIndexed { index, account ->
                     if (index > 0) DividerLine()
                     ListRow(
-                        account.name.take(1),
                         account.name,
                         account.description,
                         state.formatCurrency(account.balanceMinor),
-                        if (account.offBudget) tandemPalette.muted else tandemPalette.text,
+                        options = ListRowOptions(trailingColor = if (account.offBudget) tandemPalette.muted else tandemPalette.text),
                     ) {
                         state.selectedAccountId = account.id
                         navigation.open(AppRoute.ACCOUNT_DETAIL)
@@ -5617,7 +5675,7 @@ private fun AccountDetailScreen(
                         }
                     }
                 }
-                SettingRow("•••", "Account options", "Read-only account details", onClick = { navigation.open(AppRoute.ACCOUNT_OPTIONS) })
+                SettingRow("Account options", "Read-only account details", onClick = { navigation.open(AppRoute.ACCOUNT_OPTIONS) })
             }
         }
         return
@@ -5649,7 +5707,7 @@ private fun AccountDetailScreen(
                 }
             }
         }
-        SettingRow("•••", "Account options", "${account.name} settings", onClick = { navigation.open(AppRoute.ACCOUNT_OPTIONS) })
+        SettingRow("Account options", "${account.name} settings", onClick = { navigation.open(AppRoute.ACCOUNT_OPTIONS) })
     }
 }
 
@@ -5666,11 +5724,11 @@ private fun AccountOptionsScreen(
                 BodyText("This account isn’t saved on this device.")
             } else {
                 SectionCard("Account", "Read-only Actual data") {
-                    ListRow("A", "Name", "Account name", account.name)
+                    ListRow("Name", "Account name", account.name)
                     DividerLine()
-                    ListRow("¤", "Balance", "Current Actual balance", account.balanceMinor?.let(::formatCurrency) ?: "Unavailable")
+                    ListRow("Balance", "Current Actual balance", account.balanceMinor?.let(::formatCurrency) ?: "Unavailable")
                     DividerLine()
-                    ListRow("◷", "Budget status", "Account scope", if (account.offBudget) "Off budget" else "On budget")
+                    ListRow("Budget status", "Account scope", if (account.offBudget) "Off budget" else "On budget")
                 }
                 PreviewNote("Account names and settings can only be changed in Actual.")
             }
@@ -5680,9 +5738,9 @@ private fun AccountOptionsScreen(
     val account = previewAccountById(state.selectedAccountId)
     PageColumn {
         Heading(account.name, "Account options")
-        ListRow("✎", "Edit account details", "Name and notes", "Unavailable")
-        ListRow("◷", "Reconcile balance", "Compare the account against a statement", "Unavailable")
-        ListRow("⊖", "Hide from budget", "Keep historical activity available", "Unavailable")
+        ListRow("Edit account details", "Name and notes", "Unavailable")
+        ListRow("Reconcile balance", "Compare the account against a statement", "Unavailable")
+        ListRow("Hide from budget", "Keep historical activity available", "Unavailable")
         PreviewNote(
             "Account changes and reconciliation aren’t available in this sample view.",
         )
@@ -5700,9 +5758,14 @@ private fun ReconciliationScreen(state: AppState) {
             TextFieldOptions(placeholder = state.formatAmount(0)),
         )
         SectionCard("Difference", "Sample calculation") {
-            ListRow("=", "Account balance", "Current sample balance", state.formatCurrency(348_216))
+            ListRow("Account balance", "Current sample balance", state.formatCurrency(348_216))
             DividerLine()
-            ListRow("Δ", "Out of balance", "No cleared transactions compared", state.formatCurrency(0), tandemPalette.positive)
+            ListRow(
+                "Out of balance",
+                "No cleared transactions compared",
+                state.formatCurrency(0),
+                options = ListRowOptions(trailingColor = tandemPalette.positive),
+            )
         }
         PreviewNote(
             "This sample balance isn’t verified. No statement or transaction will be changed.",
@@ -6274,13 +6337,17 @@ private fun TransactionDetailScreen(
             }
         }
         SectionCard(title = "") {
-            ListRow("", "Account", trailing = state.transactionAccount, leadingVector = Lucide.WalletCards)
+            ListRow("Account", leading = RowLeading.Icon(Lucide.WalletCards), trailing = state.transactionAccount)
             DividerLine()
-            ListRow("", "Category", trailing = state.transactionCategory, leadingVector = Lucide.Tags)
+            ListRow("Category", leading = RowLeading.Icon(Lucide.Tags), trailing = state.transactionCategory)
             DividerLine()
-            ListRow("", "Date", trailing = state.transactionDate, leadingVector = Lucide.CalendarDays)
+            ListRow("Date", leading = RowLeading.Icon(Lucide.CalendarDays), trailing = state.transactionDate)
             DividerLine()
-            ListRow("", "Notes", trailing = state.transactionNotes.ifBlank { "No notes" }, leadingVector = Lucide.NotepadText)
+            ListRow(
+                "Notes",
+                leading = RowLeading.Icon(Lucide.NotepadText),
+                trailing = state.transactionNotes.ifBlank { "No notes" },
+            )
         }
         if (isLive) {
             PrimaryButton("Edit transaction", enabled = state.selectedTransactionRecordId.isNotBlank() && !state.readOnlyMode) {
@@ -6562,13 +6629,13 @@ private fun TransactionFormScreen(
                     TextFieldOptions(placeholder = "Add a note", singleLine = false),
                 )
                 SectionCard("Transaction details") {
-                    ListRow("", "Account", state.transactionAccount, leadingVector = Lucide.WalletCards)
+                    ListRow("Account", state.transactionAccount, leading = RowLeading.Icon(Lucide.WalletCards))
                     DividerLine()
-                    ListRow("", "Payee", state.transactionPayee, leadingVector = Lucide.Receipt)
+                    ListRow("Payee", state.transactionPayee, leading = RowLeading.Icon(Lucide.Receipt))
                     DividerLine()
-                    ListRow("", "Category", state.transactionCategory, leadingVector = Lucide.Tags)
+                    ListRow("Category", state.transactionCategory, leading = RowLeading.Icon(Lucide.Tags))
                     DividerLine()
-                    ListRow("", "Date", state.transactionDate, leadingVector = Lucide.CalendarDays)
+                    ListRow("Date", state.transactionDate, leading = RowLeading.Icon(Lucide.CalendarDays))
                 }
                 mobileSession.transactionWriteMessage?.let { message ->
                     SurfaceCard {
@@ -6814,9 +6881,9 @@ private fun SaveResultScreen(
         Badge("Not saved", palette.warning)
         Heading("No change was made", "This sample form can’t save a transaction yet.")
         SectionCard("Transaction", "Sample data") {
-            ListRow("¤", "Amount", "Corner Market", state.formatCurrency(-4_218))
+            ListRow("Amount", "Corner Market", state.formatCurrency(-4_218))
             DividerLine()
-            ListRow("C", "Account and category", "Checking · Groceries")
+            ListRow("Account and category", "Checking · Groceries")
         }
         PreviewNote(
             "Actual Budget is unchanged. New transactions aren’t available here yet, and this screen doesn’t send changes.",
@@ -6892,21 +6959,25 @@ private fun SyncCenterScreen(
                     val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
                     SurfaceCard {
                         ListRow(
-                            "",
                             transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
                             "${writeStatusLabel(operation.status)} · ${transaction?.category ?: "Transaction edit"}",
                             "Review",
-                            trailingColor =
-                                when (operation.status) {
-                                    "conflict", "uncertain", "rejected" -> tandemPalette.warning
-                                    else -> tandemPalette.syncing
-                                },
-                            leadingVector =
-                                when (operation.status) {
-                                    "conflict", "uncertain", "rejected" -> Lucide.CloudAlert
-                                    "queued", "sending" -> Lucide.CloudSync
-                                    else -> Lucide.Cloud
-                                },
+                            leading =
+                                RowLeading.Icon(
+                                    when (operation.status) {
+                                        "conflict", "uncertain", "rejected" -> Lucide.CloudAlert
+                                        "queued", "sending" -> Lucide.CloudSync
+                                        else -> Lucide.Cloud
+                                    },
+                                ),
+                            options =
+                                ListRowOptions(
+                                    trailingColor =
+                                        when (operation.status) {
+                                            "conflict", "uncertain", "rejected" -> tandemPalette.warning
+                                            else -> tandemPalette.syncing
+                                        },
+                                ),
                             onClick = {
                                 state.selectedConflictOperationId = operation.operationId
                                 navigation.open(
@@ -6949,30 +7020,33 @@ private fun SyncCenterScreen(
             }
         }
         SectionCard("Attention needed", "Sample recovery states") {
-            ListRow("!", "Needs your review", "Corner Market · two versions", "1", tandemPalette.warning) {
+            ListRow(
+                "Needs your review",
+                "Corner Market · two versions",
+                "1",
+                options = ListRowOptions(trailingColor = tandemPalette.warning),
+            ) {
                 navigation.open(AppRoute.CONFLICT_INBOX)
             }
             DividerLine()
             ListRow(
-                "?",
                 "Status unknown",
                 "Check before retrying",
                 "1",
-                tandemPalette.warning,
+                options = ListRowOptions(trailingColor = tandemPalette.warning),
             ) { navigation.open(AppRoute.UNCERTAIN_WRITE) }
             DividerLine()
             ListRow(
-                "×",
                 "Not applied",
                 "New transactions aren’t available yet",
                 "1",
-                tandemPalette.negative,
+                options = ListRowOptions(trailingColor = tandemPalette.negative),
             ) { navigation.open(AppRoute.REJECTED_WRITE) }
         }
         SectionCard("Recent sync activity", "Sample events", "") {
-            ListRow("↓", "Budget snapshot", "Ready for initial download", "Pending")
+            ListRow("Budget snapshot", "Ready for initial download", "Pending")
             DividerLine()
-            ListRow("↑", "Local edits", "None in sample data", "0")
+            ListRow("Local edits", "None in sample data", "0")
         }
         SecondaryButton("Review changes") { navigation.open(AppRoute.CONFLICT_INBOX) }
     }
@@ -7007,11 +7081,10 @@ private fun ConflictInboxScreen(
                     val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
                     SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
                         ListRow(
-                            "!",
                             transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
                             "${transaction?.dateLabel ?: "Actual changed"} · ${transaction?.category ?: "Transaction"}",
                             "Review",
-                            tandemPalette.warning,
+                            options = ListRowOptions(trailingColor = tandemPalette.warning),
                         ) {
                             state.selectedConflictOperationId = operation.operationId
                             navigation.open(AppRoute.CONFLICT_REVIEW)
@@ -7109,11 +7182,11 @@ private fun ConflictReviewScreen(
                     )
                 }
                 SectionCard("Details") {
-                    ListRow("A", "Account", "Actual account", transaction?.account ?: "Unavailable")
+                    ListRow("Account", "Actual account", transaction?.account ?: "Unavailable")
                     DividerLine()
-                    ListRow("C", "Category", "Actual category", transaction?.category ?: "Unavailable")
+                    ListRow("Category", "Actual category", transaction?.category ?: "Unavailable")
                     DividerLine()
-                    ListRow("◷", "Date", "Actual date", transaction?.dateLabel ?: "Unavailable")
+                    ListRow("Date", "Actual date", transaction?.dateLabel ?: "Unavailable")
                 }
                 mobileSession.transactionWriteMessage?.let { BodyText(it) }
                 PrimaryButton(
@@ -7134,11 +7207,11 @@ private fun ConflictReviewScreen(
             ConflictValueCard("In Actual", state.formatCurrency(1_500), Modifier.weight(1f))
         }
         SectionCard("Other details", "Review before choosing") {
-            ListRow("C", "Account", "Same on both versions", "Checking")
+            ListRow("Account", "Same on both versions", "Checking")
             DividerLine()
-            ListRow("G", "Category", "Same on both versions", "Groceries")
+            ListRow("Category", "Same on both versions", "Groceries")
             DividerLine()
-            ListRow("◷", "Date", "Same on both versions", formatShortDate(SampleDate(2026, 5, 14)))
+            ListRow("Date", "Same on both versions", formatShortDate(SampleDate(2026, 5, 14)))
         }
         if (state.conflictChoice.isNotEmpty()) {
             PreviewNote("Sample choice selected: ${state.conflictChoice}. No server update has been sent.")
@@ -7342,7 +7415,6 @@ private fun RejectedWriteScreen(
                 val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
                 SectionCard(transaction?.payee ?: "Transaction", transaction?.dateLabel ?: "Not applied") {
                     ListRow(
-                        "¤",
                         "Your edit",
                         "Not applied",
                         operation.optimisticAmountMinor?.let { state.formatSignedCurrency(it) } ?: "Unavailable",
@@ -7357,9 +7429,14 @@ private fun RejectedWriteScreen(
         Badge("Not applied", tandemPalette.negative)
         Heading("Change not applied")
         SectionCard("Sample edit", "Corner Market · ${formatShortDate(SampleDate(2026, 5, 14))}") {
-            ListRow("¤", "Your edit", "Not applied", state.formatCurrency(1_200))
+            ListRow("Your edit", "Not applied", state.formatCurrency(1_200))
             DividerLine()
-            ListRow("!", "Reason", "New transactions aren’t available yet", "Unavailable", tandemPalette.warning)
+            ListRow(
+                "Reason",
+                "New transactions aren’t available yet",
+                "Unavailable",
+                options = ListRowOptions(trailingColor = tandemPalette.warning),
+            )
         }
         PreviewNote(
             "The change wasn’t saved. You can dismiss this message.",
@@ -7383,79 +7460,70 @@ private fun SettingsScreen(
         }
         SectionCard("Appearance") {
             ListRow(
-                "",
                 "Appearance",
                 "Theme, accent, and background",
                 state.theme.label,
-                leadingVector = Lucide.Palette,
+                leading = RowLeading.Icon(Lucide.Palette),
                 onClick = { navigation.open(AppRoute.APPEARANCE) },
             )
             DividerLine()
             ListRow(
-                "",
                 "Home screen layout",
                 "Choose how much detail to show",
                 state.homeLayout,
-                leadingVector = Lucide.LayoutDashboard,
+                leading = RowLeading.Icon(Lucide.LayoutDashboard),
                 onClick = { navigation.open(AppRoute.HOME_LAYOUT) },
             )
             DividerLine()
             ListRow(
-                "",
                 "Budget preferences",
                 "Currency and planning choices",
-                leadingVector = Lucide.WalletCards,
+                leading = RowLeading.Icon(Lucide.WalletCards),
                 onClick = { navigation.open(AppRoute.BUDGET_PREFERENCES) },
             )
         }
         SectionCard("Connection", "Sync and paired device") {
             ListRow(
-                "",
                 "Sync preferences",
                 "Refresh and network behavior",
-                leadingVector = Lucide.CloudSync,
+                leading = RowLeading.Icon(Lucide.CloudSync),
                 onClick = { navigation.open(AppRoute.SYNC_PREFERENCES) },
             )
             DividerLine()
             ListRow(
-                "",
                 "Server and paired device",
                 "Connection details and access",
-                leadingVector = Lucide.Smartphone,
+                leading = RowLeading.Icon(Lucide.Smartphone),
                 onClick = { navigation.open(AppRoute.SERVER_DEVICE) },
             )
             DividerLine()
             ListRow(
-                "",
                 "Notifications",
                 "Sync reminders and review alerts",
-                leadingVector = Lucide.Bell,
+                leading = RowLeading.Icon(Lucide.Bell),
                 onClick = { navigation.open(AppRoute.NOTIFICATIONS) },
             )
         }
         SectionCard("Privacy", "Device data and security") {
             ListRow(
-                "",
                 "Security and privacy",
                 "Access and local data",
-                leadingVector = Lucide.ShieldCheck,
+                leading = RowLeading.Icon(Lucide.ShieldCheck),
                 onClick = { navigation.open(AppRoute.SECURITY_PRIVACY) },
             )
             DividerLine()
             ListRow(
-                "",
                 "Local data and storage",
                 "Cached budget and pending edits",
-                leadingVector = Lucide.Database,
+                leading = RowLeading.Icon(Lucide.Database),
                 onClick = { navigation.open(AppRoute.LOCAL_DATA) },
             )
         }
         SectionCard("Support", "Help and project details") {
             ListRow(
-                "",
                 "About, help, and licenses",
                 "Version and open-source licenses",
-                leadingVector = Lucide.Info,
+                leading = RowLeading.Icon(Lucide.Info),
                 onClick = { navigation.open(AppRoute.ABOUT) },
             )
         }
@@ -7471,30 +7539,27 @@ private fun AppearanceScreen(
         Heading("Visual settings")
         SectionCard("Theme", "${state.theme.label} appearance", "") {
             ListRow(
-                "",
                 "Theme mode",
                 "System, light, dark, or pure black",
                 state.theme.label,
-                leadingVector = Lucide.SunMoon,
+                leading = RowLeading.Icon(Lucide.SunMoon),
                 onClick = { navigation.open(AppRoute.THEME_MODE) },
             )
         }
         SectionCard("Color", "${state.accent.label} accent", "") {
             ListRow(
-                "",
                 "Accent color",
                 "Applies to every screen",
                 state.accent.label,
-                leadingVector = Lucide.PaintbrushVertical,
+                leading = RowLeading.Icon(Lucide.PaintbrushVertical),
                 onClick = { navigation.open(AppRoute.ACCENT_COLOR) },
             )
         }
         SectionCard("Background") {
             ListRow(
-                "",
                 "Background and motion",
                 "Subtle treatments and reduced motion",
-                leadingVector = Lucide.Wallpaper,
+                leading = RowLeading.Icon(Lucide.Wallpaper),
                 onClick = { navigation.open(AppRoute.BACKGROUND_MOTION) },
             )
         }
@@ -7589,7 +7654,6 @@ private fun BackgroundScreen(state: AppState) {
             ) { state.reduceMotionOverride = it }
             if (state.reduceMotionOverride != null) {
                 SettingRow(
-                    "↺",
                     "Use device setting",
                     if (state.systemReduceMotionEnabled) {
                         "The device currently requests reduced motion"
@@ -7628,31 +7692,28 @@ private fun HomeLayoutScreen(state: AppState) {
                 )
                 if (state.homeLayout == "Essentials") {
                     ListRow(
-                        "◷",
                         "Upcoming bills",
                         "Due soon",
                         state.formatCurrency(12_000),
-                        dense = false,
-                        leadingVector = financeIcon("Upcoming bills"),
+                        leading = RowLeading.Icon(financeIcon("Upcoming bills")),
+                        options = ListRowOptions(dense = false),
                     )
                     DividerLine()
                 }
                 ListRow(
-                    "H",
                     "Essentials",
                     "3 categories",
                     state.formatCurrency(232_000),
-                    dense = state.homeLayout == "Compact",
-                    leadingVector = financeIcon("Essentials"),
+                    leading = RowLeading.Icon(financeIcon("Essentials")),
+                    options = ListRowOptions(dense = state.homeLayout == "Compact"),
                 )
                 DividerLine()
                 ListRow(
-                    "G",
                     "Groceries",
                     "Available this month",
                     state.formatCurrency(50_000),
-                    dense = state.homeLayout == "Compact",
-                    leadingVector = financeIcon("Groceries"),
+                    leading = RowLeading.Icon(financeIcon("Groceries")),
+                    options = ListRowOptions(dense = state.homeLayout == "Compact"),
                 )
             }
         }
@@ -7672,18 +7733,22 @@ private fun BudgetPreferencesScreen(
             if (state.budgetDisplaySettings != null) "Uses Actual budget settings" else "Device locale fallback",
         ) {
             ListRow(
-                "¤",
                 "Currency",
                 if (mobileSession.budgetDisplaySettings != null) "Selected Actual budget" else "Follows the device locale",
                 currencyCode,
             )
             DividerLine()
-            ListRow("◷", "Start of week", "Follows the device locale", formatFirstWeekday())
+            ListRow("Start of week", "Follows the device locale", formatFirstWeekday())
         }
         SectionCard("Planning") {
-            ListRow("✓", "Available category amounts", "Shown from the synced plan", "Available", tandemPalette.positive)
+            ListRow(
+                "Available category amounts",
+                "Shown from the synced plan",
+                "Available",
+                options = ListRowOptions(trailingColor = tandemPalette.positive),
+            )
             DividerLine()
-            ListRow("↻", "Carry balances forward", "Controlled by Actual and shown read-only", "Actual")
+            ListRow("Carry balances forward", "Controlled by Actual and shown read-only", "Actual")
         }
         PreviewNote("Tandem displays planning rules set in Actual. To change them, update the rules on the Actual website.")
     }
@@ -7747,7 +7812,6 @@ private fun SyncPreferencesScreen(
         }
         SectionCard("Current budget", if (hasSelectedBudget) state.selectedBudget else "Choose an Actual budget", animateDetail = true) {
             ListRow(
-                "↻",
                 "Sync now",
                 "Read changes and check pending edits",
                 when {
@@ -7755,17 +7819,26 @@ private fun SyncPreferencesScreen(
                     hasSelectedBudget -> "Sync"
                     else -> "Unavailable"
                 },
+                options = ListRowOptions(animateChanges = true),
                 onClick = onSyncNow.takeIf { hasSelectedBudget && !mobileSession.isSyncing },
-                animateChanges = true,
             )
             DividerLine()
             ListRow(
-                "◷",
                 "Sync status",
                 syncDescription,
                 syncStatus,
-                trailingColor = if (mobileSession.syncError != null) tandemPalette.warning else null,
-                animateChanges = true,
+                options =
+                    ListRowOptions(
+                        trailingColor =
+                            if (mobileSession.syncError !=
+                                null
+                            ) {
+                                tandemPalette.warning
+                            } else {
+                                null
+                            },
+                        animateChanges = true,
+                    ),
             )
         }
         AnimatedPreviewNote(mobileSession.syncError)
@@ -7793,22 +7866,26 @@ private fun ServerDeviceScreen(
             },
         ) {
             ListRow(
-                "",
                 "Server URL",
                 state.serverUrl,
                 if (mobileSession.isServerReachable) "Connected" else "Disconnected",
-                if (mobileSession.isServerReachable) tandemPalette.positive else tandemPalette.negative,
-                leadingVector = Lucide.Server,
+                leading = RowLeading.Icon(Lucide.Server),
+                options =
+                    ListRowOptions(
+                        trailingColor = if (mobileSession.isServerReachable) tandemPalette.positive else tandemPalette.negative,
+                    ),
                 onClick = { navigation.open(AppRoute.SERVER_ADDRESS) },
             )
             DividerLine()
             ListRow(
-                "",
                 "Connection status",
                 if (mobileSession.isServerReachable) "Server is reachable" else "Server can’t be reached",
                 if (mobileSession.isServerReachable) "Connected" else "Disconnected",
-                if (mobileSession.isServerReachable) tandemPalette.positive else tandemPalette.negative,
-                leadingVector = Lucide.Wifi,
+                leading = RowLeading.Icon(Lucide.Wifi),
+                options =
+                    ListRowOptions(
+                        trailingColor = if (mobileSession.isServerReachable) tandemPalette.positive else tandemPalette.negative,
+                    ),
             )
         }
         SectionCard(
@@ -7820,21 +7897,18 @@ private fun ServerDeviceScreen(
             },
         ) {
             ListRow(
-                "",
                 "Device name",
                 if (device != null) deviceName else "Not paired",
-                leadingVector = Lucide.Smartphone,
+                leading = RowLeading.Icon(Lucide.Smartphone),
             )
             DividerLine()
             ListRow(
-                "",
                 "Budgets this device can open",
                 if (device == null) "Not paired" else "${device.budgetIds.size} available",
-                leadingVector = Lucide.FolderKey,
+                leading = RowLeading.Icon(Lucide.FolderKey),
             )
             DividerLine()
             ListRow(
-                "",
                 "Saved pairing",
                 if (mobileSession.isCredentialStored) "Protected on this phone" else "Available until the app closes",
                 when {
@@ -7842,7 +7916,7 @@ private fun ServerDeviceScreen(
                     device != null -> "Active"
                     else -> "None"
                 },
-                leadingVector = Lucide.KeyRound,
+                leading = RowLeading.Icon(Lucide.KeyRound),
             )
         }
         InfoBubble("Pairing codes and budget passwords are never saved.")
@@ -7883,11 +7957,10 @@ private fun SecurityScreen(
         Heading("Device protection")
         SectionCard("App access") {
             ListRow(
-                "",
                 "Biometric unlock",
                 "Not available yet",
                 "Unavailable",
-                leadingVector = Lucide.FingerprintPattern,
+                leading = RowLeading.Icon(Lucide.FingerprintPattern),
             )
             DividerLine()
             CheckBoxRow(
@@ -7906,7 +7979,6 @@ private fun SecurityScreen(
         }
         SectionCard("Access") {
             ListRow(
-                "",
                 "Saved pairing",
                 if (mobileSession.isCredentialStored) "Protected on this phone" else "Available until the app closes",
                 when {
@@ -7914,15 +7986,14 @@ private fun SecurityScreen(
                     mobileSession.isAuthenticated -> "Active"
                     else -> "Not paired"
                 },
-                leadingVector = Lucide.KeyRound,
+                leading = RowLeading.Icon(Lucide.KeyRound),
             )
             DividerLine()
             ListRow(
-                "",
                 "Budget password",
                 if (state.selectedBudgetEncrypted) "Used to unlock this budget" else "Encrypted budgets only",
                 if (state.selectedBudgetEncrypted) "Not stored" else "Unavailable",
-                leadingVector = Lucide.LockKeyhole,
+                leading = RowLeading.Icon(Lucide.LockKeyhole),
             )
         }
         PreviewNote("Budget passwords aren’t stored.")
@@ -8041,27 +8112,34 @@ private fun LocalDataScreen(
         )
         SectionCard("On this device", syncStatus, animateDetail = true) {
             ListRow(
-                "▤",
                 "Transactions",
                 "Cached transactions",
                 formatInteger(mobileSession.cachedTransactionCount),
             )
             DividerLine()
-            ListRow("▣", "Accounts", "Cached accounts", formatInteger(mobileSession.accountRecords.size))
+            ListRow("Accounts", "Cached accounts", formatInteger(mobileSession.accountRecords.size))
             DividerLine()
-            ListRow("", "Pending Changes", trailing = formatInteger(queuedCount), leadingVector = Lucide.CloudSync)
+            ListRow(
+                "Pending Changes",
+                leading = RowLeading.Icon(Lucide.CloudSync),
+                trailing = formatInteger(queuedCount),
+            )
             DividerLine()
-            ListRow("", "Needs your review", "Choose a version", formatInteger(conflictCount), leadingVector = Lucide.CloudAlert)
+            ListRow(
+                "Needs your review",
+                "Choose a version",
+                formatInteger(conflictCount),
+                leading = RowLeading.Icon(Lucide.CloudAlert),
+            )
             AnimatedReveal(visible = attentionCount > 0, animateHeight = false) {
                 Column {
                     DividerLine()
-                    ListRow("⚠", "Other changes needing attention", "Review locally", formatInteger(attentionCount))
+                    ListRow("Other changes needing attention", "Review locally", formatInteger(attentionCount))
                 }
             }
         }
         SectionCard("Storage actions") {
             ListRow(
-                "↻",
                 "Refresh local budget",
                 "Sync this budget",
                 when {
@@ -8069,11 +8147,11 @@ private fun LocalDataScreen(
                     hasSelectedBudget -> "Refresh"
                     else -> "Unavailable"
                 },
+                options = ListRowOptions(animateChanges = true),
                 onClick = onSyncNow.takeIf { hasSelectedBudget && !mobileSession.isSyncing },
-                animateChanges = true,
             )
             DividerLine()
-            ListRow("×", "Clear local data", trailing = "Unavailable")
+            ListRow("Clear local data", trailing = "Unavailable")
         }
         AnimatedPreviewNote(mobileSession.syncError)
         if (mobileSession.pendingWrites.isNotEmpty()) InfoBubble("Pending edits stay on this device.")
@@ -8228,36 +8306,34 @@ private fun AboutScreen(
             }
         }
         SectionCard("Project") {
-            ListRow("A", "Supported Actual server", "Required by this Tandem release", SUPPORTED_ACTUAL_SERVER_VERSION)
+            ListRow("Supported Actual server", "Required by this Tandem release", SUPPORTED_ACTUAL_SERVER_VERSION)
             DividerLine()
-            ListRow("⌘", "Open-source license", "GNU AGPL-3.0-or-later")
+            ListRow("Open-source license", "GNU AGPL-3.0-or-later")
         }
         SectionCard("Open-source libraries", "Direct mobile-app dependencies and licenses") {
-            ListRow("K", "Kotlin and kotlinx", "Kotlin, Coroutines and Serialization · Apache-2.0")
+            ListRow("Kotlin and kotlinx", "Kotlin, Coroutines and Serialization · Apache-2.0")
             DividerLine()
-            ListRow("C", "Compose Multiplatform and resources", "Apache-2.0")
+            ListRow("Compose Multiplatform and resources", "Apache-2.0")
             DividerLine()
-            ListRow("N", "Ktor", "Apache-2.0")
+            ListRow("Ktor", "Apache-2.0")
             DividerLine()
-            ListRow("R", "AndroidX Room and SQLite", "Apache-2.0")
+            ListRow("AndroidX Room and SQLite", "Apache-2.0")
             DividerLine()
             ListRow(
-                "W",
                 "AndroidX platform libraries",
                 "Activity Compose, WorkManager and SplashScreen · Apache-2.0",
             )
             DividerLine()
-            ListRow("M", "Compose Icons", "MIT")
+            ListRow("Compose Icons", "MIT")
             DividerLine()
-            ListRow("L", "Lucide icon artwork", "ISC")
+            ListRow("Lucide icon artwork", "ISC")
             DividerLine()
-            ListRow("T", "TheSVG icon package", "Build-time catalog and tooling · MIT")
+            ListRow("TheSVG icon package", "Build-time catalog and tooling · MIT")
         }
         SurfaceCard {
             ListRow(
-                "",
                 "View icon licenses and sources",
-                leadingVector = Lucide.Info,
+                leading = RowLeading.Icon(Lucide.Info),
                 onClick = { navigation.open(AppRoute.MERCHANT_ICON_LICENSES) },
             )
         }
