@@ -162,4 +162,44 @@ class TandemMobileSessionTest {
             assertEquals(0, clearCalls)
             assertNull(session.credentialStorageError)
         }
+
+    @Test
+    fun forgettingThisDeviceLocallyClearsTheSessionAndSavedCredential() =
+        runBlocking {
+            val savedSession =
+                """{"serverUrl":"https://budget.example.test","accessToken":"saved-token","device":{"deviceId":"device-1","principalId":"person-1","budgetIds":["budget-1"]}}"""
+            var clearCalls = 0
+            val credentialStore =
+                object : DeviceCredentialStore {
+                    override fun read(): String = savedSession
+
+                    override fun write(value: String) = Unit
+
+                    override fun clear() {
+                        clearCalls += 1
+                    }
+                }
+            val apiClient = TandemApiClient()
+            val session =
+                TandemMobileSession(
+                    apiClient = apiClient,
+                    database = null,
+                    nowEpochMillis = { 0L },
+                    credentialStore = credentialStore,
+                )
+
+            session.restoreStoredSession()
+            assertTrue(session.pairedDevice != null)
+            assertTrue(apiClient.isAuthenticated)
+            assertTrue(session.isCredentialStored)
+
+            session.forgetDeviceLocally()
+
+            assertNull(session.pairedDevice)
+            assertFalse(apiClient.isAuthenticated)
+            assertNull(apiClient.currentServerUrl)
+            assertFalse(session.isCredentialStored)
+            assertNull(session.deviceRevocationError)
+            assertEquals(1, clearCalls)
+        }
 }

@@ -245,23 +245,23 @@ internal class TandemMobileSession(
                 throw error
             } catch (error: TandemApiException) {
                 if (error.httpStatus != 401 && error.httpStatus != 404) {
-                    deviceRevocationError = "Couldn’t remove access. Check the connection and try again."
+                    deviceRevocationError = "Check your connection and try again."
                     return
                 }
             } catch (_: Exception) {
-                deviceRevocationError = "Couldn’t remove access. Check the connection and try again."
+                deviceRevocationError = "Check your connection and try again."
                 return
             }
-            apiClient.forgetSession()
-            pairedDevice = null
-            budgets = emptyList()
-            budgetCatalogLoaded = false
-            isServerReachable = false
-            budgetError = null
-            clearStoredCredential()
+            clearDeviceSession()
         } finally {
             isRevokingDevice = false
         }
+    }
+
+    suspend fun forgetDeviceLocally() {
+        if (pairedDevice == null || isRevokingDevice) return
+        deviceRevocationError = null
+        clearDeviceSession()
     }
 
     suspend fun pair(
@@ -858,6 +858,16 @@ internal class TandemMobileSession(
         } catch (_: Exception) {
             credentialStorageError = "The saved device credential could not be removed."
         }
+    }
+
+    private suspend fun clearDeviceSession() {
+        apiClient.forgetSession()
+        pairedDevice = null
+        budgets = emptyList()
+        budgetCatalogLoaded = false
+        isServerReachable = false
+        budgetError = null
+        clearStoredCredential()
     }
 }
 

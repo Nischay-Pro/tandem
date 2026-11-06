@@ -1741,6 +1741,7 @@ fun TandemApp(
                                 onRetryUncertainWrite = retryUncertainWrite,
                                 onCheckUncertainWriteStatus = checkUncertainWriteStatus,
                                 onForgetDevice = { coroutineScope.launch { mobileSession.forgetDevice() } },
+                                onForgetDeviceLocally = { coroutineScope.launch { mobileSession.forgetDeviceLocally() } },
                                 onRequestNotificationPermission = onRequestNotificationPermission,
                                 onOpenNotificationSettings = onOpenNotificationSettings,
                                 notificationPermissionEnabled = notificationPermissionEnabled,
@@ -2260,6 +2261,7 @@ private fun ScreenContent(
     onRetryUncertainWrite: (String) -> Unit,
     onCheckUncertainWriteStatus: (String) -> Unit,
     onForgetDevice: () -> Unit,
+    onForgetDeviceLocally: () -> Unit,
     onRequestNotificationPermission: (() -> Unit)?,
     onOpenNotificationSettings: (() -> Unit)?,
     notificationPermissionEnabled: Boolean?,
@@ -2394,7 +2396,7 @@ private fun ScreenContent(
                 backgroundSyncSupported,
             )
         AppRoute.SERVER_DEVICE ->
-            ServerDeviceScreen(state, deviceName, mobileSession, navigation, onForgetDevice)
+            ServerDeviceScreen(state, deviceName, mobileSession, navigation, onForgetDevice, onForgetDeviceLocally)
         AppRoute.SECURITY_PRIVACY -> SecurityScreen(state, mobileSession)
         AppRoute.NOTIFICATIONS ->
             NotificationsScreen(
@@ -6723,6 +6725,7 @@ private fun ServerDeviceScreen(
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
     onForgetDevice: () -> Unit,
+    onForgetDeviceLocally: () -> Unit,
 ) {
     val device = mobileSession.pairedDevice
     PageColumn {
@@ -6789,14 +6792,21 @@ private fun ServerDeviceScreen(
         }
         InfoBubble("Pairing codes and budget passwords are never saved.")
         mobileSession.deviceRevocationError?.let { message ->
-            AttentionBanner("Couldn’t remove access", message, "Retry", onForgetDevice)
+            AttentionBanner("Couldn’t remove this device", message, "Retry", onForgetDevice)
+            InfoBubble("The server still trusts this phone until its owner removes it there.")
         }
         AnimatedPreviewNote(mobileSession.credentialStorageError)
         if (device == null) {
             SecondaryButton("Pair this device") { navigation.open(AppRoute.SERVER_ADDRESS) }
+        } else if (mobileSession.deviceRevocationError != null) {
+            SecondaryButton(
+                "Forget on this phone only",
+                enabled = !mobileSession.isRevokingDevice,
+                onClick = onForgetDeviceLocally,
+            )
         } else {
             SecondaryButton(
-                if (mobileSession.isRevokingDevice) "Removing…" else "Forget this device",
+                if (mobileSession.isRevokingDevice) "Removing this device" else "Remove this device",
                 enabled = !mobileSession.isRevokingDevice,
                 onClick = onForgetDevice,
             )
