@@ -59,16 +59,17 @@ entropy; only its SHA-256 hash is stored in PostgreSQL. Pairing code hashes use
 HMAC with SHA-256 and the `DATABASE_URL` value as the key, so the CLI and API
 must use the same value. Device tokens expire after 90 days without an
 authenticated request; each successful request refreshes that idle window.
-Pairing attempts are limited to 10 per client address
-per minute, with an aggregate cap of 100 attempts per API process per minute.
-These in-memory limits apply separately to each process. Forwarded client
-addresses are ignored by default. For a
+Invalid pairing codes are limited to 10 per client address per minute.
+Successful pairings and other request-validation errors do not consume this
+failure limit. The in-memory limit applies separately to each API process.
+Forwarded client addresses are ignored by default. For a
 reverse-proxy deployment, set `TRUST_PROXY` to the exact proxy IP addresses or
 narrow CIDRs, for example `172.30.0.2` or `172.30.0.0/24`. Do not use
 `0.0.0.0/0`, and make the API reachable only through the trusted proxy network.
-Fastify then keys the pairing limit on the forwarded client address. If
-`TRUST_PROXY` is unset, requests arriving from the same proxy socket share a
-rate-limit bucket.
+Fastify then keys the pairing limit on the forwarded client address. The Nginx
+example also applies a per-address limit to the pairing route. If `TRUST_PROXY`
+is unset, the API warns when it receives `X-Forwarded-For`; requests arriving
+from the same proxy socket share the API's in-memory limit.
 
 Invalid pairing input returns HTTP 400 with a structured `invalid_request`
 error. An unavailable, expired, or already-used pairing code returns HTTP 401.

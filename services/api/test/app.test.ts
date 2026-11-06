@@ -272,6 +272,60 @@ describe("health routes and OpenAPI", () => {
     await app.close();
   });
 
+  it("does not charge successful pairings against the failed-code limit", async () => {
+    const pair = vi.fn(async () => ({
+      ...createDevice(),
+      accessToken: testAccessToken,
+    }));
+    const app = await buildApiApp(
+      { ping: vi.fn(), close: vi.fn() },
+      { deviceAuth: createDeviceAuth({ pair }) },
+    );
+
+    try {
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        const response = await app.inject({
+          method: "POST",
+          url: "/api/v1/auth/pair",
+          payload: { code: "P7R2-A9C4", deviceName: "Synthetic phone" },
+        });
+        expect(response.statusCode).toBe(201);
+      }
+      expect(pair).toHaveBeenCalledTimes(12);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("warns once when pairing arrives with forwarded addresses but no trusted proxy", async () => {
+    const warning = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+    const app = await buildApiApp(
+      { ping: vi.fn(), close: vi.fn() },
+      { deviceAuth: createDeviceAuth() },
+    );
+
+    try {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const response = await app.inject({
+          method: "POST",
+          url: "/api/v1/auth/pair",
+          headers: { "x-forwarded-for": `198.51.100.${attempt + 1}` },
+          payload: { code: "G7G7-G7G7", deviceName: "Synthetic phone" },
+        });
+        expect(response.statusCode).toBe(401);
+      }
+      expect(warning).toHaveBeenCalledOnce();
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining("TRUST_PROXY is unset"),
+      );
+    } finally {
+      await app.close();
+      warning.mockRestore();
+    }
+  });
+
   it("uses forwarded client addresses only when the socket peer is trusted", async () => {
     const pair = vi.fn(async ({ code }: { code: string }) =>
       code === "P7R2-A9C4"

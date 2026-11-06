@@ -116,7 +116,11 @@ export async function buildApiApp(
   app.get("/api/v1/openapi.json", async () => app.swagger());
 
   if (options.deviceAuth) {
-    registerDeviceAuthorizationRoutes(app, options.deviceAuth);
+    registerDeviceAuthorizationRoutes(
+      app,
+      options.deviceAuth,
+      options.trustProxy ?? false,
+    );
     registerTransactionRoutes(app, options.deviceAuth, options.transactionApi);
     registerBudgetReadRoutes(app, options.deviceAuth, options.budgetReadApi);
   }
@@ -135,8 +139,10 @@ export async function buildApiApp(
 function registerDeviceAuthorizationRoutes(
   app: FastifyInstance,
   deviceAuth: DeviceAuthorization,
+  trustProxy: false | string[],
 ): void {
   const rateLimiter = new PairingRateLimiter();
+  let warnedAboutIgnoredForwardedFor = false;
   const errorSchema = {
     type: "object",
     properties: {
@@ -241,10 +247,21 @@ function registerDeviceAuthorizationRoutes(
         });
       }
 
-      const rateLimit = rateLimiter.consume(request.ip);
-      if (!rateLimit.allowed) {
+      if (
+        trustProxy === false &&
+        request.headers["x-forwarded-for"] &&
+        !warnedAboutIgnoredForwardedFor
+      ) {
+        warnedAboutIgnoredForwardedFor = true;
+        console.warn(
+          "X-Forwarded-For is present while TRUST_PROXY is unset; pairing requests share the proxy's rate limit.",
+        );
+      }
+
+      const attempt = rateLimiter.reserveAttempt(request.ip);
+      if (!attempt.allowed) {
         return reply
-          .header("retry-after", String(rateLimit.retryAfterSeconds))
+          .header("retry-after", String(attempt.retryAfterSeconds))
           .code(429)
           .send({
             error: {
@@ -258,6 +275,7 @@ function registerDeviceAuthorizationRoutes(
       try {
         paired = await deviceAuth.pair(request.body);
       } catch (error) {
+        attempt.complete(true);
         if (!(error instanceof DeviceAuthInputError)) {
           throw error;
         }
@@ -266,6 +284,7 @@ function registerDeviceAuthorizationRoutes(
         });
       }
       if (!paired) {
+        attempt.complete(false);
         return reply.code(401).send({
           error: {
             code: "invalid_pairing_code",
@@ -273,6 +292,7 @@ function registerDeviceAuthorizationRoutes(
           },
         });
       }
+      attempt.complete(true);
 
       reply.header("cache-control", "no-store");
       return reply.code(201).send({

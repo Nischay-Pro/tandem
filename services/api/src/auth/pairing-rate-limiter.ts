@@ -1,5 +1,6 @@
 interface RateLimitWindow {
-  count: number;
+  failures: number;
+  inFlight: number;
   expiresAt: number;
 }
 
@@ -8,49 +9,44 @@ export interface RateLimitDecision {
   retryAfterSeconds: number;
 }
 
+export interface PairingAttemptReservation extends RateLimitDecision {
+  complete(succeeded: boolean): void;
+}
+
 export class PairingRateLimiter {
   #clients = new Map<string, RateLimitWindow>();
-  #processWindow: RateLimitWindow | undefined;
 
   constructor(
-    private readonly maxRequests = 10,
+    private readonly maxFailures = 10,
     private readonly windowMs = 60_000,
     private readonly maxClients = 10_000,
     private readonly now: () => number = Date.now,
-    private readonly maxProcessRequests = 100,
   ) {
     if (
-      !Number.isSafeInteger(maxRequests) ||
-      maxRequests < 1 ||
+      !Number.isSafeInteger(maxFailures) ||
+      maxFailures < 1 ||
       !Number.isSafeInteger(windowMs) ||
       windowMs < 1 ||
       !Number.isSafeInteger(maxClients) ||
-      maxClients < 1 ||
-      !Number.isSafeInteger(maxProcessRequests) ||
-      maxProcessRequests < 1
+      maxClients < 1
     ) {
       throw new Error("Pairing rate limit configuration must be positive");
     }
   }
 
-  consume(clientKey: string): RateLimitDecision {
+  reserveAttempt(clientKey: string): PairingAttemptReservation {
     const currentTime = this.now();
-    let processWindow = this.#processWindow;
-    if (processWindow && processWindow.expiresAt <= currentTime) {
-      processWindow = undefined;
-    }
-    if (!processWindow) {
-      processWindow = { count: 0, expiresAt: currentTime + this.windowMs };
-      this.#processWindow = processWindow;
-    }
-
-    if (processWindow.count >= this.maxProcessRequests) {
-      return rateLimitDecision(processWindow.expiresAt, currentTime);
-    }
-
     let window = this.#clients.get(clientKey);
     if (window && window.expiresAt <= currentTime) {
+      this.#clients.delete(clientKey);
       window = undefined;
+    }
+
+    if (window && window.failures + window.inFlight >= this.maxFailures) {
+      return {
+        ...rateLimitDecision(window.expiresAt, currentTime),
+        complete: () => undefined,
+      };
     }
 
     if (!window) {
@@ -59,17 +55,35 @@ export class PairingRateLimiter {
         const oldestClient = this.#clients.keys().next().value!;
         this.#clients.delete(oldestClient);
       }
-      window = { count: 0, expiresAt: currentTime + this.windowMs };
+      window = {
+        failures: 0,
+        inFlight: 0,
+        expiresAt: currentTime + this.windowMs,
+      };
       this.#clients.set(clientKey, window);
     }
 
-    if (window.count >= this.maxRequests) {
-      return rateLimitDecision(window.expiresAt, currentTime);
-    }
+    window.inFlight += 1;
+    let completed = false;
+    return {
+      allowed: true,
+      retryAfterSeconds: 0,
+      complete: (succeeded) => {
+        if (completed) return;
+        completed = true;
+        if (this.#clients.get(clientKey) !== window) return;
 
-    window.count += 1;
-    processWindow.count += 1;
-    return { allowed: true, retryAfterSeconds: 0 };
+        window.inFlight -= 1;
+        if (this.now() >= window.expiresAt) return;
+        if (succeeded) {
+          if (window.failures === 0 && window.inFlight === 0) {
+            this.#clients.delete(clientKey);
+          }
+          return;
+        }
+        window.failures += 1;
+      },
+    };
   }
 
   #removeExpiredClients(currentTime: number): void {
