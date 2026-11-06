@@ -5332,6 +5332,7 @@ private fun TransactionFormScreen(
             var calculatorAccumulator by rememberSaveable { mutableStateOf<Long?>(null) }
             var calculatorOperator by rememberSaveable { mutableStateOf<String?>(null) }
             var enterNewOperand by rememberSaveable { mutableStateOf(false) }
+            var amountEntryMessage by rememberSaveable { mutableStateOf<String?>(null) }
             val amountFocusRequester = remember { FocusRequester() }
             val focusManager = LocalFocusManager.current
             val softwareKeyboard = LocalSoftwareKeyboardController.current
@@ -5344,19 +5345,32 @@ private fun TransactionFormScreen(
                     mutableStateOf(
                         state
                             .parseAmountMinorUnits(state.transactionAmount)
-                            ?.let { if (it == Long.MIN_VALUE) Long.MAX_VALUE else kotlin.math.abs(it) } ?: 0L,
+                            ?.let {
+                                (if (it == Long.MIN_VALUE) Long.MAX_VALUE else kotlin.math.abs(it))
+                                    .coerceAtMost(MAX_TRANSACTION_AMOUNT_MINOR_UNITS)
+                            }
+                            ?: 0L,
                     )
                 }
 
             fun setAmount(minorUnits: Long) {
-                val magnitude = if (minorUnits == Long.MIN_VALUE) Long.MAX_VALUE else kotlin.math.abs(minorUnits)
+                val magnitude =
+                    (if (minorUnits == Long.MIN_VALUE) Long.MAX_VALUE else kotlin.math.abs(minorUnits))
+                        .coerceAtMost(MAX_TRANSACTION_AMOUNT_MINOR_UNITS)
                 amountMinorUnits = magnitude
                 state.transactionAmount = state.formatAmount(magnitude)
             }
 
             fun enterDigit(digit: Int) {
                 val current = if (enterNewOperand) 0L else amountMinorUnits
+                val exceededLimit = amountDigitExceedsLimit(current, digit)
                 setAmount(appendAmountDigit(current, digit))
+                amountEntryMessage =
+                    if (exceededLimit) {
+                        "Largest amount is ${state.formatCurrency(MAX_TRANSACTION_AMOUNT_MINOR_UNITS)}."
+                    } else {
+                        null
+                    }
                 enterNewOperand = false
             }
 
@@ -5365,13 +5379,21 @@ private fun TransactionFormScreen(
                 val pending = calculatorOperator
                 if (previous != null && pending != null && !enterNewOperand) {
                     val result = calculateAmountMinorUnits(previous, amountMinorUnits, pending)
-                    if (result != null) {
-                        setAmount(result)
-                        calculatorAccumulator = if (result == Long.MIN_VALUE) Long.MAX_VALUE else kotlin.math.abs(result)
+                    if (result == null) {
+                        amountEntryMessage =
+                            if (pending == "÷" && amountMinorUnits == 0L) {
+                                "Can’t divide by zero."
+                            } else {
+                                "Largest amount is ${state.formatCurrency(MAX_TRANSACTION_AMOUNT_MINOR_UNITS)}."
+                            }
+                        return
                     }
+                    setAmount(result)
+                    calculatorAccumulator = kotlin.math.abs(result)
                 } else if (previous == null) {
                     calculatorAccumulator = amountMinorUnits
                 }
+                amountEntryMessage = null
                 calculatorOperator = operator
                 enterNewOperand = true
             }
@@ -5382,8 +5404,18 @@ private fun TransactionFormScreen(
                 if (previous != null && operator != null) {
                     val result =
                         if (enterNewOperand) previous else calculateAmountMinorUnits(previous, amountMinorUnits, operator)
-                    result?.let(::setAmount)
+                    if (result == null) {
+                        amountEntryMessage =
+                            if (operator == "÷" && amountMinorUnits == 0L) {
+                                "Can’t divide by zero."
+                            } else {
+                                "Largest amount is ${state.formatCurrency(MAX_TRANSACTION_AMOUNT_MINOR_UNITS)}."
+                            }
+                        return
+                    }
+                    setAmount(result)
                 }
+                amountEntryMessage = null
                 calculatorAccumulator = null
                 calculatorOperator = null
                 enterNewOperand = true
@@ -5408,6 +5440,9 @@ private fun TransactionFormScreen(
                         focusRequester = amountFocusRequester,
                         onShowKeypad = { keypadVisible = true },
                     )
+                    AnimatedReveal(visible = amountEntryMessage != null) {
+                        Text(amountEntryMessage.orEmpty(), color = tandemPalette.warning, fontSize = 13.sp)
+                    }
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         TransactionTypeChip(state.transactionType) {
                             keypadVisible = false
@@ -5476,6 +5511,7 @@ private fun TransactionFormScreen(
                         onDelete = {
                             val current = if (enterNewOperand) 0L else amountMinorUnits
                             setAmount(removeAmountDigit(current))
+                            amountEntryMessage = null
                             enterNewOperand = false
                         },
                         onOperator = ::chooseOperator,

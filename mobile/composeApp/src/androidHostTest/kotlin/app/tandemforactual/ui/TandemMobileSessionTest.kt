@@ -10,6 +10,35 @@ import kotlin.test.assertTrue
 
 class TandemMobileSessionTest {
     @Test
+    fun transactionWritesRejectAmountsAboveTheApiLimitBeforeStorageAccess() =
+        runBlocking {
+            val session =
+                TandemMobileSession(
+                    apiClient = TandemApiClient(),
+                    database = null,
+                    nowEpochMillis = { 0L },
+                )
+            val overLimit = formatAmount(MAX_TRANSACTION_AMOUNT_MINOR_UNITS + 1)
+
+            session.updateTransaction("budget-1", "transaction-1", overLimit, "note", -100, null)
+            assertTrue(session.transactionWriteMessage.orEmpty().startsWith("Largest amount is"))
+
+            assertFalse(
+                session.createTransaction(
+                    "budget-1",
+                    "account-1",
+                    null,
+                    null,
+                    overLimit,
+                    "2026-05-14",
+                    "note",
+                    null,
+                ),
+            )
+            assertTrue(session.transactionWriteMessage.orEmpty().startsWith("Largest amount is"))
+        }
+
+    @Test
     fun readOnlyModeBlocksEveryTransactionWriteEntryPoint() =
         runBlocking {
             val session =

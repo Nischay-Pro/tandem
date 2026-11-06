@@ -372,6 +372,10 @@ internal class TandemMobileSession(
             transactionWriteMessage = "Enter a valid positive amount using this device’s number format."
             return
         }
+        if (enteredAmount > MAX_TRANSACTION_AMOUNT_MINOR_UNITS) {
+            transactionWriteMessage = "Largest amount is ${formatCurrency(MAX_TRANSACTION_AMOUNT_MINOR_UNITS, displaySettings)}."
+            return
+        }
         val localRepository = repository
         val coordinator = syncCoordinator
         if (localRepository == null || coordinator == null || !isAuthenticated) {
@@ -461,6 +465,10 @@ internal class TandemMobileSession(
         val amount = parseAmountMinorUnits(amountText, displaySettings)
         if (amount == null || amount == 0L) {
             transactionWriteMessage = "Enter an amount greater than zero."
+            return false
+        }
+        if (amount == Long.MIN_VALUE || kotlin.math.abs(amount) > MAX_TRANSACTION_AMOUNT_MINOR_UNITS) {
+            transactionWriteMessage = "Largest amount is ${formatCurrency(MAX_TRANSACTION_AMOUNT_MINOR_UNITS, displaySettings)}."
             return false
         }
         val date = normalizeTransactionDate(dateText)

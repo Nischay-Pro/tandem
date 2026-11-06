@@ -3,6 +3,7 @@ package app.tandemforactual.ui
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class TransactionAmountInputTest {
     @Test
@@ -27,8 +28,13 @@ class TransactionAmountInputTest {
     }
 
     @Test
-    fun longAmountsSaturateAndDigitsAreValidated() {
-        assertEquals(Long.MAX_VALUE, appendAmountDigit(Long.MAX_VALUE, 9))
+    fun digitEntryStopsAtTheServerAmountLimit() {
+        assertEquals(MAX_TRANSACTION_AMOUNT_MINOR_UNITS, appendAmountDigit(100_000_000L, 0))
+        assertEquals(MAX_TRANSACTION_AMOUNT_MINOR_UNITS, appendAmountDigit(MAX_TRANSACTION_AMOUNT_MINOR_UNITS, 9))
+        assertEquals(-MAX_TRANSACTION_AMOUNT_MINOR_UNITS, appendAmountDigit(-MAX_TRANSACTION_AMOUNT_MINOR_UNITS, 9))
+        assertTrue(amountDigitExceedsLimit(MAX_TRANSACTION_AMOUNT_MINOR_UNITS, 0))
+        assertNull(calculateAmountMinorUnits(MAX_TRANSACTION_AMOUNT_MINOR_UNITS, 1, "+"))
+        assertNull(calculateAmountMinorUnits(MAX_TRANSACTION_AMOUNT_MINOR_UNITS, MAX_TRANSACTION_AMOUNT_MINOR_UNITS, "×"))
         assertEquals(-11L, removeAmountDigit(-112L))
         assertEquals(0L, removeAmountDigit(9L))
     }
