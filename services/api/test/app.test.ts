@@ -153,6 +153,7 @@ describe("health routes and OpenAPI", () => {
   });
 
   it("pairs a device once and returns its bearer token without cache", async () => {
+    const auditLog = vi.spyOn(console, "info").mockImplementation(() => {});
     const device = createDevice();
     const auth = createDeviceAuth({
       pair: vi.fn(async ({ code }: { code: string }) =>
@@ -205,6 +206,27 @@ describe("health routes and OpenAPI", () => {
       payload: { code: "short", deviceName: "Synthetic phone" },
     });
     expect(invalidBody.statusCode).toBe(400);
+    const events = auditLog.mock.calls.map(([line]) =>
+      JSON.parse(line as string),
+    );
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ event: "device.pair", outcome: "success" }),
+        expect.objectContaining({
+          event: "device.pair",
+          outcome: "rejected",
+          reason: "invalid_code",
+        }),
+        expect.objectContaining({
+          event: "device.pair",
+          outcome: "rejected",
+          reason: "invalid_request",
+        }),
+      ]),
+    );
+    expect(auditLog.mock.calls.flat().join(" ")).not.toContain("b7m2q3x9");
+    expect(auditLog.mock.calls.flat().join(" ")).not.toContain(testAccessToken);
+    auditLog.mockRestore();
     await app.close();
   });
 
@@ -247,6 +269,7 @@ describe("health routes and OpenAPI", () => {
   });
 
   it("rate-limits pairing attempts from one client address", async () => {
+    const auditLog = vi.spyOn(console, "info").mockImplementation(() => {});
     const auth = createDeviceAuth();
     const app = await buildApiApp(
       { ping: vi.fn(), close: vi.fn() },
@@ -269,6 +292,20 @@ describe("health routes and OpenAPI", () => {
       error: { code: "rate_limited", message: "Too many pairing attempts" },
     });
     expect(auth.pair).toHaveBeenCalledTimes(10);
+    const events = auditLog.mock.calls.map(([line]) =>
+      JSON.parse(line as string),
+    );
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: "device.pair_rate_limited",
+          outcome: "rejected",
+          reason: "rate_limited",
+        }),
+      ]),
+    );
+    expect(auditLog.mock.calls.flat().join(" ")).not.toContain("D7M2-Q3X9");
+    auditLog.mockRestore();
     await app.close();
   });
 
@@ -385,6 +422,7 @@ describe("health routes and OpenAPI", () => {
   });
 
   it("authenticates, scopes device listing, and returns 404 for invisible revocations", async () => {
+    const auditLog = vi.spyOn(console, "info").mockImplementation(() => {});
     const device = createDevice({
       lastSeenAt: new Date("2026-11-01T01:00:00.000Z"),
     });
@@ -488,6 +526,27 @@ describe("health routes and OpenAPI", () => {
       headers: { authorization: `Bearer ${testAccessToken}` },
     });
     expect(missing.statusCode).toBe(404);
+    const events = auditLog.mock.calls.map(([line]) =>
+      JSON.parse(line as string),
+    );
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: "device.auth",
+          outcome: "rejected",
+          reason: "invalid_device_credential",
+        }),
+        expect.objectContaining({ event: "device.revoke", outcome: "success" }),
+        expect.objectContaining({
+          event: "device.revoke",
+          outcome: "rejected",
+          reason: "not_found_or_out_of_scope",
+        }),
+      ]),
+    );
+    expect(auditLog.mock.calls.flat().join(" ")).not.toContain(testAccessToken);
+    expect(auditLog.mock.calls.flat().join(" ")).not.toContain("B".repeat(43));
+    auditLog.mockRestore();
     await app.close();
   });
 });

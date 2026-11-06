@@ -1,5 +1,9 @@
 import swagger from "@fastify/swagger";
-import Fastify, { type FastifyInstance, type FastifySchema } from "fastify";
+import Fastify, {
+  type FastifyInstance,
+  type FastifyRequest,
+  type FastifySchema,
+} from "fastify";
 import { READINESS_TIMEOUT_MS } from "./config.js";
 import type { HealthDatabase } from "./database.js";
 import {
@@ -7,6 +11,7 @@ import {
   DeviceAuthInputError,
 } from "./auth/device-auth.js";
 import { PairingRateLimiter } from "./auth/pairing-rate-limiter.js";
+import { logSecurityAuditEvent } from "./security-audit.js";
 import type { TransactionApiPort } from "./actual/transaction-api.js";
 import type { BudgetReadApiPort } from "./budget-projection/budget-read-api.js";
 import { BudgetProjectionInputError } from "./budget-projection/contracts.js";
@@ -239,6 +244,12 @@ function registerDeviceAuthorizationRoutes(
     { schema: pairSchema, attachValidation: true },
     async (request, reply) => {
       if (request.validationError) {
+        logSecurityAuditEvent({
+          event: "device.pair",
+          outcome: "rejected",
+          reason: "invalid_request",
+          clientAddress: request.ip,
+        });
         return reply.code(400).send({
           error: {
             code: "invalid_request",
@@ -260,6 +271,12 @@ function registerDeviceAuthorizationRoutes(
 
       const attempt = rateLimiter.reserveAttempt(request.ip);
       if (!attempt.allowed) {
+        logSecurityAuditEvent({
+          event: "device.pair_rate_limited",
+          outcome: "rejected",
+          reason: "rate_limited",
+          clientAddress: request.ip,
+        });
         return reply
           .header("retry-after", String(attempt.retryAfterSeconds))
           .code(429)
@@ -279,12 +296,24 @@ function registerDeviceAuthorizationRoutes(
         if (!(error instanceof DeviceAuthInputError)) {
           throw error;
         }
+        logSecurityAuditEvent({
+          event: "device.pair",
+          outcome: "rejected",
+          reason: "invalid_request",
+          clientAddress: request.ip,
+        });
         return reply.code(400).send({
           error: { code: "invalid_request", message: error.message },
         });
       }
       if (!paired) {
         attempt.complete(false);
+        logSecurityAuditEvent({
+          event: "device.pair",
+          outcome: "rejected",
+          reason: "invalid_code",
+          clientAddress: request.ip,
+        });
         return reply.code(401).send({
           error: {
             code: "invalid_pairing_code",
@@ -293,6 +322,12 @@ function registerDeviceAuthorizationRoutes(
         });
       }
       attempt.complete(true);
+      logSecurityAuditEvent({
+        event: "device.pair",
+        outcome: "success",
+        clientAddress: request.ip,
+        deviceId: paired.deviceId,
+      });
 
       reply.header("cache-control", "no-store");
       return reply.code(201).send({
@@ -319,11 +354,7 @@ function registerDeviceAuthorizationRoutes(
       },
     },
     async (request, reply) => {
-      const device = await requireDevice(
-        deviceAuth,
-        request.headers.authorization,
-        reply,
-      );
+      const device = await requireDevice(deviceAuth, request, reply);
       if (!device) {
         return reply;
       }
@@ -353,11 +384,7 @@ function registerDeviceAuthorizationRoutes(
       },
     },
     async (request, reply) => {
-      const device = await requireDevice(
-        deviceAuth,
-        request.headers.authorization,
-        reply,
-      );
+      const device = await requireDevice(deviceAuth, request, reply);
       if (!device) {
         return reply;
       }
@@ -393,11 +420,7 @@ function registerDeviceAuthorizationRoutes(
       },
     },
     async (request, reply) => {
-      const device = await requireDevice(
-        deviceAuth,
-        request.headers.authorization,
-        reply,
-      );
+      const device = await requireDevice(deviceAuth, request, reply);
       if (!device) {
         return reply;
       }
@@ -406,10 +429,25 @@ function registerDeviceAuthorizationRoutes(
         request.params.deviceId,
       );
       if (!revoked) {
+        logSecurityAuditEvent({
+          event: "device.revoke",
+          outcome: "rejected",
+          reason: "not_found_or_out_of_scope",
+          clientAddress: request.ip,
+          deviceId: device.deviceId,
+          targetDeviceId: request.params.deviceId,
+        });
         return reply.code(404).send({
           error: { code: "device_not_found", message: "Device was not found" },
         });
       }
+      logSecurityAuditEvent({
+        event: "device.revoke",
+        outcome: "success",
+        clientAddress: request.ip,
+        deviceId: device.deviceId,
+        targetDeviceId: request.params.deviceId,
+      });
       return reply.code(204).send();
     },
   );
@@ -652,11 +690,7 @@ function registerTransactionRoutes(
       attachValidation: true,
     },
     async (request, reply) => {
-      const device = await requireDevice(
-        deviceAuth,
-        request.headers.authorization,
-        reply,
-      );
+      const device = await requireDevice(deviceAuth, request, reply);
       if (!device) return reply;
       if (request.validationError) return invalidTransactionRequest(reply);
       if (
@@ -745,11 +779,7 @@ function registerTransactionRoutes(
       attachValidation: true,
     },
     async (request, reply) => {
-      const device = await requireDevice(
-        deviceAuth,
-        request.headers.authorization,
-        reply,
-      );
+      const device = await requireDevice(deviceAuth, request, reply);
       if (!device) return reply;
       if (request.validationError) return invalidTransactionRequest(reply);
       if (
@@ -879,11 +909,7 @@ function registerTransactionRoutes(
       attachValidation: true,
     },
     async (request, reply) => {
-      const device = await requireDevice(
-        deviceAuth,
-        request.headers.authorization,
-        reply,
-      );
+      const device = await requireDevice(deviceAuth, request, reply);
       if (!device) return reply;
       if (request.validationError) return invalidTransactionRequest(reply);
       if (!transactionApi) return actualNotConfigured(reply);
@@ -1138,11 +1164,7 @@ function registerBudgetReadRoutes(
       },
     },
     async (request, reply) => {
-      const device = await requireDevice(
-        deviceAuth,
-        request.headers.authorization,
-        reply,
-      );
+      const device = await requireDevice(deviceAuth, request, reply);
       if (!device) return reply;
       const listBudgets = budgetReadApi?.listBudgets;
       if (!listBudgets) return actualNotConfigured(reply);
@@ -1194,11 +1216,7 @@ function registerBudgetReadRoutes(
       attachValidation: true,
     },
     async (request, reply) => {
-      const device = await requireDevice(
-        deviceAuth,
-        request.headers.authorization,
-        reply,
-      );
+      const device = await requireDevice(deviceAuth, request, reply);
       if (!device) return reply;
       if (request.validationError) return invalidBudgetRequest(reply);
       if (
@@ -1265,11 +1283,7 @@ function registerBudgetReadRoutes(
       attachValidation: true,
     },
     async (request, reply) => {
-      const device = await requireDevice(
-        deviceAuth,
-        request.headers.authorization,
-        reply,
-      );
+      const device = await requireDevice(deviceAuth, request, reply);
       if (!device) return reply;
       if (request.validationError) return invalidBudgetRequest(reply);
       if (
@@ -1423,14 +1437,22 @@ function toOperationResultResponse(result: {
 
 async function requireDevice(
   deviceAuth: DeviceAuthorization,
-  authorization: string | undefined,
+  request: FastifyRequest,
   reply: import("fastify").FastifyReply,
 ) {
+  const authorization = request.headers.authorization;
   const match = authorization?.match(/^Bearer ([A-Za-z0-9_-]{43})$/i);
   const device = await deviceAuth.authenticate(match?.[1]);
   if (device) {
     return device;
   }
+  logSecurityAuditEvent({
+    event: "device.auth",
+    outcome: "rejected",
+    reason: "invalid_device_credential",
+    clientAddress: request.ip,
+    route: request.routeOptions.url,
+  });
   reply.header("www-authenticate", 'Bearer realm="tandem-for-actual"');
   await reply.code(401).send({
     error: {
