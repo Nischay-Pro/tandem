@@ -5842,12 +5842,14 @@ private fun ActivitySearchScreen(
     var isEvaluatingSearch by remember { mutableStateOf(true) }
     LaunchedEffect(search, filters, searchableRecords, quickFilters, state.budgetDisplaySettings) {
         isEvaluatingSearch = true
+        if (search.isNotBlank()) delay(150)
         val displaySettings = state.budgetDisplaySettings
         val evaluation =
             withContext(Dispatchers.Default) {
+                val preparedSearch = prepareActivitySearch(search, filters)
                 val matchedIndices =
                     searchableRecords.mapIndexedNotNull { index, record ->
-                        index.takeIf { matchesActivitySearch(record, search, filters) }
+                        index.takeIf { matchesActivitySearch(record, preparedSearch) }
                     }
                 val refinements =
                     if (search.isBlank()) {
@@ -6010,8 +6012,9 @@ private fun ActivitySearchInput(
             BasicTextField(
                 value = value,
                 onValueChange = onValueChange,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
                 textStyle = TextStyle(color = palette.text, fontSize = TandemTypography.body),
                 cursorBrush = SolidColor(palette.accent),
                 decorationBox = { innerTextField ->

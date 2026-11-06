@@ -47,16 +47,66 @@ internal data class ActivitySearchRecord(
     val approved: Boolean? = null,
     val matched: Boolean? = null,
     val transfer: Boolean = false,
+) {
+    val normalizedSearchText: String =
+        buildString {
+            append(payee.lowercase())
+            append('\u0000')
+            append(account.lowercase())
+            append('\u0000')
+            append(category.lowercase())
+            append('\u0000')
+            append(notes.lowercase())
+            append('\u0000')
+            append(dateIso.lowercase())
+            append('\u0000')
+            append(dateLabel.lowercase())
+            append('\u0000')
+            append(amountText.lowercase())
+        }
+}
+
+internal data class PreparedActivitySearchFilter(
+    val filter: ActivitySearchFilter,
+    val expectedAmount: Long?,
+    val textAmount: Long?,
 )
+
+internal data class PreparedActivitySearch(
+    val normalizedQuery: String,
+    val queryAmount: Long?,
+    val filters: List<PreparedActivitySearchFilter>,
+)
+
+internal fun prepareActivitySearch(
+    query: String,
+    filters: List<ActivitySearchFilter>,
+): PreparedActivitySearch =
+    PreparedActivitySearch(
+        normalizedQuery = query.trim().lowercase(),
+        queryAmount = parseActivitySearchAmount(query),
+        filters =
+            filters.map { filter ->
+                PreparedActivitySearchFilter(
+                    filter = filter,
+                    expectedAmount = filter.value.toLongOrNull(),
+                    textAmount = if (filter.field == ActivitySearchField.ANY_CONTAINS) parseActivitySearchAmount(filter.value) else null,
+                )
+            },
+    )
 
 internal fun matchesActivitySearch(
     record: ActivitySearchRecord,
     query: String,
     filters: List<ActivitySearchFilter>,
+): Boolean = matchesActivitySearch(record, prepareActivitySearch(query, filters))
+
+internal fun matchesActivitySearch(
+    record: ActivitySearchRecord,
+    prepared: PreparedActivitySearch,
 ): Boolean {
-    val normalizedQuery = query.trim()
-    if (normalizedQuery.isNotEmpty() && !matchesAnyText(record, normalizedQuery)) return false
-    return filters.all { filter -> matchesFilter(record, filter) }
+    if (prepared.normalizedQuery.isNotEmpty() && !matchesAnyText(record, prepared.normalizedQuery, prepared.queryAmount)) return false
+    return prepared.filters.all { filter -> matchesFilter(record, filter) }
 }
 
 internal fun activitySearchSuggestions(
@@ -186,23 +236,22 @@ internal fun parseActivitySearchAmount(value: String): Long? {
 
 private fun matchesAnyText(
     record: ActivitySearchRecord,
-    query: String,
+    normalizedQuery: String,
+    queryAmount: Long?,
 ): Boolean {
-    val queryAmount = parseActivitySearchAmount(query)
     val amountMatches = queryAmount != null && kotlin.math.abs(record.amountMinorUnits) == queryAmount
-    return amountMatches ||
-        listOf(record.payee, record.account, record.category, record.notes, record.dateIso, record.dateLabel, record.amountText)
-            .any { it.contains(query, ignoreCase = true) }
+    return amountMatches || record.normalizedSearchText.contains(normalizedQuery)
 }
 
 private fun matchesFilter(
     record: ActivitySearchRecord,
-    filter: ActivitySearchFilter,
+    prepared: PreparedActivitySearchFilter,
 ): Boolean {
-    val expectedAmount = filter.value.toLongOrNull()
+    val filter = prepared.filter
+    val expectedAmount = prepared.expectedAmount
     val absoluteAmount = kotlin.math.abs(record.amountMinorUnits)
     return when (filter.field) {
-        ActivitySearchField.ANY_CONTAINS -> matchesAnyText(record, filter.value)
+        ActivitySearchField.ANY_CONTAINS -> matchesAnyText(record, filter.value.trim().lowercase(), prepared.textAmount)
         ActivitySearchField.PAYEE_CONTAINS ->
             record.payee.contains(filter.value, ignoreCase = true) || record.payeeId == filter.value
         ActivitySearchField.NOTES_CONTAIN -> record.notes.contains(filter.value, ignoreCase = true)

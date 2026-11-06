@@ -45,6 +45,17 @@ class ActivitySearchTest {
     }
 
     @Test
+    fun preparedSearchNormalizesQueryAndParsesFilterAmountsOnce() {
+        val transaction = record(payee = "Panera Bread", amount = -5_000)
+        val outflow = ActivitySearchFilter(ActivitySearchField.OUTFLOW_IS, "5000", "Outflow is $50.00")
+        val prepared = prepareActivitySearch("  PANERA  ", listOf(outflow))
+
+        assertEquals("panera", prepared.normalizedQuery)
+        assertEquals(5_000L, prepared.filters.single().expectedAmount)
+        assertTrue(matchesActivitySearch(transaction, prepared))
+    }
+
+    @Test
     fun amountBoundsSeparateInflowsAndOutflows() {
         val expense = record(amount = -12_000)
         val income = record(amount = 12_000)
