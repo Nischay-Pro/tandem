@@ -90,6 +90,86 @@ class ActivitySearchTest {
     }
 
     @Test
+    fun generalSearchAcceptsDatePrefixesMonthNamesAndCommonDateFormats() {
+        val november = record(date = "2026-11-06")
+        val january = record(date = "2026-01-12")
+        val januaryThirteenth = record(date = "2026-01-13")
+
+        listOf("Date: November 2026", "November 2026", "Nov 2026", "11/2026", "2026-11")
+            .forEach { query -> assertTrue(matchesActivitySearch(november, query, emptyList()), query) }
+        listOf(
+            "01/12/2026",
+            "2026-01-12",
+            "2026/01/12",
+            "1-12-2026",
+            "January 12, 2026",
+            "Jan. 12, 2026",
+            "12 January 2026",
+        ).forEach { query -> assertTrue(matchesActivitySearch(january, query, emptyList()), query) }
+        assertTrue(matchesActivitySearch(januaryThirteenth, "13/01/2026", emptyList()))
+        assertTrue(matchesActivitySearch(january, "12.01.2026", emptyList()))
+        assertFalse(matchesActivitySearch(november, "Date: Noveber 2026", emptyList()))
+
+        val monthSuggestion = activitySearchSuggestions("Date: November 2026", listOf(november)).single()
+        assertEquals(ActivitySearchField.DATE_MONTH, monthSuggestion.field)
+        assertEquals("2026-11", monthSuggestion.value)
+        assertTrue(monthSuggestion.label.contains("November 2026"))
+    }
+
+    @Test
+    fun generalSearchSupportsInclusiveDateRangesAndCommonRangeSeparators() {
+        val januaryFirst = record(date = "2026-01-01")
+        val januaryThirtyFirst = record(date = "2026-01-31")
+        val februaryFirst = record(date = "2026-02-01")
+        val queries =
+            listOf(
+                "Date: 1/1/2026 to 1/31/2026",
+                "between 01/01/2026 and 01/31/2026",
+                "2026-01-01..2026-01-31",
+                "Jan 1 - Jan 31, 2026",
+            )
+
+        queries.forEach { query ->
+            assertTrue(matchesActivitySearch(januaryFirst, query, emptyList()), query)
+            assertTrue(matchesActivitySearch(januaryThirtyFirst, query, emptyList()), query)
+            assertFalse(matchesActivitySearch(februaryFirst, query, emptyList()), query)
+        }
+        assertTrue(matchesActivitySearch(februaryFirst, "between January 2026 and February 2026", emptyList()))
+    }
+
+    @Test
+    fun dateQuickFilterShowsMinusWhenItsMonthIsCoveredByAnActiveDateRange() {
+        val november = recentActivitySearchMonthFilters(listOf(record(date = "2026-11-06"))).single()
+        val dateRange =
+            ActivitySearchFilter(
+                ActivitySearchField.DATE_RANGE,
+                "2026-11-01..2026-11-30",
+                "Date: November 2026",
+            )
+
+        assertTrue(isActivitySearchFilterActive(listOf(dateRange), november))
+        assertFalse(isActivitySearchFilterActive(emptyList(), november))
+        assertEquals(emptyList(), toggleActivitySearchFilter(listOf(dateRange), november))
+    }
+
+    @Test
+    fun activitySearchSortsByDateAmountAndPayee() {
+        val records =
+            listOf(
+                record(payee = "Target", date = "2026-01-01", amount = -4_000),
+                record(payee = "Costco", date = "2026-01-03", amount = -12_000),
+                record(payee = "Walmart", date = "2026-01-02", amount = 20_000),
+            )
+        val indices = records.indices.toList()
+
+        assertEquals(listOf(1, 2, 0), sortActivitySearchIndices(indices, records, ActivitySortOrder.NEWEST_FIRST))
+        assertEquals(listOf(0, 2, 1), sortActivitySearchIndices(indices, records, ActivitySortOrder.OLDEST_FIRST))
+        assertEquals(listOf(2, 1, 0), sortActivitySearchIndices(indices, records, ActivitySortOrder.AMOUNT_HIGH_TO_LOW))
+        assertEquals(listOf(0, 1, 2), sortActivitySearchIndices(indices, records, ActivitySortOrder.AMOUNT_LOW_TO_HIGH))
+        assertEquals(listOf(1, 0, 2), sortActivitySearchIndices(indices, records, ActivitySortOrder.PAYEE_A_TO_Z))
+    }
+
+    @Test
     fun categoryAndMonthFiltersCombineForCategoryActivity() {
         val groceriesMay = record(category = "Groceries", categoryId = "cat-grocery", date = "2026-05-14")
         val groceriesApril = record(category = "Groceries", categoryId = "cat-grocery", date = "2026-04-14")

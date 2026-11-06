@@ -64,6 +64,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.AlertDialog
 import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.DropdownMenu
+import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
@@ -183,6 +185,7 @@ import com.composables.icons.lucide.KeyRound
 import com.composables.icons.lucide.LayoutDashboard
 import com.composables.icons.lucide.LockKeyhole
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Minus
 import com.composables.icons.lucide.NotepadText
 import com.composables.icons.lucide.PaintbrushVertical
 import com.composables.icons.lucide.Palette
@@ -862,6 +865,7 @@ internal class AppState {
     var selectedMonthId by mutableStateOf("2026-05")
     var activitySearchQuery by mutableStateOf("")
     var activitySearchFilters by mutableStateOf<List<ActivitySearchFilter>>(emptyList())
+    var activitySortOrder by mutableStateOf(ActivitySortOrder.NEWEST_FIRST)
     var activitySearchCache: ActivitySearchCache? = null
     var activitySearchResultCache: ActivitySearchResultCache? = null
     var selectedAccountId by mutableStateOf("")
@@ -4220,8 +4224,12 @@ private fun BudgetScreen(
     val palette = tandemPalette
     val compact = state.homeLayout == "Compact"
     val essentialsFirst = state.homeLayout == "Essentials"
+    val sectionSpacing = if (compact) 10.dp else 16.dp
     if (state.selectedBudgetId.isNotBlank()) {
-        PageLazyColumn(verticalSpacing = if (compact) 10.dp else 16.dp, horizontalPadding = if (compact) 16.dp else 20.dp) {
+        PageLazyColumn(
+            verticalSpacing = sectionSpacing,
+            horizontalPadding = if (compact) 16.dp else 20.dp,
+        ) {
             val conflictCount = mobileSession.pendingWrites.count { it.status == "conflict" }
             item(key = "budget-conflict-alert") {
                 AnimatedReveal(visible = state.conflictReviewAlerts && conflictCount > 0) {
@@ -4287,31 +4295,37 @@ private fun BudgetScreen(
                 if (pinnedCategories.isNotEmpty()) {
                     val pinnedSectionKey = "live:${state.selectedBudgetId}:pinned"
                     val pinnedExpanded = !state.isBudgetSectionCollapsed(pinnedSectionKey)
-                    item(key = "$pinnedSectionKey:header") {
-                        CollapsibleSectionCard(
-                            "Pinned",
-                            "${pinnedCategories.size} categories",
-                            expanded = pinnedExpanded,
-                            onToggleExpanded = { state.toggleBudgetSection(pinnedSectionKey) },
-                        ) {}
-                    }
-                    items(pinnedCategories, key = { "pinned:${it.second.id}" }) { (group, category) ->
-                        AnimatedVisibility(
-                            modifier = tandemListItemModifier(tandemReduceMotion),
-                            visible = pinnedExpanded,
-                            enter = expandVertically() + fadeIn(),
-                            exit = shrinkVertically() + fadeOut(),
-                        ) {
-                            SurfaceCard {
-                                ListRow(
-                                    category.name,
-                                    group.name,
-                                    state.formatCurrency(category.balanceMinor),
-                                    leading = RowLeading.Icon(financeIcon(category.name)),
+                    item(key = "$pinnedSectionKey:section") {
+                        Column {
+                            CollapsibleSectionCard(
+                                "Pinned",
+                                "${pinnedCategories.size} categories",
+                                expanded = pinnedExpanded,
+                                onToggleExpanded = { state.toggleBudgetSection(pinnedSectionKey) },
+                            ) {}
+                            AnimatedVisibility(
+                                visible = pinnedExpanded,
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut(),
+                            ) {
+                                Column(
+                                    Modifier.padding(top = sectionSpacing),
+                                    verticalArrangement = Arrangement.spacedBy(sectionSpacing),
                                 ) {
-                                    state.selectedCategoryGroupId = group.id
-                                    state.selectedCategoryId = category.id
-                                    navigation.open(AppRoute.CATEGORY_DETAIL)
+                                    pinnedCategories.forEach { (group, category) ->
+                                        SurfaceCard {
+                                            ListRow(
+                                                category.name,
+                                                group.name,
+                                                state.formatCurrency(category.balanceMinor),
+                                                leading = RowLeading.Icon(financeIcon(category.name)),
+                                            ) {
+                                                state.selectedCategoryGroupId = group.id
+                                                state.selectedCategoryId = category.id
+                                                navigation.open(AppRoute.CATEGORY_DETAIL)
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -4333,19 +4347,6 @@ private fun BudgetScreen(
                 displayGroups.forEach { group ->
                     val groupSectionKey = "live:${state.selectedBudgetId}:group:${group.id}"
                     val groupExpanded = !state.isBudgetSectionCollapsed(groupSectionKey)
-                    item(key = "$groupSectionKey:header") {
-                        CollapsibleSectionCard(
-                            group.name,
-                            "${state.formatCurrency(group.assignedMinor)} assigned · ${group.categories.size} categories",
-                            state.formatCurrency(group.balanceMinor),
-                            expanded = groupExpanded,
-                            onToggleExpanded = { state.toggleBudgetSection(groupSectionKey) },
-                            onClick = {
-                                state.selectedCategoryGroupId = group.id
-                                navigation.open(AppRoute.CATEGORY_GROUP)
-                            },
-                        ) {}
-                    }
                     val displayCategories =
                         if (essentialsFirst) {
                             group.categories
@@ -4359,37 +4360,50 @@ private fun BudgetScreen(
                         } else {
                             group.categories
                         }
-                    items(displayCategories, key = { "$groupSectionKey:${it.id}" }) { category ->
-                        AnimatedVisibility(
-                            modifier = tandemListItemModifier(tandemReduceMotion),
-                            visible = groupExpanded,
-                            enter = expandVertically() + fadeIn(),
-                            exit = shrinkVertically() + fadeOut(),
-                        ) {
-                            SurfaceCard {
-                                ListRow(
-                                    category.name,
-                                    "Spent ${state.formatCurrency(
-                                        kotlin.math.abs(category.activityMinor),
-                                    )} · ${state.formatCurrency(category.balanceMinor)} left",
-                                    state.formatCurrency(category.assignedMinor),
-                                    leading = RowLeading.Icon(financeIcon(category.name)),
-                                    options =
-                                        ListRowOptions(
-                                            trailingColor =
-                                                if (category.balanceMinor >=
-                                                    0
-                                                ) {
-                                                    palette.positive
-                                                } else {
-                                                    palette.warning
-                                                },
-                                            dense = compact,
-                                        ),
-                                ) {
+                    item(key = "$groupSectionKey:section") {
+                        Column {
+                            CollapsibleSectionCard(
+                                group.name,
+                                "${state.formatCurrency(group.assignedMinor)} assigned · ${group.categories.size} categories",
+                                state.formatCurrency(group.balanceMinor),
+                                expanded = groupExpanded,
+                                onToggleExpanded = { state.toggleBudgetSection(groupSectionKey) },
+                                onClick = {
                                     state.selectedCategoryGroupId = group.id
-                                    state.selectedCategoryId = category.id
-                                    navigation.open(AppRoute.CATEGORY_DETAIL)
+                                    navigation.open(AppRoute.CATEGORY_GROUP)
+                                },
+                            ) {}
+                            AnimatedVisibility(
+                                visible = groupExpanded,
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut(),
+                            ) {
+                                Column(
+                                    Modifier.padding(top = sectionSpacing),
+                                    verticalArrangement = Arrangement.spacedBy(sectionSpacing),
+                                ) {
+                                    displayCategories.forEach { category ->
+                                        SurfaceCard {
+                                            ListRow(
+                                                category.name,
+                                                "Spent ${state.formatCurrency(
+                                                    kotlin.math.abs(category.activityMinor),
+                                                )} · ${state.formatCurrency(category.balanceMinor)} left",
+                                                state.formatCurrency(category.assignedMinor),
+                                                leading = RowLeading.Icon(financeIcon(category.name)),
+                                                options =
+                                                    ListRowOptions(
+                                                        trailingColor =
+                                                            if (category.balanceMinor >= 0) palette.positive else palette.warning,
+                                                        dense = compact,
+                                                    ),
+                                            ) {
+                                                state.selectedCategoryGroupId = group.id
+                                                state.selectedCategoryId = category.id
+                                                navigation.open(AppRoute.CATEGORY_DETAIL)
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -4399,25 +4413,31 @@ private fun BudgetScreen(
             if (liveTransactions.isNotEmpty()) {
                 val recentSectionKey = "live:${state.selectedBudgetId}:recent-activity"
                 val recentExpanded = !state.isBudgetSectionCollapsed(recentSectionKey)
-                item(key = "$recentSectionKey:header") {
-                    CollapsibleSectionCard(
-                        "Recent activity",
-                        "${liveTransactions.size} synced transactions",
-                        "See all",
-                        onClick = { navigation.selectTab(AppRoute.ACTIVITY) },
-                        expanded = recentExpanded,
-                        onToggleExpanded = { state.toggleBudgetSection(recentSectionKey) },
-                    ) {}
-                }
-                items(liveTransactions.take(3), key = { "recent:${it.recordId}" }) { item ->
-                    AnimatedVisibility(
-                        modifier = tandemListItemModifier(tandemReduceMotion),
-                        visible = recentExpanded,
-                        enter = expandVertically() + fadeIn(),
-                        exit = shrinkVertically() + fadeOut(),
-                    ) {
-                        SurfaceCard {
-                            TransactionRow(item) { openTransaction(state, navigation, item, isLive = true) }
+                item(key = "$recentSectionKey:section") {
+                    Column {
+                        CollapsibleSectionCard(
+                            "Recent activity",
+                            "${liveTransactions.size} synced transactions",
+                            "See all",
+                            onClick = { navigation.selectTab(AppRoute.ACTIVITY) },
+                            expanded = recentExpanded,
+                            onToggleExpanded = { state.toggleBudgetSection(recentSectionKey) },
+                        ) {}
+                        AnimatedVisibility(
+                            visible = recentExpanded,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut(),
+                        ) {
+                            Column(
+                                Modifier.padding(top = sectionSpacing),
+                                verticalArrangement = Arrangement.spacedBy(sectionSpacing),
+                            ) {
+                                liveTransactions.take(3).forEach { item ->
+                                    SurfaceCard {
+                                        TransactionRow(item) { openTransaction(state, navigation, item, isLive = true) }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -5148,7 +5168,30 @@ private fun ActivityScreen(
 ) {
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     val transactions = if (isLiveBudget) liveTransactions else previewTransactions
-    val recentDescription = if (isLiveBudget) "Newest first" else "${transactions.size} sample entries"
+    val selectedSortOrder = state.activitySortOrder
+    var sortedTransactions by remember(state.selectedBudgetId) { mutableStateOf(transactions) }
+    LaunchedEffect(transactions, selectedSortOrder) {
+        sortedTransactions =
+            if (selectedSortOrder == ActivitySortOrder.NEWEST_FIRST) {
+                transactions
+            } else {
+                withContext(Dispatchers.Default) {
+                    transactions.sortedWith { first, second ->
+                        val primary =
+                            when (selectedSortOrder) {
+                                ActivitySortOrder.NEWEST_FIRST -> second.dateIso.compareTo(first.dateIso)
+                                ActivitySortOrder.OLDEST_FIRST -> first.dateIso.compareTo(second.dateIso)
+                                ActivitySortOrder.AMOUNT_HIGH_TO_LOW ->
+                                    kotlin.math.abs(second.amountMinorUnits).compareTo(kotlin.math.abs(first.amountMinorUnits))
+                                ActivitySortOrder.AMOUNT_LOW_TO_HIGH ->
+                                    kotlin.math.abs(first.amountMinorUnits).compareTo(kotlin.math.abs(second.amountMinorUnits))
+                                ActivitySortOrder.PAYEE_A_TO_Z -> first.payee.compareTo(second.payee, ignoreCase = true)
+                            }
+                        if (primary != 0) primary else second.dateIso.compareTo(first.dateIso)
+                    }
+                }
+            }
+    }
     PageLazyColumn {
         if (!isLiveBudget) item(key = "activity-preview-banner") { SampleBanner() }
         item(key = "activity-search-entry") {
@@ -5169,6 +5212,10 @@ private fun ActivityScreen(
                 }
             }
         }
+        item(key = "activity-sort") {
+            ActivitySortControl(state.activitySortOrder) { state.activitySortOrder = it }
+        }
+        val recentDescription = if (isLiveBudget) state.activitySortOrder.label else "${transactions.size} sample entries"
         if (transactions.isEmpty()) {
             item(key = "activity-empty") {
                 SectionCard("Recent transactions", recentDescription) {
@@ -5182,7 +5229,7 @@ private fun ActivityScreen(
         } else {
             item(key = "activity-recent-title") { SectionCard("Recent transactions", recentDescription) {} }
             items(
-                transactions,
+                sortedTransactions,
                 key = { transaction ->
                     val prefix = if (isLiveBudget) "activity" else "sample"
                     "$prefix:${transaction.recordId ?: "${transaction.dateLabel}:${transaction.payee}:${transaction.amountMinorUnits}"}"
@@ -5196,6 +5243,37 @@ private fun ActivityScreen(
             }
         }
         if (!isLiveBudget) item(key = "activity-sample-note") { PreviewNote("Transactions use sample data.") }
+    }
+}
+
+@Composable
+private fun ActivitySortControl(
+    selected: ActivitySortOrder,
+    onSelect: (ActivitySortOrder) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { expanded = true }) {
+            Text("Sort: ${selected.label}", color = tandemPalette.text, fontSize = TandemTypography.caption)
+            Icon(
+                Lucide.ChevronDown,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp).padding(start = 2.dp),
+                tint = tandemPalette.muted,
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            ActivitySortOrder.entries.forEach { option ->
+                DropdownMenuItem(
+                    onClick = {
+                        expanded = false
+                        onSelect(option)
+                    },
+                ) {
+                    Text(option.label, color = tandemPalette.text, fontSize = TandemTypography.compactBody)
+                }
+            }
+        }
     }
 }
 
@@ -5458,6 +5536,20 @@ private fun ActivitySearchScreen(
         suggestions = evaluation.second
         isEvaluatingSearch = false
     }
+    var sortedResultIndices by remember(state.selectedBudgetId) {
+        mutableStateOf(cachedEvaluation?.indices ?: emptyList())
+    }
+    val selectedSortOrder = state.activitySortOrder
+    LaunchedEffect(resultIndices, searchableRecords, selectedSortOrder) {
+        sortedResultIndices =
+            if (selectedSortOrder == ActivitySortOrder.NEWEST_FIRST) {
+                resultIndices
+            } else {
+                withContext(Dispatchers.Default) {
+                    sortActivitySearchIndices(resultIndices, searchableRecords, selectedSortOrder)
+                }
+            }
+    }
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = TandemSpacing.screen, vertical = TandemSpacing.medium),
         verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
@@ -5493,7 +5585,8 @@ private fun ActivitySearchScreen(
                     horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                 ) {
                     shownSuggestions.take(8).forEach { suggestion ->
-                        ActivitySearchQuickFilter(suggestion) {
+                        val isActive = isActivitySearchFilterActive(state.activitySearchFilters, suggestion)
+                        ActivitySearchQuickFilter(suggestion, isActive) {
                             state.activitySearchFilters =
                                 toggleActivitySearchFilter(state.activitySearchFilters, suggestion)
                         }
@@ -5515,13 +5608,20 @@ private fun ActivitySearchScreen(
                 }
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("Results", color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
-            Text(
-                formatInteger(resultIndices.size),
-                color = tandemPalette.muted,
-                fontSize = TandemTypography.caption,
-            )
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Results", color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
+                Text(formatInteger(resultIndices.size), color = tandemPalette.muted, fontSize = TandemTypography.caption)
+            }
+            ActivitySortControl(state.activitySortOrder) { state.activitySortOrder = it }
         }
         if (
             isLiveBudget &&
@@ -5557,7 +5657,7 @@ private fun ActivitySearchScreen(
                 verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
             ) {
                 items(
-                    resultIndices,
+                    sortedResultIndices,
                     key = { index ->
                         val record = searchableRecords.getOrNull(index)
                         "search:${record?.recordId ?: index}"
@@ -5689,7 +5789,12 @@ private fun ActivitySearchSuggestion(
         ) {
             Icon(
                 when (suggestion.field) {
-                    ActivitySearchField.DATE_MONTH, ActivitySearchField.DATE_ON -> Lucide.CalendarDays
+                    ActivitySearchField.DATE_MONTH,
+                    ActivitySearchField.DATE_ON,
+                    ActivitySearchField.DATE_RANGE,
+                    ActivitySearchField.DATE_MONTH_OF_YEAR,
+                    ActivitySearchField.DATE_MONTH_DAY,
+                    -> Lucide.CalendarDays
                     ActivitySearchField.ACCOUNT -> Lucide.WalletCards
                     ActivitySearchField.CATEGORY -> Lucide.Tags
                     ActivitySearchField.TRANSFER -> Lucide.Zap
@@ -5726,6 +5831,7 @@ private fun ActivitySearchSuggestion(
 @Composable
 private fun ActivitySearchQuickFilter(
     filter: ActivitySearchFilter,
+    isActive: Boolean,
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
@@ -5738,7 +5844,12 @@ private fun ActivitySearchQuickFilter(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
     ) {
-        Icon(Lucide.Plus, contentDescription = null, modifier = Modifier.size(14.dp), tint = palette.accent)
+        Icon(
+            if (isActive) Lucide.Minus else Lucide.Plus,
+            contentDescription = if (isActive) "Remove ${filter.label}" else "Add ${filter.label}",
+            modifier = Modifier.size(14.dp),
+            tint = palette.accent,
+        )
         Text(filter.label, color = palette.text, fontSize = TandemTypography.caption, maxLines = 1)
     }
 }
