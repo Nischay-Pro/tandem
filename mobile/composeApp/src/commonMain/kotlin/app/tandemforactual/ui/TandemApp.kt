@@ -7847,7 +7847,7 @@ private fun MerchantIconLicensesScreen(
         modifier = Modifier.fillMaxSize().padding(horizontal = TandemSpacing.screen, vertical = TandemSpacing.medium),
         verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
     ) {
-        Heading("Merchant icon licenses", "Each bundled mark, its reported license, and its source.")
+        Heading("Icon licenses and sources")
         when {
             loadError != null -> BodyText(loadError)
             merchantIconPack == null -> {
@@ -7874,7 +7874,7 @@ private fun MerchantIconLicensesScreen(
                         }
                     }
                 Text(
-                    "${filteredNotices.size} of ${merchantIconPack.notices.size} bundled icons",
+                    "${filteredNotices.size} of ${merchantIconPack.notices.size} icons",
                     color = tandemPalette.muted,
                     fontSize = TandemTypography.label,
                 )
@@ -8001,7 +8001,7 @@ private fun AboutScreen(
             DividerLine()
             ListRow("T", "TheSVG icon package", "Build-time catalog and tooling · MIT")
         }
-        SectionCard("Merchant artwork") {
+        SurfaceCard {
             ListRow(
                 "",
                 "View icon licenses and sources",
