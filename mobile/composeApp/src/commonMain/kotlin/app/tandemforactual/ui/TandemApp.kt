@@ -2790,6 +2790,7 @@ private fun AttentionBanner(
 private fun Heading(
     title: String,
     subtitle: String? = null,
+    compactSubtitle: Boolean = false,
 ) {
     val palette = tandemPalette
     Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
@@ -2800,10 +2801,39 @@ private fun Heading(
             lineHeight = TandemTypography.headingLineHeight,
             fontWeight = FontWeight.Bold,
         )
-        if (subtitle !=
-            null
+        if (subtitle != null) {
+            Text(
+                subtitle,
+                color = palette.muted,
+                fontSize = if (compactSubtitle) TandemTypography.compactBody else TandemTypography.body,
+                lineHeight = TandemTypography.bodyLineHeight,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MonthSelectorCard(
+    month: String,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    SurfaceCard(onClick = onClick) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(subtitle, color = palette.muted, fontSize = TandemTypography.body, lineHeight = TandemTypography.bodyLineHeight)
+            Column(modifier = Modifier.weight(1f)) {
+                LabelText("Planning period")
+                Spacer(Modifier.height(TandemSpacing.extraSmall))
+                Text(month, color = palette.text, fontSize = TandemTypography.action, fontWeight = FontWeight.SemiBold)
+            }
+            Icon(
+                Lucide.ChevronDown,
+                contentDescription = "Choose month",
+                modifier = Modifier.size(22.dp),
+                tint = palette.accent,
+            )
         }
     }
 }
@@ -4816,39 +4846,14 @@ private fun BudgetScreen(
                 }
             }
             item(key = "budget-overview-title") {
-                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-                    Text("Budget overview", color = palette.text, fontSize = TandemTypography.pageTitle, fontWeight = FontWeight.Bold)
-                    Text(
-                        "Review the synced plan and recent activity for the selected month.",
-                        color = palette.muted,
-                        fontSize = TandemTypography.compactBody,
-                    )
-                }
+                Heading(
+                    "Budget overview",
+                    "Review the synced plan and recent activity for the selected month.",
+                    compactSubtitle = true,
+                )
             }
             item(key = "budget-month-picker") {
-                SurfaceCard(onClick = { navigation.open(AppRoute.MONTH_PICKER) }) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            LabelText("Planning period")
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                state.selectedMonth,
-                                color = palette.text,
-                                fontSize = TandemTypography.action,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        }
-                        Icon(
-                            Lucide.ChevronDown,
-                            contentDescription = "Choose month",
-                            modifier = Modifier.size(22.dp),
-                            tint = palette.accent,
-                        )
-                    }
-                }
+                MonthSelectorCard(state.selectedMonth) { navigation.open(AppRoute.MONTH_PICKER) }
             }
             if (liveBudgetMonth == null) {
                 item(key = "budget-month-empty") {
@@ -5025,27 +5030,12 @@ private fun BudgetScreen(
                 "Categories use sample data"
             },
         )
-        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-            Text("Budget overview", color = palette.text, fontSize = TandemTypography.pageTitle, fontWeight = FontWeight.Bold)
-            Text(
-                "Review category balances and spending for the selected month.",
-                color = palette.muted,
-                fontSize = TandemTypography.compactBody,
-            )
-        }
-        SurfaceCard(onClick = { navigation.open(AppRoute.MONTH_PICKER) }) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    LabelText("Planning period")
-                    Spacer(Modifier.height(4.dp))
-                    Text(state.selectedMonth, color = palette.text, fontSize = TandemTypography.action, fontWeight = FontWeight.SemiBold)
-                }
-                Icon(Lucide.ChevronDown, contentDescription = "Choose month", modifier = Modifier.size(22.dp), tint = palette.accent)
-            }
-        }
+        Heading(
+            "Budget overview",
+            "Review category balances and spending for the selected month.",
+            compactSubtitle = true,
+        )
+        MonthSelectorCard(state.selectedMonth) { navigation.open(AppRoute.MONTH_PICKER) }
         val summaryKey = "summary:${state.selectedMonthId}"
         SectionCard(
             "${state.selectedMonth} summary",
