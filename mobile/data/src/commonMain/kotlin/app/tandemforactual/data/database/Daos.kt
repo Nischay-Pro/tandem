@@ -69,7 +69,7 @@ interface BudgetRecordDao {
     @Query(
         """
     SELECT recordId, recordDate, accountId, categoryId, payeeId, amountMinor, notes,
-           cleared, reconciled, approved, matched, transfer
+           cleared, reconciled, approved, matched, transfer, isParent
     FROM budget_records
     WHERE budgetId = :budgetId AND recordType = 'transaction'
       AND localDeleted = 0
@@ -88,6 +88,7 @@ interface BudgetRecordDao {
       AND categoryId IS NOT NULL AND amountMinor < 0 AND transfer = 0
       AND localDeleted = 0 AND remoteDeleted = 0
       AND (localJson IS NOT NULL OR remoteJson IS NOT NULL)
+      AND isParent = 0
       AND (:fromDate IS NULL OR recordDate >= :fromDate)
       AND (:throughDate IS NULL OR recordDate <= :throughDate)
     GROUP BY substr(recordDate, 1, 7), categoryId
@@ -111,6 +112,7 @@ interface BudgetRecordDao {
       AND amountMinor IS NOT NULL AND transfer = 0
       AND localDeleted = 0 AND remoteDeleted = 0
       AND (localJson IS NOT NULL OR remoteJson IS NOT NULL)
+      AND isParent = 0
       AND (:fromDate IS NULL OR recordDate >= :fromDate)
       AND (:throughDate IS NULL OR recordDate <= :throughDate)
     GROUP BY substr(recordDate, 1, 7)
@@ -132,6 +134,7 @@ interface BudgetRecordDao {
       AND amountMinor IS NOT NULL
       AND localDeleted = 0 AND remoteDeleted = 0
       AND (localJson IS NOT NULL OR remoteJson IS NOT NULL)
+      AND isParent = 0
       AND recordDate <= :throughDate
     GROUP BY accountId, recordDate
     ORDER BY recordDate DESC, accountId ASC

@@ -17,12 +17,13 @@ import androidx.sqlite.SQLiteConnection
         AppPreferenceEntity::class,
         OutboxOperationEntity::class,
     ],
-    version = 5,
+    version = 6,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3, spec = BudgetRecordDisplayMetadataMigration::class),
         AutoMigration(from = 3, to = 4, spec = BudgetRecordSearchMetadataMigration::class),
         AutoMigration(from = 4, to = 5),
+        AutoMigration(from = 5, to = 6, spec = BudgetRecordParentMetadataMigration::class),
     ],
     exportSchema = true,
 )
@@ -107,6 +108,31 @@ class BudgetRecordSearchMetadataMigration : AutoMigrationSpec {
                       OR json_extract($body, '$.is_transfer') = 1
                       OR json_extract($body, '$.isTransfer') = 1
                     THEN 1
+                    ELSE 0
+                END
+                WHERE recordType = 'transaction'
+                """.trimIndent(),
+            ).use { statement -> statement.step() }
+    }
+}
+
+class BudgetRecordParentMetadataMigration : AutoMigrationSpec {
+    override suspend fun onPostMigrate(connection: SQLiteConnection) {
+        connection
+            .prepare(
+                """
+                UPDATE budget_records
+                SET isParent = CASE
+                    WHEN json_valid(localJson) = 1 AND COALESCE(
+                        json_extract(localJson, '$.is_parent'),
+                        json_extract(localJson, '$.isParent'),
+                        0
+                    ) = 1 THEN 1
+                    WHEN json_valid(remoteJson) = 1 AND COALESCE(
+                        json_extract(remoteJson, '$.is_parent'),
+                        json_extract(remoteJson, '$.isParent'),
+                        0
+                    ) = 1 THEN 1
                     ELSE 0
                 END
                 WHERE recordType = 'transaction'

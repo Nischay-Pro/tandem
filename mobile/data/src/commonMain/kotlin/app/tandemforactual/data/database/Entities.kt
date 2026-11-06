@@ -1,5 +1,6 @@
 package app.tandemforactual.data.database
 
+import androidx.room3.ColumnInfo
 import androidx.room3.Entity
 import androidx.room3.Index
 import androidx.room3.PrimaryKey
@@ -40,6 +41,8 @@ data class BudgetRecordEntity(
     val approved: Boolean? = null,
     val matched: Boolean? = null,
     val transfer: Boolean? = null,
+    @ColumnInfo(defaultValue = "0")
+    val isParent: Boolean = false,
 )
 
 @Entity(
@@ -67,6 +70,8 @@ data class BudgetSnapshotRecordEntity(
     val approved: Boolean?,
     val matched: Boolean?,
     val transfer: Boolean?,
+    @ColumnInfo(defaultValue = "0")
+    val isParent: Boolean = false,
 )
 
 @Entity(tableName = "budget_snapshot_progress")
@@ -92,6 +97,7 @@ data class SearchableBudgetTransaction(
     val approved: Boolean?,
     val matched: Boolean?,
     val transfer: Boolean?,
+    val isParent: Boolean = false,
 )
 
 data class RemoteBudgetRecordKey(

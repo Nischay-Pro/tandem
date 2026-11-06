@@ -97,6 +97,7 @@ private data class TransactionSearchMetadata(
     val approved: Boolean?,
     val matched: Boolean?,
     val transfer: Boolean?,
+    val isParent: Boolean,
 )
 
 private fun parseTransactionSearchMetadata(bodyJson: String?): TransactionSearchMetadata? =
@@ -125,6 +126,7 @@ private fun parseTransactionSearchMetadata(bodyJson: String?): TransactionSearch
                         body.displayString("transferId") != null ||
                         body.displayBooleanOrNull("is_transfer") == true ||
                         body.displayBooleanOrNull("isTransfer") == true,
+                isParent = body.displayBooleanOrNull("is_parent") ?: body.displayBooleanOrNull("isParent") ?: false,
             )
         }.getOrNull()
     }
@@ -532,6 +534,7 @@ class LocalBudgetRepository(
                         approved = entity.approved,
                         matched = entity.matched,
                         transfer = entity.transfer,
+                        isParent = entity.isParent,
                     )
                 }
             }
@@ -959,6 +962,7 @@ class LocalBudgetRepository(
                 approved = searchMetadata?.approved,
                 matched = searchMetadata?.matched,
                 transfer = searchMetadata?.transfer,
+                isParent = searchMetadata?.isParent ?: false,
             ),
         )
     }
@@ -1301,6 +1305,7 @@ class LocalBudgetRepository(
             approved = searchMetadata?.approved,
             matched = searchMetadata?.matched,
             transfer = searchMetadata?.transfer,
+            isParent = parseTransactionSearchMetadata(bodyJson)?.isParent ?: false,
         )
     }
 

@@ -3,6 +3,7 @@ package app.tandemforactual.data.store
 import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import app.tandemforactual.data.database.BudgetRecordDisplayMetadataMigration
+import app.tandemforactual.data.database.BudgetRecordParentMetadataMigration
 import app.tandemforactual.data.database.BudgetRecordSearchMetadataMigration
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.TandemDatabase
@@ -131,6 +132,54 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
+    fun parentMetadataMigrationChecksLocalAndRemoteJsonAndSkipsMalformedBodies() =
+        runBlocking {
+            val connection = BundledSQLiteDriver().open(":memory:")
+            try {
+                connection
+                    .prepare(
+                        "CREATE TABLE budget_records (recordId TEXT, recordType TEXT, localJson TEXT, remoteJson TEXT, isParent INTEGER)",
+                    ).use { it.step() }
+                connection
+                    .prepare(
+                        """INSERT INTO budget_records VALUES ('remote-parent', 'transaction', '{"amount":-500}', '{"is_parent":true}', 0)""",
+                    ).use { it.step() }
+                connection
+                    .prepare(
+                        """INSERT INTO budget_records VALUES ('local-parent', 'transaction', '{"isParent":true}', NULL, 0)""",
+                    ).use { it.step() }
+                connection
+                    .prepare(
+                        """INSERT INTO budget_records VALUES ('ordinary', 'transaction', '{"is_parent":false}', NULL, 1)""",
+                    ).use { it.step() }
+                connection
+                    .prepare(
+                        "INSERT INTO budget_records VALUES ('invalid', 'transaction', 'not-json', NULL, 1)",
+                    ).use { it.step() }
+                connection
+                    .prepare(
+                        """INSERT INTO budget_records VALUES ('category', 'category', '{"is_parent":true}', NULL, 0)""",
+                    ).use { it.step() }
+
+                BudgetRecordParentMetadataMigration().onPostMigrate(connection)
+
+                val statement = connection.prepare("SELECT recordId, isParent FROM budget_records ORDER BY recordId")
+                val metadata =
+                    buildList {
+                        statement.use {
+                            while (it.step()) add(it.getText(0) to it.getLong(1).toInt())
+                        }
+                    }
+                assertEquals(
+                    listOf("category" to 0, "invalid" to 0, "local-parent" to 1, "ordinary" to 0, "remote-parent" to 1),
+                    metadata,
+                )
+            } finally {
+                connection.close()
+            }
+        }
+
+    @Test
     fun searchableTransactionProjectionUsesCachedColumnsForRemoteAndLocalRecords() =
         runBlocking {
             val database = newDatabase()
@@ -144,13 +193,13 @@ class LocalBudgetRepositoryTest {
                         transaction(
                             recordId = "remote",
                             bodyJson =
-                                """{"cleared":"reconciled","approved":true,"matched":false,"transfer_id":"other","notes":"remote note"}""",
+                                """{"cleared":"reconciled","approved":true,"matched":false,"transfer_id":"other","notes":"remote note","is_parent":true}""",
                         ),
                     ),
                 )
 
                 assertEquals(
-                    listOf("remote", "2026-10-01", "checking", "food", "market", 1000L, "remote note", true, true, true, false, true),
+                    listOf("remote", "2026-10-01", "checking", "food", "market", 1000L, "remote note", true, true, true, false, true, true),
                     repository.observeSearchableTransactions(BUDGET).first().single().let {
                         listOf(
                             it.recordId,
@@ -165,6 +214,7 @@ class LocalBudgetRepositoryTest {
                             it.approved,
                             it.matched,
                             it.transfer,
+                            it.isParent,
                         )
                     },
                 )
@@ -183,6 +233,7 @@ class LocalBudgetRepositoryTest {
                 assertEquals(false, local.approved)
                 assertEquals(true, local.matched)
                 assertEquals(false, local.transfer)
+                assertEquals(true, local.isParent)
             } finally {
                 database.close()
             }
