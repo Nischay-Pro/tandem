@@ -6787,12 +6787,19 @@ private fun ServerDeviceScreen(
                 leadingVector = Lucide.KeyRound,
             )
         }
-        InfoBubble("Pairing codes and budget passwords are never saved. Revoke device access on the server.")
+        InfoBubble("Pairing codes and budget passwords are never saved.")
+        mobileSession.deviceRevocationError?.let { message ->
+            AttentionBanner("Couldn’t remove access", message, "Retry", onForgetDevice)
+        }
         AnimatedPreviewNote(mobileSession.credentialStorageError)
         if (device == null) {
             SecondaryButton("Pair this device") { navigation.open(AppRoute.SERVER_ADDRESS) }
         } else {
-            SecondaryButton("Forget this device on this phone", onClick = onForgetDevice)
+            SecondaryButton(
+                if (mobileSession.isRevokingDevice) "Removing…" else "Forget this device",
+                enabled = !mobileSession.isRevokingDevice,
+                onClick = onForgetDevice,
+            )
         }
     }
 }

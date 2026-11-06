@@ -25,6 +25,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 
 class TandemApiClientTest {
     @Test
@@ -59,6 +60,40 @@ class TandemApiClientTest {
             sync.await()
             forget.await()
             assertFalse(client.isAuthenticated)
+        }
+
+    @Test
+    fun revokingCurrentDeviceUsesItsAuthenticatedServerIdentity() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            val engine =
+                MockEngine { request ->
+                    requests += request
+                    respond("", HttpStatusCode.NoContent)
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            val deviceId = Uuid.parse("6d860805-fdd6-4fe4-8e67-668c9900fe1f")
+            try {
+                client.restoreStoredSession(
+                    """{"serverUrl":"https://tandem.example","accessToken":"saved-token","device":{"deviceId":"$deviceId","principalId":"person-1","budgetIds":["budget-1"]}}""",
+                )
+
+                client.revokeCurrentDevice()
+
+                assertEquals(1, requests.size)
+                assertEquals("DELETE", requests.single().method.value)
+                assertEquals("/api/v1/devices/$deviceId", requests.single().url.encodedPath)
+                assertEquals("Bearer saved-token", requests.single().headers[HttpHeaders.Authorization])
+                assertTrue(client.isAuthenticated)
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
         }
 
     @Test

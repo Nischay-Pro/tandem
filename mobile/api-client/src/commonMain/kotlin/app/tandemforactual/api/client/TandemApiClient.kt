@@ -24,6 +24,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
+import kotlin.uuid.Uuid
 
 data class PairedDevice(
     val deviceId: String,
@@ -166,6 +167,30 @@ class TandemApiClient(
         sessionMutex.withLock {
             withGeneratedApi { parseBudgetCatalog(BudgetsApi.listBudgets()) }
         }
+
+    /** Revokes this device on the server while its credential is still active. */
+    suspend fun revokeCurrentDevice() {
+        sessionMutex.withLock {
+            val deviceId = pairedDevice?.deviceId ?: throw TandemApiException("not-paired")
+            val parsedDeviceId =
+                try {
+                    Uuid.parse(deviceId)
+                } catch (_: IllegalArgumentException) {
+                    throw TandemApiProtocolException("Stored device ID is invalid")
+                }
+            GeneratedApiAccess.mutex.withLock {
+                configureGeneratedApi()
+                val response =
+                    AuthenticationApi.revokeDevice(parsedDeviceId).fold(
+                        { error -> throw error.toTandemApiException() },
+                        { it },
+                    )
+                if (!response.isSuccessful) {
+                    throw TandemApiException("device-revocation-failed")
+                }
+            }
+        }
+    }
 
     /** Prevents credential changes during a multi-request sync. */
     suspend fun <T> withExclusiveSession(block: suspend () -> T): T = sessionMutex.withLock { block() }

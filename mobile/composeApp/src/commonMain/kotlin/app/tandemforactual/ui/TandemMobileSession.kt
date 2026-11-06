@@ -101,6 +101,12 @@ internal class TandemMobileSession(
     var credentialStorageError by mutableStateOf<String?>(null)
         private set
 
+    var deviceRevocationError by mutableStateOf<String?>(null)
+        private set
+
+    var isRevokingDevice by mutableStateOf(false)
+        private set
+
     var isCredentialStored by mutableStateOf(false)
         private set
 
@@ -229,13 +235,33 @@ internal class TandemMobileSession(
     }
 
     suspend fun forgetDevice() {
-        apiClient.forgetSession()
-        pairedDevice = null
-        budgets = emptyList()
-        budgetCatalogLoaded = false
-        isServerReachable = false
-        budgetError = null
-        clearStoredCredential()
+        if (pairedDevice == null || isRevokingDevice) return
+        deviceRevocationError = null
+        isRevokingDevice = true
+        try {
+            try {
+                apiClient.revokeCurrentDevice()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: TandemApiException) {
+                if (error.httpStatus != 401 && error.httpStatus != 404) {
+                    deviceRevocationError = "Connect to the server and try again to remove access."
+                    return
+                }
+            } catch (_: Exception) {
+                deviceRevocationError = "Connect to the server and try again to remove access."
+                return
+            }
+            apiClient.forgetSession()
+            pairedDevice = null
+            budgets = emptyList()
+            budgetCatalogLoaded = false
+            isServerReachable = false
+            budgetError = null
+            clearStoredCredential()
+        } finally {
+            isRevokingDevice = false
+        }
     }
 
     suspend fun pair(
@@ -244,6 +270,7 @@ internal class TandemMobileSession(
         deviceName: String,
     ) {
         pairingError = null
+        deviceRevocationError = null
         isPairing = true
         try {
             pairedDevice = apiClient.pair(serverUrl, pairingCode, deviceName)
