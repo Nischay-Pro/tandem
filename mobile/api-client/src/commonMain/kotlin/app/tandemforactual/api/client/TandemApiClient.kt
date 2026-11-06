@@ -9,6 +9,8 @@ import com.kroegerama.openapi.kmp.gen.companion.AuthItem
 import com.kroegerama.openapi.kmp.gen.companion.CallException
 import com.kroegerama.openapi.kmp.gen.companion.HttpCallException
 import com.kroegerama.openapi.kmp.gen.companion.HttpCallResponse
+import io.ktor.client.plugins.compression.ContentEncoding
+import io.ktor.client.plugins.pluginOrNull
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.Url
 import kotlinx.coroutines.CancellationException
@@ -150,6 +152,7 @@ class TandemApiClient(
                     put("deviceName", normalizeDeviceName(deviceName))
                 }.toMap()
             GeneratedApiAccess.mutex.withLock {
+                GeneratedApiAccess.ensureContentEncoding()
                 clearGeneratedAuthProvider()
                 Api.baseUrl = parsedUrl
                 setGeneratedAuthProvider(bearerAuth)
@@ -241,6 +244,7 @@ class TandemApiClient(
         if (currentServerUrl.isNullOrBlank() || accessToken.isNullOrBlank()) {
             throw TandemApiException("not-paired")
         }
+        GeneratedApiAccess.ensureContentEncoding()
         Api.baseUrl = parseServerUrl(currentServerUrl, allowInsecureLoopback)
         setGeneratedAuthProvider(bearerAuth)
     }
@@ -334,6 +338,18 @@ internal fun normalizeDeviceName(value: String): String {
 /** The generated OpenAPI package stores its URL and auth provider in process-wide state. */
 internal object GeneratedApiAccess {
     val mutex = Mutex()
+
+    fun ensureContentEncoding() {
+        if (Api.client.pluginOrNull(ContentEncoding) != null) return
+        Api.updateClient(
+            decorator = {
+                install(ContentEncoding) {
+                    gzip()
+                    deflate()
+                }
+            },
+        )
+    }
 }
 
 private fun parseServerUrl(

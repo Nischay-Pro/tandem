@@ -9,6 +9,7 @@ import {
 } from "../src/budget-projection/contracts.js";
 import {
   MAX_BUDGET_CHANGE_PAGE_SIZE,
+  MAX_BUDGET_PROJECTION_WRITE_BATCH_SIZE,
   MAX_RETAINED_BUDGET_CHANGES,
   createPostgresBudgetProjectionStore,
 } from "../src/budget-projection/postgres-budget-projection-store.js";
@@ -178,6 +179,91 @@ describe.skipIf(!integrationEnabled)(
       await expect(
         store.isSnapshotFresh("budget-freshness", "epoch-a", 15_000),
       ).resolves.toBe(false);
+    });
+
+    it("writes large upsert and delete snapshots in bounded batches", async () => {
+      const statementCounts = new Map<string, number>();
+      const database = getPool();
+      const trackingPool = {
+        connect: async () =>
+          new Proxy(await database.connect(), {
+            get(target, property) {
+              if (property === "query") {
+                return (queryText: string, ...args: unknown[]) => {
+                  const normalized = queryText.replace(/\s+/g, " ").trim();
+                  const statement = normalized.startsWith(
+                    "INSERT INTO companion_budget_records",
+                  )
+                    ? "record-upsert"
+                    : normalized.startsWith(
+                          "UPDATE companion_budget_records AS existing",
+                        )
+                      ? "record-delete"
+                      : normalized.startsWith(
+                            "INSERT INTO companion_budget_changes",
+                          )
+                        ? "change"
+                        : undefined;
+                  if (statement) {
+                    statementCounts.set(
+                      statement,
+                      (statementCounts.get(statement) ?? 0) + 1,
+                    );
+                  }
+                  return Reflect.apply(
+                    Reflect.get(target, property, target),
+                    target,
+                    [queryText, ...args],
+                  );
+                };
+              }
+              const value = Reflect.get(target, property, target);
+              return typeof value === "function" ? value.bind(target) : value;
+            },
+          }),
+      } as unknown as Pool;
+      const store = createPostgresBudgetProjectionStore(trackingPool);
+      const records = Array.from(
+        { length: MAX_BUDGET_PROJECTION_WRITE_BATCH_SIZE * 2 + 1 },
+        (_, index) => {
+          const id = `transaction-${index.toString().padStart(5, "0")}`;
+          return record("transaction", id, { id, amount: -index });
+        },
+      );
+
+      const initial = await store.applySnapshot(
+        "budget-batched",
+        "epoch",
+        records,
+      );
+      expect(initial.cursor).toBe(records.length.toString());
+      expect(initial.records).toHaveLength(records.length);
+      expect(Object.fromEntries(statementCounts)).toEqual({
+        "record-upsert": 3,
+        change: 3,
+      });
+
+      statementCounts.clear();
+      const nextRecords = records
+        .slice(0, 500)
+        .map((item, index) =>
+          index === 0
+            ? record("transaction", item.id, { id: item.id, amount: 1 })
+            : item,
+        );
+      const updated = await store.applySnapshot(
+        "budget-batched",
+        "epoch",
+        nextRecords,
+      );
+
+      expect(updated.cursor).toBe((records.length + 1 + 501).toString());
+      expect(updated.records).toHaveLength(500);
+      expect(Object.fromEntries(statementCounts)).toEqual({
+        "record-upsert": 1,
+        change: 3,
+        "record-delete": 2,
+      });
     });
 
     it("rotates generation and clears old events when the restore epoch changes", async () => {

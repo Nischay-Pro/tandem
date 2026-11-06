@@ -38,6 +38,7 @@ room3 = { id = "androidx.room3", version.ref = "room3" }
 [libraries]
 ktorClientMock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 ktorClientCore = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktorClientEncoding = { module = "io.ktor:ktor-client-encoding", version.ref = "ktor" }
 room3Runtime = { module = "androidx.room3:room3-runtime", version.ref = "room3" }
 room3Compiler = { module = "androidx.room3:room3-compiler", version.ref = "room3" }
 sqliteBundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sqlite" }

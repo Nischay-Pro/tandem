@@ -13,6 +13,7 @@ import {
 
 export const MAX_BUDGET_CHANGE_PAGE_SIZE = 500;
 export const MAX_RETAINED_BUDGET_CHANGES = 100_000;
+export const MAX_BUDGET_PROJECTION_WRITE_BATCH_SIZE = 500;
 
 interface SyncStateRow {
   budget_id: string;
@@ -37,6 +38,18 @@ interface ChangeRow {
   operation: "upsert" | "delete";
   revision: string;
   body: Record<string, unknown> | null;
+}
+
+interface PendingUpsert {
+  record: BudgetProjectionRecord;
+  cursor: bigint;
+}
+
+interface PendingDelete {
+  entityType: BudgetEntityType;
+  entityId: string;
+  revision: string;
+  cursor: bigint;
 }
 
 export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
@@ -141,6 +154,7 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
       }
       const incomingKeys = new Set<string>();
       const sortedRecords = [...records].sort(compareRecords);
+      const upserts: PendingUpsert[] = [];
 
       for (const record of sortedRecords) {
         const key = recordKey(record.type, record.id);
@@ -155,40 +169,10 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
         }
 
         cursor += 1n;
-        await client.query(
-          `INSERT INTO companion_budget_records
-            (budget_id, entity_type, entity_id, revision, body, is_deleted, updated_cursor)
-           VALUES ($1, $2, $3, $4, $5::jsonb, false, $6::bigint)
-           ON CONFLICT (budget_id, entity_type, entity_id) DO UPDATE SET
-             revision = EXCLUDED.revision,
-             body = EXCLUDED.body,
-             is_deleted = false,
-             updated_cursor = EXCLUDED.updated_cursor,
-             updated_at = clock_timestamp()`,
-          [
-            budgetId,
-            record.type,
-            record.id,
-            record.revision,
-            JSON.stringify(record.body),
-            cursor.toString(),
-          ],
-        );
-        await client.query(
-          `INSERT INTO companion_budget_changes
-            (budget_id, cursor, entity_type, entity_id, operation, revision, body)
-           VALUES ($1, $2::bigint, $3, $4, 'upsert', $5, $6::jsonb)`,
-          [
-            budgetId,
-            cursor.toString(),
-            record.type,
-            record.id,
-            record.revision,
-            JSON.stringify(record.body),
-          ],
-        );
+        upserts.push({ record, cursor });
       }
 
+      const deletions: PendingDelete[] = [];
       for (const [key, previous] of current) {
         if (previous.is_deleted || incomingKeys.has(key)) {
           continue;
@@ -198,32 +182,16 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
           previous.entity_type,
           previous.entity_id,
         );
-        await client.query(
-          `UPDATE companion_budget_records
-           SET revision = $4, body = NULL, is_deleted = true,
-               updated_cursor = $5::bigint, updated_at = clock_timestamp()
-           WHERE budget_id = $1 AND entity_type = $2 AND entity_id = $3`,
-          [
-            budgetId,
-            previous.entity_type,
-            previous.entity_id,
-            revision,
-            cursor.toString(),
-          ],
-        );
-        await client.query(
-          `INSERT INTO companion_budget_changes
-            (budget_id, cursor, entity_type, entity_id, operation, revision, body)
-           VALUES ($1, $2::bigint, $3, $4, 'delete', $5, NULL)`,
-          [
-            budgetId,
-            cursor.toString(),
-            previous.entity_type,
-            previous.entity_id,
-            revision,
-          ],
-        );
+        deletions.push({
+          entityType: previous.entity_type,
+          entityId: previous.entity_id,
+          revision,
+          cursor,
+        });
       }
+
+      await writeUpsertBatches(client, budgetId, upserts);
+      await writeDeleteBatches(client, budgetId, deletions);
 
       await client.query(
         `UPDATE companion_budget_sync_state
@@ -419,6 +387,102 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
     } finally {
       client.release(destroyClient);
     }
+  }
+}
+
+async function writeUpsertBatches(
+  client: PoolClient,
+  budgetId: string,
+  upserts: readonly PendingUpsert[],
+): Promise<void> {
+  for (
+    let offset = 0;
+    offset < upserts.length;
+    offset += MAX_BUDGET_PROJECTION_WRITE_BATCH_SIZE
+  ) {
+    const batch = upserts.slice(
+      offset,
+      offset + MAX_BUDGET_PROJECTION_WRITE_BATCH_SIZE,
+    );
+    const types = batch.map(({ record }) => record.type);
+    const ids = batch.map(({ record }) => record.id);
+    const revisions = batch.map(({ record }) => record.revision);
+    const bodies = batch.map(({ record }) => JSON.stringify(record.body));
+    const cursors = batch.map(({ cursor }) => cursor.toString());
+
+    await client.query(
+      `INSERT INTO companion_budget_records
+        (budget_id, entity_type, entity_id, revision, body, is_deleted, updated_cursor)
+       SELECT $1, incoming.entity_type, incoming.entity_id, incoming.revision,
+              incoming.body::jsonb, false, incoming.updated_cursor
+       FROM unnest(
+         $2::text[], $3::text[], $4::text[], $5::text[], $6::bigint[]
+       ) AS incoming(entity_type, entity_id, revision, body, updated_cursor)
+       ON CONFLICT (budget_id, entity_type, entity_id) DO UPDATE SET
+         revision = EXCLUDED.revision,
+         body = EXCLUDED.body,
+         is_deleted = false,
+         updated_cursor = EXCLUDED.updated_cursor,
+         updated_at = clock_timestamp()`,
+      [budgetId, types, ids, revisions, bodies, cursors],
+    );
+    await client.query(
+      `INSERT INTO companion_budget_changes
+        (budget_id, cursor, entity_type, entity_id, operation, revision, body)
+       SELECT $1, incoming.cursor, incoming.entity_type, incoming.entity_id,
+              'upsert', incoming.revision, incoming.body::jsonb
+       FROM unnest(
+         $2::bigint[], $3::text[], $4::text[], $5::text[], $6::text[]
+       ) AS incoming(cursor, entity_type, entity_id, revision, body)`,
+      [budgetId, cursors, types, ids, revisions, bodies],
+    );
+  }
+}
+
+async function writeDeleteBatches(
+  client: PoolClient,
+  budgetId: string,
+  deletions: readonly PendingDelete[],
+): Promise<void> {
+  for (
+    let offset = 0;
+    offset < deletions.length;
+    offset += MAX_BUDGET_PROJECTION_WRITE_BATCH_SIZE
+  ) {
+    const batch = deletions.slice(
+      offset,
+      offset + MAX_BUDGET_PROJECTION_WRITE_BATCH_SIZE,
+    );
+    const types = batch.map(({ entityType }) => entityType);
+    const ids = batch.map(({ entityId }) => entityId);
+    const revisions = batch.map(({ revision }) => revision);
+    const cursors = batch.map(({ cursor }) => cursor.toString());
+
+    await client.query(
+      `UPDATE companion_budget_records AS existing
+       SET revision = incoming.revision,
+           body = NULL,
+           is_deleted = true,
+           updated_cursor = incoming.updated_cursor,
+           updated_at = clock_timestamp()
+       FROM unnest(
+         $2::text[], $3::text[], $4::text[], $5::bigint[]
+       ) AS incoming(entity_type, entity_id, revision, updated_cursor)
+       WHERE existing.budget_id = $1
+         AND existing.entity_type = incoming.entity_type
+         AND existing.entity_id = incoming.entity_id`,
+      [budgetId, types, ids, revisions, cursors],
+    );
+    await client.query(
+      `INSERT INTO companion_budget_changes
+        (budget_id, cursor, entity_type, entity_id, operation, revision, body)
+       SELECT $1, incoming.cursor, incoming.entity_type, incoming.entity_id,
+              'delete', incoming.revision, NULL
+       FROM unnest(
+         $2::bigint[], $3::text[], $4::text[], $5::text[]
+       ) AS incoming(cursor, entity_type, entity_id, revision)`,
+      [budgetId, cursors, types, ids, revisions],
+    );
   }
 }
 

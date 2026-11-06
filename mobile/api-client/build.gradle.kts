@@ -21,6 +21,7 @@ kotlin {
     commonMain.dependencies {
       implementation(project(":data"))
       implementation(libs.ktorClientCore)
+      implementation(libs.ktorClientEncoding)
     }
     jvmTest.dependencies {
       implementation(kotlin("test"))

@@ -7,6 +7,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.DefaultRequest
+import io.ktor.client.plugins.compression.ContentEncoding
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
@@ -413,6 +414,10 @@ class TandemApiClientTest {
             createHttpClient = {
                 HttpClient(engine) {
                     install(ContentNegotiation) { json(Api.json) }
+                    install(ContentEncoding) {
+                        gzip()
+                        deflate()
+                    }
                     install(DefaultRequest) { url.takeFrom(Api.baseUrl) }
                     install(AuthPlugin) {
                         authItem { key -> if (key == auth.key) auth.provideAuthItem() else null }

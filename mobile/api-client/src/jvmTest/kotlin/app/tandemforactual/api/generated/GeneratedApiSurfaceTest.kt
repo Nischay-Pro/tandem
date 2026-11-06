@@ -7,7 +7,9 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.DefaultRequest
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.compression.ContentEncoding
 import io.ktor.client.request.HttpRequestData
+import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
@@ -15,6 +17,9 @@ import io.ktor.http.Url
 import io.ktor.http.headersOf
 import io.ktor.http.takeFrom
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.utils.io.ByteReadChannel
+import java.io.ByteArrayOutputStream
+import java.util.zip.GZIPOutputStream
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.buildJsonObject
@@ -49,9 +54,13 @@ class GeneratedApiSurfaceTest {
                             "{}"
                         }
                     respond(
-                        content = responseBody,
+                        content = ByteReadChannel(gzip(responseBody)),
                         status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                        headers = headersOf(
+                            HttpHeaders.ContentType to
+                                listOf(ContentType.Application.Json.toString()),
+                            HttpHeaders.ContentEncoding to listOf("gzip"),
+                        ),
                     )
                 }
             val auth = Auth.BearerAuth { AuthItem.Bearer("device-token") }
@@ -63,6 +72,10 @@ class GeneratedApiSurfaceTest {
                     createHttpClient = {
                         HttpClient(engine) {
                             install(ContentNegotiation) { json(Api.json) }
+                            install(ContentEncoding) {
+                                gzip()
+                                deflate()
+                            }
                             install(DefaultRequest) { url.takeFrom(Api.baseUrl) }
                             install(AuthPlugin) {
                                 authItem { key ->
@@ -142,6 +155,7 @@ class GeneratedApiSurfaceTest {
                         ).getOrNull()
                         ?.isSuccessful == true,
                 )
+                assertEquals("gzip,deflate", capturedRequests.first().headers[HttpHeaders.AcceptEncoding])
                 assertTrue(
                     TransactionsApi
                         .submitTransactionOperation(
@@ -231,4 +245,10 @@ class GeneratedApiSurfaceTest {
                 previousClient.close()
             }
         }
+}
+
+private fun gzip(value: String): ByteArray {
+    val output = ByteArrayOutputStream()
+    GZIPOutputStream(output).use { it.write(value.encodeToByteArray()) }
+    return output.toByteArray()
 }

@@ -62,7 +62,8 @@ TLS termination and the Actual server's existing proxy settings in the
 existing Nginx site configuration.
 The example also limits the API to 600 requests per minute per client address
 and pairing attempts to 10 per minute. Keep the API origin private so clients
-cannot bypass the reverse-proxy limits.
+cannot bypass the reverse-proxy limits. The API location compresses JSON
+responses of at least 1 KiB when the client supports gzip.
 
 Start and verify:
 

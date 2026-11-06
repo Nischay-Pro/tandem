@@ -22,6 +22,11 @@ location = /api/v1/auth/pair {
 location ^~ /api/v1/ {
     limit_req zone=tandem_api burst=60 nodelay;
     limit_req_status 429;
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_min_length 1024;
+    gzip_types application/json;
     proxy_pass http://tandem_api;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
