@@ -4,6 +4,8 @@ import app.tandemforactual.data.store.BudgetDisplaySettings
 import java.util.Locale
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class LocaleFormattingTest {
     @Test
@@ -62,6 +64,18 @@ class LocaleFormattingTest {
             assertEquals("$1.235", platformFormatCurrency(123_456, hideFraction))
             assertEquals("1.234,56", platformFormatDecimal(123_456, hideFraction))
             assertEquals(123_456L, platformParseDecimalMinorUnits("1.234,56", hideFraction))
+        }
+    }
+
+    @Test
+    fun reportCurrencyUsesPhoneLocaleWithBudgetCurrencyPrecision() {
+        withPhoneLocale(Locale.GERMANY) {
+            val usd = platformFormatReportCurrency(123_456, "USD", 2)
+            assertTrue(usd.contains("1.234,56"), usd)
+
+            val jpy = platformFormatReportCurrency(123_456, "JPY", 0)
+            assertTrue(jpy.contains("123.456"), jpy)
+            assertFalse(jpy.contains(","), jpy)
         }
     }
 

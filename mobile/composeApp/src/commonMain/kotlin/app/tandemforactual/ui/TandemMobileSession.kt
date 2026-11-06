@@ -23,6 +23,7 @@ import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
 import app.tandemforactual.ui.model.booleanValue
 import app.tandemforactual.ui.model.recordBody
+import app.tandemforactual.ui.reports.ReportsViewModels
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
@@ -62,6 +63,7 @@ internal class TandemMobileSession(
     private val credentialStore: DeviceCredentialStore? = null,
 ) {
     private val repository = database?.let { LocalBudgetRepository(it, nowEpochMillis) }
+    internal val reportViewModels = repository?.let(::ReportsViewModels)
     private val syncCoordinator =
         repository?.let {
             BudgetSyncCoordinator(

@@ -42,6 +42,23 @@ internal actual fun platformFormatCurrency(
     return if (minorUnits < 0) "-$formatted" else formatted
 }
 
+internal actual fun platformFormatReportCurrency(
+    minorUnits: Long,
+    currencyCode: String?,
+    fractionDigits: Int?,
+): String {
+    val locale = Locale.getDefault()
+    val currency = currencyCode?.let { runCatching { Currency.getInstance(it) }.getOrNull() }
+    val digits = fractionDigits ?: currency?.defaultFractionDigits?.takeIf { it >= 0 } ?: 2
+    return NumberFormat
+        .getCurrencyInstance(locale)
+        .apply {
+            if (currency != null) this.currency = currency
+            minimumFractionDigits = digits
+            maximumFractionDigits = digits
+        }.format(BigDecimal.valueOf(minorUnits).movePointLeft(digits))
+}
+
 internal actual fun platformFormatDecimal(
     minorUnits: Long,
     displaySettings: BudgetDisplaySettings?,

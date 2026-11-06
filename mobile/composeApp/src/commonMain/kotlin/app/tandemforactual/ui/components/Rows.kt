@@ -60,6 +60,11 @@ internal data class ListRowOptions(
     val animateChanges: Boolean = false,
 )
 
+@Composable
+internal fun DividerLine() {
+    Box(Modifier.fillMaxWidth().height(1.dp).background(tandemPalette.border.copy(alpha = 0.8f)))
+}
+
 internal sealed interface RowLeading {
     data object Automatic : RowLeading
 

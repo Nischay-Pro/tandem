@@ -44,6 +44,23 @@ internal actual fun platformFormatCurrency(
     return if (minorUnits < 0) "-$formatted" else formatted
 }
 
+internal actual fun platformFormatReportCurrency(
+    minorUnits: Long,
+    currencyCode: String?,
+    fractionDigits: Int?,
+): String {
+    val formatter =
+        NSNumberFormatter().apply {
+            locale = NSLocale.currentLocale
+            numberStyle = NSNumberFormatterCurrencyStyle
+            if (currencyCode != null) this.currencyCode = currencyCode
+        }
+    val digits = fractionDigits?.coerceIn(0, 6)?.toULong() ?: formatter.maximumFractionDigits
+    formatter.minimumFractionDigits = digits
+    formatter.maximumFractionDigits = digits
+    return formatter.stringFromNumber(NSNumber(minorUnits.toDouble() / 10.0.pow(digits.toDouble()))) ?: ""
+}
+
 internal actual fun platformFormatDecimal(
     minorUnits: Long,
     displaySettings: BudgetDisplaySettings?,

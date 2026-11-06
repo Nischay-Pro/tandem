@@ -150,6 +150,7 @@ import app.tandemforactual.ui.components.AnimatedStatusText
 import app.tandemforactual.ui.components.Badge
 import app.tandemforactual.ui.components.BodyText
 import app.tandemforactual.ui.components.CollapsibleSectionCard
+import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
@@ -177,10 +178,15 @@ import app.tandemforactual.ui.model.liveBudgetMonthSummary
 import app.tandemforactual.ui.model.longValue
 import app.tandemforactual.ui.model.recordName
 import app.tandemforactual.ui.model.stringValue
+import app.tandemforactual.ui.reports.ReportKind
+import app.tandemforactual.ui.reports.ReportPeriodMode
+import app.tandemforactual.ui.reports.ReportWindow
+import app.tandemforactual.ui.reports.reportMonthLabel
 import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.BriefcaseBusiness
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.CarFront
+import com.composables.icons.lucide.Carrot
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronLeft
@@ -216,6 +222,7 @@ import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.Server
 import com.composables.icons.lucide.ShieldCheck
+import com.composables.icons.lucide.Shirt
 import com.composables.icons.lucide.ShoppingCart
 import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.SunMoon
@@ -273,6 +280,12 @@ private enum class AppRoute(
     ACCOUNT_DETAIL("Checking"),
     ACCOUNT_OPTIONS("Account options"),
     ACTIVITY("Activity"),
+    REPORTS("Reports"),
+    REPORT_SPENDING_BY_CATEGORY("Spending by category"),
+    REPORT_SPENDING_OVER_TIME("Spending over time"),
+    REPORT_INCOME_AND_SPENDING("Income and spending"),
+    REPORT_BUDGETED_AND_SPENT("Budgeted and spent"),
+    REPORT_NET_WORTH("Net worth"),
     ACTIVITY_SEARCH("Search transactions"),
     ACTIVITY_FILTER("Filter and sort"),
     TRANSACTION_DETAIL("Transaction details"),
@@ -484,7 +497,7 @@ private fun AppState.formatSignedCurrency(minorUnits: Long): String = formatSign
 
 private fun AppState.parseAmountMinorUnits(value: String): Long? = parseAmountMinorUnits(value, budgetDisplaySettings)
 
-private val previewTransactions =
+internal val previewTransactions =
     listOf(
         TransactionItem(
             "Corner Market",
@@ -542,7 +555,7 @@ private val previewTransactions =
         ),
     )
 
-private val previewCategoryGroups =
+internal val previewCategoryGroups =
     listOf(
         LiveCategoryGroupSummary(
             id = "sample-essentials",
@@ -788,6 +801,11 @@ internal class AppState {
     var budgetDisplaySettings by mutableStateOf<BudgetDisplaySettings?>(null)
     var selectedMonth by mutableStateOf(formatMonth(2026, 5))
     var selectedMonthId by mutableStateOf("2026-05")
+    var reportsMonthId by mutableStateOf("2026-05")
+    var reportsBudgetId by mutableStateOf("")
+    var reportsPeriodMode by mutableStateOf(ReportPeriodMode.MONTH.name)
+    var reportsRangeMonths by mutableStateOf(6)
+    var reportsNetWorthScope by mutableStateOf("All accounts")
     var activitySearchQuery by mutableStateOf("")
     var activitySearchFilters by mutableStateOf<List<ActivitySearchFilter>>(emptyList())
     var activitySortOrder by mutableStateOf(ActivitySortOrder.NEWEST_FIRST)
@@ -848,6 +866,11 @@ internal class AppState {
             "selectedBudgetId" to selectedBudgetId,
             "selectedBudgetEncrypted" to selectedBudgetEncrypted.toString(),
             "cachedBudgetCatalogJson" to cachedBudgetCatalogJson,
+            "reportsMonthId" to reportsMonthId,
+            "reportsBudgetId" to reportsBudgetId,
+            "reportsPeriodMode" to reportsPeriodMode,
+            "reportsRangeMonths" to reportsRangeMonths.toString(),
+            "reportsNetWorthScope" to reportsNetWorthScope,
             "reduceMotionMode" to (reduceMotionOverride?.let { if (it) "on" else "off" } ?: "system"),
             "syncOnOpen" to syncOnOpen.toString(),
             "backgroundSyncEnabled" to backgroundSyncEnabled.toString(),
@@ -869,6 +892,11 @@ internal class AppState {
         selectedBudgetId = saved["selectedBudgetId"] ?: selectedBudgetId
         selectedBudgetEncrypted = saved["selectedBudgetEncrypted"]?.toBooleanStrictOrNull() ?: selectedBudgetEncrypted
         cachedBudgetCatalogJson = saved["cachedBudgetCatalogJson"] ?: cachedBudgetCatalogJson
+        reportsMonthId = saved["reportsMonthId"] ?: reportsMonthId
+        reportsBudgetId = saved["reportsBudgetId"] ?: reportsBudgetId
+        reportsPeriodMode = saved["reportsPeriodMode"] ?: reportsPeriodMode
+        reportsRangeMonths = saved["reportsRangeMonths"]?.toIntOrNull()?.coerceIn(3, 12) ?: reportsRangeMonths
+        reportsNetWorthScope = saved["reportsNetWorthScope"] ?: reportsNetWorthScope
         reduceMotionOverride =
             when (saved["reduceMotionMode"]) {
                 "on" -> true
@@ -901,6 +929,11 @@ internal class AppState {
                         "cachedBudgetCatalogJson" to state.cachedBudgetCatalogJson,
                         "selectedMonth" to state.selectedMonth,
                         "selectedMonthId" to state.selectedMonthId,
+                        "reportsMonthId" to state.reportsMonthId,
+                        "reportsBudgetId" to state.reportsBudgetId,
+                        "reportsPeriodMode" to state.reportsPeriodMode,
+                        "reportsRangeMonths" to state.reportsRangeMonths,
+                        "reportsNetWorthScope" to state.reportsNetWorthScope,
                         "selectedAccountId" to state.selectedAccountId,
                         "selectedCategoryGroupId" to state.selectedCategoryGroupId,
                         "selectedCategoryId" to state.selectedCategoryId,
@@ -947,6 +980,11 @@ internal class AppState {
                         cachedBudgetCatalogJson = saved["cachedBudgetCatalogJson"] as? String ?: cachedBudgetCatalogJson
                         selectedMonth = saved["selectedMonth"] as? String ?: selectedMonth
                         selectedMonthId = saved["selectedMonthId"] as? String ?: selectedMonthId
+                        reportsMonthId = saved["reportsMonthId"] as? String ?: reportsMonthId
+                        reportsBudgetId = saved["reportsBudgetId"] as? String ?: reportsBudgetId
+                        reportsPeriodMode = saved["reportsPeriodMode"] as? String ?: reportsPeriodMode
+                        reportsRangeMonths = (saved["reportsRangeMonths"] as? Int)?.coerceIn(3, 12) ?: reportsRangeMonths
+                        reportsNetWorthScope = saved["reportsNetWorthScope"] as? String ?: reportsNetWorthScope
                         selectedAccountId = saved["selectedAccountId"] as? String ?: selectedAccountId
                         selectedCategoryGroupId = saved["selectedCategoryGroupId"] as? String ?: selectedCategoryGroupId
                         selectedCategoryId = saved["selectedCategoryId"] as? String ?: selectedCategoryId
@@ -2078,14 +2116,19 @@ fun TandemApp(
 }
 
 private fun AppRoute.isTab(): Boolean =
-    this == AppRoute.BUDGET || this == AppRoute.ACCOUNTS || this == AppRoute.ACTIVITY || this == AppRoute.SETTINGS
+    this == AppRoute.BUDGET ||
+        this == AppRoute.ACCOUNTS ||
+        this == AppRoute.ACTIVITY ||
+        this == AppRoute.REPORTS ||
+        this == AppRoute.SETTINGS
 
 private fun AppRoute.tabOrder(): Int =
     when (this) {
         AppRoute.BUDGET -> 0
         AppRoute.ACCOUNTS -> 1
         AppRoute.ACTIVITY -> 2
-        AppRoute.SETTINGS -> 3
+        AppRoute.REPORTS -> 3
+        AppRoute.SETTINGS -> 4
         else -> -1
     }
 
@@ -2306,6 +2349,7 @@ private fun BottomNavigation(
             AppRoute.BUDGET to "Budget",
             AppRoute.ACCOUNTS to "Accounts",
             AppRoute.ACTIVITY to "Activity",
+            AppRoute.REPORTS to "Reports",
             AppRoute.SETTINGS to "Settings",
         )
     Row(
@@ -2438,6 +2482,26 @@ private fun NavigationGlyph(
                     cap = StrokeCap.Round,
                 )
             }
+            AppRoute.REPORTS -> {
+                drawArc(
+                    color = color,
+                    startAngle = -90f,
+                    sweepAngle = 250f,
+                    useCenter = false,
+                    topLeft = Offset(inset * 2, inset * 2),
+                    size = Size(size.width - inset * 4, size.height - inset * 4),
+                    style = Stroke(stroke, cap = StrokeCap.Round),
+                )
+                drawArc(
+                    color = color,
+                    startAngle = 170f,
+                    sweepAngle = 72f,
+                    useCenter = false,
+                    topLeft = Offset(inset * 2, inset * 2),
+                    size = Size(size.width - inset * 4, size.height - inset * 4),
+                    style = Stroke(stroke, cap = StrokeCap.Round),
+                )
+            }
             AppRoute.SETTINGS -> {
                 listOf(0.32f, 0.52f, 0.72f).forEachIndexed { index, fraction ->
                     val y = size.height * fraction
@@ -2513,6 +2577,41 @@ private fun ScreenContent(
         AppRoute.ACCOUNT_DETAIL -> AccountDetailScreen(state, navigation, liveAccounts, liveTransactions)
         AppRoute.ACCOUNT_OPTIONS -> AccountOptionsScreen(state, liveAccounts)
         AppRoute.ACTIVITY -> ActivityScreen(state, navigation, liveTransactions, mobileSession.isSyncing, onSyncNow)
+        AppRoute.REPORTS ->
+            ReportsScreen(
+                state,
+                mobileSession,
+                liveAccounts,
+                onOpenReport = { kind -> navigation.open(reportRoute(kind)) },
+                onOpenCategoryActivity = { categoryId, categoryName, window ->
+                    openReportCategoryActivity(state, navigation, categoryId, categoryName, window)
+                },
+                onOpenActivity = { navigation.selectTab(AppRoute.ACTIVITY) },
+                onAddTransaction = { navigation.newTransaction(null) },
+            )
+        AppRoute.REPORT_SPENDING_BY_CATEGORY,
+        AppRoute.REPORT_SPENDING_OVER_TIME,
+        AppRoute.REPORT_INCOME_AND_SPENDING,
+        AppRoute.REPORT_BUDGETED_AND_SPENT,
+        AppRoute.REPORT_NET_WORTH,
+        -> {
+            val kind = reportKind(route)
+            ReportDetailScreen(
+                kind,
+                state,
+                mobileSession,
+                liveAccounts,
+                onOpenCategoryActivity = { categoryId, categoryName, window ->
+                    openReportCategoryActivity(state, navigation, categoryId, categoryName, window)
+                },
+                onEmptyAction =
+                    if (state.selectedBudgetId.isBlank()) {
+                        { navigation.selectTab(AppRoute.ACTIVITY) }
+                    } else {
+                        { navigation.newTransaction(null) }
+                    },
+            )
+        }
         AppRoute.ACTIVITY_SEARCH -> ActivitySearchScreen(state, mobileSession, navigation, merchantIconMatcher)
         AppRoute.ACTIVITY_FILTER -> ActivitySearchScreen(state, mobileSession, navigation, merchantIconMatcher)
         AppRoute.TRANSACTION_DETAIL -> TransactionDetailScreen(state, mobileSession, navigation, merchantIconMatcher)
@@ -2875,7 +2974,7 @@ private fun AttentionBanner(
 }
 
 @Composable
-private fun Heading(
+internal fun Heading(
     title: String,
     subtitle: String? = null,
     compactSubtitle: Boolean = false,
@@ -3424,10 +3523,12 @@ internal fun financeIcon(label: String): ImageVector? {
         matches("essentials") -> Lucide.House
         matches("upcoming", "due") -> Lucide.CalendarDays
         matches("pet", "pets", "veterinary", "vet clinic", "animal care") -> Lucide.PawPrint
-        matches("flight", "airfare", "airport", "plane", "travel") -> Lucide.Plane
+        matches("flight", "flights", "airfare", "airport", "plane", "travel") -> Lucide.Plane
         matches("rent", "mortgage", "housing", "home maintenance", "home repair", "landlord") -> Lucide.House
         matches("electric", "utility", "utilities", "power bill", "water bill", "energy", "internet bill") -> Lucide.Zap
-        matches("grocery", "groceries", "supermarket", "produce", "market", "shopping", "household supplies") -> Lucide.ShoppingCart
+        matches("grocery", "groceries", "supermarket", "produce", "market", "household supplies") -> Lucide.Carrot
+        matches("clothing", "clothes", "apparel", "garments", "shirts") -> Lucide.Shirt
+        matches("shopping", "retail", "department store") -> Lucide.ShoppingCart
         matches("cafe", "coffee") -> Lucide.Coffee
         matches("dining", "restaurant", "takeout", "food and drink") -> Lucide.Utensils
         matches(
@@ -3744,11 +3845,6 @@ private fun AmountHero(
             Text(supporting, color = palette.muted, fontSize = TandemTypography.label)
         }
     }
-}
-
-@Composable
-private fun DividerLine() {
-    Box(Modifier.fillMaxWidth().height(1.dp).background(tandemPalette.border.copy(alpha = 0.8f)))
 }
 
 @Composable
@@ -4836,11 +4932,69 @@ private fun openCategoryActivity(
     state.activitySearchQuery = ""
     state.activitySearchFilters =
         listOf(
-            ActivitySearchFilter(ActivitySearchField.CATEGORY, categoryId.ifBlank { categoryName }, "Category: $categoryName"),
+            ActivitySearchFilter(
+                ActivitySearchField.CATEGORY,
+                if (state.selectedBudgetId.isBlank()) categoryName else categoryId.ifBlank { categoryName },
+                "Category: $categoryName",
+            ),
             ActivitySearchFilter(ActivitySearchField.DATE_MONTH, state.selectedMonthId, "Date: ${state.selectedMonth}"),
         )
     navigation.open(AppRoute.ACTIVITY_SEARCH)
 }
+
+private fun openReportCategoryActivity(
+    state: AppState,
+    navigation: AppNavigation,
+    categoryId: String,
+    categoryName: String,
+    window: ReportWindow,
+) {
+    state.activitySearchQuery = ""
+    val dateFilter =
+        if (window.monthCount == 1) {
+            ActivitySearchFilter(
+                ActivitySearchField.DATE_MONTH,
+                window.endMonthId,
+                "Date: ${reportMonthLabel(window.endMonthId)}",
+            )
+        } else {
+            ActivitySearchFilter(
+                ActivitySearchField.DATE_RANGE,
+                "${window.startDate}..${window.throughDate}",
+                "Date: ${reportMonthLabel(window.startMonthId)} – ${reportMonthLabel(window.endMonthId)}",
+            )
+        }
+    state.activitySearchFilters =
+        listOf(
+            ActivitySearchFilter(
+                ActivitySearchField.CATEGORY,
+                if (state.selectedBudgetId.isBlank()) categoryName else categoryId.ifBlank { categoryName },
+                "Category: $categoryName",
+            ),
+            dateFilter,
+        )
+    navigation.selectTab(AppRoute.ACTIVITY)
+    navigation.open(AppRoute.ACTIVITY_SEARCH)
+}
+
+private fun reportRoute(kind: ReportKind): AppRoute =
+    when (kind) {
+        ReportKind.SPENDING_BY_CATEGORY -> AppRoute.REPORT_SPENDING_BY_CATEGORY
+        ReportKind.SPENDING_OVER_TIME -> AppRoute.REPORT_SPENDING_OVER_TIME
+        ReportKind.INCOME_AND_SPENDING -> AppRoute.REPORT_INCOME_AND_SPENDING
+        ReportKind.BUDGETED_AND_SPENT -> AppRoute.REPORT_BUDGETED_AND_SPENT
+        ReportKind.NET_WORTH -> AppRoute.REPORT_NET_WORTH
+    }
+
+private fun reportKind(route: AppRoute): ReportKind =
+    when (route) {
+        AppRoute.REPORT_SPENDING_BY_CATEGORY -> ReportKind.SPENDING_BY_CATEGORY
+        AppRoute.REPORT_SPENDING_OVER_TIME -> ReportKind.SPENDING_OVER_TIME
+        AppRoute.REPORT_INCOME_AND_SPENDING -> ReportKind.INCOME_AND_SPENDING
+        AppRoute.REPORT_BUDGETED_AND_SPENT -> ReportKind.BUDGETED_AND_SPENT
+        AppRoute.REPORT_NET_WORTH -> ReportKind.NET_WORTH
+        else -> error("Route is not a report detail: $route")
+    }
 
 private data class AccountListItemUi(
     val id: String,

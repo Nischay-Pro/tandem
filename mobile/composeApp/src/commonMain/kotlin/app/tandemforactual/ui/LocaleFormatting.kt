@@ -13,6 +13,12 @@ internal expect fun platformFormatCurrency(
     displaySettings: BudgetDisplaySettings?,
 ): String
 
+internal expect fun platformFormatReportCurrency(
+    minorUnits: Long,
+    currencyCode: String?,
+    fractionDigits: Int?,
+): String
+
 internal expect fun platformFormatDecimal(
     minorUnits: Long,
     displaySettings: BudgetDisplaySettings?,
@@ -60,6 +66,16 @@ internal fun formatCurrency(
     minorUnits: Long,
     displaySettings: BudgetDisplaySettings? = null,
 ): String = platformFormatCurrency(minorUnits, displaySettings)
+
+internal fun formatReportCurrency(
+    minorUnits: Long,
+    displaySettings: BudgetDisplaySettings?,
+): String =
+    platformFormatReportCurrency(
+        minorUnits,
+        displaySettings?.currencyCode,
+        displaySettings?.currencyFractionDigits,
+    )
 
 internal fun formatAmount(
     minorUnits: Long,
