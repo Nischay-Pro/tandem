@@ -5,6 +5,7 @@ import UIKit
 @main
 struct TandemCompanionApp: App {
     @UIApplicationDelegateAdaptor(TandemAppDelegate.self) private var appDelegate
+    @AppStorage("tandem_notifications_permission_prompted") private var notificationPermissionPrompted = false
     @State private var preferredScheme: ColorScheme? = .dark
 
     var body: some Scene {
@@ -13,6 +14,11 @@ struct TandemCompanionApp: App {
                 .preferredColorScheme(preferredScheme)
                 .ignoresSafeArea()
                 .background(Color(red: 16 / 255, green: 42 / 255, blue: 67 / 255))
+                .task {
+                    guard !notificationPermissionPrompted else { return }
+                    notificationPermissionPrompted = true
+                    IosBudgetNotifications.shared.requestPermission()
+                }
         }
     }
 }

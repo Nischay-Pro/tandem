@@ -13,7 +13,10 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.core.splashscreen.SplashScreen
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import app.tandemforactual.data.database.openTandemDatabase
@@ -23,8 +26,11 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 
 class MainActivity : ComponentActivity() {
   private var appStartupComplete = false
+  private var notificationPermissionEnabled by mutableStateOf(false)
   private val notificationPermissionLauncher =
-    registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+      notificationPermissionEnabled = granted || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+    }
   private val appResumeEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
   private val networkRestoredEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
   private val syncSignalState = SyncSignalState<Network>()
@@ -51,6 +57,7 @@ class MainActivity : ComponentActivity() {
     }
     super.onCreate(savedInstanceState)
     val openPreview = intent.getBooleanExtra("preview", false)
+    notificationPermissionEnabled = hasNotificationPermission()
     BudgetSystemNotifications.initialize(applicationContext)
     val database = openTandemDatabase(tandemDatabaseBuilder(applicationContext))
     setContent {
@@ -71,7 +78,12 @@ class MainActivity : ComponentActivity() {
         onBackgroundSyncSettingsChanged = onBackgroundSyncSettingsChanged,
         onRequestNotificationPermission = { requestNotificationPermission() },
         onOpenNotificationSettings = { openNotificationSettings() },
-        onStartupComplete = { appStartupComplete = true },
+        notificationPermissionEnabled = notificationPermissionEnabled,
+        onToggleNotificationPermission = { updateNotificationPermission(it) },
+        onStartupComplete = {
+          appStartupComplete = true
+          if (!openPreview) requestNotificationPermissionOnFirstLaunch()
+        },
         appResumeEvents = appResumeEvents,
         networkRestoredEvents = networkRestoredEvents,
       )
@@ -79,11 +91,55 @@ class MainActivity : ComponentActivity() {
   }
 
   private fun requestNotificationPermission() {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-      checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-    ) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+      notificationPermissionEnabled = true
+      return
+    }
+    if (hasNotificationPermission()) {
+      notificationPermissionEnabled = true
+      return
+    }
+    notificationPreferences().edit().putBoolean(NOTIFICATION_PERMISSION_PROMPTED, true).apply()
+    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+  }
+
+  private fun updateNotificationPermission(enabled: Boolean) {
+    if (!enabled) {
+      openNotificationSettings()
+      return
+    }
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || hasNotificationPermission()) {
+      notificationPermissionEnabled = true
+      return
+    }
+    val permissionWasRequested = notificationPreferences().getBoolean(NOTIFICATION_PERMISSION_PROMPTED, false)
+    if (permissionWasRequested && !shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
+      openNotificationSettings()
+    } else {
+      requestNotificationPermission()
+    }
+  }
+
+  private fun requestNotificationPermissionOnFirstLaunch() {
+    val preferences = notificationPreferences()
+    if (preferences.getBoolean(NOTIFICATION_PERMISSION_PROMPTED, false)) return
+    preferences.edit().putBoolean(NOTIFICATION_PERMISSION_PROMPTED, true).apply()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission()) {
       notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
+  }
+
+  private fun notificationPreferences() =
+    getSharedPreferences(NOTIFICATION_PREFERENCES, MODE_PRIVATE)
+
+  private fun hasNotificationPermission(): Boolean =
+    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+      checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
+  override fun onResume() {
+    super.onResume()
+    notificationPermissionEnabled = hasNotificationPermission()
+    if (syncSignalState.onActivityResumed()) appResumeEvents.tryEmit(Unit)
   }
 
   private fun openNotificationSettings() {
@@ -103,11 +159,6 @@ class MainActivity : ComponentActivity() {
     }
   }
 
-  override fun onResume() {
-    super.onResume()
-    if (syncSignalState.onActivityResumed()) appResumeEvents.tryEmit(Unit)
-  }
-
   override fun onStop() {
     if (networkCallbackRegistered) {
       connectivityManager.unregisterNetworkCallback(networkCallback)
@@ -119,3 +170,5 @@ class MainActivity : ComponentActivity() {
 }
 
 private const val MAX_SYSTEM_SPLASH_WAIT_MILLIS = 2_500L
+private const val NOTIFICATION_PREFERENCES = "tandem_notification_permissions"
+private const val NOTIFICATION_PERMISSION_PROMPTED = "prompted_once"

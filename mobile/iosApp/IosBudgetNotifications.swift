@@ -30,7 +30,7 @@ final class IosBudgetNotifications {
         post(
             identifier: "tandem-sync-failed",
             title: "Budget sync needs attention",
-            body: "Tandem couldn't refresh your budget. Open the app to retry."
+            body: "Tandem couldn’t refresh your budget. Open the app to retry."
         )
     }
 
@@ -51,7 +51,7 @@ final class IosBudgetNotifications {
         let verb = count == 1 ? "needs" : "need"
         post(
             identifier: "tandem-rejected-edits",
-            title: "An edit wasn't applied",
+            title: "An edit wasn’t applied",
             body: "\(count) \(noun) \(verb) review."
         )
     }
