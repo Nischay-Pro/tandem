@@ -39,7 +39,7 @@ describe("Actual compatibility release pin", () => {
     );
     expect(mobileSupportedVersion).toBe(supportedVersion);
     expect(mobileUiSource).toMatch(
-      /ListRow\(\s*"A",\s*"Supported Actual server",\s*"Required by this Tandem release",\s*SUPPORTED_ACTUAL_SERVER_VERSION/s,
+      /ListRow\(\s*"Supported Actual server",\s*"Required by this Tandem release",\s*SUPPORTED_ACTUAL_SERVER_VERSION/s,
     );
   });
 });
