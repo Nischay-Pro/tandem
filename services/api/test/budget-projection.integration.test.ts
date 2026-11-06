@@ -10,6 +10,7 @@ import {
 import {
   MAX_BUDGET_CHANGE_PAGE_SIZE,
   MAX_BUDGET_PROJECTION_WRITE_BATCH_SIZE,
+  MAX_BUDGET_SNAPSHOT_PAGE_SIZE,
   MAX_RETAINED_BUDGET_CHANGES,
   createPostgresBudgetProjectionStore,
 } from "../src/budget-projection/postgres-budget-projection-store.js";
@@ -154,6 +155,83 @@ describe.skipIf(!integrationEnabled)(
       await expect(restartedStore.readSnapshot("budget-1")).resolves.toEqual(
         changed,
       );
+    });
+
+    it("reads keyset snapshot pages from one generation and requests a reset after changes", async () => {
+      const store = createPostgresBudgetProjectionStore(getPool());
+      const budgetId = "budget-snapshot-pages";
+      const input = [
+        record("account", "account-1", { id: "account-1" }),
+        record("account", "account-2", { id: "account-2" }),
+        record("category", "category-1", { id: "category-1" }),
+        record("payee", "payee-1", { id: "payee-1" }),
+        record("transaction", "txn-1", { id: "txn-1" }),
+        record("transaction", "txn-2", { id: "txn-2" }),
+        record("transaction", "txn-3", { id: "txn-3" }),
+      ];
+      const snapshot = await store.applySnapshot(budgetId, "epoch", input);
+      const first = await store.readSnapshotPage({
+        budgetId,
+        generation: snapshot.generation,
+        cursor: snapshot.cursor,
+        limit: 3,
+      });
+      expect(first).toMatchObject({
+        budgetId,
+        generation: snapshot.generation,
+        cursor: snapshot.cursor,
+        hasMore: true,
+        resetRequired: false,
+        nextAfterType: first!.records.at(-1)!.type,
+        nextAfterId: first!.records.at(-1)!.id,
+      });
+      const second = await store.readSnapshotPage({
+        budgetId,
+        generation: snapshot.generation,
+        cursor: snapshot.cursor,
+        afterType: first!.nextAfterType!,
+        afterId: first!.nextAfterId!,
+        limit: 3,
+      });
+      const third = await store.readSnapshotPage({
+        budgetId,
+        generation: snapshot.generation,
+        cursor: snapshot.cursor,
+        afterType: second!.nextAfterType!,
+        afterId: second!.nextAfterId!,
+        limit: 3,
+      });
+      expect(second?.hasMore).toBe(true);
+      expect(third).toMatchObject({
+        hasMore: false,
+        resetRequired: false,
+        records: [{ id: "txn-3" }],
+      });
+      expect(
+        [...first!.records, ...second!.records, ...third!.records].map(
+          ({ type, id }) => `${type}:${id}`,
+        ),
+      ).toEqual(snapshot.records.map(({ type, id }) => `${type}:${id}`));
+
+      await store.applySnapshot(budgetId, "epoch", [
+        ...input,
+        record("transaction", "txn-4", { id: "txn-4" }),
+      ]);
+      await expect(
+        store.readSnapshotPage({
+          budgetId,
+          generation: snapshot.generation,
+          cursor: snapshot.cursor,
+          afterType: first!.nextAfterType!,
+          afterId: first!.nextAfterId!,
+          limit: 3,
+        }),
+      ).resolves.toMatchObject({
+        resetRequired: true,
+        records: [],
+        hasMore: false,
+      });
+      expect(MAX_BUDGET_SNAPSHOT_PAGE_SIZE).toBe(2_000);
     });
 
     it("uses the database refresh timestamp and epoch for snapshot freshness", async () => {

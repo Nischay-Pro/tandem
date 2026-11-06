@@ -8,6 +8,7 @@ import app.tandemforactual.data.store.LocalRecordProjection
 import app.tandemforactual.data.store.RemoteBudgetChangePage
 import app.tandemforactual.data.store.RemoteBudgetRecord
 import app.tandemforactual.data.store.RemoteBudgetSnapshot
+import app.tandemforactual.data.store.RemoteBudgetSnapshotPage
 import app.tandemforactual.data.store.RemoteOperationResult
 import app.tandemforactual.data.store.RemoteOperationStatus
 import app.tandemforactual.data.store.RemoteTransactionRecord
@@ -47,6 +48,50 @@ object BudgetSyncJson {
             throw BudgetSyncProtocolException("Snapshot contains duplicate record identities")
         }
         return RemoteBudgetSnapshot(budgetId, generation, cursor, records, root.optionalDisplaySettings())
+    }
+
+    fun parseSnapshotPage(
+        payload: Map<String, JsonElement>,
+        expectedBudgetId: String,
+    ): RemoteBudgetSnapshotPage {
+        val root = payload.toJsonObject()
+        val budgetId = root.requiredString("budgetId")
+        val generation = root.requiredString("generation")
+        val cursor = root.requiredCursor("cursor")
+        requireBudgetId(budgetId, expectedBudgetId)
+        val records =
+            root.requiredArray("records").map { element ->
+                val record = element.requireObject("snapshot page record")
+                val type = record.requiredString("type")
+                val id = record.requiredString("id")
+                val revision = record.requiredString("revision")
+                val body = record.requiredObject("body")
+                body.toRemoteRecord(budgetId, type, id, revision, generation)
+            }
+        if (records.map { it.recordType to it.recordId }.toSet().size != records.size) {
+            throw BudgetSyncProtocolException("Snapshot page contains duplicate record identities")
+        }
+        val hasMore = root.requiredBoolean("hasMore")
+        val resetRequired = root.requiredBoolean("resetRequired")
+        val nextAfterType = root.requiredNullableString("nextAfterType")
+        val nextAfterId = root.requiredNullableString("nextAfterId")
+        if (hasMore != (nextAfterType != null && nextAfterId != null)) {
+            throw BudgetSyncProtocolException("Snapshot page continuation is invalid")
+        }
+        if (resetRequired && (records.isNotEmpty() || hasMore)) {
+            throw BudgetSyncProtocolException("A reset snapshot page cannot contain records")
+        }
+        return RemoteBudgetSnapshotPage(
+            budgetId = budgetId,
+            generation = generation,
+            cursor = cursor,
+            records = records,
+            hasMore = hasMore,
+            resetRequired = resetRequired,
+            nextAfterType = nextAfterType,
+            nextAfterId = nextAfterId,
+            displaySettings = root.optionalDisplaySettings(),
+        )
     }
 
     fun parseChanges(
@@ -173,6 +218,19 @@ object BudgetSyncJson {
         }
         return primitive.booleanOrNull
             ?: throw BudgetSyncProtocolException("Response is missing a valid $name")
+    }
+
+    private fun JsonObject.requiredNullableString(name: String): String? {
+        val value = this[name] ?: throw BudgetSyncProtocolException("Response is missing $name")
+        if (value == JsonNull) return null
+        val primitive =
+            try {
+                value.jsonPrimitive
+            } catch (error: IllegalArgumentException) {
+                throw BudgetSyncProtocolException("Response contains an invalid $name", error)
+            }
+        if (!primitive.isString) throw BudgetSyncProtocolException("Response contains an invalid $name")
+        return primitive.content
     }
 
     private fun JsonObject.requiredInt(name: String): Int {

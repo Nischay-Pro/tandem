@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   BudgetReadApi,
   DEFAULT_BUDGET_SNAPSHOT_FRESHNESS_MS,
+  type BudgetSnapshotPageRequest,
 } from "../src/budget-projection/budget-read-api.js";
 import type {
   BudgetProjectionChangePage,
@@ -59,6 +60,16 @@ function createApi(
       cursor: snapshot.cursor,
     };
   });
+  const readSnapshotPage = vi.fn(async () => ({
+    budgetId: snapshot.budgetId,
+    generation: snapshot.generation,
+    cursor: snapshot.cursor,
+    records: [],
+    hasMore: false,
+    resetRequired: false,
+    nextAfterType: null,
+    nextAfterId: null,
+  }));
   const queuedResults: Array<BudgetProjectionChangePage | undefined> = [];
   if (Object.hasOwn(overrides, "refreshPage")) {
     queuedResults.push(overrides.refreshPage);
@@ -75,6 +86,7 @@ function createApi(
     isSnapshotFresh,
     applySnapshot,
     applySnapshotForRefresh,
+    readSnapshotPage,
     readChanges,
   } as unknown as BudgetProjectionStore;
   const api = new BudgetReadApi(
@@ -89,6 +101,7 @@ function createApi(
     reader,
     applySnapshot,
     applySnapshotForRefresh,
+    readSnapshotPage,
     readChanges,
     isSnapshotFresh,
     events,
@@ -96,6 +109,105 @@ function createApi(
 }
 
 describe("budget read API", () => {
+  it("requires snapshot continuation fields to be complete", async () => {
+    const fake = createApi();
+    await expect(
+      fake.api.getSnapshotPage({
+        budgetId: "budget-1",
+        generation: snapshot.generation,
+        limit: 10,
+      } as BudgetSnapshotPageRequest),
+    ).rejects.toThrow("generation and cursor must be provided together");
+    await expect(
+      fake.api.getSnapshotPage({
+        budgetId: "budget-1",
+        generation: snapshot.generation,
+        cursor: "4",
+        afterType: "transaction",
+        limit: 10,
+      } as BudgetSnapshotPageRequest),
+    ).rejects.toThrow("afterType and afterId must be provided together");
+  });
+
+  it("supports stores without the refresh-only snapshot checkpoint method", async () => {
+    const fake = createApi();
+    const api = new BudgetReadApi(
+      { withBudgetLock: fake.lock } as BudgetLockPort,
+      fake.reader,
+      {
+        applySnapshot: fake.applySnapshot,
+        readSnapshotPage: fake.readSnapshotPage,
+      } as unknown as BudgetProjectionStore,
+      "feed-epoch-1",
+    );
+    await expect(
+      api.getSnapshotPage({ budgetId: "budget-1", limit: 10 }),
+    ).resolves.toMatchObject({
+      generation: snapshot.generation,
+      cursor: snapshot.cursor,
+    });
+    expect(fake.applySnapshot).toHaveBeenCalledOnce();
+  });
+
+  it("fails clearly when a refresh does not create snapshot page state", async () => {
+    const fake = createApi();
+    const api = new BudgetReadApi(
+      { withBudgetLock: fake.lock } as BudgetLockPort,
+      fake.reader,
+      {
+        applySnapshotForRefresh: fake.applySnapshotForRefresh,
+        readSnapshotPage: vi.fn(async () => undefined),
+      } as unknown as BudgetProjectionStore,
+      "feed-epoch-1",
+    );
+    await expect(
+      api.getSnapshotPage({ budgetId: "budget-1", limit: 10 }),
+    ).rejects.toThrow("Budget projection state was not created");
+  });
+
+  it("refreshes Actual once for the first snapshot page", async () => {
+    const fake = createApi();
+    await expect(
+      fake.api.getSnapshotPage({ budgetId: "budget-1", limit: 2_000 }),
+    ).resolves.toMatchObject({
+      budgetId: "budget-1",
+      generation: snapshot.generation,
+      cursor: snapshot.cursor,
+      displaySettings: null,
+    });
+    expect(fake.events).toEqual(["lock:budget-1", "read", "apply"]);
+    expect(fake.readSnapshotPage).toHaveBeenCalledWith({
+      budgetId: "budget-1",
+      generation: snapshot.generation,
+      cursor: snapshot.cursor,
+      limit: 2_000,
+    });
+    expect(fake.applySnapshotForRefresh).toHaveBeenCalledOnce();
+    expect(fake.applySnapshot).not.toHaveBeenCalled();
+  });
+
+  it("reads continuation pages without refreshing Actual", async () => {
+    const fake = createApi();
+    await fake.api.getSnapshotPage({
+      budgetId: "budget-1",
+      generation: snapshot.generation,
+      cursor: "4",
+      afterType: "transaction",
+      afterId: "txn-1",
+      limit: 500,
+    });
+    expect(fake.events).toEqual(["lock:budget-1"]);
+    expect(fake.reader.read).not.toHaveBeenCalled();
+    expect(fake.readSnapshotPage).toHaveBeenCalledWith({
+      budgetId: "budget-1",
+      generation: snapshot.generation,
+      cursor: "4",
+      afterType: "transaction",
+      afterId: "txn-1",
+      limit: 500,
+    });
+  });
+
   it("exposes the Actual budget catalog reader when configured", async () => {
     const fake = createApi();
     const budgets = [

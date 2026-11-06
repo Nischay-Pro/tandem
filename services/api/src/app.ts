@@ -14,7 +14,10 @@ import { PairingRateLimiter } from "./auth/pairing-rate-limiter.js";
 import { logSecurityAuditEvent } from "./security-audit.js";
 import type { TransactionApiPort } from "./actual/transaction-api.js";
 import type { BudgetReadApiPort } from "./budget-projection/budget-read-api.js";
-import { BudgetProjectionInputError } from "./budget-projection/contracts.js";
+import {
+  BUDGET_ENTITY_TYPES,
+  BudgetProjectionInputError,
+} from "./budget-projection/contracts.js";
 import {
   IDEMPOTENCY_KEY_MAX_LENGTH,
   IdempotencyKeyReuseError,
@@ -949,6 +952,14 @@ interface BudgetChangeQuery {
   limit?: number;
 }
 
+interface BudgetSnapshotPageQuery {
+  generation?: string;
+  cursor?: string;
+  afterType?: (typeof BUDGET_ENTITY_TYPES)[number];
+  afterId?: string;
+  limit?: number;
+}
+
 interface BudgetReadHeaders {
   "x-budget-encryption-password"?: string;
 }
@@ -1077,6 +1088,39 @@ function registerBudgetReadRoutes(
       "generation",
       "cursor",
       "records",
+      "displaySettings",
+    ],
+    additionalProperties: false,
+  };
+  const snapshotPageSchema = {
+    type: "object",
+    properties: {
+      budgetId: { type: "string" },
+      generation: { type: "string", format: "uuid" },
+      cursor: { type: "string", pattern: "^(0|[1-9][0-9]*)$" },
+      records: { type: "array", items: recordSchema },
+      hasMore: { type: "boolean" },
+      resetRequired: { type: "boolean" },
+      nextAfterType: {
+        anyOf: [
+          { type: "string", enum: BUDGET_ENTITY_TYPES },
+          { type: "null" },
+        ],
+      },
+      nextAfterId: { type: ["string", "null"] },
+      displaySettings: {
+        anyOf: [displaySettingsSchema, { type: "null" }],
+      },
+    },
+    required: [
+      "budgetId",
+      "generation",
+      "cursor",
+      "records",
+      "hasMore",
+      "resetRequired",
+      "nextAfterType",
+      "nextAfterId",
       "displaySettings",
     ],
     additionalProperties: false,
@@ -1238,6 +1282,92 @@ function registerBudgetReadRoutes(
           return invalidBudgetRequest(reply);
         }
         reportTransactionFailure("Budget snapshot read failed", error);
+        return budgetReadFailed(reply);
+      }
+    },
+  );
+
+  app.get<{
+    Params: BudgetRouteParams;
+    Querystring: BudgetSnapshotPageQuery;
+    Headers: BudgetReadHeaders;
+  }>(
+    "/api/v1/budgets/:budgetId/snapshot-pages",
+    {
+      schema: {
+        tags: ["Budgets"],
+        operationId: "getBudgetSnapshotPage",
+        summary: "Refresh and read a bounded page of the budget projection",
+        security: [{ bearerAuth: [] }],
+        params: budgetParamsSchema,
+        headers: encryptionHeadersSchema,
+        querystring: {
+          type: "object",
+          properties: {
+            generation: { type: "string", format: "uuid" },
+            cursor: { type: "string", pattern: "^(0|[1-9][0-9]*)$" },
+            afterType: { type: "string", enum: BUDGET_ENTITY_TYPES },
+            afterId: { type: "string", minLength: 1, maxLength: 500 },
+            limit: { type: "integer", minimum: 1, maximum: 2_000 },
+          },
+          additionalProperties: false,
+        },
+        response: {
+          200: snapshotPageSchema,
+          400: errorSchema,
+          401: errorSchema,
+          404: errorSchema,
+          502: errorSchema,
+          503: errorSchema,
+        },
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(deviceAuth, request, reply);
+      if (!device) return reply;
+      if (request.validationError) return invalidBudgetRequest(reply);
+      if (
+        !DeviceAuthorization.canAccessBudget(device, request.params.budgetId)
+      ) {
+        return transactionNotFound(reply);
+      }
+      if (!budgetReadApi) return actualNotConfigured(reply);
+
+      const query = request.query;
+      if (
+        (query.generation === undefined) !== (query.cursor === undefined) ||
+        (query.afterType === undefined) !== (query.afterId === undefined) ||
+        (query.afterType !== undefined && query.generation === undefined)
+      ) {
+        return invalidBudgetRequest(reply);
+      }
+      try {
+        const page = await budgetReadApi.getSnapshotPage({
+          budgetId: request.params.budgetId,
+          ...(query.generation === undefined
+            ? {}
+            : { generation: query.generation }),
+          ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+          ...(query.afterType === undefined
+            ? {}
+            : { afterType: query.afterType }),
+          ...(query.afterId === undefined ? {} : { afterId: query.afterId }),
+          limit: query.limit ?? 2_000,
+          ...(request.headers["x-budget-encryption-password"] === undefined
+            ? {}
+            : {
+                encryptionPassword:
+                  request.headers["x-budget-encryption-password"],
+              }),
+        });
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send(page);
+      } catch (error) {
+        if (error instanceof BudgetProjectionInputError) {
+          return invalidBudgetRequest(reply);
+        }
+        reportTransactionFailure("Budget snapshot page read failed", error);
         return budgetReadFailed(reply);
       }
     },

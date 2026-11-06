@@ -43,6 +43,27 @@ export interface BudgetProjectionSnapshot {
   displaySettings?: BudgetDisplaySettings | null;
 }
 
+export interface BudgetProjectionSnapshotPage {
+  budgetId: string;
+  generation: string;
+  cursor: string;
+  records: BudgetProjectionRecord[];
+  hasMore: boolean;
+  resetRequired: boolean;
+  nextAfterType: BudgetEntityType | null;
+  nextAfterId: string | null;
+  displaySettings?: BudgetDisplaySettings | null;
+}
+
+export interface BudgetProjectionSnapshotPageRequest {
+  budgetId: string;
+  generation: string;
+  cursor: string;
+  afterType?: BudgetEntityType;
+  afterId?: string;
+  limit: number;
+}
+
 export type BudgetProjectionCheckpoint = Pick<
   BudgetProjectionSnapshot,
   "budgetId" | "generation" | "cursor"
@@ -86,6 +107,9 @@ export interface BudgetProjectionStore {
     records: readonly BudgetProjectionRecord[],
   ): Promise<BudgetProjectionCheckpoint>;
   readSnapshot(budgetId: string): Promise<BudgetProjectionSnapshot | undefined>;
+  readSnapshotPage(
+    request: BudgetProjectionSnapshotPageRequest,
+  ): Promise<BudgetProjectionSnapshotPage | undefined>;
   readChanges(input: {
     budgetId: string;
     generation: string;

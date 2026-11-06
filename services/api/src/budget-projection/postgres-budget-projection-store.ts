@@ -9,10 +9,13 @@ import {
   type BudgetProjectionCheckpoint,
   type BudgetProjectionRecord,
   type BudgetProjectionSnapshot,
+  type BudgetProjectionSnapshotPage,
+  type BudgetProjectionSnapshotPageRequest,
   type BudgetProjectionStore,
 } from "./contracts.js";
 
 export const MAX_BUDGET_CHANGE_PAGE_SIZE = 500;
+export const MAX_BUDGET_SNAPSHOT_PAGE_SIZE = 2_000;
 export const MAX_RETAINED_BUDGET_CHANGES = 100_000;
 export const MAX_BUDGET_PROJECTION_WRITE_BATCH_SIZE = 500;
 
@@ -294,6 +297,124 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
       await client.query("COMMIT");
       transactionOpen = false;
       return snapshot;
+    } catch (error) {
+      if (transactionOpen) {
+        try {
+          await client.query("ROLLBACK");
+        } catch (rollbackError) {
+          destroyClient = true;
+          reportRollbackFailure(error, rollbackError);
+        }
+      }
+      throw error;
+    } finally {
+      client.release(destroyClient);
+    }
+  }
+
+  async readSnapshotPage(
+    input: BudgetProjectionSnapshotPageRequest,
+  ): Promise<BudgetProjectionSnapshotPage | undefined> {
+    validateBudgetId(input.budgetId);
+    validateGeneration(input.generation);
+    const cursor = parseCursor(input.cursor, "snapshot cursor");
+    if (
+      !Number.isSafeInteger(input.limit) ||
+      input.limit < 1 ||
+      input.limit > MAX_BUDGET_SNAPSHOT_PAGE_SIZE
+    ) {
+      throw new BudgetProjectionInputError(
+        `limit must be between 1 and ${MAX_BUDGET_SNAPSHOT_PAGE_SIZE}`,
+      );
+    }
+    if ((input.afterType === undefined) !== (input.afterId === undefined)) {
+      throw new BudgetProjectionInputError(
+        "afterType and afterId must be provided together",
+      );
+    }
+    if (input.afterType !== undefined) {
+      if (
+        !(BUDGET_ENTITY_TYPES as readonly string[]).includes(input.afterType)
+      ) {
+        throw new BudgetProjectionInputError("afterType is invalid");
+      }
+      validateEntityId(input.afterId!);
+    }
+
+    const client = await this.pool.connect();
+    let transactionOpen = false;
+    let destroyClient = false;
+    try {
+      await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+      transactionOpen = true;
+      const stateResult = await client.query<SyncStateRow>(
+        `SELECT budget_id, generation, feed_epoch, cursor::text, refreshed_at
+         FROM companion_budget_sync_state WHERE budget_id = $1`,
+        [input.budgetId],
+      );
+      const state = stateResult.rows[0];
+      if (!state) {
+        await client.query("COMMIT");
+        transactionOpen = false;
+        return undefined;
+      }
+      const currentCursor = BigInt(state.cursor);
+      if (input.generation !== state.generation || cursor !== currentCursor) {
+        await client.query("COMMIT");
+        transactionOpen = false;
+        return {
+          budgetId: input.budgetId,
+          generation: state.generation,
+          cursor: currentCursor.toString(),
+          records: [],
+          hasMore: false,
+          resetRequired: true,
+          nextAfterType: null,
+          nextAfterId: null,
+        };
+      }
+
+      const recordResult =
+        input.afterType === undefined
+          ? await client.query<CurrentRecordRow>(
+              `SELECT entity_type, entity_id, revision, body, is_deleted
+               FROM companion_budget_records
+               WHERE budget_id = $1 AND is_deleted = false
+               ORDER BY entity_type, entity_id
+               LIMIT $2`,
+              [input.budgetId, input.limit + 1],
+            )
+          : await client.query<CurrentRecordRow>(
+              `SELECT entity_type, entity_id, revision, body, is_deleted
+               FROM companion_budget_records
+               WHERE budget_id = $1 AND is_deleted = false
+                 AND (entity_type, entity_id) > ($2::text, $3::text)
+               ORDER BY entity_type, entity_id
+               LIMIT $4`,
+              [input.budgetId, input.afterType, input.afterId, input.limit + 1],
+            );
+      const hasMore = recordResult.rows.length > input.limit;
+      const rows = hasMore
+        ? recordResult.rows.slice(0, input.limit)
+        : recordResult.rows;
+      const last = rows.at(-1);
+      await client.query("COMMIT");
+      transactionOpen = false;
+      return {
+        budgetId: input.budgetId,
+        generation: state.generation,
+        cursor: currentCursor.toString(),
+        records: rows.map((row) => ({
+          type: row.entity_type,
+          id: row.entity_id,
+          revision: row.revision,
+          body: requireJsonObject(row.body),
+        })),
+        hasMore,
+        resetRequired: false,
+        nextAfterType: hasMore ? last!.entity_type : null,
+        nextAfterId: hasMore ? last!.entity_id : null,
+      };
     } catch (error) {
       if (transactionOpen) {
         try {

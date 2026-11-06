@@ -1723,6 +1723,329 @@
         }
       }
     },
+    "/api/v1/budgets/{budgetId}/snapshot-pages": {
+      "get": {
+        "operationId": "getBudgetSnapshotPage",
+        "summary": "Refresh and read a bounded page of the budget projection",
+        "tags": ["Budgets"],
+        "parameters": [
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "in": "query",
+            "name": "generation",
+            "required": false
+          },
+          {
+            "schema": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" },
+            "in": "query",
+            "name": "cursor",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "account",
+                "account-group",
+                "category",
+                "category-group",
+                "payee",
+                "transaction",
+                "budget-month"
+              ]
+            },
+            "in": "query",
+            "name": "afterType",
+            "required": false
+          },
+          {
+            "schema": { "type": "string", "minLength": 1, "maxLength": 500 },
+            "in": "query",
+            "name": "afterId",
+            "required": false
+          },
+          {
+            "schema": { "type": "integer", "minimum": 1, "maximum": 2000 },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500,
+              "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$"
+            },
+            "in": "path",
+            "name": "budgetId",
+            "required": true
+          },
+          {
+            "schema": { "type": "string", "minLength": 1, "maxLength": 1024 },
+            "in": "header",
+            "name": "x-budget-encryption-password",
+            "required": false
+          }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "budgetId": { "type": "string" },
+                    "generation": { "type": "string", "format": "uuid" },
+                    "cursor": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)$"
+                    },
+                    "records": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "account",
+                              "account-group",
+                              "category",
+                              "category-group",
+                              "payee",
+                              "transaction",
+                              "budget-month"
+                            ]
+                          },
+                          "id": { "type": "string" },
+                          "revision": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          },
+                          "body": {
+                            "type": "object",
+                            "additionalProperties": true
+                          }
+                        },
+                        "required": ["type", "id", "revision", "body"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "hasMore": { "type": "boolean" },
+                    "resetRequired": { "type": "boolean" },
+                    "nextAfterType": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "account",
+                            "account-group",
+                            "category",
+                            "category-group",
+                            "payee",
+                            "transaction",
+                            "budget-month"
+                          ]
+                        },
+                        { "type": "null" }
+                      ]
+                    },
+                    "nextAfterId": { "type": ["null", "string"] },
+                    "displaySettings": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "currencyCode": {
+                              "type": "string",
+                              "pattern": "^[A-Z]{3}$"
+                            },
+                            "currencySymbol": { "type": "string" },
+                            "currencyFractionDigits": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "numberFormat": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "comma-dot",
+                                    "dot-comma",
+                                    "space-comma",
+                                    "apostrophe-dot",
+                                    "comma-dot-in"
+                                  ]
+                                },
+                                { "type": "null" }
+                              ]
+                            },
+                            "hideFraction": { "type": "boolean" },
+                            "currencySymbolPosition": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": ["before", "after"]
+                                },
+                                { "type": "null" }
+                              ]
+                            },
+                            "currencySpaceBetweenAmountAndSymbol": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "currencyCode",
+                            "currencySymbol",
+                            "currencyFractionDigits",
+                            "numberFormat",
+                            "hideFraction",
+                            "currencySymbolPosition",
+                            "currencySpaceBetweenAmountAndSymbol"
+                          ],
+                          "additionalProperties": false
+                        },
+                        { "type": "null" }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "budgetId",
+                    "generation",
+                    "cursor",
+                    "records",
+                    "hasMore",
+                    "resetRequired",
+                    "nextAfterType",
+                    "nextAfterId",
+                    "displaySettings"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/budgets/{budgetId}/changes": {
       "get": {
         "operationId": "getBudgetChanges",

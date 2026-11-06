@@ -215,6 +215,43 @@ interface BudgetRecordDao {
         recordType: String,
         recordIds: List<String>,
     ): Int
+
+    @Query(
+        "UPDATE budget_records SET remoteDeleted = 1, remoteJson = NULL, remoteRevision = NULL WHERE budgetId = :budgetId AND remoteJson IS NOT NULL AND NOT EXISTS (SELECT 1 FROM budget_snapshot_records AS staged WHERE staged.budgetId = :budgetId AND staged.snapshotKey = :snapshotKey AND staged.recordType = budget_records.recordType AND staged.recordId = budget_records.recordId)",
+    )
+    suspend fun tombstoneRemoteRecordsMissingFromSnapshot(
+        budgetId: String,
+        snapshotKey: String,
+    ): Int
+}
+
+@Dao
+interface BudgetSnapshotDao {
+    @Query("SELECT * FROM budget_snapshot_progress WHERE budgetId = :budgetId LIMIT 1")
+    suspend fun findProgress(budgetId: String): BudgetSnapshotProgressEntity?
+
+    @Upsert
+    suspend fun putProgress(progress: BudgetSnapshotProgressEntity)
+
+    @Query("DELETE FROM budget_snapshot_progress WHERE budgetId = :budgetId")
+    suspend fun deleteProgress(budgetId: String): Int
+
+    @Upsert
+    suspend fun putAll(records: List<BudgetSnapshotRecordEntity>)
+
+    @Query(
+        "SELECT * FROM budget_snapshot_records WHERE budgetId = :budgetId AND snapshotKey = :snapshotKey AND (:afterType IS NULL OR recordType > :afterType OR (recordType = :afterType AND recordId > :afterId)) ORDER BY recordType ASC, recordId ASC LIMIT :limit",
+    )
+    suspend fun findPage(
+        budgetId: String,
+        snapshotKey: String,
+        afterType: String?,
+        afterId: String?,
+        limit: Int,
+    ): List<BudgetSnapshotRecordEntity>
+
+    @Query("DELETE FROM budget_snapshot_records WHERE budgetId = :budgetId")
+    suspend fun deleteRecords(budgetId: String): Int
 }
 
 @Dao

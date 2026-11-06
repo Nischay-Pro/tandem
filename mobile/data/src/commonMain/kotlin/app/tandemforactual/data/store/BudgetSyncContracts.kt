@@ -20,6 +20,18 @@ data class RemoteBudgetSnapshot(
     val displaySettings: BudgetDisplaySettings? = null,
 )
 
+data class RemoteBudgetSnapshotPage(
+    val budgetId: String,
+    val generation: String,
+    val cursor: String,
+    val records: List<RemoteBudgetRecord>,
+    val hasMore: Boolean,
+    val resetRequired: Boolean,
+    val nextAfterType: String?,
+    val nextAfterId: String?,
+    val displaySettings: BudgetDisplaySettings? = null,
+)
+
 data class RemoteBudgetChangePage(
     val budgetId: String,
     val generation: String,
@@ -67,6 +79,54 @@ interface BudgetSyncRemote {
         budgetId: String,
         encryptionPassword: String?,
     ): RemoteBudgetSnapshot
+
+    suspend fun readSnapshotPage(
+        budgetId: String,
+        generation: String?,
+        cursor: String?,
+        afterType: String?,
+        afterId: String?,
+        limit: Int,
+        encryptionPassword: String?,
+    ): RemoteBudgetSnapshotPage {
+        val snapshot = readSnapshot(budgetId, encryptionPassword)
+        if (generation != null &&
+            cursor != null &&
+            (generation != snapshot.generation || cursor != snapshot.cursor)
+        ) {
+            return RemoteBudgetSnapshotPage(
+                budgetId = snapshot.budgetId,
+                generation = snapshot.generation,
+                cursor = snapshot.cursor,
+                records = emptyList(),
+                hasMore = false,
+                resetRequired = true,
+                nextAfterType = null,
+                nextAfterId = null,
+            )
+        }
+        val records =
+            snapshot.records
+                .filter { record ->
+                    afterType == null ||
+                        record.recordType > afterType ||
+                        (record.recordType == afterType && record.recordId > afterId.orEmpty())
+                }.take(limit + 1)
+        val hasMore = records.size > limit
+        val page = if (hasMore) records.dropLast(1) else records
+        val last = page.lastOrNull()
+        return RemoteBudgetSnapshotPage(
+            budgetId = snapshot.budgetId,
+            generation = snapshot.generation,
+            cursor = snapshot.cursor,
+            records = page,
+            hasMore = hasMore,
+            resetRequired = false,
+            nextAfterType = last?.recordType?.takeIf { hasMore },
+            nextAfterId = last?.recordId?.takeIf { hasMore },
+            displaySettings = snapshot.displaySettings.takeIf { afterType == null },
+        )
+    }
 
     suspend fun readChanges(
         budgetId: String,

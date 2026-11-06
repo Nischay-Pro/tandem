@@ -4,9 +4,12 @@ import type {
   BudgetProjectionChangePage,
   BudgetProjectionRecord,
   BudgetProjectionSnapshot,
+  BudgetProjectionSnapshotPage,
   BudgetProjectionStore,
+  BudgetEntityType,
   BudgetSnapshotReader,
 } from "./contracts.js";
+import { BudgetProjectionInputError } from "./contracts.js";
 
 export const DEFAULT_BUDGET_SNAPSHOT_FRESHNESS_MS = 15_000;
 
@@ -15,6 +18,16 @@ export interface BudgetChangeRequest {
   generation: string;
   cursor: string;
   throughCursor?: string;
+  limit: number;
+  encryptionPassword?: string;
+}
+
+export interface BudgetSnapshotPageRequest {
+  budgetId: string;
+  generation?: string;
+  cursor?: string;
+  afterType?: BudgetEntityType;
+  afterId?: string;
   limit: number;
   encryptionPassword?: string;
 }
@@ -32,6 +45,9 @@ export interface BudgetReadApiPort {
     encryptionPassword?: string,
   ): Promise<BudgetProjectionSnapshot>;
   getChanges(request: BudgetChangeRequest): Promise<BudgetProjectionChangePage>;
+  getSnapshotPage(
+    request: BudgetSnapshotPageRequest,
+  ): Promise<BudgetProjectionSnapshotPage>;
 }
 
 export class BudgetReadApi implements BudgetReadApiPort {
@@ -66,6 +82,69 @@ export class BudgetReadApi implements BudgetReadApiPort {
         result.records,
       );
       return { ...snapshot, displaySettings: result.displaySettings };
+    });
+  }
+
+  getSnapshotPage(
+    request: BudgetSnapshotPageRequest,
+  ): Promise<BudgetProjectionSnapshotPage> {
+    return this.locks.withBudgetLock(request.budgetId, async () => {
+      const hasGeneration = request.generation !== undefined;
+      const hasCursor = request.cursor !== undefined;
+      if (hasGeneration !== hasCursor) {
+        throw new BudgetProjectionInputError(
+          "generation and cursor must be provided together",
+        );
+      }
+      if (
+        (request.afterType === undefined) !==
+        (request.afterId === undefined)
+      ) {
+        throw new BudgetProjectionInputError(
+          "afterType and afterId must be provided together",
+        );
+      }
+
+      let generation = request.generation;
+      let cursor = request.cursor;
+      let displaySettings: BudgetDisplaySettings | null = null;
+      if (generation === undefined || cursor === undefined) {
+        const result = await this.readSnapshot(
+          request.budgetId,
+          request.encryptionPassword,
+        );
+        displaySettings = result.displaySettings;
+        if (this.store.applySnapshotForRefresh) {
+          const checkpoint = await this.store.applySnapshotForRefresh(
+            request.budgetId,
+            this.feedEpoch,
+            result.records,
+          );
+          generation = checkpoint.generation;
+          cursor = checkpoint.cursor;
+        } else {
+          const snapshot = await this.store.applySnapshot(
+            request.budgetId,
+            this.feedEpoch,
+            result.records,
+          );
+          generation = snapshot.generation;
+          cursor = snapshot.cursor;
+        }
+      }
+
+      const page = await this.store.readSnapshotPage({
+        budgetId: request.budgetId,
+        generation,
+        cursor,
+        ...(request.afterType === undefined
+          ? {}
+          : { afterType: request.afterType }),
+        ...(request.afterId === undefined ? {} : { afterId: request.afterId }),
+        limit: request.limit,
+      });
+      if (!page) throw new Error("Budget projection state was not created");
+      return { ...page, displaySettings };
     });
   }
 

@@ -2,6 +2,8 @@ package app.tandemforactual.data.store
 
 import androidx.room3.withWriteTransaction
 import app.tandemforactual.data.database.BudgetRecordEntity
+import app.tandemforactual.data.database.BudgetSnapshotProgressEntity
+import app.tandemforactual.data.database.BudgetSnapshotRecordEntity
 import app.tandemforactual.data.database.BudgetSyncStateEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.RemoteBudgetRecordKey
@@ -438,6 +440,161 @@ class LocalBudgetRepository(
                     lastErrorCode = null,
                 ),
             )
+            FullSnapshotResult.APPLIED
+        }
+    }
+
+    suspend fun beginPagedSnapshot(
+        budgetId: String,
+        generation: String,
+        cursor: String,
+        expectedCheckpoint: BudgetSyncCheckpoint?,
+    ) {
+        requireIdentifier(budgetId, "budgetId")
+        requireIdentifier(generation, "generation")
+        requireIdentifier(cursor, "cursor")
+        val snapshotKey = snapshotKey(generation, cursor)
+        database.withWriteTransaction {
+            val snapshotDao = database.budgetSnapshotDao()
+            snapshotDao.deleteRecords(budgetId)
+            snapshotDao.putProgress(
+                BudgetSnapshotProgressEntity(
+                    budgetId = budgetId,
+                    snapshotKey = snapshotKey,
+                    generation = generation,
+                    cursor = cursor,
+                    expectedGeneration = expectedCheckpoint?.generation,
+                    expectedCursor = expectedCheckpoint?.cursor,
+                ),
+            )
+        }
+    }
+
+    suspend fun stageSnapshotPage(
+        budgetId: String,
+        generation: String,
+        cursor: String,
+        records: List<RemoteBudgetRecord>,
+    ) {
+        requireIdentifier(budgetId, "budgetId")
+        val snapshotKey = snapshotKey(generation, cursor)
+        val identities = mutableSetOf<Pair<String, String>>()
+        val staged =
+            records.map { record ->
+                validateRemoteRecord(record, budgetId)
+                if (record.generation != generation) {
+                    throw InvalidLocalWriteException("A record generation must match its snapshot page")
+                }
+                if (!identities.add(record.recordType to record.recordId)) {
+                    throw InvalidLocalWriteException("A snapshot page cannot contain duplicate records")
+                }
+                record.toEntity(localJson = null, localDeleted = false).let { entity ->
+                    BudgetSnapshotRecordEntity(
+                        budgetId = entity.budgetId,
+                        snapshotKey = snapshotKey,
+                        recordType = entity.recordType,
+                        recordId = entity.recordId,
+                        remoteJson = entity.remoteJson ?: "{}",
+                        remoteRevision = entity.remoteRevision ?: "",
+                        generation = entity.syncGeneration,
+                        recordDate = entity.recordDate,
+                        accountId = entity.accountId,
+                        categoryId = entity.categoryId,
+                        payeeId = entity.payeeId,
+                        amountMinor = entity.amountMinor,
+                        budgetMonth = entity.budgetMonth,
+                        displayName = entity.displayName,
+                        notes = entity.notes,
+                        cleared = entity.cleared,
+                        reconciled = entity.reconciled,
+                        approved = entity.approved,
+                        matched = entity.matched,
+                        transfer = entity.transfer,
+                    )
+                }
+            }
+        database.withWriteTransaction {
+            val progress = database.budgetSnapshotDao().findProgress(budgetId)
+            if (progress?.snapshotKey != snapshotKey) {
+                throw InvalidLocalWriteException("Snapshot page does not match the active snapshot")
+            }
+            if (staged.isNotEmpty()) database.budgetSnapshotDao().putAll(staged)
+        }
+    }
+
+    suspend fun finishPagedSnapshot(
+        budgetId: String,
+        generation: String,
+        cursor: String,
+        displaySettings: BudgetDisplaySettings?,
+    ): FullSnapshotResult {
+        requireIdentifier(budgetId, "budgetId")
+        val snapshotKey = snapshotKey(generation, cursor)
+        return database.withWriteTransaction {
+            val syncStateDao = database.budgetSyncStateDao()
+            val snapshotDao = database.budgetSnapshotDao()
+            val progress = snapshotDao.findProgress(budgetId)
+            if (progress?.snapshotKey != snapshotKey) {
+                throw InvalidLocalWriteException("Snapshot finalization does not match the active snapshot")
+            }
+            val currentState = syncStateDao.find(budgetId)
+            val currentCheckpoint = currentState?.let { BudgetSyncCheckpoint(it.generation, it.cursor) }
+            val expectedCheckpoint =
+                progress.expectedGeneration?.let {
+                    BudgetSyncCheckpoint(it, progress.expectedCursor)
+                }
+            if (currentCheckpoint != expectedCheckpoint) {
+                snapshotDao.deleteRecords(budgetId)
+                snapshotDao.deleteProgress(budgetId)
+                return@withWriteTransaction FullSnapshotResult.STALE_CHECKPOINT
+            }
+
+            val recordDao = database.budgetRecordDao()
+            val localOverlays = recordDao.findLocalOverlays(budgetId).associateBy { it.recordType to it.recordId }
+            var afterType: String? = null
+            var afterId: String? = null
+            while (true) {
+                val page = snapshotDao.findPage(budgetId, snapshotKey, afterType, afterId, SNAPSHOT_LOCAL_BATCH_SIZE)
+                if (page.isEmpty()) break
+                recordDao.putAll(
+                    page.map { staged ->
+                        RemoteBudgetRecord(
+                            budgetId = staged.budgetId,
+                            recordType = staged.recordType,
+                            recordId = staged.recordId,
+                            revision = staged.remoteRevision,
+                            bodyJson = staged.remoteJson,
+                            generation = staged.generation,
+                            recordDate = staged.recordDate,
+                            accountId = staged.accountId,
+                            categoryId = staged.categoryId,
+                            payeeId = staged.payeeId,
+                            amountMinor = staged.amountMinor,
+                            budgetMonth = staged.budgetMonth,
+                            displayMetadata = BudgetRecordDisplayMetadata(staged.displayName, staged.notes),
+                        ).toEntity(localOverlays[staged.recordType to staged.recordId])
+                    },
+                )
+                val last = page.last()
+                afterType = last.recordType
+                afterId = last.recordId
+            }
+            recordDao.tombstoneRemoteRecordsMissingFromSnapshot(budgetId, snapshotKey)
+            displaySettings?.let { storeBudgetDisplaySettings(budgetId, generation, it) }
+            markEditsForDeletedRecords(budgetId)
+            syncStateDao.put(
+                BudgetSyncStateEntity(
+                    budgetId = budgetId,
+                    generation = generation,
+                    cursor = cursor,
+                    status = BudgetSyncStatus.READY.name,
+                    lastAttemptAtEpochMs = now(),
+                    lastSyncedAtEpochMs = now(),
+                    lastErrorCode = null,
+                ),
+            )
+            snapshotDao.deleteRecords(budgetId)
+            snapshotDao.deleteProgress(budgetId)
             FullSnapshotResult.APPLIED
         }
     }
@@ -1177,6 +1334,13 @@ class LocalBudgetRepository(
         )
     }
 }
+
+private const val SNAPSHOT_LOCAL_BATCH_SIZE = 500
+
+private fun snapshotKey(
+    generation: String,
+    cursor: String,
+): String = "$generation:$cursor"
 
 private fun JsonObject.displayString(name: String): String? = (this[name] as? JsonPrimitive)?.takeIf { it != JsonNull }?.contentOrNull
 

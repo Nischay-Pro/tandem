@@ -35,6 +35,39 @@ import kotlin.test.assertTrue
 
 class GeneratedBudgetSyncRemoteTest {
     @Test
+    fun generatedClientReadsSnapshotPagesAndSerializesTheContinuationKey() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            val engine =
+                MockEngine { request ->
+                    requests += request
+                    respond(snapshotPageJson(), headers = jsonHeaders())
+                }
+            val cleanup = configureApi(engine)
+            try {
+                val remote = GeneratedBudgetSyncRemote(testApiClient())
+                val first = remote.readSnapshotPage(BUDGET, null, null, null, null, 2_000, "encrypted-budget")
+                assertEquals(BUDGET, first.budgetId)
+                assertEquals(GENERATION, first.generation)
+                assertEquals("1000", first.cursor)
+                assertEquals(1, first.records.size)
+                assertTrue(first.hasMore)
+                assertEquals("transaction", first.nextAfterType)
+                assertEquals(TXN, first.nextAfterId)
+                assertEquals(BudgetRecordDisplayMetadata("Corner Market", "weekly groceries"), first.records.single().displayMetadata)
+
+                remote.readSnapshotPage(BUDGET, GENERATION, "1000", "transaction", TXN, 2_000, null)
+                assertEquals("transaction", requests[1].url.parameters["afterType"])
+                assertEquals(TXN, requests[1].url.parameters["afterId"])
+                assertEquals(GENERATION, requests[1].url.parameters["generation"])
+                assertEquals("1000", requests[1].url.parameters["cursor"])
+                assertNull(requests[1].headers["x-budget-encryption-password"])
+            } finally {
+                cleanup()
+            }
+        }
+
+    @Test
     fun generatedClientMapsSnapshotsFeedWritesAndTransactionReads() =
         runBlocking {
             val requests = mutableListOf<HttpRequestData>()
@@ -453,6 +486,9 @@ class GeneratedBudgetSyncRemoteTest {
     }
 
     private fun snapshotJson(): String = """{"budgetId":"$BUDGET","generation":"$GENERATION","cursor":"1000","records":[${recordJson()}]}"""
+
+    private fun snapshotPageJson() =
+        """{"budgetId":"$BUDGET","generation":"$GENERATION","cursor":"1000","records":[${recordJson()}],"hasMore":true,"resetRequired":false,"nextAfterType":"transaction","nextAfterId":"$TXN","displaySettings":null}"""
 
     private fun recordJson() =
         """{"type":"transaction","id":"$TXN","revision":"revision-1","body":{"id":"$TXN","name":"Corner Market","notes":"weekly groceries","account":"checking","amount":1200,"date":"2026-10-01","category":"food","payee":"market"}}"""

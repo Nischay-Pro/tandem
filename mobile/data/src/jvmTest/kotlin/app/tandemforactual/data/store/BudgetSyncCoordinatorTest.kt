@@ -80,6 +80,42 @@ class BudgetSyncCoordinatorTest {
         }
 
     @Test
+    fun snapshotPagesAreStagedIndividuallyAndAppliedTogether() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val records = listOf(transaction("txn-1"), transaction("txn-2"))
+                val remote = FakeBudgetSyncRemote(snapshot(records = records))
+                val requests = mutableListOf<String?>()
+                remote.snapshotPageHandler = { budgetId, generation, cursor, afterType, afterId, _, _ ->
+                    requests += afterId
+                    val current = if (afterId == null) records.first() else records.last()
+                    RemoteBudgetSnapshotPage(
+                        budgetId = budgetId,
+                        generation = generation ?: GENERATION,
+                        cursor = cursor ?: "2",
+                        records = listOf(current),
+                        hasMore = afterId == null,
+                        resetRequired = false,
+                        nextAfterType = if (afterId == null) current.recordType else null,
+                        nextAfterId = if (afterId == null) current.recordId else null,
+                        displaySettings = null,
+                    )
+                }
+
+                val result = BudgetSyncCoordinator(repository, remote).synchronize(BUDGET, sendQueuedWrites = false)
+
+                assertTrue(result.fullSnapshotApplied)
+                assertEquals(listOf(null, "txn-1"), requests)
+                assertEquals(listOf("txn-1", "txn-2"), repository.findRecords(BUDGET, "transaction").map { it.recordId })
+                assertEquals(BudgetSyncStatus.READY.name, repository.readSyncState(BUDGET)?.status)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun twoLocalDevicesApplyTheSameSharedChangeFeed() =
         runBlocking {
             val firstDatabase = newDatabase()
@@ -1032,6 +1068,7 @@ class BudgetSyncCoordinatorTest {
         var submitError: Exception? = null
         var readOperationError: Exception? = null
         var snapshotHandler: suspend (String, String?) -> RemoteBudgetSnapshot = { _, _ -> snapshotResponse }
+        var snapshotPageHandler: (suspend (String, String?, String?, String?, String?, Int, String?) -> RemoteBudgetSnapshotPage)? = null
         var changeHandler: suspend (String, String, String, String?, String?) -> RemoteBudgetChangePage =
             { budgetId, generation, cursor, _, _ ->
                 RemoteBudgetChangePage(budgetId, generation, cursor, cursor, cursor, false, false, emptyList())
@@ -1047,6 +1084,26 @@ class BudgetSyncCoordinatorTest {
             budgetId: String,
             encryptionPassword: String?,
         ) = snapshotHandler(budgetId, encryptionPassword)
+
+        override suspend fun readSnapshotPage(
+            budgetId: String,
+            generation: String?,
+            cursor: String?,
+            afterType: String?,
+            afterId: String?,
+            limit: Int,
+            encryptionPassword: String?,
+        ): RemoteBudgetSnapshotPage =
+            snapshotPageHandler?.invoke(budgetId, generation, cursor, afterType, afterId, limit, encryptionPassword)
+                ?: super<BudgetSyncRemote>.readSnapshotPage(
+                    budgetId,
+                    generation,
+                    cursor,
+                    afterType,
+                    afterId,
+                    limit,
+                    encryptionPassword,
+                )
 
         override suspend fun readChanges(
             budgetId: String,

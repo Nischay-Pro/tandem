@@ -34,6 +34,17 @@ const page = {
   changes: [],
   displaySettings: null,
 };
+const snapshotPage = {
+  budgetId: "budget-1",
+  generation,
+  cursor: "2",
+  records: snapshot.records,
+  hasMore: false,
+  resetRequired: false,
+  nextAfterType: null,
+  nextAfterId: null,
+  displaySettings: null,
+};
 
 function createDevice(): DeviceRecord {
   return {
@@ -66,6 +77,7 @@ function createBudgetReadApi(overrides: Record<string, unknown> = {}) {
       { budgetId: "private-budget", name: "Private", isEncrypted: true },
     ]),
     getSnapshot: vi.fn(async () => snapshot),
+    getSnapshotPage: vi.fn(async () => snapshotPage),
     getChanges: vi.fn(async () => page),
     ...overrides,
   } as unknown as BudgetReadApiPort;
@@ -177,6 +189,136 @@ describe("budget snapshot and change feed routes", () => {
     await app.close();
   });
 
+  it("returns bounded snapshot pages and forwards a continuation checkpoint", async () => {
+    const budgetApi = createBudgetReadApi();
+    const app = await buildApp(budgetApi);
+    const first = await app.inject({
+      method: "GET",
+      url: "/api/v1/budgets/budget-1/snapshot-pages",
+      headers: {
+        ...authHeaders,
+        "x-budget-encryption-password": "encrypted-budget-password",
+      },
+    });
+    const next = await app.inject({
+      method: "GET",
+      url: `/api/v1/budgets/budget-1/snapshot-pages?generation=${generation}&cursor=2&afterType=transaction&afterId=txn-1&limit=500`,
+      headers: authHeaders,
+    });
+
+    expect(first.statusCode).toBe(200);
+    expect(first.headers["cache-control"]).toBe("no-store");
+    expect(first.json()).toEqual(snapshotPage);
+    expect(budgetApi.getSnapshotPage).toHaveBeenNthCalledWith(1, {
+      budgetId: "budget-1",
+      limit: 2_000,
+      encryptionPassword: "encrypted-budget-password",
+    });
+    expect(next.statusCode).toBe(200);
+    expect(budgetApi.getSnapshotPage).toHaveBeenNthCalledWith(2, {
+      budgetId: "budget-1",
+      generation,
+      cursor: "2",
+      afterType: "transaction",
+      afterId: "txn-1",
+      limit: 500,
+      encryptionPassword: undefined,
+    });
+    await app.close();
+  });
+
+  it("rejects incomplete snapshot continuation parameters", async () => {
+    const budgetApi = createBudgetReadApi();
+    const app = await buildApp(budgetApi);
+    const missingCursor = await app.inject({
+      method: "GET",
+      url: `/api/v1/budgets/budget-1/snapshot-pages?generation=${generation}`,
+      headers: authHeaders,
+    });
+    const missingAfterId = await app.inject({
+      method: "GET",
+      url: `/api/v1/budgets/budget-1/snapshot-pages?generation=${generation}&cursor=2&afterType=transaction`,
+      headers: authHeaders,
+    });
+    const afterWithoutCheckpoint = await app.inject({
+      method: "GET",
+      url: "/api/v1/budgets/budget-1/snapshot-pages?afterType=transaction&afterId=txn-1",
+      headers: authHeaders,
+    });
+    const oversizedPage = await app.inject({
+      method: "GET",
+      url: `/api/v1/budgets/budget-1/snapshot-pages?limit=2001`,
+      headers: authHeaders,
+    });
+    expect(missingCursor.statusCode).toBe(400);
+    expect(missingAfterId.statusCode).toBe(400);
+    expect(afterWithoutCheckpoint.statusCode).toBe(400);
+    expect(oversizedPage.statusCode).toBe(400);
+    expect(budgetApi.getSnapshotPage).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("enforces snapshot page scope and reports unavailable or failed reads safely", async () => {
+    const outOfScopeApi = createBudgetReadApi();
+    const outOfScopeApp = await buildApp(outOfScopeApi);
+    const outOfScope = await outOfScopeApp.inject({
+      method: "GET",
+      url: "/api/v1/budgets/private-budget/snapshot-pages",
+      headers: authHeaders,
+    });
+    expect(outOfScope.statusCode).toBe(404);
+    expect(outOfScopeApi.getSnapshotPage).not.toHaveBeenCalled();
+    await outOfScopeApp.close();
+
+    const unavailableApp = await buildApp(undefined);
+    const unavailable = await unavailableApp.inject({
+      method: "GET",
+      url: "/api/v1/budgets/budget-1/snapshot-pages",
+      headers: authHeaders,
+    });
+    expect(unavailable.statusCode).toBe(503);
+    await unavailableApp.close();
+
+    const invalidApi = createBudgetReadApi({
+      getSnapshotPage: vi.fn(async () => {
+        throw new BudgetProjectionInputError("invalid snapshot page input");
+      }),
+    });
+    const invalidApp = await buildApp(invalidApi);
+    const invalid = await invalidApp.inject({
+      method: "GET",
+      url: "/api/v1/budgets/budget-1/snapshot-pages",
+      headers: authHeaders,
+    });
+    expect(invalid.statusCode).toBe(400);
+    await invalidApp.close();
+
+    const failedApi = createBudgetReadApi({
+      getSnapshotPage: vi.fn(async () => {
+        throw new Error("private Actual workspace path");
+      }),
+    });
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const failedApp = await buildApp(failedApi);
+    const failed = await failedApp.inject({
+      method: "GET",
+      url: "/api/v1/budgets/budget-1/snapshot-pages",
+      headers: authHeaders,
+    });
+    expect(failed.statusCode).toBe(502);
+    expect(failed.body).not.toContain("private Actual workspace path");
+    expect(consoleError).toHaveBeenCalledWith(
+      "Budget snapshot page read failed",
+      {
+        errorType: "Error",
+      },
+    );
+    vi.restoreAllMocks();
+    await failedApp.close();
+  });
+
   it("requires device credentials and hides budgets outside the device scope", async () => {
     const budgetApi = createBudgetReadApi();
     const app = await buildApp(budgetApi);
@@ -187,6 +329,10 @@ describe("budget snapshot and change feed routes", () => {
     const unauthorizedChanges = await app.inject({
       method: "GET",
       url: `/api/v1/budgets/budget-1/changes?generation=${generation}&cursor=0`,
+    });
+    const unauthorizedSnapshotPage = await app.inject({
+      method: "GET",
+      url: "/api/v1/budgets/budget-1/snapshot-pages",
     });
     const outOfScope = await app.inject({
       method: "GET",
@@ -201,9 +347,11 @@ describe("budget snapshot and change feed routes", () => {
 
     expect(unauthorized.statusCode).toBe(401);
     expect(unauthorizedChanges.statusCode).toBe(401);
+    expect(unauthorizedSnapshotPage.statusCode).toBe(401);
     expect(outOfScope.statusCode).toBe(404);
     expect(outOfScopeChanges.statusCode).toBe(404);
     expect(budgetApi.getSnapshot).not.toHaveBeenCalled();
+    expect(budgetApi.getSnapshotPage).not.toHaveBeenCalled();
     expect(budgetApi.getChanges).not.toHaveBeenCalled();
     await app.close();
   });
@@ -399,6 +547,9 @@ describe("budget snapshot and change feed routes", () => {
     };
     expect(
       document.paths["/api/v1/budgets/{budgetId}/snapshot"]?.get,
+    ).toBeDefined();
+    expect(
+      document.paths["/api/v1/budgets/{budgetId}/snapshot-pages"]?.get,
     ).toBeDefined();
     expect(
       document.paths["/api/v1/budgets/{budgetId}/changes"]?.get,

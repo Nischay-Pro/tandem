@@ -9,18 +9,28 @@ import androidx.room3.migration.AutoMigrationSpec
 import androidx.sqlite.SQLiteConnection
 
 @Database(
-    entities = [BudgetRecordEntity::class, BudgetSyncStateEntity::class, AppPreferenceEntity::class, OutboxOperationEntity::class],
-    version = 4,
+    entities = [
+        BudgetRecordEntity::class,
+        BudgetSnapshotRecordEntity::class,
+        BudgetSnapshotProgressEntity::class,
+        BudgetSyncStateEntity::class,
+        AppPreferenceEntity::class,
+        OutboxOperationEntity::class,
+    ],
+    version = 5,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3, spec = BudgetRecordDisplayMetadataMigration::class),
         AutoMigration(from = 3, to = 4, spec = BudgetRecordSearchMetadataMigration::class),
+        AutoMigration(from = 4, to = 5),
     ],
     exportSchema = true,
 )
 @ConstructedBy(TandemDatabaseConstructor::class)
 abstract class TandemDatabase : RoomDatabase() {
     abstract fun budgetRecordDao(): BudgetRecordDao
+
+    abstract fun budgetSnapshotDao(): BudgetSnapshotDao
 
     abstract fun outboxDao(): OutboxDao
 

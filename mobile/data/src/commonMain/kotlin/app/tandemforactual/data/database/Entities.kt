@@ -42,6 +42,43 @@ data class BudgetRecordEntity(
     val transfer: Boolean? = null,
 )
 
+@Entity(
+    tableName = "budget_snapshot_records",
+    primaryKeys = ["budgetId", "snapshotKey", "recordType", "recordId"],
+)
+data class BudgetSnapshotRecordEntity(
+    val budgetId: String,
+    val snapshotKey: String,
+    val recordType: String,
+    val recordId: String,
+    val remoteJson: String,
+    val remoteRevision: String,
+    val generation: String,
+    val recordDate: String?,
+    val accountId: String?,
+    val categoryId: String?,
+    val payeeId: String?,
+    val amountMinor: Long?,
+    val budgetMonth: String?,
+    val displayName: String?,
+    val notes: String?,
+    val cleared: Boolean?,
+    val reconciled: Boolean?,
+    val approved: Boolean?,
+    val matched: Boolean?,
+    val transfer: Boolean?,
+)
+
+@Entity(tableName = "budget_snapshot_progress")
+data class BudgetSnapshotProgressEntity(
+    @PrimaryKey val budgetId: String,
+    val snapshotKey: String,
+    val generation: String,
+    val cursor: String,
+    val expectedGeneration: String?,
+    val expectedCursor: String?,
+)
+
 data class SearchableBudgetTransaction(
     val recordId: String,
     val recordDate: String?,

@@ -1,8 +1,107 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
+import type { BudgetEntityType } from "../src/budget-projection/contracts.js";
 import { createPostgresBudgetProjectionStore } from "../src/budget-projection/postgres-budget-projection-store.js";
 
 describe("PostgreSQL budget projection store failure handling", () => {
+  it("validates keyset snapshot page parameters before connecting", async () => {
+    const pool = { connect: vi.fn() } as unknown as Pool;
+    const store = createPostgresBudgetProjectionStore(pool);
+    const request = {
+      budgetId: "budget-1",
+      generation: "d9d69fa5-45fb-48ee-9a8c-99bf49f873bd",
+      cursor: "0",
+      limit: 10,
+    };
+    await expect(
+      store.readSnapshotPage({ ...request, cursor: "01" }),
+    ).rejects.toThrow("snapshot cursor must be a decimal cursor");
+    await expect(
+      store.readSnapshotPage({ ...request, limit: 0 }),
+    ).rejects.toThrow("limit must be between 1 and 2000");
+    await expect(
+      store.readSnapshotPage({ ...request, limit: 2001 }),
+    ).rejects.toThrow("limit must be between 1 and 2000");
+    await expect(
+      store.readSnapshotPage({ ...request, afterType: "transaction" }),
+    ).rejects.toThrow("afterType and afterId must be provided together");
+    await expect(
+      store.readSnapshotPage({
+        ...request,
+        afterType: "unknown" as BudgetEntityType,
+        afterId: "txn-1",
+      }),
+    ).rejects.toThrow("afterType is invalid");
+    await expect(
+      store.readSnapshotPage({
+        ...request,
+        afterType: "transaction",
+        afterId: " ",
+      }),
+    ).rejects.toThrow("Budget entity ID is invalid");
+    expect(pool.connect).not.toHaveBeenCalled();
+  });
+
+  it("returns no snapshot page when the budget checkpoint does not exist", async () => {
+    const query = vi.fn(async () => ({ rows: [] }));
+    const release = vi.fn();
+    const pool = {
+      connect: vi.fn(async () => ({ query, release })),
+    } as unknown as Pool;
+    const store = createPostgresBudgetProjectionStore(pool);
+
+    await expect(
+      store.readSnapshotPage({
+        budgetId: "budget-1",
+        generation: "d9d69fa5-45fb-48ee-9a8c-99bf49f873bd",
+        cursor: "0",
+        limit: 10,
+      }),
+    ).resolves.toBeUndefined();
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
+    );
+    expect(query).toHaveBeenLastCalledWith("COMMIT");
+    expect(release).toHaveBeenCalledWith(false);
+  });
+
+  it("rolls back snapshot page reads and discards a connection if rollback fails", async () => {
+    const primaryError = new Error("synthetic page read failure");
+    const rollbackError = new Error("synthetic rollback failure");
+    const query = vi.fn(async (sql: string) => {
+      if (sql.startsWith("SELECT budget_id")) throw primaryError;
+      if (sql === "ROLLBACK") throw rollbackError;
+      return { rows: [] };
+    });
+    const release = vi.fn();
+    const pool = {
+      connect: vi.fn(async () => ({ query, release })),
+    } as unknown as Pool;
+    const store = createPostgresBudgetProjectionStore(pool);
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await expect(
+      store.readSnapshotPage({
+        budgetId: "budget-1",
+        generation: "d9d69fa5-45fb-48ee-9a8c-99bf49f873bd",
+        cursor: "0",
+        limit: 10,
+      }),
+    ).rejects.toBe(primaryError);
+    expect(release).toHaveBeenCalledWith(true);
+    expect(consoleError).toHaveBeenCalledWith(
+      "Budget projection rollback failed",
+      {
+        primaryError: "Error",
+        rollbackError: "Error",
+      },
+    );
+    vi.restoreAllMocks();
+  });
+
   it("checks freshness with a positive interval and fails closed without state", async () => {
     const query = vi.fn(async () => ({ rows: [] }));
     const pool = { query } as unknown as Pool;
@@ -81,8 +180,16 @@ describe("PostgreSQL budget projection store failure handling", () => {
         limit: 10,
       }),
     ).rejects.toBe(beginError);
+    await expect(
+      store.readSnapshotPage({
+        budgetId: "budget-1",
+        generation: "d9d69fa5-45fb-48ee-9a8c-99bf49f873bd",
+        cursor: "0",
+        limit: 10,
+      }),
+    ).rejects.toBe(beginError);
 
-    expect(query).toHaveBeenCalledTimes(3);
+    expect(query).toHaveBeenCalledTimes(4);
     expect(query).toHaveBeenCalledWith("BEGIN");
     expect(query).toHaveBeenCalledWith(
       "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
@@ -90,6 +197,7 @@ describe("PostgreSQL budget projection store failure handling", () => {
     expect(release).toHaveBeenNthCalledWith(1, false);
     expect(release).toHaveBeenNthCalledWith(2, false);
     expect(release).toHaveBeenNthCalledWith(3, false);
+    expect(release).toHaveBeenNthCalledWith(4, false);
   });
 
   it("fails clearly if synchronization state is missing during refresh", async () => {

@@ -259,6 +259,78 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
+    fun pagedSnapshotStaysStagedUntilAtomicFinalizeAndRemovesMissingRecords() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                repository.applySnapshot(
+                    BUDGET,
+                    GENERATION,
+                    "1",
+                    listOf(transaction(), transaction(recordId = "old-record")),
+                )
+                val expectedCheckpoint = assertNotNull(repository.readSyncCheckpoint(BUDGET))
+                val nextGeneration = "bcbf9837-9e95-4c34-86f4-2f90cdce943e"
+                val incoming =
+                    listOf(
+                        transaction(generation = nextGeneration, revision = "new-r1"),
+                        transaction(recordId = "new-record", generation = nextGeneration, revision = "new-r2"),
+                    )
+                repository.beginPagedSnapshot(BUDGET, nextGeneration, "9", expectedCheckpoint)
+                repository.stageSnapshotPage(BUDGET, nextGeneration, "9", incoming.take(1))
+                repository.stageSnapshotPage(BUDGET, nextGeneration, "9", incoming.drop(1))
+
+                assertEquals(listOf("old-record", "txn-1"), repository.findRecords(BUDGET, "transaction").map { it.recordId }.sorted())
+                assertEquals(
+                    FullSnapshotResult.APPLIED,
+                    repository.finishPagedSnapshot(BUDGET, nextGeneration, "9", null),
+                )
+                assertEquals(listOf("new-record", "txn-1"), repository.findRecords(BUDGET, "transaction").map { it.recordId }.sorted())
+                assertEquals(nextGeneration, repository.readSyncCheckpoint(BUDGET)?.generation)
+                assertNull(database.budgetSnapshotDao().findProgress(BUDGET))
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun pagedSnapshotWithAStaleCheckpointIsDiscardedWithoutReplacingTheCache() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                repository.applySnapshot(BUDGET, GENERATION, "1", listOf(transaction()))
+                val expectedCheckpoint = assertNotNull(repository.readSyncCheckpoint(BUDGET))
+                val nextGeneration = "bcbf9837-9e95-4c34-86f4-2f90cdce943e"
+                repository.beginPagedSnapshot(BUDGET, nextGeneration, "9", expectedCheckpoint)
+                repository.stageSnapshotPage(
+                    BUDGET,
+                    nextGeneration,
+                    "9",
+                    listOf(transaction(recordId = "replacement", generation = nextGeneration)),
+                )
+                repository.applyChangePage(
+                    BudgetChangePage(
+                        budgetId = BUDGET,
+                        generation = GENERATION,
+                        fromCursor = "1",
+                        nextCursor = "2",
+                        changes = emptyList(),
+                    ),
+                )
+
+                assertEquals(
+                    FullSnapshotResult.STALE_CHECKPOINT,
+                    repository.finishPagedSnapshot(BUDGET, nextGeneration, "9", null),
+                )
+                assertEquals(listOf("txn-1"), repository.findRecords(BUDGET, "transaction").map { it.recordId })
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun selectedMonthLookupReturnsOnlyItsRecordAndDisplayMetadataTracksTheActiveJson() =
         runBlocking {
             val database = newDatabase()

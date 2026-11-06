@@ -157,25 +157,101 @@ class BudgetSyncCoordinator(
     ): String {
         repeat(MAX_SNAPSHOT_ATTEMPTS) {
             val expectedCheckpoint = repository.readSyncCheckpoint(budgetId)
-            val snapshot = remote.readSnapshot(budgetId, encryptionPassword)
-            if (snapshot.budgetId != budgetId) {
+            var page =
+                remote.readSnapshotPage(
+                    budgetId = budgetId,
+                    generation = null,
+                    cursor = null,
+                    afterType = null,
+                    afterId = null,
+                    limit = SNAPSHOT_PAGE_SIZE,
+                    encryptionPassword = encryptionPassword,
+                )
+            if (page.budgetId != budgetId) {
                 throw BudgetSyncProtocolException("Snapshot belongs to a different budget")
             }
-            when (
-                repository.applyFullSnapshot(
-                    budgetId = budgetId,
-                    generation = snapshot.generation,
-                    cursor = snapshot.cursor,
-                    expectedCheckpoint = expectedCheckpoint,
-                    records = snapshot.records,
-                    displaySettings = snapshot.displaySettings,
-                )
-            ) {
-                FullSnapshotResult.APPLIED -> return snapshot.generation
-                FullSnapshotResult.STALE_CHECKPOINT -> Unit
+            if (page.resetRequired) return@repeat
+            validateSnapshotCheckpoint(page.generation, page.cursor)
+            val generation = page.generation
+            val cursor = page.cursor
+            repository.beginPagedSnapshot(budgetId, generation, cursor, expectedCheckpoint)
+            var displaySettings = page.displaySettings
+            var afterType: String? = null
+            var afterId: String? = null
+            var previousType: String? = null
+            var previousId: String? = null
+            var resetRequired = false
+            while (true) {
+                if (page.budgetId != budgetId) {
+                    throw BudgetSyncProtocolException("Snapshot page belongs to a different budget")
+                }
+                if (page.resetRequired || page.generation != generation || page.cursor != cursor) {
+                    resetRequired = true
+                    break
+                }
+                if (displaySettings == null) displaySettings = page.displaySettings
+                var pagePreviousType = previousType
+                var pagePreviousId = previousId
+                for (record in page.records) {
+                    if (record.generation != generation ||
+                        pagePreviousType != null &&
+                        (
+                            record.recordType < pagePreviousType ||
+                                (record.recordType == pagePreviousType && record.recordId <= pagePreviousId.orEmpty())
+                        )
+                    ) {
+                        throw BudgetSyncProtocolException("Snapshot page records are out of order")
+                    }
+                    pagePreviousType = record.recordType
+                    pagePreviousId = record.recordId
+                }
+                repository.stageSnapshotPage(budgetId, generation, cursor, page.records)
+                previousType = pagePreviousType
+                previousId = pagePreviousId
+                if (!page.hasMore) {
+                    if (page.nextAfterType != null || page.nextAfterId != null) {
+                        throw BudgetSyncProtocolException("Final snapshot page contains a continuation key")
+                    }
+                    when (repository.finishPagedSnapshot(budgetId, generation, cursor, displaySettings)) {
+                        FullSnapshotResult.APPLIED -> return generation
+                        FullSnapshotResult.STALE_CHECKPOINT -> break
+                    }
+                }
+                val nextType = page.nextAfterType
+                val nextId = page.nextAfterId
+                if (nextType == null ||
+                    nextId.isNullOrBlank() ||
+                    page.records.isEmpty() ||
+                    previousType != nextType ||
+                    previousId != nextId
+                ) {
+                    throw BudgetSyncProtocolException("Snapshot page continuation is invalid")
+                }
+                afterType = nextType
+                afterId = nextId
+                page =
+                    remote.readSnapshotPage(
+                        budgetId = budgetId,
+                        generation = generation,
+                        cursor = cursor,
+                        afterType = afterType,
+                        afterId = afterId,
+                        limit = SNAPSHOT_PAGE_SIZE,
+                        encryptionPassword = encryptionPassword,
+                    )
             }
+            if (resetRequired) return@repeat
         }
         throw BudgetSyncProtocolException("Snapshot could not be applied because the local checkpoint kept changing")
+    }
+
+    private fun validateSnapshotCheckpoint(
+        generation: String,
+        cursor: String,
+    ) {
+        if (!generation.matches(Regex("^[A-Za-z0-9._:-]{1,100}$")) || !cursor.isDecimalCursor()) {
+            throw BudgetSyncProtocolException("Snapshot contains an invalid checkpoint")
+        }
     }
 
     private fun validatePageProgress(
@@ -472,6 +548,7 @@ class BudgetSyncCoordinator(
 
     private companion object {
         const val MAX_SNAPSHOT_ATTEMPTS = 3
+        const val SNAPSHOT_PAGE_SIZE = 2_000
     }
 }
 

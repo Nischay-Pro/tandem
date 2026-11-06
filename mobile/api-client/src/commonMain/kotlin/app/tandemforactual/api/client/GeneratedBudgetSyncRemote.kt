@@ -2,12 +2,14 @@ package app.tandemforactual.api.client
 
 import app.tandemforactual.api.generated.api.BudgetsApi
 import app.tandemforactual.api.generated.api.TransactionsApi
+import app.tandemforactual.api.generated.models.GetBudgetSnapshotPageAfterType
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.store.BudgetSyncProtocolException
 import app.tandemforactual.data.store.BudgetSyncRemote
 import app.tandemforactual.data.store.BudgetSyncRemoteException
 import app.tandemforactual.data.store.RemoteBudgetChangePage
 import app.tandemforactual.data.store.RemoteBudgetSnapshot
+import app.tandemforactual.data.store.RemoteBudgetSnapshotPage
 import app.tandemforactual.data.store.RemoteOperationResult
 import app.tandemforactual.data.store.RemoteTransactionRecord
 import arrow.core.Either
@@ -33,6 +35,32 @@ class GeneratedBudgetSyncRemote(
                     BudgetsApi.getBudgetSnapshot(
                         xBudgetEncryptionPassword = encryptionPassword,
                         budgetId = budgetId,
+                    )
+                },
+            ),
+            budgetId,
+        )
+
+    override suspend fun readSnapshotPage(
+        budgetId: String,
+        generation: String?,
+        cursor: String?,
+        afterType: String?,
+        afterId: String?,
+        limit: Int,
+        encryptionPassword: String?,
+    ): RemoteBudgetSnapshotPage =
+        BudgetSyncJson.parseSnapshotPage(
+            unwrap(
+                withApiRequest {
+                    BudgetsApi.getBudgetSnapshotPage(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        budgetId = budgetId,
+                        generation = generation?.let(Uuid::parse),
+                        cursor = cursor,
+                        afterType = afterType?.toGeneratedSnapshotRecordType(),
+                        afterId = afterId,
+                        limit = limit.toLong(),
                     )
                 },
             ),
@@ -145,6 +173,18 @@ class GeneratedBudgetSyncRemote(
     }
 
     private suspend fun <T> withApiRequest(block: suspend () -> T): T = apiClient.withGeneratedApi(block)
+
+    private fun String.toGeneratedSnapshotRecordType(): GetBudgetSnapshotPageAfterType =
+        when (this) {
+            "account" -> GetBudgetSnapshotPageAfterType.ACCOUNT
+            "account-group" -> GetBudgetSnapshotPageAfterType.ACCOUNT_GROUP
+            "category" -> GetBudgetSnapshotPageAfterType.CATEGORY
+            "category-group" -> GetBudgetSnapshotPageAfterType.CATEGORY_GROUP
+            "payee" -> GetBudgetSnapshotPageAfterType.PAYEE
+            "transaction" -> GetBudgetSnapshotPageAfterType.TRANSACTION
+            "budget-month" -> GetBudgetSnapshotPageAfterType.BUDGET_MONTH
+            else -> throw BudgetSyncProtocolException("Snapshot continuation type is invalid")
+        }
 
     private fun CallException.toBudgetSyncException(): BudgetSyncRemoteException =
         when (this) {
