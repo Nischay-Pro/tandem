@@ -2,12 +2,12 @@ name: tandem
 
 services:
   postgres:
-    image: postgres:18.6-alpine3.24
+    image: postgres:18.6-alpine3.24@sha256:123b17998ccaf47e53b502e8c6a1e79afd8f579c6f3eec83c563da026f957395
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in deploy/compose/.env}
       POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in deploy/compose/.env}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/compose/.env}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
     volumes:
       - postgres-data:/var/lib/postgresql
     healthcheck:
@@ -19,6 +19,8 @@ services:
       start_period: 10s
     networks:
       - data
+    secrets:
+      - postgres_password
 
   api:
     build:
@@ -34,14 +36,14 @@ services:
     security_opt:
       - no-new-privileges:true
     environment:
-      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in deploy/compose/.env}
-      PAIRING_CODE_HASH_KEY: ${PAIRING_CODE_HASH_KEY:?Set PAIRING_CODE_HASH_KEY in deploy/compose/.env}
+      DATABASE_URL_FILE: /run/secrets/database_url
+      PAIRING_CODE_HASH_KEY_FILE: /run/secrets/pairing_code_hash_key
       HOST: 0.0.0.0
       PORT: 19753
       TRUST_PROXY: ${TRUST_PROXY:-}
       CHANGE_FEED_EPOCH: ${CHANGE_FEED_EPOCH:?Set CHANGE_FEED_EPOCH in deploy/compose/.env}
       ACTUAL_SERVER_URL: ${ACTUAL_SERVER_URL:-}
-      ACTUAL_SERVER_PASSWORD: ${ACTUAL_SERVER_PASSWORD:-}
+      ACTUAL_SERVER_PASSWORD_FILE: /run/secrets/actual_server_password
       ACTUAL_API_DATA_DIR: /data/actual-api
     depends_on:
       postgres:
@@ -66,6 +68,20 @@ services:
     networks:
       - data
       - edge
+    secrets:
+      - database_url
+      - pairing_code_hash_key
+      - actual_server_password
+
+secrets:
+  postgres_password:
+    file: ${POSTGRES_PASSWORD_FILE:?Set POSTGRES_PASSWORD_FILE in deploy/compose/.env}
+  database_url:
+    file: ${DATABASE_URL_FILE:?Set DATABASE_URL_FILE in deploy/compose/.env}
+  pairing_code_hash_key:
+    file: ${PAIRING_CODE_HASH_KEY_FILE:?Set PAIRING_CODE_HASH_KEY_FILE in deploy/compose/.env}
+  actual_server_password:
+    file: ${ACTUAL_SERVER_PASSWORD_FILE:?Set ACTUAL_SERVER_PASSWORD_FILE in deploy/compose/.env}
 
 volumes:
   postgres-data:

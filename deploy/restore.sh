@@ -40,7 +40,7 @@ tar -tzf "${backup_prefix}.actual-workspace.tar.gz" >/dev/null
   'pg_restore --exit-on-error --single-transaction --clean --if-exists --no-owner --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' \
   < "${backup_prefix}.postgres.dump"
 docker run --rm -i --volumes-from "$api_id" --entrypoint sh \
-  node:26.13.0-trixie-slim -ec \
+  node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 -ec \
   'mkdir -p /data/actual-api/.restore && find /data/actual-api/.restore -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + && tar -xzf - --no-same-owner -C /data/actual-api/.restore && find /data/actual-api -mindepth 1 -maxdepth 1 ! -name .restore -exec rm -rf -- {} + && find /data/actual-api/.restore -mindepth 1 -maxdepth 1 -exec mv -t /data/actual-api -- {} + && rmdir /data/actual-api/.restore && chown -R node:node /data/actual-api' \
   < "${backup_prefix}.actual-workspace.tar.gz"
 env_tmp="$(mktemp "${env_file}.XXXXXX")"

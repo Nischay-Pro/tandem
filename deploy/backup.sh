@@ -50,7 +50,7 @@ fi
   > "$postgres_tmp"
 chmod 600 "$postgres_tmp"
 docker run --rm --volumes-from "$api_id":ro --entrypoint tar \
-  node:26.13.0-trixie-slim -czf - -C /data/actual-api . \
+  node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 -czf - -C /data/actual-api . \
   > "$workspace_tmp"
 chmod 600 "$workspace_tmp"
 mv -f "$postgres_tmp" "${backup_prefix}.postgres.dump"

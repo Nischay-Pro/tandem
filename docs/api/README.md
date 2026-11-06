@@ -58,6 +58,10 @@ the resulting device token has 256 bits of random
 entropy; only its SHA-256 hash is stored in PostgreSQL. Pairing code hashes use
 HMAC with SHA-256 and the independent `PAIRING_CODE_HASH_KEY`. Set it to at
 least 32 random bytes and provide the same value to the API and pairing CLI.
+For production Compose, set `PAIRING_CODE_HASH_KEY_FILE` to the mounted secret
+path instead; the API and pairing CLI accept either setting and reject having
+both set. Production Compose uses the same file-based configuration for
+`DATABASE_URL` and the optional `ACTUAL_SERVER_PASSWORD`.
 Rotating the key invalidates pending pairing codes but does not affect paired
 devices. Device tokens expire after 90 days without an
 authenticated request; each successful request refreshes that idle window.

@@ -32,7 +32,10 @@ describe("Actual compatibility release pin", () => {
       packageManifest.dependencies["@actual-app/api"],
     );
     expect(compose).toContain(
-      `image: ghcr.io/actualbudget/actual:${supportedVersion}`,
+      `image: ghcr.io/actualbudget/actual:${supportedVersion}@sha256:`,
+    );
+    expect(compose).toMatch(
+      /image: ghcr\.io\/actualbudget\/actual:[^\s@]+@sha256:[a-f0-9]{64}/,
     );
     expect(mobileSupportedVersion).toBe(supportedVersion);
     expect(mobileUiSource).toMatch(

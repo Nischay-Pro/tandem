@@ -12,6 +12,7 @@ coverage/
 *.pem
 *.key
 secrets/
+**/.tandem-secrets/
 
 # Deliberately local-only scratch space for development and disposable data
 /.dev-tmp/

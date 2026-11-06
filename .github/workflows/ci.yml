@@ -164,4 +164,4 @@ jobs:
             --add-host actual-server:127.0.0.1 \
             -v "$GITHUB_WORKSPACE/deploy/nginx:/validation:ro" \
             -v "$RUNNER_TEMP/tandem-nginx-validation/nginx.conf:/tmp/nginx.conf:ro" \
-            nginx:1.30.6-alpine3.24 nginx -t -c /tmp/nginx.conf
+            nginx:1.30.6-alpine3.24@sha256:e9b2d7624fd7957f4ed44ae0a272d93fb73aeb8512ba8916f8118ae6143fd115 nginx -t -c /tmp/nginx.conf

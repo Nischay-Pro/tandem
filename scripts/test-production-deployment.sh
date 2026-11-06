@@ -6,6 +6,9 @@ scratch_root="$project_root/.dev-tmp/release-check"
 mkdir -p "$scratch_root"
 env_file="$(mktemp "$scratch_root/production.XXXXXX.env")"
 chmod 600 "$env_file"
+secret_dir="$scratch_root/secrets"
+mkdir -p "$secret_dir"
+chmod 700 "$secret_dir"
 project="tandem-release-check"
 edge_network="${project}-edge"
 compose=(docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml")
@@ -14,6 +17,7 @@ cleanup() {
   "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
   docker network rm "$edge_network" >/dev/null 2>&1 || true
   rm -f "$env_file"
+  rm -rf "$secret_dir"
   rm -f \
     "$scratch_root/tandem-backup.postgres.dump" \
     "$scratch_root/tandem-backup.actual-workspace.tar.gz" \
@@ -23,12 +27,20 @@ trap cleanup EXIT
 
 test_secret="release-check-$(date +%s)-synthetic"
 test_epoch="release-check-$(date +%s)"
+pairing_key="release-check-pairing-code-hash-key-32-bytes"
+printf '%s' "$test_secret" > "$secret_dir/postgres_password"
+printf 'postgresql://tandem_release_check:%s@postgres:5432/tandem_release_check' \
+  "$test_secret" > "$secret_dir/database_url"
+printf '%s' "$pairing_key" > "$secret_dir/pairing_code_hash_key"
+: > "$secret_dir/actual_server_password"
+chmod 444 "$secret_dir"/*
 cat > "$env_file" <<EOF
 POSTGRES_DB=tandem_release_check
 POSTGRES_USER=tandem_release_check
-POSTGRES_PASSWORD=$test_secret
-DATABASE_URL=postgresql://tandem_release_check:$test_secret@postgres:5432/tandem_release_check
-PAIRING_CODE_HASH_KEY=release-check-pairing-code-hash-key-32-bytes
+POSTGRES_PASSWORD_FILE=$secret_dir/postgres_password
+DATABASE_URL_FILE=$secret_dir/database_url
+PAIRING_CODE_HASH_KEY_FILE=$secret_dir/pairing_code_hash_key
+ACTUAL_SERVER_PASSWORD_FILE=$secret_dir/actual_server_password
 CHANGE_FEED_EPOCH=$test_epoch
 TRUST_PROXY=
 TANDEM_EDGE_NETWORK=$edge_network
@@ -39,6 +51,17 @@ EOF
 docker network create "$edge_network" >/dev/null
 "${compose[@]}" config --quiet
 "${compose[@]}" up --build --detach
+api_id="$("${compose[@]}" ps -q api)"
+api_environment="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$api_id")"
+if [[ "$api_environment" == *"$test_secret"* || "$api_environment" == *"$pairing_key"* ]]; then
+  echo "Production secrets were exposed in the API container environment." >&2
+  exit 1
+fi
+if [[ "$api_environment" != *"DATABASE_URL_FILE=/run/secrets/database_url"* || \
+  "$api_environment" != *"PAIRING_CODE_HASH_KEY_FILE=/run/secrets/pairing_code_hash_key"* ]]; then
+  echo "The production API did not receive its secret-file paths." >&2
+  exit 1
+fi
 
 wait_for_api() {
   local attempts="${1:-60}"

@@ -1,6 +1,7 @@
-import { isAbsolute } from "node:path";
-import { isIP } from "node:net";
 import { Buffer } from "node:buffer";
+import { readFileSync } from "node:fs";
+import { isIP } from "node:net";
+import { isAbsolute } from "node:path";
 import type { ActualConnectionConfig } from "./actual/actual-session.js";
 import { OperatorMessageError } from "./operator-message-error.js";
 
@@ -19,7 +20,7 @@ export type Environment = Record<string, string | undefined>;
 export const READINESS_TIMEOUT_MS = 2_000;
 
 export function parseApiConfig(environment: Environment): ApiConfig {
-  const databaseUrl = environment.DATABASE_URL?.trim();
+  const databaseUrl = readSecret(environment, "DATABASE_URL")?.trim();
   if (!databaseUrl) {
     throw new OperatorMessageError("DATABASE_URL is required");
   }
@@ -42,7 +43,10 @@ export function parseApiConfig(environment: Environment): ApiConfig {
     );
   }
 
-  const pairingCodeHashKey = environment.PAIRING_CODE_HASH_KEY?.trim();
+  const pairingCodeHashKey = readSecret(
+    environment,
+    "PAIRING_CODE_HASH_KEY",
+  )?.trim();
   if (!pairingCodeHashKey) {
     throw new OperatorMessageError("PAIRING_CODE_HASH_KEY is required");
   }
@@ -87,7 +91,7 @@ function parseActualConnection(
   environment: Environment,
 ): Extract<ActualConnectionConfig, { password: string }> | undefined {
   const serverUrl = environment.ACTUAL_SERVER_URL?.trim() || undefined;
-  const password = environment.ACTUAL_SERVER_PASSWORD;
+  const password = readSecret(environment, "ACTUAL_SERVER_PASSWORD");
   const configuredDataDirectory = environment.ACTUAL_API_DATA_DIR?.trim();
 
   if (!serverUrl && !password) {
@@ -130,6 +134,38 @@ function parseActualConnection(
     password,
     dataDir,
   };
+}
+
+function readSecret(
+  environment: Environment,
+  name: "DATABASE_URL" | "PAIRING_CODE_HASH_KEY" | "ACTUAL_SERVER_PASSWORD",
+): string | undefined {
+  const directValue = environment[name];
+  const fileVariable = `${name}_FILE`;
+  const fileValue = environment[fileVariable];
+
+  if (fileValue === undefined) {
+    return directValue;
+  }
+  if (directValue !== undefined) {
+    throw new OperatorMessageError(
+      `${name} and ${fileVariable} cannot both be set`,
+    );
+  }
+
+  const filePath = fileValue.trim();
+  if (!filePath) {
+    throw new OperatorMessageError(`${fileVariable} must not be empty`);
+  }
+  if (!isAbsolute(filePath)) {
+    throw new OperatorMessageError(`${fileVariable} must be an absolute path`);
+  }
+
+  try {
+    return readFileSync(filePath, "utf8").replace(/\r?\n$/, "");
+  } catch {
+    throw new OperatorMessageError(`${fileVariable} could not be read`);
+  }
 }
 
 function parseTrustedProxyAddresses(

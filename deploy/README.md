@@ -8,26 +8,49 @@ external Docker network used by the reverse proxy.
 
 ## Start the service
 
-Create a dedicated edge network and configure the deployment file with private
-credentials:
+Create a dedicated edge network, a private directory for Compose secrets, and
+the deployment environment file:
 
 ```sh
 docker network create tandem-edge
 cp deploy/compose/.env.example deploy/compose/.env
 chmod 600 deploy/compose/.env
+mkdir -m 700 -p deploy/compose/secrets
+postgres_password="$(openssl rand -hex 32)"
+printf '%s' "$postgres_password" > deploy/compose/secrets/postgres_password
+printf 'postgresql://tandem:%s@postgres:5432/tandem' "$postgres_password" > deploy/compose/secrets/database_url
+openssl rand -hex 32 > deploy/compose/secrets/pairing_code_hash_key
+: > deploy/compose/secrets/actual_server_password
+chmod 444 deploy/compose/secrets/*
+unset postgres_password
 ```
 
-Set `POSTGRES_PASSWORD` to a long random value. `DATABASE_URL` must use the
-same database, username, and password; URL-encode any reserved password
-characters. Set `PAIRING_CODE_HASH_KEY` to the output of `openssl rand -hex
-32` and provide the same value to the API and pairing CLI. Rotating it
-invalidates pending pairing codes but leaves paired devices working. Set
-`CHANGE_FEED_EPOCH` to a random stable value. Keep it unchanged
-for ordinary restarts. Use a new value after restoring a database backup so
-mobile devices discard cursors from the pre-restore history. Leave
-`ACTUAL_SERVER_URL` and `ACTUAL_SERVER_PASSWORD` empty to start without Actual
-integration. When enabled, the server release must match
+Compose secrets are mounted read-only inside the containers. The `.env` file
+contains their paths, not their values; the API reads the database URL, pairing
+key, and optional Actual password from those mounted files. Keep the secrets
+directory private (`chmod 700 deploy/compose/secrets`). The `0444` file mode
+lets the unprivileged API process read the bind-mounted files even when the
+deployment host uses a different numeric user ID. If Actual requires a
+password, write it to `actual_server_password` without a trailing newline and
+restore that file's mode to `0444`; leave it empty when Actual integration is
+disabled. Do not change the secret paths in `.env` unless you move these files.
+
+Set `CHANGE_FEED_EPOCH` in `deploy/compose/.env` to a random stable value. Keep
+it unchanged for ordinary restarts. Use a new value after restoring a database
+backup so mobile devices discard cursors from the pre-restore history. Leave
+`ACTUAL_SERVER_URL` empty to start without Actual integration. When enabled,
+the server release must match
 [`docs/actual-compatibility.md`](../docs/actual-compatibility.md).
+
+When moving an existing deployment to this Compose file, populate the secret
+files with the credentials already in use. In particular, the Postgres
+password secret and database URL must match the existing database role; setting
+`POSTGRES_PASSWORD_FILE` does not rotate a password in an initialized volume.
+The existing PostgreSQL and Actual workspace volumes are preserved.
+
+The production Postgres and Node images are pinned by multi-platform registry
+digests. Review and update those digests together with their version tags when
+adopting a new image release.
 
 Attach the existing Nginx container to `tandem-edge`, or set
 `TANDEM_EDGE_NETWORK` to its existing external Docker network. Add the two
@@ -77,8 +100,10 @@ docker compose --project-directory "$PWD" \
 Backups contain PostgreSQL coordination records and the API's Actual workspace.
 They may contain transaction data, notes, and decrypted Actual budget files.
 Store them encrypted at rest, restrict access, and keep them off the deployment
-host. Back up `deploy/compose/.env` separately in an approved secrets manager:
-it contains database credentials and the change-feed epoch.
+host. Back up `deploy/compose/.env` and `deploy/compose/secrets/` separately in
+an approved secrets manager. The `.env` contains the change-feed epoch and
+secret file paths; the secret files contain the database and pairing
+credentials.
 
 Run a backup to a protected prefix in a directory accessible only to the
 operator; output files are created with mode 600. The API is briefly stopped while its Actual

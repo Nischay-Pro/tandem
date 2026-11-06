@@ -11,11 +11,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir -p "$context_root/deploy/compose" "$context_root/certs" "$context_root/secrets"
+mkdir -p "$context_root/deploy/compose" "$context_root/certs" "$context_root/secrets" "$context_root/.tandem-secrets"
 cp "$project_root/.dockerignore" "$context_root/.dockerignore"
 cp "$project_root/deploy/compose/.env.example" "$context_root/deploy/compose/.env.example"
 cat > "$context_root/Dockerfile" <<'EOF'
-FROM node:26.13.0-trixie-slim
+FROM node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072
 WORKDIR /payload
 COPY . .
 EOF
@@ -37,6 +37,9 @@ EOF
 cat > "$context_root/secrets/database.json" <<'EOF'
 {"password":"canary-secret-directory"}
 EOF
+cat > "$context_root/.tandem-secrets/actual-server-password" <<'EOF'
+canary-compose-secret
+EOF
 
 docker build --quiet --tag "$image" "$context_root" >/dev/null
 docker run --rm --entrypoint /bin/sh "$image" -ec '
@@ -46,7 +49,8 @@ docker run --rm --entrypoint /bin/sh "$image" -ec '
     /payload/deploy/compose/.env.local \
     /payload/server.key \
     /payload/certs/server.pem \
-    /payload/secrets/database.json; do
+    /payload/secrets/database.json \
+    /payload/.tandem-secrets/actual-server-password; do
     if [ -e "$path" ]; then
       echo "A canary secret entered the Docker build context: $path" >&2
       exit 1

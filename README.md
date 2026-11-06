@@ -49,12 +49,12 @@ Change to the directory containing your existing `docker-compose.yml` (use its a
 ```yaml
 services:
   tandem-postgres:
-    image: postgres:18.6-alpine3.24
+    image: postgres:18.6-alpine3.24@sha256:123b17998ccaf47e53b502e8c6a1e79afd8f579c6f3eec83c563da026f957395
     restart: unless-stopped
     environment:
       POSTGRES_DB: tandem
       POSTGRES_USER: tandem
-      POSTGRES_PASSWORD: ${TANDEM_DB_PASSWORD:?Set TANDEM_DB_PASSWORD in .env.tandem}
+      POSTGRES_PASSWORD_FILE: /run/secrets/tandem_postgres_password
     volumes:
       - tandem-postgres-data:/var/lib/postgresql
     healthcheck:
@@ -65,6 +65,8 @@ services:
       retries: 20
     networks:
       - tandem-data
+    secrets:
+      - tandem_postgres_password
 
   tandem-api:
     image: tandem-for-actual-api:26.11.0-local
@@ -78,14 +80,14 @@ services:
     security_opt:
       - no-new-privileges:true
     environment:
-      DATABASE_URL: postgresql://tandem:${TANDEM_DB_PASSWORD:?Set TANDEM_DB_PASSWORD in .env.tandem}@tandem-postgres:5432/tandem
-      PAIRING_CODE_HASH_KEY: ${PAIRING_CODE_HASH_KEY:?Set PAIRING_CODE_HASH_KEY in .env.tandem}
+      DATABASE_URL_FILE: /run/secrets/tandem_database_url
+      PAIRING_CODE_HASH_KEY_FILE: /run/secrets/tandem_pairing_code_hash_key
       HOST: 0.0.0.0
       PORT: 19753
       CHANGE_FEED_EPOCH: ${CHANGE_FEED_EPOCH:?Set CHANGE_FEED_EPOCH in .env.tandem}
       TRUST_PROXY: ${TRUST_PROXY:-}
       ACTUAL_SERVER_URL: ${ACTUAL_SERVER_URL:-http://actual-server:5006}
-      ACTUAL_SERVER_PASSWORD: ${ACTUAL_SERVER_PASSWORD:?Set ACTUAL_SERVER_PASSWORD in .env.tandem}
+      ACTUAL_SERVER_PASSWORD_FILE: /run/secrets/tandem_actual_server_password
       ACTUAL_API_DATA_DIR: /data/actual-api
     depends_on:
       tandem-postgres:
@@ -97,6 +99,20 @@ services:
     networks:
       - tandem-data
       - default
+    secrets:
+      - tandem_database_url
+      - tandem_pairing_code_hash_key
+      - tandem_actual_server_password
+
+secrets:
+  tandem_postgres_password:
+    file: ${TANDEM_POSTGRES_PASSWORD_FILE:?Set TANDEM_POSTGRES_PASSWORD_FILE in .env.tandem}
+  tandem_database_url:
+    file: ${TANDEM_DATABASE_URL_FILE:?Set TANDEM_DATABASE_URL_FILE in .env.tandem}
+  tandem_pairing_code_hash_key:
+    file: ${TANDEM_PAIRING_CODE_HASH_KEY_FILE:?Set TANDEM_PAIRING_CODE_HASH_KEY_FILE in .env.tandem}
+  tandem_actual_server_password:
+    file: ${TANDEM_ACTUAL_SERVER_PASSWORD_FILE:?Set TANDEM_ACTUAL_SERVER_PASSWORD_FILE in .env.tandem}
 
 volumes:
   tandem-postgres-data:
@@ -109,18 +125,44 @@ networks:
 
 The API joins the Compose project's `default` network so it can reach Actual and a proxy in the same project. PostgreSQL is isolated on `tandem-data`. If Actual or the proxy uses a named network, replace `default` under `tandem-api` with the shared network name and ensure the Actual service and proxy join it too. `expose` makes the API available to containers on that network without publishing a host port. If the reverse proxy runs directly on the host, add `ports: ["127.0.0.1:19753:19753"]` to `tandem-api` and point the proxy at `127.0.0.1:19753`.
 
-Keep Tandem's credentials in a separate, private `.env.tandem` file beside your Compose file. Generate a database password and pairing-code hash key with `openssl rand -hex 32`, and a stable change-feed value with `openssl rand -hex 24`:
+Keep Tandem's secret files in a private directory beside your Compose file. Compose mounts them read-only at `/run/secrets`; Tandem reads the values from those files, so they do not appear in the container environment. Create the directory and generate the database password, database URL, and pairing-code key:
+
+```sh
+mkdir -m 700 -p .tandem-secrets
+tandem_db_password="$(openssl rand -hex 32)"
+printf '%s' "$tandem_db_password" > .tandem-secrets/postgres_password
+printf 'postgresql://tandem:%s@tandem-postgres:5432/tandem' "$tandem_db_password" > .tandem-secrets/database_url
+openssl rand -hex 32 > .tandem-secrets/pairing_code_hash_key
+: > .tandem-secrets/actual_server_password
+chmod 444 .tandem-secrets/*
+unset tandem_db_password
+```
+
+If Actual requires a password, make the secret writable for the deployment account, enter the password without echoing it, then restore the read-only container mode:
+
+```sh
+chmod 600 .tandem-secrets/actual_server_password
+read -r -s -p "Actual server password: " actual_server_password
+printf '%s' "$actual_server_password" > .tandem-secrets/actual_server_password
+unset actual_server_password
+chmod 444 .tandem-secrets/actual_server_password
+```
+
+Keep the directory private (`chmod 700 .tandem-secrets`); the files are readable inside the container because Compose file-backed secrets use the source file permissions. If Actual has no password, leave the file empty.
+
+The separate `.env.tandem` file contains paths and non-secret settings only:
 
 ```dotenv
-TANDEM_DB_PASSWORD=<paste-the-generated-database-password>
-PAIRING_CODE_HASH_KEY=<paste-a-separate-openssl-rand-hex-32-value>
+TANDEM_POSTGRES_PASSWORD_FILE=.tandem-secrets/postgres_password
+TANDEM_DATABASE_URL_FILE=.tandem-secrets/database_url
+TANDEM_PAIRING_CODE_HASH_KEY_FILE=.tandem-secrets/pairing_code_hash_key
+TANDEM_ACTUAL_SERVER_PASSWORD_FILE=.tandem-secrets/actual_server_password
 CHANGE_FEED_EPOCH=<paste-the-generated-change-feed-value>
 ACTUAL_SERVER_URL=http://actual-server:5006
-ACTUAL_SERVER_PASSWORD=<your-Actual-server-password>
 TRUST_PROXY=
 ```
 
-Replace the example Actual service name and password with the values for your server. Keep the pairing-code hash key the same for the API and pairing CLI; rotating it invalidates pending pairing codes but leaves paired devices working. Restrict this file to the deployment account with `chmod 600 .env.tandem`. Keep `CHANGE_FEED_EPOCH` stable across normal restarts; see [deployment and restore guidance](deploy/README.md) before changing it or restoring a backup. If the existing Actual stack has an `.env` file, pass both files so its current settings remain available and Tandem's values are added:
+Replace the example Actual service name, URL, and password with the values for your server. Keep the pairing-code hash key file stable for the API and pairing CLI; rotating it invalidates pending pairing codes but leaves paired devices working. Restrict `.env.tandem` to the deployment account with `chmod 600 .env.tandem`. Keep `CHANGE_FEED_EPOCH` stable across normal restarts; see [deployment and restore guidance](deploy/README.md) before changing it or restoring a backup. If the existing Actual stack has an `.env` file, pass both files so its current settings remain available and Tandem's paths are added:
 
 ```sh
 docker compose \

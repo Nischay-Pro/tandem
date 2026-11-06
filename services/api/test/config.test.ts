@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseApiConfig as parseRawApiConfig } from "../src/config.js";
 
@@ -10,6 +13,25 @@ function parseApiConfig(environment: Record<string, string | undefined>) {
     PAIRING_CODE_HASH_KEY: testPairingCodeHashKey,
     ...environment,
   });
+}
+
+function withSecretFiles<T>(
+  contents: Record<string, string>,
+  run: (paths: Record<string, string>) => T,
+): T {
+  const directory = mkdtempSync(join(tmpdir(), "tandem-config-secrets-"));
+  try {
+    const paths = Object.fromEntries(
+      Object.entries(contents).map(([name, content]) => {
+        const path = join(directory, name.toLowerCase());
+        writeFileSync(path, content);
+        return [name, path];
+      }),
+    );
+    return run(paths);
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
 }
 
 describe("parseApiConfig", () => {
@@ -211,6 +233,69 @@ describe("parseApiConfig", () => {
         PAIRING_CODE_HASH_KEY: "x".repeat(32),
       }).pairingCodeHashKey,
     ).toBe("x".repeat(32));
+  });
+
+  it("reads the database URL and pairing key from secret files", () => {
+    withSecretFiles(
+      {
+        DATABASE_URL: `${databaseUrl}\n`,
+        PAIRING_CODE_HASH_KEY: `${testPairingCodeHashKey}\n`,
+      },
+      (paths) => {
+        expect(
+          parseApiConfig({
+            DATABASE_URL: undefined,
+            DATABASE_URL_FILE: paths.DATABASE_URL,
+            PAIRING_CODE_HASH_KEY: undefined,
+            PAIRING_CODE_HASH_KEY_FILE: paths.PAIRING_CODE_HASH_KEY,
+          }),
+        ).toMatchObject({
+          databaseUrl,
+          pairingCodeHashKey: testPairingCodeHashKey,
+        });
+      },
+    );
+  });
+
+  it("reads the optional Actual password from a secret file", () => {
+    withSecretFiles(
+      { ACTUAL_SERVER_PASSWORD: " server secret \n" },
+      (paths) => {
+        expect(
+          parseApiConfig({
+            DATABASE_URL: databaseUrl,
+            ACTUAL_SERVER_URL: "https://budget.example.com",
+            ACTUAL_SERVER_PASSWORD_FILE: paths.ACTUAL_SERVER_PASSWORD,
+          }).actual?.password,
+        ).toBe(" server secret ");
+      },
+    );
+  });
+
+  it("rejects supplying a secret both directly and through a file", () => {
+    withSecretFiles({ DATABASE_URL: databaseUrl }, (paths) => {
+      expect(() =>
+        parseApiConfig({
+          DATABASE_URL: databaseUrl,
+          DATABASE_URL_FILE: paths.DATABASE_URL,
+        }),
+      ).toThrow("DATABASE_URL and DATABASE_URL_FILE cannot both be set");
+    });
+  });
+
+  it("requires secret-file paths to be absolute and readable", () => {
+    expect(() =>
+      parseApiConfig({ DATABASE_URL: undefined, DATABASE_URL_FILE: "secret" }),
+    ).toThrow("DATABASE_URL_FILE must be an absolute path");
+    expect(() =>
+      parseApiConfig({
+        DATABASE_URL: undefined,
+        DATABASE_URL_FILE: join(tmpdir(), `missing-${process.pid}-secret`),
+      }),
+    ).toThrow("DATABASE_URL_FILE could not be read");
+    expect(() =>
+      parseApiConfig({ DATABASE_URL: undefined, DATABASE_URL_FILE: "  " }),
+    ).toThrow("DATABASE_URL_FILE must not be empty");
   });
 
   it("rejects malformed database URLs", () => {
