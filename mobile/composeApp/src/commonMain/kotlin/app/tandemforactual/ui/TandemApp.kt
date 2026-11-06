@@ -2832,6 +2832,59 @@ private fun BodyText(text: String) {
     Text(text, color = tandemPalette.muted, fontSize = TandemTypography.body, lineHeight = TandemTypography.bodyLineHeight)
 }
 
+private enum class InlineMessageKind {
+    ERROR,
+    WARNING,
+    INFO,
+}
+
+@Composable
+private fun InlineMessage(
+    text: String,
+    kind: InlineMessageKind = InlineMessageKind.WARNING,
+    modifier: Modifier = Modifier,
+) {
+    val palette = tandemPalette
+    val color =
+        when (kind) {
+            InlineMessageKind.ERROR -> palette.negative
+            InlineMessageKind.WARNING -> palette.warning
+            InlineMessageKind.INFO -> palette.muted
+        }
+    Text(
+        text,
+        modifier = modifier,
+        color = color,
+        fontSize = TandemTypography.compactBody,
+        lineHeight = TandemTypography.bodyLineHeight,
+    )
+}
+
+@Composable
+private fun EmptyState(
+    title: String,
+    message: String? = null,
+    modifier: Modifier = Modifier,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+    ) {
+        Text(
+            title,
+            color = tandemPalette.text,
+            fontSize = TandemTypography.action,
+            fontWeight = FontWeight.SemiBold,
+        )
+        if (message != null) BodyText(message)
+        if (actionLabel != null && onAction != null) {
+            SecondaryButton(actionLabel, onClick = onAction)
+        }
+    }
+}
+
 @Composable
 private fun AnimatedStatusText(
     text: String,
@@ -4377,21 +4430,9 @@ private fun PairingCodeScreen(
             textAlign = TextAlign.Center,
         )
         InfoBubble("This one-time code expires after five minutes. Tandem doesn’t save it or your budget password.")
-        mobileSession.pairingError?.let { error ->
-            Text(
-                error,
-                color = tandemPalette.warning,
-                fontSize = TandemTypography.compactBody,
-                lineHeight = TandemTypography.bodyLineHeight,
-            )
-        }
+        mobileSession.pairingError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
         mobileSession.credentialStorageError?.let { error ->
-            Text(
-                error,
-                color = tandemPalette.warning,
-                fontSize = TandemTypography.compactBody,
-                lineHeight = TandemTypography.bodyLineHeight,
-            )
+            InlineMessage(error, InlineMessageKind.ERROR)
             SecondaryButton(
                 if (mobileSession.isRestoringStoredSession) "Checking storage" else "Retry saved pairing",
                 enabled = !mobileSession.isRestoringStoredSession,
@@ -4429,9 +4470,7 @@ private fun PairingResultScreen(
             }
             InfoBubble("Pairing codes and budget passwords are never saved.")
         }
-        mobileSession.budgetError?.let { error ->
-            Text(error, color = palette.warning, fontSize = TandemTypography.compactBody, lineHeight = TandemTypography.bodyLineHeight)
-        }
+        mobileSession.budgetError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
         PrimaryButton("Choose a budget", enabled = mobileSession.pairedDevice != null) {
             navigation.open(AppRoute.BUDGET_CHOOSER)
         }
@@ -4504,13 +4543,8 @@ private fun BudgetChooserScreen(
             mobileSession.isLoadingBudgets -> BodyText("Loading budgets")
             mobileSession.budgets.isEmpty() && mobileSession.isAuthenticated -> {
                 mobileSession.budgetError?.let { error ->
-                    Text(
-                        error,
-                        color = tandemPalette.warning,
-                        fontSize = TandemTypography.compactBody,
-                        lineHeight = TandemTypography.bodyLineHeight,
-                    )
-                } ?: BodyText("No budgets are available to this paired device.")
+                    InlineMessage(error, InlineMessageKind.ERROR)
+                } ?: EmptyState("No budgets available", "This paired device has no budget access.")
                 SecondaryButton("Retry loading budgets", onClick = onRefreshBudgets)
             }
             mobileSession.budgets.isEmpty() -> {
@@ -4524,7 +4558,7 @@ private fun BudgetChooserScreen(
             }
         }
         mobileSession.budgetError?.takeIf { selectableBudgets.isNotEmpty() }?.let { error ->
-            Text(error, color = tandemPalette.warning, fontSize = TandemTypography.label)
+            InlineMessage(error, InlineMessageKind.ERROR)
         }
         PrimaryButton(
             if (state.selectedBudgetEncrypted && state.encryptedPassword.isBlank() && !cachedBudgetSelected) {
@@ -4740,13 +4774,11 @@ private fun BudgetScreen(
             if (liveBudgetMonth == null) {
                 item(key = "budget-month-empty") {
                     SurfaceCard {
-                        Column(
-                            Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                            verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                        ) {
-                            Text("No plan for this month is cached", color = palette.text, fontWeight = FontWeight.SemiBold)
-                            BodyText("Sync a month available in Actual, or choose a different planning period.")
-                        }
+                        EmptyState(
+                            "No plan for this month",
+                            "Sync a month available in Actual, or choose a different planning period.",
+                            modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                        )
                     }
                 }
             } else {
@@ -5250,8 +5282,13 @@ private fun CategoryGroupScreen(
                 ?: liveBudgetMonth?.groups?.firstOrNull()
         PageLazyColumn {
             if (group == null) {
-                item(key = "category-group-empty-title") { Heading("Category group", state.selectedMonth) }
-                item(key = "category-group-empty-message") { BodyText("No synced category group is available for this month.") }
+                item(key = "category-group-empty-message") {
+                    EmptyState(
+                        "No category group",
+                        "No category group is available for this month.",
+                        modifier = Modifier.padding(horizontal = TandemSpacing.large),
+                    )
+                }
             } else {
                 item(key = "category-group-title:${group.id}") { Heading(group.name, state.selectedMonth) }
                 item(key = "category-group-summary:${group.id}") {
@@ -5425,13 +5462,11 @@ private fun AccountsScreen(
             if (liveAccounts.isEmpty()) {
                 item(key = "accounts-empty") {
                     SurfaceCard {
-                        Column(
-                            Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                            verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                        ) {
-                            Text("No accounts are cached", color = tandemPalette.text, fontWeight = FontWeight.SemiBold)
-                            BodyText("Sync this budget to load its Actual account list and balances.")
-                        }
+                        EmptyState(
+                            "No accounts yet",
+                            "Sync this budget to load its account list and balances.",
+                            modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                        )
                     }
                 }
             } else {
@@ -5514,11 +5549,7 @@ private fun AccountDetailScreen(
                 )
                 if (accountActivity.isEmpty()) {
                     SurfaceCard {
-                        Text(
-                            "No recent activity for this account.",
-                            modifier = Modifier.padding(TandemSpacing.large),
-                            color = tandemPalette.muted,
-                        )
+                        EmptyState("No recent activity", modifier = Modifier.padding(TandemSpacing.large))
                     }
                 } else {
                     SectionCard("Recent activity", account.name, "See all", onClick = { navigation.selectTab(AppRoute.ACTIVITY) }) {
@@ -5550,7 +5581,7 @@ private fun AccountDetailScreen(
         )
         if (accountActivity.isEmpty()) {
             SurfaceCard {
-                Text("No recent activity for this account.", modifier = Modifier.padding(TandemSpacing.large), color = tandemPalette.muted)
+                EmptyState("No recent activity", modifier = Modifier.padding(TandemSpacing.large))
             }
         } else {
             SectionCard(account.name, "Recent activity", "See all", onClick = { navigation.selectTab(AppRoute.ACTIVITY) }) {
@@ -5648,7 +5679,7 @@ private fun ActivityScreen(
             if (liveTransactions.isEmpty()) {
                 item(key = "activity-empty") {
                     SectionCard("Recent transactions", "Newest first") {
-                        BodyText("No transactions are saved on this device yet. Sync the budget to refresh.")
+                        EmptyState("No transactions yet", "Sync the budget to refresh.", modifier = Modifier.padding(TandemSpacing.large))
                     }
                 }
             } else {
@@ -5908,16 +5939,15 @@ private fun ActivitySearchScreen(
             }
         } else if (resultTransactions.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text(
+                EmptyState(
                     if (filters.isEmpty() &&
                         search.isBlank()
                     ) {
-                        "No transactions are available in this local budget."
+                        "No transactions yet"
                     } else {
-                        "No matching transactions."
+                        "No matching transactions"
                     },
-                    color = tandemPalette.muted,
-                    fontSize = TandemTypography.body,
+                    modifier = Modifier.padding(TandemSpacing.large),
                 )
             }
         } else {
@@ -6318,7 +6348,7 @@ private fun TransactionFormScreen(
                         onShowKeypad = { keypadVisible = true },
                     )
                     AnimatedReveal(visible = amountEntryMessage != null) {
-                        Text(amountEntryMessage.orEmpty(), color = tandemPalette.warning, fontSize = TandemTypography.compactBody)
+                        InlineMessage(amountEntryMessage.orEmpty(), InlineMessageKind.ERROR)
                     }
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         TransactionTypeChip(state.transactionType) {
@@ -6546,9 +6576,7 @@ private fun SelectorScreen(
         TextFieldCard("Search", query, { query = it }, "Start typing")
         val filtered = values.filter { it.label.contains(query, ignoreCase = true) }
         if (filtered.isEmpty()) {
-            SurfaceCard {
-                Text("No matches", modifier = Modifier.padding(TandemSpacing.large), color = tandemPalette.muted)
-            }
+            SurfaceCard { EmptyState("No matches", modifier = Modifier.padding(TandemSpacing.large)) }
         }
         filtered.forEach { item ->
             ChoiceRow(
@@ -6788,12 +6816,9 @@ private fun SyncCenterScreen(
             if (attention.isEmpty()) {
                 item(key = "pending-changes-empty") {
                     AnimatedAttentionContent(showingAttention = false) { _ ->
-                        Text(
-                            "No pending changes.",
+                        EmptyState(
+                            "No pending changes",
                             modifier = Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
-                            color = tandemPalette.muted,
-                            fontSize = TandemTypography.body,
-                            lineHeight = TandemTypography.bodyLineHeight,
                         )
                     }
                 }
@@ -6905,7 +6930,7 @@ private fun ConflictInboxScreen(
                 item(key = "conflicts-empty") {
                     AnimatedAttentionContent(showingAttention = false, animateSizeChanges = true) { _ ->
                         SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
-                            Column(Modifier.padding(TandemSpacing.large)) { BodyText("No changes need review.") }
+                            EmptyState("No changes need review", modifier = Modifier.padding(TandemSpacing.large))
                         }
                     }
                 }
@@ -8021,7 +8046,7 @@ private fun MerchantIconLicensesScreen(
                     fontSize = TandemTypography.label,
                 )
                 if (filteredNotices.isEmpty()) {
-                    BodyText("No icons match that search.")
+                    EmptyState("No icons match", "Try another search.")
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxWidth().weight(1f),

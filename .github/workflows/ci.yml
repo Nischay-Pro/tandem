@@ -58,6 +58,9 @@ jobs:
       - name: Check mobile UI apostrophes
         run: python3 scripts/check-mobile-ui-apostrophes.py
 
+      - name: Check mobile design tokens
+        run: python3 scripts/check-mobile-design-tokens.py
+
       - name: Compile and test Android, JVM, and iOS data and client targets
         working-directory: mobile
         run: >-
