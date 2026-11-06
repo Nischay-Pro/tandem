@@ -10,8 +10,14 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -108,6 +114,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -127,6 +136,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.TandemApiClient
@@ -193,6 +203,7 @@ import com.composables.icons.lucide.PawPrint
 import com.composables.icons.lucide.Plane
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Receipt
+import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.Server
 import com.composables.icons.lucide.ShieldCheck
@@ -2580,15 +2591,15 @@ private fun ScreenContent(
             BudgetChooserScreen(state, mobileSession, navigation, onSelectBudget, onRefreshBudgets, onOpenSelectedBudget)
         AppRoute.UNLOCK_BUDGET -> UnlockBudgetScreen(state, navigation)
         AppRoute.FIRST_SYNC -> FirstSyncScreen(state, mobileSession, navigation, onRetrySync)
-        AppRoute.BUDGET -> BudgetScreen(state, navigation, mobileSession, liveTransactions, liveBudgetMonth)
+        AppRoute.BUDGET -> BudgetScreen(state, navigation, mobileSession, liveTransactions, liveBudgetMonth, onSyncNow)
         AppRoute.MONTH_PICKER -> MonthPickerScreen(state, navigation)
         AppRoute.CATEGORY_GROUP -> CategoryGroupScreen(state, navigation, liveBudgetMonth)
         AppRoute.CATEGORY_DETAIL -> CategoryDetailScreen(state, navigation, liveBudgetMonth)
-        AppRoute.ACCOUNTS -> AccountsScreen(state, navigation, liveAccounts)
+        AppRoute.ACCOUNTS -> AccountsScreen(state, navigation, liveAccounts, mobileSession.isSyncing, onSyncNow)
         AppRoute.ACCOUNT_DETAIL -> AccountDetailScreen(state, navigation, liveAccounts, liveTransactions)
         AppRoute.ACCOUNT_OPTIONS -> AccountOptionsScreen(state, liveAccounts)
         AppRoute.RECONCILIATION -> ReconciliationScreen(state)
-        AppRoute.ACTIVITY -> ActivityScreen(state, navigation, liveTransactions)
+        AppRoute.ACTIVITY -> ActivityScreen(state, navigation, liveTransactions, mobileSession.isSyncing, onSyncNow)
         AppRoute.ACTIVITY_SEARCH -> ActivitySearchScreen(state, mobileSession, navigation, merchantIconMatcher)
         AppRoute.ACTIVITY_FILTER -> ActivitySearchScreen(state, mobileSession, navigation, merchantIconMatcher)
         AppRoute.TRANSACTION_DETAIL -> TransactionDetailScreen(state, mobileSession, navigation, merchantIconMatcher)
@@ -2737,16 +2748,130 @@ private fun PageLazyColumn(
     verticalSpacing: androidx.compose.ui.unit.Dp = TandemSpacing.large,
     horizontalPadding: androidx.compose.ui.unit.Dp = TandemSpacing.screen,
     modifier: Modifier = Modifier,
+    isRefreshing: Boolean = false,
+    onRefresh: (() -> Unit)? = null,
     content: LazyListScope.() -> Unit,
 ) {
     val routeListState = LocalRouteLazyListState.current ?: rememberLazyListState()
-    LazyColumn(
-        state = routeListState,
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = TandemSpacing.medium),
-        verticalArrangement = Arrangement.spacedBy(verticalSpacing),
-        content = content,
-    )
+    if (onRefresh == null) {
+        LazyColumn(
+            state = routeListState,
+            modifier = modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = TandemSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(verticalSpacing),
+            content = content,
+        )
+        return
+    }
+
+    val density = LocalDensity.current
+    val refreshThresholdPx = with(density) { 72.dp.toPx() }
+    var pullDistancePx by remember(routeListState) { mutableStateOf(0f) }
+    val latestIsRefreshing by rememberUpdatedState(isRefreshing)
+    val latestOnRefresh by rememberUpdatedState(onRefresh)
+    val refreshConnection =
+        remember(routeListState, refreshThresholdPx) {
+            object : NestedScrollConnection {
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    if (source != NestedScrollSource.UserInput) return Offset.Zero
+                    val atTop = routeListState.firstVisibleItemIndex == 0 && routeListState.firstVisibleItemScrollOffset == 0
+                    if (available.y <= 0f || !atTop || latestIsRefreshing) return Offset.Zero
+                    val remainingPull = (refreshThresholdPx * 1.5f - pullDistancePx).coerceAtLeast(0f)
+                    val acceptedPull = available.y.coerceAtMost(remainingPull)
+                    pullDistancePx += acceptedPull
+                    return Offset(x = 0f, y = acceptedPull)
+                }
+
+                override fun onPreScroll(
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    if (source != NestedScrollSource.UserInput) return Offset.Zero
+                    if (available.y >= 0f || pullDistancePx <= 0f) return Offset.Zero
+                    val consumedPull = (-available.y).coerceAtMost(pullDistancePx)
+                    pullDistancePx -= consumedPull
+                    return Offset(x = 0f, y = -consumedPull)
+                }
+
+                override suspend fun onPreFling(available: Velocity): Velocity {
+                    releasePull()
+                    return Velocity.Zero
+                }
+
+                override suspend fun onPostFling(
+                    consumed: Velocity,
+                    available: Velocity,
+                ): Velocity {
+                    releasePull()
+                    return Velocity.Zero
+                }
+
+                private fun releasePull() {
+                    val shouldRefresh = pullDistancePx >= refreshThresholdPx && !latestIsRefreshing
+                    pullDistancePx = 0f
+                    if (shouldRefresh) latestOnRefresh()
+                }
+            }
+        }
+    val pullProgress = (pullDistancePx / refreshThresholdPx).coerceIn(0f, 1f)
+    val indicatorTarget = if (isRefreshing) 44.dp else with(density) { pullDistancePx.toDp().coerceAtMost(64.dp) }
+    val indicatorOffset by
+        animateDpAsState(
+            targetValue = indicatorTarget,
+            animationSpec = spring(),
+            label = "pull-to-refresh-offset",
+        )
+    Box(modifier.fillMaxSize()) {
+        LazyColumn(
+            state = routeListState,
+            modifier = Modifier.fillMaxSize().nestedScroll(refreshConnection),
+            contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = TandemSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(verticalSpacing),
+            content = content,
+        )
+        if (isRefreshing || pullDistancePx > 0f) {
+            val rotation =
+                if (isRefreshing) {
+                    val transition = rememberInfiniteTransition(label = "pull-to-refresh-spin")
+                    val spin by
+                        transition.animateFloat(
+                            initialValue = 0f,
+                            targetValue = 360f,
+                            animationSpec = infiniteRepeatable(tween(800, easing = LinearEasing), RepeatMode.Restart),
+                            label = "pull-to-refresh-rotation",
+                        )
+                    spin
+                } else {
+                    pullProgress * 360f
+                }
+            Box(
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .offset(y = (indicatorOffset - 18.dp).coerceAtLeast(0.dp))
+                    .size(36.dp)
+                    .graphicsLayer {
+                        val visibleProgress = if (isRefreshing) 1f else (pullDistancePx / with(density) { 20.dp.toPx() }).coerceIn(0.2f, 1f)
+                        alpha = visibleProgress
+                        scaleX = 0.72f + 0.28f * visibleProgress
+                        scaleY = 0.72f + 0.28f * visibleProgress
+                    }.clip(CircleShape)
+                    .background(tandemPalette.raised)
+                    .border(1.dp, tandemPalette.border, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Lucide.RefreshCw,
+                    contentDescription = if (isRefreshing) "Refreshing" else "Pull to refresh",
+                    modifier = Modifier.size(18.dp).graphicsLayer { rotationZ = rotation },
+                    tint = tandemPalette.accent,
+                )
+            }
+        }
+    }
 }
 
 private fun LazyItemScope.tandemListItemModifier(reduceMotion: Boolean): Modifier =
@@ -4220,6 +4345,7 @@ private fun BudgetScreen(
     mobileSession: TandemMobileSession,
     liveTransactions: List<TransactionItem>,
     liveBudgetMonth: LiveBudgetMonthSummary?,
+    onSyncNow: () -> Unit,
 ) {
     val palette = tandemPalette
     val compact = state.homeLayout == "Compact"
@@ -4229,6 +4355,8 @@ private fun BudgetScreen(
         PageLazyColumn(
             verticalSpacing = sectionSpacing,
             horizontalPadding = if (compact) 16.dp else 20.dp,
+            isRefreshing = mobileSession.isSyncing,
+            onRefresh = onSyncNow.takeIf { state.selectedBudgetId.isNotBlank() },
         ) {
             val conflictCount = mobileSession.pendingWrites.count { it.status == "conflict" }
             item(key = "budget-conflict-alert") {
@@ -4906,6 +5034,8 @@ private fun AccountsScreen(
     state: AppState,
     navigation: AppNavigation,
     liveAccounts: List<LiveAccountSummary>,
+    isRefreshing: Boolean,
+    onSyncNow: () -> Unit,
 ) {
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     val model =
@@ -4973,7 +5103,10 @@ private fun AccountsScreen(
             )
         }
 
-    PageLazyColumn {
+    PageLazyColumn(
+        isRefreshing = isRefreshing,
+        onRefresh = onSyncNow.takeIf { isLiveBudget },
+    ) {
         if (model.isSample) item(key = "accounts-preview-banner") { SampleBanner() }
         item(key = "accounts-title") { Heading("Balances", model.subtitle) }
         item(key = "accounts-summary") {
@@ -5165,6 +5298,8 @@ private fun ActivityScreen(
     state: AppState,
     navigation: AppNavigation,
     liveTransactions: List<TransactionItem>,
+    isRefreshing: Boolean,
+    onSyncNow: () -> Unit,
 ) {
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     val transactions = if (isLiveBudget) liveTransactions else previewTransactions
@@ -5192,7 +5327,10 @@ private fun ActivityScreen(
                 }
             }
     }
-    PageLazyColumn {
+    PageLazyColumn(
+        isRefreshing = isRefreshing,
+        onRefresh = onSyncNow.takeIf { isLiveBudget },
+    ) {
         if (!isLiveBudget) item(key = "activity-preview-banner") { SampleBanner() }
         item(key = "activity-search-entry") {
             SurfaceCard(onClick = { navigation.open(AppRoute.ACTIVITY_SEARCH) }) {

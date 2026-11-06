@@ -5,6 +5,8 @@ package app.tandemforactual.ui
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.MaterialTheme
+import androidx.compose.material.darkColors
+import androidx.compose.material.lightColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -200,7 +202,39 @@ internal fun TandemTheme(
         LocalTandemPalette provides animatedPalette,
         LocalReduceMotion provides reduceMotion,
     ) {
-        MaterialTheme(content = content)
+        val materialColors =
+            if (dark) {
+                darkColors(
+                    primary = animatedPalette.accent,
+                    primaryVariant = animatedPalette.accent,
+                    secondary = animatedPalette.accent,
+                    secondaryVariant = animatedPalette.accent,
+                    background = animatedPalette.background,
+                    surface = animatedPalette.raised,
+                    error = animatedPalette.negative,
+                    onPrimary = animatedPalette.accentContent,
+                    onSecondary = animatedPalette.accentContent,
+                    onBackground = animatedPalette.text,
+                    onSurface = animatedPalette.text,
+                    onError = Color.White,
+                )
+            } else {
+                lightColors(
+                    primary = animatedPalette.accent,
+                    primaryVariant = animatedPalette.accent,
+                    secondary = animatedPalette.accent,
+                    secondaryVariant = animatedPalette.accent,
+                    background = animatedPalette.background,
+                    surface = animatedPalette.raised,
+                    error = animatedPalette.negative,
+                    onPrimary = animatedPalette.accentContent,
+                    onSecondary = animatedPalette.accentContent,
+                    onBackground = animatedPalette.text,
+                    onSurface = animatedPalette.text,
+                    onError = Color.White,
+                )
+            }
+        MaterialTheme(colors = materialColors, content = content)
     }
 }
 
