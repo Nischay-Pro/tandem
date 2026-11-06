@@ -157,8 +157,16 @@ interface BudgetRecordDao {
         recordId: String,
     ): BudgetRecordEntity?
 
+    @Query(
+        "SELECT * FROM budget_records WHERE budgetId = :budgetId AND (localJson IS NOT NULL OR localDeleted = 1)",
+    )
+    suspend fun findLocalOverlays(budgetId: String): List<BudgetRecordEntity>
+
     @Upsert
     suspend fun put(record: BudgetRecordEntity)
+
+    @Upsert
+    suspend fun putAll(records: List<BudgetRecordEntity>)
 
     @Query(
         "UPDATE budget_records SET remoteDeleted = 1, remoteJson = NULL, remoteRevision = :revision, syncGeneration = :generation WHERE budgetId = :budgetId AND recordType = :recordType AND recordId = :recordId",

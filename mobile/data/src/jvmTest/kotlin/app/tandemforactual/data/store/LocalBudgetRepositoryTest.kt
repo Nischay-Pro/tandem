@@ -1088,6 +1088,49 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
+    fun fullSnapshotBatchUpsertPreservesLocalOverlayAndProjection() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                repository.applySnapshot(BUDGET, GENERATION, "c1", listOf(transaction()))
+                val localProjection = LocalRecordProjection("2026-10-03", "savings", "rent", "landlord", 1200L, "2026-10")
+                val localWrite =
+                    updateRequest(
+                        patch = "{\"amount\":1200}",
+                        optimistic = "{\"id\":\"txn-1\",\"amount\":1200}",
+                        projection = localProjection,
+                    )
+                repository.enqueueWrite(localWrite)
+
+                val updatedRemote =
+                    transaction(
+                        revision = "revision-2",
+                        bodyJson = "{\"id\":\"txn-1\",\"amount\":1500}",
+                        date = "2026-10-04",
+                        accountId = "remote-account",
+                        categoryId = "remote-category",
+                        payeeId = "remote-payee",
+                        amountMinor = 1500L,
+                    )
+                repository.applySnapshot(BUDGET, GENERATION, "c2", listOf(updatedRemote, transaction(recordId = "txn-2")))
+
+                val row = assertNotNull(repository.findRecord(BUDGET, "transaction", "txn-1"))
+                assertEquals(updatedRemote.bodyJson, row.remoteJson)
+                assertEquals(localWrite.optimisticJson, row.localJson)
+                assertEquals(localProjection.recordDate, row.recordDate)
+                assertEquals(localProjection.accountId, row.accountId)
+                assertEquals(localProjection.categoryId, row.categoryId)
+                assertEquals(localProjection.payeeId, row.payeeId)
+                assertEquals(localProjection.amountMinor, row.amountMinor)
+                assertEquals(localProjection.budgetMonth, row.budgetMonth)
+                assertEquals(listOf("txn-1", "txn-2"), repository.findRecords(BUDGET, "transaction").map { it.recordId })
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun staleFullSnapshotCannotOverwriteChangesAppliedAfterItsRequestStarted() =
         runBlocking {
             val database = newDatabase()

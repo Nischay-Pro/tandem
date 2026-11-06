@@ -343,11 +343,18 @@ class LocalBudgetRepository(
         requireIdentifier(budgetId, "budgetId")
         requireIdentifier(generation, "generation")
         requireIdentifier(cursor, "cursor")
-        records.forEach { validateRemoteRecord(it, budgetId) }
-        if (records.any { it.generation != generation }) {
+        val recordKeys = mutableSetOf<Pair<String, String>>()
+        var generationMismatch = false
+        var duplicateRecords = false
+        records.forEach { record ->
+            validateRemoteRecord(record, budgetId)
+            if (record.generation != generation) generationMismatch = true
+            if (!recordKeys.add(record.recordType to record.recordId)) duplicateRecords = true
+        }
+        if (generationMismatch) {
             throw InvalidLocalWriteException("A record generation must match its full snapshot")
         }
-        if (records.map { it.recordType to it.recordId }.toSet().size != records.size) {
+        if (duplicateRecords) {
             throw InvalidLocalWriteException("A full snapshot cannot contain duplicate records")
         }
         return database.withWriteTransaction {
@@ -357,8 +364,16 @@ class LocalBudgetRepository(
             if (currentCheckpoint != expectedCheckpoint) {
                 return@withWriteTransaction FullSnapshotResult.STALE_CHECKPOINT
             }
-            database.budgetRecordDao().tombstoneAllRemoteRecords(budgetId)
-            records.forEach { applyRemoteUpsert(it) }
+            val recordDao = database.budgetRecordDao()
+            val localOverlays = recordDao.findLocalOverlays(budgetId).associateBy { it.recordType to it.recordId }
+            recordDao.tombstoneAllRemoteRecords(budgetId)
+            if (records.isNotEmpty()) {
+                recordDao.putAll(
+                    records.map { record ->
+                        record.toEntity(localOverlays[record.recordType to record.recordId])
+                    },
+                )
+            }
             displaySettings?.let { storeBudgetDisplaySettings(budgetId, generation, it) }
             markEditsForDeletedRecords(budgetId)
             syncStateDao.put(
@@ -744,21 +759,7 @@ class LocalBudgetRepository(
     ) {
         val dao = database.budgetRecordDao()
         val current = dao.find(record.budgetId, record.recordType, record.recordId)
-        val remoteEntity = record.toEntity(localJson = current?.localJson, localDeleted = current?.localDeleted ?: false)
-        val entity =
-            if (preserveLocalProjection && current?.localJson != null) {
-                remoteEntity.copy(
-                    recordDate = current.recordDate,
-                    accountId = current.accountId,
-                    categoryId = current.categoryId,
-                    payeeId = current.payeeId,
-                    amountMinor = current.amountMinor,
-                    budgetMonth = current.budgetMonth,
-                )
-            } else {
-                remoteEntity
-            }
-        dao.put(entity)
+        dao.put(record.toEntity(current, preserveLocalProjection))
     }
 
     private suspend fun applyRemoteDelete(
@@ -1047,6 +1048,22 @@ class LocalBudgetRepository(
             budgetMonth = budgetMonth,
             displayName = metadata?.displayName,
             notes = metadata?.notes,
+        )
+    }
+
+    private fun RemoteBudgetRecord.toEntity(
+        current: BudgetRecordEntity?,
+        preserveLocalProjection: Boolean = true,
+    ): BudgetRecordEntity {
+        val remoteEntity = toEntity(localJson = current?.localJson, localDeleted = current?.localDeleted ?: false)
+        if (!preserveLocalProjection || current?.localJson == null) return remoteEntity
+        return remoteEntity.copy(
+            recordDate = current.recordDate,
+            accountId = current.accountId,
+            categoryId = current.categoryId,
+            payeeId = current.payeeId,
+            amountMinor = current.amountMinor,
+            budgetMonth = current.budgetMonth,
         )
     }
 
