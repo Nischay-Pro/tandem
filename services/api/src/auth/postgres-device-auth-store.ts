@@ -14,6 +14,7 @@ interface DeviceRow {
   created_at: Date;
   last_seen_at: Date | null;
   revoked_at: Date | null;
+  should_refresh_last_seen?: boolean;
 }
 
 export class PostgresDeviceAuthStore implements DeviceAuthStore {
@@ -64,17 +65,48 @@ export class PostgresDeviceAuthStore implements DeviceAuthStore {
     credentialHash: string,
   ): Promise<DeviceRecord | undefined> {
     const result = await this.pool.query<DeviceRow>(
-      `UPDATE companion_devices
-      SET last_seen_at = clock_timestamp()
+      `SELECT device_id, principal_id, device_name, budget_ids,
+        created_at, last_seen_at, revoked_at,
+        (last_seen_at IS NULL OR last_seen_at <=
+          clock_timestamp() - interval '1 minute') AS should_refresh_last_seen
+      FROM companion_devices
       WHERE credential_hash = $1 AND revoked_at IS NULL
         AND COALESCE(last_seen_at, created_at) >
-          clock_timestamp() - ($2::int * interval '1 day')
-      RETURNING device_id, principal_id, device_name, budget_ids,
-        created_at, last_seen_at, revoked_at`,
+          clock_timestamp() - ($2::int * interval '1 day')`,
       [credentialHash, DEVICE_CREDENTIAL_IDLE_TTL_DAYS],
     );
     const row = result.rows[0];
-    return row === undefined ? undefined : mapDeviceRow(row);
+    if (row === undefined) return undefined;
+    if (!row.should_refresh_last_seen) return mapDeviceRow(row);
+
+    const refreshed = await this.pool.query<DeviceRow>(
+      `UPDATE companion_devices
+      SET last_seen_at = clock_timestamp()
+      WHERE device_id = $1 AND credential_hash = $2 AND revoked_at IS NULL
+        AND COALESCE(last_seen_at, created_at) >
+          clock_timestamp() - ($3::int * interval '1 day')
+        AND (last_seen_at IS NULL OR last_seen_at <=
+          clock_timestamp() - interval '1 minute')
+      RETURNING device_id, principal_id, device_name, budget_ids,
+        created_at, last_seen_at, revoked_at`,
+      [row.device_id, credentialHash, DEVICE_CREDENTIAL_IDLE_TTL_DAYS],
+    );
+    const refreshedRow = refreshed.rows[0];
+    if (refreshedRow !== undefined) return mapDeviceRow(refreshedRow);
+
+    // Another request may have refreshed this row while this one waited. Read
+    // it again so that concurrent requests do not spuriously reject the token.
+    const current = await this.pool.query<DeviceRow>(
+      `SELECT device_id, principal_id, device_name, budget_ids,
+        created_at, last_seen_at, revoked_at
+      FROM companion_devices
+      WHERE device_id = $1 AND credential_hash = $2 AND revoked_at IS NULL
+        AND COALESCE(last_seen_at, created_at) >
+          clock_timestamp() - ($3::int * interval '1 day')`,
+      [row.device_id, credentialHash, DEVICE_CREDENTIAL_IDLE_TTL_DAYS],
+    );
+    const currentRow = current.rows[0];
+    return currentRow === undefined ? undefined : mapDeviceRow(currentRow);
   }
 
   async listDevices(principalId: string): Promise<DeviceRecord[]> {

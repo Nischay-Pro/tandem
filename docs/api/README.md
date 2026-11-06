@@ -70,6 +70,9 @@ Fastify then keys the pairing limit on the forwarded client address. The Nginx
 example also applies a per-address limit to the pairing route. If `TRUST_PROXY`
 is unset, the API warns when it receives `X-Forwarded-For`; requests arriving
 from the same proxy socket share the API's in-memory limit.
+The Nginx example also limits API traffic to 600 requests per minute per client
+address, with a short burst allowance. Keep the API reachable only through this
+proxy so invalid-token traffic cannot bypass that limit.
 
 Invalid pairing input returns HTTP 400 with a structured `invalid_request`
 error. An unavailable, expired, or already-used pairing code returns HTTP 401.

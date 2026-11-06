@@ -198,6 +198,75 @@ describe("PostgreSQL device authorization integration", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("writes last-seen activity at most once per minute", async () => {
+    const principalId = `activity-owner-${randomUUID()}`;
+    const pairing = await authorization.createPairingCode({
+      principalId,
+      budgetIds: ["synthetic-budget"],
+    });
+    const device = await authorization.pair({
+      code: pairing.code,
+      deviceName: "Active phone",
+    });
+    if (!device) {
+      throw new Error("A valid pairing code did not create a device");
+    }
+
+    await expect(
+      authorization.authenticate(device.accessToken),
+    ).resolves.toMatchObject({
+      deviceId: device.deviceId,
+      lastSeenAt: expect.any(Date),
+    });
+    const firstTouch = await pool!.query<{
+      last_seen_at: Date;
+      row_version: string;
+    }>(
+      "SELECT last_seen_at, xmin::text AS row_version FROM companion_devices WHERE device_id = $1",
+      [device.deviceId],
+    );
+    const initialLastSeen = firstTouch.rows[0]?.last_seen_at;
+    if (!initialLastSeen)
+      throw new Error("Initial last-seen time was not stored");
+
+    await expect(
+      authorization.authenticate(device.accessToken),
+    ).resolves.toMatchObject({
+      deviceId: device.deviceId,
+      lastSeenAt: initialLastSeen,
+    });
+    const unchanged = await pool!.query<{
+      last_seen_at: Date;
+      row_version: string;
+    }>(
+      "SELECT last_seen_at, xmin::text AS row_version FROM companion_devices WHERE device_id = $1",
+      [device.deviceId],
+    );
+    expect(unchanged.rows[0]?.last_seen_at).toEqual(initialLastSeen);
+    expect(unchanged.rows[0]?.row_version).toBe(
+      firstTouch.rows[0]?.row_version,
+    );
+
+    await pool!.query(
+      `UPDATE companion_devices
+      SET last_seen_at = clock_timestamp() - interval '2 minutes'
+      WHERE device_id = $1`,
+      [device.deviceId],
+    );
+    const refreshed = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        authorization.authenticate(device.accessToken),
+      ),
+    );
+    expect(refreshed).toHaveLength(8);
+    expect(
+      refreshed.every((entry) => entry?.deviceId === device.deviceId),
+    ).toBe(true);
+    expect(
+      Math.max(...refreshed.map((entry) => entry?.lastSeenAt?.getTime() ?? 0)),
+    ).toBeGreaterThan(initialLastSeen.getTime());
+  });
+
   it("pairs, authenticates, and revokes through Fastify and PostgreSQL", async () => {
     const principalId = `owner-${randomUUID()}`;
     const pairing = await authorization.createPairingCode({

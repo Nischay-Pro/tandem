@@ -4,6 +4,7 @@
 # to reach it, and keep the API origin inaccessible to untrusted clients.
 
 limit_req_zone $binary_remote_addr zone=tandem_pairing:10m rate=10r/m;
+limit_req_zone $binary_remote_addr zone=tandem_api:10m rate=600r/m;
 
 upstream tandem_api {
     server api:19753;
