@@ -1,5 +1,6 @@
 plugins {
   alias(libs.plugins.androidApplication)
+  alias(libs.plugins.baselineProfile)
   alias(libs.plugins.jetbrainsCompose)
   alias(libs.plugins.composeCompiler)
 }
@@ -23,6 +24,10 @@ android {
       isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
     }
+
+    create("nonMinifiedRelease") {
+      applicationIdSuffix = ".profile"
+    }
   }
 
   compileOptions {
@@ -31,6 +36,10 @@ android {
 
   buildFeatures {
     buildConfig = true
+  }
+
+  baselineProfile {
+    saveInSrc = true
   }
 }
 
@@ -44,6 +53,7 @@ dependencies {
   implementation(libs.workRuntimeKtx)
   implementation(libs.activityCompose)
   implementation(libs.coreSplashScreen)
+  implementation(libs.profileInstaller)
   implementation(libs.composeRuntimeAndroid)
   implementation(libs.composeUiAndroid)
   implementation(libs.composeFoundationAndroid)
@@ -51,4 +61,5 @@ dependencies {
   testImplementation(libs.junit)
   androidTestImplementation(libs.androidxTestRunner)
   androidTestImplementation(libs.androidxTestExtJunit)
+  add("baselineProfile", project(":baselineprofile"))
 }

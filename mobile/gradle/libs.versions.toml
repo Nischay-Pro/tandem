@@ -21,12 +21,17 @@ workManager = "2.12.0"
 junit = "4.13.2"
 composeIcons = "2.2.1"
 coreSplashScreen = "1.2.0"
+baselineProfile = "1.5.0"
+macrobenchmark = "1.5.0"
+profileInstaller = "1.4.1"
 
 [plugins]
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 androidKmpLibrary = { id = "com.android.kotlin.multiplatform.library", version.ref = "androidGradlePlugin" }
 androidApplication = { id = "com.android.application", version.ref = "androidGradlePlugin" }
+androidTest = { id = "com.android.test", version.ref = "androidGradlePlugin" }
+baselineProfile = { id = "androidx.baselineprofile", version.ref = "baselineProfile" }
 jetbrainsCompose = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
 composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 openapiKmpGen = { id = "com.kroegerama.openapi-kmp-gen", version.ref = "openapiKmpGen" }
@@ -59,3 +64,5 @@ composeAnimation = { module = "org.jetbrains.compose.animation:animation", versi
 composeResources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "composeMultiplatform" }
 composeIconsLucide = { module = "com.composables:icons-lucide-cmp", version.ref = "composeIcons" }
 coreSplashScreen = { module = "androidx.core:core-splashscreen", version.ref = "coreSplashScreen" }
+benchmarkMacroJunit4 = { module = "androidx.benchmark:benchmark-macro-junit4", version.ref = "macrobenchmark" }
+profileInstaller = { module = "androidx.profileinstaller:profileinstaller", version.ref = "profileInstaller" }
