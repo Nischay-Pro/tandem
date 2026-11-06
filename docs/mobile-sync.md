@@ -154,9 +154,10 @@ AES-GCM and keeps the key in Android Keystore; iOS stores it as a Keychain
 generic-password item marked for this device only. The app restores the device
 session on launch and clears the saved credential only when the server explicitly
 reports that the device credential is invalid.
-“Forget this device on this phone” removes the local credential; revoke the
-device on the server as well to invalidate its bearer token. Encrypted-budget
-passwords are not saved.
+“Forget this device” first revokes its server token, then removes the local
+credential. If Tandem is unreachable, the app keeps the pairing so you can retry.
+Idle device tokens expire after 90 days. Encrypted-budget passwords are not
+saved.
 Temporary wireframes, test data, and device review artifacts belong under
 ignored `.dev-tmp/` paths and must not be committed.
 

@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { DEVICE_CREDENTIAL_IDLE_TTL_DAYS } from "./device-auth.js";
 import type {
   DeviceAuthStore,
   DeviceRecord,
@@ -66,9 +67,11 @@ export class PostgresDeviceAuthStore implements DeviceAuthStore {
       `UPDATE companion_devices
       SET last_seen_at = clock_timestamp()
       WHERE credential_hash = $1 AND revoked_at IS NULL
+        AND COALESCE(last_seen_at, created_at) >
+          clock_timestamp() - ($2::int * interval '1 day')
       RETURNING device_id, principal_id, device_name, budget_ids,
         created_at, last_seen_at, revoked_at`,
-      [credentialHash],
+      [credentialHash, DEVICE_CREDENTIAL_IDLE_TTL_DAYS],
     );
     const row = result.rows[0];
     return row === undefined ? undefined : mapDeviceRow(row);

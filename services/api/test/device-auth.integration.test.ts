@@ -162,6 +162,42 @@ describe("PostgreSQL device authorization integration", () => {
     ).toBeInstanceOf(Date);
   });
 
+  it("expires inactive device credentials after 90 days and refreshes active ones", async () => {
+    const principalId = `idle-owner-${randomUUID()}`;
+    const pairing = await authorization.createPairingCode({
+      principalId,
+      budgetIds: ["synthetic-budget"],
+    });
+    const device = await authorization.pair({
+      code: pairing.code,
+      deviceName: "Idle phone",
+    });
+    if (!device) {
+      throw new Error("A valid pairing code did not create a device");
+    }
+
+    await pool!.query(
+      `UPDATE companion_devices
+      SET last_seen_at = clock_timestamp() - interval '89 days 23 hours'
+      WHERE device_id = $1`,
+      [device.deviceId],
+    );
+    const refreshed = await authorization.authenticate(device.accessToken);
+    expect(refreshed?.lastSeenAt?.getTime()).toBeGreaterThan(
+      Date.now() - 60_000,
+    );
+
+    await pool!.query(
+      `UPDATE companion_devices
+      SET last_seen_at = clock_timestamp() - interval '91 days'
+      WHERE device_id = $1`,
+      [device.deviceId],
+    );
+    await expect(
+      authorization.authenticate(device.accessToken),
+    ).resolves.toBeUndefined();
+  });
+
   it("pairs, authenticates, and revokes through Fastify and PostgreSQL", async () => {
     const principalId = `owner-${randomUUID()}`;
     const pairing = await authorization.createPairingCode({

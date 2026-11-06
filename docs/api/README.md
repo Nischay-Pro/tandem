@@ -57,7 +57,9 @@ the opaque bearer token once. The short code is only a bootstrap credential;
 the resulting device token has 256 bits of random
 entropy; only its SHA-256 hash is stored in PostgreSQL. Pairing code hashes use
 HMAC with SHA-256 and the `DATABASE_URL` value as the key, so the CLI and API
-must use the same value. Pairing attempts are limited to 10 per client address
+must use the same value. Device tokens expire after 90 days without an
+authenticated request; each successful request refreshes that idle window.
+Pairing attempts are limited to 10 per client address
 per minute, with an aggregate cap of 100 attempts per API process per minute.
 These in-memory limits apply separately to each process. Forwarded client
 addresses are ignored by default. For a

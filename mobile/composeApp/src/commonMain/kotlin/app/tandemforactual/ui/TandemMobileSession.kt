@@ -245,11 +245,11 @@ internal class TandemMobileSession(
                 throw error
             } catch (error: TandemApiException) {
                 if (error.httpStatus != 401 && error.httpStatus != 404) {
-                    deviceRevocationError = "Connect to the server and try again to remove access."
+                    deviceRevocationError = "Couldn’t remove access. Check the connection and try again."
                     return
                 }
             } catch (_: Exception) {
-                deviceRevocationError = "Connect to the server and try again to remove access."
+                deviceRevocationError = "Couldn’t remove access. Check the connection and try again."
                 return
             }
             apiClient.forgetSession()
