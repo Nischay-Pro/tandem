@@ -8,6 +8,14 @@ import kotlin.test.assertTrue
 
 class AppStateTest {
     @Test
+    fun accountActionButtonsStackWhenSystemTextNeedsMoreWidth() {
+        assertFalse(shouldStackActionButtons(1.0f))
+        assertFalse(shouldStackActionButtons(1.19f))
+        assertTrue(shouldStackActionButtons(1.2f))
+        assertTrue(shouldStackActionButtons(2.0f))
+    }
+
+    @Test
     fun pinnedCategoriesAndCollapsedBudgetSectionsSurviveAppRestart() {
         val state =
             AppState().apply {

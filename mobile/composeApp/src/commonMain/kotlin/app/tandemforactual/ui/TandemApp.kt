@@ -104,6 +104,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
@@ -2646,7 +2647,7 @@ private fun PrimaryButton(
         modifier =
             modifier
                 .fillMaxWidth()
-                .height(52.dp)
+                .heightIn(min = 52.dp)
                 .clip(RoundedCornerShape(15.dp))
                 .background(backgroundColor)
                 .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
@@ -2697,14 +2698,35 @@ private fun SecondaryButton(
         modifier =
             modifier
                 .fillMaxWidth()
-                .height(52.dp)
+                .heightIn(min = 52.dp)
                 .clip(RoundedCornerShape(15.dp))
                 .border(1.dp, borderColor, RoundedCornerShape(15.dp))
                 .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
                 .padding(horizontal = 12.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = textColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(label, color = textColor, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun AccountActionButtons(
+    addEnabled: Boolean,
+    reconciliationEnabled: Boolean,
+    onAddTransaction: () -> Unit,
+    onReconcile: () -> Unit,
+) {
+    val useFullWidthButtons = shouldStackActionButtons(LocalDensity.current.fontScale)
+    if (useFullWidthButtons) {
+        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            PrimaryButton("Add transaction", enabled = addEnabled, onClick = onAddTransaction)
+            SecondaryButton("Reconcile", enabled = reconciliationEnabled, onClick = onReconcile)
+        }
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            PrimaryButton("Add transaction", enabled = addEnabled, modifier = Modifier.weight(1f), onClick = onAddTransaction)
+            SecondaryButton("Reconcile", enabled = reconciliationEnabled, modifier = Modifier.weight(1f), onClick = onReconcile)
+        }
     }
 }
 
@@ -4954,20 +4976,12 @@ private fun AccountDetailScreen(
                     account.balanceMinor?.let { state.formatCurrency(it) } ?: "Unavailable",
                     "${account.name} · ${if (account.offBudget) "off budget" else "on budget"}",
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                    if (account.offBudget) {
-                        PrimaryButton("Add transaction", enabled = false, modifier = Modifier.weight(1f)) {}
-                    } else {
-                        PrimaryButton("Add transaction", enabled = !state.readOnlyMode, modifier = Modifier.weight(1f)) {
-                            navigation.newTransaction(account.id)
-                        }
-                    }
-                    SecondaryButton(
-                        "Reconcile",
-                        modifier = Modifier.weight(1f),
-                        enabled = false,
-                    ) {}
-                }
+                AccountActionButtons(
+                    addEnabled = !account.offBudget && !state.readOnlyMode,
+                    reconciliationEnabled = false,
+                    onAddTransaction = { navigation.newTransaction(account.id) },
+                    onReconcile = {},
+                )
                 if (accountActivity.isEmpty()) {
                     SurfaceCard {
                         Text("No recent activity for this account.", modifier = Modifier.padding(16.dp), color = tandemPalette.muted)
@@ -4994,16 +5008,12 @@ private fun AccountDetailScreen(
             state.formatCurrency(account.balanceMinor),
             "${account.name} · ${if (account.offBudget) "off budget" else "Updated ${formatShortDate(SampleDate(2026, 5, 14))}"}",
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            PrimaryButton(
-                "Add transaction",
-                enabled = !account.offBudget && !state.readOnlyMode,
-                modifier = Modifier.weight(1f),
-            ) {
-                if (!account.offBudget && !state.readOnlyMode) navigation.open(AppRoute.NEW_TRANSACTION)
-            }
-            SecondaryButton("Reconcile", modifier = Modifier.weight(1f)) { navigation.open(AppRoute.RECONCILIATION) }
-        }
+        AccountActionButtons(
+            addEnabled = !account.offBudget && !state.readOnlyMode,
+            reconciliationEnabled = true,
+            onAddTransaction = { navigation.open(AppRoute.NEW_TRANSACTION) },
+            onReconcile = { navigation.open(AppRoute.RECONCILIATION) },
+        )
         if (accountActivity.isEmpty()) {
             SurfaceCard {
                 Text("No recent activity for this account.", modifier = Modifier.padding(16.dp), color = tandemPalette.muted)
@@ -6058,10 +6068,10 @@ private fun ConflictReviewScreen(
                 }
                 mobileSession.transactionWriteMessage?.let { BodyText(it) }
                 PrimaryButton(
-                    "Keep device version",
+                    "Keep device",
                     enabled = !state.readOnlyMode && !mobileSession.isSavingTransaction && record?.remoteDeleted != true,
                 ) { onResolveConflict(operation.operationId, true) }
-                SecondaryButton("Keep latest Actual version", enabled = !state.readOnlyMode && !mobileSession.isSavingTransaction) {
+                SecondaryButton("Keep Actual", enabled = !state.readOnlyMode && !mobileSession.isSavingTransaction) {
                     onResolveConflict(operation.operationId, false)
                 }
             }
