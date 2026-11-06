@@ -5,6 +5,7 @@ import app.tandemforactual.api.generated.Auth
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.store.BudgetChange
 import app.tandemforactual.data.store.BudgetDisplaySettings
+import app.tandemforactual.data.store.BudgetRecordDisplayMetadata
 import app.tandemforactual.data.store.BudgetSyncProtocolException
 import app.tandemforactual.data.store.BudgetSyncRemoteException
 import app.tandemforactual.data.store.RemoteOperationStatus
@@ -64,6 +65,7 @@ class GeneratedBudgetSyncRemoteTest {
                 assertEquals("1000", snapshot.cursor)
                 assertEquals("checking", snapshot.records.single().accountId)
                 assertEquals(1200L, snapshot.records.single().amountMinor)
+                assertEquals(BudgetRecordDisplayMetadata("Corner Market", "weekly groceries"), snapshot.records.single().displayMetadata)
 
                 val page = remote.readChanges(BUDGET, GENERATION, "1000", null, "encrypted-budget")
                 assertEquals(2, page.changes.size)
@@ -94,6 +96,7 @@ class GeneratedBudgetSyncRemoteTest {
                 val transaction = remote.readTransaction(BUDGET, TXN, "encrypted-budget")
                 assertEquals(TXN, transaction?.transactionId)
                 assertEquals("checking", transaction?.projection?.accountId)
+                assertEquals(BudgetRecordDisplayMetadata("Corner Market", "weekly groceries"), transaction?.displayMetadata)
                 assertNull(requests[0].url.parameters["cursor"])
                 assertEquals("encrypted-budget", requests[0].headers["x-budget-encryption-password"])
                 assertEquals("1000", requests[1].url.parameters["cursor"])
@@ -452,13 +455,13 @@ class GeneratedBudgetSyncRemoteTest {
     private fun snapshotJson(): String = """{"budgetId":"$BUDGET","generation":"$GENERATION","cursor":"1000","records":[${recordJson()}]}"""
 
     private fun recordJson() =
-        """{"type":"transaction","id":"$TXN","revision":"revision-1","body":{"id":"$TXN","account":"checking","amount":1200,"date":"2026-10-01","category":"food","payee":"market"}}"""
+        """{"type":"transaction","id":"$TXN","revision":"revision-1","body":{"id":"$TXN","name":"Corner Market","notes":"weekly groceries","account":"checking","amount":1200,"date":"2026-10-01","category":"food","payee":"market"}}"""
 
     private fun changePageJson() =
         """{"budgetId":"$BUDGET","generation":"$GENERATION","currentCursor":"2","throughCursor":"2","nextCursor":"2","hasMore":false,"resetRequired":false,"changes":[{"cursor":"1","type":"transaction","id":"$TXN","operation":"upsert","revision":"revision-1","body":{"id":"$TXN","account":"checking","amount":1200,"date":"2026-10-01"}},{"cursor":"2","type":"transaction","id":"txn-deleted","operation":"delete","revision":"revision-2","body":null}]}"""
 
     private fun transactionJson() =
-        """{"transaction":{"id":"$TXN","account":"checking","amount":1200,"date":"2026-10-01","category":"food","payee":"market"},"revision":"revision-1"}"""
+        """{"transaction":{"id":"$TXN","name":"Corner Market","notes":"weekly groceries","account":"checking","amount":1200,"date":"2026-10-01","category":"food","payee":"market"},"revision":"revision-1"}"""
 
     private fun operationJson(status: String) =
         """{"operation":{"operationId":"$OPERATION_ID","budgetId":"$BUDGET","transactionId":"$TXN","status":"$status","errorCode":null},"conflict":null}"""

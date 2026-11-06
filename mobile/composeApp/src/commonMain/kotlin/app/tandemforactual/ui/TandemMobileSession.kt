@@ -195,7 +195,10 @@ internal class TandemMobileSession(
     var categoryGroupRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
         private set
 
-    var budgetMonthRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
+    var budgetMonthIds by mutableStateOf<List<String>>(emptyList())
+        private set
+
+    var selectedBudgetMonthRecord by mutableStateOf<BudgetRecordEntity?>(null)
         private set
 
     var accountRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
@@ -862,7 +865,8 @@ internal class TandemMobileSession(
         payeeRecords = localRepository.findRecords(budgetId, "payee")
         categoryRecords = localRepository.findRecords(budgetId, "category")
         categoryGroupRecords = localRepository.findRecords(budgetId, "category-group")
-        budgetMonthRecords = localRepository.findRecords(budgetId, "budget-month")
+        budgetMonthIds = localRepository.findRecordIds(budgetId, "budget-month")
+        selectedBudgetMonthRecord = null
         pendingWrites = localRepository.readPendingWrites(budgetId)
     }
 
@@ -885,10 +889,20 @@ internal class TandemMobileSession(
             launch { localRepository.observeRecords(budgetId, "payee").collect { payeeRecords = it } }
             launch { localRepository.observeRecords(budgetId, "category").collect { categoryRecords = it } }
             launch { localRepository.observeRecords(budgetId, "category-group").collect { categoryGroupRecords = it } }
-            launch { localRepository.observeRecords(budgetId, "budget-month").collect { budgetMonthRecords = it } }
+            launch { localRepository.observeRecordIds(budgetId, "budget-month").collect { budgetMonthIds = it } }
             launch { localRepository.observePendingWrites(budgetId).collect { pendingWrites = it } }
             launch { localRepository.observeSyncState(budgetId).collect { localSyncState = it } }
         }
+    }
+
+    suspend fun observeSelectedBudgetMonth(
+        budgetId: String,
+        monthId: String,
+    ) {
+        val localRepository = repository ?: return
+        selectedBudgetMonthRecord = null
+        if (budgetId.isBlank() || monthId.isBlank()) return
+        localRepository.observeRecord(budgetId, "budget-month", monthId).collect { selectedBudgetMonthRecord = it }
     }
 
     suspend fun observeActivitySearchRecords(budgetId: String) {

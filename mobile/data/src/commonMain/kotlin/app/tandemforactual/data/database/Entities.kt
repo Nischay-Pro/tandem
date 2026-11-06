@@ -29,6 +29,8 @@ data class BudgetRecordEntity(
     val payeeId: String?,
     val amountMinor: Long?,
     val budgetMonth: String?,
+    val displayName: String? = null,
+    val notes: String? = null,
 )
 
 @Entity(tableName = "budget_sync_state")

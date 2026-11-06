@@ -5,7 +5,12 @@ import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.BudgetSyncStateEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.TandemDatabase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
@@ -56,6 +61,7 @@ data class RemoteBudgetRecord(
     val payeeId: String? = null,
     val amountMinor: Long? = null,
     val budgetMonth: String? = null,
+    val displayMetadata: BudgetRecordDisplayMetadata? = null,
 )
 
 data class LocalRecordProjection(
@@ -66,6 +72,17 @@ data class LocalRecordProjection(
     val amountMinor: Long?,
     val budgetMonth: String?,
 )
+
+private fun parseDisplayMetadata(bodyJson: String?): BudgetRecordDisplayMetadata? =
+    bodyJson?.let { json ->
+        runCatching {
+            val body = Json.parseToJsonElement(json).jsonObject
+            BudgetRecordDisplayMetadata(
+                displayName = body.displayString("name")?.takeIf { it.isNotBlank() },
+                notes = body.displayString("notes")?.takeIf { it.isNotBlank() },
+            )
+        }.getOrNull()
+    }
 
 sealed interface BudgetChange {
     val budgetId: String
@@ -155,18 +172,29 @@ class LocalBudgetRepository(
     fun observeRecords(
         budgetId: String,
         recordType: String,
-    ): Flow<List<BudgetRecordEntity>> = database.budgetRecordDao().observeVisible(budgetId, recordType)
+    ): Flow<List<BudgetRecordEntity>> = database.budgetRecordDao().observeVisible(budgetId, recordType).stabilized()
+
+    fun observeRecordIds(
+        budgetId: String,
+        recordType: String,
+    ): Flow<List<String>> = database.budgetRecordDao().observeVisibleRecordIds(budgetId, recordType).stabilized()
+
+    fun observeRecord(
+        budgetId: String,
+        recordType: String,
+        recordId: String,
+    ): Flow<BudgetRecordEntity?> = database.budgetRecordDao().observeVisibleRecord(budgetId, recordType, recordId).stabilized()
 
     fun observeRecentRecords(
         budgetId: String,
         recordType: String,
         limit: Int,
-    ): Flow<List<BudgetRecordEntity>> = database.budgetRecordDao().observeRecentVisible(budgetId, recordType, limit)
+    ): Flow<List<BudgetRecordEntity>> = database.budgetRecordDao().observeRecentVisible(budgetId, recordType, limit).stabilized()
 
     fun observeVisibleRecordCount(
         budgetId: String,
         recordType: String,
-    ): Flow<Long> = database.budgetRecordDao().observeVisibleCount(budgetId, recordType)
+    ): Flow<Long> = database.budgetRecordDao().observeVisibleCount(budgetId, recordType).stabilized()
 
     fun observePendingWrites(budgetId: String): Flow<List<OutboxOperationEntity>> = database.outboxDao().observePending(budgetId)
 
@@ -190,6 +218,15 @@ class LocalBudgetRepository(
             fromDate,
             throughDate,
         )
+
+    suspend fun findRecordIds(
+        budgetId: String,
+        recordType: String,
+    ): List<String> {
+        requireIdentifier(budgetId, "budgetId")
+        requireIdentifier(recordType, "recordType")
+        return database.budgetRecordDao().findVisibleRecordIds(budgetId, recordType)
+    }
 
     suspend fun findRecentRecords(
         budgetId: String,
@@ -652,6 +689,7 @@ class LocalBudgetRepository(
     private suspend fun restoreRemoteOverlay(operation: OutboxOperationEntity) {
         val records = database.budgetRecordDao()
         val current = records.find(operation.budgetId, operation.recordType, operation.recordId) ?: return
+        val remoteMetadata = parseDisplayMetadata(current.remoteJson)
         val projection =
             if (current.remoteDeleted) {
                 null
@@ -668,6 +706,8 @@ class LocalBudgetRepository(
                 payeeId = projection?.payeeId,
                 amountMinor = projection?.amountMinor,
                 budgetMonth = projection?.budgetMonth,
+                displayName = remoteMetadata?.displayName,
+                notes = remoteMetadata?.notes,
             ),
         )
     }
@@ -790,6 +830,7 @@ class LocalBudgetRepository(
     ) {
         val localDeleted = request.action == LocalWriteAction.DELETE
         val projection = request.optimisticProjection
+        val metadata = request.optimisticJson?.let(::parseDisplayMetadata)
         val entity =
             current?.copy(
                 localJson = request.optimisticJson,
@@ -800,6 +841,8 @@ class LocalBudgetRepository(
                 payeeId = if (projection == null) current.payeeId else projection.payeeId,
                 amountMinor = if (projection == null) current.amountMinor else projection.amountMinor,
                 budgetMonth = if (projection == null) current.budgetMonth else projection.budgetMonth,
+                displayName = if (request.optimisticJson == null) current.displayName else metadata?.displayName,
+                notes = if (request.optimisticJson == null) current.notes else metadata?.notes,
             ) ?: BudgetRecordEntity(
                 budgetId = request.budgetId,
                 recordType = request.recordType,
@@ -816,6 +859,8 @@ class LocalBudgetRepository(
                 payeeId = projection?.payeeId,
                 amountMinor = projection?.amountMinor,
                 budgetMonth = projection?.budgetMonth,
+                displayName = metadata?.displayName,
+                notes = metadata?.notes,
             )
         dao.put(entity)
     }
@@ -979,8 +1024,12 @@ class LocalBudgetRepository(
     private fun RemoteBudgetRecord.toEntity(
         localJson: String?,
         localDeleted: Boolean,
-    ): BudgetRecordEntity =
-        BudgetRecordEntity(
+    ): BudgetRecordEntity {
+        val metadata =
+            localJson?.let(::parseDisplayMetadata)
+                ?: displayMetadata
+                ?: parseDisplayMetadata(bodyJson)
+        return BudgetRecordEntity(
             budgetId = budgetId,
             recordType = recordType,
             recordId = recordId,
@@ -996,7 +1045,10 @@ class LocalBudgetRepository(
             payeeId = payeeId,
             amountMinor = amountMinor,
             budgetMonth = budgetMonth,
+            displayName = metadata?.displayName,
+            notes = metadata?.notes,
         )
+    }
 
     private suspend fun storeBudgetDisplaySettings(
         budgetId: String,
@@ -1041,3 +1093,9 @@ private fun JsonObject.displayInt(name: String): Int? = (this[name] as? JsonPrim
 
 private fun JsonObject.displayBoolean(name: String): Boolean =
     (this[name] as? JsonPrimitive)?.let { it.booleanOrNull ?: (it.contentOrNull == "true") } ?: false
+
+@OptIn(FlowPreview::class)
+private fun <T> Flow<T>.stabilized(): Flow<T> =
+    debounce(75)
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)

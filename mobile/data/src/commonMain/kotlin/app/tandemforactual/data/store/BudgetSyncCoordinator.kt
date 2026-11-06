@@ -418,6 +418,7 @@ class BudgetSyncCoordinator(
             payeeId = projection.payeeId,
             amountMinor = projection.amountMinor,
             budgetMonth = projection.budgetMonth,
+            displayMetadata = displayMetadata,
         )
 
     private fun Exception.syncErrorCode(): String =

@@ -37,6 +37,12 @@ data class RemoteTransactionRecord(
     val revision: String,
     val bodyJson: String,
     val projection: LocalRecordProjection,
+    val displayMetadata: BudgetRecordDisplayMetadata? = null,
+)
+
+data class BudgetRecordDisplayMetadata(
+    val displayName: String?,
+    val notes: String?,
 )
 
 enum class RemoteOperationStatus {

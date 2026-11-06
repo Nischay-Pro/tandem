@@ -445,20 +445,6 @@ private val previewTransactions =
         ),
     )
 
-private fun liveTransactionItems(
-    session: TandemMobileSession,
-    merchantIconPack: MerchantIconPack? = null,
-    records: List<BudgetRecordEntity> = session.transactionRecords,
-): List<TransactionItem> =
-    buildLiveTransactionItems(
-        records = records,
-        accountRecords = session.accountRecords,
-        payeeRecords = session.payeeRecords,
-        categoryRecords = session.categoryRecords,
-        displaySettings = session.budgetDisplaySettings,
-        merchantIconPack = merchantIconPack,
-    )
-
 private fun buildLiveTransactionItems(
     records: List<BudgetRecordEntity>,
     accountRecords: List<BudgetRecordEntity>,
@@ -491,7 +477,7 @@ private fun buildLiveTransactionItems(
             account = record.accountId?.let(accounts::get) ?: record.accountId ?: "No account",
             accountId = record.accountId,
             recordId = record.recordId,
-            notes = body?.stringValue("notes") ?: "",
+            notes = record.notes.orEmpty(),
             displaySettings = displaySettings,
             dateIso = record.recordDate.orEmpty(),
             payeeId = record.payeeId,
@@ -581,12 +567,12 @@ private data class SelectorItem(
     val label: String,
 )
 
-private fun liveAccountSummaries(session: TandemMobileSession): List<LiveAccountSummary> =
-    session.accountRecords.mapNotNull { record ->
+private fun liveAccountSummaries(accountRecords: List<BudgetRecordEntity>): List<LiveAccountSummary> =
+    accountRecords.mapNotNull { record ->
         val body = record.recordBody() ?: return@mapNotNull null
         LiveAccountSummary(
             id = record.recordId,
-            name = body.stringValue("name") ?: return@mapNotNull null,
+            name = record.recordName() ?: return@mapNotNull null,
             balanceMinor = body.longValue("balance_current"),
             type = body.stringValue("type"),
             offBudget = body.booleanValue("offbudget") ?: body.booleanValue("offBudget") ?: false,
@@ -594,13 +580,14 @@ private fun liveAccountSummaries(session: TandemMobileSession): List<LiveAccount
     }
 
 private fun liveBudgetMonthSummary(
-    session: TandemMobileSession,
-    monthId: String,
+    monthRecord: BudgetRecordEntity?,
+    categoryRecords: List<BudgetRecordEntity>,
+    categoryGroupRecords: List<BudgetRecordEntity>,
 ): LiveBudgetMonthSummary? {
-    val monthRecord = session.budgetMonthRecords.firstOrNull { it.recordId == monthId } ?: return null
+    monthRecord ?: return null
     val month = monthRecord.recordBody() ?: return null
-    val categoryNames = session.categoryRecords.associate { it.recordId to (it.recordName() ?: it.recordId) }
-    val groupNames = session.categoryGroupRecords.associate { it.recordId to (it.recordName() ?: it.recordId) }
+    val categoryNames = categoryRecords.associate { it.recordId to (it.recordName() ?: it.recordId) }
+    val groupNames = categoryGroupRecords.associate { it.recordId to (it.recordName() ?: it.recordId) }
     val groups =
         (month["categoryGroups"] as? JsonArray)
             ?.mapNotNull { element ->
@@ -640,7 +627,7 @@ private fun liveBudgetMonthSummary(
     )
 }
 
-private fun BudgetRecordEntity.recordName(): String? = recordBody()?.stringValue("name")?.takeIf { it.isNotBlank() }
+private fun BudgetRecordEntity.recordName(): String? = displayName?.takeIf { it.isNotBlank() }
 
 private fun JsonObject.stringValue(name: String): String? = (this[name] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
 
@@ -1261,10 +1248,11 @@ fun TandemApp(
             state.cachedBudgetCatalogJson = encodeCachedBudgetCatalog(mobileSession.budgets)
         }
     }
+    var liveAccounts by remember { mutableStateOf(emptyList<LiveAccountSummary>()) }
     val newTransaction: (String?) -> Unit = { requestedAccountId ->
         if (!state.readOnlyMode) {
             routeTransitionDirection = 1f
-            val eligibleAccounts = liveAccountSummaries(mobileSession).filterNot { it.offBudget }
+            val eligibleAccounts = liveAccounts.filterNot { it.offBudget }
             val defaultAccount =
                 if (state.selectedBudgetId.isNotBlank()) {
                     eligibleAccounts.firstOrNull { it.id == requestedAccountId } ?: eligibleAccounts.firstOrNull()
@@ -1475,6 +1463,9 @@ fun TandemApp(
             mobileSession.observeLocalRecords(state.selectedBudgetId)
         }
     }
+    LaunchedEffect(state.selectedBudgetId, state.selectedMonthId, mobileSession) {
+        mobileSession.observeSelectedBudgetMonth(state.selectedBudgetId, state.selectedMonthId)
+    }
     LaunchedEffect(
         route,
         state.selectedBudgetId,
@@ -1505,27 +1496,51 @@ fun TandemApp(
                 mobileSession.budgetDisplaySettingsBudgetId == state.selectedBudgetId
             }
     }
-    val liveTransactions =
-        remember(
-            mobileSession.transactionRecords,
-            mobileSession.accountRecords,
-            mobileSession.payeeRecords,
-            mobileSession.categoryRecords,
-            mobileSession.budgetDisplaySettings,
-            merchantIconPack,
-        ) {
-            liveTransactionItems(mobileSession, merchantIconPack)
-        }
-    val liveAccounts = remember(mobileSession.accountRecords) { liveAccountSummaries(mobileSession) }
-    val liveBudgetMonth =
-        remember(
-            mobileSession.budgetMonthRecords,
-            mobileSession.categoryRecords,
-            mobileSession.categoryGroupRecords,
-            state.selectedMonthId,
-        ) {
-            liveBudgetMonthSummary(mobileSession, state.selectedMonthId)
-        }
+    var liveTransactions by remember { mutableStateOf(emptyList<TransactionItem>()) }
+    val transactionRecords = mobileSession.transactionRecords
+    val accountRecords = mobileSession.accountRecords
+    val payeeRecords = mobileSession.payeeRecords
+    val categoryRecords = mobileSession.categoryRecords
+    val displaySettings = mobileSession.budgetDisplaySettings
+    LaunchedEffect(
+        transactionRecords,
+        accountRecords,
+        payeeRecords,
+        categoryRecords,
+        displaySettings,
+        merchantIconPack,
+    ) {
+        liveTransactions =
+            withContext(Dispatchers.Default) {
+                buildLiveTransactionItems(
+                    transactionRecords,
+                    accountRecords,
+                    payeeRecords,
+                    categoryRecords,
+                    displaySettings,
+                    merchantIconPack,
+                )
+            }
+    }
+    LaunchedEffect(accountRecords) {
+        liveAccounts = withContext(Dispatchers.Default) { liveAccountSummaries(accountRecords) }
+    }
+    var liveBudgetMonth by remember { mutableStateOf<LiveBudgetMonthSummary?>(null) }
+    LaunchedEffect(
+        mobileSession.selectedBudgetMonthRecord,
+        mobileSession.categoryRecords,
+        mobileSession.categoryGroupRecords,
+        state.selectedMonthId,
+    ) {
+        val monthRecord = mobileSession.selectedBudgetMonthRecord?.takeIf { it.recordId == state.selectedMonthId }
+        val monthCategories = mobileSession.categoryRecords
+        val monthCategoryGroups = mobileSession.categoryGroupRecords
+        liveBudgetMonth = null
+        liveBudgetMonth =
+            withContext(Dispatchers.Default) {
+                liveBudgetMonthSummary(monthRecord, monthCategories, monthCategoryGroups)
+            }
+    }
 
     val pairDevice = {
         if (!mobileSession.isPairing) {
@@ -2467,7 +2482,7 @@ private fun ScreenContent(
                 if (state.selectedBudgetId.isBlank()) {
                     listOf("Checking", "Savings", "Credit Card", "Cash").map { SelectorItem(it, it) }
                 } else {
-                    liveAccountSummaries(mobileSession)
+                    liveAccounts
                         .filterNot { it.offBudget }
                         .map { SelectorItem(it.id, it.name) }
                 }
@@ -2536,9 +2551,9 @@ private fun ScreenContent(
             }
         AppRoute.CHOOSE_DATE -> DatePickerScreen(state, navigation)
         AppRoute.SAVE_RESULT -> SaveResultScreen(state, navigation)
-        AppRoute.SYNC_CENTER -> SyncCenterScreen(state, mobileSession, navigation)
-        AppRoute.CONFLICT_INBOX -> ConflictInboxScreen(state, mobileSession, navigation)
-        AppRoute.CONFLICT_REVIEW -> ConflictReviewScreen(state, mobileSession, onResolveConflict)
+        AppRoute.SYNC_CENTER -> SyncCenterScreen(state, mobileSession, navigation, liveTransactions)
+        AppRoute.CONFLICT_INBOX -> ConflictInboxScreen(state, mobileSession, navigation, liveTransactions)
+        AppRoute.CONFLICT_REVIEW -> ConflictReviewScreen(state, mobileSession, onResolveConflict, liveTransactions)
         AppRoute.UNCERTAIN_WRITE ->
             UncertainWriteScreen(
                 state,
@@ -2547,8 +2562,9 @@ private fun ScreenContent(
                 onCheckUncertainWriteStatus,
                 onRetryUncertainWrite,
                 onDiscardWrite,
+                liveTransactions,
             )
-        AppRoute.REJECTED_WRITE -> RejectedWriteScreen(state, mobileSession, navigation, onDiscardWrite)
+        AppRoute.REJECTED_WRITE -> RejectedWriteScreen(state, mobileSession, navigation, onDiscardWrite, liveTransactions)
         AppRoute.SETTINGS -> SettingsScreen(state, navigation)
         AppRoute.APPEARANCE -> AppearanceScreen(state, navigation)
         AppRoute.THEME_MODE -> ThemeModeScreen(state)
@@ -4565,14 +4581,14 @@ private fun FirstSyncScreen(
                 if (mobileSession.cachedSnapshotBudgetId == state.selectedBudgetId && mobileSession.hasCachedSnapshot) {
                     BodyText("The last saved copy is still available on this phone.")
                     SecondaryButton("Open saved copy") {
-                        selectLatestCachedMonth(state, mobileSession.budgetMonthRecords, mobileSession.transactionRecords)
+                        selectLatestCachedMonth(state, mobileSession.budgetMonthIds, mobileSession.transactionRecords)
                         navigation.selectTab(AppRoute.BUDGET)
                     }
                 }
             }
         }
         PrimaryButton("Done", enabled = mobileSession.syncComplete) {
-            selectLatestCachedMonth(state, mobileSession.budgetMonthRecords, mobileSession.transactionRecords)
+            selectLatestCachedMonth(state, mobileSession.budgetMonthIds, mobileSession.transactionRecords)
             navigation.selectTab(AppRoute.BUDGET)
         }
     }
@@ -4580,17 +4596,18 @@ private fun FirstSyncScreen(
 
 private fun selectLatestCachedMonth(
     state: AppState,
-    budgetMonthRecords: List<BudgetRecordEntity>,
+    budgetMonthIds: List<String>,
     transactionRecords: List<BudgetRecordEntity>,
 ) {
     val cachedMonthIds =
-        budgetMonthRecords
-            .mapNotNull { record ->
-                val parts = record.recordId.split('-')
+        budgetMonthIds
+            .mapNotNull { monthId ->
+                val parts = monthId.split('-')
                 if (parts.size != 2) return@mapNotNull null
                 val year = parts[0].toIntOrNull() ?: return@mapNotNull null
                 val month = parts[1].toIntOrNull()?.takeIf { it in 1..12 } ?: return@mapNotNull null
-                record.recordId
+                if (year !in 1..9999) return@mapNotNull null
+                monthId
             }.distinct()
             .sorted()
     if (state.selectedMonthId in cachedMonthIds) return
@@ -6602,6 +6619,7 @@ private fun SyncCenterScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
+    liveTransactions: List<TransactionItem>,
 ) {
     if (state.selectedBudgetId.isNotBlank()) {
         val attention = mobileSession.pendingWrites.filter { it.status in setOf("queued", "conflict", "uncertain", "rejected") }
@@ -6647,7 +6665,7 @@ private fun SyncCenterScreen(
                             attention.forEachIndexed { index, operation ->
                                 if (index > 0) DividerLine()
                                 val transaction =
-                                    liveTransactionItems(mobileSession).firstOrNull { it.recordId == operation.recordId }
+                                    liveTransactions.firstOrNull { it.recordId == operation.recordId }
                                 ListRow(
                                     "",
                                     transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
@@ -6750,6 +6768,7 @@ private fun ConflictInboxScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
+    liveTransactions: List<TransactionItem>,
 ) {
     if (state.selectedBudgetId.isNotBlank()) {
         val conflicts = mobileSession.pendingWrites.filter { it.status == "conflict" }
@@ -6761,7 +6780,7 @@ private fun ConflictInboxScreen(
                     SectionCard("Conflicts", "${conflicts.size} transaction changes") {
                         conflicts.forEachIndexed { index, operation ->
                             if (index > 0) DividerLine()
-                            val transaction = liveTransactionItems(mobileSession).firstOrNull { it.recordId == operation.recordId }
+                            val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
                             ListRow(
                                 "!",
                                 transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
@@ -6837,6 +6856,7 @@ private fun ConflictReviewScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
     onResolveConflict: (String, Boolean) -> Unit,
+    liveTransactions: List<TransactionItem>,
 ) {
     if (state.selectedBudgetId.isNotBlank()) {
         val operation =
@@ -6854,7 +6874,7 @@ private fun ConflictReviewScreen(
             if (operation == null) {
                 Heading("Conflict is no longer available", "Refresh the sync center to see the current state.")
             } else {
-                val transaction = liveTransactionItems(mobileSession).firstOrNull { it.recordId == operation.recordId }
+                val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
                 Heading("Two versions differ", transaction?.payee ?: "Review this transaction before continuing.")
                 Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     ConflictValueCard(
@@ -6935,6 +6955,7 @@ private fun UncertainWriteScreen(
     onCheckStatus: (String) -> Unit,
     onRetry: (String) -> Unit,
     onDiscard: (String) -> Unit,
+    liveTransactions: List<TransactionItem>,
 ) {
     if (state.selectedBudgetId.isNotBlank()) {
         val pendingOperation =
@@ -6954,7 +6975,7 @@ private fun UncertainWriteScreen(
                 Heading("No change to check")
                 InfoBubble("This change is no longer waiting for server confirmation.")
             } else {
-                val transaction = liveTransactionItems(mobileSession).firstOrNull { it.recordId == operation.recordId }
+                val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
                 val isChecked = mobileSession.checkedWriteOperationId == operation.operationId
                 val isNotFound = isChecked && operation.status == "uncertain" && operation.lastErrorCode == "http-404"
                 val checkError =
@@ -7094,6 +7115,7 @@ private fun RejectedWriteScreen(
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
     onDiscard: (String) -> Unit,
+    liveTransactions: List<TransactionItem>,
 ) {
     if (state.selectedBudgetId.isNotBlank()) {
         val operation =
@@ -7106,7 +7128,7 @@ private fun RejectedWriteScreen(
             if (operation == null) {
                 BodyText("There are no rejected edits in the current local copy.")
             } else {
-                val transaction = liveTransactionItems(mobileSession).firstOrNull { it.recordId == operation.recordId }
+                val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
                 SectionCard(transaction?.payee ?: "Transaction", transaction?.dateLabel ?: "Rejected edit") {
                     ListRow(
                         "¤",
@@ -7773,7 +7795,7 @@ private fun LocalDataScreen(
             mobileSession.payeeRecords.size +
             mobileSession.categoryRecords.size +
             mobileSession.categoryGroupRecords.size +
-            mobileSession.budgetMonthRecords.size
+            mobileSession.budgetMonthIds.size
     val queuedCount = mobileSession.pendingWrites.count { it.status == "queued" || it.status == "sending" }
     val conflictCount = mobileSession.pendingWrites.count { it.status == "conflict" }
     val attentionCount = mobileSession.pendingWrites.count { it.status == "uncertain" || it.status == "rejected" }

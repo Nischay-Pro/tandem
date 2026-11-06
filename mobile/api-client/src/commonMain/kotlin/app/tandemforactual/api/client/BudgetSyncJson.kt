@@ -2,6 +2,7 @@ package app.tandemforactual.api.client
 
 import app.tandemforactual.data.store.BudgetChange
 import app.tandemforactual.data.store.BudgetDisplaySettings
+import app.tandemforactual.data.store.BudgetRecordDisplayMetadata
 import app.tandemforactual.data.store.BudgetSyncProtocolException
 import app.tandemforactual.data.store.LocalRecordProjection
 import app.tandemforactual.data.store.RemoteBudgetChangePage
@@ -110,6 +111,7 @@ object BudgetSyncJson {
             revision = root.requiredString("revision"),
             bodyJson = body.toString(),
             projection = body.toProjection(),
+            displayMetadata = body.toDisplayMetadata(),
         )
     }
 
@@ -248,6 +250,12 @@ object BudgetSyncJson {
             budgetMonth = firstString("month", "budgetMonth"),
         )
 
+    private fun JsonObject.toDisplayMetadata(): BudgetRecordDisplayMetadata =
+        BudgetRecordDisplayMetadata(
+            displayName = optionalString("name")?.takeIf { it.isNotBlank() },
+            notes = optionalString("notes")?.takeIf { it.isNotBlank() },
+        )
+
     private fun JsonObject.toRemoteRecord(
         budgetId: String,
         recordType: String,
@@ -268,6 +276,7 @@ object BudgetSyncJson {
             payeeId = firstString("payee", "payeeId"),
             amountMinor = firstLong("amount", "amountMinor"),
             budgetMonth = firstString("month", "budgetMonth"),
+            displayMetadata = toDisplayMetadata(),
         )
 
     private fun JsonObject.firstString(vararg names: String): String? = names.firstNotNullOfOrNull { name -> optionalString(name) }

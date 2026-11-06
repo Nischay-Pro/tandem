@@ -1,6 +1,8 @@
 package app.tandemforactual.data.store
 
 import androidx.room3.Room
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import app.tandemforactual.data.database.BudgetRecordDisplayMetadataMigration
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.openTandemDatabase
@@ -18,6 +20,55 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 
 class LocalBudgetRepositoryTest {
+    @Test
+    fun displayMetadataMigrationBackfillsLocalAndRemoteBodiesAndSkipsInvalidJson() =
+        runBlocking {
+            val connection = BundledSQLiteDriver().open(":memory:")
+            try {
+                connection
+                    .prepare(
+                        "CREATE TABLE budget_records (recordId TEXT, localJson TEXT, remoteJson TEXT, displayName TEXT, notes TEXT)",
+                    ).use { it.step() }
+                connection
+                    .prepare(
+                        """INSERT INTO budget_records VALUES ('local', '{"name":"Device name","notes":"Local note"}', '{"name":"Server name"}', NULL, NULL)""",
+                    ).use { it.step() }
+                connection
+                    .prepare(
+                        """INSERT INTO budget_records VALUES ('remote', NULL, '{"name":"Server name","notes":"Server note"}', NULL, NULL)""",
+                    ).use { it.step() }
+                connection.prepare("INSERT INTO budget_records VALUES ('invalid', 'not-json', NULL, NULL, NULL)").use { it.step() }
+
+                BudgetRecordDisplayMetadataMigration().onPostMigrate(connection)
+
+                val statement = connection.prepare("SELECT recordId, displayName, notes FROM budget_records ORDER BY recordId")
+                val metadata =
+                    buildList {
+                        statement.use {
+                            while (it.step()) {
+                                add(
+                                    Triple(
+                                        it.getText(0),
+                                        if (it.isNull(1)) null else it.getText(1),
+                                        if (it.isNull(2)) null else it.getText(2),
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                assertEquals(
+                    listOf(
+                        Triple("invalid", null, null),
+                        Triple("local", "Device name", "Local note"),
+                        Triple("remote", "Server name", "Server note"),
+                    ),
+                    metadata,
+                )
+            } finally {
+                connection.close()
+            }
+        }
+
     @Test
     fun cachedBudgetIdsIncludeSnapshotsAfterFailedRefreshAndSortByLastSuccessfulSync() =
         runBlocking {
@@ -83,6 +134,48 @@ class LocalBudgetRepositoryTest {
                 )
 
                 assertEquals(usaSettings, LocalBudgetRepository(database) { 200L }.readBudgetDisplaySettings(BUDGET))
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun selectedMonthLookupReturnsOnlyItsRecordAndDisplayMetadataTracksTheActiveJson() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val october =
+                    RemoteBudgetRecord(
+                        budgetId = BUDGET,
+                        recordType = "budget-month",
+                        recordId = "2026-10",
+                        revision = "october-r1",
+                        bodyJson = """{"month":"2026-10","categoryGroups":[]}""",
+                        generation = GENERATION,
+                        recordDate = "2026-10-01",
+                    )
+                val september = october.copy(recordId = "2026-09", revision = "september-r1", recordDate = "2026-09-01")
+                val namedTransaction =
+                    transaction(
+                        bodyJson = """{"id":"txn-1","name":"Corner Market","notes":"weekly groceries","amount":1000}""",
+                    )
+                repository.applySnapshot(BUDGET, GENERATION, "c1", listOf(october, september, namedTransaction))
+
+                assertEquals(listOf("2026-10", "2026-09"), repository.findRecordIds(BUDGET, "budget-month"))
+                assertEquals("2026-10", repository.observeRecord(BUDGET, "budget-month", "2026-10").first()?.recordId)
+                val synced = repository.findRecord(BUDGET, "transaction", "txn-1")
+                assertEquals("Corner Market", synced?.displayName)
+                assertEquals("weekly groceries", synced?.notes)
+
+                repository.enqueueWrite(
+                    updateRequest(
+                        optimistic = """{"id":"txn-1","name":"Corner Market","notes":"hardware store","amount":1200}""",
+                    ),
+                )
+                val local = repository.findRecord(BUDGET, "transaction", "txn-1")
+                assertEquals("Corner Market", local?.displayName)
+                assertEquals("hardware store", local?.notes)
             } finally {
                 database.close()
             }

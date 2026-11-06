@@ -11,6 +11,49 @@ import kotlinx.coroutines.flow.Flow
 interface BudgetRecordDao {
     @Query(
         """
+    SELECT recordId FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = :recordType
+      AND localDeleted = 0
+      AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))
+    ORDER BY recordDate DESC, recordId ASC
+    """,
+    )
+    fun observeVisibleRecordIds(
+        budgetId: String,
+        recordType: String,
+    ): Flow<List<String>>
+
+    @Query(
+        """
+    SELECT recordId FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = :recordType
+      AND localDeleted = 0
+      AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))
+    ORDER BY recordDate DESC, recordId ASC
+    """,
+    )
+    suspend fun findVisibleRecordIds(
+        budgetId: String,
+        recordType: String,
+    ): List<String>
+
+    @Query(
+        """
+    SELECT * FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = :recordType AND recordId = :recordId
+      AND localDeleted = 0
+      AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))
+    LIMIT 1
+    """,
+    )
+    fun observeVisibleRecord(
+        budgetId: String,
+        recordType: String,
+        recordId: String,
+    ): Flow<BudgetRecordEntity?>
+
+    @Query(
+        """
     SELECT * FROM budget_records
     WHERE budgetId = :budgetId AND recordType = :recordType
       AND localDeleted = 0
