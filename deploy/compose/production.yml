@@ -40,7 +40,7 @@ services:
       PAIRING_CODE_HASH_KEY_FILE: /run/secrets/pairing_code_hash_key
       HOST: 0.0.0.0
       PORT: 19753
-      TRUST_PROXY: ${TRUST_PROXY:-}
+      TRUST_PROXY: ${TRUST_PROXY:?Set TRUST_PROXY to the reverse proxy IP or narrow CIDR in deploy/compose/.env}
       CHANGE_FEED_EPOCH: ${CHANGE_FEED_EPOCH:?Set CHANGE_FEED_EPOCH in deploy/compose/.env}
       ACTUAL_SERVER_URL: ${ACTUAL_SERVER_URL:-}
       ACTUAL_SERVER_PASSWORD_FILE: /run/secrets/actual_server_password

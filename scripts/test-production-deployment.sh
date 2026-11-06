@@ -42,13 +42,17 @@ DATABASE_URL_FILE=$secret_dir/database_url
 PAIRING_CODE_HASH_KEY_FILE=$secret_dir/pairing_code_hash_key
 ACTUAL_SERVER_PASSWORD_FILE=$secret_dir/actual_server_password
 CHANGE_FEED_EPOCH=$test_epoch
-TRUST_PROXY=
+TRUST_PROXY=127.0.0.1
 TANDEM_EDGE_NETWORK=$edge_network
 ACTUAL_SERVER_URL=
 ACTUAL_SERVER_PASSWORD=
 EOF
 
 docker network create "$edge_network" >/dev/null
+if TRUST_PROXY= "${compose[@]}" config --quiet >/dev/null 2>&1; then
+  echo "Production Compose accepted an empty TRUST_PROXY value." >&2
+  exit 1
+fi
 "${compose[@]}" config --quiet
 "${compose[@]}" up --build --detach
 api_id="$("${compose[@]}" ps -q api)"

@@ -68,14 +68,15 @@ authenticated request; each successful request refreshes that idle window.
 Invalid pairing codes are limited to 10 per client address per minute.
 Successful pairings and other request-validation errors do not consume this
 failure limit. The in-memory limit applies separately to each API process.
-Forwarded client addresses are ignored by default. For a
-reverse-proxy deployment, set `TRUST_PROXY` to the exact proxy IP addresses or
-narrow CIDRs, for example `172.30.0.2` or `172.30.0.0/24`. Do not use
+Forwarded client addresses are ignored by default. Production Compose requires
+`TRUST_PROXY`; set it to the exact proxy IP addresses or narrow CIDRs, for
+example `172.30.0.2` or `172.30.0.0/24`. Do not use
 `0.0.0.0/0`, and make the API reachable only through the trusted proxy network.
 Fastify then keys the pairing limit on the forwarded client address. The Nginx
-example also applies a per-address limit to the pairing route. If `TRUST_PROXY`
-is unset, the API warns when it receives `X-Forwarded-For`; requests arriving
-from the same proxy socket share the API's in-memory limit.
+example also applies a per-address limit to the pairing route. When running the
+API outside production Compose, an unset `TRUST_PROXY` causes the API to warn
+when it receives `X-Forwarded-For`; requests arriving from the same proxy
+socket share the API's in-memory limit.
 The Nginx example also limits API traffic to 600 requests per minute per client
 address, with a short burst allowance. Keep the API reachable only through this
 proxy so invalid-token traffic cannot bypass that limit.

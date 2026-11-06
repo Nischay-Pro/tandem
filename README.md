@@ -85,7 +85,7 @@ services:
       HOST: 0.0.0.0
       PORT: 19753
       CHANGE_FEED_EPOCH: ${CHANGE_FEED_EPOCH:?Set CHANGE_FEED_EPOCH in .env.tandem}
-      TRUST_PROXY: ${TRUST_PROXY:-}
+      TRUST_PROXY: ${TRUST_PROXY:?Set TRUST_PROXY to the proxy IP or narrow CIDR in .env.tandem}
       ACTUAL_SERVER_URL: ${ACTUAL_SERVER_URL:-http://actual-server:5006}
       ACTUAL_SERVER_PASSWORD_FILE: /run/secrets/tandem_actual_server_password
       ACTUAL_API_DATA_DIR: /data/actual-api
@@ -159,6 +159,8 @@ TANDEM_PAIRING_CODE_HASH_KEY_FILE=.tandem-secrets/pairing_code_hash_key
 TANDEM_ACTUAL_SERVER_PASSWORD_FILE=.tandem-secrets/actual_server_password
 CHANGE_FEED_EPOCH=<paste-the-generated-change-feed-value>
 ACTUAL_SERVER_URL=http://actual-server:5006
+# Required when using this reverse-proxy deployment; use the proxy IP or a
+# narrow CIDR as seen by the Tandem API container.
 TRUST_PROXY=
 ```
 
@@ -172,7 +174,7 @@ docker compose \
   up -d tandem-postgres tandem-api
 ```
 
-Use your actual Compose filename in place of `docker-compose.yml`. If your Actual Compose file reads values from an existing `.env`, include `--env-file .env` on each Compose command; if it does not, use only `--env-file .env.tandem`. Add an Nginx `/api/v1/` route to `http://tandem-api:19753` before the existing Actual catch-all. In [`deploy/nginx/tandem-upstreams.conf.example`](deploy/nginx/tandem-upstreams.conf.example), change the upstream target from `api:19753` to `tandem-api:19753` to match this example service name. Keep TLS termination in the existing proxy and set `TRUST_PROXY` to its exact container IP or a narrow subnet when you want Fastify to honor forwarded client addresses. Do not publish PostgreSQL or expose the API directly to the internet.
+Use your actual Compose filename in place of `docker-compose.yml`. If your Actual Compose file reads values from an existing `.env`, include `--env-file .env` on each Compose command; if it does not, use only `--env-file .env.tandem`. Add an Nginx `/api/v1/` route to `http://tandem-api:19753` before the existing Actual catch-all. In [`deploy/nginx/tandem-upstreams.conf.example`](deploy/nginx/tandem-upstreams.conf.example), change the upstream target from `api:19753` to `tandem-api:19753` to match this example service name. Keep TLS termination in the existing proxy and set the required `TRUST_PROXY` value to its exact container IP or a narrow subnet so Fastify can honor forwarded client addresses. Do not publish PostgreSQL or expose the API directly to the internet.
 
 The image tag in the Compose service must match the tag used by `docker build`. When updating Tandem later, build from the Tandem repository root, then run Compose from the Actual deployment directory to recreate only the API service:
 

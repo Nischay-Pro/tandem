@@ -55,8 +55,9 @@ adopting a new image release.
 Attach the existing Nginx container to `tandem-edge`, or set
 `TANDEM_EDGE_NETWORK` to its existing external Docker network. Add the two
 files under `deploy/nginx/` to the matching Nginx contexts. The API location
-must precede the Actual catch-all. Set `TRUST_PROXY` to the exact proxy address
-or narrow CIDR observed by the API; do not trust all forwarded headers. Keep
+must precede the Actual catch-all. Set the required `TRUST_PROXY` value to the
+exact proxy address or narrow CIDR observed by the API; production Compose
+refuses an empty value. Do not trust all forwarded headers. Keep
 TLS termination and the Actual server's existing proxy settings in the
 existing Nginx site configuration.
 The example also limits the API to 600 requests per minute per client address
