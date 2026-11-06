@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  ACTUAL_BUDGET_MONTH_READ_CONCURRENCY,
   ACTUAL_TRANSACTION_MAX_ROWS,
   ACTUAL_TRANSACTION_PAGE_SIZE,
   ActualBudgetSnapshotReader,
@@ -208,8 +209,38 @@ describe("Actual budget snapshot reader", () => {
   });
 
   it("uses the default page and row limits", () => {
-    expect(ACTUAL_TRANSACTION_PAGE_SIZE).toBe(500);
+    expect(ACTUAL_TRANSACTION_PAGE_SIZE).toBe(2_000);
     expect(ACTUAL_TRANSACTION_MAX_ROWS).toBe(1_000_000);
+  });
+
+  it("reads budget months with bounded concurrency while preserving each month", async () => {
+    const months = Array.from({ length: 17 }, (_, index) => {
+      const month = (index % 12) + 1;
+      const year = 2025 + Math.floor(index / 12);
+      return `${year}-${String(month).padStart(2, "0")}`;
+    });
+    let activeReads = 0;
+    let peakReads = 0;
+    const fake = createApi({
+      getBudgetMonths: vi.fn(async () => months),
+      getBudgetMonth: vi.fn(async (month: string) => {
+        activeReads += 1;
+        peakReads = Math.max(peakReads, activeReads);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        activeReads -= 1;
+        return { month, incomeAvailable: 100, totalBudgeted: 50 };
+      }),
+    });
+    const reader = new ActualBudgetSnapshotReader(fake.session, fake.actual);
+
+    const records = await reader.read("budget-1");
+    const monthRecords = records.filter(({ type }) => type === "budget-month");
+
+    expect(ACTUAL_BUDGET_MONTH_READ_CONCURRENCY).toBe(8);
+    expect(peakReads).toBeGreaterThan(1);
+    expect(peakReads).toBeLessThanOrEqual(ACTUAL_BUDGET_MONTH_READ_CONCURRENCY);
+    expect(fake.actual.getBudgetMonth).toHaveBeenCalledTimes(months.length);
+    expect(monthRecords.map(({ id }) => id).sort()).toEqual([...months].sort());
   });
 
   it("publishes Companion-created rows with their stable ID, not Actual's random ID", async () => {

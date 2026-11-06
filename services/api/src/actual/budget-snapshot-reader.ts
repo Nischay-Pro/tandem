@@ -16,8 +16,9 @@ import {
   snapshotActualTransaction,
 } from "./transaction-reconciliation.js";
 
-export const ACTUAL_TRANSACTION_PAGE_SIZE = 500;
+export const ACTUAL_TRANSACTION_PAGE_SIZE = 2_000;
 export const ACTUAL_TRANSACTION_MAX_ROWS = 1_000_000;
+export const ACTUAL_BUDGET_MONTH_READ_CONCURRENCY = 8;
 
 export type ActualBudgetReadApi = Pick<
   typeof Actual,
@@ -125,7 +126,7 @@ export class ActualBudgetSnapshotReader implements BudgetSnapshotReader {
       "budget months",
     );
     const seenMonths = new Set<string>();
-    for (const value of months) {
+    const validatedMonths = months.map((value) => {
       if (typeof value !== "string" || value.length === 0) {
         throw new Error("Actual returned an invalid budget month");
       }
@@ -133,15 +134,23 @@ export class ActualBudgetSnapshotReader implements BudgetSnapshotReader {
         throw new Error("Actual returned a duplicate budget month");
       }
       seenMonths.add(value);
-      const month = requireRecord(
-        await this.actual.getBudgetMonth(value),
-        "budget month data",
-      );
-      if (month.month !== value) {
-        throw new Error("Actual returned data for a different budget month");
-      }
-      records.push(this.record("budget-month", month, value));
-    }
+      return value;
+    });
+    const budgetMonthRecords = await mapConcurrent(
+      validatedMonths,
+      ACTUAL_BUDGET_MONTH_READ_CONCURRENCY,
+      async (value) => {
+        const month = requireRecord(
+          await this.actual.getBudgetMonth(value),
+          "budget month data",
+        );
+        if (month.month !== value) {
+          throw new Error("Actual returned data for a different budget month");
+        }
+        return this.record("budget-month", month, value);
+      },
+    );
+    records.push(...budgetMonthRecords);
 
     records.push(...(await this.readTransactions()));
     records.sort((left, right) =>
@@ -396,4 +405,28 @@ function readDisplaySettings(value: unknown): BudgetDisplaySettings {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && !Array.isArray(value) && typeof value === "object";
+}
+
+async function mapConcurrent<T, R>(
+  values: readonly T[],
+  concurrency: number,
+  mapper: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const mapped: R[] = [];
+  for (let offset = 0; offset < values.length; offset += concurrency) {
+    const batch = values.slice(offset, offset + concurrency);
+    const results = await Promise.allSettled(batch.map(mapper));
+    let hasFailure = false;
+    let failure: unknown;
+    for (const result of results) {
+      if (result.status === "rejected") {
+        if (!hasFailure) failure = result.reason;
+        hasFailure = true;
+      } else {
+        mapped.push(result.value);
+      }
+    }
+    if (hasFailure) throw failure;
+  }
+  return mapped;
 }
