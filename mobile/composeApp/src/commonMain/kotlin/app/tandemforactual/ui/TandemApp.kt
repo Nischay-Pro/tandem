@@ -5064,30 +5064,30 @@ private fun AccountOptionsScreen(
     state: AppState,
     liveAccounts: List<LiveAccountSummary>,
 ) {
-    if (state.selectedBudgetId.isNotBlank()) {
-        val account = liveAccounts.firstOrNull { it.id == state.selectedAccountId }
-        PageColumn {
-            Heading(account?.name ?: "Account options", "Actual account details")
-            if (account == null) {
-                BodyText("This account isn’t saved on this device.")
-            } else {
-                SectionCard("Account", "Read-only Actual data") {
-                    ListRow("Name", "Account name", account.name)
-                    DividerLine()
-                    ListRow("Balance", "Current Actual balance", account.balanceMinor?.let(::formatCurrency) ?: "Unavailable")
-                    DividerLine()
-                    ListRow("Budget status", "Account scope", if (account.offBudget) "Off budget" else "On budget")
-                }
-                PreviewNote("Account names and settings can only be changed in Actual.")
+    val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    val liveAccount = if (isLiveBudget) liveAccounts.firstOrNull { it.id == state.selectedAccountId } else null
+    val previewAccount = if (isLiveBudget) null else previewAccountById(state.selectedAccountId)
+    val accountName = liveAccount?.name ?: previewAccount?.name
+    val accountBalance =
+        liveAccount?.balanceMinor?.let(::formatCurrency)
+            ?: previewAccount?.balanceMinor?.let(::formatCurrency)
+            ?: "Unavailable"
+    val accountScope = if (liveAccount?.offBudget ?: previewAccount?.offBudget ?: false) "Off budget" else "On budget"
+    PageColumn {
+        if (!isLiveBudget) SampleBanner()
+        if (accountName == null) {
+            Heading("Account options")
+            EmptyState("Account unavailable", "This account isn’t saved on this device.")
+        } else {
+            Heading(accountName, "Account options")
+            SectionCard("Account", "Read-only details") {
+                ListRow("Name", "Account name", accountName)
+                DividerLine()
+                ListRow("Balance", "Current balance", accountBalance)
+                DividerLine()
+                ListRow("Budget status", "Account scope", accountScope)
             }
         }
-        return
-    }
-    val account = previewAccountById(state.selectedAccountId)
-    PageColumn {
-        Heading(account.name, "Account options")
-        ListRow("Edit account details", "Name and notes", "Unavailable")
-        ListRow("Hide from budget", "Keep historical activity available", "Unavailable")
     }
 }
 
@@ -6587,76 +6587,75 @@ private fun ConflictInboxScreen(
     navigation: AppNavigation,
     liveTransactions: List<TransactionItem>,
 ) {
-    if (state.selectedBudgetId.isNotBlank()) {
-        val conflicts = mobileSession.pendingWrites.filter { it.status == "conflict" }
-        PageLazyColumn {
-            item(key = "conflicts-title") {
-                Heading("Changes to review", "Choose whether to keep your edit or the latest Actual version.")
-            }
-            if (conflicts.isEmpty()) {
-                item(key = "conflicts-empty") {
-                    AnimatedAttentionContent(showingAttention = false, animateSizeChanges = true) { _ ->
-                        SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
-                            EmptyState("No changes need review", modifier = Modifier.padding(TandemSpacing.large))
-                        }
-                    }
-                }
-            } else {
-                item(key = "conflicts-section-title") {
-                    SectionCard("Needs your review", "${conflicts.size} edits") {}
-                }
-                items(conflicts, key = { "conflict:${it.operationId}" }) { operation ->
+    val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    val conflicts =
+        if (isLiveBudget) {
+            mobileSession.pendingWrites
+                .filter { it.status == "conflict" }
+                .map { operation ->
                     val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
+                    ConflictInboxItemUi(
+                        operation.operationId,
+                        transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
+                        "${transaction?.dateLabel ?: "Actual changed"} · ${transaction?.category ?: "Transaction"}",
+                    )
+                }
+        } else {
+            listOf(
+                ConflictInboxItemUi(
+                    "sample-conflict",
+                    "Corner Market",
+                    "${formatDate(SampleDate(2026, 5, 14))} · Groceries · Checking",
+                ),
+            )
+        }
+    PageLazyColumn {
+        if (!isLiveBudget) item(key = "conflicts-sample-banner") { SampleBanner() }
+        item(key = "conflicts-title") {
+            Heading(
+                "Changes to review",
+                if (isLiveBudget) "Choose whether to keep your edit or the latest Actual version." else "Choose which version to keep.",
+            )
+        }
+        if (conflicts.isEmpty()) {
+            item(key = "conflicts-empty") {
+                AnimatedAttentionContent(showingAttention = false, animateSizeChanges = true) { _ ->
                     SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
-                        ListRow(
-                            transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
-                            "${transaction?.dateLabel ?: "Actual changed"} · ${transaction?.category ?: "Transaction"}",
-                            "Review",
-                            options = ListRowOptions(trailingColor = tandemPalette.warning),
-                        ) {
-                            state.selectedConflictOperationId = operation.operationId
-                            navigation.open(AppRoute.CONFLICT_REVIEW)
-                        }
+                        EmptyState("No changes need review", modifier = Modifier.padding(TandemSpacing.large))
                     }
                 }
             }
+        } else {
+            item(key = "conflicts-section-title") {
+                SectionCard("Needs your review", "${conflicts.size} edits") {}
+            }
+            items(conflicts, key = { "conflict:${it.id}" }) { conflict ->
+                SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
+                    ListRow(
+                        conflict.title,
+                        conflict.description,
+                        "Review",
+                        options = ListRowOptions(trailingColor = tandemPalette.warning),
+                    ) {
+                        state.selectedConflictOperationId = conflict.id
+                        navigation.open(AppRoute.CONFLICT_REVIEW)
+                    }
+                }
+            }
+        }
+        if (isLiveBudget) {
             mobileSession.transactionWriteMessage?.let { message ->
                 item(key = "conflicts-write-message") { BodyText(message) }
             }
         }
-        return
-    }
-    PageColumn {
-        SampleBanner()
-        Heading("Changes to review", "Choose which version to keep.")
-        SurfaceCard(onClick = { navigation.open(AppRoute.CONFLICT_REVIEW) }) {
-            Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                    Badge("Needs your review", tandemPalette.warning)
-                    Text("Corner Market", color = tandemPalette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
-                }
-                Text(
-                    "${formatDate(SampleDate(2026, 5, 14))} · Groceries · Checking",
-                    color = tandemPalette.muted,
-                    fontSize = TandemTypography.caption,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    ConflictValueCard("Your edit", state.formatCurrency(1_200), Modifier.weight(1f))
-                    ConflictValueCard("In Actual", state.formatCurrency(1_500), Modifier.weight(1f))
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
-                    Text(
-                        "Review both versions",
-                        color = tandemPalette.accent,
-                        fontSize = TandemTypography.label,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(16.dp), tint = tandemPalette.accent)
-                }
-            }
-        }
     }
 }
+
+private data class ConflictInboxItemUi(
+    val id: String,
+    val title: String,
+    val description: String,
+)
 
 @Composable
 private fun ConflictValueCard(
@@ -6680,81 +6679,73 @@ private fun ConflictReviewScreen(
     onResolveConflict: (String, Boolean) -> Unit,
     liveTransactions: List<TransactionItem>,
 ) {
-    if (state.selectedBudgetId.isNotBlank()) {
-        val operation =
+    val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    val operation =
+        if (isLiveBudget) {
             mobileSession.pendingWrites.firstOrNull {
                 it.operationId == state.selectedConflictOperationId &&
                     it.status == "conflict"
             }
-        val record = operation?.let { item -> mobileSession.transactionRecords.firstOrNull { it.recordId == item.recordId } }
-        val deviceVersion = operation?.optimisticJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
-        val actualVersion = record?.remoteJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
-        val deviceAmount = deviceVersion?.longValue("amount")
-        val actualAmount = actualVersion?.longValue("amount")
-        PageColumn {
-            if (operation == null) {
-                Heading("No change to review")
-            } else {
-                val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
-                Heading("Two versions differ")
-                Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    ConflictValueCard(
-                        "Your edit",
-                        deviceAmount?.let(::formatSignedCurrency) ?: "Deleted",
-                        Modifier.weight(1f),
-                    )
-                    ConflictValueCard(
-                        "In Actual",
-                        actualAmount?.let(::formatSignedCurrency) ?: "Deleted",
-                        Modifier.weight(1f),
-                    )
-                }
-                SectionCard("Details") {
-                    ListRow("Account", "Actual account", transaction?.account ?: "Unavailable")
-                    DividerLine()
-                    ListRow("Category", "Actual category", transaction?.category ?: "Unavailable")
-                    DividerLine()
-                    ListRow("Date", "Actual date", transaction?.dateLabel ?: "Unavailable")
-                }
+        } else {
+            null
+        }
+    val record = operation?.let { item -> mobileSession.transactionRecords.firstOrNull { it.recordId == item.recordId } }
+    val deviceVersion = operation?.optimisticJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
+    val actualVersion = record?.remoteJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
+    val deviceAmount = deviceVersion?.longValue("amount")
+    val actualAmount = actualVersion?.longValue("amount")
+    val transaction = operation?.let { conflict -> liveTransactions.firstOrNull { it.recordId == conflict.recordId } }
+    val deviceAmountText =
+        if (isLiveBudget) {
+            deviceAmount?.let(::formatSignedCurrency) ?: "Deleted"
+        } else {
+            state.formatCurrency(1_200)
+        }
+    val actualAmountText =
+        if (isLiveBudget) {
+            actualAmount?.let(::formatSignedCurrency) ?: "Deleted"
+        } else {
+            state.formatCurrency(1_500)
+        }
+    val accountName = transaction?.account ?: if (isLiveBudget) "Unavailable" else "Checking"
+    val categoryName = transaction?.category ?: if (isLiveBudget) "Unavailable" else "Groceries"
+    val dateLabel =
+        transaction?.dateLabel
+            ?: if (isLiveBudget) "Unavailable" else formatShortDate(SampleDate(2026, 5, 14))
+    PageColumn {
+        if (!isLiveBudget) SampleBanner()
+        if (isLiveBudget && operation == null) {
+            EmptyState("No change to review", "This change no longer needs attention.")
+        } else {
+            Heading("Two versions differ")
+            Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                ConflictValueCard("Your edit", deviceAmountText, Modifier.weight(1f))
+                ConflictValueCard("In Actual", actualAmountText, Modifier.weight(1f))
+            }
+            SectionCard("Details") {
+                ListRow("Account", trailing = accountName)
+                DividerLine()
+                ListRow("Category", trailing = categoryName)
+                DividerLine()
+                ListRow("Date", trailing = dateLabel)
+            }
+            if (isLiveBudget) {
                 mobileSession.transactionWriteMessage?.let { BodyText(it) }
                 PrimaryButton(
                     "Keep your edit",
                     enabled = !state.readOnlyMode && !mobileSession.isSavingTransaction && record?.remoteDeleted != true,
-                ) { onResolveConflict(operation.operationId, true) }
+                ) { onResolveConflict(operation!!.operationId, true) }
                 SecondaryButton("Keep Actual", enabled = !state.readOnlyMode && !mobileSession.isSavingTransaction) {
-                    onResolveConflict(operation.operationId, false)
+                    onResolveConflict(operation!!.operationId, false)
+                }
+            } else {
+                PrimaryButton("Keep $deviceAmountText") { state.conflictChoice = "Your edit" }
+                SecondaryButton("Keep $actualAmountText") { state.conflictChoice = "Actual" }
+                if (state.conflictChoice.isNotBlank()) {
+                    InfoBubble("Sample choice: ${state.conflictChoice}")
                 }
             }
         }
-        return
-    }
-    PageColumn {
-        Heading("Two versions differ", "Review the two sample amounts for Corner Market.")
-        Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-            ConflictValueCard("Your edit", state.formatCurrency(1_200), Modifier.weight(1f))
-            ConflictValueCard("In Actual", state.formatCurrency(1_500), Modifier.weight(1f))
-        }
-        SectionCard("Other details", "Review before choosing") {
-            ListRow("Account", "Same on both versions", "Checking")
-            DividerLine()
-            ListRow("Category", "Same on both versions", "Groceries")
-            DividerLine()
-            ListRow("Date", "Same on both versions", formatShortDate(SampleDate(2026, 5, 14)))
-        }
-        if (state.conflictChoice.isNotEmpty()) {
-            PreviewNote("Sample choice selected: ${state.conflictChoice}. No server update has been sent.")
-        }
-        PrimaryButton("Keep ${state.formatCurrency(1_200)}") {
-            state.conflictChoice =
-                "device value ${state.formatCurrency(1_200)}"
-        }
-        SecondaryButton("Keep ${state.formatCurrency(1_500)}") {
-            state.conflictChoice =
-                "Actual value ${state.formatCurrency(1_500)}"
-        }
-        PreviewNote(
-            "The app would compare that choice with the latest server copy before saving. Nothing changes until the server confirms it.",
-        )
     }
 }
 
