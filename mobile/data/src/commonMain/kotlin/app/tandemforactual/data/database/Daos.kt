@@ -68,6 +68,19 @@ interface BudgetRecordDao {
 
     @Query(
         """
+    SELECT recordId, recordDate, accountId, categoryId, payeeId, amountMinor, notes,
+           cleared, reconciled, approved, matched, transfer
+    FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = 'transaction'
+      AND localDeleted = 0
+      AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))
+    ORDER BY recordDate DESC, recordId ASC
+    """,
+    )
+    fun observeSearchableTransactions(budgetId: String): Flow<List<SearchableBudgetTransaction>>
+
+    @Query(
+        """
     SELECT * FROM budget_records
     WHERE budgetId = :budgetId AND recordType = :recordType
       AND localDeleted = 0

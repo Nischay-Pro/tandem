@@ -3,6 +3,7 @@ package app.tandemforactual.data.store
 import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import app.tandemforactual.data.database.BudgetRecordDisplayMetadataMigration
+import app.tandemforactual.data.database.BudgetRecordSearchMetadataMigration
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.openTandemDatabase
@@ -66,6 +67,124 @@ class LocalBudgetRepositoryTest {
                 )
             } finally {
                 connection.close()
+            }
+        }
+
+    @Test
+    fun searchMetadataMigrationBackfillsTransactionFlagsAndSkipsInvalidJson() =
+        runBlocking {
+            val connection = BundledSQLiteDriver().open(":memory:")
+            try {
+                connection
+                    .prepare(
+                        "CREATE TABLE budget_records (recordId TEXT, recordType TEXT, localJson TEXT, remoteJson TEXT, cleared INTEGER, reconciled INTEGER, approved INTEGER, matched INTEGER, transfer INTEGER)",
+                    ).use { it.step() }
+                connection
+                    .prepare(
+                        """INSERT INTO budget_records VALUES ('local', 'transaction', '{"cleared":"reconciled","approved":true,"matched":false,"transfer_id":"other"}', '{"cleared":false}', NULL, NULL, NULL, NULL, NULL)""",
+                    ).use { it.step() }
+                connection
+                    .prepare(
+                        """INSERT INTO budget_records VALUES ('remote', 'transaction', NULL, '{"cleared":false,"reconciled":false,"approved":false,"matched":true,"is_transfer":false}', NULL, NULL, NULL, NULL, NULL)""",
+                    ).use { it.step() }
+                connection
+                    .prepare(
+                        "INSERT INTO budget_records VALUES ('invalid', 'transaction', 'not-json', NULL, NULL, NULL, NULL, NULL, NULL)",
+                    ).use {
+                        it.step()
+                    }
+
+                BudgetRecordSearchMetadataMigration().onPostMigrate(connection)
+
+                val statement =
+                    connection.prepare(
+                        "SELECT recordId, cleared, reconciled, approved, matched, transfer FROM budget_records ORDER BY recordId",
+                    )
+                val metadata =
+                    buildList {
+                        statement.use {
+                            while (it.step()) {
+                                add(
+                                    listOf(
+                                        it.getText(0),
+                                        if (it.isNull(1)) null else it.getLong(1).toString(),
+                                        if (it.isNull(2)) null else it.getLong(2).toString(),
+                                        if (it.isNull(3)) null else it.getLong(3).toString(),
+                                        if (it.isNull(4)) null else it.getLong(4).toString(),
+                                        if (it.isNull(5)) null else it.getLong(5).toString(),
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                assertEquals(
+                    listOf(
+                        listOf("invalid", null, null, null, null, null),
+                        listOf("local", "1", "1", "1", "0", "1"),
+                        listOf("remote", "0", "0", "0", "1", "0"),
+                    ),
+                    metadata,
+                )
+            } finally {
+                connection.close()
+            }
+        }
+
+    @Test
+    fun searchableTransactionProjectionUsesCachedColumnsForRemoteAndLocalRecords() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                repository.applySnapshot(
+                    BUDGET,
+                    GENERATION,
+                    "c1",
+                    listOf(
+                        transaction(
+                            recordId = "remote",
+                            bodyJson =
+                                """{"cleared":"reconciled","approved":true,"matched":false,"transfer_id":"other","notes":"remote note"}""",
+                        ),
+                    ),
+                )
+
+                assertEquals(
+                    listOf("remote", "2026-10-01", "checking", "food", "market", 1000L, "remote note", true, true, true, false, true),
+                    repository.observeSearchableTransactions(BUDGET).first().single().let {
+                        listOf(
+                            it.recordId,
+                            it.recordDate,
+                            it.accountId,
+                            it.categoryId,
+                            it.payeeId,
+                            it.amountMinor,
+                            it.notes,
+                            it.cleared,
+                            it.reconciled,
+                            it.approved,
+                            it.matched,
+                            it.transfer,
+                        )
+                    },
+                )
+
+                repository.enqueueWrite(
+                    updateRequest(
+                        recordId = "remote",
+                        optimistic =
+                            """{"id":"remote","cleared":false,"reconciled":false,"approved":false,"matched":true,"isTransfer":false,"notes":"local note"}""",
+                    ),
+                )
+                val local = repository.observeSearchableTransactions(BUDGET).first().single()
+                assertEquals("local note", local.notes)
+                assertEquals(false, local.cleared)
+                assertEquals(false, local.reconciled)
+                assertEquals(false, local.approved)
+                assertEquals(true, local.matched)
+                assertEquals(false, local.transfer)
+            } finally {
+                database.close()
             }
         }
 

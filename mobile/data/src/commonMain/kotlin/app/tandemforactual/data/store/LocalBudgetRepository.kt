@@ -4,6 +4,7 @@ import androidx.room3.withWriteTransaction
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.BudgetSyncStateEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.database.TandemDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -80,6 +81,44 @@ private fun parseDisplayMetadata(bodyJson: String?): BudgetRecordDisplayMetadata
             BudgetRecordDisplayMetadata(
                 displayName = body.displayString("name")?.takeIf { it.isNotBlank() },
                 notes = body.displayString("notes")?.takeIf { it.isNotBlank() },
+            )
+        }.getOrNull()
+    }
+
+private data class TransactionSearchMetadata(
+    val cleared: Boolean?,
+    val reconciled: Boolean?,
+    val approved: Boolean?,
+    val matched: Boolean?,
+    val transfer: Boolean?,
+)
+
+private fun parseTransactionSearchMetadata(bodyJson: String?): TransactionSearchMetadata? =
+    bodyJson?.let { json ->
+        runCatching {
+            val body = Json.parseToJsonElement(json).jsonObject
+            val legacyClearedState =
+                body
+                    .displayString("cleared")
+                    ?.lowercase()
+                    ?.takeUnless { it == "true" || it == "false" }
+            TransactionSearchMetadata(
+                cleared =
+                    body.displayBooleanOrNull("cleared")
+                        ?: when (legacyClearedState) {
+                            "cleared", "reconciled" -> true
+                            "uncleared" -> false
+                            else -> null
+                        },
+                reconciled =
+                    body.displayBooleanOrNull("reconciled") ?: (legacyClearedState == "reconciled").takeIf { legacyClearedState != null },
+                approved = body.displayBooleanOrNull("approved"),
+                matched = body.displayBooleanOrNull("matched"),
+                transfer =
+                    body.displayString("transfer_id") != null ||
+                        body.displayString("transferId") != null ||
+                        body.displayBooleanOrNull("is_transfer") == true ||
+                        body.displayBooleanOrNull("isTransfer") == true,
             )
         }.getOrNull()
     }
@@ -173,6 +212,9 @@ class LocalBudgetRepository(
         budgetId: String,
         recordType: String,
     ): Flow<List<BudgetRecordEntity>> = database.budgetRecordDao().observeVisible(budgetId, recordType).stabilized()
+
+    fun observeSearchableTransactions(budgetId: String): Flow<List<SearchableBudgetTransaction>> =
+        database.budgetRecordDao().observeSearchableTransactions(budgetId).stabilized()
 
     fun observeRecordIds(
         budgetId: String,
@@ -705,6 +747,7 @@ class LocalBudgetRepository(
         val records = database.budgetRecordDao()
         val current = records.find(operation.budgetId, operation.recordType, operation.recordId) ?: return
         val remoteMetadata = parseDisplayMetadata(current.remoteJson)
+        val searchMetadata = parseTransactionSearchMetadata(current.remoteJson)
         val projection =
             if (current.remoteDeleted) {
                 null
@@ -723,6 +766,11 @@ class LocalBudgetRepository(
                 budgetMonth = projection?.budgetMonth,
                 displayName = remoteMetadata?.displayName,
                 notes = remoteMetadata?.notes,
+                cleared = searchMetadata?.cleared,
+                reconciled = searchMetadata?.reconciled,
+                approved = searchMetadata?.approved,
+                matched = searchMetadata?.matched,
+                transfer = searchMetadata?.transfer,
             ),
         )
     }
@@ -832,6 +880,7 @@ class LocalBudgetRepository(
         val localDeleted = request.action == LocalWriteAction.DELETE
         val projection = request.optimisticProjection
         val metadata = request.optimisticJson?.let(::parseDisplayMetadata)
+        val searchMetadata = request.optimisticJson?.takeIf { request.recordType == "transaction" }?.let(::parseTransactionSearchMetadata)
         val entity =
             current?.copy(
                 localJson = request.optimisticJson,
@@ -844,6 +893,11 @@ class LocalBudgetRepository(
                 budgetMonth = if (projection == null) current.budgetMonth else projection.budgetMonth,
                 displayName = if (request.optimisticJson == null) current.displayName else metadata?.displayName,
                 notes = if (request.optimisticJson == null) current.notes else metadata?.notes,
+                cleared = if (request.optimisticJson == null) current.cleared else searchMetadata?.cleared,
+                reconciled = if (request.optimisticJson == null) current.reconciled else searchMetadata?.reconciled,
+                approved = if (request.optimisticJson == null) current.approved else searchMetadata?.approved,
+                matched = if (request.optimisticJson == null) current.matched else searchMetadata?.matched,
+                transfer = if (request.optimisticJson == null) current.transfer else searchMetadata?.transfer,
             ) ?: BudgetRecordEntity(
                 budgetId = request.budgetId,
                 recordType = request.recordType,
@@ -862,6 +916,11 @@ class LocalBudgetRepository(
                 budgetMonth = projection?.budgetMonth,
                 displayName = metadata?.displayName,
                 notes = metadata?.notes,
+                cleared = searchMetadata?.cleared,
+                reconciled = searchMetadata?.reconciled,
+                approved = searchMetadata?.approved,
+                matched = searchMetadata?.matched,
+                transfer = searchMetadata?.transfer,
             )
         dao.put(entity)
     }
@@ -1030,6 +1089,7 @@ class LocalBudgetRepository(
             localJson?.let(::parseDisplayMetadata)
                 ?: displayMetadata
                 ?: parseDisplayMetadata(bodyJson)
+        val searchMetadata = parseTransactionSearchMetadata(localJson ?: bodyJson).takeIf { recordType == "transaction" }
         return BudgetRecordEntity(
             budgetId = budgetId,
             recordType = recordType,
@@ -1048,6 +1108,11 @@ class LocalBudgetRepository(
             budgetMonth = budgetMonth,
             displayName = metadata?.displayName,
             notes = metadata?.notes,
+            cleared = searchMetadata?.cleared,
+            reconciled = searchMetadata?.reconciled,
+            approved = searchMetadata?.approved,
+            matched = searchMetadata?.matched,
+            transfer = searchMetadata?.transfer,
         )
     }
 
@@ -1105,6 +1170,15 @@ class LocalBudgetRepository(
 }
 
 private fun JsonObject.displayString(name: String): String? = (this[name] as? JsonPrimitive)?.takeIf { it != JsonNull }?.contentOrNull
+
+private fun JsonObject.displayBooleanOrNull(name: String): Boolean? =
+    (this[name] as? JsonPrimitive)?.let { value ->
+        value.booleanOrNull ?: when (value.contentOrNull?.lowercase()) {
+            "true" -> true
+            "false" -> false
+            else -> null
+        }
+    }
 
 private fun JsonObject.displayInt(name: String): Int? = (this[name] as? JsonPrimitive)?.longOrNull?.takeIf { it in 0..6 }?.toInt()
 

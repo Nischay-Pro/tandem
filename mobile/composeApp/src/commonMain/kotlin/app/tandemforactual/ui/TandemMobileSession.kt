@@ -10,6 +10,7 @@ import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.BudgetSyncStateEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.BudgetSyncCoordinator
@@ -180,7 +181,7 @@ internal class TandemMobileSession(
     var transactionRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
         private set
 
-    var activitySearchRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
+    var activitySearchRecords by mutableStateOf<List<SearchableBudgetTransaction>>(emptyList())
         private set
 
     var activitySearchRecordsBudgetId by mutableStateOf("")
@@ -916,7 +917,7 @@ internal class TandemMobileSession(
             activitySearchRecords = emptyList()
             activitySearchRecordsBudgetId = budgetId
         }
-        localRepository.observeRecords(budgetId, "transaction").collect { records ->
+        localRepository.observeSearchableTransactions(budgetId).collect { records ->
             if (records != activitySearchRecords) activitySearchRecords = records
         }
     }

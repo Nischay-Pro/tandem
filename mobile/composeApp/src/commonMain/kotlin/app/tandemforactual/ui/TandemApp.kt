@@ -129,6 +129,7 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.data.database.BudgetRecordEntity
+import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetDisplaySettings
@@ -363,7 +364,7 @@ internal data class MerchantIconMatcherPack(
 
 internal data class ActivitySearchCache(
     val budgetId: String,
-    val sourceTransactions: List<BudgetRecordEntity>,
+    val sourceTransactions: List<SearchableBudgetTransaction>,
     val sourceAccounts: List<BudgetRecordEntity>,
     val sourcePayees: List<BudgetRecordEntity>,
     val sourceCategories: List<BudgetRecordEntity>,
@@ -374,7 +375,7 @@ internal data class ActivitySearchCache(
 ) {
     fun matches(
         budgetId: String,
-        transactions: List<BudgetRecordEntity>,
+        transactions: List<SearchableBudgetTransaction>,
         accounts: List<BudgetRecordEntity>,
         payees: List<BudgetRecordEntity>,
         categories: List<BudgetRecordEntity>,
@@ -541,16 +542,6 @@ private fun buildLiveTransactionItems(
         val payeeName = record.payeeId?.let(payees::get)
         val categoryName = record.categoryId?.let(categories::get) ?: record.categoryId ?: "Uncategorized"
         val displayedPayee = payeeName ?: record.payeeId ?: "No payee"
-        val body = record.recordBody()
-        val legacyClearedState = body?.stringValue("cleared")?.lowercase()
-        val cleared =
-            body?.booleanValue("cleared")
-                ?: when (legacyClearedState) {
-                    "cleared", "reconciled" -> true
-                    "uncleared" -> false
-                    else -> null
-                }
-        val reconciled = body?.booleanValue("reconciled") ?: (legacyClearedState == "reconciled").takeIf { legacyClearedState != null }
         TransactionItem(
             payee = displayedPayee,
             category = categoryName,
@@ -567,15 +558,53 @@ private fun buildLiveTransactionItems(
             dateIso = record.recordDate.orEmpty(),
             payeeId = record.payeeId,
             categoryId = record.categoryId,
-            cleared = cleared,
-            reconciled = reconciled,
-            approved = body?.booleanValue("approved"),
-            matched = body?.booleanValue("matched"),
-            isTransfer =
-                body?.stringValue("transfer_id") != null ||
-                    body?.stringValue("transferId") != null ||
-                    body?.booleanValue("is_transfer") == true ||
-                    body?.booleanValue("isTransfer") == true,
+            cleared = record.cleared,
+            reconciled = record.reconciled,
+            approved = record.approved,
+            matched = record.matched,
+            isTransfer = record.transfer == true,
+        )
+    }
+}
+
+private fun buildSearchTransactionItems(
+    records: List<SearchableBudgetTransaction>,
+    accountRecords: List<BudgetRecordEntity>,
+    payeeRecords: List<BudgetRecordEntity>,
+    categoryRecords: List<BudgetRecordEntity>,
+    displaySettings: BudgetDisplaySettings?,
+    merchantIconMatcher: MerchantIconMatcherPack?,
+): List<TransactionItem> {
+    val accounts = accountRecords.mapNotNull { record -> record.recordName()?.let { record.recordId to it } }.toMap()
+    val payees = payeeRecords.mapNotNull { record -> record.recordName()?.let { record.recordId to it } }.toMap()
+    val categories = categoryRecords.mapNotNull { record -> record.recordName()?.let { record.recordId to it } }.toMap()
+    val payeeIconCache = mutableMapOf<String, DrawableResource?>()
+    return records.mapNotNull { record ->
+        val amount = record.amountMinor ?: return@mapNotNull null
+        val payeeName = record.payeeId?.let(payees::get)
+        val categoryName = record.categoryId?.let(categories::get) ?: record.categoryId ?: "Uncategorized"
+        val displayedPayee = payeeName ?: record.payeeId ?: "No payee"
+        TransactionItem(
+            payee = displayedPayee,
+            category = categoryName,
+            dateLabel = formatLiveDate(record.recordDate),
+            amountMinorUnits = amount,
+            icon = displayedPayee.take(1).uppercase(),
+            categoryIcon = financeIcon(categoryName),
+            merchantIcon = payeeIconCache.getOrPut(displayedPayee) { merchantIconMatcher?.iconFor(displayedPayee) },
+            account = record.accountId?.let(accounts::get) ?: record.accountId ?: "No account",
+            accountId = record.accountId,
+            recordId = record.recordId,
+            notes = record.notes.orEmpty(),
+            displaySettings = displaySettings,
+            dateIso = record.recordDate.orEmpty(),
+            payeeId = record.payeeId,
+            categoryId = record.categoryId,
+            cleared = record.cleared,
+            reconciled = record.reconciled,
+            approved = record.approved,
+            matched = record.matched,
+            isTransfer = record.transfer == true,
         )
     }
 }
@@ -5313,7 +5342,7 @@ private fun ActivitySearchScreen(
                 isBuildingSearchRecords = true
                 val items =
                     withContext(Dispatchers.Default) {
-                        buildLiveTransactionItems(
+                        buildSearchTransactionItems(
                             records = records,
                             accountRecords = accountRecords,
                             payeeRecords = payeeRecords,

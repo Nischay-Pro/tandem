@@ -10,6 +10,10 @@ import androidx.room3.PrimaryKey
     indices = [
         Index(value = ["budgetId", "recordType", "accountId", "recordDate"]),
         Index(value = ["budgetId", "recordType", "categoryId", "recordDate"]),
+        Index(
+            value = ["budgetId", "recordType", "recordDate", "recordId"],
+            orders = [Index.Order.ASC, Index.Order.ASC, Index.Order.DESC, Index.Order.ASC],
+        ),
         Index(value = ["budgetId", "syncGeneration"]),
     ],
 )
@@ -31,6 +35,26 @@ data class BudgetRecordEntity(
     val budgetMonth: String?,
     val displayName: String? = null,
     val notes: String? = null,
+    val cleared: Boolean? = null,
+    val reconciled: Boolean? = null,
+    val approved: Boolean? = null,
+    val matched: Boolean? = null,
+    val transfer: Boolean? = null,
+)
+
+data class SearchableBudgetTransaction(
+    val recordId: String,
+    val recordDate: String?,
+    val accountId: String?,
+    val categoryId: String?,
+    val payeeId: String?,
+    val amountMinor: Long?,
+    val notes: String?,
+    val cleared: Boolean?,
+    val reconciled: Boolean?,
+    val approved: Boolean?,
+    val matched: Boolean?,
+    val transfer: Boolean?,
 )
 
 @Entity(tableName = "budget_sync_state")
