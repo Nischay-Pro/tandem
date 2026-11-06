@@ -40,10 +40,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -68,6 +70,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
@@ -87,6 +90,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -98,16 +104,20 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -121,37 +131,51 @@ import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.allDrawableResources
-import app.tandemforactual.ui.generated.resources.tandem_logo_squircle
 import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.BriefcaseBusiness
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.CarFront
+import com.composables.icons.lucide.Check
+import com.composables.icons.lucide.ChevronDown
+import com.composables.icons.lucide.ChevronLeft
+import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.CircleAlert
+import com.composables.icons.lucide.CircleDot
 import com.composables.icons.lucide.Cloud
+import com.composables.icons.lucide.CloudAlert
 import com.composables.icons.lucide.CloudCheck
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Coffee
 import com.composables.icons.lucide.Database
+import com.composables.icons.lucide.Eye
+import com.composables.icons.lucide.FingerprintPattern
 import com.composables.icons.lucide.FolderKey
 import com.composables.icons.lucide.HeartPulse
 import com.composables.icons.lucide.House
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.KeyRound
 import com.composables.icons.lucide.LayoutDashboard
+import com.composables.icons.lucide.LockKeyhole
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.NotepadText
+import com.composables.icons.lucide.PaintbrushVertical
 import com.composables.icons.lucide.Palette
 import com.composables.icons.lucide.PawPrint
 import com.composables.icons.lucide.Plane
+import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Receipt
 import com.composables.icons.lucide.Server
 import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.ShoppingCart
 import com.composables.icons.lucide.Smartphone
+import com.composables.icons.lucide.SunMoon
 import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.Utensils
 import com.composables.icons.lucide.WalletCards
+import com.composables.icons.lucide.Wallpaper
 import com.composables.icons.lucide.Wifi
+import com.composables.icons.lucide.X
 import com.composables.icons.lucide.Zap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -205,11 +229,12 @@ private enum class AppRoute(
     ACTIVITY_SEARCH("Search activity"),
     ACTIVITY_FILTER("Filter and sort"),
     TRANSACTION_DETAIL("Transaction details"),
-    NEW_TRANSACTION("New transaction"),
+    NEW_TRANSACTION("Add transaction"),
     EDIT_TRANSACTION("Edit transaction"),
     CHOOSE_ACCOUNT("Choose account"),
     CHOOSE_PAYEE("Choose payee"),
     CHOOSE_CATEGORY("Choose category"),
+    CHOOSE_TRANSACTION_TYPE("Choose transaction type"),
     CHOOSE_DATE("Choose date"),
     SAVE_RESULT("Transaction status"),
     SYNC_CENTER("Sync center"),
@@ -717,12 +742,16 @@ internal class AppState {
     var transactionCategory by mutableStateOf("Groceries")
     var newTransactionCategoryId by mutableStateOf("")
     var transactionDate by mutableStateOf(formatDate(SampleDate(2026, 5, 14)))
+    var transactionType by mutableStateOf("Spending")
     var transactionNotes by mutableStateOf("")
     var selectedTransactionAmountMinor by mutableStateOf<Long?>(null)
     var selectedTransactionIsLive by mutableStateOf(false)
     var conflictChoice by mutableStateOf("")
     var backgroundStyle by mutableStateOf("Solid surface")
     var homeLayout by mutableStateOf("Comfortable")
+    var collapsedBudgetSections by mutableStateOf("")
+    var pinnedCategoryIds by mutableStateOf("")
+    var readOnlyMode by mutableStateOf(false)
     var reduceMotionOverride by mutableStateOf<Boolean?>(null)
     var systemReduceMotionEnabled by mutableStateOf(false)
     val reduceMotion: Boolean get() = reduceMotionOverride ?: systemReduceMotionEnabled
@@ -743,6 +772,9 @@ internal class AppState {
             "accent" to accent.name,
             "backgroundStyle" to backgroundStyle,
             "homeLayout" to homeLayout,
+            "collapsedBudgetSections" to collapsedBudgetSections,
+            "pinnedCategoryIds" to pinnedCategoryIds,
+            "readOnlyMode" to readOnlyMode.toString(),
             "selectedBudget" to selectedBudget,
             "selectedBudgetId" to selectedBudgetId,
             "selectedBudgetEncrypted" to selectedBudgetEncrypted.toString(),
@@ -760,7 +792,10 @@ internal class AppState {
         theme = ThemeMode.entries.firstOrNull { it.name == saved["theme"] } ?: theme
         accent = AccentChoice.entries.firstOrNull { it.name == saved["accent"] } ?: accent
         backgroundStyle = saved["backgroundStyle"] ?: backgroundStyle
-        homeLayout = saved["homeLayout"] ?: homeLayout
+        homeLayout = (saved["homeLayout"] ?: homeLayout).let { if (it == "Essentials first") "Essentials" else it }
+        collapsedBudgetSections = saved["collapsedBudgetSections"] ?: collapsedBudgetSections
+        pinnedCategoryIds = saved["pinnedCategoryIds"] ?: pinnedCategoryIds
+        readOnlyMode = saved["readOnlyMode"]?.toBooleanStrictOrNull() ?: readOnlyMode
         selectedBudget = saved["selectedBudget"] ?: selectedBudget
         selectedBudgetId = saved["selectedBudgetId"] ?: selectedBudgetId
         selectedBudgetEncrypted = saved["selectedBudgetEncrypted"]?.toBooleanStrictOrNull() ?: selectedBudgetEncrypted
@@ -811,12 +846,16 @@ internal class AppState {
                         "transactionCategory" to state.transactionCategory,
                         "newTransactionCategoryId" to state.newTransactionCategoryId,
                         "transactionDate" to state.transactionDate,
+                        "transactionType" to state.transactionType,
                         "transactionNotes" to state.transactionNotes,
                         "selectedTransactionAmountMinor" to state.selectedTransactionAmountMinor,
                         "selectedTransactionIsLive" to state.selectedTransactionIsLive,
                         "conflictChoice" to state.conflictChoice,
                         "backgroundStyle" to state.backgroundStyle,
                         "homeLayout" to state.homeLayout,
+                        "collapsedBudgetSections" to state.collapsedBudgetSections,
+                        "pinnedCategoryIds" to state.pinnedCategoryIds,
+                        "readOnlyMode" to state.readOnlyMode,
                         "reduceMotionOverride" to state.reduceMotionOverride,
                         "syncOnOpen" to state.syncOnOpen,
                         "backgroundSyncEnabled" to state.backgroundSyncEnabled,
@@ -851,12 +890,19 @@ internal class AppState {
                         transactionCategory = saved["transactionCategory"] as? String ?: transactionCategory
                         newTransactionCategoryId = saved["newTransactionCategoryId"] as? String ?: newTransactionCategoryId
                         transactionDate = saved["transactionDate"] as? String ?: transactionDate
+                        transactionType = saved["transactionType"] as? String ?: transactionType
                         transactionNotes = saved["transactionNotes"] as? String ?: transactionNotes
                         selectedTransactionAmountMinor = saved["selectedTransactionAmountMinor"] as? Long
                         selectedTransactionIsLive = saved["selectedTransactionIsLive"] as? Boolean ?: selectedTransactionIsLive
                         conflictChoice = saved["conflictChoice"] as? String ?: conflictChoice
                         backgroundStyle = saved["backgroundStyle"] as? String ?: backgroundStyle
-                        homeLayout = saved["homeLayout"] as? String ?: homeLayout
+                        homeLayout =
+                            (saved["homeLayout"] as? String ?: homeLayout).let {
+                                if (it == "Essentials first") "Essentials" else it
+                            }
+                        collapsedBudgetSections = saved["collapsedBudgetSections"] as? String ?: collapsedBudgetSections
+                        pinnedCategoryIds = saved["pinnedCategoryIds"] as? String ?: pinnedCategoryIds
+                        readOnlyMode = saved["readOnlyMode"] as? Boolean ?: readOnlyMode
                         selectedBudgetId = saved["selectedBudgetId"] as? String ?: selectedBudgetId
                         reduceMotionOverride =
                             (saved["reduceMotionOverride"] as? Boolean) ?: (saved["reduceMotion"] as? Boolean)
@@ -875,6 +921,32 @@ internal class AppState {
             )
     }
 }
+
+private fun AppState.isBudgetSectionCollapsed(sectionKey: String): Boolean =
+    collapsedBudgetSections.split('\u001f').any { it == sectionKey }
+
+private fun AppState.toggleBudgetSection(sectionKey: String) {
+    val collapsed = collapsedBudgetSections.split('\u001f').filter(String::isNotBlank).toMutableSet()
+    if (!collapsed.add(sectionKey)) collapsed.remove(sectionKey)
+    collapsedBudgetSections = collapsed.joinToString("\u001f")
+}
+
+private fun AppState.isCategoryPinned(categoryId: String): Boolean =
+    pinnedCategoryIds.split('\u001f').any { it == categoryPinKey(categoryId) || it == categoryId }
+
+private fun AppState.togglePinnedCategory(categoryId: String) {
+    val pinned = pinnedCategoryIds.split('\u001f').filter(String::isNotBlank).toMutableSet()
+    val key = categoryPinKey(categoryId)
+    if (key in pinned || categoryId in pinned) {
+        pinned.remove(key)
+        pinned.remove(categoryId)
+    } else {
+        pinned.add(key)
+    }
+    pinnedCategoryIds = pinned.joinToString("\u001f")
+}
+
+private fun AppState.categoryPinKey(categoryId: String): String = "${selectedBudgetId.ifBlank { "sample" }}:$categoryId"
 
 private data class AppNavigation(
     val open: (AppRoute) -> Unit,
@@ -924,6 +996,8 @@ fun TandemApp(
     onSystemAppearanceChanged: ((isDark: Boolean, followsSystem: Boolean) -> Unit)? = null,
     onRequestNotificationPermission: (() -> Unit)? = null,
     onOpenNotificationSettings: (() -> Unit)? = null,
+    notificationPermissionEnabled: Boolean? = null,
+    onToggleNotificationPermission: ((Boolean) -> Unit)? = null,
     onStartupComplete: (() -> Unit)? = null,
     appResumeEvents: Flow<Unit> = emptyFlow(),
     networkRestoredEvents: Flow<Unit> = emptyFlow(),
@@ -993,6 +1067,9 @@ fun TandemApp(
         } finally {
             sessionRestoreComplete = true
         }
+    }
+    LaunchedEffect(state.selectedBudgetId, state.selectedBudgetEncrypted) {
+        if (state.selectedBudgetEncrypted) state.backgroundSyncEnabled = false
     }
     LaunchedEffect(
         cacheDiscoveryComplete,
@@ -1123,27 +1200,30 @@ fun TandemApp(
         }
     }
     val newTransaction: (String?) -> Unit = { requestedAccountId ->
-        routeTransitionDirection = 1f
-        val eligibleAccounts = liveAccountSummaries(mobileSession).filterNot { it.offBudget }
-        val defaultAccount =
-            if (state.selectedBudgetId.isNotBlank()) {
-                eligibleAccounts.firstOrNull { it.id == requestedAccountId } ?: eligibleAccounts.firstOrNull()
-            } else {
-                null
-            }
-        state.transactionAmount = ""
-        state.transactionAccount = defaultAccount?.name ?: "Checking"
-        state.newTransactionAccountId = defaultAccount?.id.orEmpty()
-        state.transactionPayee = ""
-        state.newTransactionPayeeId = ""
-        state.transactionCategory = ""
-        state.newTransactionCategoryId = ""
-        state.transactionDate = platformTodayIsoDate()
-        state.transactionNotes = ""
-        state.selectedTransactionRecordId = ""
-        state.selectedTransactionAmountMinor = null
-        state.selectedTransactionIsLive = false
-        backStack.add(newRouteEntry(AppRoute.NEW_TRANSACTION))
+        if (!state.readOnlyMode) {
+            routeTransitionDirection = 1f
+            val eligibleAccounts = liveAccountSummaries(mobileSession).filterNot { it.offBudget }
+            val defaultAccount =
+                if (state.selectedBudgetId.isNotBlank()) {
+                    eligibleAccounts.firstOrNull { it.id == requestedAccountId } ?: eligibleAccounts.firstOrNull()
+                } else {
+                    null
+                }
+            state.transactionAmount = state.formatAmount(0)
+            state.transactionAccount = defaultAccount?.name ?: "Checking"
+            state.newTransactionAccountId = defaultAccount?.id.orEmpty()
+            state.transactionPayee = ""
+            state.newTransactionPayeeId = ""
+            state.transactionCategory = ""
+            state.newTransactionCategoryId = ""
+            state.transactionDate = platformTodayIsoDate()
+            state.transactionType = "Spending"
+            state.transactionNotes = ""
+            state.selectedTransactionRecordId = ""
+            state.selectedTransactionAmountMinor = null
+            state.selectedTransactionIsLive = false
+            backStack.add(newRouteEntry(AppRoute.NEW_TRANSACTION))
+        }
     }
     val popRoute: () -> Unit = {
         if (backStack.size > 1) {
@@ -1443,7 +1523,7 @@ fun TandemApp(
     val saveTransaction: () -> Unit = {
         val transactionId = state.selectedTransactionRecordId
         val originalAmount = state.selectedTransactionAmountMinor
-        if (transactionId.isNotBlank() && originalAmount != null && !mobileSession.isSavingTransaction) {
+        if (!state.readOnlyMode && transactionId.isNotBlank() && originalAmount != null && !mobileSession.isSavingTransaction) {
             coroutineScope.launch {
                 mobileSession.updateTransaction(
                     budgetId = state.selectedBudgetId,
@@ -1458,7 +1538,13 @@ fun TandemApp(
         }
     }
     val createTransaction: () -> Unit = {
-        if (!mobileSession.isSavingTransaction) {
+        if (!state.readOnlyMode && !mobileSession.isSavingTransaction) {
+            val enteredAmount = state.parseAmountMinorUnits(state.transactionAmount)
+            val signedAmountText =
+                enteredAmount?.let { amount ->
+                    val unsignedAmount = kotlin.math.abs(amount)
+                    state.formatAmount(if (state.transactionType == "Income") unsignedAmount else -unsignedAmount)
+                } ?: state.transactionAmount
             coroutineScope.launch {
                 val created =
                     mobileSession.createTransaction(
@@ -1466,7 +1552,7 @@ fun TandemApp(
                         accountId = state.newTransactionAccountId,
                         payeeId = state.newTransactionPayeeId.takeIf { it.isNotBlank() },
                         categoryId = state.newTransactionCategoryId.takeIf { it.isNotBlank() },
-                        amountText = state.transactionAmount,
+                        amountText = signedAmountText,
                         dateText = state.transactionDate,
                         notes = state.transactionNotes,
                         encryptionPassword = state.encryptedPassword.takeIf { it.isNotBlank() },
@@ -1557,6 +1643,17 @@ fun TandemApp(
             onBack = handleBack,
             onBackProgress = updateBackGesture,
         )
+        val mainCloudStatus =
+            resolveMainCloudStatus(
+                syncEnabled =
+                    state.selectedBudgetId.isNotBlank() &&
+                        (mobileSession.isAuthenticated || mobileSession.isRestoringStoredSession),
+                isSyncing = mobileSession.isSyncing,
+                hasSyncError = mobileSession.syncError != null,
+                persistedSyncStatus = mobileSession.localSyncState?.status,
+                pendingWriteStatuses = mobileSession.pendingWrites.map { it.status },
+                hasSuccessfulSync = mobileSession.localSyncState?.lastSyncedAtEpochMs != null,
+            )
         val renderHeader: @Composable (AppRoute) -> Unit = { headerRoute ->
             if (headerRoute != AppRoute.WELCOME && headerRoute != AppRoute.STARTUP) {
                 AppHeader(
@@ -1565,15 +1662,7 @@ fun TandemApp(
                     showBack = !headerRoute.isTab(),
                     onBack = handleBack,
                     onSync = { navigation.open(AppRoute.SYNC_CENTER) },
-                    syncStatus =
-                        resolveMainCloudStatus(
-                            syncEnabled = state.selectedBudgetId.isNotBlank() && mobileSession.isAuthenticated,
-                            isSyncing = mobileSession.isSyncing,
-                            hasSyncError = mobileSession.syncError != null,
-                            persistedSyncStatus = mobileSession.localSyncState?.status,
-                            pendingWriteStatuses = mobileSession.pendingWrites.map { it.status },
-                            hasSuccessfulSync = mobileSession.localSyncState?.lastSyncedAtEpochMs != null,
-                        ),
+                    syncStatus = mainCloudStatus,
                     onBudget = { navigation.open(AppRoute.BUDGET_CHOOSER) },
                     actualConnected = mobileSession.isServerReachable,
                     liveAccounts = liveAccounts,
@@ -1640,7 +1729,27 @@ fun TandemApp(
                                 onForgetDevice = { coroutineScope.launch { mobileSession.forgetDevice() } },
                                 onRequestNotificationPermission = onRequestNotificationPermission,
                                 onOpenNotificationSettings = onOpenNotificationSettings,
+                                notificationPermissionEnabled = notificationPermissionEnabled,
+                                onToggleNotificationPermission = onToggleNotificationPermission,
                             )
+                            if (visibleRoute == AppRoute.BUDGET) {
+                                val transactionActionCompact by
+                                    remember(routeScrollState) {
+                                        derivedStateOf { routeScrollState.value > 72 }
+                                    }
+                                FloatingTransactionAction(
+                                    compact = transactionActionCompact,
+                                    enabled = !state.readOnlyMode,
+                                    onClick = {
+                                        if (state.selectedBudgetId.isNotBlank()) {
+                                            navigation.newTransaction(null)
+                                        } else {
+                                            navigation.open(AppRoute.NEW_TRANSACTION)
+                                        }
+                                    },
+                                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = 14.dp),
+                                )
+                            }
                         }
                         if (includeChrome && visibleRoute.isTab()) BottomNavigation(visibleRoute, navigation.selectTab)
                     }
@@ -1759,6 +1868,47 @@ fun TandemApp(
 private fun AppRoute.isTab(): Boolean =
     this == AppRoute.BUDGET || this == AppRoute.ACCOUNTS || this == AppRoute.ACTIVITY || this == AppRoute.SETTINGS
 
+@Composable
+private fun FloatingTransactionAction(
+    compact: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val palette = tandemPalette
+    Row(
+        modifier =
+            modifier
+                .animateContentSize(tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS))
+                .height(56.dp)
+                .defaultMinSize(minWidth = 56.dp)
+                .clip(if (compact) CircleShape else RoundedCornerShape(18.dp))
+                .background(if (enabled) palette.accent else palette.raised)
+                .semantics(mergeDescendants = true) {
+                    contentDescription = if (enabled) "Add transaction" else "Read-only mode is on"
+                }.clickable(enabled = enabled, role = Role.Button, onClickLabel = "Add transaction", onClick = onClick)
+                .padding(horizontal = if (compact) 16.dp else 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 9.dp),
+    ) {
+        Icon(
+            Lucide.Plus,
+            contentDescription = null,
+            modifier = Modifier.size(24.dp),
+            tint = if (enabled) palette.accentContent else palette.muted,
+        )
+        AnimatedVisibility(visible = !compact, enter = fadeIn(), exit = fadeOut()) {
+            Text(
+                "Add transaction",
+                color = if (enabled) palette.accentContent else palette.muted,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
 private fun AppRoute.tabOrder(): Int =
     when (this) {
         AppRoute.BUDGET -> 0
@@ -1784,6 +1934,7 @@ private fun AppHeader(
     val palette = tandemPalette
     val headerTitle =
         when (route) {
+            AppRoute.NEW_TRANSACTION -> ""
             AppRoute.BUDGET -> state.selectedBudget
             AppRoute.CATEGORY_GROUP ->
                 liveBudgetMonth?.groups?.firstOrNull { it.id == state.selectedCategoryGroupId }?.name ?: route.title
@@ -1808,18 +1959,17 @@ private fun AppHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showBack) {
-            Text(
-                text = "‹",
+            Icon(
+                imageVector = if (route == AppRoute.NEW_TRANSACTION) Lucide.X else Lucide.ChevronLeft,
+                contentDescription = null,
                 modifier =
                     Modifier
                         .size(44.dp)
                         .clip(CircleShape)
                         .semantics(mergeDescendants = true) { contentDescription = "Back" }
                         .clickable(role = Role.Button, onClickLabel = "Back", onClick = onBack)
-                        .wrapContentAlignment(),
-                color = palette.text,
-                fontSize = 32.sp,
-                textAlign = TextAlign.Center,
+                        .padding(11.dp),
+                tint = palette.text,
             )
             Spacer(Modifier.width(6.dp))
         }
@@ -1832,38 +1982,36 @@ private fun AppHeader(
                     onClick = onBudget,
                 ),
         ) {
-            Text(
-                text = headerTitle,
-                color = palette.text,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (route == AppRoute.BUDGET) {
+            if (headerTitle.isNotBlank()) {
                 Text(
-                    if (state.selectedBudgetId.isNotBlank()) {
-                        "${state.selectedMonth} · Actual"
-                    } else {
-                        "${state.selectedMonth} · Sample budget"
-                    },
-                    color = palette.muted,
-                    fontSize = 11.sp,
+                    text = headerTitle,
+                    color = palette.text,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
+                if (route == AppRoute.BUDGET) {
+                    Text(
+                        if (state.selectedBudgetId.isNotBlank()) {
+                            "${state.selectedMonth} · Actual"
+                        } else {
+                            "${state.selectedMonth} · Sample budget"
+                        },
+                        color = palette.muted,
+                        fontSize = 11.sp,
+                    )
+                }
             }
         }
         if (route.isTab()) {
-            val cloudTint by animateColorAsState(
-                targetValue =
-                    when (syncStatus) {
-                        MainCloudStatus.OFF -> palette.muted
-                        MainCloudStatus.SYNCED -> palette.positive
-                        MainCloudStatus.SYNCING -> palette.syncing
-                        MainCloudStatus.ERROR -> palette.negative
-                    },
-                animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
-                label = "main-cloud-status-color",
-            )
+            val cloudTint =
+                when (syncStatus) {
+                    MainCloudStatus.OFF -> palette.muted
+                    MainCloudStatus.SYNCED -> palette.positive
+                    MainCloudStatus.SYNCING -> palette.syncing
+                    MainCloudStatus.ERROR -> palette.negative
+                }
             Box(
                 modifier =
                     Modifier
@@ -1885,7 +2033,12 @@ private fun AppHeader(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = if (syncStatus == MainCloudStatus.OFF) Lucide.CloudOff else Lucide.Cloud,
+                    imageVector =
+                        when (syncStatus) {
+                            MainCloudStatus.OFF -> Lucide.CloudOff
+                            MainCloudStatus.ERROR -> Lucide.CloudAlert
+                            else -> Lucide.Cloud
+                        },
                     contentDescription = null,
                     modifier = Modifier.size(25.dp),
                     tint = cloudTint,
@@ -1976,7 +2129,7 @@ private fun NavigationGlyph(
     val surface = tandemPalette.surface
     Canvas(
         Modifier
-            .size(20.dp)
+            .size(24.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -2094,6 +2247,8 @@ private fun ScreenContent(
     onForgetDevice: () -> Unit,
     onRequestNotificationPermission: (() -> Unit)?,
     onOpenNotificationSettings: (() -> Unit)?,
+    notificationPermissionEnabled: Boolean?,
+    onToggleNotificationPermission: ((Boolean) -> Unit)?,
 ) {
     when (route) {
         AppRoute.STARTUP -> StartupScreen()
@@ -2184,6 +2339,15 @@ private fun ScreenContent(
                 navigation.back()
             }
         }
+        AppRoute.CHOOSE_TRANSACTION_TYPE ->
+            SelectorScreen(
+                listOf(SelectorItem("Spending", "Spending"), SelectorItem("Income", "Income")),
+                state.transactionType,
+                live = state.selectedBudgetId.isNotBlank(),
+            ) { item ->
+                state.transactionType = item.label
+                navigation.back()
+            }
         AppRoute.CHOOSE_DATE -> DatePickerScreen(state, navigation)
         AppRoute.SAVE_RESULT -> SaveResultScreen(state, navigation)
         AppRoute.SYNC_CENTER -> SyncCenterScreen(state, mobileSession, navigation, onSyncNow)
@@ -2207,12 +2371,14 @@ private fun ScreenContent(
             )
         AppRoute.SERVER_DEVICE ->
             ServerDeviceScreen(state, deviceName, mobileSession, navigation, onForgetDevice)
-        AppRoute.SECURITY_PRIVACY -> SecurityScreen(mobileSession)
+        AppRoute.SECURITY_PRIVACY -> SecurityScreen(state, mobileSession)
         AppRoute.NOTIFICATIONS ->
             NotificationsScreen(
                 state,
                 onRequestNotificationPermission,
                 onOpenNotificationSettings,
+                notificationPermissionEnabled,
+                onToggleNotificationPermission,
             )
         AppRoute.LOCAL_DATA -> LocalDataScreen(state, mobileSession, onSyncNow)
         AppRoute.ABOUT -> AboutScreen(merchantIconPack, merchantIconPackLoadError, navigation)
@@ -2224,12 +2390,13 @@ private fun ScreenContent(
 private fun PageColumn(
     verticalSpacing: androidx.compose.ui.unit.Dp = 16.dp,
     horizontalPadding: androidx.compose.ui.unit.Dp = 20.dp,
+    modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val scrollState = LocalRouteScrollState.current ?: rememberScrollState()
     Column(
         modifier =
-            Modifier
+            modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
                 .padding(horizontal = horizontalPadding, vertical = 12.dp),
@@ -2307,7 +2474,7 @@ private fun AttentionBanner(
                 overflow = TextOverflow.Ellipsis,
                 fontWeight = FontWeight.SemiBold,
             )
-            Text("›", color = palette.muted, fontSize = 18.sp)
+            Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.muted)
         }
     }
 }
@@ -2456,11 +2623,11 @@ private fun PrimaryButton(
         modifier =
             modifier
                 .fillMaxWidth()
-                .heightIn(min = 52.dp)
+                .height(52.dp)
                 .clip(RoundedCornerShape(15.dp))
                 .background(backgroundColor)
                 .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
-                .padding(horizontal = 18.dp, vertical = 14.dp),
+                .padding(horizontal = 12.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
         Row(
@@ -2471,7 +2638,14 @@ private fun PrimaryButton(
             AnimatedReveal(visible = loading, animateHeight = false) {
                 TandemLoadingIndicator(Modifier.size(17.dp), textColor, 2.dp)
             }
-            AnimatedStatusText(label, textColor, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            AnimatedStatusText(
+                label,
+                textColor,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -2500,14 +2674,41 @@ private fun SecondaryButton(
         modifier =
             modifier
                 .fillMaxWidth()
-                .heightIn(min = 50.dp)
+                .height(52.dp)
                 .clip(RoundedCornerShape(15.dp))
                 .border(1.dp, borderColor, RoundedCornerShape(15.dp))
                 .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
-                .padding(horizontal = 18.dp, vertical = 13.dp),
+                .padding(horizontal = 12.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = textColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text(label, color = textColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun CompactActionButton(
+    label: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    Box(
+        modifier
+            .height(40.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, palette.border, RoundedCornerShape(12.dp))
+            .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            color = palette.text,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -2527,6 +2728,8 @@ private fun TextFieldCard(
     secretKeyboardType: KeyboardType = KeyboardType.Password,
     keyboardOptions: KeyboardOptions? = null,
     textAlign: TextAlign = TextAlign.Start,
+    large: Boolean = false,
+    onFocusedChange: ((Boolean) -> Unit)? = null,
 ) {
     val palette = tandemPalette
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -2535,11 +2738,11 @@ private fun TextFieldCard(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .defaultMinSize(minHeight = 52.dp)
+                    .defaultMinSize(minHeight = if (large) 82.dp else 52.dp)
                     .clip(RoundedCornerShape(14.dp))
                     .background(palette.surface)
                     .border(1.dp, palette.border, RoundedCornerShape(14.dp))
-                    .padding(horizontal = 14.dp, vertical = 14.dp),
+                    .padding(horizontal = if (large) 18.dp else 14.dp, vertical = if (large) 20.dp else 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             BasicTextField(
@@ -2557,9 +2760,20 @@ private fun TextFieldCard(
                         KeyboardOptions.Default
                     },
                 visualTransformation = if (isSecret) PasswordVisualTransformation() else VisualTransformation.None,
-                textStyle = TextStyle(color = palette.text, fontSize = 15.sp, lineHeight = 20.sp, textAlign = textAlign),
+                textStyle =
+                    TextStyle(
+                        color = palette.text,
+                        fontSize = if (large) 32.sp else 15.sp,
+                        lineHeight = if (large) 38.sp else 20.sp,
+                        fontWeight = if (large) FontWeight.SemiBold else FontWeight.Normal,
+                        textAlign = textAlign,
+                    ),
                 cursorBrush = SolidColor(palette.accent),
-                modifier = Modifier.fillMaxWidth().semantics { contentDescription = label },
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { focusState -> onFocusedChange?.invoke(focusState.isFocused) }
+                        .semantics { contentDescription = label },
                 decorationBox = { innerTextField ->
                     Box {
                         if (value.isEmpty() && placeholder.isNotEmpty()) {
@@ -2567,7 +2781,7 @@ private fun TextFieldCard(
                                 placeholder,
                                 modifier = Modifier.fillMaxWidth(),
                                 color = palette.muted,
-                                fontSize = 14.sp,
+                                fontSize = if (large) 22.sp else 14.sp,
                                 textAlign = textAlign,
                             )
                         }
@@ -2580,10 +2794,273 @@ private fun TextFieldCard(
 }
 
 @Composable
+private fun TransactionAmountField(
+    amount: String,
+    amountMinorUnits: Long,
+    transactionType: String,
+    focusRequester: FocusRequester,
+    onShowKeypad: () -> Unit,
+) {
+    val palette = tandemPalette
+    val entered = amountMinorUnits != 0L
+    val amountColor =
+        when {
+            !entered -> palette.text
+            transactionType == "Income" -> palette.positive
+            else -> palette.negative
+        }
+    val outline = if (entered) amountColor else palette.border
+    val fill = if (entered) amountColor.copy(alpha = 0.08f) else palette.surface
+    val display = amount.ifBlank { "0.00" }
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 88.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(fill)
+                .border(1.5.dp, outline, RoundedCornerShape(18.dp))
+                .clickable(role = Role.Button, onClickLabel = "Enter amount", onClick = onShowKeypad)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BasicTextField(
+            value = TextFieldValue(display, selection = TextRange(display.length)),
+            onValueChange = {},
+            readOnly = true,
+            singleLine = true,
+            textStyle =
+                TextStyle(
+                    color = if (entered) amountColor else palette.muted,
+                    fontSize = 40.sp,
+                    lineHeight = 48.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                ),
+            cursorBrush = SolidColor(amountColor),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { if (it.isFocused) onShowKeypad() }
+                    .semantics { contentDescription = "Amount, $display" },
+            decorationBox = { innerTextField ->
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { innerTextField() }
+            },
+        )
+    }
+}
+
+@Composable
+private fun TransactionTypeChip(
+    type: String,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    Row(
+        modifier =
+            Modifier
+                .clip(CircleShape)
+                .background(palette.raised)
+                .clickable(role = Role.Button, onClickLabel = "Choose transaction type", onClick = onClick)
+                .padding(horizontal = 18.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
+    ) {
+        Icon(Lucide.Receipt, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.text)
+        Text(type, color = palette.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Icon(Lucide.ChevronDown, contentDescription = null, modifier = Modifier.size(19.dp), tint = palette.muted)
+    }
+}
+
+@Composable
+private fun TransactionPickerRow(
+    value: String,
+    placeholder: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    val label = value.ifBlank { placeholder }
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 62.dp)
+                .clickable(role = Role.Button, onClickLabel = placeholder, onClick = onClick)
+                .semantics { contentDescription = "$placeholder: $label" }
+                .padding(horizontal = 14.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(palette.raised),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp), tint = palette.accent)
+        }
+        Text(
+            label,
+            modifier = Modifier.weight(1f),
+            color = if (value.isBlank()) palette.muted else palette.text,
+            fontSize = 14.sp,
+            fontWeight = if (value.isBlank()) FontWeight.Normal else FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.muted)
+    }
+}
+
+private enum class AmountPadKeyStyle {
+    NUMBER,
+    OPERATOR,
+    EQUALS,
+    DONE,
+}
+
+@Composable
+private fun AmountPadKey(
+    label: String,
+    modifier: Modifier = Modifier,
+    style: AmountPadKeyStyle = AmountPadKeyStyle.NUMBER,
+    accessibilityLabel: String = label,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    val background =
+        when (style) {
+            AmountPadKeyStyle.NUMBER -> Color.Transparent
+            AmountPadKeyStyle.DONE -> palette.accent
+            else -> palette.raised
+        }
+    val color =
+        when (style) {
+            AmountPadKeyStyle.DONE -> palette.accentContent
+            AmountPadKeyStyle.NUMBER -> palette.text
+            else -> palette.muted
+        }
+    val shape =
+        when (style) {
+            AmountPadKeyStyle.NUMBER -> RoundedCornerShape(16.dp)
+            AmountPadKeyStyle.OPERATOR -> CircleShape
+            else -> RoundedCornerShape(28.dp)
+        }
+    Box(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(2.dp)
+                .clip(shape)
+                .background(background)
+                .semantics(mergeDescendants = true) { contentDescription = accessibilityLabel }
+                .clickable(role = Role.Button, onClickLabel = accessibilityLabel, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            color = color,
+            fontSize = if (style == AmountPadKeyStyle.NUMBER) 22.sp else 16.sp,
+            fontWeight = if (style == AmountPadKeyStyle.DONE) FontWeight.SemiBold else FontWeight.Medium,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun TransactionAmountKeypad(
+    onDigit: (Int) -> Unit,
+    onDelete: () -> Unit,
+    onOperator: (String) -> Unit,
+    onEquals: () -> Unit,
+    onDone: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val palette = tandemPalette
+    Surface(modifier = modifier.fillMaxWidth().height(AMOUNT_KEYPAD_HEIGHT), color = palette.surface) {
+        Row(
+            Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Column(
+                Modifier.weight(3.15f).fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                listOf(listOf(7, 8, 9), listOf(4, 5, 6), listOf(1, 2, 3)).forEach { row ->
+                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        row.forEach { digit ->
+                            AmountPadKey(digit.toString(), Modifier.weight(1f)) { onDigit(digit) }
+                        }
+                    }
+                }
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Spacer(Modifier.weight(1f).fillMaxSize())
+                    AmountPadKey("0", Modifier.weight(1f)) { onDigit(0) }
+                    AmountPadKey("⌫", Modifier.weight(1f), accessibilityLabel = "Delete last digit", onClick = onDelete)
+                }
+            }
+            Column(
+                Modifier.weight(1f).fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                listOf(listOf("×", "÷"), listOf("+", "−")).forEach { row ->
+                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        row.forEach { operator ->
+                            AmountPadKey(operator, Modifier.weight(1f), AmountPadKeyStyle.OPERATOR) { onOperator(operator) }
+                        }
+                    }
+                }
+                AmountPadKey("=", Modifier.weight(1f), AmountPadKeyStyle.EQUALS, "Calculate", onEquals)
+                AmountPadKey("Done", Modifier.weight(1f), AmountPadKeyStyle.DONE, onClick = onDone)
+            }
+        }
+    }
+}
+
+private val AMOUNT_KEYPAD_HEIGHT = 252.dp
+
+@Composable
+private fun FloatingTransactionSave(
+    compact: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val palette = tandemPalette
+    Row(
+        modifier =
+            modifier
+                .animateContentSize(tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS))
+                .height(56.dp)
+                .clip(if (compact) CircleShape else RoundedCornerShape(18.dp))
+                .background(if (enabled) palette.accent else palette.raised)
+                .semantics(mergeDescendants = true) { contentDescription = "Save transaction" }
+                .clickable(enabled = enabled, role = Role.Button, onClickLabel = "Save transaction", onClick = onClick)
+                .padding(horizontal = if (compact) 16.dp else 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 9.dp),
+    ) {
+        Box(Modifier.size(23.dp).clip(CircleShape).background(palette.accentContent), contentAlignment = Alignment.Center) {
+            Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(15.dp), tint = palette.accent)
+        }
+        AnimatedVisibility(visible = !compact, enter = fadeIn(), exit = fadeOut()) {
+            Text(
+                "Save",
+                color = if (enabled) palette.accentContent else palette.muted,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
 private fun ReadOnlyField(
     label: String,
     value: String,
     leading: String = "",
+    leadingVector: ImageVector? = null,
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
@@ -2602,7 +3079,9 @@ private fun ReadOnlyField(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            if (leading.isNotEmpty()) {
+            if (leadingVector != null) {
+                Icon(leadingVector, contentDescription = null, modifier = Modifier.size(30.dp), tint = palette.accent)
+            } else if (leading.isNotEmpty()) {
                 Text(
                     leading,
                     modifier = Modifier.clearAndSetSemantics {},
@@ -2612,7 +3091,12 @@ private fun ReadOnlyField(
                 )
             }
             Text(value, color = palette.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
-            Text("›", modifier = Modifier.clearAndSetSemantics {}, color = palette.muted, fontSize = 22.sp)
+            Icon(
+                Lucide.ChevronRight,
+                contentDescription = null,
+                modifier = Modifier.size(22.dp).clearAndSetSemantics {},
+                tint = palette.muted,
+            )
         }
     }
 }
@@ -2633,12 +3117,12 @@ private fun ListRow(
 ) {
     val palette = tandemPalette
     val resolvedPainter = leadingIconResource?.let { painterResource(it) }
-    val resolvedVector = if (resolvedPainter == null) leadingVector ?: fallbackVector else null
+    val resolvedVector = if (resolvedPainter == null) leadingVector ?: fallbackVector ?: financeIcon(title) ?: Lucide.CircleDot else null
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .defaultMinSize(minHeight = if (dense) 48.dp else 62.dp)
+                .defaultMinSize(minHeight = if (dense) 56.dp else 64.dp)
                 .then(
                     if (onClick != null) {
                         Modifier.clickable(role = Role.Button, onClickLabel = title, onClick = onClick)
@@ -2650,21 +3134,21 @@ private fun ListRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(
-            modifier = Modifier.size(if (dense) 30.dp else 36.dp).clip(RoundedCornerShape(12.dp)).background(palette.raised),
+            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(palette.raised),
             contentAlignment = Alignment.Center,
         ) {
             if (resolvedPainter != null) {
                 Image(
                     painter = resolvedPainter,
                     contentDescription = null,
-                    modifier = Modifier.size(if (dense) 22.dp else 26.dp).padding(3.dp),
+                    modifier = Modifier.size(32.dp).padding(2.dp),
                     contentScale = ContentScale.Fit,
                 )
             } else if (resolvedVector != null) {
                 Icon(
                     imageVector = resolvedVector,
                     contentDescription = null,
-                    modifier = Modifier.size(if (dense) 17.dp else 20.dp),
+                    modifier = Modifier.size(30.dp),
                     tint = palette.accent,
                 )
             } else {
@@ -2672,7 +3156,7 @@ private fun ListRow(
                     icon,
                     modifier = Modifier.clearAndSetSemantics {},
                     color = palette.accent,
-                    fontSize = 13.sp,
+                    fontSize = if (dense) 15.sp else 18.sp,
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -2703,7 +3187,7 @@ private fun ListRow(
                         subtitle,
                         palette.muted,
                         fontSize = 11.sp,
-                        maxLines = 2,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 } else {
@@ -2723,10 +3207,22 @@ private fun ListRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             } else {
-                Text(trailing, color = effectiveColor, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    trailing,
+                    color = effectiveColor,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         } else if (onClick != null) {
-            Text("›", modifier = Modifier.clearAndSetSemantics {}, color = palette.muted, fontSize = 20.sp)
+            Icon(
+                Lucide.ChevronRight,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp).clearAndSetSemantics {},
+                tint = palette.muted,
+            )
         }
     }
 }
@@ -2734,9 +3230,21 @@ private fun ListRow(
 internal fun financeIcon(label: String): ImageVector? {
     val words = labelWords(label)
 
+    if (words == listOf("account") || words == listOf("accounts")) return Lucide.WalletCards
+
     fun matches(vararg phrases: String): Boolean = phrases.any { containsPhrase(words, it) }
 
     return when {
+        matches("biometric", "fingerprint") -> Lucide.FingerprintPattern
+        matches("read-only", "read only", "view only") -> Lucide.Eye
+        matches("password") -> Lucide.LockKeyhole
+        matches("credential", "security key") -> Lucide.KeyRound
+        matches("conflict", "attention needed", "needs attention", "review", "reason", "rejected") -> Lucide.CircleAlert
+        matches("queued", "pending", "outbox", "changes", "local edits") -> Lucide.CloudSync
+        matches("transaction", "transactions", "purchase", "receipt", "payee", "merchant") -> Lucide.Receipt
+        matches("local data", "storage", "cached", "records", "snapshot") -> Lucide.Database
+        matches("essentials") -> Lucide.House
+        matches("upcoming", "due") -> Lucide.CalendarDays
         matches("pet", "pets", "veterinary", "vet clinic", "animal care") -> Lucide.PawPrint
         matches("flight", "airfare", "airport", "plane", "travel") -> Lucide.Plane
         matches("rent", "mortgage", "housing", "home maintenance", "home repair", "landlord") -> Lucide.House
@@ -2755,9 +3263,31 @@ internal fun financeIcon(label: String): ImageVector? {
             "parking",
             "train fare",
         ) -> Lucide.CarFront
-        matches("insurance", "coverage", "policy premium") -> Lucide.ShieldCheck
+        matches("insurance", "coverage", "policy premium", "security", "privacy") -> Lucide.ShieldCheck
         matches("medical", "healthcare", "doctor", "pharmacy", "dental", "hospital") -> Lucide.HeartPulse
         matches("paycheck", "payroll", "salary", "income") -> Lucide.BriefcaseBusiness
+        matches(
+            "balance",
+            "currency",
+            "money",
+            "amount",
+            "number format",
+            "assigned",
+            "available",
+            "ready to assign",
+        ) -> Lucide.WalletCards
+        matches("date", "calendar", "start of week", "planning period", "month", "due", "posted") -> Lucide.CalendarDays
+        matches("sync", "synchronization", "cloud") -> Lucide.CloudSync
+        matches("server", "connection", "api") -> Lucide.Server
+        matches("device", "phone", "paired device") -> Lucide.Smartphone
+        matches("theme", "appearance", "accent", "color", "background", "motion") -> Lucide.Palette
+        matches("layout", "home screen") -> Lucide.LayoutDashboard
+        matches("storage", "database", "local data", "cache") -> Lucide.Database
+        matches("notification", "reminder", "alert") -> Lucide.Bell
+        matches("category", "categories", "group", "budget") -> Lucide.Tags
+        matches("about", "help", "information", "project", "library", "license") -> Lucide.Info
+        matches("notes", "memo") -> Lucide.NotepadText
+        matches("payee", "merchant", "transaction", "purchase", "activity", "history") -> Lucide.Receipt
         else -> null
     }
 }
@@ -2777,6 +3307,8 @@ private fun SectionCard(
     action: String? = null,
     onClick: (() -> Unit)? = null,
     animateDetail: Boolean = false,
+    expanded: Boolean? = null,
+    onToggleExpanded: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val palette = tandemPalette
@@ -2788,20 +3320,67 @@ private fun SectionCard(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(title, color = palette.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            title,
+                            color = palette.text,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                         if (detail != null) {
                             if (animateDetail) {
-                                AnimatedStatusText(detail, palette.muted, fontSize = 11.sp, maxLines = 2)
+                                AnimatedStatusText(detail, palette.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             } else {
-                                Text(detail, color = palette.muted, fontSize = 11.sp)
+                                Text(detail, color = palette.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
                     }
-                    if (action != null) Text(action, color = palette.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    if (action != null) {
+                        Text(
+                            action,
+                            color = palette.accent,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    if (onToggleExpanded != null) {
+                        val arrowRotation by
+                            animateFloatAsState(
+                                targetValue = if (expanded == false) -90f else 0f,
+                                animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
+                                label = "section-chevron-$title",
+                            )
+                        Icon(
+                            imageVector = Lucide.ChevronDown,
+                            contentDescription = if (expanded == false) "Expand $title" else "Collapse $title",
+                            modifier =
+                                Modifier
+                                    .padding(start = 6.dp)
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .clickable(role = Role.Button, onClick = onToggleExpanded)
+                                    .padding(8.dp)
+                                    .graphicsLayer { rotationZ = arrowRotation },
+                            tint = palette.muted,
+                        )
+                    }
                 }
                 Box(Modifier.fillMaxWidth().height(1.dp).background(palette.border.copy(alpha = 0.75f)))
             }
-            content()
+            if (onToggleExpanded == null) {
+                content()
+            } else {
+                AnimatedVisibility(
+                    visible = expanded != false,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut(),
+                ) {
+                    Column(content = content)
+                }
+            }
         }
     }
 }
@@ -2811,9 +3390,11 @@ private fun ToggleRow(
     title: String,
     subtitle: String? = null,
     checked: Boolean,
+    enabled: Boolean = true,
     onChange: (Boolean) -> Unit,
 ) {
     val palette = tandemPalette
+    val controlColor = if (enabled) palette.accent else palette.muted
     val thumbOffset by
         animateDpAsState(
             targetValue = if (checked) 18.dp else 0.dp,
@@ -2822,13 +3403,13 @@ private fun ToggleRow(
         )
     val trackColor by
         animateColorAsState(
-            targetValue = if (checked) palette.accent else palette.raised,
+            targetValue = if (checked && enabled) palette.accent else palette.raised,
             animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
             label = "toggle-track-color",
         )
     val thumbColor by
         animateColorAsState(
-            targetValue = if (checked) palette.accentContent else palette.muted,
+            targetValue = if (checked && enabled) palette.accentContent else palette.muted,
             animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
             label = "toggle-thumb-color",
         )
@@ -2837,14 +3418,29 @@ private fun ToggleRow(
             Modifier
                 .fillMaxWidth()
                 .defaultMinSize(minHeight = 66.dp)
-                .toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
+                .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange)
                 .padding(horizontal = 15.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(title, color = palette.text, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            if (subtitle != null) Text(subtitle, color = palette.muted, fontSize = 11.sp, lineHeight = 15.sp)
+            Text(
+                title,
+                color = if (enabled) palette.text else palette.muted,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (subtitle != null) {
+                Text(
+                    subtitle,
+                    color = if (enabled) palette.muted else controlColor,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         Box(
             modifier =
@@ -2853,7 +3449,7 @@ private fun ToggleRow(
                         42.dp,
                     ).height(24.dp)
                     .clip(CircleShape)
-                    .background(trackColor)
+                    .background(if (enabled) trackColor else palette.raised)
                     .padding(3.dp),
         ) {
             Box(
@@ -2861,8 +3457,53 @@ private fun ToggleRow(
                     .offset(x = thumbOffset)
                     .size(18.dp)
                     .clip(CircleShape)
-                    .background(thumbColor),
+                    .background(if (enabled) thumbColor else palette.muted),
             )
+        }
+    }
+}
+
+@Composable
+private fun CheckBoxRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    enabled: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    val palette = tandemPalette
+    val accent = if (enabled) palette.accent else palette.muted
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 64.dp)
+                .toggleable(value = checked, enabled = enabled, role = Role.Checkbox, onValueChange = onChange)
+                .padding(horizontal = 15.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(
+                title,
+                color = if (enabled) palette.text else palette.muted,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(subtitle, color = palette.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Box(
+            Modifier
+                .size(24.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(if (checked) accent else Color.Transparent)
+                .border(1.5.dp, accent, RoundedCornerShape(6.dp))
+                .clearAndSetSemantics {},
+            contentAlignment = Alignment.Center,
+        ) {
+            if (checked) Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(17.dp), tint = palette.accentContent)
         }
     }
 }
@@ -2905,8 +3546,19 @@ private fun ChoiceRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(title, color = palette.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                if (subtitle != null) Text(subtitle, color = palette.muted, fontSize = 11.sp)
+                Text(
+                    title,
+                    color = palette.text,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (subtitle !=
+                    null
+                ) {
+                    Text(subtitle, color = palette.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
             Box(
                 Modifier
@@ -2951,6 +3603,23 @@ private fun PreviewNote(text: String) {
             lineHeight = 17.sp,
             animateSizeChanges = true,
         )
+    }
+}
+
+@Composable
+private fun InfoBubble(text: String) {
+    val palette = tandemPalette
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(palette.syncing.copy(alpha = 0.14f))
+            .padding(horizontal = 13.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
+    ) {
+        Icon(Lucide.Info, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.syncing)
+        Text(text, color = palette.text, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -3281,7 +3950,7 @@ private fun PairingResultScreen(
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     LabelText("Device access")
                     BodyText(
-                        "This device can access ${device.budgetIds.size} authorized budget scope${if (device.budgetIds.size == 1) "" else "s"}.",
+                        "This device can open ${device.budgetIds.size} budget${if (device.budgetIds.size == 1) "" else "s"}.",
                     )
                     BodyText(
                         when {
@@ -3543,7 +4212,7 @@ private fun BudgetScreen(
 ) {
     val palette = tandemPalette
     val compact = state.homeLayout == "Compact"
-    val essentialsFirst = state.homeLayout == "Essentials first"
+    val essentialsFirst = state.homeLayout == "Essentials"
     if (state.selectedBudgetId.isNotBlank()) {
         PageColumn(verticalSpacing = if (compact) 10.dp else 16.dp, horizontalPadding = if (compact) 16.dp else 20.dp) {
             val conflictCount = mobileSession.pendingWrites.count { it.status == "conflict" }
@@ -3574,7 +4243,7 @@ private fun BudgetScreen(
                         Spacer(Modifier.height(4.dp))
                         Text(state.selectedMonth, color = palette.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                     }
-                    Text("⌄", color = palette.accent, fontSize = 20.sp)
+                    Icon(Lucide.ChevronDown, contentDescription = "Choose month", modifier = Modifier.size(22.dp), tint = palette.accent)
                 }
             }
             if (liveBudgetMonth == null) {
@@ -3585,24 +4254,47 @@ private fun BudgetScreen(
                     }
                 }
             } else {
-                SurfaceCard {
-                    Column(
-                        Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 18.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                val summaryKey = "live:${state.selectedBudgetId}:summary:${state.selectedMonthId}"
+                SectionCard(
+                    "${state.selectedMonth} Summary",
+                    "${liveBudgetMonth.groups.sumOf { it.categories.size }} categories",
+                    state.formatCurrency(liveBudgetMonth.toBudgetMinor ?: 0),
+                    expanded = !state.isBudgetSectionCollapsed(summaryKey),
+                    onToggleExpanded = { state.toggleBudgetSection(summaryKey) },
+                ) {
+                    ListRow(
+                        "¤",
+                        "Ready to assign",
+                        state.selectedMonth,
+                        state.formatCurrency(liveBudgetMonth.toBudgetMinor ?: 0),
+                        leadingVector = Lucide.WalletCards,
+                    )
+                }
+                val pinnedCategories =
+                    liveBudgetMonth.groups.flatMap { group ->
+                        group.categories.filter { state.isCategoryPinned(it.id) }.map { group to it }
+                    }
+                if (pinnedCategories.isNotEmpty()) {
+                    SectionCard(
+                        "Pinned",
+                        "${pinnedCategories.size} categories",
+                        expanded = !state.isBudgetSectionCollapsed("live:${state.selectedBudgetId}:pinned"),
+                        onToggleExpanded = { state.toggleBudgetSection("live:${state.selectedBudgetId}:pinned") },
                     ) {
-                        LabelText("Ready to assign")
-                        Text(
-                            state.formatCurrency(liveBudgetMonth.toBudgetMinor ?: 0),
-                            color = palette.text,
-                            fontSize = 34.sp,
-                            lineHeight = 39.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text(
-                            "${liveBudgetMonth.groups.sumOf { it.categories.size }} categories · ${state.selectedMonth}",
-                            color = palette.muted,
-                            fontSize = 12.sp,
-                        )
+                        pinnedCategories.forEachIndexed { index, (group, category) ->
+                            if (index > 0) DividerLine()
+                            ListRow(
+                                category.name.take(1).uppercase(),
+                                category.name,
+                                group.name,
+                                state.formatCurrency(category.balanceMinor),
+                                leadingVector = financeIcon(category.name),
+                            ) {
+                                state.selectedCategoryGroupId = group.id
+                                state.selectedCategoryId = category.id
+                                navigation.open(AppRoute.CATEGORY_DETAIL)
+                            }
+                        }
                     }
                 }
                 val displayGroups =
@@ -3623,6 +4315,8 @@ private fun BudgetScreen(
                         group.name,
                         "${state.formatCurrency(group.assignedMinor)} assigned · ${group.categories.size} categories",
                         state.formatCurrency(group.balanceMinor),
+                        expanded = !state.isBudgetSectionCollapsed("live:${state.selectedBudgetId}:group:${group.id}"),
+                        onToggleExpanded = { state.toggleBudgetSection("live:${state.selectedBudgetId}:group:${group.id}") },
                         onClick = {
                             state.selectedCategoryGroupId = group.id
                             navigation.open(AppRoute.CATEGORY_GROUP)
@@ -3663,15 +4357,21 @@ private fun BudgetScreen(
                 }
             }
             if (liveTransactions.isNotEmpty()) {
-                SectionCard("Recent activity", "${liveTransactions.size} synced transactions", "See all", onClick = {
-                    navigation.selectTab(AppRoute.ACTIVITY)
-                }) {
+                SectionCard(
+                    "Recent activity",
+                    "${liveTransactions.size} synced transactions",
+                    "See all",
+                    onClick = { navigation.selectTab(AppRoute.ACTIVITY) },
+                    expanded = !state.isBudgetSectionCollapsed("live:${state.selectedBudgetId}:recent-activity"),
+                    onToggleExpanded = { state.toggleBudgetSection("live:${state.selectedBudgetId}:recent-activity") },
+                ) {
                     liveTransactions.take(3).forEachIndexed { index, item ->
                         if (index > 0) DividerLine()
                         TransactionRow(item) { openTransaction(state, navigation, item, isLive = true) }
                     }
                 }
             }
+            Spacer(Modifier.height(72.dp))
         }
         return
     }
@@ -3694,36 +4394,35 @@ private fun BudgetScreen(
                     Spacer(Modifier.height(4.dp))
                     Text(state.selectedMonth, color = palette.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 }
-                Text("⌄", color = palette.accent, fontSize = 20.sp)
+                Icon(Lucide.ChevronDown, contentDescription = "Choose month", modifier = Modifier.size(22.dp), tint = palette.accent)
             }
         }
-        SurfaceCard {
-            Column(
-                Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 18.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                LabelText("Ready to assign")
-                Text(
-                    state.formatCurrency(124_000),
-                    color = palette.text,
-                    fontSize = 34.sp,
-                    lineHeight = 39.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("Available this month", color = palette.muted, fontSize = 12.sp)
-                    Badge("On track", palette.positive)
-                }
-            }
+        val summaryKey = "summary:${state.selectedMonthId}"
+        SectionCard(
+            "${state.selectedMonth} Summary",
+            "Ready to assign",
+            state.formatCurrency(124_000),
+            expanded = !state.isBudgetSectionCollapsed(summaryKey),
+            onToggleExpanded = { state.toggleBudgetSection(summaryKey) },
+        ) {
+            ListRow(
+                "¤",
+                "Available this month",
+                "On track",
+                state.formatCurrency(124_000),
+                palette.positive,
+                leadingVector = Lucide.WalletCards,
+            )
         }
         if (essentialsFirst) UpcomingBillsCard(state, navigation)
-        SectionCard("Essentials", "${state.formatCurrency(232_000)} assigned · 3 categories", state.formatCurrency(232_000), onClick = {
-            navigation.open(AppRoute.CATEGORY_GROUP)
-        }) {
+        SectionCard(
+            "Essentials",
+            "${state.formatCurrency(232_000)} assigned · 3 categories",
+            state.formatCurrency(232_000),
+            onClick = { navigation.open(AppRoute.CATEGORY_GROUP) },
+            expanded = !state.isBudgetSectionCollapsed("sample:essentials"),
+            onToggleExpanded = { state.toggleBudgetSection("sample:essentials") },
+        ) {
             ListRow(
                 "H",
                 "Rent",
@@ -3765,6 +4464,8 @@ private fun BudgetScreen(
             "Flexible spending",
             "${state.formatCurrency(18_000)} left",
             onClick = { navigation.open(AppRoute.CATEGORY_GROUP) },
+            expanded = !state.isBudgetSectionCollapsed("sample:everyday"),
+            onToggleExpanded = { state.toggleBudgetSection("sample:everyday") },
         ) {
             ListRow(
                 "D",
@@ -3778,7 +4479,14 @@ private fun BudgetScreen(
             }
         }
         if (!essentialsFirst) UpcomingBillsCard(state, navigation)
-        SectionCard("Recent activity", "Latest budget changes", "See all", onClick = { navigation.selectTab(AppRoute.ACTIVITY) }) {
+        SectionCard(
+            "Recent activity",
+            "Latest budget changes",
+            "See all",
+            onClick = { navigation.selectTab(AppRoute.ACTIVITY) },
+            expanded = !state.isBudgetSectionCollapsed("sample:recent-activity"),
+            onToggleExpanded = { state.toggleBudgetSection("sample:recent-activity") },
+        ) {
             (liveTransactions.takeIf { it.isNotEmpty() } ?: previewTransactions).take(2).forEachIndexed { index, item ->
                 if (index > 0) DividerLine()
                 TransactionRow(item) { openTransaction(state, navigation, item, liveTransactions.isNotEmpty()) }
@@ -3803,9 +4511,10 @@ private fun BudgetScreen(
                         fontSize = 11.sp,
                     )
                 }
-                Text("›", color = palette.muted, fontSize = 20.sp)
+                Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.muted)
             }
         }
+        Spacer(Modifier.height(72.dp))
     }
 }
 
@@ -3831,6 +4540,8 @@ private fun UpcomingBillsCard(
         "Two bills before the end of the month",
         "View all",
         onClick = { navigation.open(AppRoute.CATEGORY_GROUP) },
+        expanded = !state.isBudgetSectionCollapsed("sample:upcoming"),
+        onToggleExpanded = { state.toggleBudgetSection("sample:upcoming") },
     ) {
         ListRow(
             "↗",
@@ -3902,33 +4613,35 @@ private fun MonthPickerScreen(
     navigation: AppNavigation,
 ) {
     PageColumn {
-        Heading("Select a month", "Choose which month to review.")
+        Heading("Select a month")
         var selectedYear by remember {
             mutableStateOf(state.selectedMonthId.substringBefore('-').toIntOrNull() ?: 2026)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "‹",
+            Icon(
+                Lucide.ChevronLeft,
+                contentDescription = "Previous year",
                 modifier =
                     Modifier
+                        .size(44.dp)
                         .semantics { contentDescription = "Previous year" }
                         .clickable(role = Role.Button, onClickLabel = "Previous year") {
                             selectedYear -= 1
                         }.padding(10.dp),
-                color = tandemPalette.text,
-                fontSize = 24.sp,
+                tint = tandemPalette.text,
             )
-            Text(formatInteger(selectedYear), color = tandemPalette.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-            Text(
-                "›",
+            Text(selectedYear.toString(), color = tandemPalette.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Icon(
+                Lucide.ChevronRight,
+                contentDescription = "Next year",
                 modifier =
                     Modifier
+                        .size(44.dp)
                         .semantics { contentDescription = "Next year" }
                         .clickable(role = Role.Button, onClickLabel = "Next year") {
                             selectedYear += 1
                         }.padding(10.dp),
-                color = tandemPalette.text,
-                fontSize = 24.sp,
+                tint = tandemPalette.text,
             )
         }
         val months = (1..12).map { month -> month to formatShortMonth(selectedYear, month) }
@@ -4091,6 +4804,9 @@ private fun CategoryDetailScreen(
                     DividerLine()
                     ListRow("=", "Available", "Assigned plus activity", state.formatCurrency(category.balanceMinor))
                 }
+                SecondaryButton(
+                    if (state.isCategoryPinned(category.id)) "Unpin" else "Pin",
+                ) { state.togglePinnedCategory(category.id) }
                 PrimaryButton("View all activity") { navigation.selectTab(AppRoute.ACTIVITY) }
             }
         }
@@ -4217,14 +4933,14 @@ private fun AccountDetailScreen(
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                     if (account.offBudget) {
-                        PrimaryButton("New transaction unavailable", enabled = false, modifier = Modifier.weight(1f)) {}
+                        PrimaryButton("Add transaction", enabled = false, modifier = Modifier.weight(1f)) {}
                     } else {
-                        PrimaryButton("Add transaction", modifier = Modifier.weight(1f)) {
+                        PrimaryButton("Add transaction", enabled = !state.readOnlyMode, modifier = Modifier.weight(1f)) {
                             navigation.newTransaction(account.id)
                         }
                     }
                     SecondaryButton(
-                        "Reconciliation unavailable",
+                        "Reconcile",
                         modifier = Modifier.weight(1f),
                         enabled = false,
                     ) {}
@@ -4257,11 +4973,11 @@ private fun AccountDetailScreen(
         )
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
             PrimaryButton(
-                if (account.offBudget) "New transaction unavailable" else "Add transaction",
-                enabled = !account.offBudget,
+                "Add transaction",
+                enabled = !account.offBudget && !state.readOnlyMode,
                 modifier = Modifier.weight(1f),
             ) {
-                if (!account.offBudget) navigation.open(AppRoute.NEW_TRANSACTION)
+                if (!account.offBudget && !state.readOnlyMode) navigation.open(AppRoute.NEW_TRANSACTION)
             }
             SecondaryButton("Reconcile", modifier = Modifier.weight(1f)) { navigation.open(AppRoute.RECONCILIATION) }
         }
@@ -4386,11 +5102,10 @@ private fun ActivityScreen(
             }
         }
         if (isLiveBudget) {
-            BodyText("Tap a transaction to view or edit it. New entries are saved locally before syncing.")
-            PrimaryButton("Add transaction") { navigation.newTransaction(null) }
+            PrimaryButton("Add transaction", enabled = !state.readOnlyMode) { navigation.newTransaction(null) }
         } else {
             PreviewNote("Transactions use sample data. Search and filters do not change a live budget.")
-            PrimaryButton("Add transaction") { navigation.open(AppRoute.NEW_TRANSACTION) }
+            PrimaryButton("Add transaction", enabled = !state.readOnlyMode) { navigation.open(AppRoute.NEW_TRANSACTION) }
         }
     }
 }
@@ -4522,7 +5237,7 @@ private fun TransactionDetailScreen(
                         Icon(
                             imageVector = categoryIcon,
                             contentDescription = null,
-                            modifier = Modifier.size(23.dp),
+                            modifier = Modifier.size(30.dp),
                             tint = tandemPalette.accent,
                         )
                     }
@@ -4561,12 +5276,12 @@ private fun TransactionDetailScreen(
             ListRow("", "Notes", trailing = state.transactionNotes.ifBlank { "No notes" }, leadingVector = Lucide.NotepadText)
         }
         if (isLive) {
-            PrimaryButton("Edit transaction", enabled = state.selectedTransactionRecordId.isNotBlank()) {
+            PrimaryButton("Edit transaction", enabled = state.selectedTransactionRecordId.isNotBlank() && !state.readOnlyMode) {
                 navigation.open(AppRoute.EDIT_TRANSACTION)
             }
         } else {
             PreviewNote("This sample transaction is read-only. Editing it will not change Actual Budget.")
-            PrimaryButton("Edit transaction") { navigation.open(AppRoute.EDIT_TRANSACTION) }
+            PrimaryButton("Edit transaction", enabled = !state.readOnlyMode) { navigation.open(AppRoute.EDIT_TRANSACTION) }
         }
     }
 }
@@ -4580,41 +5295,191 @@ private fun TransactionFormScreen(
     onSaveTransaction: () -> Unit,
     onCreateTransaction: () -> Unit,
 ) {
+    if (state.readOnlyMode) {
+        PageColumn {
+            Heading("Read-only mode")
+            BodyText("Turn it off in Device protection to edit this transaction.")
+        }
+        return
+    }
     val isNew = route == AppRoute.NEW_TRANSACTION
     if (state.selectedBudgetId.isNotBlank()) {
         if (isNew) {
-            PageColumn {
-                Badge("Actual · saved locally first", tandemPalette.positive)
-                Heading("Add transaction", "New entries sync safely with the current Actual budget.")
-                TextFieldCard(
-                    "Amount",
-                    state.transactionAmount,
-                    { state.transactionAmount = it },
-                    "For example, -42.18 for spending or 2500 for income",
-                )
-                if (state.newTransactionAccountId.isBlank()) {
-                    BodyText("Choose an on-budget account to save this transaction.")
+            var keypadVisible by rememberSaveable { mutableStateOf(true) }
+            var calculatorAccumulator by rememberSaveable { mutableStateOf<Long?>(null) }
+            var calculatorOperator by rememberSaveable { mutableStateOf<String?>(null) }
+            var enterNewOperand by rememberSaveable { mutableStateOf(false) }
+            val amountFocusRequester = remember { FocusRequester() }
+            val focusManager = LocalFocusManager.current
+            val softwareKeyboard = LocalSoftwareKeyboardController.current
+            val routeScrollState = LocalRouteScrollState.current
+            val compactSave by remember(routeScrollState) {
+                derivedStateOf { (routeScrollState?.value ?: 0) > 72 }
+            }
+            var amountMinorUnits by
+                remember(state.transactionAmount) {
+                    mutableStateOf(
+                        state
+                            .parseAmountMinorUnits(state.transactionAmount)
+                            ?.let { if (it == Long.MIN_VALUE) Long.MAX_VALUE else kotlin.math.abs(it) } ?: 0L,
+                    )
                 }
-                ReadOnlyField("Account", state.transactionAccount, "A") { navigation.open(AppRoute.CHOOSE_ACCOUNT) }
-                ReadOnlyField("Payee", state.transactionPayee.ifBlank { "No payee" }, "P") { navigation.open(AppRoute.CHOOSE_PAYEE) }
-                ReadOnlyField("Category", state.transactionCategory.ifBlank { "Uncategorized" }, "C") {
-                    navigation.open(AppRoute.CHOOSE_CATEGORY)
+
+            fun setAmount(minorUnits: Long) {
+                val magnitude = if (minorUnits == Long.MIN_VALUE) Long.MAX_VALUE else kotlin.math.abs(minorUnits)
+                amountMinorUnits = magnitude
+                state.transactionAmount = state.formatAmount(magnitude)
+            }
+
+            fun enterDigit(digit: Int) {
+                val current = if (enterNewOperand) 0L else amountMinorUnits
+                setAmount(appendAmountDigit(current, digit))
+                enterNewOperand = false
+            }
+
+            fun chooseOperator(operator: String) {
+                val previous = calculatorAccumulator
+                val pending = calculatorOperator
+                if (previous != null && pending != null && !enterNewOperand) {
+                    val result = calculateAmountMinorUnits(previous, amountMinorUnits, pending)
+                    if (result != null) {
+                        setAmount(result)
+                        calculatorAccumulator = if (result == Long.MIN_VALUE) Long.MAX_VALUE else kotlin.math.abs(result)
+                    }
+                } else if (previous == null) {
+                    calculatorAccumulator = amountMinorUnits
                 }
-                TextFieldCard("Date · YYYY-MM-DD", state.transactionDate, { state.transactionDate = it }, "${platformTodayIsoDate()}")
-                TextFieldCard("Notes", state.transactionNotes, { state.transactionNotes = it }, "Add a note (optional)", singleLine = false)
-                AnimatedReveal(visible = mobileSession.transactionWriteMessage != null) {
-                    SurfaceCard {
-                        Column(Modifier.padding(14.dp)) { BodyText(mobileSession.transactionWriteMessage.orEmpty()) }
+                calculatorOperator = operator
+                enterNewOperand = true
+            }
+
+            fun calculate() {
+                val previous = calculatorAccumulator
+                val operator = calculatorOperator
+                if (previous != null && operator != null) {
+                    val result =
+                        if (enterNewOperand) previous else calculateAmountMinorUnits(previous, amountMinorUnits, operator)
+                    result?.let(::setAmount)
+                }
+                calculatorAccumulator = null
+                calculatorOperator = null
+                enterNewOperand = true
+            }
+
+            LaunchedEffect(keypadVisible) {
+                if (keypadVisible) {
+                    softwareKeyboard?.hide()
+                    amountFocusRequester.requestFocus()
+                }
+            }
+
+            Box(Modifier.fillMaxSize()) {
+                PageColumn(
+                    verticalSpacing = 14.dp,
+                    modifier = Modifier.imePadding().padding(bottom = if (keypadVisible) AMOUNT_KEYPAD_HEIGHT + 68.dp else 76.dp),
+                ) {
+                    TransactionAmountField(
+                        amount = state.transactionAmount.ifBlank { state.formatAmount(0) },
+                        amountMinorUnits = amountMinorUnits,
+                        transactionType = state.transactionType,
+                        focusRequester = amountFocusRequester,
+                        onShowKeypad = { keypadVisible = true },
+                    )
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        TransactionTypeChip(state.transactionType) {
+                            keypadVisible = false
+                            softwareKeyboard?.hide()
+                            navigation.open(AppRoute.CHOOSE_TRANSACTION_TYPE)
+                        }
+                    }
+                    SectionCard(title = "") {
+                        TransactionPickerRow(
+                            state.transactionPayee,
+                            "Choose payee",
+                            Lucide.Receipt,
+                        ) {
+                            keypadVisible = false
+                            softwareKeyboard?.hide()
+                            navigation.open(AppRoute.CHOOSE_PAYEE)
+                        }
+                        DividerLine()
+                        TransactionPickerRow(
+                            state.transactionCategory,
+                            "Choose category",
+                            Lucide.Tags,
+                        ) {
+                            keypadVisible = false
+                            softwareKeyboard?.hide()
+                            navigation.open(AppRoute.CHOOSE_CATEGORY)
+                        }
+                        DividerLine()
+                        TransactionPickerRow(
+                            state.transactionAccount,
+                            "Choose account",
+                            Lucide.WalletCards,
+                        ) {
+                            keypadVisible = false
+                            softwareKeyboard?.hide()
+                            navigation.open(AppRoute.CHOOSE_ACCOUNT)
+                        }
+                        DividerLine()
+                        TransactionPickerRow(
+                            displayTransactionDate(state.transactionDate),
+                            "Choose date",
+                            Lucide.CalendarDays,
+                        ) {
+                            keypadVisible = false
+                            softwareKeyboard?.hide()
+                            navigation.open(AppRoute.CHOOSE_DATE)
+                        }
+                    }
+                    TextFieldCard(
+                        "Notes",
+                        state.transactionNotes,
+                        { state.transactionNotes = it },
+                        "Add a note",
+                        singleLine = false,
+                        onFocusedChange = { focused -> if (focused) keypadVisible = false },
+                    )
+                    AnimatedReveal(visible = mobileSession.transactionWriteMessage != null) {
+                        SurfaceCard {
+                            Column(Modifier.padding(14.dp)) { BodyText(mobileSession.transactionWriteMessage.orEmpty()) }
+                        }
                     }
                 }
-                PrimaryButton(
-                    "Save transaction",
+                if (keypadVisible) {
+                    TransactionAmountKeypad(
+                        onDigit = ::enterDigit,
+                        onDelete = {
+                            val current = if (enterNewOperand) 0L else amountMinorUnits
+                            setAmount(removeAmountDigit(current))
+                            enterNewOperand = false
+                        },
+                        onOperator = ::chooseOperator,
+                        onEquals = ::calculate,
+                        onDone = {
+                            keypadVisible = false
+                            focusManager.clearFocus()
+                        },
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
+                }
+                FloatingTransactionSave(
+                    compact = compactSave,
                     enabled =
                         !mobileSession.isSavingTransaction &&
                             state.newTransactionAccountId.isNotBlank() &&
-                            state.transactionAmount.isNotBlank(),
-                ) { onCreateTransaction() }
-                SecondaryButton("Cancel") { navigation.back() }
+                            amountMinorUnits > 0,
+                    onClick = onCreateTransaction,
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .imePadding()
+                            .padding(
+                                end = 18.dp,
+                                bottom = if (keypadVisible) AMOUNT_KEYPAD_HEIGHT + 12.dp else 12.dp,
+                            ),
+                )
             }
             return
         }
@@ -4645,6 +5510,9 @@ private fun TransactionFormScreen(
         SampleBanner()
         Heading("Transaction details", "Record a change to the budget.")
         TextFieldCard("Amount", state.transactionAmount, { state.transactionAmount = it }, "For example, ${state.formatAmount(1_250)}")
+        ReadOnlyField("Type", state.transactionType, leadingVector = Lucide.Receipt) {
+            navigation.open(AppRoute.CHOOSE_TRANSACTION_TYPE)
+        }
         ReadOnlyField("Account", state.transactionAccount, "A") { navigation.open(AppRoute.CHOOSE_ACCOUNT) }
         ReadOnlyField("Payee", state.transactionPayee, "P") { navigation.open(AppRoute.CHOOSE_PAYEE) }
         ReadOnlyField("Category", state.transactionCategory, "C") { navigation.open(AppRoute.CHOOSE_CATEGORY) }
@@ -4670,14 +5538,11 @@ private fun SelectorScreen(
 ) {
     var query by remember { mutableStateOf("") }
     PageColumn {
-        BodyText(if (live) "Choose an item from the open Actual budget." else "Choose an item for the sample transaction.")
         TextFieldCard("Search", query, { query = it }, "Start typing")
         val filtered = values.filter { it.label.contains(query, ignoreCase = true) }
         if (filtered.isEmpty()) {
             SurfaceCard {
-                Column(Modifier.padding(14.dp)) {
-                    BodyText(if (live) "No matching items are available in this budget." else "No sample items match your search.")
-                }
+                Text("No matches", modifier = Modifier.padding(14.dp), color = tandemPalette.muted)
             }
         }
         filtered.forEach { item ->
@@ -4687,7 +5552,6 @@ private fun SelectorScreen(
                 onClick = { onSelect(item) },
             )
         }
-        if (!live) PreviewNote("Selections update only this sample form.")
     }
 }
 
@@ -4696,18 +5560,63 @@ private fun DatePickerScreen(
     state: AppState,
     navigation: AppNavigation,
 ) {
-    val year = 2026
-    val month = 5
+    val selectedDateParts = parseIsoDate(state.transactionDate) ?: parseIsoDate(platformTodayIsoDate()) ?: Triple(2026, 5, 1)
+    var visibleYear by remember { mutableStateOf(selectedDateParts.first) }
+    var visibleMonth by remember { mutableStateOf(selectedDateParts.second) }
     val firstWeekday = platformFirstWeekday()
-    val firstDayOffset = (platformWeekday(year, month, 1) - firstWeekday + 7) % 7
-    val dayCells = List<Int?>(firstDayOffset) { null } + (1..31).map { it }
+    val firstDayOffset = (platformWeekday(visibleYear, visibleMonth, 1) - firstWeekday + 7) % 7
+    val daysInVisibleMonth = daysInMonth(visibleYear, visibleMonth)
+    val dayCells = List<Int?>(firstDayOffset) { null } + (1..daysInVisibleMonth).map { it }
     PageColumn {
-        Heading("Select a day", formatMonth(year, month))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Lucide.ChevronLeft,
+                contentDescription = "Previous month",
+                modifier =
+                    Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .clickable(role = Role.Button, onClickLabel = "Previous month") {
+                            if (visibleMonth == 1) {
+                                visibleMonth = 12
+                                visibleYear -= 1
+                            } else {
+                                visibleMonth -= 1
+                            }
+                        }.padding(10.dp),
+                tint = tandemPalette.text,
+            )
+            Text(
+                formatMonth(visibleYear, visibleMonth),
+                modifier = Modifier.weight(1f),
+                color = tandemPalette.text,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+            )
+            Icon(
+                Lucide.ChevronRight,
+                contentDescription = "Next month",
+                modifier =
+                    Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .clickable(role = Role.Button, onClickLabel = "Next month") {
+                            if (visibleMonth == 12) {
+                                visibleMonth = 1
+                                visibleYear += 1
+                            } else {
+                                visibleMonth += 1
+                            }
+                        }.padding(10.dp),
+                tint = tandemPalette.text,
+            )
+        }
+        Row(Modifier.fillMaxWidth()) {
             (0..6).forEach { column ->
                 val representativeDay = 1 + ((column - firstDayOffset + 7) % 7)
                 Text(
-                    formatWeekday(year, month, representativeDay),
+                    formatWeekday(visibleYear, visibleMonth, representativeDay),
                     modifier = Modifier.weight(1f),
                     color = tandemPalette.muted,
                     textAlign = TextAlign.Center,
@@ -4721,8 +5630,8 @@ private fun DatePickerScreen(
                     if (day == null) {
                         Spacer(Modifier.weight(1f).height(44.dp))
                     } else {
-                        val label = formatDate(SampleDate(year, month, day))
-                        val selected = state.transactionDate == label
+                        val isoDate = transactionIsoDate(visibleYear, visibleMonth, day)
+                        val selected = state.transactionDate == isoDate
                         val cellBackground by
                             animateColorAsState(
                                 targetValue = if (selected) tandemPalette.accentSurface else Color.Transparent,
@@ -4742,19 +5651,19 @@ private fun DatePickerScreen(
                                     .height(44.dp)
                                     .clip(CircleShape)
                                     .background(cellBackground)
-                                    .semantics { contentDescription = label }
+                                    .semantics { contentDescription = displayTransactionDate(isoDate) }
                                     .selectable(
                                         selected = selected,
                                         role = Role.RadioButton,
                                         onClick = {
-                                            state.transactionDate = label
+                                            state.transactionDate = isoDate
                                             navigation.back()
                                         },
                                     ),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
-                                formatInteger(day),
+                                day.toString(),
                                 color = cellTextColor,
                                 fontSize = 12.sp,
                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
@@ -4765,9 +5674,36 @@ private fun DatePickerScreen(
                 repeat(7 - week.size) { Spacer(Modifier.weight(1f).height(44.dp)) }
             }
         }
-        PreviewNote("The date selector uses sample local dates.")
     }
 }
+
+private fun parseIsoDate(value: String): Triple<Int, Int, Int>? {
+    val parts = value.split('-')
+    if (parts.size != 3) return null
+    val year = parts[0].toIntOrNull() ?: return null
+    val month = parts[1].toIntOrNull() ?: return null
+    val day = parts[2].toIntOrNull() ?: return null
+    return Triple(year, month, day).takeIf { year > 0 && month in 1..12 && day in 1..daysInMonth(year, month) }
+}
+
+private fun daysInMonth(
+    year: Int,
+    month: Int,
+): Int =
+    when (month) {
+        2 -> if (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) 29 else 28
+        4, 6, 9, 11 -> 30
+        else -> 31
+    }
+
+private fun transactionIsoDate(
+    year: Int,
+    month: Int,
+    day: Int,
+): String = "${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}"
+
+private fun displayTransactionDate(value: String): String =
+    parseIsoDate(value)?.let { (year, month, day) -> formatDate(SampleDate(year, month, day)) } ?: value
 
 @Composable
 private fun SaveResultScreen(
@@ -4984,7 +5920,10 @@ private fun ConflictInboxScreen(
                     ConflictValueCard("On this device", state.formatCurrency(1_200), Modifier.weight(1f))
                     ConflictValueCard("In Actual", state.formatCurrency(1_500), Modifier.weight(1f))
                 }
-                Text("Review both versions ›", color = tandemPalette.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Review both versions", color = tandemPalette.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(16.dp), tint = tandemPalette.accent)
+                }
             }
         }
         PreviewNote("This conflict is sample data. No resolution is sent or applied.")
@@ -5087,11 +6026,11 @@ private fun ConflictReviewScreen(
         if (state.conflictChoice.isNotEmpty()) {
             PreviewNote("Sample choice selected: ${state.conflictChoice}. No server update has been sent.")
         }
-        PrimaryButton("Keep ${state.formatCurrency(1_200)} on this device") {
+        PrimaryButton("Keep ${state.formatCurrency(1_200)}") {
             state.conflictChoice =
                 "device value ${state.formatCurrency(1_200)}"
         }
-        SecondaryButton("Keep ${state.formatCurrency(1_500)} from Actual") {
+        SecondaryButton("Keep ${state.formatCurrency(1_500)}") {
             state.conflictChoice =
                 "Actual value ${state.formatCurrency(1_500)}"
         }
@@ -5314,18 +6253,33 @@ private fun AppearanceScreen(
     navigation: AppNavigation,
 ) {
     PageColumn {
-        Heading("Visual settings", "The same appearance choices work on Android and iOS.")
+        Heading("Visual settings")
         SectionCard("Theme", "${state.theme.label} appearance", "") {
-            ListRow("◐", "Theme mode", "System, light, dark, or pure black", state.theme.label) { navigation.open(AppRoute.THEME_MODE) }
+            ListRow(
+                "",
+                "Theme mode",
+                "System, light, dark, or pure black",
+                state.theme.label,
+                leadingVector = Lucide.SunMoon,
+                onClick = { navigation.open(AppRoute.THEME_MODE) },
+            )
         }
         SectionCard("Color", "${state.accent.label} accent", "") {
-            ListRow("●", "Accent color", "Selected across every app page", state.accent.label) { navigation.open(AppRoute.ACCENT_COLOR) }
-        }
-        SectionCard("Background", state.backgroundStyle, "") {
             ListRow(
-                "✦",
+                "",
+                "Accent color",
+                "Selected across every app page",
+                state.accent.label,
+                leadingVector = Lucide.PaintbrushVertical,
+                onClick = { navigation.open(AppRoute.ACCENT_COLOR) },
+            )
+        }
+        SectionCard("Background") {
+            ListRow(
+                "",
                 "Background and motion",
                 "Subtle treatments and reduced motion",
+                leadingVector = Lucide.Wallpaper,
                 onClick = { navigation.open(AppRoute.BACKGROUND_MOTION) },
             )
         }
@@ -5356,7 +6310,6 @@ private fun ThemeModeScreen(state: AppState) {
 @Composable
 private fun AccentColorScreen(state: AppState) {
     PageColumn {
-        Heading("Accent color")
         AccentChoice.entries.forEach { accent ->
             val palette = tandemPalette
             SurfaceCard(onClick = { state.accent = accent }) {
@@ -5385,7 +6338,6 @@ private fun AccentColorScreen(state: AppState) {
 @Composable
 private fun BackgroundScreen(state: AppState) {
     PageColumn {
-        Heading("Background and motion", "These choices apply across every screen.")
         SurfaceCard {
             Box(
                 Modifier
@@ -5395,7 +6347,6 @@ private fun BackgroundScreen(state: AppState) {
                     .background(appBackgroundBrush(state.backgroundStyle, tandemPalette)),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("${state.backgroundStyle} preview", color = tandemPalette.text, fontWeight = FontWeight.SemiBold)
             }
         }
         listOf(
@@ -5408,7 +6359,7 @@ private fun BackgroundScreen(state: AppState) {
         SectionCard("Motion", "Animation should never get in the way") {
             ToggleRow(
                 "Reduce motion",
-                "Use the device setting by default; turn on to reduce motion further.",
+                "Fewer animations",
                 state.reduceMotion,
             ) { state.reduceMotionOverride = it }
             if (state.reduceMotionOverride != null) {
@@ -5435,7 +6386,7 @@ private fun HomeLayoutScreen(state: AppState) {
         listOf(
             "Comfortable" to "Roomy cards and extra context",
             "Compact" to "More categories visible at once",
-            "Essentials first" to "Keep upcoming bills near the top",
+            "Essentials" to "Keep upcoming bills near the top",
         ).forEach { (label, description) ->
             ChoiceRow(label, description, selected = state.homeLayout == label, onClick = { state.homeLayout = label })
         }
@@ -5445,19 +6396,40 @@ private fun HomeLayoutScreen(state: AppState) {
                 Text(
                     when (state.homeLayout) {
                         "Compact" -> "Compact rows and tighter spacing"
-                        "Essentials first" -> "Upcoming bills and essentials appear first"
+                        "Essentials" -> "Upcoming bills and essentials appear first"
                         else -> "Roomy category rows with more breathing space"
                     },
                     color = tandemPalette.muted,
                     fontSize = 12.sp,
                 )
-                if (state.homeLayout == "Essentials first") {
-                    ListRow("◷", "Upcoming bills", "Due soon", state.formatCurrency(12_000), dense = false)
+                if (state.homeLayout == "Essentials") {
+                    ListRow(
+                        "◷",
+                        "Upcoming bills",
+                        "Due soon",
+                        state.formatCurrency(12_000),
+                        dense = false,
+                        leadingVector = financeIcon("Upcoming bills"),
+                    )
                     DividerLine()
                 }
-                ListRow("H", "Essentials", "3 categories", state.formatCurrency(232_000), dense = state.homeLayout == "Compact")
+                ListRow(
+                    "H",
+                    "Essentials",
+                    "3 categories",
+                    state.formatCurrency(232_000),
+                    dense = state.homeLayout == "Compact",
+                    leadingVector = financeIcon("Essentials"),
+                )
                 DividerLine()
-                ListRow("G", "Groceries", "Available this month", state.formatCurrency(50_000), dense = state.homeLayout == "Compact")
+                ListRow(
+                    "G",
+                    "Groceries",
+                    "Available this month",
+                    state.formatCurrency(50_000),
+                    dense = state.homeLayout == "Compact",
+                    leadingVector = financeIcon("Groceries"),
+                )
             }
         }
     }
@@ -5470,7 +6442,7 @@ private fun BudgetPreferencesScreen(
 ) {
     val currencyCode = state.budgetDisplaySettings?.currencyCode ?: platformCurrencyCode()
     PageColumn {
-        Heading("Amount and planning", "Choose how amounts and plans are presented.")
+        Heading("Amount and planning")
         SectionCard(
             "Number format",
             if (state.budgetDisplaySettings != null) "Uses Actual budget settings" else "Device locale fallback",
@@ -5484,14 +6456,12 @@ private fun BudgetPreferencesScreen(
             DividerLine()
             ListRow("◷", "Start of week", "Follows the device locale", formatFirstWeekday())
         }
-        SectionCard("Planning", "Values come from the selected Actual budget") {
+        SectionCard("Planning") {
             ListRow("✓", "Available category amounts", "Shown from the synced plan", "Available", tandemPalette.positive)
-            DividerLine()
-            ListRow("◷", "Upcoming bills", "Due-date data is not in the mobile sync yet", "Unavailable")
             DividerLine()
             ListRow("↻", "Carry balances forward", "Controlled by Actual and shown read-only", "Actual")
         }
-        PreviewNote("Tandem displays planning values from Actual. It does not change budget rules from this page.")
+        PreviewNote("Tandem displays planning rules set in Actual. To change them, update the rules on the Actual website.")
     }
 }
 
@@ -5522,8 +6492,7 @@ private fun SyncPreferencesScreen(
             else -> "Open a budget and sync it to start keeping a local copy"
         }
     PageColumn {
-        Heading("Sync preferences", "Choose when this device checks Actual for changes.")
-        SectionCard("When to sync", "Local data stays available offline") {
+        SectionCard("When to sync") {
             ToggleRow("Sync when opening a budget", "Check for server changes when returning to a budget", state.syncOnOpen) {
                 state.syncOnOpen =
                     it
@@ -5532,22 +6501,25 @@ private fun SyncPreferencesScreen(
                 DividerLine()
                 ToggleRow(
                     "Schedule background sync",
-                    "Refresh the selected budget about every six hours",
-                    state.backgroundSyncEnabled,
+                    if (state.selectedBudgetEncrypted) {
+                        "Encrypted budgets cannot sync in background."
+                    } else {
+                        "Refresh the selected budget about every six hours"
+                    },
+                    state.backgroundSyncEnabled && !state.selectedBudgetEncrypted,
+                    enabled = !state.selectedBudgetEncrypted,
                 ) { state.backgroundSyncEnabled = it }
-                DividerLine()
-                ToggleRow(
-                    "Background sync on Wi-Fi or other unrestricted connections",
-                    "Your device pauses sync on networks marked as limited or costly.",
-                    state.syncOnWifi,
-                ) { state.syncOnWifi = it }
-                BodyText("Encrypted budgets are skipped because budget passwords are never stored.")
+                if (!state.selectedBudgetEncrypted) {
+                    DividerLine()
+                    ToggleRow(
+                        "Use unrestricted networks",
+                        "Pauses on metered connections",
+                        state.syncOnWifi,
+                    ) { state.syncOnWifi = it }
+                }
             } else {
-                BodyText("Scheduled sync is managed by the iOS host app and is not configured in this workspace.")
+                InfoBubble("Background sync isn’t available on this device.")
             }
-            BodyText(
-                "Manual sync and sync on open use the current connection.",
-            )
         }
         SectionCard("Current budget", if (hasSelectedBudget) state.selectedBudget else "Choose an Actual budget", animateDetail = true) {
             ListRow(
@@ -5625,22 +6597,13 @@ private fun ServerDeviceScreen(
                 "",
                 "Device name",
                 if (device != null) deviceName else "Not paired",
-                leadingIconResource = if (device != null) Res.drawable.tandem_logo_squircle else null,
                 leadingVector = Lucide.Smartphone,
             )
             DividerLine()
             ListRow(
                 "",
-                "Budget access",
-                if (device == null) {
-                    "No device pairing"
-                } else {
-                    when (device.budgetIds.size) {
-                        0 -> "No budgets available to this device"
-                        1 -> "1 budget available to this device"
-                        else -> "${device.budgetIds.size} budgets available to this device"
-                    }
-                },
+                "Budgets this device can open",
+                if (device == null) "Not paired" else "${device.budgetIds.size} available",
                 leadingVector = Lucide.FolderKey,
             )
             DividerLine()
@@ -5656,13 +6619,7 @@ private fun ServerDeviceScreen(
                 leadingVector = Lucide.KeyRound,
             )
         }
-        BodyText(
-            if (mobileSession.isCredentialStored) {
-                "Pairing codes and budget passwords are never saved. The device credential is protected by the platform secure store. Removing it here only clears this phone; revoke the device on the server to disable its token."
-            } else {
-                "Pairing codes and budget passwords are never saved. The device credential is active only until the app closes."
-            },
-        )
+        InfoBubble("Pairing codes and budget passwords are never saved. Revoke device access on the server.")
         AnimatedPreviewNote(mobileSession.credentialStorageError)
         if (device == null) {
             SecondaryButton("Pair this device") { navigation.open(AppRoute.SERVER_ADDRESS) }
@@ -5673,31 +6630,56 @@ private fun ServerDeviceScreen(
 }
 
 @Composable
-private fun SecurityScreen(mobileSession: TandemMobileSession) {
+private fun SecurityScreen(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+) {
+    val hasActiveConnection =
+        state.selectedBudgetId.isNotBlank() && mobileSession.isAuthenticated && mobileSession.isServerReachable
+    val hasPendingWrites = mobileSession.pendingWrites.isNotEmpty()
+    val canEnableReadOnly = hasActiveConnection && !hasPendingWrites
+    val canChangeReadOnly = state.readOnlyMode || canEnableReadOnly
     PageColumn {
-        Heading("Device protection", "Protect financial data and manage device access.")
-        SectionCard("Feature availability", "Pairing and budget credentials") {
-            ListRow("◎", "Biometric unlock", "App lock is not available in this build", "Unavailable")
-            DividerLine()
-            ListRow("⌫", "Transaction deletion", "Delete actions are not available in the mobile app", "Unavailable")
-        }
-        SectionCard("Data handling", "Server connection") {
+        Heading("Device protection")
+        SectionCard("App access") {
             ListRow(
-                "⌑",
+                "",
+                "Biometric unlock",
+                "Not available yet",
+                "Unavailable",
+                leadingVector = Lucide.FingerprintPattern,
+            )
+            DividerLine()
+            CheckBoxRow(
+                title = "Read-only mode",
+                subtitle = if (canChangeReadOnly) "Block transaction edits and notes" else "Connect and sync pending changes first",
+                checked = state.readOnlyMode,
+                enabled = canChangeReadOnly,
+                onChange = { state.readOnlyMode = it },
+            )
+        }
+        SectionCard("Credentials") {
+            ListRow(
+                "",
                 "Device credential",
-                if (mobileSession.isCredentialStored) "Encrypted in system secure storage" else "In-memory until the app closes",
+                if (mobileSession.isCredentialStored) "Protected by system storage" else "Active for this session",
                 when {
                     mobileSession.isCredentialStored -> "Saved"
                     mobileSession.isAuthenticated -> "Active"
                     else -> "Not paired"
                 },
+                leadingVector = Lucide.KeyRound,
             )
             DividerLine()
-            ListRow("◉", "Budget password", "Used only to open an encrypted budget", "Not stored")
+            ListRow(
+                "",
+                "Budget password",
+                if (state.selectedBudgetEncrypted) "Used to unlock this budget" else "Encrypted budgets only",
+                if (state.selectedBudgetEncrypted) "Not stored" else "Unavailable",
+                leadingVector = Lucide.LockKeyhole,
+            )
         }
-        PreviewNote(
-            "Pairing codes and encrypted-budget passwords are never stored. Device credentials use the platform secure store when available.",
-        )
+        PreviewNote("Budget passwords are not stored.")
         AnimatedPreviewNote(mobileSession.credentialStorageError)
     }
 }
@@ -5707,13 +6689,48 @@ private fun NotificationsScreen(
     state: AppState,
     onRequestNotificationPermission: (() -> Unit)?,
     onOpenNotificationSettings: (() -> Unit)?,
+    notificationPermissionEnabled: Boolean?,
+    onToggleNotificationPermission: ((Boolean) -> Unit)?,
 ) {
     PageColumn {
-        Heading("Alert preferences", "Choose in-app reminders and background notifications.")
-        SectionCard("Budget activity", "In-app banners appear when you open the budget") {
+        SectionCard("") {
+            if (notificationPermissionEnabled != null && onToggleNotificationPermission != null) {
+                ToggleRow(
+                    "Notifications",
+                    if (notificationPermissionEnabled) {
+                        "On · Disable in notification settings"
+                    } else {
+                        "Off · Enable in notification settings"
+                    },
+                    notificationPermissionEnabled,
+                    onChange = onToggleNotificationPermission,
+                )
+            } else {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        "Notifications",
+                        modifier = Modifier.weight(1f),
+                        color = tandemPalette.text,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    if (onRequestNotificationPermission != null) {
+                        CompactActionButton("Enable", Modifier.weight(1f), onRequestNotificationPermission)
+                    }
+                    if (onOpenNotificationSettings != null) {
+                        CompactActionButton("Settings", Modifier.weight(1f), onOpenNotificationSettings)
+                    }
+                }
+            }
+        }
+        SectionCard("Alert preferences") {
             ToggleRow(
                 "Sync reminders",
-                "Show a banner and notification when a background sync fails",
+                "When background sync fails",
                 state.syncReminders,
             ) {
                 state.syncReminders = it
@@ -5721,7 +6738,7 @@ private fun NotificationsScreen(
             DividerLine()
             ToggleRow(
                 "Conflict review alerts",
-                "Show a banner and notification when a background sync finds a conflict",
+                "When a change needs review",
                 state.conflictReviewAlerts,
             ) {
                 state.conflictReviewAlerts =
@@ -5730,22 +6747,13 @@ private fun NotificationsScreen(
             DividerLine()
             ToggleRow(
                 "Rejected edit alerts",
-                "Show a banner and notification when a background sync cannot apply an edit",
+                "When an edit cannot be applied",
                 state.rejectedEditAlerts,
             ) {
                 state.rejectedEditAlerts = it
             }
         }
-        SectionCard("System permission", "The operating system controls notification delivery") {
-            if (onRequestNotificationPermission != null) {
-                SecondaryButton("Allow notifications") { onRequestNotificationPermission() }
-                Spacer(Modifier.height(8.dp))
-            }
-            if (onOpenNotificationSettings != null) {
-                SecondaryButton("Open notification settings") { onOpenNotificationSettings() }
-            }
-        }
-        PreviewNote("System alerts follow scheduled sync; banners appear in-app. If disabled, manage permission in system settings.")
+        InfoBubble("In-app alerts appear when you open Tandem.")
     }
 }
 
@@ -5777,12 +6785,8 @@ private fun LocalDataScreen(
         }
     PageColumn {
         Heading(
-            "Stored data",
-            if (hasSelectedBudget) {
-                "Review the local copy and queued changes for ${state.selectedBudget}."
-            } else {
-                "Pair this device and select an Actual budget to view its cached data."
-            },
+            "Local copy",
+            if (hasSelectedBudget) "Cached records and sync status." else "Choose a budget to view the cache.",
         )
         AmountHero(
             "Cached records",
@@ -5793,27 +6797,27 @@ private fun LocalDataScreen(
             ListRow(
                 "▤",
                 "Transactions",
-                "Full local record count",
+                "Cached transactions",
                 formatInteger(mobileSession.cachedTransactionCount),
             )
             DividerLine()
-            ListRow("▣", "Accounts", "Cached account records", formatInteger(mobileSession.accountRecords.size))
+            ListRow("▣", "Accounts", "Cached accounts", formatInteger(mobileSession.accountRecords.size))
             DividerLine()
             ListRow("↑", "Queued changes", "Waiting to sync", formatInteger(queuedCount))
             DividerLine()
-            ListRow("!", "Conflicts to review", "Changes with a newer server version", formatInteger(conflictCount))
+            ListRow("!", "Conflicts to review", "Choose a version", formatInteger(conflictCount))
             AnimatedReveal(visible = attentionCount > 0, animateHeight = false) {
                 Column {
                     DividerLine()
-                    ListRow("⚠", "Other changes needing attention", "Uncertain or rejected", formatInteger(attentionCount))
+                    ListRow("⚠", "Other changes needing attention", "Review locally", formatInteger(attentionCount))
                 }
             }
         }
-        SectionCard("Storage actions", "") {
+        SectionCard("Storage actions") {
             ListRow(
                 "↻",
                 "Refresh local budget",
-                "Sync the selected budget with Actual",
+                "Sync this budget",
                 when {
                     mobileSession.isSyncing -> "Syncing"
                     hasSelectedBudget -> "Refresh"
@@ -5823,13 +6827,10 @@ private fun LocalDataScreen(
                 animateChanges = true,
             )
             DividerLine()
-            ListRow("×", "Clear local data", "Not available while local-first sync is active", "Unavailable")
+            ListRow("×", "Clear local data", trailing = "Unavailable")
         }
         AnimatedPreviewNote(mobileSession.syncError)
-        BodyText(
-            "Cached data belongs to this budget on this device. Clearing it is disabled so queued, " +
-                "conflicted, or uncertain edits cannot be lost.",
-        )
+        if (mobileSession.pendingWrites.isNotEmpty()) InfoBubble("Pending edits stay on this device.")
     }
 }
 

@@ -8,6 +8,19 @@ import kotlin.test.assertTrue
 
 class AppStateTest {
     @Test
+    fun pinnedCategoriesAndCollapsedBudgetSectionsSurviveAppRestart() {
+        val state =
+            AppState().apply {
+                collapsedBudgetSections = "live:budget-a:pinned"
+                pinnedCategoryIds = "budget-a:category-a"
+            }
+        val restored = AppState().apply { restorePersistentSettings(state.persistentSettings()) }
+
+        assertEquals(state.collapsedBudgetSections, restored.collapsedBudgetSections)
+        assertEquals(state.pinnedCategoryIds, restored.pinnedCategoryIds)
+    }
+
+    @Test
     fun mainCloudIndicatorDistinguishesOffSyncedSyncingAndAttentionStates() {
         fun status(
             syncEnabled: Boolean = true,

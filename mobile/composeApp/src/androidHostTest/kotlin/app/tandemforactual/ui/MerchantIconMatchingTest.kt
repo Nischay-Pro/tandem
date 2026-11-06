@@ -3,6 +3,7 @@ package app.tandemforactual.ui
 import com.composables.icons.lucide.CarFront
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.ShieldCheck
+import com.composables.icons.lucide.WalletCards
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -14,6 +15,7 @@ class MerchantIconMatchingTest {
         assertNull(financeIcon("Carpet cleaning"))
         assertNull(financeIcon("Competition fees"))
         assertNull(financeIcon("Current account"))
+        assertEquals(Lucide.WalletCards, financeIcon("Accounts"))
         assertNull(financeIcon("Parent loan"))
         assertNull(financeIcon("Different bank"))
         assertNull(financeIcon("Marketing"))

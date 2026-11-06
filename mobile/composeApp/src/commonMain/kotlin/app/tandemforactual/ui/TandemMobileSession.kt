@@ -427,7 +427,7 @@ internal class TandemMobileSession(
         transactionWriteMessage = null
         val amount = parseAmountMinorUnits(amountText, displaySettings)
         if (amount == null || amount == 0L) {
-            transactionWriteMessage = "Enter a non-zero amount. Use a minus sign for spending; positive amounts are income."
+            transactionWriteMessage = "Enter an amount greater than zero."
             return false
         }
         val date = normalizeTransactionDate(dateText)
