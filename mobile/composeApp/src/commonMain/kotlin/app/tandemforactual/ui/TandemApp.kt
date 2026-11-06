@@ -5069,6 +5069,8 @@ private fun ActivityScreen(
     liveTransactions: List<TransactionItem>,
 ) {
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    val transactions = if (isLiveBudget) liveTransactions else previewTransactions
+    val recentDescription = if (isLiveBudget) "Newest first" else "${transactions.size} sample entries"
     PageLazyColumn {
         if (!isLiveBudget) item(key = "activity-preview-banner") { SampleBanner() }
         item(key = "activity-search-entry") {
@@ -5089,29 +5091,29 @@ private fun ActivityScreen(
                 }
             }
         }
-        if (isLiveBudget) {
-            if (liveTransactions.isEmpty()) {
-                item(key = "activity-empty") {
-                    SectionCard("Recent transactions", "Newest first") {
-                        EmptyState("No transactions yet", "Sync the budget to refresh.", modifier = Modifier.padding(TandemSpacing.large))
-                    }
-                }
-            } else {
-                item(key = "activity-recent-title") { SectionCard("Recent transactions", "Newest first") {} }
-                items(
-                    liveTransactions,
-                    key = { "activity:${it.recordId ?: "${it.dateLabel}:${it.payee}:${it.amountMinorUnits}"}" },
-                ) { item ->
-                    SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
-                        TransactionRow(item) { openTransaction(state, navigation, item, isLive = true) }
-                    }
+        if (transactions.isEmpty()) {
+            item(key = "activity-empty") {
+                SectionCard("Recent transactions", recentDescription) {
+                    EmptyState(
+                        if (isLiveBudget) "No transactions yet" else "No sample transactions",
+                        if (isLiveBudget) "Sync the budget to refresh." else null,
+                        modifier = Modifier.padding(TandemSpacing.large),
+                    )
                 }
             }
         } else {
-            item(key = "activity-sample-title") { SectionCard("Recent transactions", "${previewTransactions.size} sample entries") {} }
-            items(previewTransactions, key = { "sample:${it.recordId ?: "${it.dateLabel}:${it.payee}:${it.amountMinorUnits}"}" }) { item ->
-                SurfaceCard {
-                    TransactionRow(item) { openTransaction(state, navigation, item, isLive = false) }
+            item(key = "activity-recent-title") { SectionCard("Recent transactions", recentDescription) {} }
+            items(
+                transactions,
+                key = { transaction ->
+                    val prefix = if (isLiveBudget) "activity" else "sample"
+                    "$prefix:${transaction.recordId ?: "${transaction.dateLabel}:${transaction.payee}:${transaction.amountMinorUnits}"}"
+                },
+            ) { transaction ->
+                SurfaceCard(modifier = if (isLiveBudget) tandemListItemModifier(tandemReduceMotion) else Modifier) {
+                    TransactionRow(transaction) {
+                        openTransaction(state, navigation, transaction, isLive = isLiveBudget)
+                    }
                 }
             }
         }
