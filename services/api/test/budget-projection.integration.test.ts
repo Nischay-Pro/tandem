@@ -155,6 +155,31 @@ describe.skipIf(!integrationEnabled)(
       );
     });
 
+    it("uses the database refresh timestamp and epoch for snapshot freshness", async () => {
+      const store = createPostgresBudgetProjectionStore(getPool());
+      await expect(
+        store.isSnapshotFresh("budget-freshness", "epoch-a", 15_000),
+      ).resolves.toBe(false);
+
+      await store.applySnapshot("budget-freshness", "epoch-a", []);
+      await expect(
+        store.isSnapshotFresh("budget-freshness", "epoch-a", 15_000),
+      ).resolves.toBe(true);
+      await expect(
+        store.isSnapshotFresh("budget-freshness", "epoch-b", 15_000),
+      ).resolves.toBe(false);
+
+      await getPool().query(
+        `UPDATE companion_budget_sync_state
+         SET refreshed_at = clock_timestamp() - INTERVAL '16 seconds'
+         WHERE budget_id = $1`,
+        ["budget-freshness"],
+      );
+      await expect(
+        store.isSnapshotFresh("budget-freshness", "epoch-a", 15_000),
+      ).resolves.toBe(false);
+    });
+
     it("rotates generation and clears old events when the restore epoch changes", async () => {
       const store = createPostgresBudgetProjectionStore(getPool());
       const rows = [

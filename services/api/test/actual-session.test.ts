@@ -132,6 +132,51 @@ describe("ActualSession", () => {
     await session.close();
   });
 
+  it("uses incremental sync for an already-loaded unencrypted budget", async () => {
+    const fake = createFakeClient();
+    const session = new ActualSession(fake.api, config);
+
+    await session.runBudget("budget-a", async () => undefined);
+    await session.runBudget("budget-a", async () => undefined);
+    await session.runBudget("budget-b", async () => undefined);
+    await session.runBudget("budget-a", async () => undefined);
+
+    expect(fake.calls).toEqual([
+      "init",
+      "version",
+      "download:budget-a:",
+      "sync",
+      "download:budget-b:",
+      "download:budget-a:",
+    ]);
+    await session.close();
+  });
+
+  it("revalidates password-opened budgets instead of reusing a decrypted copy", async () => {
+    const fake = createFakeClient();
+    const session = new ActualSession(fake.api, config);
+
+    await session.runBudget("encrypted-budget", async () => undefined, {
+      encryptionPassword: "budget-secret",
+    });
+    await session.runBudget("encrypted-budget", async () => undefined);
+    await session.runBudget("encrypted-budget", async () => undefined, {
+      encryptionPassword: "budget-secret",
+    });
+
+    expect(
+      fake.calls.filter((call) =>
+        call.startsWith("download:encrypted-budget:"),
+      ),
+    ).toEqual([
+      "download:encrypted-budget:budget-secret",
+      "download:encrypted-budget:",
+      "download:encrypted-budget:budget-secret",
+    ]);
+    expect(fake.calls).not.toContain("sync");
+    await session.close();
+  });
+
   it("synchronizes a successful write after its operation", async () => {
     const fake = createFakeClient();
     const session = new ActualSession(fake.api, config);

@@ -49,6 +49,30 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
     }
   }
 
+  async isSnapshotFresh(
+    budgetId: string,
+    feedEpoch: string,
+    maxAgeMs: number,
+  ): Promise<boolean> {
+    validateBudgetId(budgetId);
+    validateFeedEpoch(feedEpoch);
+    if (!Number.isSafeInteger(maxAgeMs) || maxAgeMs < 1) {
+      throw new Error("Snapshot freshness interval must be a positive integer");
+    }
+
+    const result = await this.pool.query<{ fresh: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1
+         FROM companion_budget_sync_state
+         WHERE budget_id = $1
+           AND feed_epoch = $2
+           AND refreshed_at >= clock_timestamp() - ($3::double precision * INTERVAL '1 millisecond')
+       ) AS fresh`,
+      [budgetId, feedEpoch, maxAgeMs],
+    );
+    return result.rows[0]?.fresh ?? false;
+  }
+
   async applySnapshot(
     budgetId: string,
     feedEpoch: string,

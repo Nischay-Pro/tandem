@@ -110,6 +110,8 @@ export class ActualSession {
   #poisoned = false;
   #cleanupFailed = false;
   #closePromise: Promise<void> | undefined;
+  #loadedBudgetSyncId: string | undefined;
+  #loadedBudgetWasOpenedWithPassword = false;
 
   constructor(
     private readonly client: ActualApiPort,
@@ -157,11 +159,24 @@ export class ActualSession {
     return enqueueActualApiOperation(() =>
       this.#withTimeout(async () => {
         await this.#initialize();
-        const encryptionOptions =
-          options.encryptionPassword === undefined
-            ? undefined
-            : { password: options.encryptionPassword };
-        await this.client.downloadBudget(normalizedSyncId, encryptionOptions);
+        const canReuseLoadedBudget =
+          this.#loadedBudgetSyncId === normalizedSyncId &&
+          !this.#loadedBudgetWasOpenedWithPassword &&
+          options.encryptionPassword === undefined;
+        if (canReuseLoadedBudget) {
+          await this.client.sync();
+        } else {
+          this.#loadedBudgetSyncId = undefined;
+          this.#loadedBudgetWasOpenedWithPassword = false;
+          const encryptionOptions =
+            options.encryptionPassword === undefined
+              ? undefined
+              : { password: options.encryptionPassword };
+          await this.client.downloadBudget(normalizedSyncId, encryptionOptions);
+          this.#loadedBudgetSyncId = normalizedSyncId;
+          this.#loadedBudgetWasOpenedWithPassword =
+            options.encryptionPassword !== undefined;
+        }
         return this.#executeOperation(operation, options.synchronizeAfterWrite);
       }),
     );
@@ -182,6 +197,8 @@ export class ActualSession {
       }
 
       await this.#withTimeout(() => this.client.shutdown());
+      this.#loadedBudgetSyncId = undefined;
+      this.#loadedBudgetWasOpenedWithPassword = false;
       activeActualSession = undefined;
     });
     this.#closePromise = closePromise;

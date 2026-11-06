@@ -65,6 +65,11 @@ export interface BudgetProjectionChangePage {
 }
 
 export interface BudgetProjectionStore {
+  isSnapshotFresh(
+    budgetId: string,
+    feedEpoch: string,
+    maxAgeMs: number,
+  ): Promise<boolean>;
   applySnapshot(
     budgetId: string,
     feedEpoch: string,

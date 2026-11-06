@@ -3,6 +3,29 @@ import type { Pool } from "pg";
 import { createPostgresBudgetProjectionStore } from "../src/budget-projection/postgres-budget-projection-store.js";
 
 describe("PostgreSQL budget projection store failure handling", () => {
+  it("checks freshness with a positive interval and fails closed without state", async () => {
+    const query = vi.fn(async () => ({ rows: [] }));
+    const pool = { query } as unknown as Pool;
+    const store = createPostgresBudgetProjectionStore(pool);
+
+    await expect(
+      store.isSnapshotFresh("budget-1", "epoch-1", 15_000),
+    ).resolves.toBe(false);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("refreshed_at >= clock_timestamp()"),
+      ["budget-1", "epoch-1", 15_000],
+    );
+    await expect(
+      store.isSnapshotFresh("budget-1", "epoch-1", 0),
+    ).rejects.toThrow("Snapshot freshness interval must be a positive integer");
+    await expect(store.isSnapshotFresh("", "epoch-1", 15_000)).rejects.toThrow(
+      "Budget ID is invalid",
+    );
+    await expect(
+      store.isSnapshotFresh("budget-1", "bad epoch", 15_000),
+    ).rejects.toThrow("Change feed epoch is invalid");
+  });
+
   it("preserves the write error and discards a client when rollback fails", async () => {
     const primaryError = new Error("synthetic write failure");
     const rollbackError = new Error("synthetic rollback failure");

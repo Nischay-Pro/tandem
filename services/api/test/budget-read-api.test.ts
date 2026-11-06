@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { BudgetReadApi } from "../src/budget-projection/budget-read-api.js";
+import {
+  BudgetReadApi,
+  DEFAULT_BUDGET_SNAPSHOT_FRESHNESS_MS,
+} from "../src/budget-projection/budget-read-api.js";
 import type {
   BudgetProjectionChangePage,
   BudgetProjectionSnapshot,
@@ -30,6 +33,7 @@ function createApi(
   overrides: {
     refreshPage?: BudgetProjectionChangePage | undefined;
     readPage?: BudgetProjectionChangePage | undefined;
+    snapshotFresh?: boolean;
   } = {},
 ) {
   const events: string[] = [];
@@ -58,7 +62,9 @@ function createApi(
     }
     return Object.hasOwn(overrides, "readPage") ? overrides.readPage : page;
   });
+  const isSnapshotFresh = vi.fn(async () => overrides.snapshotFresh ?? false);
   const store = {
+    isSnapshotFresh,
     applySnapshot,
     readChanges,
   } as unknown as BudgetProjectionStore;
@@ -68,7 +74,15 @@ function createApi(
     store,
     "feed-epoch-1",
   );
-  return { api, lock, reader, applySnapshot, readChanges, events };
+  return {
+    api,
+    lock,
+    reader,
+    applySnapshot,
+    readChanges,
+    isSnapshotFresh,
+    events,
+  };
 }
 
 describe("budget read API", () => {
@@ -82,6 +96,7 @@ describe("budget read API", () => {
       { withBudgetLock: fake.lock } as BudgetLockPort,
       fake.reader,
       {
+        isSnapshotFresh: vi.fn(async () => false),
         applySnapshot: fake.applySnapshot,
         readChanges: fake.readChanges,
       } as unknown as BudgetProjectionStore,
@@ -132,6 +147,7 @@ describe("budget read API", () => {
       { withBudgetLock: fake.lock } as BudgetLockPort,
       reader,
       {
+        isSnapshotFresh: vi.fn(async () => false),
         applySnapshot: fake.applySnapshot,
         readChanges: fake.readChanges,
       } as unknown as BudgetProjectionStore,
@@ -163,6 +179,11 @@ describe("budget read API", () => {
       }),
     ).resolves.toEqual({ ...page, displaySettings: null });
     expect(fake.events).toEqual(["lock:budget-1", "read", "apply", "changes"]);
+    expect(fake.isSnapshotFresh).toHaveBeenCalledWith(
+      "budget-1",
+      "feed-epoch-1",
+      DEFAULT_BUDGET_SNAPSHOT_FRESHNESS_MS,
+    );
     expect(fake.readChanges).toHaveBeenCalledWith(
       expect.objectContaining({
         budgetId: "budget-1",
@@ -188,6 +209,23 @@ describe("budget read API", () => {
     });
     expect(fake.events).toEqual(["lock:budget-1", "changes"]);
     expect(fake.reader.read).not.toHaveBeenCalled();
+    expect(fake.isSnapshotFresh).not.toHaveBeenCalled();
+  });
+
+  it("serves a fresh projection without downloading or rereading Actual", async () => {
+    const fake = createApi({ snapshotFresh: true });
+    await expect(
+      fake.api.getChanges({
+        budgetId: "budget-1",
+        generation: snapshot.generation,
+        cursor: "2",
+        limit: 25,
+      }),
+    ).resolves.toEqual({ ...page, displaySettings: null });
+    expect(fake.isSnapshotFresh).toHaveBeenCalledOnce();
+    expect(fake.reader.read).not.toHaveBeenCalled();
+    expect(fake.applySnapshot).not.toHaveBeenCalled();
+    expect(fake.readChanges).toHaveBeenCalledOnce();
   });
 
   it("refreshes when a paged request refers to a budget without stored state", async () => {
@@ -234,11 +272,31 @@ describe("budget read API", () => {
           { withBudgetLock: fake.lock } as unknown as BudgetLockPort,
           fake.reader,
           {
+            isSnapshotFresh: vi.fn(async () => false),
             applySnapshot: fake.applySnapshot,
             readChanges: fake.readChanges,
           } as unknown as BudgetProjectionStore,
           "bad epoch",
         ),
     ).toThrow("Change feed epoch is invalid");
+  });
+
+  it("rejects an invalid snapshot freshness interval", () => {
+    const fake = createApi();
+    expect(
+      () =>
+        new BudgetReadApi(
+          { withBudgetLock: fake.lock } as unknown as BudgetLockPort,
+          fake.reader,
+          {
+            isSnapshotFresh: fake.isSnapshotFresh,
+            applySnapshot: fake.applySnapshot,
+            readChanges: fake.readChanges,
+          } as unknown as BudgetProjectionStore,
+          "feed-epoch-1",
+          undefined,
+          0,
+        ),
+    ).toThrow("Snapshot freshness interval must be a positive integer");
   });
 });

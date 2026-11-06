@@ -8,6 +8,8 @@ import type {
   BudgetSnapshotReader,
 } from "./contracts.js";
 
+export const DEFAULT_BUDGET_SNAPSHOT_FRESHNESS_MS = 15_000;
+
 export interface BudgetChangeRequest {
   budgetId: string;
   generation: string;
@@ -41,10 +43,14 @@ export class BudgetReadApi implements BudgetReadApiPort {
     private readonly store: BudgetProjectionStore,
     private readonly feedEpoch: string,
     listBudgets?: () => Promise<BudgetCatalogEntry[]>,
+    private readonly snapshotFreshnessMs = DEFAULT_BUDGET_SNAPSHOT_FRESHNESS_MS,
   ) {
     this.listBudgets = listBudgets;
     if (!/^[A-Za-z0-9._:-]{1,100}$/.test(feedEpoch)) {
       throw new Error("Change feed epoch is invalid");
+    }
+    if (!Number.isSafeInteger(snapshotFreshnessMs) || snapshotFreshnessMs < 1) {
+      throw new Error("Snapshot freshness interval must be a positive integer");
     }
   }
 
@@ -69,10 +75,17 @@ export class BudgetReadApi implements BudgetReadApiPort {
     return this.locks.withBudgetLock(request.budgetId, async () => {
       let displaySettings: BudgetDisplaySettings | null = null;
       if (request.throughCursor === undefined) {
-        displaySettings = await this.refresh(
+        const isFresh = await this.store.isSnapshotFresh(
           request.budgetId,
-          request.encryptionPassword,
+          this.feedEpoch,
+          this.snapshotFreshnessMs,
         );
+        if (!isFresh) {
+          displaySettings = await this.refresh(
+            request.budgetId,
+            request.encryptionPassword,
+          );
+        }
       }
 
       let page = await this.store.readChanges(request);
