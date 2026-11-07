@@ -18,6 +18,7 @@ import { createBudgetRecordRevision } from "../src/actual/budget-snapshot-reader
 
 const databaseUrl = process.env.DATABASE_URL;
 const integrationEnabled = Boolean(databaseUrl);
+const storageBenchmarkEnabled = process.env.RUN_STORAGE_BENCHMARK === "true";
 
 let adminPool: Pool | undefined;
 let pool: Pool | undefined;
@@ -239,18 +240,21 @@ describe.skipIf(!integrationEnabled)(
       ]);
     });
 
-    it("reduces retained feed storage for 100,000 current transaction bodies", async () => {
-      const scopedPool = getPool();
-      const budgetId = `budget-body-size-${randomUUID()}`;
-      const recordCount = 100_000;
-      await scopedPool.query(
-        `INSERT INTO companion_budget_sync_state
+    it.skipIf(!storageBenchmarkEnabled)(
+      "reduces retained feed storage for 100,000 current transaction bodies",
+      async () => {
+        const startedAt = Date.now();
+        const scopedPool = getPool();
+        const budgetId = `budget-body-size-${randomUUID()}`;
+        const recordCount = 100_000;
+        await scopedPool.query(
+          `INSERT INTO companion_budget_sync_state
          (budget_id, generation, feed_epoch, cursor)
          VALUES ($1, $2, 'epoch', $3)`,
-        [budgetId, randomUUID(), recordCount],
-      );
-      await scopedPool.query(
-        `INSERT INTO companion_budget_records
+          [budgetId, randomUUID(), recordCount],
+        );
+        await scopedPool.query(
+          `INSERT INTO companion_budget_records
          (budget_id, entity_type, entity_id, revision, body, is_deleted, updated_cursor)
          SELECT $1, 'transaction', 'txn-' || item.id, repeat('a', 64),
                 jsonb_build_object(
@@ -262,22 +266,22 @@ describe.skipIf(!integrationEnabled)(
                     || md5('m6:' || item.id::text) || md5('m7:' || item.id::text)
                 ), false, item.id
          FROM generate_series(1, $2::integer) AS item(id)`,
-        [budgetId, recordCount],
-      );
-      await scopedPool.query(
-        `INSERT INTO companion_budget_changes
+          [budgetId, recordCount],
+        );
+        await scopedPool.query(
+          `INSERT INTO companion_budget_changes
          (budget_id, cursor, entity_type, entity_id, operation, revision, body)
          SELECT $1, item.id, 'transaction', 'txn-' || item.id,
                 'upsert', repeat('a', 64), NULL
          FROM generate_series(1, $2::integer) AS item(id)`,
-        [budgetId, recordCount],
-      );
-      await scopedPool.query(
-        `CREATE TABLE legacy_change_body_benchmark
+          [budgetId, recordCount],
+        );
+        await scopedPool.query(
+          `CREATE TABLE legacy_change_body_benchmark
          (LIKE companion_budget_changes INCLUDING ALL)`,
-      );
-      await scopedPool.query(
-        `INSERT INTO legacy_change_body_benchmark
+        );
+        await scopedPool.query(
+          `INSERT INTO legacy_change_body_benchmark
          (budget_id, cursor, entity_type, entity_id, operation, revision, body)
          SELECT change.budget_id, change.cursor, change.entity_type,
                 change.entity_id, change.operation, change.revision, record.body
@@ -287,27 +291,29 @@ describe.skipIf(!integrationEnabled)(
           AND record.entity_type = change.entity_type
           AND record.entity_id = change.entity_id
          WHERE change.budget_id = $1`,
-        [budgetId],
-      );
-      await scopedPool.query(
-        `VACUUM (ANALYZE) companion_budget_changes, legacy_change_body_benchmark`,
-      );
-      const sizes = await scopedPool.query<{
-        compact_bytes: string;
-        duplicate_bytes: string;
-      }>(
-        `SELECT pg_total_relation_size('companion_budget_changes')::text AS compact_bytes,
+          [budgetId],
+        );
+        await scopedPool.query(
+          `VACUUM (ANALYZE) companion_budget_changes, legacy_change_body_benchmark`,
+        );
+        const sizes = await scopedPool.query<{
+          compact_bytes: string;
+          duplicate_bytes: string;
+        }>(
+          `SELECT pg_total_relation_size('companion_budget_changes')::text AS compact_bytes,
                 pg_total_relation_size('legacy_change_body_benchmark')::text AS duplicate_bytes`,
-      );
-      const compactBytes = Number(sizes.rows[0]?.compact_bytes);
-      const duplicateBytes = Number(sizes.rows[0]?.duplicate_bytes);
-      console.log("B197 change table bytes for 100,000 records", {
-        compactBytes,
-        duplicateBytes,
-      });
-      expect(compactBytes).toBeLessThan(duplicateBytes * 0.8);
-      // This synthetic 100,000-row storage benchmark is sensitive to shared-runner I/O.
-    }, 60_000);
+        );
+        const compactBytes = Number(sizes.rows[0]?.compact_bytes);
+        const duplicateBytes = Number(sizes.rows[0]?.duplicate_bytes);
+        console.log("B197 change table bytes for 100,000 records", {
+          compactBytes,
+          duplicateBytes,
+          elapsedMs: Date.now() - startedAt,
+        });
+        expect(compactBytes).toBeLessThan(duplicateBytes * 0.8);
+      },
+      60_000,
+    );
 
     it("upgrades, reverses, and reapplies body deduplication without losing feed bodies", async () => {
       const connectionString = process.env.DATABASE_URL;
