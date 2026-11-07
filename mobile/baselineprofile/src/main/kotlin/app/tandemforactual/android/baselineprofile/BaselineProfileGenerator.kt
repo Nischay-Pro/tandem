@@ -38,6 +38,50 @@ class BaselineProfileGenerator {
         }
     }
 
+    @Test
+    fun activitySearchTransactionFormAndReports() {
+        baselineProfileRule.collect(
+            packageName = PROFILE_PACKAGE,
+            includeInStartupProfile = false,
+        ) {
+            launchPreview()
+            selectTab("Activity")
+            check(device.wait(Until.hasObject(By.text("Search transactions")), CONTENT_TIMEOUT_MS)) {
+                "Could not find Activity search."
+            }
+            device.findObject(By.text("Search transactions")).click()
+            check(device.wait(Until.hasObject(By.text("Results")), CONTENT_TIMEOUT_MS)) {
+                "Activity search did not open."
+            }
+            device.pressBack()
+            device.waitForIdle()
+
+            selectTab("Budget")
+            check(device.wait(Until.hasObject(By.desc("Add transaction")), CONTENT_TIMEOUT_MS)) {
+                "Could not find the Add transaction action."
+            }
+            device.findObject(By.desc("Add transaction")).click()
+            check(device.wait(Until.hasObject(By.text("Amount")), CONTENT_TIMEOUT_MS)) {
+                "The transaction form did not open."
+            }
+            device.pressBack()
+            device.waitForIdle()
+
+            selectTab("Reports")
+            check(device.wait(Until.hasObject(By.text("Spending by category")), CONTENT_TIMEOUT_MS)) {
+                "Reports did not open."
+            }
+            device.findObject(By.text("Spending by category")).click()
+            device.waitForIdle()
+            check(
+                device.wait(Until.hasObject(By.text("Details")), 1_000L) ||
+                    device.wait(Until.hasObject(By.text("No report data yet")), 1_000L),
+            ) {
+                "The spending report detail did not open."
+            }
+        }
+    }
+
     private fun MacrobenchmarkScope.launchPreview() {
         pressHome()
         // Preview mode skips device credentials and auto-sync, so profiling cannot
