@@ -2377,19 +2377,9 @@ fun TandemApp(
                                 initialState.route == AppRoute.STARTUP ||
                                 targetState.route == AppRoute.STARTUP ->
                                 EnterTransition.None togetherWith ExitTransition.None
-                            initialState.route.isTab() && targetState.route.isTab() -> {
-                                val movesForward = targetState.route.tabOrder() > initialState.route.tabOrder()
-                                val enterFrom = if (movesForward) 1 else -1
-                                val durationMillis = TandemMotion.TAB_MILLIS
-                                (
-                                    slideInHorizontally(
-                                        tween(durationMillis, easing = TandemMotion.movementEasing),
-                                    ) { it * enterFrom }
-                                ) togetherWith
-                                    slideOutHorizontally(
-                                        tween(durationMillis, easing = TandemMotion.movementEasing),
-                                    ) { -it * enterFrom } using null
-                            }
+                            initialState.route.isTab() && targetState.route.isTab() ->
+                                fadeIn(tween(TandemMotion.CROSSFADE_MILLIS)) togetherWith
+                                    fadeOut(tween(TandemMotion.CROSSFADE_MILLIS)) using null
                             routeTransitionDirection > 0f ->
                                 (
                                     slideInHorizontally(
@@ -2447,16 +2437,6 @@ private fun AppRoute.isReportDetail(): Boolean =
         this == AppRoute.REPORT_INCOME_AND_SPENDING ||
         this == AppRoute.REPORT_BUDGETED_AND_SPENT ||
         this == AppRoute.REPORT_NET_WORTH
-
-private fun AppRoute.tabOrder(): Int =
-    when (this) {
-        AppRoute.BUDGET -> 0
-        AppRoute.ACCOUNTS -> 1
-        AppRoute.ACTIVITY -> 2
-        AppRoute.REPORTS -> 3
-        AppRoute.SETTINGS -> 4
-        else -> -1
-    }
 
 @Composable
 private fun FloatingAction(
