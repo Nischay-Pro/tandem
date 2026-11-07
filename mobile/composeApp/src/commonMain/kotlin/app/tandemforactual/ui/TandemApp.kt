@@ -7762,7 +7762,7 @@ private fun AccountsScreen(
                     TextFieldCard("Name", newAccountName, { newAccountName = it }, TextFieldOptions(placeholder = "Checking"))
                     Box {
                         ListRow(
-                            "Account type",
+                            "Account group",
                             trailing = accountGroupOptions.firstOrNull { it.first == newAccountGroupId }?.second ?: "No group",
                             leading = RowLeading.Icon(Lucide.FolderKey),
                             onClick = { accountGroupMenuExpanded = true },
