@@ -246,6 +246,12 @@ object BudgetSyncJson {
     private fun JsonObject.optionalDisplaySettings(): BudgetDisplaySettings? {
         val element = this["displaySettings"]?.takeUnless { it == JsonNull } ?: return null
         val settings = element.requireObject("displaySettings")
+        // Older middleware versions omit this display-only field. Preserve the
+        // prior envelope presentation until the server can supply the mode.
+        val budgetType = settings.optionalString("budgetType") ?: "envelope"
+        if (budgetType !in setOf("envelope", "tracking")) {
+            throw BudgetSyncProtocolException("Response has an unsupported budgetType")
+        }
         val currencyCode = settings.requiredString("currencyCode")
         if (!currencyCode.matches(Regex("[A-Z]{3}"))) {
             throw BudgetSyncProtocolException("Response has an invalid currencyCode")
@@ -264,6 +270,7 @@ object BudgetSyncJson {
             throw BudgetSyncProtocolException("Response has an unsupported currencySymbolPosition")
         }
         return BudgetDisplaySettings(
+            budgetType = budgetType,
             currencyCode = currencyCode,
             currencySymbol = currencySymbol,
             currencyFractionDigits = currencyFractionDigits,

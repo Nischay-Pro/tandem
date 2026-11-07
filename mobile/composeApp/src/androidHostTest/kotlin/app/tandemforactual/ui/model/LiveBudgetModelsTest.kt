@@ -122,6 +122,53 @@ class LiveBudgetModelsTest {
         assertEquals(250, local.recordBody()?.longValue("balance_current"))
         assertNull(invalid.recordBody())
     }
+
+    @Test
+    fun mapsUpcomingSchedulesAndOmitsCompletedOrUndatedRows() {
+        val schedules =
+            listOf(
+                record(
+                    type = "schedule",
+                    id = "rent",
+                    json =
+                        """
+                        {"id":"rent","name":"Rent","payee":"landlord","account":"checking",
+                         "amount":150000,"next_date":"2026-11-15","completed":false}
+                        """.trimIndent(),
+                ),
+                record(
+                    type = "schedule",
+                    id = "variable",
+                    json =
+                        """
+                        {"id":"variable","payee":"utility","account":"checking",
+                         "amount":{"num1":5000,"num2":12000},"next_date":"2026-11-18"}
+                        """.trimIndent(),
+                ),
+                record(
+                    type = "schedule",
+                    id = "completed",
+                    json = """{"id":"completed","next_date":"2026-11-01","completed":true}""",
+                ),
+                record(type = "schedule", id = "undated", json = """{"id":"undated"}"""),
+            )
+
+        val upcoming =
+            liveScheduleSummaries(
+                schedules,
+                listOf(
+                    record(type = "payee", id = "landlord", name = "North Apartments"),
+                    record(type = "payee", id = "utility", name = "Electric Company"),
+                ),
+                listOf(record(type = "account", id = "checking", name = "Household Checking")),
+            )
+
+        assertEquals(listOf("rent", "variable"), upcoming.map { it.id })
+        assertEquals("Rent", upcoming.first().name)
+        assertEquals("Household Checking", upcoming.first().accountName)
+        assertEquals(150_000, upcoming.first().amountMinor)
+        assertEquals(5_000L to 12_000L, upcoming.last().amountRangeMinor)
+    }
 }
 
 private fun record(

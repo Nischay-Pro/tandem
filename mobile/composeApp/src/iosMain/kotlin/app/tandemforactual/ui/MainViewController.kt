@@ -2,6 +2,7 @@
 
 package app.tandemforactual.ui
 
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.window.ComposeUIViewController
 import app.tandemforactual.data.database.openTandemDatabase
 import app.tandemforactual.data.database.tandemDatabaseBuilder
@@ -33,6 +34,12 @@ private fun createTandemViewController(
 ): UIViewController {
     val syncEvents = IosSyncEventSource()
     return ComposeUIViewController {
+        DisposableEffect(database, syncEvents) {
+            onDispose {
+                syncEvents.close()
+                database.close()
+            }
+        }
         TandemApp(
             deviceName = UIDevice.currentDevice.name.ifBlank { "iPhone" },
             database = database,

@@ -351,6 +351,7 @@ class LocalBudgetRepository(
                     hideFraction = settings.displayBoolean("hideFraction"),
                     currencySymbolPosition = settings.displayString("currencySymbolPosition"),
                     currencySpaceBetweenAmountAndSymbol = settings.displayBoolean("currencySpaceBetweenAmountAndSymbol"),
+                    budgetType = settings.displayString("budgetType")?.takeIf { it == "tracking" } ?: "envelope",
                 )
             }.getOrNull()
         }
@@ -1350,6 +1351,7 @@ class LocalBudgetRepository(
                 put("hideFraction", settings.hideFraction)
                 put("currencySymbolPosition", settings.currencySymbolPosition?.let { JsonPrimitive(it) } ?: JsonNull)
                 put("currencySpaceBetweenAmountAndSymbol", settings.currencySpaceBetweenAmountAndSymbol)
+                put("budgetType", settings.budgetType)
             }.toString()
         database.budgetRecordDao().put(
             BudgetRecordEntity(

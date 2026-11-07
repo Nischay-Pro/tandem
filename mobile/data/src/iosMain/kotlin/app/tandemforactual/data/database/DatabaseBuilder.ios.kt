@@ -17,6 +17,29 @@ fun tandemDatabaseBuilder(): RoomDatabase.Builder<TandemDatabase> {
             create = true,
             error = null,
         )
-    val databasePath = requireNotNull(applicationSupportDirectory?.path) + "/tandem.db"
+    val supportDirectory = requireNotNull(applicationSupportDirectory)
+    val applicationSupportPath = requireNotNull(supportDirectory.path)
+    supportDirectory.setResourceValue(
+        true,
+        forKey = "NSURLIsExcludedFromBackupKey",
+        error = null,
+    )
+    val databasePath = "$applicationSupportPath/tandem.db"
+    val fileProtectionAttributes =
+        mapOf<Any?, Any?>("NSFileProtectionKey" to "NSFileProtectionCompleteUntilFirstUserAuthentication")
+    NSFileManager.defaultManager.setAttributes(
+        fileProtectionAttributes,
+        ofItemAtPath = applicationSupportPath,
+        error = null,
+    )
+    listOf(databasePath, "$databasePath-wal", "$databasePath-shm")
+        .filter(NSFileManager.defaultManager::fileExistsAtPath)
+        .forEach { path ->
+            NSFileManager.defaultManager.setAttributes(
+                fileProtectionAttributes,
+                ofItemAtPath = path,
+                error = null,
+            )
+        }
     return Room.databaseBuilder<TandemDatabase>(name = databasePath)
 }

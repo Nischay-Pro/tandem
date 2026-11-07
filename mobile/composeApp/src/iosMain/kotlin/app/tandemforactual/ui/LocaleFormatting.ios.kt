@@ -15,6 +15,7 @@ import platform.Foundation.NSNumberFormatter
 import platform.Foundation.NSNumberFormatterCurrencyStyle
 import platform.Foundation.NSNumberFormatterDecimalStyle
 import platform.Foundation.NSNumberFormatterPercentStyle
+import platform.Foundation.NSRecursiveLock
 import platform.Foundation.currentLocale
 import kotlin.math.abs
 import kotlin.math.pow
@@ -25,12 +26,15 @@ internal actual fun platformFormatCurrency(
     displaySettings: BudgetDisplaySettings?,
 ): String {
     if (displaySettings == null) {
-        val formatter =
+        val locale = NSLocale.currentLocale
+        return withNumberFormatter("currency:$locale", {
             NSNumberFormatter().apply {
-                locale = NSLocale.currentLocale
+                this.locale = locale
                 numberStyle = NSNumberFormatterCurrencyStyle
             }
-        return formatter.stringFromNumber(NSNumber(minorUnits.toDouble() / 100.0)) ?: ""
+        }) { formatter ->
+            formatter.stringFromNumber(NSNumber(minorUnits.toDouble() / 100.0)) ?: ""
+        }
     }
     val fractionDigits = displaySettings.currencyFractionDigits()
     val amount = formatBudgetNumber(abs(minorUnits.toDouble()), displaySettings, fractionDigits)
@@ -50,16 +54,27 @@ internal actual fun platformFormatReportCurrency(
     currencyCode: String?,
     fractionDigits: Int?,
 ): String {
-    val formatter =
+    val locale = NSLocale.currentLocale
+    val defaultDigits =
+        withNumberFormatter("currency:$locale:$currencyCode", {
+            NSNumberFormatter().apply {
+                this.locale = locale
+                numberStyle = NSNumberFormatterCurrencyStyle
+                if (currencyCode != null) this.currencyCode = currencyCode
+            }
+        }) { it.maximumFractionDigits.toInt() }
+    val digits = fractionDigits?.coerceIn(0, 6) ?: defaultDigits
+    return withNumberFormatter("currency:$locale:$currencyCode:$digits", {
         NSNumberFormatter().apply {
-            locale = NSLocale.currentLocale
+            this.locale = locale
             numberStyle = NSNumberFormatterCurrencyStyle
             if (currencyCode != null) this.currencyCode = currencyCode
+            minimumFractionDigits = digits.toULong()
+            maximumFractionDigits = digits.toULong()
         }
-    val digits = fractionDigits?.coerceIn(0, 6)?.toULong() ?: formatter.maximumFractionDigits
-    formatter.minimumFractionDigits = digits
-    formatter.maximumFractionDigits = digits
-    return formatter.stringFromNumber(NSNumber(minorUnits.toDouble() / 10.0.pow(digits.toDouble()))) ?: ""
+    }) { formatter ->
+        formatter.stringFromNumber(NSNumber(minorUnits.toDouble() / 10.0.pow(digits.toDouble()))) ?: ""
+    }
 }
 
 internal actual fun platformFormatDecimal(
@@ -73,15 +88,18 @@ internal actual fun platformParseDecimalMinorUnits(
 ): Long? {
     val input = value.trim()
     if (input.isEmpty()) return null
-    val formatter =
-        NSNumberFormatter().apply {
-            locale = numberLocale(displaySettings)
-            numberStyle = NSNumberFormatterDecimalStyle
-            usesGroupingSeparator = true
-            maximumFractionDigits = displaySettings.currencyFractionDigits().toULong()
-        }
-    val amount = formatter.numberFromString(input)?.doubleValue ?: return null
-    val minorUnits = amount * 10.0.pow(displaySettings.currencyFractionDigits().toDouble())
+    val locale = numberLocale(displaySettings)
+    val fractionDigits = displaySettings.currencyFractionDigits()
+    val amount =
+        withNumberFormatter("decimal:$locale:$fractionDigits", {
+            NSNumberFormatter().apply {
+                this.locale = locale
+                numberStyle = NSNumberFormatterDecimalStyle
+                usesGroupingSeparator = true
+                maximumFractionDigits = fractionDigits.toULong()
+            }
+        }) { it.numberFromString(input)?.doubleValue } ?: return null
+    val minorUnits = amount * 10.0.pow(fractionDigits.toDouble())
     if (!minorUnits.isFinite() || abs(minorUnits) > Long.MAX_VALUE.toDouble()) return null
     val rounded = minorUnits.roundToLong()
     return rounded.takeIf { abs(minorUnits - it.toDouble()) < 0.000001 }
@@ -101,16 +119,17 @@ private fun formatBudgetNumber(
     hideFraction: Boolean = displaySettings?.hideFraction == true,
 ): String {
     val visibleDigits = if (hideFraction) 0 else fractionDigits
-    val formatter =
+    val locale = numberLocale(displaySettings)
+    val amount = minorUnits / 10.0.pow(fractionDigits.toDouble())
+    return withNumberFormatter("decimal:$locale:$visibleDigits", {
         NSNumberFormatter().apply {
-            locale = numberLocale(displaySettings)
+            this.locale = locale
             numberStyle = NSNumberFormatterDecimalStyle
             usesGroupingSeparator = true
             minimumFractionDigits = visibleDigits.toULong()
             maximumFractionDigits = visibleDigits.toULong()
         }
-    val amount = minorUnits / 10.0.pow(fractionDigits.toDouble())
-    return formatter.stringFromNumber(NSNumber(amount)) ?: ""
+    }) { it.stringFromNumber(NSNumber(amount)) ?: "" }
 }
 
 private fun numberLocale(displaySettings: BudgetDisplaySettings?): NSLocale =
@@ -128,60 +147,75 @@ internal actual fun platformFormatDate(
     month: Int,
     day: Int,
     includeYear: Boolean,
-): String =
-    NSDateFormatter()
-        .apply {
-            locale = NSLocale.currentLocale
+): String {
+    val locale = NSLocale.currentLocale
+    return withDateFormatter("date:$locale:$includeYear", {
+        NSDateFormatter().apply {
+            this.locale = locale
             dateStyle = if (includeYear) NSDateFormatterMediumStyle else NSDateFormatterShortStyle
-        }.stringFromDate(calendarDate(year, month, day))
+        }
+    }) { it.stringFromDate(calendarDate(year, month, day)) }
+}
 
-internal actual fun platformTodayIsoDate(): String =
-    NSDateFormatter()
-        .apply {
-            locale = NSLocale(localeIdentifier = "en_US_POSIX")
+internal actual fun platformTodayIsoDate(): String {
+    val locale = NSLocale(localeIdentifier = "en_US_POSIX")
+    return withDateFormatter("date:iso", {
+        NSDateFormatter().apply {
+            this.locale = locale
             dateFormat = "yyyy-MM-dd"
-        }.stringFromDate(NSDate())
+        }
+    }) { it.stringFromDate(NSDate()) }
+}
 
 internal actual fun platformFormatMonth(
     year: Int,
     month: Int,
     abbreviated: Boolean,
-): String =
-    NSDateFormatter()
-        .apply {
-            locale = NSLocale.currentLocale
-            dateFormat = if (abbreviated) "MMM yyyy" else "MMMM yyyy"
-        }.stringFromDate(calendarDate(year, month, 1))
+): String {
+    val locale = NSLocale.currentLocale
+    val pattern = if (abbreviated) "MMM yyyy" else "MMMM yyyy"
+    return withDateFormatter("month:$locale:$pattern", {
+        NSDateFormatter().apply {
+            this.locale = locale
+            dateFormat = pattern
+        }
+    }) { it.stringFromDate(calendarDate(year, month, 1)) }
+}
 
 internal actual fun platformFormatInteger(value: Int): String {
-    val formatter =
+    val locale = NSLocale.currentLocale
+    return withNumberFormatter("integer:$locale", {
         NSNumberFormatter().apply {
-            locale = NSLocale.currentLocale
+            this.locale = locale
             numberStyle = NSNumberFormatterDecimalStyle
             maximumFractionDigits = 0uL
         }
-    return formatter.stringFromNumber(NSNumber(value)) ?: value.toString()
+    }) { it.stringFromNumber(NSNumber(value)) ?: value.toString() }
 }
 
-internal actual fun platformFormatReportPercentage(ratio: Double): String =
-    NSNumberFormatter()
-        .apply {
-            locale = NSLocale.currentLocale
+internal actual fun platformFormatReportPercentage(ratio: Double): String {
+    val locale = NSLocale.currentLocale
+    return withNumberFormatter("percent:$locale", {
+        NSNumberFormatter().apply {
+            this.locale = locale
             numberStyle = NSNumberFormatterPercentStyle
             minimumFractionDigits = 0uL
             maximumFractionDigits = 1uL
-        }.stringFromNumber(NSNumber(ratio.coerceAtLeast(0.0))) ?: "0%"
+        }
+    }) { it.stringFromNumber(NSNumber(ratio.coerceAtLeast(0.0))) ?: "0%" }
+}
 
 internal actual fun platformCurrencyCode(): String = NSLocale.currentLocale.objectForKey(NSLocaleCurrencyCode) as String
 
 private fun BudgetDisplaySettings?.currencyFractionDigits(): Int {
     if (this != null) return this.currencyFractionDigits
-    val formatter =
+    val locale = NSLocale.currentLocale
+    return withNumberFormatter("currency:$locale", {
         NSNumberFormatter().apply {
-            locale = NSLocale.currentLocale
+            this.locale = locale
             numberStyle = NSNumberFormatterCurrencyStyle
         }
-    return formatter.maximumFractionDigits.toInt()
+    }) { it.maximumFractionDigits.toInt() }
 }
 
 internal actual fun platformFirstWeekday(): Int = NSCalendar.currentCalendar.firstWeekday.toInt()
@@ -196,12 +230,69 @@ internal actual fun platformWeekdayName(
     year: Int,
     month: Int,
     day: Int,
-): String =
-    NSDateFormatter()
-        .apply {
-            locale = NSLocale.currentLocale
+): String {
+    val locale = NSLocale.currentLocale
+    return withDateFormatter("weekday:$locale", {
+        NSDateFormatter().apply {
+            this.locale = locale
             dateFormat = "EEEEE"
-        }.stringFromDate(calendarDate(year, month, day))
+        }
+    }) { it.stringFromDate(calendarDate(year, month, day)) }
+}
+
+private object IosFormatterCache {
+    private val lock = NSRecursiveLock()
+    private val numbers = linkedMapOf<String, NSNumberFormatter>()
+    private val dates = linkedMapOf<String, NSDateFormatter>()
+
+    fun <T> withNumber(
+        key: String,
+        create: () -> NSNumberFormatter,
+        use: (NSNumberFormatter) -> T,
+    ): T {
+        lock.lock()
+        try {
+            val formatter = numbers.remove(key) ?: create()
+            numbers[key] = formatter
+            trim(numbers)
+            return use(formatter)
+        } finally {
+            lock.unlock()
+        }
+    }
+
+    fun <T> withDate(
+        key: String,
+        create: () -> NSDateFormatter,
+        use: (NSDateFormatter) -> T,
+    ): T {
+        lock.lock()
+        try {
+            val formatter = dates.remove(key) ?: create()
+            dates[key] = formatter
+            trim(dates)
+            return use(formatter)
+        } finally {
+            lock.unlock()
+        }
+    }
+
+    private fun <T> trim(cache: LinkedHashMap<String, T>) {
+        while (cache.size > 64) cache.remove(cache.keys.first())
+    }
+}
+
+private fun <T> withNumberFormatter(
+    key: String,
+    create: () -> NSNumberFormatter,
+    use: (NSNumberFormatter) -> T,
+): T = IosFormatterCache.withNumber(key, create, use)
+
+private fun <T> withDateFormatter(
+    key: String,
+    create: () -> NSDateFormatter,
+    use: (NSDateFormatter) -> T,
+): T = IosFormatterCache.withDate(key, create, use)
 
 private fun calendarDate(
     year: Int,

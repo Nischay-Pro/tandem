@@ -91,6 +91,11 @@ kotlin {
   }
 
   sourceSets {
+    getByName("iosSimulatorArm64Test") {
+      dependencies {
+        implementation(kotlin("test"))
+      }
+    }
     commonMain.dependencies {
       implementation(project(":data"))
       implementation(project(":api-client"))

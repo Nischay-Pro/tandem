@@ -53,6 +53,7 @@ class TandemApiException(
             errorCode == "invalid_pairing_code" -> "The pairing code is invalid, expired, or already used."
             errorCode == "invalid_device_credential" -> "This device needs to be paired again."
             errorCode == "bank_sync_failed" -> "Actual couldn’t complete bank sync. Check its provider setup and try again."
+            errorCode == "bank_sync_busy" -> "A bank sync is already running. Try again shortly."
             errorCode == "actual_operation_failed" -> "Actual couldn’t complete this change. Check the budget and try again."
             errorCode == "invalid_request" -> "Check the details and try again."
             httpStatus == 400 -> "The server rejected this request. Check the details and try again."
@@ -73,6 +74,8 @@ class TandemApiClient(
     private val allowInsecureLoopback: Boolean = false,
 ) {
     private val sessionMutex = Mutex()
+    private val maintenanceKeyMutex = Mutex()
+    private val pendingMaintenanceKeys = mutableMapOf<String, String>()
     private var accessToken: String? = null
     private var serverUrl: String? = null
     private var pairedDevice: PairedDevice? = null
@@ -193,13 +196,16 @@ class TandemApiClient(
         budgetId: String,
         encryptionPassword: String?,
     ) {
-        withGeneratedApi {
-            requireOk(
-                BudgetsApi.runBudgetBankSync(
-                    xBudgetEncryptionPassword = encryptionPassword,
-                    budgetId = budgetId,
-                ),
-            )
+        withMaintenanceOperation(maintenanceSignature("bank-sync", budgetId)) { idempotencyKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.runBudgetBankSync(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                    ),
+                )
+            }
         }
     }
 
@@ -207,20 +213,27 @@ class TandemApiClient(
         budgetId: String,
         name: String,
         offbudget: Boolean,
+        accountGroupId: String?,
         encryptionPassword: String?,
     ) {
-        withGeneratedApi {
-            requireOk(
-                BudgetsApi.createBudgetAccount(
-                    xBudgetEncryptionPassword = encryptionPassword,
-                    budgetId = budgetId,
-                    body =
-                        buildJsonObject {
-                            put("name", name)
-                            put("offbudget", offbudget)
-                        }.toMap(),
-                ),
-            )
+        withMaintenanceOperation(
+            maintenanceSignature("account-create", budgetId, name, offbudget.toString(), accountGroupId.orEmpty()),
+        ) { idempotencyKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.createBudgetAccount(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        body =
+                            buildJsonObject {
+                                put("name", name)
+                                put("offbudget", offbudget)
+                                if (accountGroupId == null) put("accountGroupId", JsonNull) else put("accountGroupId", accountGroupId)
+                            }.toMap(),
+                    ),
+                )
+            }
         }
     }
 
@@ -231,19 +244,64 @@ class TandemApiClient(
         transferCategoryId: String?,
         encryptionPassword: String?,
     ) {
-        withGeneratedApi {
-            requireOk(
-                BudgetsApi.closeBudgetAccount(
-                    xBudgetEncryptionPassword = encryptionPassword,
-                    budgetId = budgetId,
-                    accountId = accountId,
-                    body =
-                        buildJsonObject {
-                            put("transferAccountId", transferAccountId?.let(::JsonPrimitive) ?: JsonNull)
-                            put("transferCategoryId", transferCategoryId?.let(::JsonPrimitive) ?: JsonNull)
-                        }.toMap(),
-                ),
-            )
+        withMaintenanceOperation(
+            maintenanceSignature("account-close", budgetId, accountId, transferAccountId, transferCategoryId),
+        ) { idempotencyKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.closeBudgetAccount(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        accountId = accountId,
+                        body =
+                            buildJsonObject {
+                                put("transferAccountId", transferAccountId?.let(::JsonPrimitive) ?: JsonNull)
+                                put("transferCategoryId", transferCategoryId?.let(::JsonPrimitive) ?: JsonNull)
+                            }.toMap(),
+                    ),
+                )
+            }
+        }
+    }
+
+    suspend fun renameBudgetAccount(
+        budgetId: String,
+        accountId: String,
+        name: String,
+        encryptionPassword: String?,
+    ) {
+        withMaintenanceOperation(maintenanceSignature("account-rename", budgetId, accountId, name)) { idempotencyKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.renameBudgetAccount(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        accountId = accountId,
+                        body = buildJsonObject { put("name", name) }.toMap(),
+                    ),
+                )
+            }
+        }
+    }
+
+    suspend fun reopenBudgetAccount(
+        budgetId: String,
+        accountId: String,
+        encryptionPassword: String?,
+    ) {
+        withMaintenanceOperation(maintenanceSignature("account-reopen", budgetId, accountId)) { idempotencyKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.reopenBudgetAccount(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        accountId = accountId,
+                    ),
+                )
+            }
         }
     }
 
@@ -253,15 +311,18 @@ class TandemApiClient(
         name: String,
         encryptionPassword: String?,
     ) {
-        withGeneratedApi {
-            requireOk(
-                BudgetsApi.renameBudgetCategory(
-                    xBudgetEncryptionPassword = encryptionPassword,
-                    budgetId = budgetId,
-                    categoryId = categoryId,
-                    body = buildJsonObject { put("name", name) }.toMap(),
-                ),
-            )
+        withMaintenanceOperation(maintenanceSignature("category-rename", budgetId, categoryId, name)) { idempotencyKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.renameBudgetCategory(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        categoryId = categoryId,
+                        body = buildJsonObject { put("name", name) }.toMap(),
+                    ),
+                )
+            }
         }
     }
 
@@ -271,26 +332,57 @@ class TandemApiClient(
         name: String,
         encryptionPassword: String?,
     ): String =
-        withGeneratedApi {
-            BudgetsApi.createBudgetCategory(
-                xBudgetEncryptionPassword = encryptionPassword,
-                budgetId = budgetId,
-                body =
-                    buildJsonObject {
-                        put("name", name)
-                        put("categoryGroupId", categoryGroupId)
-                    }.toMap(),
-            ).fold(
-                { error -> throw error.toTandemApiException() },
-                { response ->
-                    val categoryId = (response.data["categoryId"] as? JsonPrimitive)?.contentOrNull
-                    verifyApiStatus(
-                        isSuccessful = response.isSuccessful,
-                        hasExpectedStatus = categoryId?.isNotBlank() == true,
+        withMaintenanceOperation(maintenanceSignature("category-create", budgetId, categoryGroupId, name)) { idempotencyKey ->
+            withGeneratedApi {
+                BudgetsApi
+                    .createBudgetCategory(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        body =
+                            buildJsonObject {
+                                put("name", name)
+                                put("categoryGroupId", categoryGroupId)
+                            }.toMap(),
+                    ).fold(
+                        { error -> throw error.toTandemApiException() },
+                        { response ->
+                            val categoryId = (response.data["categoryId"] as? JsonPrimitive)?.contentOrNull
+                            verifyApiStatus(
+                                isSuccessful = response.isSuccessful,
+                                hasExpectedStatus = categoryId?.isNotBlank() == true,
+                            )
+                            categoryId ?: throw TandemApiProtocolException("Actual did not return the created category ID")
+                        },
                     )
-                    categoryId ?: throw TandemApiProtocolException("Actual did not return the created category ID")
-                },
-            )
+            }
+        }
+
+    suspend fun createBudgetPayee(
+        budgetId: String,
+        name: String,
+        encryptionPassword: String?,
+    ): String =
+        withMaintenanceOperation(maintenanceSignature("payee-create", budgetId, name)) { idempotencyKey ->
+            withGeneratedApi {
+                BudgetsApi
+                    .createBudgetPayee(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        body = buildJsonObject { put("name", name) }.toMap(),
+                    ).fold(
+                        { error -> throw error.toTandemApiException() },
+                        { response ->
+                            val payeeId = (response.data["payeeId"] as? JsonPrimitive)?.contentOrNull
+                            verifyApiStatus(
+                                isSuccessful = response.isSuccessful,
+                                hasExpectedStatus = payeeId?.isNotBlank() == true,
+                            )
+                            payeeId ?: throw TandemApiProtocolException("Actual did not return the created payee ID")
+                        },
+                    )
+            }
         }
 
     suspend fun setBudgetCategoryAmount(
@@ -300,19 +392,61 @@ class TandemApiClient(
         amountMinor: Long,
         encryptionPassword: String?,
     ) {
-        withGeneratedApi {
-            requireOk(
-                BudgetsApi.setBudgetCategoryAmount(
-                    xBudgetEncryptionPassword = encryptionPassword,
-                    budgetId = budgetId,
-                    categoryId = categoryId,
-                    body =
-                        buildJsonObject {
-                            put("month", month)
-                            put("amountMinor", amountMinor)
-                        }.toMap(),
-                ),
-            )
+        withMaintenanceOperation(
+            maintenanceSignature("category-budget-amount", budgetId, categoryId, month, amountMinor.toString()),
+        ) { idempotencyKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.setBudgetCategoryAmount(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        categoryId = categoryId,
+                        body =
+                            buildJsonObject {
+                                put("month", month)
+                                put("amountMinor", amountMinor)
+                            }.toMap(),
+                    ),
+                )
+            }
+        }
+    }
+
+    suspend fun moveMoneyBetweenCategories(
+        budgetId: String,
+        month: String,
+        fromCategoryId: String,
+        toCategoryId: String,
+        amountMinor: Long,
+        encryptionPassword: String?,
+    ) {
+        withMaintenanceOperation(
+            maintenanceSignature(
+                "category-move-money",
+                budgetId,
+                month,
+                fromCategoryId,
+                toCategoryId,
+                amountMinor.toString(),
+            ),
+        ) { idempotencyKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.moveMoneyBetweenCategories(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        body =
+                            buildJsonObject {
+                                put("month", month)
+                                put("fromCategoryId", fromCategoryId)
+                                put("toCategoryId", toCategoryId)
+                                put("amountMinor", amountMinor)
+                            }.toMap(),
+                    ),
+                )
+            }
         }
     }
 
@@ -322,18 +456,21 @@ class TandemApiClient(
         transferCategoryId: String?,
         encryptionPassword: String?,
     ) {
-        withGeneratedApi {
-            requireOk(
-                BudgetsApi.deleteBudgetCategory(
-                    xBudgetEncryptionPassword = encryptionPassword,
-                    budgetId = budgetId,
-                    categoryId = categoryId,
-                    body =
-                        buildJsonObject {
-                            put("transferCategoryId", transferCategoryId?.let(::JsonPrimitive) ?: JsonNull)
-                        }.toMap(),
-                ),
-            )
+        withMaintenanceOperation(maintenanceSignature("category-delete", budgetId, categoryId, transferCategoryId)) { idempotencyKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.deleteBudgetCategory(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        categoryId = categoryId,
+                        body =
+                            buildJsonObject {
+                                put("transferCategoryId", transferCategoryId?.let(::JsonPrimitive) ?: JsonNull)
+                            }.toMap(),
+                    ),
+                )
+            }
         }
     }
 
@@ -361,6 +498,34 @@ class TandemApiClient(
 
     /** Prevents credential changes during a multi-request sync. */
     suspend fun <T> withExclusiveSession(block: suspend () -> T): T = sessionMutex.withLock { block() }
+
+    private suspend fun <T> withMaintenanceOperation(
+        signature: String,
+        request: suspend (String) -> T,
+    ): T {
+        val idempotencyKey =
+            maintenanceKeyMutex.withLock {
+                pendingMaintenanceKeys.getOrPut(signature) { Uuid.random().toString() }
+            }
+        return try {
+            request(idempotencyKey).also {
+                maintenanceKeyMutex.withLock {
+                    if (pendingMaintenanceKeys[signature] == idempotencyKey) {
+                        pendingMaintenanceKeys.remove(signature)
+                    }
+                }
+            }
+        } catch (error: TandemApiException) {
+            if (error.httpStatus == 400 || error.httpStatus == 429) {
+                maintenanceKeyMutex.withLock {
+                    if (pendingMaintenanceKeys[signature] == idempotencyKey) {
+                        pendingMaintenanceKeys.remove(signature)
+                    }
+                }
+            }
+            throw error
+        }
+    }
 
     /** Runs one generated request with this instance's server and credential selected. */
     internal suspend fun <T> withGeneratedApi(block: suspend () -> T): T =
@@ -566,6 +731,9 @@ private fun parseServerUrl(
     }
     return url
 }
+
+private fun maintenanceSignature(vararg fields: String?): String =
+    JsonArray(fields.map { field -> field?.let(::JsonPrimitive) ?: JsonNull }).toString()
 
 private fun JsonObject.requiredString(name: String): String =
     (this[name] as? JsonPrimitive)

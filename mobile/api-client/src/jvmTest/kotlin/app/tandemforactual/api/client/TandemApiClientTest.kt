@@ -400,6 +400,8 @@ class TandemApiClientTest {
                     respond(
                         if (request.url.encodedPath.endsWith("/categories") && request.method == HttpMethod.Post) {
                             """{"status":"ok","categoryId":"category-created"}"""
+                        } else if (request.url.encodedPath.endsWith("/payees") && request.method == HttpMethod.Post) {
+                            """{"status":"ok","payeeId":"payee-created"}"""
                         } else {
                             """{"status":"ok"}"""
                         },
@@ -413,20 +415,28 @@ class TandemApiClientTest {
             try {
                 client.restoreSession("https://tandem.example", "device-token")
                 client.runBudgetBankSync("budget-1", null)
-                client.createBudgetAccount("budget-1", "Savings", true, "budget-password")
+                client.createBudgetAccount("budget-1", "Savings", true, "credit-group", "budget-password")
                 client.closeBudgetAccount("budget-1", "account-1", "account-2", "category-1", "budget-password")
+                client.renameBudgetAccount("budget-1", "account-1", "Daily checking", null)
+                client.reopenBudgetAccount("budget-1", "account-1", null)
                 client.renameBudgetCategory("budget-1", "category-1", "Home", null)
                 assertEquals("category-created", client.createBudgetCategory("budget-1", "group-1", "Dining", null))
+                assertEquals("payee-created", client.createBudgetPayee("budget-1", "Corner Market", null))
                 client.setBudgetCategoryAmount("budget-1", "category-1", "2026-11", 125_000, "budget-password")
+                client.moveMoneyBetweenCategories("budget-1", "2026-11", "category-1", "category-2", 12_500, "budget-password")
                 client.deleteBudgetCategory("budget-1", "category-1", null, null)
                 client.withGeneratedApi {
-                    BudgetsApi.runBudgetBankSync(budgetId = "budget-1")
-                    BudgetsApi.createBudgetAccount(budgetId = "budget-1")
-                    BudgetsApi.closeBudgetAccount(budgetId = "budget-1", accountId = "account-1")
-                    BudgetsApi.renameBudgetCategory(budgetId = "budget-1", categoryId = "category-1")
-                    BudgetsApi.createBudgetCategory(budgetId = "budget-1")
-                    BudgetsApi.setBudgetCategoryAmount(budgetId = "budget-1", categoryId = "category-1")
-                    BudgetsApi.deleteBudgetCategory(budgetId = "budget-1", categoryId = "category-1")
+                    BudgetsApi.runBudgetBankSync(idempotencyKey = "direct-1", budgetId = "budget-1")
+                    BudgetsApi.createBudgetAccount(idempotencyKey = "direct-2", budgetId = "budget-1")
+                    BudgetsApi.closeBudgetAccount(idempotencyKey = "direct-3", budgetId = "budget-1", accountId = "account-1")
+                    BudgetsApi.renameBudgetAccount(idempotencyKey = "direct-4", budgetId = "budget-1", accountId = "account-1")
+                    BudgetsApi.reopenBudgetAccount(idempotencyKey = "direct-5", budgetId = "budget-1", accountId = "account-1")
+                    BudgetsApi.renameBudgetCategory(idempotencyKey = "direct-6", budgetId = "budget-1", categoryId = "category-1")
+                    BudgetsApi.createBudgetCategory(idempotencyKey = "direct-7", budgetId = "budget-1")
+                    BudgetsApi.createBudgetPayee(idempotencyKey = "direct-8", budgetId = "budget-1")
+                    BudgetsApi.setBudgetCategoryAmount(idempotencyKey = "direct-9", budgetId = "budget-1", categoryId = "category-1")
+                    BudgetsApi.moveMoneyBetweenCategories(idempotencyKey = "direct-10", budgetId = "budget-1")
+                    BudgetsApi.deleteBudgetCategory(idempotencyKey = "direct-11", budgetId = "budget-1", categoryId = "category-1")
                     BudgetsApi.getBudgetSnapshot(budgetId = "budget-1")
                     BudgetsApi.getBudgetSnapshotPage(budgetId = "budget-1")
                     BudgetsApi.getBudgetChanges(budgetId = "budget-1", generation = "generation", cursor = "0")
@@ -438,26 +448,39 @@ class TandemApiClientTest {
                         "POST /api/v1/budgets/budget-1/bank-sync",
                         "POST /api/v1/budgets/budget-1/accounts",
                         "POST /api/v1/budgets/budget-1/accounts/account-1/close",
+                        "PATCH /api/v1/budgets/budget-1/accounts/account-1",
+                        "POST /api/v1/budgets/budget-1/accounts/account-1/reopen",
                         "PATCH /api/v1/budgets/budget-1/categories/category-1",
                         "POST /api/v1/budgets/budget-1/categories",
+                        "POST /api/v1/budgets/budget-1/payees",
                         "PUT /api/v1/budgets/budget-1/categories/category-1/budget-amount",
+                        "POST /api/v1/budgets/budget-1/categories/move-money",
                         "DELETE /api/v1/budgets/budget-1/categories/category-1",
                     ),
-                    requests.take(7).map { "${it.method.value} ${it.url.encodedPath}" },
+                    requests.take(11).map { "${it.method.value} ${it.url.encodedPath}" },
                 )
                 assertEquals(null, requests[0].headers["x-budget-encryption-password"])
                 assertEquals("budget-password", requests[1].headers["x-budget-encryption-password"])
                 assertEquals("budget-password", requests[2].headers["x-budget-encryption-password"])
-                assertEquals("budget-password", requests[5].headers["x-budget-encryption-password"])
+                assertEquals("budget-password", requests[8].headers["x-budget-encryption-password"])
+                assertEquals("budget-password", requests[9].headers["x-budget-encryption-password"])
+                val idempotencyKeys = requests.take(11).map { it.headers["Idempotency-Key"] }
+                assertTrue(idempotencyKeys.all { key -> key?.let { runCatching { Uuid.parse(it) }.isSuccess } == true })
+                assertEquals(11, idempotencyKeys.distinct().size)
                 assertTrue((requests[1].body as TextContent).text.contains("\"name\":\"Savings\""))
                 assertTrue((requests[1].body as TextContent).text.contains("\"offbudget\":true"))
+                assertTrue((requests[1].body as TextContent).text.contains("\"accountGroupId\":\"credit-group\""))
                 assertTrue((requests[2].body as TextContent).text.contains("\"transferAccountId\":\"account-2\""))
                 assertTrue((requests[2].body as TextContent).text.contains("\"transferCategoryId\":\"category-1\""))
-                assertTrue((requests[3].body as TextContent).text.contains("\"name\":\"Home\""))
-                assertTrue((requests[4].body as TextContent).text.contains("\"categoryGroupId\":\"group-1\""))
-                assertTrue((requests[5].body as TextContent).text.contains("\"month\":\"2026-11\""))
-                assertTrue((requests[5].body as TextContent).text.contains("\"amountMinor\":125000"))
-                assertTrue((requests[6].body as TextContent).text.contains("\"transferCategoryId\":null"))
+                assertTrue((requests[3].body as TextContent).text.contains("\"name\":\"Daily checking\""))
+                assertTrue((requests[5].body as TextContent).text.contains("\"name\":\"Home\""))
+                assertTrue((requests[6].body as TextContent).text.contains("\"categoryGroupId\":\"group-1\""))
+                assertTrue((requests[7].body as TextContent).text.contains("\"name\":\"Corner Market\""))
+                assertTrue((requests[8].body as TextContent).text.contains("\"month\":\"2026-11\""))
+                assertTrue((requests[8].body as TextContent).text.contains("\"amountMinor\":125000"))
+                assertTrue((requests[9].body as TextContent).text.contains("\"fromCategoryId\":\"category-1\""))
+                assertTrue((requests[9].body as TextContent).text.contains("\"toCategoryId\":\"category-2\""))
+                assertTrue((requests[10].body as TextContent).text.contains("\"transferCategoryId\":null"))
             } finally {
                 cleanup()
                 Api.baseUrl = previousBaseUrl
@@ -507,7 +530,7 @@ class TandemApiClientTest {
 
                 status = HttpStatusCode.InternalServerError
                 responseBody = """{"error":{"code":"actual_operation_failed","message":"private detail"}}"""
-                val operationFailure = captureApiException { client.createBudgetAccount("budget-1", "Savings", false, null) }
+                val operationFailure = captureApiException { client.createBudgetAccount("budget-1", "Savings", false, null, null) }
                 assertEquals("actual_operation_failed", operationFailure.errorCode)
                 assertEquals("Actual couldn’t complete this change. Check the budget and try again.", operationFailure.message)
 

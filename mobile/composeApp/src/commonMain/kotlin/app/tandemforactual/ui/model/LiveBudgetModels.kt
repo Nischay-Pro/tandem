@@ -45,6 +45,15 @@ internal data class LiveBudgetMonthSummary(
     val groups: List<LiveCategoryGroupSummary>,
 )
 
+internal data class LiveScheduleSummary(
+    val id: String,
+    val name: String,
+    val nextDate: String,
+    val accountName: String?,
+    val amountMinor: Long?,
+    val amountRangeMinor: Pair<Long, Long>?,
+)
+
 internal fun BudgetRecordEntity.recordBody(): JsonObject? {
     val json = localJson ?: remoteJson ?: return null
     return try {
@@ -141,4 +150,37 @@ internal fun liveBudgetMonthSummary(
         totalSpentMinor = month.longValue("totalSpent"),
         groups = groups,
     )
+}
+
+internal fun liveScheduleSummaries(
+    scheduleRecords: List<BudgetRecordEntity>,
+    payeeRecords: List<BudgetRecordEntity>,
+    accountRecords: List<BudgetRecordEntity>,
+): List<LiveScheduleSummary> {
+    val payees = payeeRecords.mapNotNull { it.recordName()?.let { name -> it.recordId to name } }.toMap()
+    val accounts = accountRecords.mapNotNull { it.recordName()?.let { name -> it.recordId to name } }.toMap()
+    return scheduleRecords
+        .mapNotNull { record ->
+            val body = record.recordBody() ?: return@mapNotNull null
+            if (body.booleanValue("completed") == true) return@mapNotNull null
+            val nextDate = body.stringValue("next_date") ?: return@mapNotNull null
+            val payeeId = body.stringValue("payee")
+            val accountId = body.stringValue("account")
+            val amountElement = body["amount"]
+            val amountObject = amountElement as? JsonObject
+            val amountRange =
+                amountObject?.let { amount ->
+                    val first = amount.longValue("num1")
+                    val second = amount.longValue("num2")
+                    if (first != null && second != null) first to second else null
+                }
+            LiveScheduleSummary(
+                id = record.recordId,
+                name = body.stringValue("name") ?: payeeId?.let(payees::get) ?: "Scheduled transaction",
+                nextDate = nextDate,
+                accountName = accountId?.let(accounts::get),
+                amountMinor = if (amountRange == null) body.longValue("amount") else null,
+                amountRangeMinor = amountRange,
+            )
+        }.sortedBy(LiveScheduleSummary::nextDate)
 }

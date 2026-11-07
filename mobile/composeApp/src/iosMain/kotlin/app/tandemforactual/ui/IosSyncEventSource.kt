@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import platform.Foundation.NSNotificationCenter
 import platform.Network.nw_path_get_status
+import platform.Network.nw_path_monitor_cancel
 import platform.Network.nw_path_monitor_create
 import platform.Network.nw_path_monitor_set_queue
 import platform.Network.nw_path_monitor_set_update_handler
@@ -41,6 +42,12 @@ internal class IosSyncEventSource {
 
     val appResumeEvents = mutableAppResumeEvents.asSharedFlow()
     val networkRestoredEvents = mutableNetworkRestoredEvents.asSharedFlow()
+
+    fun close() {
+        NSNotificationCenter.defaultCenter.removeObserver(becameActiveObserver)
+        NSNotificationCenter.defaultCenter.removeObserver(willResignActiveObserver)
+        nw_path_monitor_cancel(pathMonitor)
+    }
 
     init {
         nw_path_monitor_set_queue(pathMonitor, dispatch_get_main_queue())

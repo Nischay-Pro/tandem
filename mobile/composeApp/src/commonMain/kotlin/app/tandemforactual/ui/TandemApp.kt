@@ -180,10 +180,12 @@ import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
 import app.tandemforactual.ui.model.LiveCategoryGroupSummary
 import app.tandemforactual.ui.model.LiveCategorySummary
+import app.tandemforactual.ui.model.LiveScheduleSummary
 import app.tandemforactual.ui.model.booleanValue
 import app.tandemforactual.ui.model.liveAccountGroupLabel
 import app.tandemforactual.ui.model.liveAccountSummaries
 import app.tandemforactual.ui.model.liveBudgetMonthSummary
+import app.tandemforactual.ui.model.liveScheduleSummaries
 import app.tandemforactual.ui.model.longValue
 import app.tandemforactual.ui.model.recordBody
 import app.tandemforactual.ui.model.recordName
@@ -319,6 +321,7 @@ private enum class AppRoute(
     MONTH_PICKER("Choose month"),
     CATEGORY_GROUP("Essentials"),
     CATEGORY_DETAIL("Rent"),
+    SCHEDULES("Upcoming bills"),
     ACCOUNTS("Accounts"),
     ACCOUNT_DETAIL("Checking"),
     ACCOUNT_OPTIONS("Account options"),
@@ -1536,6 +1539,7 @@ fun TandemApp(
         }
     }
     var liveAccounts by remember { mutableStateOf(emptyList<LiveAccountSummary>()) }
+    var liveSchedules by remember { mutableStateOf(emptyList<LiveScheduleSummary>()) }
     val newTransaction: (String?) -> Unit = { requestedAccountId ->
         if (!state.readOnlyMode) {
             routeTransitionDirection = 1f
@@ -1881,6 +1885,14 @@ fun TandemApp(
                 liveAccountSummaries(accountRecords, mobileSession.accountGroupRecords)
             }
     }
+    LaunchedEffect(mobileSession.scheduleRecords, mobileSession.payeeRecords, accountRecords) {
+        val schedules = mobileSession.scheduleRecords
+        val payees = mobileSession.payeeRecords
+        liveSchedules =
+            withContext(Dispatchers.Default) {
+                liveScheduleSummaries(schedules, payees, accountRecords)
+            }
+    }
     var liveBudgetMonth by remember { mutableStateOf<LiveBudgetMonthSummary?>(null) }
     LaunchedEffect(
         mobileSession.selectedBudgetMonthRecord,
@@ -2224,6 +2236,7 @@ fun TandemApp(
                                 liveTransactions = liveTransactions,
                                 activitySortCache = activitySortCache,
                                 liveAccounts = liveAccounts,
+                                liveSchedules = liveSchedules,
                                 liveBudgetMonth = liveBudgetMonth,
                                 onSyncNow = syncNow,
                                 onSaveTransaction = saveTransaction,
@@ -2856,6 +2869,7 @@ private fun ScreenContent(
     liveTransactions: List<TransactionItem>,
     activitySortCache: ActivityTransactionSortCache,
     liveAccounts: List<LiveAccountSummary>,
+    liveSchedules: List<LiveScheduleSummary>,
     liveBudgetMonth: LiveBudgetMonthSummary?,
     onSyncNow: () -> Unit,
     onSaveTransaction: ((Boolean) -> Unit) -> Unit,
@@ -2883,10 +2897,11 @@ private fun ScreenContent(
             BudgetChooserScreen(state, mobileSession, navigation, onSelectBudget, onRefreshBudgets, onOpenSelectedBudget)
         AppRoute.UNLOCK_BUDGET -> UnlockBudgetScreen(state, navigation)
         AppRoute.FIRST_SYNC -> FirstSyncScreen(state, mobileSession, navigation, onRetrySync)
-        AppRoute.BUDGET -> BudgetScreen(state, navigation, mobileSession, liveTransactions, liveBudgetMonth, onSyncNow)
+        AppRoute.BUDGET -> BudgetScreen(state, navigation, mobileSession, liveTransactions, liveSchedules, liveBudgetMonth, onSyncNow)
         AppRoute.MONTH_PICKER -> MonthPickerScreen(state, navigation)
         AppRoute.CATEGORY_GROUP -> CategoryGroupScreen(state, navigation, liveBudgetMonth)
         AppRoute.CATEGORY_DETAIL -> CategoryDetailScreen(state, navigation, liveBudgetMonth, mobileSession)
+        AppRoute.SCHEDULES -> UpcomingSchedulesScreen(state, liveSchedules)
         AppRoute.ACCOUNTS ->
             AccountsScreen(
                 state,
@@ -2970,8 +2985,10 @@ private fun ScreenContent(
             }
         }
         AppRoute.CHOOSE_PAYEE -> {
+            val scope = rememberCoroutineScope()
+            val isLiveBudget = state.selectedBudgetId.isNotBlank()
             val values =
-                if (state.selectedBudgetId.isBlank()) {
+                if (!isLiveBudget) {
                     listOf("Corner Market", "Electric Company", "Acme Corp", "Riverside Cafe", "City Transit")
                         .map { SelectorItem(it, it) }
                 } else {
@@ -2983,13 +3000,52 @@ private fun ScreenContent(
                 }
             SelectorScreen(
                 values,
-                if (state.selectedBudgetId.isBlank()) state.transactionPayee else state.newTransactionPayeeId,
-                live = state.selectedBudgetId.isNotBlank(),
-            ) { item ->
-                state.transactionPayee = if (item.label == "No payee") "" else item.label
-                state.newTransactionPayeeId = if (state.selectedBudgetId.isBlank()) "" else item.id
-                navigation.back()
-            }
+                if (isLiveBudget) state.newTransactionPayeeId else state.transactionPayee,
+                live = isLiveBudget,
+                noMatches =
+                    if (isLiveBudget) {
+                        { query ->
+                            val newName = query.trim()
+                            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                                if (newName.isNotEmpty()) {
+                                    SurfaceCard {
+                                        ListRow(
+                                            if (mobileSession.isPerformingBudgetAction) "Adding payee…" else "Add $newName",
+                                            leading = RowLeading.Icon(Lucide.Plus),
+                                            onClick = {
+                                                if (!mobileSession.isPerformingBudgetAction) {
+                                                    scope.launch {
+                                                        val payeeId =
+                                                            mobileSession.createBudgetPayee(
+                                                                state.selectedBudgetId,
+                                                                newName,
+                                                                state.encryptedPassword.takeIf { it.isNotBlank() },
+                                                            )
+                                                        if (payeeId != null) {
+                                                            state.transactionPayee = newName
+                                                            state.newTransactionPayeeId = payeeId
+                                                            navigation.back()
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                        )
+                                    }
+                                } else {
+                                    EmptyState("No matches", modifier = Modifier.padding(TandemSpacing.large))
+                                }
+                                mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                            }
+                        }
+                    } else {
+                        null
+                    },
+                onSelect = { item ->
+                    state.transactionPayee = if (item.label == "No payee") "" else item.label
+                    state.newTransactionPayeeId = if (isLiveBudget) item.id else ""
+                    navigation.back()
+                },
+            )
         }
         AppRoute.CHOOSE_CATEGORY -> {
             val scope = rememberCoroutineScope()
@@ -4780,11 +4836,13 @@ private fun BudgetScreen(
     navigation: AppNavigation,
     mobileSession: TandemMobileSession,
     liveTransactions: List<TransactionItem>,
+    liveSchedules: List<LiveScheduleSummary>,
     liveBudgetMonth: LiveBudgetMonthSummary?,
     onSyncNow: () -> Unit,
 ) {
     val palette = tandemPalette
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    val isTrackingBudget = isLiveBudget && state.budgetDisplaySettings?.budgetType == "tracking"
     val compact = state.homeLayout == "Compact"
     val essentialsFirst = state.homeLayout == "Essentials"
     val sectionSpacing = if (compact) 10.dp else 16.dp
@@ -4828,8 +4886,10 @@ private fun BudgetScreen(
             }
         }
     val pinnedCategories =
-        groups.flatMap { group ->
-            group.categories.filter { state.isCategoryPinned(it.id) }.map { group to it }
+        remember(groups, state.pinnedCategoryIds) {
+            groups.flatMap { group ->
+                group.categories.filter { state.isCategoryPinned(it.id) }.map { group to it }
+            }
         }
 
     PageLazyColumn(
@@ -4872,7 +4932,9 @@ private fun BudgetScreen(
         item(key = "budget-overview-title") {
             Heading(
                 "Budget overview",
-                if (isLiveBudget) {
+                if (isTrackingBudget) {
+                    "Review activity for the selected month."
+                } else if (isLiveBudget) {
                     "Review the synced plan and recent activity for the selected month."
                 } else {
                     "Review category balances and spending for the selected month."
@@ -4883,7 +4945,18 @@ private fun BudgetScreen(
         item(key = "budget-month-picker") {
             MonthSelectorCard(state.selectedMonth) { navigation.open(AppRoute.MONTH_PICKER) }
         }
-        if (isLiveBudget && liveBudgetMonth == null) {
+        if (isTrackingBudget) {
+            item(key = "budget-tracking-mode") {
+                SurfaceCard {
+                    ListRow(
+                        "Tracking budget",
+                        "Actual does not assign money to categories in this budget.",
+                        leading = RowLeading.Icon(Lucide.ChartNoAxesCombined),
+                    )
+                }
+            }
+        }
+        if (isLiveBudget && liveBudgetMonth == null && !isTrackingBudget) {
             item(key = "budget-month-empty") {
                 SurfaceCard {
                     EmptyState(
@@ -4894,30 +4967,32 @@ private fun BudgetScreen(
                 }
             }
         } else {
-            item(key = summaryKey) {
-                val summaryExpanded = !state.isBudgetSectionCollapsed(summaryKey)
-                Column {
-                    CollapsibleSectionCard(
-                        "${state.selectedMonth} summary",
-                        if (isLiveBudget) "${groups.sumOf { it.categories.size }} categories" else "Ready to assign",
-                        state.formatCurrency(readyToAssignMinor),
-                        actionColor = readyToAssignColor,
-                        expanded = summaryExpanded,
-                        onToggleExpanded = { state.toggleBudgetSection(summaryKey) },
-                    ) {}
-                    AnimatedVisibility(
-                        visible = summaryExpanded,
-                        enter = expandVertically() + fadeIn(),
-                        exit = shrinkVertically() + fadeOut(),
-                    ) {
-                        SurfaceCard(Modifier.padding(top = sectionSpacing)) {
-                            ListRow(
-                                if (isLiveBudget) "Ready to assign" else "Available this month",
-                                if (isLiveBudget) state.selectedMonth else "On track",
-                                state.formatCurrency(readyToAssignMinor),
-                                leading = RowLeading.Icon(Lucide.WalletCards),
-                                options = ListRowOptions(trailingColor = readyToAssignColor),
-                            )
+            if (!isTrackingBudget) {
+                item(key = summaryKey) {
+                    val summaryExpanded = !state.isBudgetSectionCollapsed(summaryKey)
+                    Column {
+                        CollapsibleSectionCard(
+                            "${state.selectedMonth} summary",
+                            if (isLiveBudget) "${groups.sumOf { it.categories.size }} categories" else "Ready to assign",
+                            state.formatCurrency(readyToAssignMinor),
+                            actionColor = readyToAssignColor,
+                            expanded = summaryExpanded,
+                            onToggleExpanded = { state.toggleBudgetSection(summaryKey) },
+                        ) {}
+                        AnimatedVisibility(
+                            visible = summaryExpanded,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut(),
+                        ) {
+                            SurfaceCard(Modifier.padding(top = sectionSpacing)) {
+                                ListRow(
+                                    if (isLiveBudget) "Ready to assign" else "Available this month",
+                                    if (isLiveBudget) state.selectedMonth else "On track",
+                                    state.formatCurrency(readyToAssignMinor),
+                                    leading = RowLeading.Icon(Lucide.WalletCards),
+                                    options = ListRowOptions(trailingColor = readyToAssignColor),
+                                )
+                            }
                         }
                     }
                 }
@@ -4989,7 +5064,11 @@ private fun BudgetScreen(
                     Column {
                         CollapsibleSectionCard(
                             group.name,
-                            "${state.formatCurrency(group.assignedMinor)} assigned · ${group.categories.size} categories",
+                            if (isTrackingBudget) {
+                                "${group.categories.size} categories"
+                            } else {
+                                "${state.formatCurrency(group.assignedMinor)} assigned · ${group.categories.size} categories"
+                            },
                             state.formatCurrency(group.balanceMinor),
                             expanded = groupExpanded,
                             onToggleExpanded = { state.toggleBudgetSection(groupSectionKey) },
@@ -5043,6 +5122,11 @@ private fun BudgetScreen(
             }
             if (!isLiveBudget && !essentialsFirst) {
                 item(key = "sample-upcoming-after-groups") { UpcomingBillsCard(state, navigation) }
+            }
+            if (isLiveBudget && liveSchedules.isNotEmpty()) {
+                item(key = "actual-upcoming-schedules") {
+                    LiveUpcomingBillsCard(state, navigation, liveSchedules)
+                }
             }
         }
         if (recentTransactions.isNotEmpty()) {
@@ -5183,6 +5267,74 @@ private fun UpcomingBillsCard(
         )
     }
 }
+
+@Composable
+private fun LiveUpcomingBillsCard(
+    state: AppState,
+    navigation: AppNavigation,
+    schedules: List<LiveScheduleSummary>,
+) {
+    val sectionKey = "live:${state.selectedBudgetId}:upcoming"
+    val expanded = !state.isBudgetSectionCollapsed(sectionKey)
+    CollapsibleSectionCard(
+        "Upcoming bills",
+        "${schedules.size} scheduled",
+        "See all",
+        expanded = expanded,
+        onToggleExpanded = { state.toggleBudgetSection(sectionKey) },
+        onClick = { navigation.open(AppRoute.SCHEDULES) },
+    ) {
+        schedules.take(3).forEachIndexed { index, schedule ->
+            if (index > 0) DividerLine()
+            ListRow(
+                schedule.name,
+                listOfNotNull(formatLiveDate(schedule.nextDate), schedule.accountName).joinToString(" · "),
+                schedule.amountLabel(state),
+                leading = RowLeading.Icon(Lucide.CalendarDays),
+            ) { navigation.open(AppRoute.SCHEDULES) }
+        }
+    }
+}
+
+@Composable
+private fun UpcomingSchedulesScreen(
+    state: AppState,
+    schedules: List<LiveScheduleSummary>,
+) {
+    PageLazyColumn {
+        item(key = "upcoming-schedules-heading") { Heading("Upcoming bills") }
+        if (schedules.isEmpty()) {
+            item(key = "upcoming-schedules-empty") {
+                SurfaceCard {
+                    EmptyState(
+                        "No upcoming bills",
+                        "Schedules added in Actual will appear here.",
+                        modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                    )
+                }
+            }
+        } else {
+            items(schedules.size, key = { index -> schedules[index].id }) { index ->
+                val schedule = schedules[index]
+                SurfaceCard {
+                    ListRow(
+                        schedule.name,
+                        listOfNotNull(formatLiveDate(schedule.nextDate), schedule.accountName).joinToString(" · "),
+                        schedule.amountLabel(state),
+                        leading = RowLeading.Icon(Lucide.CalendarDays),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun LiveScheduleSummary.amountLabel(state: AppState): String =
+    when {
+        amountMinor != null -> state.formatCurrency(amountMinor)
+        amountRangeMinor != null -> "${state.formatCurrency(amountRangeMinor.first)}–${state.formatCurrency(amountRangeMinor.second)}"
+        else -> "Variable"
+    }
 
 @Composable
 private fun TransactionRow(
@@ -5414,6 +5566,7 @@ private fun CategoryGroupScreen(
 ) {
     val palette = tandemPalette
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    val isTrackingBudget = isLiveBudget && state.budgetDisplaySettings?.budgetType == "tracking"
     val groups = if (isLiveBudget) liveBudgetMonth?.groups.orEmpty() else previewCategoryGroups
     val group = groups.firstOrNull { it.id == state.selectedCategoryGroupId } ?: groups.firstOrNull()
     PageLazyColumn {
@@ -5432,9 +5585,13 @@ private fun CategoryGroupScreen(
             item(key = "category-group-title:${group.id}") { Heading(group.name, state.selectedMonth) }
             item(key = "category-group-summary:${group.id}") {
                 AmountHero(
-                    "Assigned this month",
-                    state.formatCurrency(group.assignedMinor),
-                    "${state.formatCurrency(group.balanceMinor)} available across ${group.categories.size} categories",
+                    if (isTrackingBudget) "Activity this month" else "Assigned this month",
+                    state.formatCurrency(if (isTrackingBudget) group.activityMinor else group.assignedMinor),
+                    if (isTrackingBudget) {
+                        "Across ${group.categories.size} categories"
+                    } else {
+                        "${state.formatCurrency(group.balanceMinor)} available across ${group.categories.size} categories"
+                    },
                 )
             }
             item(key = "category-group-list-title:${group.id}") {
@@ -5444,10 +5601,14 @@ private fun CategoryGroupScreen(
                 SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
                     ListRow(
                         category.name,
-                        "Spent ${state.formatCurrency(
-                            kotlin.math.abs(category.activityMinor),
-                        )} · ${state.formatCurrency(category.balanceMinor)} available",
-                        state.formatCurrency(category.assignedMinor),
+                        if (isTrackingBudget) {
+                            "Activity ${state.formatCurrency(category.activityMinor)}"
+                        } else {
+                            "Spent ${state.formatCurrency(
+                                kotlin.math.abs(category.activityMinor),
+                            )} · ${state.formatCurrency(category.balanceMinor)} available"
+                        },
+                        if (isTrackingBudget) null else state.formatCurrency(category.assignedMinor),
                         leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
                         options = ListRowOptions(trailingColor = if (category.balanceMinor >= 0) palette.positive else palette.warning),
                     ) {
@@ -5470,6 +5631,7 @@ private fun CategoryDetailScreen(
 ) {
     val scope = rememberCoroutineScope()
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    val isTrackingBudget = isLiveBudget && state.budgetDisplaySettings?.budgetType == "tracking"
     val category =
         if (isLiveBudget) {
             liveBudgetMonth
@@ -5489,6 +5651,18 @@ private fun CategoryDetailScreen(
     var showAssignedAmountDialog by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId, state.selectedMonthId) {
         mutableStateOf(false)
     }
+    var showMoveMoneyDialog by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId, state.selectedMonthId) {
+        mutableStateOf(false)
+    }
+    var moveMoneyFromId by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId, state.selectedMonthId) { mutableStateOf("") }
+    var moveMoneyToId by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId, state.selectedMonthId) { mutableStateOf("") }
+    var moveMoneyAmountDraft by rememberSaveable(
+        state.selectedBudgetId,
+        state.selectedCategoryId,
+        state.selectedMonthId,
+    ) { mutableStateOf("") }
+    var moveMoneyFromExpanded by rememberSaveable { mutableStateOf(false) }
+    var moveMoneyToExpanded by rememberSaveable { mutableStateOf(false) }
     var assignedAmountDraft by
         rememberSaveable(state.selectedBudgetId, state.selectedCategoryId, state.selectedMonthId) {
             mutableStateOf("")
@@ -5511,6 +5685,20 @@ private fun CategoryDetailScreen(
                         ?.recordBody()
                         ?.booleanValue("is_income") ?: false
                 ) == currentIncomeType
+        }
+    val moveMoneyCategories =
+        remember(liveBudgetMonth, mobileSession.categoryRecords, currentIncomeType) {
+            liveBudgetMonth?.groups.orEmpty().flatMap { group ->
+                group.categories
+                    .filter { candidate ->
+                        (
+                            mobileSession.categoryRecords
+                                .firstOrNull { it.recordId == candidate.id }
+                                ?.recordBody()
+                                ?.booleanValue("is_income") ?: false
+                        ) == currentIncomeType
+                    }.map { group.name to it }
+            }
         }
     PageColumn {
         if (!isLiveBudget) SampleBanner()
@@ -5541,60 +5729,92 @@ private fun CategoryDetailScreen(
                 }
             }
             AmountHero(
-                "Available",
-                state.formatCurrency(category.balanceMinor),
-                "${state.formatCurrency(category.assignedMinor)} assigned",
+                if (isTrackingBudget) "Activity" else "Available",
+                state.formatCurrency(if (isTrackingBudget) category.activityMinor else category.balanceMinor),
+                if (isTrackingBudget) "For the selected month" else "${state.formatCurrency(category.assignedMinor)} assigned",
             )
             SectionCard("This month") {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 64.dp)
-                        .clickable(
-                            enabled = isLiveBudget && !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
-                            role = Role.Button,
-                            onClickLabel = "Edit assigned amount",
-                            onClick = {
-                                assignedAmountDraft = state.formatAmount(category.assignedMinor)
-                                mobileSession.clearBudgetActionMessage()
-                                showAssignedAmountDialog = true
-                            },
-                        ).padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                ) {
-                    Box(
-                        Modifier.size(44.dp).clip(RoundedCornerShape(TandemShapes.medium)).background(tandemPalette.raised),
-                        contentAlignment = Alignment.Center,
+                if (!isTrackingBudget) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 64.dp)
+                            .clickable(
+                                enabled = isLiveBudget && !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                                role = Role.Button,
+                                onClickLabel = "Edit assigned amount",
+                                onClick = {
+                                    assignedAmountDraft = state.formatAmount(category.assignedMinor)
+                                    mobileSession.clearBudgetActionMessage()
+                                    showAssignedAmountDialog = true
+                                },
+                            ).padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
                     ) {
-                        Icon(Lucide.WalletCards, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
-                    }
-                    Text("Assigned", modifier = Modifier.weight(1f), color = tandemPalette.text, fontSize = TandemTypography.body)
-                    Text(state.formatCurrency(category.assignedMinor), color = tandemPalette.text, fontSize = TandemTypography.compactBody)
-                    if (isLiveBudget) {
-                        Icon(
-                            Lucide.Pencil,
-                            contentDescription = "Edit assigned amount",
-                            modifier = Modifier.size(19.dp),
-                            tint = if (state.readOnlyMode) tandemPalette.muted else tandemPalette.accent,
+                        Box(
+                            Modifier.size(44.dp).clip(RoundedCornerShape(TandemShapes.medium)).background(tandemPalette.raised),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Lucide.WalletCards,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                                tint = tandemPalette.accent,
+                            )
+                        }
+                        Text("Assigned", modifier = Modifier.weight(1f), color = tandemPalette.text, fontSize = TandemTypography.body)
+                        Text(
+                            state.formatCurrency(category.assignedMinor),
+                            color = tandemPalette.text,
+                            fontSize = TandemTypography.compactBody,
                         )
+                        if (isLiveBudget) {
+                            Icon(
+                                Lucide.Pencil,
+                                contentDescription = "Edit assigned amount",
+                                modifier = Modifier.size(19.dp),
+                                tint = if (state.readOnlyMode) tandemPalette.muted else tandemPalette.accent,
+                            )
+                        }
                     }
                 }
-                DividerLine()
+                if (!isTrackingBudget) DividerLine()
                 ListRow(
                     "Activity",
-                    "${state.selectedMonth} · ${state.formatCurrency(kotlin.math.abs(category.activityMinor))}",
+                    "${state.selectedMonth} · ${state.formatCurrency(category.activityMinor)}",
                     leading = RowLeading.Icon(Lucide.Receipt),
                     onClick = { openCategoryActivity(state, navigation, category.id, category.name) },
                 )
+                if (isLiveBudget && !isTrackingBudget) {
+                    DividerLine()
+                    ListRow(
+                        "Move money",
+                        leading = RowLeading.Icon(Lucide.WalletCards),
+                        onClick = {
+                            moveMoneyFromId = category.id
+                            moveMoneyToId =
+                                moveMoneyCategories
+                                    .firstOrNull { it.second.id != category.id }
+                                    ?.second
+                                    ?.id
+                                    .orEmpty()
+                            moveMoneyAmountDraft = ""
+                            mobileSession.clearBudgetActionMessage()
+                            showMoveMoneyDialog = true
+                        },
+                    )
+                }
                 DividerLine()
                 ListRow(
                     "Icon",
                     state.categoryIconChoice(category.id) ?: "Automatic",
                     leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
                 )
-                DividerLine()
-                ListRow("Available", "Assigned plus activity", state.formatCurrency(category.balanceMinor))
+                if (!isTrackingBudget) {
+                    DividerLine()
+                    ListRow("Available", "Assigned plus activity", state.formatCurrency(category.balanceMinor))
+                }
             }
             if (isLiveBudget) {
                 SecondaryButton(
@@ -5603,7 +5823,7 @@ private fun CategoryDetailScreen(
             }
         }
     }
-    if (showAssignedAmountDialog && category != null && isLiveBudget) {
+    if (showAssignedAmountDialog && category != null && isLiveBudget && !isTrackingBudget) {
         val parsedAmount = state.parseAmountMinorUnits(assignedAmountDraft)
         Dialog(
             onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showAssignedAmountDialog = false },
@@ -5670,6 +5890,117 @@ private fun CategoryDetailScreen(
                                         state.encryptedPassword.takeIf { it.isNotBlank() },
                                     )
                                 if (saved) showAssignedAmountDialog = false
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (showMoveMoneyDialog && category != null && isLiveBudget && !isTrackingBudget) {
+        val parsedMoveAmount = state.parseAmountMinorUnits(moveMoneyAmountDraft)
+        val fromLabel = moveMoneyCategories.firstOrNull { it.second.id == moveMoneyFromId }?.second?.name ?: "Choose category"
+        val toLabel = moveMoneyCategories.firstOrNull { it.second.id == moveMoneyToId }?.second?.name ?: "Choose category"
+        Dialog(
+            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showMoveMoneyDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = 16.dp)) {
+                Column(
+                    Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        Icon(Lucide.WalletCards, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
+                        Text(
+                            "Move money",
+                            modifier = Modifier.weight(1f),
+                            color = tandemPalette.text,
+                            fontSize = TandemTypography.sectionTitle,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        TandemIconButton(
+                            Lucide.X,
+                            "Close",
+                            sizeDp = 40,
+                            iconSizeDp = 18,
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                        ) { showMoveMoneyDialog = false }
+                    }
+                    Box {
+                        ListRow("From", trailing = fromLabel, leading = RowLeading.Icon(Lucide.Minus), onClick = {
+                            moveMoneyFromExpanded =
+                                true
+                        })
+                        DropdownMenu(expanded = moveMoneyFromExpanded, onDismissRequest = { moveMoneyFromExpanded = false }) {
+                            moveMoneyCategories.forEach { (_, candidate) ->
+                                DropdownMenuItem(onClick = {
+                                    moveMoneyFromId = candidate.id
+                                    moveMoneyFromExpanded = false
+                                }) {
+                                    Text(candidate.name, color = tandemPalette.text, fontSize = TandemTypography.compactBody)
+                                }
+                            }
+                        }
+                    }
+                    Box {
+                        ListRow("To", trailing = toLabel, leading = RowLeading.Icon(Lucide.Plus), onClick = { moveMoneyToExpanded = true })
+                        DropdownMenu(expanded = moveMoneyToExpanded, onDismissRequest = { moveMoneyToExpanded = false }) {
+                            moveMoneyCategories.filter { it.second.id != moveMoneyFromId }.forEach { (_, candidate) ->
+                                DropdownMenuItem(onClick = {
+                                    moveMoneyToId = candidate.id
+                                    moveMoneyToExpanded = false
+                                }) {
+                                    Text(candidate.name, color = tandemPalette.text, fontSize = TandemTypography.compactBody)
+                                }
+                            }
+                        }
+                    }
+                    TextFieldCard(
+                        "Amount",
+                        moveMoneyAmountDraft,
+                        { moveMoneyAmountDraft = it },
+                        TextFieldOptions(
+                            placeholder = state.formatAmount(0),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            textAlign = TextAlign.Center,
+                            large = true,
+                        ),
+                    )
+                    mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        TandemActionButton(
+                            "Cancel",
+                            TandemActionButtonTone.NEUTRAL,
+                            Modifier.weight(1f),
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                        ) { showMoveMoneyDialog = false }
+                        TandemActionButton(
+                            if (mobileSession.isPerformingBudgetAction) "Moving…" else "Move money",
+                            TandemActionButtonTone.PRIMARY,
+                            Modifier.weight(1f),
+                            icon = Lucide.Check,
+                            enabled =
+                                !state.readOnlyMode &&
+                                    !mobileSession.isPerformingBudgetAction &&
+                                    parsedMoveAmount != null &&
+                                    parsedMoveAmount > 0 &&
+                                    moveMoneyFromId.isNotBlank() &&
+                                    moveMoneyToId.isNotBlank() &&
+                                    moveMoneyFromId != moveMoneyToId,
+                            loading = mobileSession.isPerformingBudgetAction,
+                        ) {
+                            scope.launch {
+                                val moved =
+                                    mobileSession.moveBudgetMoney(
+                                        state.selectedBudgetId,
+                                        state.selectedMonthId,
+                                        moveMoneyFromId,
+                                        moveMoneyToId,
+                                        parsedMoveAmount ?: 0L,
+                                        state.encryptedPassword.takeIf { it.isNotBlank() },
+                                    )
+                                if (moved) showMoveMoneyDialog = false
                             }
                         }
                     }
@@ -6099,6 +6430,14 @@ private fun AccountsScreen(
     var showBankConnectionsDialog by rememberSaveable { mutableStateOf(false) }
     var newAccountName by rememberSaveable { mutableStateOf("") }
     var newAccountOffBudget by rememberSaveable { mutableStateOf(false) }
+    var newAccountGroupId by rememberSaveable { mutableStateOf("") }
+    var accountGroupMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    val accountGroupOptions =
+        remember(mobileSession.accountGroupRecords) {
+            mobileSession.accountGroupRecords
+                .mapNotNull { record -> record.recordName()?.let { record.recordId to it } }
+                .sortedBy { it.second.lowercase() }
+        }
     val isRefreshing = mobileSession.isSyncing || mobileSession.isPerformingBudgetAction
     val runBankSync: () -> Unit = {
         if (!isRefreshing && !state.readOnlyMode && state.selectedBudgetId.isNotBlank()) {
@@ -6252,6 +6591,7 @@ private fun AccountsScreen(
                     ) {
                         newAccountName = ""
                         newAccountOffBudget = false
+                        newAccountGroupId = ""
                         mobileSession.clearBudgetActionMessage()
                         addAccountDialog = true
                     }
@@ -6313,6 +6653,33 @@ private fun AccountsScreen(
                         ) { addAccountDialog = false }
                     }
                     TextFieldCard("Name", newAccountName, { newAccountName = it }, TextFieldOptions(placeholder = "Checking"))
+                    Box {
+                        ListRow(
+                            "Account group",
+                            trailing = accountGroupOptions.firstOrNull { it.first == newAccountGroupId }?.second ?: "No group",
+                            leading = RowLeading.Icon(Lucide.FolderKey),
+                            onClick = { accountGroupMenuExpanded = true },
+                        )
+                        DropdownMenu(
+                            expanded = accountGroupMenuExpanded,
+                            onDismissRequest = { accountGroupMenuExpanded = false },
+                        ) {
+                            DropdownMenuItem(onClick = {
+                                newAccountGroupId = ""
+                                accountGroupMenuExpanded = false
+                            }) {
+                                Text("No group", color = tandemPalette.text, fontSize = TandemTypography.compactBody)
+                            }
+                            accountGroupOptions.forEach { (groupId, groupName) ->
+                                DropdownMenuItem(onClick = {
+                                    newAccountGroupId = groupId
+                                    accountGroupMenuExpanded = false
+                                }) {
+                                    Text(groupName, color = tandemPalette.text, fontSize = TandemTypography.compactBody)
+                                }
+                            }
+                        }
+                    }
                     SurfaceCard {
                         CheckBoxRow(
                             "Off budget",
@@ -6344,6 +6711,7 @@ private fun AccountsScreen(
                                         state.selectedBudgetId,
                                         newAccountName,
                                         newAccountOffBudget,
+                                        newAccountGroupId.ifBlank { null },
                                         state.encryptedPassword.takeIf { it.isNotBlank() },
                                     )
                                 if (created) addAccountDialog = false
@@ -6511,6 +6879,8 @@ private fun AccountOptionsScreen(
             ?: "Unavailable"
     val accountScope = if (liveAccount?.offBudget ?: previewAccount?.offBudget ?: false) "Off budget" else "On budget"
     var confirmClose by rememberSaveable(state.selectedAccountId) { mutableStateOf(false) }
+    var renameDialog by rememberSaveable(state.selectedAccountId) { mutableStateOf(false) }
+    var renameValue by rememberSaveable(state.selectedAccountId) { mutableStateOf(liveAccount?.name.orEmpty()) }
     var transferAccountId by rememberSaveable(state.selectedAccountId) { mutableStateOf("") }
     var transferCategoryId by rememberSaveable(state.selectedAccountId) { mutableStateOf("") }
     val nonZeroBalance = liveAccount?.balanceMinor?.let { it != 0L } ?: false
@@ -6540,8 +6910,33 @@ private fun AccountOptionsScreen(
                 ListRow("Budget status", "Account scope", accountScope)
             }
             if (isLiveBudget && liveAccount != null) {
+                SecondaryButton(
+                    "Rename account",
+                    enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                    onClick = {
+                        renameValue = liveAccount.name
+                        mobileSession.clearBudgetActionMessage()
+                        renameDialog = true
+                    },
+                )
                 if (liveAccount.closed) {
                     InlineMessage("This account is closed.", InlineMessageKind.INFO)
+                    SecondaryButton(
+                        "Reopen account",
+                        enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                        onClick = {
+                            scope.launch {
+                                if (mobileSession.reopenBudgetAccount(
+                                        state.selectedBudgetId,
+                                        liveAccount.id,
+                                        state.encryptedPassword.takeIf { it.isNotBlank() },
+                                    )
+                                ) {
+                                    navigation.selectTab(AppRoute.ACCOUNTS)
+                                }
+                            }
+                        },
+                    )
                 } else {
                     SecondaryButton(
                         "Close account",
@@ -6557,6 +6952,47 @@ private fun AccountOptionsScreen(
                 mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
             }
         }
+    }
+    if (renameDialog && liveAccount != null) {
+        AlertDialog(
+            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) renameDialog = false },
+            title = { Text("Rename account", color = tandemPalette.text) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    TextFieldCard("Name", renameValue, { renameValue = it }, TextFieldOptions(placeholder = "Account name"))
+                    mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = renameValue.isNotBlank() && !mobileSession.isPerformingBudgetAction,
+                    onClick = {
+                        scope.launch {
+                            if (mobileSession.renameBudgetAccount(
+                                    state.selectedBudgetId,
+                                    liveAccount.id,
+                                    renameValue,
+                                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                                )
+                            ) {
+                                renameDialog = false
+                            }
+                        }
+                    },
+                ) {
+                    Text(if (mobileSession.isPerformingBudgetAction) "Saving…" else "Save", color = tandemPalette.accent)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !mobileSession.isPerformingBudgetAction,
+                    onClick = { renameDialog = false },
+                ) {
+                    Text("Cancel", color = tandemPalette.muted)
+                }
+            },
+            backgroundColor = tandemPalette.surface,
+        )
     }
     if (confirmClose && liveAccount != null) {
         AlertDialog(

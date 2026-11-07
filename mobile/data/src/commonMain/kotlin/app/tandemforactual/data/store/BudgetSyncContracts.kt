@@ -10,6 +10,7 @@ data class BudgetDisplaySettings(
     val hideFraction: Boolean,
     val currencySymbolPosition: String?,
     val currencySpaceBetweenAmountAndSymbol: Boolean,
+    val budgetType: String = "envelope",
 )
 
 data class RemoteBudgetSnapshot(

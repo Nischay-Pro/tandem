@@ -254,6 +254,9 @@ internal class TandemMobileSession(
     var accountGroupRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
         private set
 
+    var scheduleRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
+        private set
+
     val isAuthenticated: Boolean
         get() = apiClient.isAuthenticated
 
@@ -454,6 +457,7 @@ internal class TandemMobileSession(
         budgetId: String,
         name: String,
         offbudget: Boolean,
+        accountGroupId: String?,
         encryptionPassword: String?,
     ): Boolean {
         val cleanName = name.trim()
@@ -466,7 +470,7 @@ internal class TandemMobileSession(
             return false
         }
         return performBudgetAction(budgetId, encryptionPassword, "Couldn’t add this account. Try again.") {
-            apiClient.createBudgetAccount(budgetId, cleanName, offbudget, encryptionPassword)
+            apiClient.createBudgetAccount(budgetId, cleanName, offbudget, accountGroupId, encryptionPassword)
         }
     }
 
@@ -485,6 +489,35 @@ internal class TandemMobileSession(
                 transferCategoryId,
                 encryptionPassword,
             )
+        }
+
+    suspend fun renameBudgetAccount(
+        budgetId: String,
+        accountId: String,
+        name: String,
+        encryptionPassword: String?,
+    ): Boolean {
+        val cleanName = name.trim()
+        if (cleanName.isBlank()) {
+            budgetActionMessage = "Enter an account name."
+            return false
+        }
+        if (cleanName.length > 100) {
+            budgetActionMessage = "Account names can be up to 100 characters."
+            return false
+        }
+        return performBudgetAction(budgetId, encryptionPassword, "Couldn’t rename this account. Try again.") {
+            apiClient.renameBudgetAccount(budgetId, accountId, cleanName, encryptionPassword)
+        }
+    }
+
+    suspend fun reopenBudgetAccount(
+        budgetId: String,
+        accountId: String,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Couldn’t reopen this account. Try again.") {
+            apiClient.reopenBudgetAccount(budgetId, accountId, encryptionPassword)
         }
 
     suspend fun renameBudgetCategory(
@@ -530,6 +563,51 @@ internal class TandemMobileSession(
         return categoryId.takeIf { created }
     }
 
+    suspend fun createBudgetPayee(
+        budgetId: String,
+        name: String,
+        encryptionPassword: String?,
+    ): String? {
+        val cleanName = name.trim()
+        if (cleanName.isBlank()) {
+            budgetActionMessage = "Enter a payee name."
+            return null
+        }
+        if (cleanName.length > 100) {
+            budgetActionMessage = "Payee names can be up to 100 characters."
+            return null
+        }
+        budgetActionMessage = null
+        if (refuseWriteInReadOnlyMode()) {
+            budgetActionMessage = transactionWriteMessage
+            return null
+        }
+        if (budgetId.isBlank() || !apiClient.isAuthenticated) {
+            budgetActionMessage = "Pair this device and open a budget before changing it."
+            return null
+        }
+        if (isPerformingBudgetAction) return null
+        isPerformingBudgetAction = true
+        try {
+            val payeeId = apiClient.withExclusiveSession { apiClient.createBudgetPayee(budgetId, cleanName, encryptionPassword) }
+            if (synchronize(budgetId, encryptionPassword) == null) {
+                budgetActionMessage = "The payee was created, but this device couldn’t refresh the budget."
+                return null
+            }
+            return payeeId
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: TandemApiException) {
+            budgetActionMessage = error.message ?: "Couldn’t add this payee. Try again."
+            return null
+        } catch (_: Exception) {
+            budgetActionMessage = "Couldn’t add this payee. Try again."
+            return null
+        } finally {
+            isPerformingBudgetAction = false
+        }
+    }
+
     suspend fun setBudgetCategoryAmount(
         budgetId: String,
         categoryId: String,
@@ -547,6 +625,30 @@ internal class TandemMobileSession(
         }
         return performBudgetAction(budgetId, encryptionPassword, "Couldn’t update this assigned amount. Try again.") {
             apiClient.setBudgetCategoryAmount(budgetId, categoryId, month, amountMinor, encryptionPassword)
+        }
+    }
+
+    suspend fun moveBudgetMoney(
+        budgetId: String,
+        month: String,
+        fromCategoryId: String,
+        toCategoryId: String,
+        amountMinor: Long,
+        encryptionPassword: String?,
+    ): Boolean {
+        if (fromCategoryId == toCategoryId || amountMinor <= 0L) {
+            budgetActionMessage = "Choose two categories and a positive amount."
+            return false
+        }
+        return performBudgetAction(budgetId, encryptionPassword, "Couldn’t move money. Try again.") {
+            apiClient.moveMoneyBetweenCategories(
+                budgetId,
+                month,
+                fromCategoryId,
+                toCategoryId,
+                amountMinor,
+                encryptionPassword,
+            )
         }
     }
 
@@ -1118,6 +1220,7 @@ internal class TandemMobileSession(
             localRepository.countVisibleRecords(budgetId, "transaction").coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
         accountRecords = localRepository.findRecords(budgetId, "account")
         accountGroupRecords = localRepository.findRecords(budgetId, "account-group")
+        scheduleRecords = localRepository.findRecords(budgetId, "schedule")
         payeeRecords = localRepository.findRecords(budgetId, "payee")
         categoryRecords = localRepository.findRecords(budgetId, "category")
         categoryGroupRecords = localRepository.findRecords(budgetId, "category-group")
@@ -1149,6 +1252,7 @@ internal class TandemMobileSession(
             }
             launch { localRepository.observeRecords(budgetId, "account").collect { accountRecords = it } }
             launch { localRepository.observeRecords(budgetId, "account-group").collect { accountGroupRecords = it } }
+            launch { localRepository.observeRecords(budgetId, "schedule").collect { scheduleRecords = it } }
             launch { localRepository.observeRecords(budgetId, "payee").collect { payeeRecords = it } }
             launch { localRepository.observeRecords(budgetId, "category").collect { categoryRecords = it } }
             launch { localRepository.observeRecords(budgetId, "category-group").collect { categoryGroupRecords = it } }
