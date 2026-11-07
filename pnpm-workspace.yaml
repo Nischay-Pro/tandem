@@ -4,9 +4,6 @@ packages:
 allowBuilds:
   better-sqlite3: true
   esbuild: true
-minimumReleaseAgeExclude:
-  # Temporary pnpm 24-hour release-age allowlist for this package version only.
-  # Published at 2026-11-05T07:04:51.729Z; remove this entry after 2026-11-06T07:04:51.729Z.
-  - "@thesvg/icons@4.0.4"
 overrides:
   minimatch: 11.0.3
+  qs: 6.17.1
