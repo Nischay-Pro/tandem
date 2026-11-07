@@ -1,9 +1,18 @@
 package app.tandemforactual.ui
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.put
+
 internal enum class ActivitySearchField {
     ANY_CONTAINS,
     PAYEE_CONTAINS,
     NOTES_CONTAIN,
+    TAG,
     ACCOUNT,
     CATEGORY,
     DATE_MONTH,
@@ -51,6 +60,69 @@ internal data class ActivitySearchFilter(
     val value: String,
     val label: String,
 )
+
+internal data class SavedActivitySearch(
+    val budgetId: String,
+    val name: String,
+    val query: String,
+    val filters: List<ActivitySearchFilter>,
+)
+
+internal fun encodeSavedActivitySearches(searches: List<SavedActivitySearch>): String =
+    JsonArray(
+        searches.takeLast(20).map { saved ->
+            buildJsonObject {
+                put("budgetId", JsonPrimitive(saved.budgetId))
+                put("name", JsonPrimitive(saved.name.take(80)))
+                put("query", JsonPrimitive(saved.query.take(300)))
+                put(
+                    "filters",
+                    JsonArray(
+                        saved.filters.take(20).map { filter ->
+                            buildJsonObject {
+                                put("field", JsonPrimitive(filter.field.name))
+                                put("value", JsonPrimitive(filter.value.take(300)))
+                                put("label", JsonPrimitive(filter.label.take(300)))
+                            }
+                        },
+                    ),
+                )
+            }
+        },
+    ).toString()
+
+internal fun decodeSavedActivitySearches(serialized: String): List<SavedActivitySearch> {
+    val root =
+        try {
+            Json.parseToJsonElement(serialized) as? JsonArray ?: return emptyList()
+        } catch (_: Exception) {
+            return emptyList()
+        }
+    return root
+        .mapNotNull { element ->
+            val item = element as? JsonObject ?: return@mapNotNull null
+            val budgetId = item.stringValue("budgetId") ?: return@mapNotNull null
+            val name = item.stringValue("name")?.take(80)?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+            val query = item.stringValue("query")?.take(300) ?: ""
+            val filters =
+                (item["filters"] as? JsonArray)
+                    .orEmpty()
+                    .take(20)
+                    .mapNotNull { filterElement ->
+                        val filter = filterElement as? JsonObject ?: return@mapNotNull null
+                        val field =
+                            ActivitySearchField.entries.firstOrNull {
+                                it.name == filter.stringValue("field")
+                            } ?: return@mapNotNull null
+                        val value = filter.stringValue("value")?.take(300) ?: ""
+                        val label = filter.stringValue("label")?.take(300) ?: return@mapNotNull null
+                        ActivitySearchFilter(field, value, label)
+                    }
+            SavedActivitySearch(budgetId, name, query, filters)
+        }.takeLast(20)
+}
+
+private fun JsonObject.stringValue(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
 
 internal fun recentActivitySearchMonthFilters(records: List<ActivitySearchRecord>): List<ActivitySearchFilter> =
     records
@@ -229,6 +301,8 @@ internal data class ActivitySearchRecord(
     val transfer: Boolean = false,
     val recordId: String? = null,
 ) {
+    val tagNames: List<String> = parseActivitySearchTags(notes)
+
     val normalizedSearchText: String =
         buildString {
             append(payee.lowercase())
@@ -252,6 +326,7 @@ internal data class PreparedActivitySearchFilter(
 
 internal data class PreparedActivitySearch(
     val normalizedQuery: String,
+    val queryTag: String?,
     val queryAmount: Long?,
     val queryDatePrefixes: List<String>,
     val queryDate: ActivitySearchDateQuery?,
@@ -280,11 +355,16 @@ internal fun prepareActivitySearch(
 ): PreparedActivitySearch =
     PreparedActivitySearch(
         normalizedQuery =
-            if (parseActivitySearchDateQuery(query) != null || hasExplicitActivitySearchDatePrefix(query)) {
+            if (
+                parseActivitySearchDateQuery(query) != null ||
+                hasExplicitActivitySearchDatePrefix(query) ||
+                parseExplicitActivitySearchTag(query) != null
+            ) {
                 ""
             } else {
                 query.trim().lowercase()
             },
+        queryTag = parseExplicitActivitySearchTag(query),
         queryAmount = parseActivitySearchAmount(query, currencyCode),
         queryDatePrefixes = parseActivitySearchDatePrefixes(query),
         queryDate = parseActivitySearchDateQuery(query),
@@ -322,6 +402,7 @@ internal fun matchesActivitySearch(
 ): Boolean {
     if (prepared.hasExplicitDatePrefix && prepared.queryDate == null) return false
     if (prepared.queryDate != null && !prepared.queryDate.matches(record.dateIso)) return false
+    if (prepared.queryTag != null && record.tagNames.none { it.equals(prepared.queryTag, ignoreCase = true) }) return false
     if (
         prepared.normalizedQuery.isNotEmpty() &&
         !matchesAnyText(record, prepared.normalizedQuery, prepared.queryAmount, prepared.queryDatePrefixes)
@@ -339,6 +420,18 @@ internal fun activitySearchSuggestions(
 ): List<ActivitySearchFilter> {
     val value = query.trim()
     if (value.isEmpty()) return emptyList()
+    if (value.startsWith("tag:", ignoreCase = true)) {
+        val requestedTag = value.substringAfter(':').removePrefix("#")
+        if (requestedTag.isBlank()) return emptyList()
+        return records
+            .asSequence()
+            .flatMap { it.tagNames.asSequence() }
+            .distinct()
+            .filter { it.startsWith(requestedTag, ignoreCase = true) }
+            .take(8)
+            .map { ActivitySearchFilter(ActivitySearchField.TAG, it, "Tag: #$it") }
+            .toList()
+    }
     val explicitDatePrefix = hasExplicitActivitySearchDatePrefix(value)
     val dateQuery = parseActivitySearchDateQuery(value)
     val rawDateLabel = stripActivitySearchDatePrefix(value)
@@ -411,6 +504,13 @@ internal fun activitySearchSuggestions(
         .forEach { (name, id) ->
             add(ActivitySearchField.PAYEE_CONTAINS, id ?: name, "Payee is: $name")
         }
+    records
+        .asSequence()
+        .flatMap { it.tagNames.asSequence() }
+        .distinct()
+        .filter { it.contains(dateLabel, ignoreCase = true) }
+        .take(4)
+        .forEach { tag -> add(ActivitySearchField.TAG, tag, "Tag: #$tag") }
 
     val month = dateLabel.takeIf(::isActivitySearchMonthId)
     val date = dateLabel.takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
@@ -762,6 +862,7 @@ private fun matchesFilter(
         ActivitySearchField.PAYEE_CONTAINS ->
             record.payee.contains(filter.value, ignoreCase = true) || record.payeeId == filter.value
         ActivitySearchField.NOTES_CONTAIN -> record.notes.contains(filter.value, ignoreCase = true)
+        ActivitySearchField.TAG -> record.tagNames.any { it.equals(filter.value, ignoreCase = true) }
         ActivitySearchField.ACCOUNT -> record.accountId == filter.value || record.account.equals(filter.value, ignoreCase = true)
         ActivitySearchField.CATEGORY -> record.categoryId == filter.value || record.category.equals(filter.value, ignoreCase = true)
         ActivitySearchField.DATE_MONTH -> record.dateIso.startsWith(filter.value)
@@ -789,4 +890,27 @@ private fun matchesFilter(
         ActivitySearchField.INFLOW_AT_LEAST -> record.amountMinorUnits > 0 && expectedAmount != null && absoluteAmount >= expectedAmount
         ActivitySearchField.INFLOW_AT_MOST -> record.amountMinorUnits > 0 && expectedAmount != null && absoluteAmount <= expectedAmount
     }
+}
+
+private fun parseExplicitActivitySearchTag(query: String): String? {
+    val normalized = query.trim()
+    if (!normalized.startsWith("tag:", ignoreCase = true)) return null
+    return normalized.substringAfter(':').removePrefix("#").takeIf { it.isNotBlank() }
+}
+
+internal fun parseActivitySearchTags(notes: String): List<String> {
+    val tags = linkedSetOf<String>()
+    var index = 0
+    while (index < notes.length) {
+        if (notes[index] != '#' || (index > 0 && notes[index - 1] == '#')) {
+            index++
+            continue
+        }
+        val start = index + 1
+        var end = start
+        while (end < notes.length && notes[end] != '#' && !notes[end].isWhitespace()) end++
+        if (end > start) tags += notes.substring(start, end)
+        index = end.coerceAtLeast(index + 1)
+    }
+    return tags.toList()
 }

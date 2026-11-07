@@ -10,6 +10,46 @@ import kotlin.test.assertTrue
 
 class ActivitySearchTest {
     @Test
+    fun savedSearchesRoundTripWithBudgetScopeAndFilters() {
+        val saved =
+            SavedActivitySearch(
+                budgetId = "budget-a",
+                name = "Home supplies",
+                query = "hardware",
+                filters =
+                    listOf(
+                        ActivitySearchFilter(ActivitySearchField.TAG, "home", "Tag: #home"),
+                        ActivitySearchFilter(ActivitySearchField.DATE_RANGE, "2026-05-01..2026-05-31", "Date: May 2026"),
+                    ),
+            )
+
+        assertEquals(listOf(saved), decodeSavedActivitySearches(encodeSavedActivitySearches(listOf(saved))))
+        assertEquals(emptyList(), decodeSavedActivitySearches("not json"))
+    }
+
+    @Test
+    fun actualHashTagsCanBeFilteredAndCombinedWithOtherFilters() {
+        val tagged = record(notes = "hardware run #home #DIY #home")
+        val escaped = record(notes = "literal ##not-a-tag")
+        val tagFilter = ActivitySearchFilter(ActivitySearchField.TAG, "home", "Tag: #home")
+        val categoryFilter = ActivitySearchFilter(ActivitySearchField.CATEGORY, "category-groceries", "Category: Groceries")
+        val dateFilter = ActivitySearchFilter(ActivitySearchField.DATE_RANGE, "2026-05-01..2026-05-31", "Date: May 2026")
+
+        assertEquals(listOf("home", "DIY"), parseActivitySearchTags(tagged.notes))
+        assertEquals(emptyList(), parseActivitySearchTags(escaped.notes))
+        assertTrue(matchesActivitySearch(tagged, "tag:home", emptyList()))
+        assertFalse(matchesActivitySearch(tagged, "tag:travel", emptyList()))
+        assertTrue(matchesActivitySearch(tagged, "", listOf(tagFilter)))
+        assertFalse(matchesActivitySearch(escaped, "", listOf(tagFilter)))
+        assertTrue(matchesActivitySearch(tagged, "", listOf(tagFilter, categoryFilter, dateFilter)))
+        assertTrue(
+            activitySearchSuggestions("tag:di", listOf(tagged)).any {
+                it.field == ActivitySearchField.TAG && it.value == "DIY"
+            },
+        )
+    }
+
+    @Test
     fun buildsSearchRowsDirectlyFromSlimTransactionProjections() {
         val indexed =
             buildSearchActivityRecords(
