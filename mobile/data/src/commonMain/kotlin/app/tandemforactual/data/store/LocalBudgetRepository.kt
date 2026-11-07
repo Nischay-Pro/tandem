@@ -304,6 +304,21 @@ class LocalBudgetRepository(
             throughDate,
         )
 
+    suspend fun findRecordsByIds(
+        budgetId: String,
+        recordType: String,
+        recordIds: Collection<String>,
+    ): List<BudgetRecordEntity> {
+        requireIdentifier(budgetId, "budgetId")
+        requireIdentifier(recordType, "recordType")
+        val ids = recordIds.distinct()
+        ids.forEach { requireIdentifier(it, "recordId") }
+        if (ids.isEmpty()) return emptyList()
+        return ids.chunked(400).flatMap { chunk ->
+            database.budgetRecordDao().findVisibleByIds(budgetId, recordType, chunk)
+        }
+    }
+
     suspend fun findRecordIds(
         budgetId: String,
         recordType: String,

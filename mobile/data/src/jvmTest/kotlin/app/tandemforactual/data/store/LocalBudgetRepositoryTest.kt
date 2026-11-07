@@ -50,6 +50,26 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
+    fun findRecordsByIdsBatchesLargeSelectionsAndReturnsOnlyVisibleRows() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val records = (0 until 405).map { index -> transaction(recordId = "txn-$index") }
+                repository.applySnapshot(BUDGET, GENERATION, "c1", records)
+
+                val selectedIds = records.map { it.recordId } + listOf("txn-1", "missing")
+                val found = repository.findRecordsByIds(BUDGET, "transaction", selectedIds)
+
+                assertEquals(405, found.size)
+                assertEquals(records.map { it.recordId }.toSet(), found.map { it.recordId }.toSet())
+                assertTrue(repository.findRecordsByIds(BUDGET, "transaction", emptyList()).isEmpty())
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun displayMetadataMigrationBackfillsLocalAndRemoteBodiesAndSkipsInvalidJson() =
         runBlocking {
             val connection = BundledSQLiteDriver().open(":memory:")

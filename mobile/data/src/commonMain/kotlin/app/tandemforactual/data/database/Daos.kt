@@ -319,6 +319,20 @@ interface BudgetRecordDao {
     ): BudgetRecordEntity?
 
     @Query(
+        """
+    SELECT * FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = :recordType AND recordId IN (:recordIds)
+      AND localDeleted = 0
+      AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))
+    """,
+    )
+    suspend fun findVisibleByIds(
+        budgetId: String,
+        recordType: String,
+        recordIds: List<String>,
+    ): List<BudgetRecordEntity>
+
+    @Query(
         "SELECT * FROM budget_records WHERE budgetId = :budgetId AND (localJson IS NOT NULL OR localDeleted = 1)",
     )
     suspend fun findLocalOverlays(budgetId: String): List<BudgetRecordEntity>

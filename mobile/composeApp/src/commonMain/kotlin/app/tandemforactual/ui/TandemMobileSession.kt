@@ -550,8 +550,12 @@ internal class TandemMobileSession(
         isSavingTransaction = true
         try {
             val requests = mutableListOf<LocalWriteRequest>()
+            val recordsById =
+                localRepository
+                    .findRecordsByIds(budgetId, "transaction", ids)
+                    .associateBy(BudgetRecordEntity::recordId)
             for (transactionId in ids) {
-                val record = localRepository.findRecord(budgetId, "transaction", transactionId)
+                val record = recordsById[transactionId]
                 val baseJson = record?.remoteJson
                 val revision = record?.remoteRevision
                 if (
