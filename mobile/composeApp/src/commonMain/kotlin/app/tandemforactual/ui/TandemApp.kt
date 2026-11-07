@@ -5083,7 +5083,7 @@ private fun BudgetScreen(
                         "Template name",
                         budgetTemplateNameDraft,
                         { budgetTemplateNameDraft = it.take(60) },
-                        TextFieldOptions(placeholder = "e.g. Summer plan"),
+                        TextFieldOptions(placeholder = "Summer plan"),
                     )
                     TandemActionButton(
                         "Save ${state.selectedMonth} plan",
