@@ -23,6 +23,19 @@ export interface BudgetMaintenanceApiPort {
     name: string,
     encryptionPassword?: string,
   ): Promise<void>;
+  createCategory(
+    budgetId: string,
+    name: string,
+    categoryGroupId: string,
+    encryptionPassword?: string,
+  ): Promise<string>;
+  setBudgetAmount(
+    budgetId: string,
+    categoryId: string,
+    month: string,
+    amountMinor: number,
+    encryptionPassword?: string,
+  ): Promise<void>;
   deleteCategory(
     budgetId: string,
     categoryId: string,
@@ -54,6 +67,9 @@ type ActualBudgetMaintenanceClient = Pick<
   | "getAccounts"
   | "getAccountBalance"
   | "getCategories"
+  | "getCategoryGroups"
+  | "setBudgetAmount"
+  | "createCategory"
   | "updateCategory"
   | "deleteCategory"
 >;
@@ -81,6 +97,51 @@ export function createBudgetMaintenanceApi(
           budgetId,
           async () => {
             await client.createAccount({ name, offbudget });
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    createCategory(budgetId, name, categoryGroupId, encryptionPassword) {
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const groups = await client.getCategoryGroups();
+            const group = groups.find((candidate) => candidate.id === categoryGroupId);
+            if (!group || group.hidden) {
+              throw new BudgetMaintenanceInputError("Choose an active category group");
+            }
+            const categories = await client.getCategories({ hidden: true });
+            const duplicate = categories.some(
+              (candidate) =>
+                candidate.group_id === categoryGroupId &&
+                candidate.name.trim().toLocaleLowerCase() === name.trim().toLocaleLowerCase(),
+            );
+            if (duplicate) {
+              throw new BudgetMaintenanceInputError("A category with this name already exists in that group");
+            }
+            return client.createCategory({
+              name,
+              group_id: categoryGroupId,
+              is_income: group.is_income ?? false,
+              hidden: false,
+            });
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    setBudgetAmount(budgetId, categoryId, month, amountMinor, encryptionPassword) {
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const categories = await client.getCategories({ hidden: true });
+            if (!categories.some((candidate) => candidate.id === categoryId)) {
+              throw new BudgetMaintenanceInputError("Category does not exist in this budget");
+            }
+            await client.setBudgetAmount(month, categoryId, amountMinor);
           },
           writeOptions(encryptionPassword),
         ),

@@ -265,6 +265,57 @@ class TandemApiClient(
         }
     }
 
+    suspend fun createBudgetCategory(
+        budgetId: String,
+        categoryGroupId: String,
+        name: String,
+        encryptionPassword: String?,
+    ): String =
+        withGeneratedApi {
+            BudgetsApi.createBudgetCategory(
+                xBudgetEncryptionPassword = encryptionPassword,
+                budgetId = budgetId,
+                body =
+                    buildJsonObject {
+                        put("name", name)
+                        put("categoryGroupId", categoryGroupId)
+                    }.toMap(),
+            ).fold(
+                { error -> throw error.toTandemApiException() },
+                { response ->
+                    val categoryId = (response.data["categoryId"] as? JsonPrimitive)?.contentOrNull
+                    verifyApiStatus(
+                        isSuccessful = response.isSuccessful,
+                        hasExpectedStatus = categoryId?.isNotBlank() == true,
+                    )
+                    categoryId ?: throw TandemApiProtocolException("Actual did not return the created category ID")
+                },
+            )
+        }
+
+    suspend fun setBudgetCategoryAmount(
+        budgetId: String,
+        categoryId: String,
+        month: String,
+        amountMinor: Long,
+        encryptionPassword: String?,
+    ) {
+        withGeneratedApi {
+            requireOk(
+                BudgetsApi.setBudgetCategoryAmount(
+                    xBudgetEncryptionPassword = encryptionPassword,
+                    budgetId = budgetId,
+                    categoryId = categoryId,
+                    body =
+                        buildJsonObject {
+                            put("month", month)
+                            put("amountMinor", amountMinor)
+                        }.toMap(),
+                ),
+            )
+        }
+    }
+
     suspend fun deleteBudgetCategory(
         budgetId: String,
         categoryId: String,

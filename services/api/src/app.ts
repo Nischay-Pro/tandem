@@ -977,6 +977,16 @@ interface BudgetCategoryRenameBody {
   name: string;
 }
 
+interface BudgetCategoryCreateBody {
+  name: string;
+  categoryGroupId: string;
+}
+
+interface BudgetCategoryBudgetAmountBody {
+  month: string;
+  amountMinor: number;
+}
+
 interface BudgetCategoryDeleteBody {
   transferCategoryId: string | null;
 }
@@ -1310,6 +1320,188 @@ function registerBudgetMaintenanceRoutes(
           request.params.accountId,
         );
         reportTransactionFailure("Actual account close failed", error);
+        return actualRequestFailed(reply);
+      }
+    },
+  );
+
+  app.post<{
+    Params: BudgetRouteParams;
+    Headers: BudgetReadHeaders;
+    Body: BudgetCategoryCreateBody;
+  }>(
+    "/api/v1/budgets/:budgetId/categories",
+    {
+      schema: {
+        tags: ["Budgets"],
+        operationId: "createBudgetCategory",
+        summary: "Create an Actual Budget category",
+        security: [{ bearerAuth: [] }],
+        params: paramsSchema,
+        headers: headersSchema,
+        body: {
+          type: "object",
+          properties: {
+            name: {
+              type: "string",
+              minLength: 1,
+              maxLength: 100,
+              pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+            },
+            categoryGroupId: {
+              type: "string",
+              minLength: 1,
+              maxLength: 500,
+              pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+            },
+          },
+          required: ["name", "categoryGroupId"],
+          additionalProperties: false,
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              status: { type: "string", enum: ["ok"] },
+              categoryId: { type: "string", minLength: 1, maxLength: 500 },
+            },
+            required: ["status", "categoryId"],
+            additionalProperties: false,
+          },
+          400: errorSchema,
+          401: errorSchema,
+          404: errorSchema,
+          502: errorSchema,
+          503: errorSchema,
+        },
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(deviceAuth, request, reply);
+      if (!device) return reply;
+      if (request.validationError) return invalidBudgetRequest(reply);
+      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
+        return transactionNotFound(reply);
+      if (!maintenanceApi) return actualNotConfigured(reply);
+      try {
+        const categoryId = await maintenanceApi.createCategory(
+          request.params.budgetId,
+          request.body.name.trim(),
+          request.body.categoryGroupId,
+          request.headers["x-budget-encryption-password"],
+        );
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "category_create",
+          "success",
+          categoryId,
+        );
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send({ status: "ok", categoryId });
+      } catch (error) {
+        if (error instanceof BudgetMaintenanceInputError) {
+          logBudgetMaintenanceEvent(
+            request,
+            device,
+            request.params.budgetId,
+            "category_create",
+            "rejected",
+          );
+          return reply.code(400).send({
+            error: { code: "invalid_request", message: error.message },
+          });
+        }
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "category_create",
+          "failed",
+        );
+        reportTransactionFailure("Actual category creation failed", error);
+        return actualRequestFailed(reply);
+      }
+    },
+  );
+
+  app.put<{
+    Params: BudgetCategoryRouteParams;
+    Headers: BudgetReadHeaders;
+    Body: BudgetCategoryBudgetAmountBody;
+  }>(
+    "/api/v1/budgets/:budgetId/categories/:categoryId/budget-amount",
+    {
+      schema: {
+        tags: ["Budgets"],
+        operationId: "setBudgetCategoryAmount",
+        summary: "Set a category's assigned amount for an Actual Budget month",
+        security: [{ bearerAuth: [] }],
+        params: categoryParamsSchema,
+        headers: headersSchema,
+        body: {
+          type: "object",
+          properties: {
+            month: { type: "string", pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$" },
+            amountMinor: { type: "integer", minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
+          },
+          required: ["month", "amountMinor"],
+          additionalProperties: false,
+        },
+        response: commonResponseSchema,
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(deviceAuth, request, reply);
+      if (!device) return reply;
+      if (request.validationError) return invalidBudgetRequest(reply);
+      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
+        return transactionNotFound(reply);
+      if (!maintenanceApi) return actualNotConfigured(reply);
+      try {
+        await maintenanceApi.setBudgetAmount(
+          request.params.budgetId,
+          request.params.categoryId,
+          request.body.month,
+          request.body.amountMinor,
+          request.headers["x-budget-encryption-password"],
+        );
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "category_budget",
+          "success",
+          request.params.categoryId,
+        );
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send({ status: "ok" });
+      } catch (error) {
+        if (error instanceof BudgetMaintenanceInputError) {
+          logBudgetMaintenanceEvent(
+            request,
+            device,
+            request.params.budgetId,
+            "category_budget",
+            "rejected",
+            request.params.categoryId,
+          );
+          return reply.code(400).send({
+            error: { code: "invalid_request", message: error.message },
+          });
+        }
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "category_budget",
+          "failed",
+          request.params.categoryId,
+        );
+        reportTransactionFailure("Actual category budget update failed", error);
         return actualRequestFailed(reply);
       }
     },

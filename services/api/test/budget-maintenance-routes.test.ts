@@ -23,6 +23,8 @@ async function createApi(maintenanceConfigured = true) {
   const budgetMaintenanceApi: BudgetMaintenanceApiPort = {
     runBankSync: vi.fn(async () => undefined),
     createAccount: vi.fn(async () => undefined),
+    createCategory: vi.fn(async () => "category-created"),
+    setBudgetAmount: vi.fn(async () => undefined),
     closeAccount: vi.fn(async () => undefined),
     renameCategory: vi.fn(async () => undefined),
     deleteCategory: vi.fn(async () => undefined),
@@ -214,6 +216,18 @@ describe("budget maintenance routes", () => {
       headers: authHeaders,
       payload: { name: "Home care" },
     });
+    const createdCategory = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/categories`,
+      headers: authHeaders,
+      payload: { name: "Dining out", categoryGroupId: "group-1" },
+    });
+    const budgetAmount = await fake.app.inject({
+      method: "PUT",
+      url: `/api/v1/budgets/${budgetId}/categories/category-1/budget-amount`,
+      headers: authHeaders,
+      payload: { month: "2026-11", amountMinor: 125_000 },
+    });
 
     expect(account.statusCode).toBe(200);
     expect(fake.budgetMaintenanceApi.createAccount).toHaveBeenCalledWith(
@@ -227,6 +241,22 @@ describe("budget maintenance routes", () => {
       budgetId,
       "category-1",
       "Home care",
+      undefined,
+    );
+    expect(createdCategory.statusCode).toBe(200);
+    expect(createdCategory.json()).toEqual({ status: "ok", categoryId: "category-created" });
+    expect(fake.budgetMaintenanceApi.createCategory).toHaveBeenCalledWith(
+      budgetId,
+      "Dining out",
+      "group-1",
+      undefined,
+    );
+    expect(budgetAmount.statusCode).toBe(200);
+    expect(fake.budgetMaintenanceApi.setBudgetAmount).toHaveBeenCalledWith(
+      budgetId,
+      "category-1",
+      "2026-11",
+      125_000,
       undefined,
     );
     await fake.app.close();
@@ -475,6 +505,18 @@ describe("budget maintenance routes", () => {
         payload: { name: "Home" },
       }),
       fake.app.inject({
+        method: "POST",
+        url: `/api/v1/budgets/${budgetId}/categories`,
+        headers: authHeaders,
+        payload: { name: "Dining", categoryGroupId: "group-1" },
+      }),
+      fake.app.inject({
+        method: "PUT",
+        url: `/api/v1/budgets/${budgetId}/categories/category-1/budget-amount`,
+        headers: authHeaders,
+        payload: { month: "2026-11", amountMinor: 900 },
+      }),
+      fake.app.inject({
         method: "DELETE",
         url: `/api/v1/budgets/${budgetId}/categories/category-1`,
         headers: authHeaders,
@@ -487,7 +529,7 @@ describe("budget maintenance routes", () => {
     );
 
     expect(responses.map((response) => response.statusCode)).toEqual([
-      200, 200, 400, 200, 200,
+      200, 200, 400, 200, 200, 200, 200,
     ]);
     expect(events.map((event) => event.event).sort()).toEqual(
       [
@@ -495,6 +537,8 @@ describe("budget maintenance routes", () => {
         "budget.account_create",
         "budget.account_close",
         "budget.category_rename",
+        "budget.category_create",
+        "budget.category_budget",
         "budget.category_delete",
       ].sort(),
     );
@@ -504,9 +548,7 @@ describe("budget maintenance routes", () => {
         outcome: "rejected",
       }),
     );
-    expect(events.filter((event) => event.outcome === "success")).toHaveLength(
-      4,
-    );
+    expect(events.filter((event) => event.outcome === "success")).toHaveLength(6);
     expect(
       events.every(
         (event) =>

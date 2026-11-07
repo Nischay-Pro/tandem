@@ -14,6 +14,7 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.pluginOrNull
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import io.ktor.http.content.TextContent
@@ -396,7 +397,14 @@ class TandemApiClientTest {
             val engine =
                 MockEngine { request ->
                     requests += request
-                    respond("""{"status":"ok"}""", headers = jsonHeaders())
+                    respond(
+                        if (request.url.encodedPath.endsWith("/categories") && request.method == HttpMethod.Post) {
+                            """{"status":"ok","categoryId":"category-created"}"""
+                        } else {
+                            """{"status":"ok"}"""
+                        },
+                        headers = jsonHeaders(),
+                    )
                 }
             val previousClient = Api.client
             val previousBaseUrl = Api.baseUrl
@@ -408,12 +416,16 @@ class TandemApiClientTest {
                 client.createBudgetAccount("budget-1", "Savings", true, "budget-password")
                 client.closeBudgetAccount("budget-1", "account-1", "account-2", "category-1", "budget-password")
                 client.renameBudgetCategory("budget-1", "category-1", "Home", null)
+                assertEquals("category-created", client.createBudgetCategory("budget-1", "group-1", "Dining", null))
+                client.setBudgetCategoryAmount("budget-1", "category-1", "2026-11", 125_000, "budget-password")
                 client.deleteBudgetCategory("budget-1", "category-1", null, null)
                 client.withGeneratedApi {
                     BudgetsApi.runBudgetBankSync(budgetId = "budget-1")
                     BudgetsApi.createBudgetAccount(budgetId = "budget-1")
                     BudgetsApi.closeBudgetAccount(budgetId = "budget-1", accountId = "account-1")
                     BudgetsApi.renameBudgetCategory(budgetId = "budget-1", categoryId = "category-1")
+                    BudgetsApi.createBudgetCategory(budgetId = "budget-1")
+                    BudgetsApi.setBudgetCategoryAmount(budgetId = "budget-1", categoryId = "category-1")
                     BudgetsApi.deleteBudgetCategory(budgetId = "budget-1", categoryId = "category-1")
                     BudgetsApi.getBudgetSnapshot(budgetId = "budget-1")
                     BudgetsApi.getBudgetSnapshotPage(budgetId = "budget-1")
@@ -427,19 +439,25 @@ class TandemApiClientTest {
                         "POST /api/v1/budgets/budget-1/accounts",
                         "POST /api/v1/budgets/budget-1/accounts/account-1/close",
                         "PATCH /api/v1/budgets/budget-1/categories/category-1",
+                        "POST /api/v1/budgets/budget-1/categories",
+                        "PUT /api/v1/budgets/budget-1/categories/category-1/budget-amount",
                         "DELETE /api/v1/budgets/budget-1/categories/category-1",
                     ),
-                    requests.take(5).map { "${it.method.value} ${it.url.encodedPath}" },
+                    requests.take(7).map { "${it.method.value} ${it.url.encodedPath}" },
                 )
                 assertEquals(null, requests[0].headers["x-budget-encryption-password"])
                 assertEquals("budget-password", requests[1].headers["x-budget-encryption-password"])
                 assertEquals("budget-password", requests[2].headers["x-budget-encryption-password"])
+                assertEquals("budget-password", requests[5].headers["x-budget-encryption-password"])
                 assertTrue((requests[1].body as TextContent).text.contains("\"name\":\"Savings\""))
                 assertTrue((requests[1].body as TextContent).text.contains("\"offbudget\":true"))
                 assertTrue((requests[2].body as TextContent).text.contains("\"transferAccountId\":\"account-2\""))
                 assertTrue((requests[2].body as TextContent).text.contains("\"transferCategoryId\":\"category-1\""))
                 assertTrue((requests[3].body as TextContent).text.contains("\"name\":\"Home\""))
-                assertTrue((requests[4].body as TextContent).text.contains("\"transferCategoryId\":null"))
+                assertTrue((requests[4].body as TextContent).text.contains("\"categoryGroupId\":\"group-1\""))
+                assertTrue((requests[5].body as TextContent).text.contains("\"month\":\"2026-11\""))
+                assertTrue((requests[5].body as TextContent).text.contains("\"amountMinor\":125000"))
+                assertTrue((requests[6].body as TextContent).text.contains("\"transferCategoryId\":null"))
             } finally {
                 cleanup()
                 Api.baseUrl = previousBaseUrl
