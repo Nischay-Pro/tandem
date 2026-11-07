@@ -298,12 +298,18 @@ class ActivitySearchTest {
     }
 
     @Test
-    fun serverAddressWarningAllowsHttpsAndPrivateLanAddresses() {
+    fun serverAddressWarningMatchesTheCleartextHostPolicy() {
         assertFalse(serverAddressMayBeInsecure("https://budget.example.com"))
         assertFalse(serverAddressMayBeInsecure("http://192.168.1.40:5006"))
         assertFalse(serverAddressMayBeInsecure("http://10.0.0.12"))
+        assertFalse(serverAddressMayBeInsecure("http://[fd12::1]:19753"))
+        assertFalse(serverAddressMayBeInsecure("http://localhost:19753"))
         assertTrue(serverAddressMayBeInsecure("http://1.1.1.1"))
         assertTrue(serverAddressMayBeInsecure("http://budget.example.com"))
+        assertTrue(serverAddressMayBeInsecure("http://tandem.home"))
+        assertTrue(serverAddressMayBeInsecure("http://tandem.lan"))
+        assertTrue(serverAddressMayBeInsecure("http://actual.local"))
+        assertTrue(serverAddressMayBeInsecure("http://fe80"))
         assertTrue(serverAddressMayBeInsecure("www.example.com"))
     }
 

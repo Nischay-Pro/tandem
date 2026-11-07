@@ -145,6 +145,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.TandemApiClient
+import app.tandemforactual.api.client.isLocalHttpHost
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.database.TandemDatabase
@@ -4506,21 +4507,8 @@ internal fun serverAddressMayBeInsecure(value: String): Boolean {
             .removePrefix("www.")
             .trim()
     if (host.isBlank()) return false
-    if (host == "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".lan") || host.endsWith(".home")) {
-        return false
-    }
-    val octets = host.split('.').mapNotNull(String::toIntOrNull)
-    if (octets.size == 4 && octets.all { it in 0..255 }) {
-        val (first, second) = octets
-        val isPrivate =
-            first == 10 ||
-                (first == 172 && second in 16..31) ||
-                (first == 192 && second == 168) ||
-                first == 127 ||
-                (first == 169 && second == 254)
-        return hasHttpScheme && !isPrivate
-    }
-    if (host == "::1" || host.startsWith("fe80:") || host.startsWith("fc") || host.startsWith("fd")) return false
+    if (hasHttpScheme && isLocalHttpHost(host)) return false
+    if (host == "localhost" || host.endsWith(".localhost")) return false
     return hasHttpScheme || host.startsWith("www.") || host.contains('.')
 }
 

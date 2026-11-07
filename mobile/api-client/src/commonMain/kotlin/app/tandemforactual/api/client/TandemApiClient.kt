@@ -735,14 +735,15 @@ private fun parseServerUrl(
             throw TandemApiException("invalid-server-url", cause = error)
         }
     val secure = url.protocol.name == "https"
-    val allowedLocalHttp = allowInsecurePrivateNetwork && url.protocol.name == "http" && isLocalNetworkHost(url.host)
+    val allowedLocalHttp = allowInsecurePrivateNetwork && url.protocol.name == "http" && isLocalHttpHost(url.host)
     if (!hasExplicitHost || url.host.isBlank() || (!secure && !allowedLocalHttp) || url.user != null || url.password != null) {
         throw TandemApiException("invalid-server-url")
     }
     return url
 }
 
-private fun isLocalNetworkHost(value: String): Boolean {
+/** Allows cleartext only for loopback names and validated private-network IP literals. */
+fun isLocalHttpHost(value: String): Boolean {
     val host =
         value
             .lowercase()
@@ -752,15 +753,15 @@ private fun isLocalNetworkHost(value: String): Boolean {
     if (
         host == "localhost" ||
         host == "::1" ||
-        host.endsWith(".localhost") ||
-        host.endsWith(".local") ||
-        host.endsWith(".lan") ||
-        host.endsWith(".home")
+        host.endsWith(".localhost")
     ) {
         return true
     }
-    val octets = host.split('.').mapNotNull(String::toIntOrNull)
-    if (octets.size == 4 && octets.all { it in 0..255 }) {
+    val octetStrings = host.split('.')
+    if (octetStrings.size == 4 && octetStrings.all { it.isNotEmpty() && it.all(Char::isDigit) }) {
+        if (octetStrings.any { it.length > 1 && it.startsWith('0') }) return false
+        val octets = octetStrings.map { it.toIntOrNull() ?: return false }
+        if (octets.any { it !in 0..255 }) return false
         val (first, second) = octets
         return first == 10 ||
             (first == 172 && second in 16..31) ||
@@ -768,10 +769,27 @@ private fun isLocalNetworkHost(value: String): Boolean {
             first == 127 ||
             (first == 169 && second == 254)
     }
-    val firstIpv6Segment = host.substringBefore(':').toIntOrNull(16) ?: return false
+    if (!host.contains(':') || '%' in host) return false
+    val compression = host.indexOf("::")
+    val firstIpv6Segment =
+        if (compression >= 0) {
+            if (compression != host.lastIndexOf("::")) return false
+            val (left, right) = host.split("::", limit = 2)
+            val leftGroups = left.split(':').filter(String::isNotEmpty)
+            val rightGroups = right.split(':').filter(String::isNotEmpty)
+            val groups = leftGroups + rightGroups
+            if (groups.isEmpty() || groups.size >= 8 || groups.any { !it.isIpv6Hextet() }) return false
+            (leftGroups.firstOrNull() ?: rightGroups.first()).toIntOrNull(16) ?: return false
+        } else {
+            val groups = host.split(':')
+            if (groups.size != 8 || groups.any { !it.isIpv6Hextet() }) return false
+            groups.first().toIntOrNull(16) ?: return false
+        }
     return firstIpv6Segment in 0xfc00..0xfdff ||
         firstIpv6Segment in 0xfe80..0xfebf
 }
+
+private fun String.isIpv6Hextet(): Boolean = length in 1..4 && all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }
 
 private fun maintenanceSignature(vararg fields: String?): String =
     JsonArray(fields.map { field -> field?.let(::JsonPrimitive) ?: JsonNull }).toString()

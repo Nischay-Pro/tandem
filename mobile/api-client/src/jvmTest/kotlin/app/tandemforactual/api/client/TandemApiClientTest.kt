@@ -236,11 +236,25 @@ class TandemApiClientTest {
                 client.pair("http://10.0.0.12:19753", "4DF7-J1M9", "Phone")
                 client.pair("http://172.31.0.8:19753", "4DF7-J1M9", "Phone")
                 client.pair("http://[fd12::1]:19753", "4DF7-J1M9", "Phone")
-                client.pair("http://actual.local:19753", "4DF7-J1M9", "Phone")
+                client.pair("http://[fe80::1]:19753", "4DF7-J1M9", "Phone")
+                client.pair("http://localhost:19753", "4DF7-J1M9", "Phone")
 
-                val publicHost = captureApiException { client.pair("http://tandem.example", "4DF7-J1M9", "Phone") }
-                assertEquals("invalid-server-url", publicHost.errorCode)
-                assertEquals(5, requests.size)
+                listOf(
+                    "http://1.1.1.1:19753",
+                    "http://tandem.example:19753",
+                    "http://tandem.home:19753",
+                    "http://tandem.lan:19753",
+                    "http://actual.local:19753",
+                    "http://fe80:19753",
+                    "http://fd12:19753",
+                    "http://fe80::not-an-address:19753",
+                    "http://192.168..1:19753",
+                    "http://192.168.001.1:19753",
+                ).forEach { address ->
+                    val rejected = captureApiException { client.pair(address, "4DF7-J1M9", "Phone") }
+                    assertEquals("invalid-server-url", rejected.errorCode, address)
+                }
+                assertEquals(6, requests.size)
             } finally {
                 cleanup()
                 Api.baseUrl = previousBaseUrl
