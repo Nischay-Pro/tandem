@@ -64,7 +64,11 @@ export function createTransactionApi(
     },
     async getOperation(principalId, operationId) {
       const operation = await journal.get(operationId);
-      if (!operation || operation.principalId !== principalId) {
+      if (
+        !operation ||
+        operation.principalId !== principalId ||
+        operation.entityType !== "transaction"
+      ) {
         return undefined;
       }
       const conflict =

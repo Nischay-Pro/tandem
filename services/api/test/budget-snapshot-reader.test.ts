@@ -59,6 +59,7 @@ function createApi(overrides: Record<string, unknown> = {}) {
         metadata: ["synthetic"],
       },
     ]),
+    getSchedules: vi.fn(async () => []),
     getBudgetMonths: vi.fn(async () => ["2026-10", "2026-11"]),
     getBudgetMonth: vi.fn(async (month: string) => ({
       month,
@@ -96,6 +97,27 @@ function transactionRow(
 }
 
 describe("Actual budget snapshot reader", () => {
+  it("skips record queries when the session reports an unchanged sync", async () => {
+    const fake = createApi();
+    const runBudgetSnapshot = vi.fn(async <T>(
+      _budgetId: string,
+      operation: (changed: boolean) => Promise<T>,
+    ) => ({ changed: false, value: await operation(false) }));
+    const reader = new ActualBudgetSnapshotReader(
+      { runBudget: fake.runBudget, runBudgetSnapshot } as ActualBudgetSessionPort,
+      fake.actual,
+    );
+
+    await expect(reader.readWithSettings("budget-1")).resolves.toMatchObject({
+      records: [],
+      unchanged: true,
+      displaySettings: { budgetType: "envelope" },
+    });
+    expect(fake.actual.getPreferences).toHaveBeenCalledOnce();
+    expect(fake.actual.getAccounts).not.toHaveBeenCalled();
+    expect(fake.actual.q).not.toHaveBeenCalled();
+  });
+
   it("reads supported Actual entities and pages grouped transactions", async () => {
     const firstPage = [
       {
@@ -132,6 +154,17 @@ describe("Actual budget snapshot reader", () => {
       },
     ];
     const fake = createApi({
+      getSchedules: vi.fn(async () => [
+        {
+          id: "schedule-rent",
+          name: "Rent",
+          next_date: "2026-11-15",
+          payee: "payee-1",
+          account: "account-1",
+          amount: 150_000,
+          completed: false,
+        },
+      ]),
       aqlQuery: vi
         .fn()
         .mockResolvedValueOnce({ data: firstPage })
@@ -149,7 +182,7 @@ describe("Actual budget snapshot reader", () => {
     expect(fake.actual.getCategories).toHaveBeenCalledWith();
     expect(fake.actual.getCategoryGroups).toHaveBeenCalledWith();
     expect(fake.actual.getAccountBalance).toHaveBeenCalledWith("account-1");
-    expect(records).toHaveLength(11);
+    expect(records).toHaveLength(12);
     expect(records).toContainEqual(
       expect.objectContaining({
         type: "account",
@@ -162,6 +195,13 @@ describe("Actual budget snapshot reader", () => {
         type: "category-group",
         id: "category-group-1",
         body: expect.not.objectContaining({ categories: expect.anything() }),
+      }),
+    );
+    expect(records).toContainEqual(
+      expect.objectContaining({
+        type: "schedule",
+        id: "schedule-rent",
+        body: expect.objectContaining({ next_date: "2026-11-15" }),
       }),
     );
     const splitParent = records.find(

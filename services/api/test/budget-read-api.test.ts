@@ -129,6 +129,44 @@ describe("budget read API", () => {
     ).rejects.toThrow("afterType and afterId must be provided together");
   });
 
+  it("returns the stored snapshot when Actual sync reports no table changes", async () => {
+    const fake = createApi();
+    const displaySettings = {
+      budgetType: "envelope" as const,
+      currencyCode: "USD",
+      currencySymbol: "$",
+      currencyFractionDigits: 2,
+      numberFormat: null,
+      hideFraction: false,
+      currencySymbolPosition: "before" as const,
+      currencySpaceBetweenAmountAndSymbol: false,
+    };
+    const readWithSettings = vi.fn(async () => ({
+      records: [],
+      displaySettings,
+      unchanged: true,
+    }));
+    const readSnapshot = vi.fn(async () => snapshot);
+    const store = {
+      applySnapshot: fake.applySnapshot,
+      readSnapshot,
+    } as unknown as BudgetProjectionStore;
+    const api = new BudgetReadApi(
+      { withBudgetLock: fake.lock } as BudgetLockPort,
+      { read: vi.fn(), readWithSettings } as unknown as BudgetSnapshotReader,
+      store,
+      "feed-epoch-1",
+    );
+
+    await expect(api.getSnapshot("budget-1")).resolves.toMatchObject({
+      generation: snapshot.generation,
+      cursor: snapshot.cursor,
+      displaySettings,
+    });
+    expect(readSnapshot).toHaveBeenCalledOnce();
+    expect(fake.applySnapshot).not.toHaveBeenCalled();
+  });
+
   it("supports stores without the refresh-only snapshot checkpoint method", async () => {
     const fake = createApi();
     const api = new BudgetReadApi(

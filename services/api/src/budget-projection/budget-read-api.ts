@@ -75,7 +75,13 @@ export class BudgetReadApi implements BudgetReadApiPort {
     encryptionPassword?: string,
   ): Promise<BudgetProjectionSnapshot> {
     return this.locks.withBudgetLock(budgetId, async () => {
-      const result = await this.readSnapshot(budgetId, encryptionPassword);
+      let result = await this.readSnapshot(budgetId, encryptionPassword);
+      if (result.unchanged) {
+        const cached = await this.store.readSnapshot(budgetId);
+        if (cached)
+          return { ...cached, displaySettings: result.displaySettings };
+        result = await this.readSnapshot(budgetId, encryptionPassword, true);
+      }
       const snapshot = await this.store.applySnapshot(
         budgetId,
         this.feedEpoch,
@@ -109,12 +115,26 @@ export class BudgetReadApi implements BudgetReadApiPort {
       let cursor = request.cursor;
       let displaySettings: BudgetDisplaySettings | null = null;
       if (generation === undefined || cursor === undefined) {
-        const result = await this.readSnapshot(
+        let result = await this.readSnapshot(
           request.budgetId,
           request.encryptionPassword,
         );
         displaySettings = result.displaySettings;
-        if (this.store.applySnapshotForRefresh) {
+        let cached = result.unchanged
+          ? await this.store.readSnapshot(request.budgetId)
+          : undefined;
+        if (result.unchanged && !cached) {
+          result = await this.readSnapshot(
+            request.budgetId,
+            request.encryptionPassword,
+            true,
+          );
+          displaySettings = result.displaySettings;
+        }
+        if (cached) {
+          generation = cached.generation;
+          cursor = cached.cursor;
+        } else if (this.store.applySnapshotForRefresh) {
           const checkpoint = await this.store.applySnapshotForRefresh(
             request.budgetId,
             this.feedEpoch,
@@ -187,6 +207,29 @@ export class BudgetReadApi implements BudgetReadApiPort {
     encryptionPassword?: string,
   ): Promise<BudgetDisplaySettings | null> {
     const result = await this.readSnapshot(budgetId, encryptionPassword);
+    if (result.unchanged) {
+      const cached = await this.store.readSnapshot(budgetId);
+      if (cached) return result.displaySettings;
+      const fullResult = await this.readSnapshot(
+        budgetId,
+        encryptionPassword,
+        true,
+      );
+      if (this.store.applySnapshotForRefresh) {
+        await this.store.applySnapshotForRefresh(
+          budgetId,
+          this.feedEpoch,
+          fullResult.records,
+        );
+      } else {
+        await this.store.applySnapshot(
+          budgetId,
+          this.feedEpoch,
+          fullResult.records,
+        );
+      }
+      return fullResult.displaySettings;
+    }
     if (this.store.applySnapshotForRefresh) {
       await this.store.applySnapshotForRefresh(
         budgetId,
@@ -202,10 +245,15 @@ export class BudgetReadApi implements BudgetReadApiPort {
   private async readSnapshot(
     budgetId: string,
     encryptionPassword?: string,
+    forceFull = false,
   ): Promise<{
     records: BudgetProjectionRecord[];
     displaySettings: BudgetDisplaySettings | null;
+    unchanged?: boolean;
   }> {
+    if (forceFull && this.reader.readFullWithSettings) {
+      return this.reader.readFullWithSettings(budgetId, encryptionPassword);
+    }
     if (this.reader.readWithSettings) {
       return this.reader.readWithSettings(budgetId, encryptionPassword);
     }

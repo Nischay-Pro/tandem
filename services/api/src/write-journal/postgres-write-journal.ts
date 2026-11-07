@@ -468,6 +468,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
           SELECT operation_id
           FROM companion_operations
           WHERE status IN ('committed', 'rejected')
+            AND entity_type <> 'budget-maintenance'
             AND completed_at <= clock_timestamp() - ($1 * interval '1 day')
             AND payload_compacted_at IS NULL
           ORDER BY completed_at, operation_id

@@ -6,10 +6,34 @@ import type { BudgetLockPort } from "../src/actual/transaction-reconciler.js";
 
 function createFake() {
   const events: string[] = [];
-  const categories: Array<{ id: string; name: string; is_income: boolean; group_id: string; hidden: boolean }> = [
-    { id: "expense", name: "Expense", is_income: false, group_id: "group-1", hidden: false },
-    { id: "expense-2", name: "Expense 2", is_income: false, group_id: "group-1", hidden: false },
-    { id: "income", name: "Income", is_income: true, group_id: "group-income", hidden: false },
+  const categories: Array<{
+    id: string;
+    name: string;
+    is_income: boolean;
+    group_id: string;
+    hidden: boolean;
+  }> = [
+    {
+      id: "expense",
+      name: "Expense",
+      is_income: false,
+      group_id: "group-1",
+      hidden: false,
+    },
+    {
+      id: "expense-2",
+      name: "Expense 2",
+      is_income: false,
+      group_id: "group-1",
+      hidden: false,
+    },
+    {
+      id: "income",
+      name: "Income",
+      is_income: true,
+      group_id: "group-income",
+      hidden: false,
+    },
   ];
   const runBudgetCalls: Array<{
     budgetId: string;
@@ -35,6 +59,8 @@ function createFake() {
   const client = {
     runBankSync: vi.fn(async () => undefined),
     createAccount: vi.fn(async () => "new-account"),
+    updateAccount: vi.fn(async () => undefined),
+    getAccountGroups: vi.fn(async () => [{ id: "credit", name: "Credit" }]),
     closeAccount: vi.fn(async () => undefined),
     getAccounts: vi.fn(async () => [
       { id: "source", closed: false },
@@ -43,9 +69,33 @@ function createFake() {
     ]),
     getAccountBalance: vi.fn(async () => 0),
     getCategories: vi.fn(async () => [...categories]),
-    getCategoryGroups: vi.fn(async () => [{ id: "group-1", name: "Food", is_income: false, hidden: false }]),
+    getCategoryGroups: vi.fn(async () => [
+      { id: "group-1", name: "Food", is_income: false, hidden: false },
+    ]),
     createCategory: vi.fn(async () => "new-category"),
     setBudgetAmount: vi.fn(async () => undefined),
+    getPreferences: vi.fn(async () => ({ budgetType: "envelope" })),
+    getBudgetMonth: vi.fn(async () => ({
+      categoryGroups: [
+        {
+          categories: [
+            {
+              id: "expense",
+              is_income: false,
+              budgeted: 50_000,
+              balance: 30_000,
+            },
+            {
+              id: "expense-2",
+              is_income: false,
+              budgeted: 20_000,
+              balance: 15_000,
+            },
+          ],
+        },
+      ],
+    })),
+    batchBudgetUpdates: vi.fn(async (work: () => Promise<void>) => work()),
     updateCategory: vi.fn(async (id: string, fields: { name?: string }) => {
       const category = categories.find((candidate) => candidate.id === id);
       if (category && fields.name) category.name = fields.name;
@@ -90,24 +140,49 @@ describe("Actual budget maintenance API", () => {
     ]);
   });
 
+  it("places a new account in the selected Actual account group", async () => {
+    const fake = createFake();
+
+    await fake.api.createAccount("budget-1", "Travel card", false, "credit");
+
+    expect(fake.client.createAccount).toHaveBeenCalledWith({
+      name: "Travel card",
+      offbudget: false,
+    });
+    expect(fake.client.updateAccount).toHaveBeenCalledWith("new-account", {
+      account_group_id: "credit",
+    });
+  });
+
   it("creates a category in an active group and rejects duplicate names", async () => {
     const fake = createFake();
 
-    await expect(fake.api.createCategory("budget-1", "Dining", "group-1")).resolves.toBe("new-category");
+    await expect(
+      fake.api.createCategory("budget-1", "Dining", "group-1"),
+    ).resolves.toBe("new-category");
     expect(fake.client.createCategory).toHaveBeenCalledWith({
       name: "Dining",
       group_id: "group-1",
       is_income: false,
       hidden: false,
     });
-    expect(fake.runBudgetCalls.at(-1)).toEqual({ budgetId: "budget-1", options: { synchronizeAfterWrite: true } });
+    expect(fake.runBudgetCalls.at(-1)).toEqual({
+      budgetId: "budget-1",
+      options: { synchronizeAfterWrite: true },
+    });
 
     fake.client.getCategories.mockResolvedValueOnce([
-      { id: "existing", name: "Dining", group_id: "group-1", is_income: false, hidden: false },
+      {
+        id: "existing",
+        name: "Dining",
+        group_id: "group-1",
+        is_income: false,
+        hidden: false,
+      },
     ]);
-    await expect(fake.api.createCategory("budget-1", " dining ", "group-1")).rejects.toThrow(
-      "A category with this name already exists in that group",
-    );
+    await expect(
+      fake.api.createCategory("budget-1", " dining ", "group-1"),
+    ).rejects.toThrow("A category with this name already exists in that group");
     expect(fake.client.createCategory).toHaveBeenCalledOnce();
   });
 
@@ -116,8 +191,58 @@ describe("Actual budget maintenance API", () => {
 
     await fake.api.setBudgetAmount("budget-1", "expense", "2026-11", 125_000);
 
-    expect(fake.client.setBudgetAmount).toHaveBeenCalledWith("2026-11", "expense", 125_000);
-    expect(fake.runBudgetCalls.at(-1)).toEqual({ budgetId: "budget-1", options: { synchronizeAfterWrite: true } });
+    expect(fake.client.setBudgetAmount).toHaveBeenCalledWith(
+      "2026-11",
+      "expense",
+      125_000,
+    );
+    expect(fake.runBudgetCalls.at(-1)).toEqual({
+      budgetId: "budget-1",
+      options: { synchronizeAfterWrite: true },
+    });
+  });
+
+  it("moves category money in one Actual budget batch", async () => {
+    const fake = createFake();
+
+    await fake.api.moveMoney(
+      "budget-1",
+      "2026-11",
+      "expense",
+      "expense-2",
+      10_000,
+    );
+
+    expect(fake.client.batchBudgetUpdates).toHaveBeenCalledOnce();
+    expect(fake.client.setBudgetAmount).toHaveBeenNthCalledWith(
+      1,
+      "2026-11",
+      "expense",
+      40_000,
+    );
+    expect(fake.client.setBudgetAmount).toHaveBeenNthCalledWith(
+      2,
+      "2026-11",
+      "expense-2",
+      30_000,
+    );
+  });
+
+  it("rejects category moves with insufficient available money or tracking mode", async () => {
+    const fake = createFake();
+
+    await expect(
+      fake.api.moveMoney("budget-1", "2026-11", "expense", "expense-2", 40_000),
+    ).rejects.toThrow(
+      "The source category does not have enough available money",
+    );
+    fake.client.getPreferences.mockResolvedValueOnce({
+      budgetType: "tracking",
+    });
+    await expect(
+      fake.api.moveMoney("budget-1", "2026-11", "expense", "expense-2", 10_000),
+    ).rejects.toThrow("Money can only be moved in an envelope budget");
+    expect(fake.client.batchBudgetUpdates).not.toHaveBeenCalled();
   });
 
   it("validates account close destinations before calling Actual", async () => {

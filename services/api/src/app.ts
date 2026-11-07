@@ -1,4 +1,5 @@
 import swagger from "@fastify/swagger";
+import { randomUUID } from "node:crypto";
 import Fastify, {
   type FastifyInstance,
   type FastifyRequest,
@@ -14,7 +15,9 @@ import { PairingRateLimiter } from "./auth/pairing-rate-limiter.js";
 import { logSecurityAuditEvent } from "./security-audit.js";
 import type { TransactionApiPort } from "./actual/transaction-api.js";
 import {
+  BudgetMaintenanceBusyError,
   BudgetMaintenanceInputError,
+  MAX_BUDGET_AMOUNT_MINOR,
   type BudgetMaintenanceApiPort,
 } from "./actual/budget-maintenance-api.js";
 import type { BudgetReadApiPort } from "./budget-projection/budget-read-api.js";
@@ -26,6 +29,7 @@ import {
   IDEMPOTENCY_KEY_MAX_LENGTH,
   IdempotencyKeyReuseError,
   OperationIdReuseError,
+  type DurableWriteJournal,
   type JsonValue,
   type OperationConflict,
   type WriteOperation,
@@ -66,6 +70,10 @@ export interface ApiAppOptions {
   deviceAuth?: DeviceAuthorization;
   transactionApi?: TransactionApiPort;
   budgetMaintenanceApi?: BudgetMaintenanceApiPort;
+  maintenanceJournal?: Pick<
+    DurableWriteJournal,
+    "enqueue" | "claim" | "markCommitted" | "markRejected" | "markUncertain"
+  >;
   budgetReadApi?: BudgetReadApiPort;
   trustProxy?: false | string[];
 }
@@ -139,6 +147,7 @@ export async function buildApiApp(
       app,
       options.deviceAuth,
       options.budgetMaintenanceApi,
+      options.maintenanceJournal,
     );
     registerBudgetReadRoutes(app, options.deviceAuth, options.budgetReadApi);
   }
@@ -966,6 +975,7 @@ interface BudgetCategoryRouteParams extends BudgetRouteParams {
 interface BudgetAccountCreateBody {
   name: string;
   offbudget: boolean;
+  accountGroupId?: string | null;
 }
 
 interface BudgetAccountCloseBody {
@@ -984,6 +994,13 @@ interface BudgetCategoryCreateBody {
 
 interface BudgetCategoryBudgetAmountBody {
   month: string;
+  amountMinor: number;
+}
+
+interface BudgetMoveMoneyBody {
+  month: string;
+  fromCategoryId: string;
+  toCategoryId: string;
   amountMinor: number;
 }
 
@@ -1008,12 +1025,14 @@ interface BudgetSnapshotPageQuery {
 
 interface BudgetReadHeaders {
   "x-budget-encryption-password"?: string;
+  "idempotency-key"?: string;
 }
 
 function registerBudgetMaintenanceRoutes(
   app: FastifyInstance,
   deviceAuth: DeviceAuthorization,
   maintenanceApi: BudgetMaintenanceApiPort | undefined,
+  journal: ApiAppOptions["maintenanceJournal"],
 ): void {
   const paramsSchema = {
     type: "object",
@@ -1074,7 +1093,14 @@ function registerBudgetMaintenanceRoutes(
         minLength: 1,
         maxLength: 1_024,
       },
+      "idempotency-key": {
+        type: "string",
+        minLength: 1,
+        maxLength: IDEMPOTENCY_KEY_MAX_LENGTH,
+        pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+      },
     },
+    required: ["idempotency-key"],
     additionalProperties: true,
   };
   const errorSchema = {
@@ -1095,6 +1121,8 @@ function registerBudgetMaintenanceRoutes(
     400: errorSchema,
     401: errorSchema,
     404: errorSchema,
+    409: errorSchema,
+    429: errorSchema,
     502: errorSchema,
     503: errorSchema,
   };
@@ -1121,10 +1149,23 @@ function registerBudgetMaintenanceRoutes(
       if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
         return transactionNotFound(reply);
       if (!maintenanceApi) return actualNotConfigured(reply);
+      if (!journal) return actualNotConfigured(reply);
       try {
-        await maintenanceApi.runBankSync(
+        const result = await runMaintenanceOperation(
+          journal,
+          request,
+          device,
           request.params.budgetId,
-          request.headers["x-budget-encryption-password"],
+          "bank-sync",
+          null,
+          {},
+          async () => {
+            await maintenanceApi.runBankSync(
+              request.params.budgetId,
+              request.headers["x-budget-encryption-password"],
+            );
+            return { status: "ok" };
+          },
         );
         logBudgetMaintenanceEvent(
           request,
@@ -1134,8 +1175,26 @@ function registerBudgetMaintenanceRoutes(
           "success",
         );
         reply.header("cache-control", "no-store");
-        return reply.code(200).send({ status: "ok" });
+        return reply.code(200).send(result);
       } catch (error) {
+        if (error instanceof BudgetMaintenanceBusyError) {
+          logBudgetMaintenanceEvent(
+            request,
+            device,
+            request.params.budgetId,
+            "bank_sync",
+            "rejected",
+          );
+          reply.header("retry-after", error.retryAfterSeconds.toString());
+          return reply.code(429).send({
+            error: { code: "bank_sync_busy", message: error.message },
+          });
+        }
+        if (error instanceof MaintenanceOperationConflictError) {
+          return reply.code(409).send({
+            error: { code: error.code, message: error.message },
+          });
+        }
         logBudgetMaintenanceEvent(
           request,
           device,
@@ -1179,6 +1238,11 @@ function registerBudgetMaintenanceRoutes(
               pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
             },
             offbudget: { type: "boolean" },
+            accountGroupId: {
+              type: ["string", "null"],
+              minLength: 1,
+              maxLength: 500,
+            },
           },
           required: ["name", "offbudget"],
           additionalProperties: false,
@@ -1194,13 +1258,31 @@ function registerBudgetMaintenanceRoutes(
       if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
         return transactionNotFound(reply);
       if (!maintenanceApi) return actualNotConfigured(reply);
+      if (!journal) return actualNotConfigured(reply);
       try {
         const name = request.body.name.trim();
-        await maintenanceApi.createAccount(
+        const result = await runMaintenanceOperation(
+          journal,
+          request,
+          device,
           request.params.budgetId,
-          name,
-          request.body.offbudget,
-          request.headers["x-budget-encryption-password"],
+          "account-create",
+          null,
+          {
+            name,
+            offbudget: request.body.offbudget,
+            accountGroupId: request.body.accountGroupId ?? null,
+          },
+          async () => {
+            await maintenanceApi.createAccount(
+              request.params.budgetId,
+              name,
+              request.body.offbudget,
+              request.body.accountGroupId ?? null,
+              request.headers["x-budget-encryption-password"],
+            );
+            return { status: "ok" };
+          },
         );
         logBudgetMaintenanceEvent(
           request,
@@ -1210,7 +1292,7 @@ function registerBudgetMaintenanceRoutes(
           "success",
         );
         reply.header("cache-control", "no-store");
-        return reply.code(200).send({ status: "ok" });
+        return reply.code(200).send(result);
       } catch (error) {
         if (error instanceof BudgetMaintenanceInputError) {
           logBudgetMaintenanceEvent(
@@ -1220,9 +1302,19 @@ function registerBudgetMaintenanceRoutes(
             "account_create",
             "rejected",
           );
-          return reply.code(400).send({
-            error: { code: "invalid_request", message: error.message },
-          });
+          return reply
+            .code(
+              error instanceof MaintenanceOperationConflictError ? 409 : 400,
+            )
+            .send({
+              error: {
+                code:
+                  error instanceof MaintenanceOperationConflictError
+                    ? error.code
+                    : "invalid_request",
+                message: error.message,
+              },
+            });
         }
         logBudgetMaintenanceEvent(
           request,
@@ -1279,13 +1371,29 @@ function registerBudgetMaintenanceRoutes(
       if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
         return transactionNotFound(reply);
       if (!maintenanceApi) return actualNotConfigured(reply);
+      if (!journal) return actualNotConfigured(reply);
       try {
-        await maintenanceApi.closeAccount(
+        const result = await runMaintenanceOperation(
+          journal,
+          request,
+          device,
           request.params.budgetId,
+          "account-close",
           request.params.accountId,
-          request.body.transferAccountId,
-          request.body.transferCategoryId,
-          request.headers["x-budget-encryption-password"],
+          {
+            transferAccountId: request.body.transferAccountId,
+            transferCategoryId: request.body.transferCategoryId,
+          },
+          async () => {
+            await maintenanceApi.closeAccount(
+              request.params.budgetId,
+              request.params.accountId,
+              request.body.transferAccountId,
+              request.body.transferCategoryId,
+              request.headers["x-budget-encryption-password"],
+            );
+            return { status: "ok" };
+          },
         );
         logBudgetMaintenanceEvent(
           request,
@@ -1296,7 +1404,7 @@ function registerBudgetMaintenanceRoutes(
           request.params.accountId,
         );
         reply.header("cache-control", "no-store");
-        return reply.code(200).send({ status: "ok" });
+        return reply.code(200).send(result);
       } catch (error) {
         if (error instanceof BudgetMaintenanceInputError) {
           logBudgetMaintenanceEvent(
@@ -1307,9 +1415,19 @@ function registerBudgetMaintenanceRoutes(
             "rejected",
             request.params.accountId,
           );
-          return reply.code(400).send({
-            error: { code: "invalid_request", message: error.message },
-          });
+          return reply
+            .code(
+              error instanceof MaintenanceOperationConflictError ? 409 : 400,
+            )
+            .send({
+              error: {
+                code:
+                  error instanceof MaintenanceOperationConflictError
+                    ? error.code
+                    : "invalid_request",
+                message: error.message,
+              },
+            });
         }
         logBudgetMaintenanceEvent(
           request,
@@ -1371,6 +1489,7 @@ function registerBudgetMaintenanceRoutes(
           400: errorSchema,
           401: errorSchema,
           404: errorSchema,
+          409: errorSchema,
           502: errorSchema,
           503: errorSchema,
         },
@@ -1384,13 +1503,27 @@ function registerBudgetMaintenanceRoutes(
       if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
         return transactionNotFound(reply);
       if (!maintenanceApi) return actualNotConfigured(reply);
+      if (!journal) return actualNotConfigured(reply);
       try {
-        const categoryId = await maintenanceApi.createCategory(
+        const name = request.body.name.trim();
+        const categoryResult = await runMaintenanceOperation(
+          journal,
+          request,
+          device,
           request.params.budgetId,
-          request.body.name.trim(),
-          request.body.categoryGroupId,
-          request.headers["x-budget-encryption-password"],
+          "category-create",
+          null,
+          { name, categoryGroupId: request.body.categoryGroupId },
+          async () => ({
+            categoryId: await maintenanceApi.createCategory(
+              request.params.budgetId,
+              name,
+              request.body.categoryGroupId,
+              request.headers["x-budget-encryption-password"],
+            ),
+          }),
         );
+        const categoryId = categoryResult.categoryId;
         logBudgetMaintenanceEvent(
           request,
           device,
@@ -1410,9 +1543,19 @@ function registerBudgetMaintenanceRoutes(
             "category_create",
             "rejected",
           );
-          return reply.code(400).send({
-            error: { code: "invalid_request", message: error.message },
-          });
+          return reply
+            .code(
+              error instanceof MaintenanceOperationConflictError ? 409 : 400,
+            )
+            .send({
+              error: {
+                code:
+                  error instanceof MaintenanceOperationConflictError
+                    ? error.code
+                    : "invalid_request",
+                message: error.message,
+              },
+            });
         }
         logBudgetMaintenanceEvent(
           request,
@@ -1445,7 +1588,11 @@ function registerBudgetMaintenanceRoutes(
           type: "object",
           properties: {
             month: { type: "string", pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$" },
-            amountMinor: { type: "integer", minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
+            amountMinor: {
+              type: "integer",
+              minimum: 0,
+              maximum: MAX_BUDGET_AMOUNT_MINOR,
+            },
           },
           required: ["month", "amountMinor"],
           additionalProperties: false,
@@ -1461,13 +1608,26 @@ function registerBudgetMaintenanceRoutes(
       if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
         return transactionNotFound(reply);
       if (!maintenanceApi) return actualNotConfigured(reply);
+      if (!journal) return actualNotConfigured(reply);
       try {
-        await maintenanceApi.setBudgetAmount(
+        const result = await runMaintenanceOperation(
+          journal,
+          request,
+          device,
           request.params.budgetId,
+          "category-budget-amount",
           request.params.categoryId,
-          request.body.month,
-          request.body.amountMinor,
-          request.headers["x-budget-encryption-password"],
+          { month: request.body.month, amountMinor: request.body.amountMinor },
+          async () => {
+            await maintenanceApi.setBudgetAmount(
+              request.params.budgetId,
+              request.params.categoryId,
+              request.body.month,
+              request.body.amountMinor,
+              request.headers["x-budget-encryption-password"],
+            );
+            return { status: "ok" };
+          },
         );
         logBudgetMaintenanceEvent(
           request,
@@ -1478,7 +1638,7 @@ function registerBudgetMaintenanceRoutes(
           request.params.categoryId,
         );
         reply.header("cache-control", "no-store");
-        return reply.code(200).send({ status: "ok" });
+        return reply.code(200).send(result);
       } catch (error) {
         if (error instanceof BudgetMaintenanceInputError) {
           logBudgetMaintenanceEvent(
@@ -1489,9 +1649,19 @@ function registerBudgetMaintenanceRoutes(
             "rejected",
             request.params.categoryId,
           );
-          return reply.code(400).send({
-            error: { code: "invalid_request", message: error.message },
-          });
+          return reply
+            .code(
+              error instanceof MaintenanceOperationConflictError ? 409 : 400,
+            )
+            .send({
+              error: {
+                code:
+                  error instanceof MaintenanceOperationConflictError
+                    ? error.code
+                    : "invalid_request",
+                message: error.message,
+              },
+            });
         }
         logBudgetMaintenanceEvent(
           request,
@@ -1502,6 +1672,128 @@ function registerBudgetMaintenanceRoutes(
           request.params.categoryId,
         );
         reportTransactionFailure("Actual category budget update failed", error);
+        return actualRequestFailed(reply);
+      }
+    },
+  );
+
+  app.post<{
+    Params: BudgetRouteParams;
+    Headers: BudgetReadHeaders;
+    Body: BudgetMoveMoneyBody;
+  }>(
+    "/api/v1/budgets/:budgetId/categories/move-money",
+    {
+      schema: {
+        tags: ["Budgets"],
+        operationId: "moveMoneyBetweenCategories",
+        summary: "Move an assigned amount between Actual Budget categories",
+        security: [{ bearerAuth: [] }],
+        params: paramsSchema,
+        headers: headersSchema,
+        body: {
+          type: "object",
+          properties: {
+            month: { type: "string", pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$" },
+            fromCategoryId: {
+              type: "string",
+              minLength: 1,
+              maxLength: 500,
+              pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+            },
+            toCategoryId: {
+              type: "string",
+              minLength: 1,
+              maxLength: 500,
+              pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+            },
+            amountMinor: {
+              type: "integer",
+              minimum: 1,
+              maximum: MAX_BUDGET_AMOUNT_MINOR,
+            },
+          },
+          required: ["month", "fromCategoryId", "toCategoryId", "amountMinor"],
+          additionalProperties: false,
+        },
+        response: commonResponseSchema,
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(deviceAuth, request, reply);
+      if (!device) return reply;
+      if (request.validationError) return invalidBudgetRequest(reply);
+      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
+        return transactionNotFound(reply);
+      if (!maintenanceApi) return actualNotConfigured(reply);
+      if (!journal) return actualNotConfigured(reply);
+      try {
+        const { month, fromCategoryId, toCategoryId, amountMinor } =
+          request.body;
+        const result = await runMaintenanceOperation(
+          journal,
+          request,
+          device,
+          request.params.budgetId,
+          "category-move-money",
+          fromCategoryId,
+          { month, fromCategoryId, toCategoryId, amountMinor },
+          async () => {
+            await maintenanceApi.moveMoney(
+              request.params.budgetId,
+              month,
+              fromCategoryId,
+              toCategoryId,
+              amountMinor,
+              request.headers["x-budget-encryption-password"],
+            );
+            return { status: "ok" };
+          },
+        );
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "category_move_money",
+          "success",
+          fromCategoryId,
+        );
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send(result);
+      } catch (error) {
+        if (error instanceof BudgetMaintenanceInputError) {
+          logBudgetMaintenanceEvent(
+            request,
+            device,
+            request.params.budgetId,
+            "category_move_money",
+            "rejected",
+            request.body.fromCategoryId,
+          );
+          return reply
+            .code(
+              error instanceof MaintenanceOperationConflictError ? 409 : 400,
+            )
+            .send({
+              error: {
+                code:
+                  error instanceof MaintenanceOperationConflictError
+                    ? error.code
+                    : "invalid_request",
+                message: error.message,
+              },
+            });
+        }
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "category_move_money",
+          "failed",
+          request.body.fromCategoryId,
+        );
+        reportTransactionFailure("Actual category money move failed", error);
         return actualRequestFailed(reply);
       }
     },
@@ -1545,13 +1837,26 @@ function registerBudgetMaintenanceRoutes(
       if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
         return transactionNotFound(reply);
       if (!maintenanceApi) return actualNotConfigured(reply);
+      if (!journal) return actualNotConfigured(reply);
       try {
         const name = request.body.name.trim();
-        await maintenanceApi.renameCategory(
+        const result = await runMaintenanceOperation(
+          journal,
+          request,
+          device,
           request.params.budgetId,
+          "category-rename",
           request.params.categoryId,
-          name,
-          request.headers["x-budget-encryption-password"],
+          { name },
+          async () => {
+            await maintenanceApi.renameCategory(
+              request.params.budgetId,
+              request.params.categoryId,
+              name,
+              request.headers["x-budget-encryption-password"],
+            );
+            return { status: "ok" };
+          },
         );
         logBudgetMaintenanceEvent(
           request,
@@ -1562,7 +1867,7 @@ function registerBudgetMaintenanceRoutes(
           request.params.categoryId,
         );
         reply.header("cache-control", "no-store");
-        return reply.code(200).send({ status: "ok" });
+        return reply.code(200).send(result);
       } catch (error) {
         if (error instanceof BudgetMaintenanceInputError) {
           logBudgetMaintenanceEvent(
@@ -1573,9 +1878,19 @@ function registerBudgetMaintenanceRoutes(
             "rejected",
             request.params.categoryId,
           );
-          return reply.code(400).send({
-            error: { code: "invalid_request", message: error.message },
-          });
+          return reply
+            .code(
+              error instanceof MaintenanceOperationConflictError ? 409 : 400,
+            )
+            .send({
+              error: {
+                code:
+                  error instanceof MaintenanceOperationConflictError
+                    ? error.code
+                    : "invalid_request",
+                message: error.message,
+              },
+            });
         }
         logBudgetMaintenanceEvent(
           request,
@@ -1629,12 +1944,25 @@ function registerBudgetMaintenanceRoutes(
       if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
         return transactionNotFound(reply);
       if (!maintenanceApi) return actualNotConfigured(reply);
+      if (!journal) return actualNotConfigured(reply);
       try {
-        await maintenanceApi.deleteCategory(
+        const result = await runMaintenanceOperation(
+          journal,
+          request,
+          device,
           request.params.budgetId,
+          "category-delete",
           request.params.categoryId,
-          request.body.transferCategoryId,
-          request.headers["x-budget-encryption-password"],
+          { transferCategoryId: request.body.transferCategoryId },
+          async () => {
+            await maintenanceApi.deleteCategory(
+              request.params.budgetId,
+              request.params.categoryId,
+              request.body.transferCategoryId,
+              request.headers["x-budget-encryption-password"],
+            );
+            return { status: "ok" };
+          },
         );
         logBudgetMaintenanceEvent(
           request,
@@ -1645,7 +1973,7 @@ function registerBudgetMaintenanceRoutes(
           request.params.categoryId,
         );
         reply.header("cache-control", "no-store");
-        return reply.code(200).send({ status: "ok" });
+        return reply.code(200).send(result);
       } catch (error) {
         if (error instanceof BudgetMaintenanceInputError) {
           logBudgetMaintenanceEvent(
@@ -1656,9 +1984,19 @@ function registerBudgetMaintenanceRoutes(
             "rejected",
             request.params.categoryId,
           );
-          return reply.code(400).send({
-            error: { code: "invalid_request", message: error.message },
-          });
+          return reply
+            .code(
+              error instanceof MaintenanceOperationConflictError ? 409 : 400,
+            )
+            .send({
+              error: {
+                code:
+                  error instanceof MaintenanceOperationConflictError
+                    ? error.code
+                    : "invalid_request",
+                message: error.message,
+              },
+            });
         }
         logBudgetMaintenanceEvent(
           request,
@@ -1672,6 +2010,121 @@ function registerBudgetMaintenanceRoutes(
         return actualRequestFailed(reply);
       }
     },
+  );
+}
+
+class MaintenanceOperationConflictError extends BudgetMaintenanceInputError {
+  constructor(
+    readonly code:
+      | "idempotency_key_reused"
+      | "operation_in_progress"
+      | "operation_uncertain"
+      | "operation_rejected"
+      | "operation_result_unavailable",
+    message: string,
+  ) {
+    super(message);
+    this.name = "MaintenanceOperationConflictError";
+  }
+}
+
+async function runMaintenanceOperation<T extends JsonValue>(
+  journal: NonNullable<ApiAppOptions["maintenanceJournal"]>,
+  request: FastifyRequest,
+  device: { deviceId: string; principalId: string },
+  budgetId: string,
+  action: string,
+  entityId: string | null,
+  patch: { [key: string]: JsonValue },
+  work: () => Promise<T>,
+): Promise<T> {
+  const idempotencyKey = request.headers["idempotency-key"];
+  if (
+    typeof idempotencyKey !== "string" ||
+    idempotencyKey.trim().length === 0
+  ) {
+    throw new BudgetMaintenanceInputError("An idempotency key is required");
+  }
+
+  let queued;
+  try {
+    queued = await journal.enqueue({
+      operationId: randomUUID(),
+      principalId: device.principalId,
+      budgetId,
+      idempotencyKey,
+      entityType: "budget-maintenance",
+      action,
+      entityId,
+      baseRevision: null,
+      baseSnapshot: {},
+      patch,
+    });
+  } catch (error) {
+    if (error instanceof IdempotencyKeyReuseError) {
+      throw new MaintenanceOperationConflictError(
+        "idempotency_key_reused",
+        "This idempotency key was already used for a different change. Submit the change again.",
+      );
+    }
+    throw error;
+  }
+
+  let operation = queued.operation;
+  if (operation.status === "committed") {
+    if (operation.actualResult !== null) return operation.actualResult as T;
+    throw new MaintenanceOperationConflictError(
+      "operation_result_unavailable",
+      "This earlier change was applied, but its result has expired. Refresh the budget before continuing.",
+    );
+  }
+  if (operation.status === "queued") {
+    const claim = await journal.claim(operation.operationId);
+    operation = claim.operation;
+    if (claim.claimed) {
+      try {
+        const result = await work();
+        await journal.markCommitted(operation.operationId, result);
+        return result;
+      } catch (error) {
+        if (error instanceof BudgetMaintenanceBusyError) {
+          await journal.markRejected(operation.operationId, "bank-sync-busy");
+          throw error;
+        }
+        if (error instanceof BudgetMaintenanceInputError) {
+          await journal.markRejected(operation.operationId, "invalid-request");
+          throw error;
+        }
+        await journal.markUncertain(
+          operation.operationId,
+          "actual-result-unknown",
+        );
+        throw error;
+      }
+    }
+  }
+
+  if (operation.status === "applying" || operation.status === "queued") {
+    throw new MaintenanceOperationConflictError(
+      "operation_in_progress",
+      "This change is still being confirmed. Check the budget before trying again.",
+    );
+  }
+  if (operation.status === "uncertain") {
+    throw new MaintenanceOperationConflictError(
+      "operation_uncertain",
+      "Tandem could not confirm whether this change reached Actual. Check the budget before submitting it again.",
+    );
+  }
+  if (operation.status === "rejected") {
+    throw new MaintenanceOperationConflictError(
+      "operation_rejected",
+      "This change was rejected earlier. Correct it and submit it again with a new request.",
+    );
+  }
+  throw new MaintenanceOperationConflictError(
+    "operation_uncertain",
+    "This change was not applied. Submit it again with a new request.",
   );
 }
 
@@ -1763,6 +2216,7 @@ function registerBudgetReadRoutes(
   const displaySettingsSchema = {
     type: "object",
     properties: {
+      budgetType: { type: "string", enum: ["envelope", "tracking"] },
       currencyCode: { type: "string", pattern: "^[A-Z]{3}$" },
       currencySymbol: { type: "string" },
       currencyFractionDigits: { type: "integer", minimum: 0 },
@@ -1791,6 +2245,7 @@ function registerBudgetReadRoutes(
       currencySpaceBetweenAmountAndSymbol: { type: "boolean" },
     },
     required: [
+      "budgetType",
       "currencyCode",
       "currencySymbol",
       "currencyFractionDigits",

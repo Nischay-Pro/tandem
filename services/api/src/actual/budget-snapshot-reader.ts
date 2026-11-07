@@ -28,6 +28,7 @@ export type ActualBudgetReadApi = Pick<
   | "getCategories"
   | "getCategoryGroups"
   | "getPayees"
+  | "getSchedules"
   | "getBudgetMonths"
   | "getBudgetMonth"
   | "getPreferences"
@@ -58,12 +59,12 @@ export class ActualBudgetSnapshotReader implements BudgetSnapshotReader {
     budgetId: string,
     encryptionPassword?: string,
   ): Promise<BudgetProjectionRecord[]> {
-    return this.readWithSettings(budgetId, encryptionPassword).then(
+    return this.readFullWithSettings(budgetId, encryptionPassword).then(
       ({ records }) => records,
     );
   }
 
-  readWithSettings(
+  readFullWithSettings(
     budgetId: string,
     encryptionPassword?: string,
   ): Promise<BudgetSnapshotReadResult> {
@@ -74,10 +75,35 @@ export class ActualBudgetSnapshotReader implements BudgetSnapshotReader {
     );
   }
 
-  private async readLoadedBudget(): Promise<BudgetSnapshotReadResult> {
-    const displaySettings = readDisplaySettings(
-      await this.actual.getPreferences(),
+  readWithSettings(
+    budgetId: string,
+    encryptionPassword?: string,
+  ): Promise<BudgetSnapshotReadResult> {
+    if (this.session.runBudgetSnapshot) {
+      return this.session
+        .runBudgetSnapshot(
+          budgetId,
+          async (changed) =>
+            changed
+              ? this.readLoadedBudget()
+              : {
+                  records: [],
+                  displaySettings: await this.readCurrentDisplaySettings(),
+                  unchanged: true,
+                },
+          encryptionPassword === undefined ? undefined : { encryptionPassword },
+        )
+        .then(({ value }) => value);
+    }
+    return this.session.runBudget(
+      budgetId,
+      () => this.readLoadedBudget(),
+      encryptionPassword === undefined ? undefined : { encryptionPassword },
     );
+  }
+
+  private async readLoadedBudget(): Promise<BudgetSnapshotReadResult> {
+    const displaySettings = await this.readCurrentDisplaySettings();
     const records: BudgetProjectionRecord[] = [];
 
     const accountGroups = requireArray(
@@ -121,6 +147,12 @@ export class ActualBudgetSnapshotReader implements BudgetSnapshotReader {
     const payees = requireArray(await this.actual.getPayees(), "payees");
     records.push(...payees.map((value) => this.record("payee", value)));
 
+    const schedules = requireArray(
+      await this.actual.getSchedules(),
+      "schedules",
+    );
+    records.push(...schedules.map((value) => this.record("schedule", value)));
+
     const months = requireArray(
       await this.actual.getBudgetMonths(),
       "budget months",
@@ -160,6 +192,10 @@ export class ActualBudgetSnapshotReader implements BudgetSnapshotReader {
     );
     assertUniqueRecords(records);
     return { records, displaySettings };
+  }
+
+  private async readCurrentDisplaySettings(): Promise<BudgetDisplaySettings> {
+    return readDisplaySettings(await this.actual.getPreferences());
   }
 
   private async readTransactions(): Promise<BudgetProjectionRecord[]> {
@@ -383,6 +419,7 @@ function readDisplaySettings(value: unknown): BudgetDisplaySettings {
   const symbolPosition = preferences.currencySymbolPosition;
 
   return {
+    budgetType: preferences.budgetType === "tracking" ? "tracking" : "envelope",
     currencyCode,
     currencySymbol: currencyMetadata.symbol,
     currencyFractionDigits: currencyMetadata.decimalPlaces,

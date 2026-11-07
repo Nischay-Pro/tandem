@@ -66,6 +66,11 @@ export interface ActualBudgetSessionPort {
     operation: () => Promise<T>,
     options?: BudgetOperationOptions,
   ): Promise<T>;
+  runBudgetSnapshot?<T>(
+    syncId: string,
+    operation: (changed: boolean) => Promise<T>,
+    options?: BudgetOperationOptions,
+  ): Promise<{ changed: boolean; value: T }>;
 }
 
 export interface TransactionReconciliationResult {

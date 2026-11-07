@@ -2,12 +2,18 @@ import * as actualApi from "@actual-app/api";
 import type { BudgetOperationOptions } from "./actual-session.js";
 import type { BudgetLockPort } from "./transaction-reconciler.js";
 
+/** Maximum category assignment: 1,000,000,000 major currency units. */
+export const MAX_BUDGET_AMOUNT_MINOR = 100_000_000_000;
+export const BANK_SYNC_COOLDOWN_MS = 60_000;
+export const BANK_SYNC_TIMEOUT_MS = 120_000;
+
 export interface BudgetMaintenanceApiPort {
   runBankSync(budgetId: string, encryptionPassword?: string): Promise<void>;
   createAccount(
     budgetId: string,
     name: string,
     offbudget: boolean,
+    accountGroupId?: string | null,
     encryptionPassword?: string,
   ): Promise<void>;
   closeAccount(
@@ -36,6 +42,14 @@ export interface BudgetMaintenanceApiPort {
     amountMinor: number,
     encryptionPassword?: string,
   ): Promise<void>;
+  moveMoney(
+    budgetId: string,
+    month: string,
+    fromCategoryId: string,
+    toCategoryId: string,
+    amountMinor: number,
+    encryptionPassword?: string,
+  ): Promise<void>;
   deleteCategory(
     budgetId: string,
     categoryId: string,
@@ -59,16 +73,30 @@ export class BudgetMaintenanceInputError extends Error {
   }
 }
 
+export class BudgetMaintenanceBusyError extends Error {
+  constructor(readonly retryAfterSeconds: number) {
+    super(
+      "A bank sync is already running or was just completed. Try again shortly.",
+    );
+    this.name = "BudgetMaintenanceBusyError";
+  }
+}
+
 type ActualBudgetMaintenanceClient = Pick<
   typeof actualApi,
   | "runBankSync"
   | "createAccount"
+  | "updateAccount"
+  | "getAccountGroups"
   | "closeAccount"
   | "getAccounts"
   | "getAccountBalance"
   | "getCategories"
   | "getCategoryGroups"
   | "setBudgetAmount"
+  | "getBudgetMonth"
+  | "getPreferences"
+  | "batchBudgetUpdates"
   | "createCategory"
   | "updateCategory"
   | "deleteCategory"
@@ -79,9 +107,19 @@ export function createBudgetMaintenanceApi(
   session: ActualBudgetMaintenanceSession,
   client: ActualBudgetMaintenanceClient = actualApi,
 ): BudgetMaintenanceApiPort {
+  const bankSyncs = new Map<string, Promise<void>>();
+  const bankSyncCooldowns = new Map<string, number>();
   return {
     runBankSync(budgetId, encryptionPassword) {
-      return locks.withBudgetLock(budgetId, () =>
+      const active = bankSyncs.get(budgetId);
+      if (active) throw new BudgetMaintenanceBusyError(5);
+      const cooldownUntil = bankSyncCooldowns.get(budgetId) ?? 0;
+      if (cooldownUntil > Date.now()) {
+        throw new BudgetMaintenanceBusyError(
+          Math.ceil((cooldownUntil - Date.now()) / 1_000),
+        );
+      }
+      const sync = locks.withBudgetLock(budgetId, () =>
         session.runBudget(
           budgetId,
           async () => {
@@ -90,13 +128,44 @@ export function createBudgetMaintenanceApi(
           writeOptions(encryptionPassword),
         ),
       );
+      bankSyncs.set(budgetId, sync);
+      void sync
+        .then(
+          () =>
+            bankSyncCooldowns.set(budgetId, Date.now() + BANK_SYNC_COOLDOWN_MS),
+          () =>
+            bankSyncCooldowns.set(budgetId, Date.now() + BANK_SYNC_COOLDOWN_MS),
+        )
+        .finally(() => {
+          if (bankSyncs.get(budgetId) === sync) bankSyncs.delete(budgetId);
+        });
+      return waitForCompletion(sync, BANK_SYNC_TIMEOUT_MS);
     },
-    createAccount(budgetId, name, offbudget, encryptionPassword) {
+    createAccount(
+      budgetId,
+      name,
+      offbudget,
+      accountGroupId = null,
+      encryptionPassword,
+    ) {
       return locks.withBudgetLock(budgetId, () =>
         session.runBudget(
           budgetId,
           async () => {
-            await client.createAccount({ name, offbudget });
+            if (accountGroupId !== null) {
+              const groups = await client.getAccountGroups();
+              if (!groups.some((group) => group.id === accountGroupId)) {
+                throw new BudgetMaintenanceInputError(
+                  "Choose an account group in this budget",
+                );
+              }
+            }
+            const accountId = await client.createAccount({ name, offbudget });
+            if (accountGroupId !== null) {
+              await client.updateAccount(accountId, {
+                account_group_id: accountGroupId,
+              });
+            }
           },
           writeOptions(encryptionPassword),
         ),
@@ -108,18 +177,25 @@ export function createBudgetMaintenanceApi(
           budgetId,
           async () => {
             const groups = await client.getCategoryGroups();
-            const group = groups.find((candidate) => candidate.id === categoryGroupId);
+            const group = groups.find(
+              (candidate) => candidate.id === categoryGroupId,
+            );
             if (!group || group.hidden) {
-              throw new BudgetMaintenanceInputError("Choose an active category group");
+              throw new BudgetMaintenanceInputError(
+                "Choose an active category group",
+              );
             }
             const categories = await client.getCategories({ hidden: true });
             const duplicate = categories.some(
               (candidate) =>
                 candidate.group_id === categoryGroupId &&
-                candidate.name.trim().toLocaleLowerCase() === name.trim().toLocaleLowerCase(),
+                candidate.name.trim().toLocaleLowerCase() ===
+                  name.trim().toLocaleLowerCase(),
             );
             if (duplicate) {
-              throw new BudgetMaintenanceInputError("A category with this name already exists in that group");
+              throw new BudgetMaintenanceInputError(
+                "A category with this name already exists in that group",
+              );
             }
             return client.createCategory({
               name,
@@ -132,16 +208,121 @@ export function createBudgetMaintenanceApi(
         ),
       );
     },
-    setBudgetAmount(budgetId, categoryId, month, amountMinor, encryptionPassword) {
+    setBudgetAmount(
+      budgetId,
+      categoryId,
+      month,
+      amountMinor,
+      encryptionPassword,
+    ) {
       return locks.withBudgetLock(budgetId, () =>
         session.runBudget(
           budgetId,
           async () => {
+            if (
+              !Number.isSafeInteger(amountMinor) ||
+              amountMinor < 0 ||
+              amountMinor > MAX_BUDGET_AMOUNT_MINOR
+            ) {
+              throw new BudgetMaintenanceInputError(
+                "Enter a budget amount up to 1,000,000,000 major units",
+              );
+            }
             const categories = await client.getCategories({ hidden: true });
             if (!categories.some((candidate) => candidate.id === categoryId)) {
-              throw new BudgetMaintenanceInputError("Category does not exist in this budget");
+              throw new BudgetMaintenanceInputError(
+                "Category does not exist in this budget",
+              );
             }
             await client.setBudgetAmount(month, categoryId, amountMinor);
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    moveMoney(
+      budgetId,
+      month,
+      fromCategoryId,
+      toCategoryId,
+      amountMinor,
+      encryptionPassword,
+    ) {
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            if (
+              !Number.isSafeInteger(amountMinor) ||
+              amountMinor <= 0 ||
+              amountMinor > MAX_BUDGET_AMOUNT_MINOR
+            ) {
+              throw new BudgetMaintenanceInputError(
+                "Enter a positive move amount up to 1,000,000,000 major units",
+              );
+            }
+            if (fromCategoryId === toCategoryId) {
+              throw new BudgetMaintenanceInputError(
+                "Choose two different categories",
+              );
+            }
+            const preferences = await client.getPreferences();
+            if (preferences.budgetType === "tracking") {
+              throw new BudgetMaintenanceInputError(
+                "Money can only be moved in an envelope budget",
+              );
+            }
+            const monthData = await client.getBudgetMonth(month);
+            const categories = (
+              monthData.categoryGroups as Array<{ categories?: unknown[] }>
+            )
+              .flatMap((group) => group.categories ?? [])
+              .filter(isRecord);
+            const source = categories.find(
+              (category) => category.id === fromCategoryId,
+            );
+            const destination = categories.find(
+              (category) => category.id === toCategoryId,
+            );
+            if (!source || !destination) {
+              throw new BudgetMaintenanceInputError(
+                "Choose categories in this budget month",
+              );
+            }
+            if (source.is_income !== destination.is_income) {
+              throw new BudgetMaintenanceInputError(
+                "Move money between categories of the same type",
+              );
+            }
+            const sourceBudgeted = readSafeAmount(
+              source.budgeted ?? source.assigned,
+              "source assignment",
+            );
+            const destinationBudgeted = readSafeAmount(
+              destination.budgeted ?? destination.assigned,
+              "destination assignment",
+            );
+            const sourceAvailable = readSafeAmount(
+              source.balance ?? source.available,
+              "source available amount",
+            );
+            if (sourceAvailable < amountMinor) {
+              throw new BudgetMaintenanceInputError(
+                "The source category does not have enough available money",
+              );
+            }
+            await client.batchBudgetUpdates(async () => {
+              await client.setBudgetAmount(
+                month,
+                fromCategoryId,
+                sourceBudgeted - amountMinor,
+              );
+              await client.setBudgetAmount(
+                month,
+                toCategoryId,
+                destinationBudgeted + amountMinor,
+              );
+            });
           },
           writeOptions(encryptionPassword),
         ),
@@ -271,9 +452,41 @@ export function createBudgetMaintenanceApi(
   };
 }
 
+function waitForCompletion<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    operation,
+    new Promise<T>((_resolve, reject) => {
+      timeout = setTimeout(
+        () => reject(new Error("Actual bank sync exceeded its time limit")),
+        timeoutMs,
+      );
+      timeout.unref?.();
+    }),
+  ]).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
+}
+
 function writeOptions(encryptionPassword?: string): BudgetOperationOptions {
   return {
     synchronizeAfterWrite: true,
     ...(encryptionPassword === undefined ? {} : { encryptionPassword }),
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function readSafeAmount(value: unknown, description: string): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) {
+    throw new BudgetMaintenanceInputError(
+      `Actual returned an invalid ${description}`,
+    );
+  }
+  return value;
 }

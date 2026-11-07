@@ -6,6 +6,7 @@ export const BUDGET_ENTITY_TYPES = [
   "category",
   "category-group",
   "payee",
+  "schedule",
   "transaction",
   "budget-month",
 ] as const;
@@ -14,6 +15,7 @@ export type BudgetEntityType = (typeof BUDGET_ENTITY_TYPES)[number];
 export type JsonObject = { [key: string]: JsonValue };
 
 export interface BudgetDisplaySettings {
+  budgetType: "envelope" | "tracking";
   currencyCode: string;
   currencySymbol: string;
   currencyFractionDigits: number;
@@ -26,6 +28,7 @@ export interface BudgetDisplaySettings {
 export interface BudgetSnapshotReadResult {
   records: BudgetProjectionRecord[];
   displaySettings: BudgetDisplaySettings;
+  unchanged?: boolean;
 }
 
 export interface BudgetProjectionRecord {
@@ -125,6 +128,10 @@ export interface BudgetSnapshotReader {
     encryptionPassword?: string,
   ): Promise<BudgetProjectionRecord[]>;
   readWithSettings?(
+    budgetId: string,
+    encryptionPassword?: string,
+  ): Promise<BudgetSnapshotReadResult>;
+  readFullWithSettings?(
     budgetId: string,
     encryptionPassword?: string,
   ): Promise<BudgetSnapshotReadResult>;

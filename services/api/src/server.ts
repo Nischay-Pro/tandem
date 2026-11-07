@@ -49,6 +49,9 @@ export async function startApiServer(
       ...(runtime.budgetMaintenanceApi === undefined
         ? {}
         : { budgetMaintenanceApi: runtime.budgetMaintenanceApi }),
+      ...(database.maintenanceJournal === undefined
+        ? {}
+        : { maintenanceJournal: database.maintenanceJournal }),
       ...(runtime.budgetReadApi === undefined
         ? {}
         : { budgetReadApi: runtime.budgetReadApi }),

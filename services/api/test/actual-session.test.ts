@@ -25,6 +25,7 @@ interface FakeClient {
   failShutdown(error?: Error): void;
   failDownload(error?: Error): void;
   failSync(error: unknown): void;
+  setSyncTables(tables: string[] | undefined): void;
 }
 
 function createFakeClient(): FakeClient {
@@ -36,6 +37,8 @@ function createFakeClient(): FakeClient {
   let shutdownError: Error | undefined;
   let downloadError: Error | undefined;
   let syncError: unknown;
+  let syncTables: string[] | undefined = [];
+  let syncEventListener: ((event: unknown) => void) | undefined;
 
   const api: ActualApiPort = {
     init: vi.fn(async () => {
@@ -43,6 +46,11 @@ function createFakeClient(): FakeClient {
       if (initError) {
         throw initError;
       }
+      return {
+        on: (eventName: string, listener: (event: unknown) => void) => {
+          if (eventName === "sync-event") syncEventListener = listener;
+        },
+      };
     }),
     getServerVersion: vi.fn(async () => {
       calls.push("version");
@@ -58,6 +66,9 @@ function createFakeClient(): FakeClient {
       calls.push("sync");
       if (syncError) {
         throw syncError;
+      }
+      if (syncTables !== undefined) {
+        syncEventListener?.({ type: "success", tables: syncTables });
       }
     }),
     shutdown: vi.fn(async () => {
@@ -85,6 +96,9 @@ function createFakeClient(): FakeClient {
     },
     failSync(error) {
       syncError = error;
+    },
+    setSyncTables(tables) {
+      syncTables = tables;
     },
   };
 }
@@ -149,6 +163,24 @@ describe("ActualSession", () => {
       "download:budget-b:",
       "download:budget-a:",
     ]);
+    await session.close();
+  });
+
+  it("reports whether incremental sync changed the budget", async () => {
+    const fake = createFakeClient();
+    const session = new ActualSession(fake.api, config);
+    const changed: boolean[] = [];
+    const read = (didChange: boolean) => {
+      changed.push(didChange);
+      return Promise.resolve("read");
+    };
+
+    await session.runBudgetSnapshot("budget-a", read);
+    await session.runBudgetSnapshot("budget-a", read);
+    fake.setSyncTables(["transactions"]);
+    await session.runBudgetSnapshot("budget-a", read);
+
+    expect(changed).toEqual([true, false, true]);
     await session.close();
   });
 

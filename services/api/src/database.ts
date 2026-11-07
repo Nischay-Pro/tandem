@@ -16,6 +16,10 @@ export interface HealthDatabase {
 
 export interface ServerDatabase extends HealthDatabase {
   readonly journal: Pick<DurableWriteJournal, "expireLeases">;
+  readonly maintenanceJournal?: Pick<
+    DurableWriteJournal,
+    "enqueue" | "claim" | "markCommitted" | "markRejected" | "markUncertain"
+  >;
   readonly deviceAuth: DeviceAuthorization;
   migrate(): Promise<void>;
 }
@@ -74,6 +78,7 @@ export function createPostgresDatabase(
       await applyMigrations(pool);
     },
     journal,
+    maintenanceJournal: journal,
     budgetProjection,
     deviceAuth,
     async withBudgetLock<T>(budgetId: string, work: () => Promise<T>) {

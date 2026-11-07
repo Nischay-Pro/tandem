@@ -1,11 +1,19 @@
+import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { buildApiApp } from "../src/app.js";
 import type { BudgetMaintenanceApiPort } from "../src/actual/budget-maintenance-api.js";
 import { BudgetMaintenanceInputError } from "../src/actual/budget-maintenance-api.js";
+import { BudgetMaintenanceBusyError } from "../src/actual/budget-maintenance-api.js";
 import type {
   DeviceAuthorization,
   DeviceRecord,
 } from "../src/auth/device-auth.js";
+import { IdempotencyKeyReuseError } from "../src/write-journal/contracts.js";
+import type { ApiAppOptions } from "../src/app.js";
+import type {
+  WriteOperation,
+  WriteOperationInput,
+} from "../src/write-journal/contracts.js";
 
 const budgetId = "budget-1";
 const accessToken = "A".repeat(43);
@@ -25,6 +33,7 @@ async function createApi(maintenanceConfigured = true) {
     createAccount: vi.fn(async () => undefined),
     createCategory: vi.fn(async () => "category-created"),
     setBudgetAmount: vi.fn(async () => undefined),
+    moveMoney: vi.fn(async () => undefined),
     closeAccount: vi.fn(async () => undefined),
     renameCategory: vi.fn(async () => undefined),
     deleteCategory: vi.fn(async () => undefined),
@@ -41,20 +50,93 @@ async function createApi(maintenanceConfigured = true) {
   } as unknown as DeviceAuthorization;
   const ping = vi.fn(async () => undefined);
   const close = vi.fn(async () => undefined);
+  const operations = new Map<string, WriteOperation>();
+  const keys = new Map<string, WriteOperation>();
+  const journal = {
+    async enqueue(input: WriteOperationInput) {
+      const key = `${input.principalId}:${input.budgetId}:${input.idempotencyKey}`;
+      const requestHash = JSON.stringify([
+        input.action,
+        input.entityId,
+        input.patch,
+      ]);
+      const existing = keys.get(key);
+      if (existing) {
+        if (existing.requestHash !== requestHash)
+          throw new IdempotencyKeyReuseError();
+        return { operation: existing, replayed: true };
+      }
+      const now = new Date();
+      const operation: WriteOperation = {
+        ...input,
+        requestHash,
+        status: "queued",
+        attemptCount: 0,
+        errorCode: null,
+        actualResult: null,
+        writeEvidence: null,
+        createdAt: now,
+        updatedAt: now,
+        startedAt: null,
+        leaseExpiresAt: null,
+        completedAt: null,
+      };
+      keys.set(key, operation);
+      operations.set(operation.operationId, operation);
+      return { operation, replayed: false };
+    },
+    async claim(operationId: string) {
+      const operation = operations.get(operationId);
+      if (!operation) throw new Error("Missing operation");
+      if (operation.status !== "queued") return { operation, claimed: false };
+      operation.status = "applying";
+      operation.attemptCount += 1;
+      return { operation, claimed: true };
+    },
+    async markCommitted(
+      operationId: string,
+      result: WriteOperation["actualResult"],
+    ) {
+      const operation = operations.get(operationId);
+      if (!operation) throw new Error("Missing operation");
+      operation.status = "committed";
+      operation.actualResult = result;
+      return operation;
+    },
+    async markRejected(operationId: string, errorCode: string) {
+      const operation = operations.get(operationId);
+      if (!operation) throw new Error("Missing operation");
+      operation.status = "rejected";
+      operation.errorCode = errorCode;
+      return operation;
+    },
+    async markUncertain(operationId: string, errorCode: string) {
+      const operation = operations.get(operationId);
+      if (!operation) throw new Error("Missing operation");
+      operation.status = "uncertain";
+      operation.errorCode = errorCode;
+      return operation;
+    },
+  } as NonNullable<ApiAppOptions["maintenanceJournal"]>;
   return {
     budgetMaintenanceApi,
     authenticate,
+    journal,
     app: await buildApiApp(
       { ping, close },
       {
         deviceAuth,
         ...(maintenanceConfigured ? { budgetMaintenanceApi } : {}),
+        maintenanceJournal: journal,
       },
     ),
   };
 }
 
-const authHeaders = { authorization: `Bearer ${accessToken}` };
+const testHeaders = () => ({
+  authorization: `Bearer ${accessToken}`,
+  "idempotency-key": randomUUID(),
+});
 
 describe("budget maintenance routes", () => {
   it("requires a paired device and budget scope for bank sync", async () => {
@@ -66,7 +148,7 @@ describe("budget maintenance routes", () => {
     const outOfScope = await fake.app.inject({
       method: "POST",
       url: "/api/v1/budgets/other-budget/bank-sync",
-      headers: authHeaders,
+      headers: testHeaders(),
     });
 
     expect(unauthorized.statusCode).toBe(401);
@@ -104,18 +186,18 @@ describe("budget maintenance routes", () => {
     const invalidBudget = await fake.app.inject({
       method: "POST",
       url: "/api/v1/budgets/%20/bank-sync",
-      headers: authHeaders,
+      headers: testHeaders(),
     });
     const invalidAccount = await fake.app.inject({
       method: "POST",
       url: `/api/v1/budgets/${budgetId}/accounts`,
-      headers: authHeaders,
+      headers: testHeaders(),
       payload: { name: "Savings" },
     });
     const invalidCategory = await fake.app.inject({
       method: "PATCH",
       url: `/api/v1/budgets/${budgetId}/categories/category-1`,
-      headers: authHeaders,
+      headers: testHeaders(),
       payload: { name: "" },
     });
 
@@ -125,36 +207,50 @@ describe("budget maintenance routes", () => {
     await fake.app.close();
   });
 
+  it("rejects a category amount beyond the supported budget maximum", async () => {
+    const fake = await createApi();
+    const response = await fake.app.inject({
+      method: "PUT",
+      url: `/api/v1/budgets/${budgetId}/categories/category-1/budget-amount`,
+      headers: testHeaders(),
+      payload: { month: "2026-11", amountMinor: 100_000_000_001 },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(fake.budgetMaintenanceApi.setBudgetAmount).not.toHaveBeenCalled();
+    await fake.app.close();
+  });
+
   it("reports missing Actual integration for each maintenance operation", async () => {
     const fake = await createApi(false);
     const responses = await Promise.all([
       fake.app.inject({
         method: "POST",
         url: `/api/v1/budgets/${budgetId}/bank-sync`,
-        headers: authHeaders,
+        headers: testHeaders(),
       }),
       fake.app.inject({
         method: "POST",
         url: `/api/v1/budgets/${budgetId}/accounts`,
-        headers: authHeaders,
+        headers: testHeaders(),
         payload: { name: "Savings", offbudget: false },
       }),
       fake.app.inject({
         method: "POST",
         url: `/api/v1/budgets/${budgetId}/accounts/account-1/close`,
-        headers: authHeaders,
+        headers: testHeaders(),
         payload: { transferAccountId: null, transferCategoryId: null },
       }),
       fake.app.inject({
         method: "PATCH",
         url: `/api/v1/budgets/${budgetId}/categories/category-1`,
-        headers: authHeaders,
+        headers: testHeaders(),
         payload: { name: "Home" },
       }),
       fake.app.inject({
         method: "DELETE",
         url: `/api/v1/budgets/${budgetId}/categories/category-1`,
-        headers: authHeaders,
+        headers: testHeaders(),
         payload: { transferCategoryId: null },
       }),
     ]);
@@ -173,7 +269,7 @@ describe("budget maintenance routes", () => {
     const response = await fake.app.inject({
       method: "POST",
       url: `/api/v1/budgets/${budgetId}/bank-sync`,
-      headers: { ...authHeaders, "x-budget-encryption-password": "secret" },
+      headers: { ...testHeaders(), "x-budget-encryption-password": "secret" },
     });
 
     expect(response.statusCode).toBe(200);
@@ -185,20 +281,133 @@ describe("budget maintenance routes", () => {
     await fake.app.close();
   });
 
+  it("replays a completed maintenance write without calling Actual twice", async () => {
+    const fake = await createApi();
+    const headers = testHeaders();
+    const first = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/accounts`,
+      headers,
+      payload: { name: "Savings", offbudget: false },
+    });
+    const replay = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/accounts`,
+      headers,
+      payload: { name: "Savings", offbudget: false },
+    });
+
+    expect(first.statusCode).toBe(200);
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toEqual(first.json());
+    expect(fake.budgetMaintenanceApi.createAccount).toHaveBeenCalledTimes(1);
+    await fake.app.close();
+  });
+
+  it("rejects reusing a maintenance key for a different write", async () => {
+    const fake = await createApi();
+    const headers = testHeaders();
+    await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/accounts`,
+      headers,
+      payload: { name: "Savings", offbudget: false },
+    });
+    const replay = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/accounts`,
+      headers,
+      payload: { name: "Checking", offbudget: false },
+    });
+
+    expect(replay.statusCode).toBe(409);
+    expect(replay.json().error.code).toBe("idempotency_key_reused");
+    expect(fake.budgetMaintenanceApi.createAccount).toHaveBeenCalledTimes(1);
+    await fake.app.close();
+  });
+
+  it("requires an idempotency key on maintenance writes", async () => {
+    const fake = await createApi();
+    const response = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/accounts`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { name: "Savings", offbudget: false },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(fake.budgetMaintenanceApi.createAccount).not.toHaveBeenCalled();
+    await fake.app.close();
+  });
+
+  it("moves money between categories through the journaled maintenance route", async () => {
+    const fake = await createApi();
+    const response = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/categories/move-money`,
+      headers: testHeaders(),
+      payload: {
+        month: "2026-11",
+        fromCategoryId: "category-1",
+        toCategoryId: "category-2",
+        amountMinor: 12_500,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ status: "ok" });
+    expect(fake.budgetMaintenanceApi.moveMoney).toHaveBeenCalledWith(
+      budgetId,
+      "2026-11",
+      "category-1",
+      "category-2",
+      12_500,
+      undefined,
+    );
+    await fake.app.close();
+  });
+
   it("returns a safe error when Actual bank sync fails", async () => {
     const fake = await createApi();
+    const headers = testHeaders();
     vi.mocked(fake.budgetMaintenanceApi.runBankSync).mockRejectedValueOnce(
       new Error("private Actual detail"),
     );
     const response = await fake.app.inject({
       method: "POST",
       url: `/api/v1/budgets/${budgetId}/bank-sync`,
-      headers: authHeaders,
+      headers,
+    });
+    const retry = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/bank-sync`,
+      headers,
     });
 
     expect(response.statusCode).toBe(502);
     expect(response.json().error).toMatchObject({ code: "bank_sync_failed" });
     expect(response.body).not.toContain("private Actual detail");
+    expect(retry.statusCode).toBe(409);
+    expect(retry.json().error.code).toBe("operation_uncertain");
+    expect(fake.budgetMaintenanceApi.runBankSync).toHaveBeenCalledTimes(1);
+    await fake.app.close();
+  });
+
+  it("limits repeated bank sync requests without starting another provider call", async () => {
+    const fake = await createApi();
+    vi.mocked(fake.budgetMaintenanceApi.runBankSync).mockRejectedValueOnce(
+      new BudgetMaintenanceBusyError(30),
+    );
+    const response = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/bank-sync`,
+      headers: testHeaders(),
+    });
+
+    expect(response.statusCode).toBe(429);
+    expect(response.headers["retry-after"]).toBe("30");
+    expect(response.json().error.code).toBe("bank_sync_busy");
+    expect(fake.budgetMaintenanceApi.runBankSync).toHaveBeenCalledTimes(1);
     await fake.app.close();
   });
 
@@ -207,25 +416,29 @@ describe("budget maintenance routes", () => {
     const account = await fake.app.inject({
       method: "POST",
       url: `/api/v1/budgets/${budgetId}/accounts`,
-      headers: authHeaders,
-      payload: { name: "  Savings  ", offbudget: false },
+      headers: testHeaders(),
+      payload: {
+        name: "  Savings  ",
+        offbudget: false,
+        accountGroupId: "cash-group",
+      },
     });
     const category = await fake.app.inject({
       method: "PATCH",
       url: `/api/v1/budgets/${budgetId}/categories/category-1`,
-      headers: authHeaders,
+      headers: testHeaders(),
       payload: { name: "Home care" },
     });
     const createdCategory = await fake.app.inject({
       method: "POST",
       url: `/api/v1/budgets/${budgetId}/categories`,
-      headers: authHeaders,
+      headers: testHeaders(),
       payload: { name: "Dining out", categoryGroupId: "group-1" },
     });
     const budgetAmount = await fake.app.inject({
       method: "PUT",
       url: `/api/v1/budgets/${budgetId}/categories/category-1/budget-amount`,
-      headers: authHeaders,
+      headers: testHeaders(),
       payload: { month: "2026-11", amountMinor: 125_000 },
     });
 
@@ -234,6 +447,7 @@ describe("budget maintenance routes", () => {
       budgetId,
       "Savings",
       false,
+      "cash-group",
       undefined,
     );
     expect(category.statusCode).toBe(200);
@@ -244,7 +458,10 @@ describe("budget maintenance routes", () => {
       undefined,
     );
     expect(createdCategory.statusCode).toBe(200);
-    expect(createdCategory.json()).toEqual({ status: "ok", categoryId: "category-created" });
+    expect(createdCategory.json()).toEqual({
+      status: "ok",
+      categoryId: "category-created",
+    });
     expect(fake.budgetMaintenanceApi.createCategory).toHaveBeenCalledWith(
       budgetId,
       "Dining out",
@@ -270,7 +487,7 @@ describe("budget maintenance routes", () => {
     const response = await fake.app.inject({
       method: "POST",
       url: `/api/v1/budgets/${budgetId}/accounts`,
-      headers: authHeaders,
+      headers: testHeaders(),
       payload: { name: "Savings", offbudget: false },
     });
 
@@ -284,7 +501,7 @@ describe("budget maintenance routes", () => {
     const outOfScope = await fake.app.inject({
       method: "POST",
       url: "/api/v1/budgets/other-budget/accounts",
-      headers: authHeaders,
+      headers: testHeaders(),
       payload: { name: "Savings", offbudget: false },
     });
     vi.mocked(fake.budgetMaintenanceApi.createAccount).mockRejectedValueOnce(
@@ -293,7 +510,7 @@ describe("budget maintenance routes", () => {
     const rejected = await fake.app.inject({
       method: "POST",
       url: `/api/v1/budgets/${budgetId}/accounts`,
-      headers: authHeaders,
+      headers: testHeaders(),
       payload: { name: "Savings", offbudget: false },
     });
 
@@ -318,19 +535,19 @@ describe("budget maintenance routes", () => {
     const outOfScope = await fake.app.inject({
       method: "POST",
       url: "/api/v1/budgets/other-budget/accounts/account-1/close",
-      headers: authHeaders,
+      headers: testHeaders(),
       payload,
     });
     const invalid = await fake.app.inject({
       method: "POST",
       url: closeUrl,
-      headers: authHeaders,
+      headers: testHeaders(),
       payload: { transferAccountId: "account-2" },
     });
     const success = await fake.app.inject({
       method: "POST",
       url: closeUrl,
-      headers: { ...authHeaders, "x-budget-encryption-password": "secret" },
+      headers: { ...testHeaders(), "x-budget-encryption-password": "secret" },
       payload,
     });
     vi.mocked(fake.budgetMaintenanceApi.closeAccount).mockRejectedValueOnce(
@@ -339,7 +556,7 @@ describe("budget maintenance routes", () => {
     const rejected = await fake.app.inject({
       method: "POST",
       url: closeUrl,
-      headers: authHeaders,
+      headers: testHeaders(),
       payload,
     });
     vi.mocked(fake.budgetMaintenanceApi.closeAccount).mockRejectedValueOnce(
@@ -348,7 +565,7 @@ describe("budget maintenance routes", () => {
     const failed = await fake.app.inject({
       method: "POST",
       url: closeUrl,
-      headers: authHeaders,
+      headers: testHeaders(),
       payload,
     });
 
@@ -375,12 +592,12 @@ describe("budget maintenance routes", () => {
     const missingChoice = await fake.app.inject({
       method: "DELETE",
       url: `/api/v1/budgets/${budgetId}/categories/category-1`,
-      headers: authHeaders,
+      headers: testHeaders(),
     });
     const unassigned = await fake.app.inject({
       method: "DELETE",
       url: `/api/v1/budgets/${budgetId}/categories/category-1`,
-      headers: authHeaders,
+      headers: testHeaders(),
       payload: { transferCategoryId: null },
     });
 
@@ -403,7 +620,7 @@ describe("budget maintenance routes", () => {
     const response = await fake.app.inject({
       method: "DELETE",
       url: `/api/v1/budgets/${budgetId}/categories/category-1`,
-      headers: authHeaders,
+      headers: testHeaders(),
       payload: { transferCategoryId: "category-1" },
     });
 
@@ -417,7 +634,7 @@ describe("budget maintenance routes", () => {
     const outOfScope = await fake.app.inject({
       method: "DELETE",
       url: "/api/v1/budgets/other-budget/categories/category-1",
-      headers: authHeaders,
+      headers: testHeaders(),
       payload: { transferCategoryId: null },
     });
     vi.mocked(fake.budgetMaintenanceApi.deleteCategory).mockRejectedValueOnce(
@@ -426,7 +643,7 @@ describe("budget maintenance routes", () => {
     const failed = await fake.app.inject({
       method: "DELETE",
       url: `/api/v1/budgets/${budgetId}/categories/category-1`,
-      headers: authHeaders,
+      headers: testHeaders(),
       payload: { transferCategoryId: null },
     });
 
@@ -442,7 +659,7 @@ describe("budget maintenance routes", () => {
     const outOfScope = await fake.app.inject({
       method: "PATCH",
       url: "/api/v1/budgets/other-budget/categories/category-1",
-      headers: authHeaders,
+      headers: testHeaders(),
       payload: { name: "Home care" },
     });
     vi.mocked(fake.budgetMaintenanceApi.renameCategory).mockRejectedValueOnce(
@@ -451,7 +668,7 @@ describe("budget maintenance routes", () => {
     const invalid = await fake.app.inject({
       method: "PATCH",
       url: `/api/v1/budgets/${budgetId}/categories/missing`,
-      headers: authHeaders,
+      headers: testHeaders(),
       payload: { name: "Home care" },
     });
     vi.mocked(fake.budgetMaintenanceApi.renameCategory).mockRejectedValueOnce(
@@ -460,7 +677,7 @@ describe("budget maintenance routes", () => {
     const failed = await fake.app.inject({
       method: "PATCH",
       url: `/api/v1/budgets/${budgetId}/categories/category-1`,
-      headers: authHeaders,
+      headers: testHeaders(),
       payload: { name: "Home care" },
     });
 
@@ -484,42 +701,42 @@ describe("budget maintenance routes", () => {
       fake.app.inject({
         method: "POST",
         url: `/api/v1/budgets/${budgetId}/bank-sync`,
-        headers: { ...authHeaders, "x-budget-encryption-password": "secret" },
+        headers: { ...testHeaders(), "x-budget-encryption-password": "secret" },
       }),
       fake.app.inject({
         method: "POST",
         url: `/api/v1/budgets/${budgetId}/accounts`,
-        headers: authHeaders,
+        headers: testHeaders(),
         payload: { name: "Savings", offbudget: false },
       }),
       fake.app.inject({
         method: "POST",
         url: `/api/v1/budgets/${budgetId}/accounts/account-1/close`,
-        headers: authHeaders,
+        headers: testHeaders(),
         payload: { transferAccountId: null, transferCategoryId: null },
       }),
       fake.app.inject({
         method: "PATCH",
         url: `/api/v1/budgets/${budgetId}/categories/category-1`,
-        headers: authHeaders,
+        headers: testHeaders(),
         payload: { name: "Home" },
       }),
       fake.app.inject({
         method: "POST",
         url: `/api/v1/budgets/${budgetId}/categories`,
-        headers: authHeaders,
+        headers: testHeaders(),
         payload: { name: "Dining", categoryGroupId: "group-1" },
       }),
       fake.app.inject({
         method: "PUT",
         url: `/api/v1/budgets/${budgetId}/categories/category-1/budget-amount`,
-        headers: authHeaders,
+        headers: testHeaders(),
         payload: { month: "2026-11", amountMinor: 900 },
       }),
       fake.app.inject({
         method: "DELETE",
         url: `/api/v1/budgets/${budgetId}/categories/category-1`,
-        headers: authHeaders,
+        headers: testHeaders(),
         payload: { transferCategoryId: null },
       }),
     ];
@@ -548,7 +765,9 @@ describe("budget maintenance routes", () => {
         outcome: "rejected",
       }),
     );
-    expect(events.filter((event) => event.outcome === "success")).toHaveLength(6);
+    expect(events.filter((event) => event.outcome === "success")).toHaveLength(
+      6,
+    );
     expect(
       events.every(
         (event) =>

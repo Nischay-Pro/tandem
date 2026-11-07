@@ -31,6 +31,16 @@ export interface BudgetOperationOptions {
   synchronizeAfterWrite?: boolean | ((result: unknown) => boolean);
 }
 
+export interface BudgetSyncSnapshotResult<T> {
+  changed: boolean;
+  value: T;
+}
+
+interface ActualSyncEvent {
+  type: string;
+  tables?: readonly string[];
+}
+
 export interface ActualSecondaryFailure {
   phase: "initialization-cleanup" | "post-write-sync";
   primaryError: unknown;
@@ -112,6 +122,8 @@ export class ActualSession {
   #closePromise: Promise<void> | undefined;
   #loadedBudgetSyncId: string | undefined;
   #loadedBudgetWasOpenedWithPassword = false;
+  #lastSyncEvent: ActualSyncEvent | undefined;
+  #syncEventListenerAttached = false;
 
   constructor(
     private readonly client: ActualApiPort,
@@ -150,6 +162,19 @@ export class ActualSession {
     operation: () => Promise<T>,
     options: BudgetOperationOptions = {},
   ): Promise<T> {
+    const result = await this.runBudgetSnapshot(
+      syncId,
+      async () => operation(),
+      options,
+    );
+    return result.value;
+  }
+
+  async runBudgetSnapshot<T>(
+    syncId: string,
+    operation: (changed: boolean) => Promise<T>,
+    options: BudgetOperationOptions = {},
+  ): Promise<BudgetSyncSnapshotResult<T>> {
     const normalizedSyncId = syncId.trim();
     if (normalizedSyncId.length === 0) {
       throw new Error("Actual budget sync ID is required");
@@ -164,7 +189,18 @@ export class ActualSession {
           !this.#loadedBudgetWasOpenedWithPassword &&
           options.encryptionPassword === undefined;
         if (canReuseLoadedBudget) {
+          this.#lastSyncEvent = undefined;
           await this.client.sync();
+          const event = this.#readLastSyncEvent();
+          const changed =
+            event?.type !== "success" ||
+            !Array.isArray(event.tables) ||
+            event.tables.length > 0;
+          const value = await this.#executeOperation(
+            () => operation(changed),
+            options.synchronizeAfterWrite,
+          );
+          return { changed, value };
         } else {
           this.#loadedBudgetSyncId = undefined;
           this.#loadedBudgetWasOpenedWithPassword = false;
@@ -177,7 +213,11 @@ export class ActualSession {
           this.#loadedBudgetWasOpenedWithPassword =
             options.encryptionPassword !== undefined;
         }
-        return this.#executeOperation(operation, options.synchronizeAfterWrite);
+        const value = await this.#executeOperation(
+          () => operation(true),
+          options.synchronizeAfterWrite,
+        );
+        return { changed: true, value };
       }),
     );
   }
@@ -265,7 +305,7 @@ export class ActualSession {
     activeActualSession = this.#sessionId;
 
     try {
-      await this.client.init(this.config);
+      const initialized = await this.client.init(this.config);
 
       const server = await this.client.getServerVersion();
       if ("error" in server) {
@@ -284,6 +324,7 @@ export class ActualSession {
           server.version,
         );
       }
+      this.#attachSyncEventListener(initialized);
     } catch (error) {
       let cleanupFailed = false;
       let cleanupError: unknown;
@@ -306,6 +347,32 @@ export class ActualSession {
       }
       throw error;
     }
+  }
+
+  #attachSyncEventListener(initialized: unknown): void {
+    if (this.#syncEventListenerAttached || !isRecord(initialized)) return;
+    const on = initialized.on;
+    if (typeof on !== "function") return;
+    (on as (eventName: string, listener: (event: unknown) => void) => void)(
+      "sync-event",
+      (event) => {
+        if (!isRecord(event) || typeof event.type !== "string") return;
+        const tables =
+          Array.isArray(event.tables) &&
+          event.tables.every((table) => typeof table === "string")
+            ? (event.tables as string[])
+            : undefined;
+        this.#lastSyncEvent = {
+          type: event.type,
+          ...(tables === undefined ? {} : { tables }),
+        };
+      },
+    );
+    this.#syncEventListenerAttached = true;
+  }
+
+  #readLastSyncEvent(): ActualSyncEvent | undefined {
+    return this.#lastSyncEvent;
   }
 
   async #executeOperation<T>(
@@ -368,6 +435,10 @@ export class ActualSession {
       // An observability callback must never replace the financial operation error.
     }
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 export function createActualSession(
