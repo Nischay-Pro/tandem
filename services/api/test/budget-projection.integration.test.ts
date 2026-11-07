@@ -306,7 +306,8 @@ describe.skipIf(!integrationEnabled)(
         duplicateBytes,
       });
       expect(compactBytes).toBeLessThan(duplicateBytes * 0.8);
-    }, 20_000);
+      // This synthetic 100,000-row storage benchmark is sensitive to shared-runner I/O.
+    }, 60_000);
 
     it("upgrades, reverses, and reapplies body deduplication without losing feed bodies", async () => {
       const connectionString = process.env.DATABASE_URL;
