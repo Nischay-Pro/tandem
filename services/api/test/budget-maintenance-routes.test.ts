@@ -32,9 +32,12 @@ async function createApi(maintenanceConfigured = true) {
     runBankSync: vi.fn(async () => undefined),
     createAccount: vi.fn(async () => undefined),
     createCategory: vi.fn(async () => "category-created"),
+    createPayee: vi.fn(async () => "payee-created"),
     setBudgetAmount: vi.fn(async () => undefined),
     moveMoney: vi.fn(async () => undefined),
     closeAccount: vi.fn(async () => undefined),
+    renameAccount: vi.fn(async () => undefined),
+    reopenAccount: vi.fn(async () => undefined),
     renameCategory: vi.fn(async () => undefined),
     deleteCategory: vi.fn(async () => undefined),
   };
@@ -243,6 +246,17 @@ describe("budget maintenance routes", () => {
       }),
       fake.app.inject({
         method: "PATCH",
+        url: `/api/v1/budgets/${budgetId}/accounts/account-1`,
+        headers: testHeaders(),
+        payload: { name: "Daily checking" },
+      }),
+      fake.app.inject({
+        method: "POST",
+        url: `/api/v1/budgets/${budgetId}/accounts/account-1/reopen`,
+        headers: testHeaders(),
+      }),
+      fake.app.inject({
+        method: "PATCH",
         url: `/api/v1/budgets/${budgetId}/categories/category-1`,
         headers: testHeaders(),
         payload: { name: "Home" },
@@ -256,10 +270,10 @@ describe("budget maintenance routes", () => {
     ]);
 
     expect(responses.map((response) => response.statusCode)).toEqual([
-      503, 503, 503, 503, 503,
+      503, 503, 503, 503, 503, 503, 503,
     ]);
     expect(responses.map((response) => response.json().error.code)).toEqual(
-      Array(5).fill("actual_not_configured"),
+      Array(7).fill("actual_not_configured"),
     );
     await fake.app.close();
   });
@@ -423,6 +437,17 @@ describe("budget maintenance routes", () => {
         accountGroupId: "cash-group",
       },
     });
+    const renamedAccount = await fake.app.inject({
+      method: "PATCH",
+      url: `/api/v1/budgets/${budgetId}/accounts/account-1`,
+      headers: testHeaders(),
+      payload: { name: "Daily checking" },
+    });
+    const reopenedAccount = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/accounts/account-1/reopen`,
+      headers: testHeaders(),
+    });
     const category = await fake.app.inject({
       method: "PATCH",
       url: `/api/v1/budgets/${budgetId}/categories/category-1`,
@@ -434,6 +459,12 @@ describe("budget maintenance routes", () => {
       url: `/api/v1/budgets/${budgetId}/categories`,
       headers: testHeaders(),
       payload: { name: "Dining out", categoryGroupId: "group-1" },
+    });
+    const createdPayee = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/payees`,
+      headers: testHeaders(),
+      payload: { name: " Corner Market " },
     });
     const budgetAmount = await fake.app.inject({
       method: "PUT",
@@ -450,6 +481,19 @@ describe("budget maintenance routes", () => {
       "cash-group",
       undefined,
     );
+    expect(renamedAccount.statusCode).toBe(200);
+    expect(fake.budgetMaintenanceApi.renameAccount).toHaveBeenCalledWith(
+      budgetId,
+      "account-1",
+      "Daily checking",
+      undefined,
+    );
+    expect(reopenedAccount.statusCode).toBe(200);
+    expect(fake.budgetMaintenanceApi.reopenAccount).toHaveBeenCalledWith(
+      budgetId,
+      "account-1",
+      undefined,
+    );
     expect(category.statusCode).toBe(200);
     expect(fake.budgetMaintenanceApi.renameCategory).toHaveBeenCalledWith(
       budgetId,
@@ -462,6 +506,16 @@ describe("budget maintenance routes", () => {
       status: "ok",
       categoryId: "category-created",
     });
+    expect(createdPayee.statusCode).toBe(200);
+    expect(createdPayee.json()).toEqual({
+      status: "ok",
+      payeeId: "payee-created",
+    });
+    expect(fake.budgetMaintenanceApi.createPayee).toHaveBeenCalledWith(
+      budgetId,
+      "Corner Market",
+      undefined,
+    );
     expect(fake.budgetMaintenanceApi.createCategory).toHaveBeenCalledWith(
       budgetId,
       "Dining out",

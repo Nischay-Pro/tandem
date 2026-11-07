@@ -23,6 +23,17 @@ export interface BudgetMaintenanceApiPort {
     transferCategoryId: string | null,
     encryptionPassword?: string,
   ): Promise<void>;
+  renameAccount(
+    budgetId: string,
+    accountId: string,
+    name: string,
+    encryptionPassword?: string,
+  ): Promise<void>;
+  reopenAccount(
+    budgetId: string,
+    accountId: string,
+    encryptionPassword?: string,
+  ): Promise<void>;
   renameCategory(
     budgetId: string,
     categoryId: string,
@@ -33,6 +44,11 @@ export interface BudgetMaintenanceApiPort {
     budgetId: string,
     name: string,
     categoryGroupId: string,
+    encryptionPassword?: string,
+  ): Promise<string>;
+  createPayee(
+    budgetId: string,
+    name: string,
     encryptionPassword?: string,
   ): Promise<string>;
   setBudgetAmount(
@@ -89,6 +105,7 @@ type ActualBudgetMaintenanceClient = Pick<
   | "updateAccount"
   | "getAccountGroups"
   | "closeAccount"
+  | "reopenAccount"
   | "getAccounts"
   | "getAccountBalance"
   | "getCategories"
@@ -98,6 +115,8 @@ type ActualBudgetMaintenanceClient = Pick<
   | "getPreferences"
   | "batchBudgetUpdates"
   | "createCategory"
+  | "createPayee"
+  | "getPayees"
   | "updateCategory"
   | "deleteCategory"
 >;
@@ -203,6 +222,28 @@ export function createBudgetMaintenanceApi(
               is_income: group.is_income ?? false,
               hidden: false,
             });
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    createPayee(budgetId, name, encryptionPassword) {
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const payees = await client.getPayees();
+            const duplicate = payees.some(
+              (candidate) =>
+                candidate.name.trim().toLocaleLowerCase() ===
+                name.trim().toLocaleLowerCase(),
+            );
+            if (duplicate) {
+              throw new BudgetMaintenanceInputError(
+                "A payee with this name already exists",
+              );
+            }
+            return client.createPayee({ name, transfer_acct: "" });
           },
           writeOptions(encryptionPassword),
         ),
@@ -384,6 +425,47 @@ export function createBudgetMaintenanceApi(
               transferAccountId ?? undefined,
               transferCategoryId ?? undefined,
             );
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    renameAccount(budgetId, accountId, name, encryptionPassword) {
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const accounts = await client.getAccounts();
+            if (!accounts.some((account) => account.id === accountId)) {
+              throw new BudgetMaintenanceInputError(
+                "Account does not exist in this budget",
+              );
+            }
+            await client.updateAccount(accountId, { name });
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    reopenAccount(budgetId, accountId, encryptionPassword) {
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const account = (await client.getAccounts()).find(
+              (candidate) => candidate.id === accountId,
+            );
+            if (!account) {
+              throw new BudgetMaintenanceInputError(
+                "Account does not exist in this budget",
+              );
+            }
+            if (!account.closed) {
+              throw new BudgetMaintenanceInputError(
+                "This account is already open",
+              );
+            }
+            await client.reopenAccount(accountId);
           },
           writeOptions(encryptionPassword),
         ),

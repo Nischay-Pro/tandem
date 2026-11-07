@@ -179,8 +179,14 @@ describe("ActualSession", () => {
     await session.runBudgetSnapshot("budget-a", read);
     fake.setSyncTables(["transactions"]);
     await session.runBudgetSnapshot("budget-a", read);
+    fake.setSyncTables([]);
+    await session.runBudget("budget-a", async () => "written", {
+      synchronizeAfterWrite: true,
+    });
+    await session.runBudgetSnapshot("budget-a", read);
+    await session.runBudgetSnapshot("budget-a", read);
 
-    expect(changed).toEqual([true, false, true]);
+    expect(changed).toEqual([true, false, true, true, false]);
     await session.close();
   });
 

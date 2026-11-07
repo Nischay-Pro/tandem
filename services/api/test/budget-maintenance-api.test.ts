@@ -35,6 +35,7 @@ function createFake() {
       hidden: false,
     },
   ];
+  const payees: Array<{ id: string; name: string; transfer_acct: string }> = [];
   const runBudgetCalls: Array<{
     budgetId: string;
     options: BudgetOperationOptions | undefined;
@@ -60,6 +61,7 @@ function createFake() {
     runBankSync: vi.fn(async () => undefined),
     createAccount: vi.fn(async () => "new-account"),
     updateAccount: vi.fn(async () => undefined),
+    reopenAccount: vi.fn(async () => undefined),
     getAccountGroups: vi.fn(async () => [{ id: "credit", name: "Credit" }]),
     closeAccount: vi.fn(async () => undefined),
     getAccounts: vi.fn(async () => [
@@ -73,6 +75,14 @@ function createFake() {
       { id: "group-1", name: "Food", is_income: false, hidden: false },
     ]),
     createCategory: vi.fn(async () => "new-category"),
+    getPayees: vi.fn(async () => [...payees]),
+    createPayee: vi.fn(
+      async (payee: { name: string; transfer_acct: string }) => {
+        const id = `payee-${payees.length + 1}`;
+        payees.push({ id, ...payee });
+        return id;
+      },
+    ),
     setBudgetAmount: vi.fn(async () => undefined),
     getPreferences: vi.fn(async () => ({ budgetType: "envelope" })),
     getBudgetMonth: vi.fn(async () => ({
@@ -154,6 +164,24 @@ describe("Actual budget maintenance API", () => {
     });
   });
 
+  it("renames and reopens only accounts in the selected Actual budget", async () => {
+    const fake = createFake();
+
+    await fake.api.renameAccount("budget-1", "source", "Daily checking");
+    await fake.api.reopenAccount("budget-1", "closed");
+
+    expect(fake.client.updateAccount).toHaveBeenCalledWith("source", {
+      name: "Daily checking",
+    });
+    expect(fake.client.reopenAccount).toHaveBeenCalledWith("closed");
+    await expect(
+      fake.api.renameAccount("budget-1", "missing", "Checking"),
+    ).rejects.toThrow("Account does not exist in this budget");
+    await expect(fake.api.reopenAccount("budget-1", "source")).rejects.toThrow(
+      "This account is already open",
+    );
+  });
+
   it("creates a category in an active group and rejects duplicate names", async () => {
     const fake = createFake();
 
@@ -184,6 +212,26 @@ describe("Actual budget maintenance API", () => {
       fake.api.createCategory("budget-1", " dining ", "group-1"),
     ).rejects.toThrow("A category with this name already exists in that group");
     expect(fake.client.createCategory).toHaveBeenCalledOnce();
+  });
+
+  it("creates payees in Actual and rejects duplicate names case-insensitively", async () => {
+    const fake = createFake();
+
+    await expect(
+      fake.api.createPayee("budget-1", "Corner Market", "secret"),
+    ).resolves.toBe("payee-1");
+    expect(fake.client.createPayee).toHaveBeenCalledWith({
+      name: "Corner Market",
+      transfer_acct: "",
+    });
+    expect(fake.runBudgetCalls.at(-1)?.options).toEqual({
+      encryptionPassword: "secret",
+      synchronizeAfterWrite: true,
+    });
+    await expect(
+      fake.api.createPayee("budget-1", " corner market "),
+    ).rejects.toThrow("A payee with this name already exists");
+    expect(fake.client.createPayee).toHaveBeenCalledOnce();
   });
 
   it("sets the selected month's assigned category amount through Actual", async () => {

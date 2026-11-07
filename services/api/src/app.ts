@@ -983,6 +983,10 @@ interface BudgetAccountCloseBody {
   transferCategoryId: string | null;
 }
 
+interface BudgetAccountRenameBody {
+  name: string;
+}
+
 interface BudgetCategoryRenameBody {
   name: string;
 }
@@ -990,6 +994,10 @@ interface BudgetCategoryRenameBody {
 interface BudgetCategoryCreateBody {
   name: string;
   categoryGroupId: string;
+}
+
+interface BudgetPayeeCreateBody {
+  name: string;
 }
 
 interface BudgetCategoryBudgetAmountBody {
@@ -1438,6 +1446,323 @@ function registerBudgetMaintenanceRoutes(
           request.params.accountId,
         );
         reportTransactionFailure("Actual account close failed", error);
+        return actualRequestFailed(reply);
+      }
+    },
+  );
+
+  app.patch<{
+    Params: BudgetAccountRouteParams;
+    Headers: BudgetReadHeaders;
+    Body: BudgetAccountRenameBody;
+  }>(
+    "/api/v1/budgets/:budgetId/accounts/:accountId",
+    {
+      schema: {
+        tags: ["Budgets"],
+        operationId: "renameBudgetAccount",
+        summary: "Rename an Actual Budget account",
+        security: [{ bearerAuth: [] }],
+        params: accountParamsSchema,
+        headers: headersSchema,
+        body: {
+          type: "object",
+          properties: {
+            name: {
+              type: "string",
+              minLength: 1,
+              maxLength: 100,
+              pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+            },
+          },
+          required: ["name"],
+          additionalProperties: false,
+        },
+        response: commonResponseSchema,
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(deviceAuth, request, reply);
+      if (!device) return reply;
+      if (request.validationError) return invalidBudgetRequest(reply);
+      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
+        return transactionNotFound(reply);
+      if (!maintenanceApi) return actualNotConfigured(reply);
+      if (!journal) return actualNotConfigured(reply);
+      try {
+        const name = request.body.name.trim();
+        const result = await runMaintenanceOperation(
+          journal,
+          request,
+          device,
+          request.params.budgetId,
+          "account-rename",
+          request.params.accountId,
+          { name },
+          async () => {
+            await maintenanceApi.renameAccount(
+              request.params.budgetId,
+              request.params.accountId,
+              name,
+              request.headers["x-budget-encryption-password"],
+            );
+            return { status: "ok" };
+          },
+        );
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "account_rename",
+          "success",
+          request.params.accountId,
+        );
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send(result);
+      } catch (error) {
+        if (error instanceof BudgetMaintenanceInputError) {
+          logBudgetMaintenanceEvent(
+            request,
+            device,
+            request.params.budgetId,
+            "account_rename",
+            "rejected",
+            request.params.accountId,
+          );
+          return reply
+            .code(
+              error instanceof MaintenanceOperationConflictError ? 409 : 400,
+            )
+            .send({
+              error: {
+                code:
+                  error instanceof MaintenanceOperationConflictError
+                    ? error.code
+                    : "invalid_request",
+                message: error.message,
+              },
+            });
+        }
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "account_rename",
+          "failed",
+          request.params.accountId,
+        );
+        reportTransactionFailure("Actual account rename failed", error);
+        return actualRequestFailed(reply);
+      }
+    },
+  );
+
+  app.post<{
+    Params: BudgetAccountRouteParams;
+    Headers: BudgetReadHeaders;
+  }>(
+    "/api/v1/budgets/:budgetId/accounts/:accountId/reopen",
+    {
+      schema: {
+        tags: ["Budgets"],
+        operationId: "reopenBudgetAccount",
+        summary: "Reopen an Actual Budget account",
+        security: [{ bearerAuth: [] }],
+        params: accountParamsSchema,
+        headers: headersSchema,
+        response: commonResponseSchema,
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(deviceAuth, request, reply);
+      if (!device) return reply;
+      if (request.validationError) return invalidBudgetRequest(reply);
+      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
+        return transactionNotFound(reply);
+      if (!maintenanceApi) return actualNotConfigured(reply);
+      if (!journal) return actualNotConfigured(reply);
+      try {
+        const result = await runMaintenanceOperation(
+          journal,
+          request,
+          device,
+          request.params.budgetId,
+          "account-reopen",
+          request.params.accountId,
+          {},
+          async () => {
+            await maintenanceApi.reopenAccount(
+              request.params.budgetId,
+              request.params.accountId,
+              request.headers["x-budget-encryption-password"],
+            );
+            return { status: "ok" };
+          },
+        );
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "account_reopen",
+          "success",
+          request.params.accountId,
+        );
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send(result);
+      } catch (error) {
+        if (error instanceof BudgetMaintenanceInputError) {
+          logBudgetMaintenanceEvent(
+            request,
+            device,
+            request.params.budgetId,
+            "account_reopen",
+            "rejected",
+            request.params.accountId,
+          );
+          return reply
+            .code(
+              error instanceof MaintenanceOperationConflictError ? 409 : 400,
+            )
+            .send({
+              error: {
+                code:
+                  error instanceof MaintenanceOperationConflictError
+                    ? error.code
+                    : "invalid_request",
+                message: error.message,
+              },
+            });
+        }
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "account_reopen",
+          "failed",
+          request.params.accountId,
+        );
+        reportTransactionFailure("Actual account reopen failed", error);
+        return actualRequestFailed(reply);
+      }
+    },
+  );
+
+  app.post<{
+    Params: BudgetRouteParams;
+    Headers: BudgetReadHeaders;
+    Body: BudgetPayeeCreateBody;
+  }>(
+    "/api/v1/budgets/:budgetId/payees",
+    {
+      schema: {
+        tags: ["Budgets"],
+        operationId: "createBudgetPayee",
+        summary: "Create an Actual Budget payee",
+        security: [{ bearerAuth: [] }],
+        params: paramsSchema,
+        headers: headersSchema,
+        body: {
+          type: "object",
+          properties: {
+            name: {
+              type: "string",
+              minLength: 1,
+              maxLength: 100,
+              pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+            },
+          },
+          required: ["name"],
+          additionalProperties: false,
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              status: { type: "string", enum: ["ok"] },
+              payeeId: { type: "string", minLength: 1, maxLength: 500 },
+            },
+            required: ["status", "payeeId"],
+            additionalProperties: false,
+          },
+          400: errorSchema,
+          401: errorSchema,
+          404: errorSchema,
+          409: errorSchema,
+          502: errorSchema,
+          503: errorSchema,
+        },
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(deviceAuth, request, reply);
+      if (!device) return reply;
+      if (request.validationError) return invalidBudgetRequest(reply);
+      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
+        return transactionNotFound(reply);
+      if (!maintenanceApi) return actualNotConfigured(reply);
+      if (!journal) return actualNotConfigured(reply);
+      try {
+        const name = request.body.name.trim();
+        const result = await runMaintenanceOperation(
+          journal,
+          request,
+          device,
+          request.params.budgetId,
+          "payee-create",
+          null,
+          { name },
+          async () => ({
+            payeeId: await maintenanceApi.createPayee(
+              request.params.budgetId,
+              name,
+              request.headers["x-budget-encryption-password"],
+            ),
+          }),
+        );
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "payee_create",
+          "success",
+          result.payeeId,
+        );
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send({ status: "ok", payeeId: result.payeeId });
+      } catch (error) {
+        if (error instanceof BudgetMaintenanceInputError) {
+          logBudgetMaintenanceEvent(
+            request,
+            device,
+            request.params.budgetId,
+            "payee_create",
+            "rejected",
+          );
+          return reply
+            .code(
+              error instanceof MaintenanceOperationConflictError ? 409 : 400,
+            )
+            .send({
+              error: {
+                code:
+                  error instanceof MaintenanceOperationConflictError
+                    ? error.code
+                    : "invalid_request",
+                message: error.message,
+              },
+            });
+        }
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "payee_create",
+          "failed",
+        );
+        reportTransactionFailure("Actual payee creation failed", error);
         return actualRequestFailed(reply);
       }
     },

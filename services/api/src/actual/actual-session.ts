@@ -124,6 +124,8 @@ export class ActualSession {
   #loadedBudgetWasOpenedWithPassword = false;
   #lastSyncEvent: ActualSyncEvent | undefined;
   #syncEventListenerAttached = false;
+  #dirtyBudgetSyncIds = new Set<string>();
+  #budgetWriteRevisions = new Map<string, number>();
 
   constructor(
     private readonly client: ActualApiPort,
@@ -162,10 +164,11 @@ export class ActualSession {
     operation: () => Promise<T>,
     options: BudgetOperationOptions = {},
   ): Promise<T> {
-    const result = await this.runBudgetSnapshot(
+    const result = await this.#runBudgetSnapshot(
       syncId,
       async () => operation(),
       options,
+      false,
     );
     return result.value;
   }
@@ -174,6 +177,15 @@ export class ActualSession {
     syncId: string,
     operation: (changed: boolean) => Promise<T>,
     options: BudgetOperationOptions = {},
+  ): Promise<BudgetSyncSnapshotResult<T>> {
+    return this.#runBudgetSnapshot(syncId, operation, options, true);
+  }
+
+  async #runBudgetSnapshot<T>(
+    syncId: string,
+    operation: (changed: boolean) => Promise<T>,
+    options: BudgetOperationOptions,
+    consumeDirtyProjection: boolean,
   ): Promise<BudgetSyncSnapshotResult<T>> {
     const normalizedSyncId = syncId.trim();
     if (normalizedSyncId.length === 0) {
@@ -193,13 +205,25 @@ export class ActualSession {
           await this.client.sync();
           const event = this.#readLastSyncEvent();
           const changed =
+            this.#dirtyBudgetSyncIds.has(normalizedSyncId) ||
             event?.type !== "success" ||
             !Array.isArray(event.tables) ||
             event.tables.length > 0;
+          const writeRevision =
+            this.#budgetWriteRevisions.get(normalizedSyncId) ?? 0;
           const value = await this.#executeOperation(
             () => operation(changed),
             options.synchronizeAfterWrite,
+            () => this.#markBudgetDirty(normalizedSyncId),
           );
+          if (
+            consumeDirtyProjection &&
+            changed &&
+            (this.#budgetWriteRevisions.get(normalizedSyncId) ?? 0) ===
+              writeRevision
+          ) {
+            this.#dirtyBudgetSyncIds.delete(normalizedSyncId);
+          }
           return { changed, value };
         } else {
           this.#loadedBudgetSyncId = undefined;
@@ -213,12 +237,30 @@ export class ActualSession {
           this.#loadedBudgetWasOpenedWithPassword =
             options.encryptionPassword !== undefined;
         }
+        const writeRevision =
+          this.#budgetWriteRevisions.get(normalizedSyncId) ?? 0;
         const value = await this.#executeOperation(
           () => operation(true),
           options.synchronizeAfterWrite,
+          () => this.#markBudgetDirty(normalizedSyncId),
         );
+        if (
+          consumeDirtyProjection &&
+          (this.#budgetWriteRevisions.get(normalizedSyncId) ?? 0) ===
+            writeRevision
+        ) {
+          this.#dirtyBudgetSyncIds.delete(normalizedSyncId);
+        }
         return { changed: true, value };
       }),
+    );
+  }
+
+  #markBudgetDirty(syncId: string): void {
+    this.#dirtyBudgetSyncIds.add(syncId);
+    this.#budgetWriteRevisions.set(
+      syncId,
+      (this.#budgetWriteRevisions.get(syncId) ?? 0) + 1,
     );
   }
 
@@ -378,6 +420,7 @@ export class ActualSession {
   async #executeOperation<T>(
     operation: () => Promise<T>,
     synchronizeAfterWrite: BudgetOperationOptions["synchronizeAfterWrite"] = false,
+    markDirty?: () => void,
   ): Promise<T> {
     let result: T;
     let operationFailed = false;
@@ -408,6 +451,7 @@ export class ActualSession {
     }
 
     if (shouldSynchronize) {
+      markDirty?.();
       try {
         await this.client.sync();
       } catch (syncError) {
