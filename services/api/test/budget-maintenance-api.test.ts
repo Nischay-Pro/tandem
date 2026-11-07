@@ -119,6 +119,7 @@ function createFake() {
     mergePayees: vi.fn(async () => undefined),
     deletePayee: vi.fn(async () => undefined),
     setBudgetAmount: vi.fn(async () => undefined),
+    setBudgetCarryover: vi.fn(async () => undefined),
     getPreferences: vi.fn(async () => ({ budgetType: "envelope" })),
     getBudgetMonth: vi.fn(async () => ({
       categoryGroups: [
@@ -535,6 +536,58 @@ describe("Actual budget maintenance API", () => {
       budgetId: "budget-1",
       options: { synchronizeAfterWrite: true },
     });
+  });
+
+  it("sets carryover only for a category in the selected budget month", async () => {
+    const fake = createFake();
+
+    await fake.api.setBudgetCarryover("budget-1", "expense", "2026-11", true);
+
+    expect(fake.client.setBudgetCarryover).toHaveBeenCalledWith(
+      "2026-11",
+      "expense",
+      true,
+    );
+    fake.client.getBudgetMonth.mockResolvedValueOnce({
+      categoryGroups: [{ categories: [{ id: "other-category" }] }],
+    } as never);
+    await expect(
+      fake.api.setBudgetCarryover("budget-1", "expense", "2026-11", false),
+    ).rejects.toThrow("Choose a category in this budget month");
+  });
+
+  it("copies prior assignments for active categories in one Actual batch", async () => {
+    const fake = createFake();
+    fake.client.getBudgetMonth
+      .mockResolvedValueOnce({
+        categoryGroups: [{ categories: [{ id: "expense", budgeted: 60_000 }] }],
+      } as never)
+      .mockResolvedValueOnce({
+        categoryGroups: [
+          { categories: [{ id: "expense" }, { id: "expense-2" }] },
+        ],
+      } as never);
+
+    await fake.api.copyBudgetMonth("budget-1", "2026-11");
+
+    expect(fake.client.getBudgetMonth).toHaveBeenNthCalledWith(1, "2026-10");
+    expect(fake.client.getBudgetMonth).toHaveBeenNthCalledWith(2, "2026-11");
+    expect(fake.client.batchBudgetUpdates).toHaveBeenCalledOnce();
+    expect(fake.client.setBudgetAmount).toHaveBeenNthCalledWith(
+      1,
+      "2026-11",
+      "expense",
+      60_000,
+    );
+    expect(fake.client.setBudgetAmount).toHaveBeenNthCalledWith(
+      2,
+      "2026-11",
+      "expense-2",
+      0,
+    );
+    await expect(
+      fake.api.copyBudgetMonth("budget-1", "2026-00"),
+    ).rejects.toThrow("Choose a valid budget month");
   });
 
   it("moves category money in one Actual budget batch", async () => {

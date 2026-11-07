@@ -980,6 +980,10 @@ interface BudgetPayeeRouteParams extends BudgetRouteParams {
   payeeId: string;
 }
 
+interface BudgetMonthRouteParams extends BudgetRouteParams {
+  month: string;
+}
+
 interface BudgetAccountCreateBody {
   name: string;
   offbudget: boolean;
@@ -1017,6 +1021,15 @@ interface BudgetPayeeActionBody {
 interface BudgetCategoryBudgetAmountBody {
   month: string;
   amountMinor: number;
+}
+
+interface BudgetCategoryCarryoverBody {
+  month: string;
+  enabled: boolean;
+}
+
+interface BudgetMonthActionBody {
+  action: "copy-last-month";
 }
 
 interface BudgetMoveMoneyBody {
@@ -2176,6 +2189,219 @@ function registerBudgetMaintenanceRoutes(
           request.params.categoryId,
         );
         reportTransactionFailure("Actual category budget update failed", error);
+        return actualRequestFailed(reply);
+      }
+    },
+  );
+
+  app.put<{
+    Params: BudgetCategoryRouteParams;
+    Headers: BudgetReadHeaders;
+    Body: BudgetCategoryCarryoverBody;
+  }>(
+    "/api/v1/budgets/:budgetId/categories/:categoryId/carryover",
+    {
+      schema: {
+        tags: ["Budgets"],
+        operationId: "setBudgetCategoryCarryover",
+        summary:
+          "Set whether unused category money carries into the next month",
+        security: [{ bearerAuth: [] }],
+        params: categoryParamsSchema,
+        headers: headersSchema,
+        body: {
+          type: "object",
+          properties: {
+            month: { type: "string", pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$" },
+            enabled: { type: "boolean" },
+          },
+          required: ["month", "enabled"],
+          additionalProperties: false,
+        },
+        response: commonResponseSchema,
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(deviceAuth, request, reply);
+      if (!device) return reply;
+      if (request.validationError) return invalidBudgetRequest(reply);
+      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
+        return transactionNotFound(reply);
+      if (!maintenanceApi) return actualNotConfigured(reply);
+      if (!journal) return actualNotConfigured(reply);
+      try {
+        const result = await runMaintenanceOperation(
+          journal,
+          request,
+          device,
+          request.params.budgetId,
+          "category-carryover",
+          request.params.categoryId,
+          { month: request.body.month, enabled: request.body.enabled },
+          async () => {
+            await maintenanceApi.setBudgetCarryover(
+              request.params.budgetId,
+              request.params.categoryId,
+              request.body.month,
+              request.body.enabled,
+              request.headers["x-budget-encryption-password"],
+            );
+            return { status: "ok" };
+          },
+        );
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "category_carryover",
+          "success",
+          request.params.categoryId,
+        );
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send(result);
+      } catch (error) {
+        if (error instanceof BudgetMaintenanceInputError) {
+          logBudgetMaintenanceEvent(
+            request,
+            device,
+            request.params.budgetId,
+            "category_carryover",
+            "rejected",
+            request.params.categoryId,
+          );
+          return reply
+            .code(
+              error instanceof MaintenanceOperationConflictError ? 409 : 400,
+            )
+            .send({
+              error: {
+                code:
+                  error instanceof MaintenanceOperationConflictError
+                    ? error.code
+                    : "invalid_request",
+                message: error.message,
+              },
+            });
+        }
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "category_carryover",
+          "failed",
+          request.params.categoryId,
+        );
+        reportTransactionFailure(
+          "Actual category carryover update failed",
+          error,
+        );
+        return actualRequestFailed(reply);
+      }
+    },
+  );
+
+  app.post<{
+    Params: BudgetMonthRouteParams;
+    Headers: BudgetReadHeaders;
+    Body: BudgetMonthActionBody;
+  }>(
+    "/api/v1/budgets/:budgetId/months/:month/actions",
+    {
+      schema: {
+        tags: ["Budgets"],
+        operationId: "manageBudgetMonth",
+        summary: "Copy the prior month's category assignments",
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          properties: {
+            budgetId: paramsSchema.properties.budgetId,
+            month: { type: "string", pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$" },
+          },
+          required: ["budgetId", "month"],
+          additionalProperties: false,
+        },
+        headers: headersSchema,
+        body: {
+          type: "object",
+          properties: { action: { type: "string", enum: ["copy-last-month"] } },
+          required: ["action"],
+          additionalProperties: false,
+        },
+        response: commonResponseSchema,
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(deviceAuth, request, reply);
+      if (!device) return reply;
+      if (request.validationError) return invalidBudgetRequest(reply);
+      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
+        return transactionNotFound(reply);
+      if (!maintenanceApi) return actualNotConfigured(reply);
+      if (!journal) return actualNotConfigured(reply);
+      try {
+        const result = await runMaintenanceOperation(
+          journal,
+          request,
+          device,
+          request.params.budgetId,
+          "budget-month-copy",
+          request.params.month,
+          { action: request.body.action },
+          async () => {
+            await maintenanceApi.copyBudgetMonth(
+              request.params.budgetId,
+              request.params.month,
+              request.headers["x-budget-encryption-password"],
+            );
+            return { status: "ok" };
+          },
+        );
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "budget_month_copy",
+          "success",
+          request.params.month,
+        );
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send(result);
+      } catch (error) {
+        if (error instanceof BudgetMaintenanceInputError) {
+          logBudgetMaintenanceEvent(
+            request,
+            device,
+            request.params.budgetId,
+            "budget_month_copy",
+            "rejected",
+            request.params.month,
+          );
+          return reply
+            .code(
+              error instanceof MaintenanceOperationConflictError ? 409 : 400,
+            )
+            .send({
+              error: {
+                code:
+                  error instanceof MaintenanceOperationConflictError
+                    ? error.code
+                    : "invalid_request",
+                message: error.message,
+              },
+            });
+        }
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "budget_month_copy",
+          "failed",
+          request.params.month,
+        );
+        reportTransactionFailure("Actual budget month copy failed", error);
         return actualRequestFailed(reply);
       }
     },

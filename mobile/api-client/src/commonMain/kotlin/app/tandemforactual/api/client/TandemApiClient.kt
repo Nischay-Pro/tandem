@@ -415,6 +415,50 @@ class TandemApiClient(
         }
     }
 
+    suspend fun setBudgetCategoryCarryover(
+        budgetId: String,
+        categoryId: String,
+        month: String,
+        enabled: Boolean,
+        encryptionPassword: String?,
+    ) {
+        withMaintenanceOperation(
+            maintenanceSignature("category-carryover", budgetId, categoryId, month, enabled.toString()),
+        ) { idempotencyKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.setBudgetCategoryCarryover(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        categoryId = categoryId,
+                        body = buildJsonObject { put("month", month); put("enabled", enabled) }.toMap(),
+                    ),
+                )
+            }
+        }
+    }
+
+    suspend fun copyBudgetMonth(
+        budgetId: String,
+        month: String,
+        encryptionPassword: String?,
+    ) {
+        withMaintenanceOperation(maintenanceSignature("budget-month-copy-last", budgetId, month)) { idempotencyKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.manageBudgetMonth(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        month = month,
+                        body = buildJsonObject { put("action", "copy-last-month") }.toMap(),
+                    ),
+                )
+            }
+        }
+    }
+
     suspend fun moveMoneyBetweenCategories(
         budgetId: String,
         month: String,

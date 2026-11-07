@@ -473,6 +473,8 @@ class TandemApiClientTest {
                 assertEquals("category-created", client.createBudgetCategory("budget-1", "group-1", "Dining", null))
                 assertEquals("payee-created", client.createBudgetPayee("budget-1", "Corner Market", null))
                 client.setBudgetCategoryAmount("budget-1", "category-1", "2026-11", 125_000, "budget-password")
+                client.setBudgetCategoryCarryover("budget-1", "category-1", "2026-11", true, "budget-password")
+                client.copyBudgetMonth("budget-1", "2026-11", "budget-password")
                 client.moveMoneyBetweenCategories("budget-1", "2026-11", "category-1", "category-2", 12_500, "budget-password")
                 client.deleteBudgetCategory("budget-1", "category-1", null, null)
                 client.manageBudgetSchedule("budget-1", "schedule-1", "rename", "Rent", "budget-password")
@@ -492,16 +494,28 @@ class TandemApiClientTest {
                     BudgetsApi.createBudgetCategory(idempotencyKey = "direct-7", budgetId = "budget-1")
                     BudgetsApi.createBudgetPayee(idempotencyKey = "direct-8", budgetId = "budget-1")
                     BudgetsApi.setBudgetCategoryAmount(idempotencyKey = "direct-9", budgetId = "budget-1", categoryId = "category-1")
-                    BudgetsApi.moveMoneyBetweenCategories(idempotencyKey = "direct-10", budgetId = "budget-1")
-                    BudgetsApi.deleteBudgetCategory(idempotencyKey = "direct-11", budgetId = "budget-1", categoryId = "category-1")
+                    BudgetsApi.setBudgetCategoryCarryover(
+                        idempotencyKey = "direct-10",
+                        budgetId = "budget-1",
+                        categoryId = "category-1",
+                        body = buildJsonObject { put("month", "2026-11"); put("enabled", true) }.toMap(),
+                    )
+                    BudgetsApi.manageBudgetMonth(
+                        idempotencyKey = "direct-11",
+                        budgetId = "budget-1",
+                        month = "2026-11",
+                        body = buildJsonObject { put("action", "copy-last-month") }.toMap(),
+                    )
+                    BudgetsApi.moveMoneyBetweenCategories(idempotencyKey = "direct-12", budgetId = "budget-1")
+                    BudgetsApi.deleteBudgetCategory(idempotencyKey = "direct-13", budgetId = "budget-1", categoryId = "category-1")
                     BudgetsApi.manageBudgetSchedule(
-                        idempotencyKey = "direct-12",
+                        idempotencyKey = "direct-14",
                         budgetId = "budget-1",
                         scheduleId = "schedule-1",
                         body = buildJsonObject { put("action", "skip") }.toMap(),
                     )
                     BudgetsApi.manageBudgetPayee(
-                        idempotencyKey = "direct-13",
+                        idempotencyKey = "direct-15",
                         budgetId = "budget-1",
                         payeeId = "payee-1",
                         body = buildJsonObject { put("action", "delete") }.toMap(),
@@ -523,6 +537,8 @@ class TandemApiClientTest {
                         "POST /api/v1/budgets/budget-1/categories",
                         "POST /api/v1/budgets/budget-1/payees",
                         "PUT /api/v1/budgets/budget-1/categories/category-1/budget-amount",
+                        "PUT /api/v1/budgets/budget-1/categories/category-1/carryover",
+                        "POST /api/v1/budgets/budget-1/months/2026-11/actions",
                         "POST /api/v1/budgets/budget-1/categories/move-money",
                         "DELETE /api/v1/budgets/budget-1/categories/category-1",
                         "POST /api/v1/budgets/budget-1/schedules/schedule-1/actions",
@@ -533,16 +549,17 @@ class TandemApiClientTest {
                         "POST /api/v1/budgets/budget-1/payees/payee-1/actions",
                         "POST /api/v1/budgets/budget-1/payees/payee-1/actions",
                     ),
-                    requests.take(18).map { "${it.method.value} ${it.url.encodedPath}" },
+                    requests.take(20).map { "${it.method.value} ${it.url.encodedPath}" },
                 )
                 assertEquals(null, requests[0].headers["x-budget-encryption-password"])
                 assertEquals("budget-password", requests[1].headers["x-budget-encryption-password"])
                 assertEquals("budget-password", requests[2].headers["x-budget-encryption-password"])
                 assertEquals("budget-password", requests[8].headers["x-budget-encryption-password"])
                 assertEquals("budget-password", requests[9].headers["x-budget-encryption-password"])
-                val idempotencyKeys = requests.take(18).map { it.headers["Idempotency-Key"] }
+                assertEquals("budget-password", requests[10].headers["x-budget-encryption-password"])
+                val idempotencyKeys = requests.take(20).map { it.headers["Idempotency-Key"] }
                 assertTrue(idempotencyKeys.all { key -> key?.let { runCatching { Uuid.parse(it) }.isSuccess } == true })
-                assertEquals(18, idempotencyKeys.distinct().size)
+                assertEquals(20, idempotencyKeys.distinct().size)
                 assertTrue((requests[1].body as TextContent).text.contains("\"name\":\"Savings\""))
                 assertTrue((requests[1].body as TextContent).text.contains("\"offbudget\":true"))
                 assertTrue((requests[1].body as TextContent).text.contains("\"accountGroupId\":\"credit-group\""))
@@ -554,19 +571,21 @@ class TandemApiClientTest {
                 assertTrue((requests[7].body as TextContent).text.contains("\"name\":\"Corner Market\""))
                 assertTrue((requests[8].body as TextContent).text.contains("\"month\":\"2026-11\""))
                 assertTrue((requests[8].body as TextContent).text.contains("\"amountMinor\":125000"))
-                assertTrue((requests[9].body as TextContent).text.contains("\"fromCategoryId\":\"category-1\""))
-                assertTrue((requests[9].body as TextContent).text.contains("\"toCategoryId\":\"category-2\""))
-                assertTrue((requests[10].body as TextContent).text.contains("\"transferCategoryId\":null"))
-                assertEquals("budget-password", requests[11].headers["x-budget-encryption-password"])
-                assertTrue((requests[11].body as TextContent).text.contains("\"action\":\"rename\""))
-                assertTrue((requests[11].body as TextContent).text.contains("\"name\":\"Rent\""))
-                assertTrue((requests[12].body as TextContent).text.contains("\"action\":\"skip\""))
-                assertTrue((requests[13].body as TextContent).text.contains("\"action\":\"post\""))
-                assertTrue((requests[14].body as TextContent).text.contains("\"action\":\"delete\""))
-                assertTrue((requests[15].body as TextContent).text.contains("\"action\":\"rename\""))
-                assertTrue((requests[15].body as TextContent).text.contains("\"name\":\"Store\""))
-                assertTrue((requests[16].body as TextContent).text.contains("\"targetPayeeId\":\"payee-2\""))
-                assertEquals("budget-password", requests[17].headers["x-budget-encryption-password"])
+                assertTrue((requests[9].body as TextContent).text.contains("\"enabled\":true"))
+                assertTrue((requests[10].body as TextContent).text.contains("\"action\":\"copy-last-month\""))
+                assertTrue((requests[11].body as TextContent).text.contains("\"fromCategoryId\":\"category-1\""))
+                assertTrue((requests[11].body as TextContent).text.contains("\"toCategoryId\":\"category-2\""))
+                assertTrue((requests[12].body as TextContent).text.contains("\"transferCategoryId\":null"))
+                assertEquals("budget-password", requests[13].headers["x-budget-encryption-password"])
+                assertTrue((requests[13].body as TextContent).text.contains("\"action\":\"rename\""))
+                assertTrue((requests[13].body as TextContent).text.contains("\"name\":\"Rent\""))
+                assertTrue((requests[14].body as TextContent).text.contains("\"action\":\"skip\""))
+                assertTrue((requests[15].body as TextContent).text.contains("\"action\":\"post\""))
+                assertTrue((requests[16].body as TextContent).text.contains("\"action\":\"delete\""))
+                assertTrue((requests[17].body as TextContent).text.contains("\"action\":\"rename\""))
+                assertTrue((requests[17].body as TextContent).text.contains("\"name\":\"Store\""))
+                assertTrue((requests[18].body as TextContent).text.contains("\"targetPayeeId\":\"payee-2\""))
+                assertEquals("budget-password", requests[19].headers["x-budget-encryption-password"])
             } finally {
                 cleanup()
                 Api.baseUrl = previousBaseUrl

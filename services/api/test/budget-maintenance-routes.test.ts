@@ -40,6 +40,8 @@ async function createApi(
     mergePayee: vi.fn(async () => undefined),
     deletePayee: vi.fn(async () => undefined),
     setBudgetAmount: vi.fn(async () => undefined),
+    setBudgetCarryover: vi.fn(async () => undefined),
+    copyBudgetMonth: vi.fn(async () => undefined),
     moveMoney: vi.fn(async () => undefined),
     closeAccount: vi.fn(async () => undefined),
     renameAccount: vi.fn(async () => undefined),
@@ -195,6 +197,16 @@ const maintenanceRouteCases = (routeBudgetId = budgetId) => [
     method: "PUT" as const,
     url: `/api/v1/budgets/${routeBudgetId}/categories/category-1/budget-amount`,
     payload: { month: "2026-11", amountMinor: 1200 },
+  },
+  {
+    method: "PUT" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/categories/category-1/carryover`,
+    payload: { month: "2026-11", enabled: true },
+  },
+  {
+    method: "POST" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/months/2026-11/actions`,
+    payload: { action: "copy-last-month" },
   },
   {
     method: "POST" as const,
@@ -649,6 +661,38 @@ describe("budget maintenance routes", () => {
     await fake.app.close();
   });
 
+  it("journals carryover changes and last-month copies", async () => {
+    const fake = await createApi();
+    const carryover = await fake.app.inject({
+      method: "PUT",
+      url: `/api/v1/budgets/${budgetId}/categories/category-1/carryover`,
+      headers: testHeaders(),
+      payload: { month: "2026-11", enabled: true },
+    });
+    expect(carryover.statusCode).toBe(200);
+    expect(fake.budgetMaintenanceApi.setBudgetCarryover).toHaveBeenCalledWith(
+      budgetId,
+      "category-1",
+      "2026-11",
+      true,
+      undefined,
+    );
+
+    const copy = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/months/2026-11/actions`,
+      headers: testHeaders(),
+      payload: { action: "copy-last-month" },
+    });
+    expect(copy.statusCode).toBe(200);
+    expect(fake.budgetMaintenanceApi.copyBudgetMonth).toHaveBeenCalledWith(
+      budgetId,
+      "2026-11",
+      undefined,
+    );
+    await fake.app.close();
+  });
+
   it("returns a safe error when Actual bank sync fails", async () => {
     const fake = await createApi();
     const headers = testHeaders();
@@ -909,6 +953,18 @@ describe("budget maintenance routes", () => {
         url: `/api/v1/budgets/${budgetId}/categories/category-1/budget-amount`,
         payload: { month: "2026-11", amountMinor: 1200 },
         action: vi.mocked(fake.budgetMaintenanceApi.setBudgetAmount),
+      },
+      {
+        method: "PUT" as const,
+        url: `/api/v1/budgets/${budgetId}/categories/category-1/carryover`,
+        payload: { month: "2026-11", enabled: true },
+        action: vi.mocked(fake.budgetMaintenanceApi.setBudgetCarryover),
+      },
+      {
+        method: "POST" as const,
+        url: `/api/v1/budgets/${budgetId}/months/2026-11/actions`,
+        payload: { action: "copy-last-month" },
+        action: vi.mocked(fake.budgetMaintenanceApi.copyBudgetMonth),
       },
       {
         method: "POST" as const,

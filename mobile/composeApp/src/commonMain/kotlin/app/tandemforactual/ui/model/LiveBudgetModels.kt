@@ -25,6 +25,7 @@ internal data class LiveCategorySummary(
     val assignedMinor: Long,
     val activityMinor: Long,
     val balanceMinor: Long,
+    val carryover: Boolean = false,
 )
 
 internal data class LiveCategoryGroupSummary(
@@ -136,6 +137,7 @@ internal fun liveBudgetMonthSummary(
                                 assignedMinor = assigned,
                                 activityMinor = activity,
                                 balanceMinor = category.longValue("balance") ?: (assigned + activity),
+                                carryover = category.booleanValue("carryover") ?: false,
                             )
                         }.orEmpty()
                 LiveCategoryGroupSummary(

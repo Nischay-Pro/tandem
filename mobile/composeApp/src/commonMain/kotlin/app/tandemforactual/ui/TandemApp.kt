@@ -4844,6 +4844,8 @@ private fun BudgetScreen(
     onSyncNow: () -> Unit,
 ) {
     val palette = tandemPalette
+    val scope = rememberCoroutineScope()
+    var showCopyLastMonthDialog by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     val isTrackingBudget = isLiveBudget && state.budgetDisplaySettings?.budgetType == "tracking"
     val compact = state.homeLayout == "Compact"
@@ -4947,6 +4949,23 @@ private fun BudgetScreen(
         }
         item(key = "budget-month-picker") {
             MonthSelectorCard(state.selectedMonth) { navigation.open(AppRoute.MONTH_PICKER) }
+        }
+        if (isLiveBudget && !isTrackingBudget && liveBudgetMonth != null) {
+            item(key = "budget-copy-last-month") {
+                SurfaceCard {
+                    TandemActionButton(
+                        "Copy last month",
+                        TandemActionButtonTone.NEUTRAL,
+                        modifier = Modifier.fillMaxWidth().padding(TandemSpacing.small),
+                        icon = Lucide.CalendarDays,
+                        enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                        onClick = {
+                            mobileSession.clearBudgetActionMessage()
+                            showCopyLastMonthDialog = true
+                        },
+                    )
+                }
+            }
         }
         if (isTrackingBudget) {
             item(key = "budget-tracking-mode") {
@@ -5204,6 +5223,67 @@ private fun BudgetScreen(
             }
         }
         item(key = "budget-bottom-spacer") { Spacer(Modifier.height(72.dp)) }
+    }
+    if (showCopyLastMonthDialog) {
+        Dialog(
+            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showCopyLastMonthDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
+                Column(
+                    Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        Icon(Lucide.CalendarDays, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
+                        Text(
+                            "Copy last month?",
+                            modifier = Modifier.weight(1f),
+                            color = tandemPalette.text,
+                            fontSize = TandemTypography.sectionTitle,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        TandemIconButton(
+                            Lucide.X,
+                            "Close",
+                            sizeDp = 40,
+                            iconSizeDp = 18,
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                        ) { showCopyLastMonthDialog = false }
+                    }
+                    Text(
+                        "Replace ${state.selectedMonth} category assignments with the previous month’s amounts.",
+                        color = tandemPalette.muted,
+                        fontSize = TandemTypography.body,
+                    )
+                    mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                    TandemActionButton(
+                        if (mobileSession.isPerformingBudgetAction) "Copying…" else "Copy assignments",
+                        TandemActionButtonTone.PRIMARY,
+                        modifier = Modifier.fillMaxWidth(),
+                        icon = Lucide.Check,
+                        enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                        loading = mobileSession.isPerformingBudgetAction,
+                    ) {
+                        scope.launch {
+                            val copied =
+                                mobileSession.copyBudgetMonth(
+                                    state.selectedBudgetId,
+                                    state.selectedMonthId,
+                                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                                )
+                            if (copied) showCopyLastMonthDialog = false
+                        }
+                    }
+                    TandemActionButton(
+                        "Cancel",
+                        TandemActionButtonTone.NEUTRAL,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !mobileSession.isPerformingBudgetAction,
+                    ) { showCopyLastMonthDialog = false }
+                }
+            }
+        }
     }
 }
 
@@ -6361,6 +6441,25 @@ private fun CategoryDetailScreen(
                     leading = RowLeading.Icon(Lucide.Receipt),
                     onClick = { openCategoryActivity(state, navigation, category.id, category.name) },
                 )
+                if (isLiveBudget && !isTrackingBudget) {
+                    DividerLine()
+                    ToggleRow(
+                        "Rollover",
+                        "Unused money rolls forward",
+                        checked = category.carryover,
+                        enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                    ) { enabled ->
+                        scope.launch {
+                            mobileSession.setBudgetCategoryCarryover(
+                                state.selectedBudgetId,
+                                category.id,
+                                state.selectedMonthId,
+                                enabled,
+                                state.encryptedPassword.takeIf { it.isNotBlank() },
+                            )
+                        }
+                    }
+                }
                 if (isLiveBudget && !isTrackingBudget) {
                     DividerLine()
                     ListRow(

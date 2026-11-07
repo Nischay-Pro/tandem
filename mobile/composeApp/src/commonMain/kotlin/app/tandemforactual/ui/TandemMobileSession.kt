@@ -729,6 +729,26 @@ internal class TandemMobileSession(
         }
     }
 
+    suspend fun setBudgetCategoryCarryover(
+        budgetId: String,
+        categoryId: String,
+        month: String,
+        enabled: Boolean,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Couldn’t update carryover. Try again.") {
+            apiClient.setBudgetCategoryCarryover(budgetId, categoryId, month, enabled, encryptionPassword)
+        }
+
+    suspend fun copyBudgetMonth(
+        budgetId: String,
+        month: String,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Couldn’t copy last month’s assignments. Try again.") {
+            apiClient.copyBudgetMonth(budgetId, month, encryptionPassword)
+        }
+
     suspend fun moveBudgetMoney(
         budgetId: String,
         month: String,

@@ -86,7 +86,7 @@ class LiveBudgetModelsTest {
                 type = "budget-month",
                 id = "2026-11",
                 json =
-                    """{"month":"2026-11","toBudget":5000,"incomeAvailable":9000,"totalBudgeted":4000,"totalSpent":1800,"categoryGroups":[{"id":"essentials","categories":[{"id":"rent","budgeted":2500,"activity":-2500,"balance":0},{"id":"hidden","budgeted":100,"activity":0,"hidden":true},{"id":"deleted","budgeted":100,"activity":0,"deleted":true}]},{"id":"hidden-group","hidden":true,"categories":[{"id":"ignored","budgeted":100}]}]}""",
+                    """{"month":"2026-11","toBudget":5000,"incomeAvailable":9000,"totalBudgeted":4000,"totalSpent":1800,"categoryGroups":[{"id":"essentials","categories":[{"id":"rent","budgeted":2500,"activity":-2500,"balance":0,"carryover":true},{"id":"hidden","budgeted":100,"activity":0,"hidden":true},{"id":"deleted","budgeted":100,"activity":0,"deleted":true}]},{"id":"hidden-group","hidden":true,"categories":[{"id":"ignored","budgeted":100}]}]}""",
             )
         val categories =
             listOf(
@@ -105,7 +105,7 @@ class LiveBudgetModelsTest {
         assertEquals(1, summary?.groups?.size)
         assertEquals("Essentials", summary?.groups?.single()?.name)
         assertEquals(
-            listOf(LiveCategorySummary("rent", "Rent", 2_500, -2_500, 0)),
+            listOf(LiveCategorySummary("rent", "Rent", 2_500, -2_500, 0, carryover = true)),
             summary?.groups?.single()?.categories,
         )
         assertNull(liveBudgetMonthSummary(null, categories, groups))

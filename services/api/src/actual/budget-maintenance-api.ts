@@ -75,6 +75,18 @@ export interface BudgetMaintenanceApiPort {
     amountMinor: number,
     encryptionPassword?: string,
   ): Promise<void>;
+  setBudgetCarryover(
+    budgetId: string,
+    categoryId: string,
+    month: string,
+    enabled: boolean,
+    encryptionPassword?: string,
+  ): Promise<void>;
+  copyBudgetMonth(
+    budgetId: string,
+    month: string,
+    encryptionPassword?: string,
+  ): Promise<void>;
   moveMoney(
     budgetId: string,
     month: string,
@@ -149,6 +161,7 @@ type ActualBudgetMaintenanceClient = Pick<
   | "getCategories"
   | "getCategoryGroups"
   | "setBudgetAmount"
+  | "setBudgetCarryover"
   | "getBudgetMonth"
   | "getPreferences"
   | "batchBudgetUpdates"
@@ -396,6 +409,97 @@ export function createBudgetMaintenanceApi(
               );
             }
             await client.setBudgetAmount(month, categoryId, amountMinor);
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    setBudgetCarryover(
+      budgetId,
+      categoryId,
+      month,
+      enabled,
+      encryptionPassword,
+    ) {
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const monthData = await client.getBudgetMonth(month);
+            const categories = (
+              monthData.categoryGroups as Array<{ categories?: unknown[] }>
+            )
+              .flatMap((group) => group.categories ?? [])
+              .filter(isRecord);
+            if (!categories.some((category) => category.id === categoryId)) {
+              throw new BudgetMaintenanceInputError(
+                "Choose a category in this budget month",
+              );
+            }
+            await client.setBudgetCarryover(month, categoryId, enabled);
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    copyBudgetMonth(budgetId, month, encryptionPassword) {
+      const year = Number(month.slice(0, 4));
+      const monthNumber = Number(month.slice(5, 7));
+      if (
+        !/^\d{4}-(0[1-9]|1[0-2])$/.test(month) ||
+        year < 1 ||
+        (year === 1 && monthNumber === 1)
+      ) {
+        return Promise.reject(
+          new BudgetMaintenanceInputError("Choose a valid budget month"),
+        );
+      }
+      const previousMonth =
+        monthNumber === 1
+          ? `${String(year - 1).padStart(4, "0")}-12`
+          : `${String(year).padStart(4, "0")}-${String(monthNumber - 1).padStart(2, "0")}`;
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const sourceMonth = await client.getBudgetMonth(previousMonth);
+            const targetMonth = await client.getBudgetMonth(month);
+            const activeCategories = await client.getCategories({
+              hidden: false,
+            });
+            const sourceAmounts = new Map<string, number>();
+            for (const group of sourceMonth.categoryGroups) {
+              for (const category of group.categories ?? []) {
+                const id = typeof category.id === "string" ? category.id : null;
+                if (id === null) continue;
+                sourceAmounts.set(
+                  id,
+                  readSafeAmount(
+                    category.budgeted ?? category.assigned ?? 0,
+                    "previous month's category assignment",
+                  ),
+                );
+              }
+            }
+            const targetCategoryIds = new Set(
+              targetMonth.categoryGroups.flatMap((group) =>
+                (group.categories ?? [])
+                  .map((category) => category.id)
+                  .filter((id): id is string => typeof id === "string"),
+              ),
+            );
+            const categories = activeCategories.filter((category) =>
+              targetCategoryIds.has(category.id),
+            );
+            await client.batchBudgetUpdates(async () => {
+              for (const category of categories) {
+                await client.setBudgetAmount(
+                  month,
+                  category.id,
+                  sourceAmounts.get(category.id) ?? 0,
+                );
+              }
+            });
           },
           writeOptions(encryptionPassword),
         ),
