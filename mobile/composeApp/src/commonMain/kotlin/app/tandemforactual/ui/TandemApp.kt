@@ -6180,7 +6180,6 @@ private fun AccountsScreen(
         onRefresh = runBankSync.takeIf { isLiveBudget && !state.readOnlyMode },
     ) {
         if (model.isSample) item(key = "accounts-preview-banner") { SampleBanner() }
-        item(key = "accounts-title") { Heading("Accounts") }
         mobileSession.budgetActionMessage?.let { message ->
             item(key = "account-action-message") { InlineMessage(message, InlineMessageKind.ERROR) }
         }
