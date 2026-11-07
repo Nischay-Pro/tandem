@@ -17,10 +17,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,6 +52,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -56,6 +60,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.database.AccountDayAggregate
 import app.tandemforactual.data.database.CategoryMonthAggregate
@@ -866,6 +872,11 @@ private fun TimeSeriesReportChart(
                         modifier = Modifier.width(chartWidth).height(height),
                         showMonthlyGuides = true,
                         onNetWorthSelectionChange = onNetWorthSelectionChange,
+                        calloutViewportStartPx = scrollState.value.toFloat(),
+                        calloutViewportWidthPx =
+                            with(androidx.compose.ui.platform.LocalDensity.current) {
+                                viewportWidth.toPx()
+                            },
                     )
                     ReportMonthAxis(monthIds, chartWidth, chartWidth / monthIds.size.coerceAtLeast(1))
                 }
@@ -1085,6 +1096,8 @@ private fun ReportCanvas(
     modifier: Modifier,
     showMonthlyGuides: Boolean = false,
     onNetWorthSelectionChange: (Int?) -> Unit = {},
+    calloutViewportStartPx: Float = 0f,
+    calloutViewportWidthPx: Float? = null,
 ) {
     val palette = tandemPalette
     val monthly = monthlyPoints(kind, data)
@@ -1117,7 +1130,41 @@ private fun ReportCanvas(
             }
         }
     val description = reportChartDescription(kind, data, netWorthScope)
-    Box(modifier) {
+    var chartSize by remember { mutableStateOf(IntSize.Zero) }
+    var calloutSize by remember { mutableStateOf(IntSize.Zero) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val calloutAnchor =
+        selection?.takeIf { selectedCategory == null }?.let {
+            reportSelectionAnchor(
+                kind,
+                it,
+                monthly,
+                data.netWorth,
+                chartSize.width.toFloat(),
+                chartSize.height.toFloat(),
+                with(density) { 8.dp.toPx() },
+            )
+        }
+    val calloutOffset =
+        calloutAnchor?.let { anchor ->
+            val gap = with(density) { 8.dp.toPx() }
+            val visibleLeft = calloutViewportStartPx.coerceIn(0f, chartSize.width.toFloat())
+            val visibleRight =
+                (visibleLeft + (calloutViewportWidthPx ?: chartSize.width.toFloat()))
+                    .coerceAtMost(chartSize.width.toFloat())
+                    .coerceAtLeast(visibleLeft)
+            val rightLimit = (visibleRight - calloutSize.width).coerceAtLeast(visibleLeft)
+            val x = (anchor.x - calloutSize.width / 2f).coerceIn(visibleLeft, rightLimit)
+            val above = anchor.y - calloutSize.height - gap
+            val y =
+                if (above >= 0f) {
+                    above
+                } else {
+                    (anchor.y + gap).coerceAtMost((chartSize.height - calloutSize.height).coerceAtLeast(0).toFloat())
+                }
+            IntOffset(x.toInt(), y.toInt())
+        }
+    Box(modifier.onSizeChanged { chartSize = it }) {
         Canvas(
             Modifier
                 .fillMaxSize()
@@ -1135,7 +1182,7 @@ private fun ReportCanvas(
                                 offset,
                                 size.width.toFloat(),
                                 size.height.toFloat(),
-                                density,
+                                density.density,
                             )
                         selection = nextSelection
                         if (kind == ReportKind.NET_WORTH) selectionCallback(nextSelection?.index)
@@ -1310,7 +1357,9 @@ private fun ReportCanvas(
                 callout,
                 modifier =
                     Modifier
-                        .align(if (selectedCategory != null) Alignment.Center else Alignment.TopCenter)
+                        .align(if (selectedCategory != null) Alignment.Center else Alignment.TopStart)
+                        .then(if (calloutOffset != null) Modifier.offset { calloutOffset } else Modifier)
+                        .onSizeChanged { calloutSize = it }
                         .clip(RoundedCornerShape(TandemShapes.pill))
                         .background(tandemPalette.raised)
                         .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.extraSmall),
@@ -1420,6 +1469,51 @@ private fun reportSelectionAt(
         tap.x in spendingLeft..(spendingLeft + barWidth) && tap.y in (chartBottom - spendingHeight)..chartBottom ->
             ReportChartSelection(index, income = false)
         else -> null
+    }
+}
+
+private fun reportSelectionAnchor(
+    kind: ReportKind,
+    selection: ReportChartSelection,
+    monthly: List<MonthlyMoneyPoint>,
+    netWorth: List<NetWorthPoint>,
+    width: Float,
+    height: Float,
+    inset: Float,
+): Offset? {
+    val chartBottom = height - inset
+    val chartHeight = (chartBottom - inset).coerceAtLeast(1f)
+    when (kind) {
+        ReportKind.SPENDING_OVER_TIME -> {
+            val values = monthly.map(MonthlyMoneyPoint::spendingMinor)
+            val value = values.getOrNull(selection.index)?.coerceAtLeast(0L) ?: return null
+            val maxValue = maxOf(values.maxOrNull() ?: 0L, values.averageLong()).coerceAtLeast(1L).toDouble()
+            val slot = width / values.size.coerceAtLeast(1)
+            val barHeight = chartHeight * (value.toDouble() / maxValue).toFloat()
+            return Offset(selection.index * slot + slot / 2f, chartBottom - barHeight)
+        }
+        ReportKind.INCOME_AND_SPENDING -> {
+            val point = monthly.getOrNull(selection.index) ?: return null
+            val maxValue = monthly.maxOfOrNull { maxOf(it.incomeMinor, it.spendingMinor) }?.coerceAtLeast(1L)?.toDouble() ?: 1.0
+            val slot = width / monthly.size.coerceAtLeast(1)
+            val barWidth = slot * 0.28f
+            val barLeft =
+                selection.index * slot + slot * 0.2f +
+                    if (selection.income) 0f else barWidth + slot * 0.08f
+            val value = if (selection.income) point.incomeMinor else point.spendingMinor
+            val barHeight = chartHeight * (value.coerceAtLeast(0L).toDouble() / maxValue).toFloat()
+            return Offset(barLeft + barWidth / 2f, chartBottom - barHeight)
+        }
+        ReportKind.NET_WORTH -> {
+            val values = netWorth.map(NetWorthPoint::allAccountsMinor)
+            val value = values.getOrNull(selection.index)?.toDouble() ?: return null
+            val (minimum, maximum) = netWorthValueRange(values)
+            val spread = (maximum - minimum).coerceAtLeast(1.0)
+            val x = if (values.size == 1) width / 2f else inset + (width - inset * 2f) * selection.index / (values.size - 1)
+            val y = chartBottom - chartHeight * ((value - minimum) / spread).toFloat()
+            return Offset(x, y)
+        }
+        else -> return null
     }
 }
 
@@ -1548,7 +1642,7 @@ private fun ReportDataTable(
     onOpenCategoryActivity: (String, String, ReportWindow) -> Unit,
 ) {
     val monthly = monthlyPoints(kind, data)
-    SectionCard("Data") {
+    SectionCard(if (kind == ReportKind.NET_WORTH) "Monthly history" else "Details") {
         when (kind) {
             ReportKind.SPENDING_BY_CATEGORY ->
                 data.categories.forEachIndexed { index, point ->
@@ -1578,11 +1672,16 @@ private fun ReportDataTable(
                     }
                 }
             ReportKind.NET_WORTH -> {
-                data.netWorth.forEachIndexed { index, point ->
-                    if (index > 0) DividerLine()
-                    val assets = if (netWorthScope == "On budget") point.onBudgetAssetsMinor else point.allAccountsAssetsMinor
-                    val debts = if (netWorthScope == "On budget") point.onBudgetDebtsMinor else point.allAccountsDebtsMinor
-                    NetWorthTableRow(point.month, assets, debts, displaySettings)
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
+                    contentPadding = PaddingValues(bottom = TandemSpacing.small),
+                ) {
+                    itemsIndexed(data.netWorth, key = { _, point -> point.monthId }) { index, point ->
+                        if (index > 0) DividerLine()
+                        val assets = if (netWorthScope == "On budget") point.onBudgetAssetsMinor else point.allAccountsAssetsMinor
+                        val debts = if (netWorthScope == "On budget") point.onBudgetDebtsMinor else point.allAccountsDebtsMinor
+                        NetWorthTableRow(point.month, assets, debts, displaySettings)
+                    }
                 }
             }
         }
