@@ -43,6 +43,10 @@ async function createApi(
     reopenAccount: vi.fn(async () => undefined),
     renameCategory: vi.fn(async () => undefined),
     deleteCategory: vi.fn(async () => undefined),
+    renameSchedule: vi.fn(async () => undefined),
+    skipSchedule: vi.fn(async () => undefined),
+    postSchedule: vi.fn(async () => undefined),
+    deleteSchedule: vi.fn(async () => undefined),
   };
   const authenticate = vi.fn(async (token?: string) =>
     token === accessToken ? device : undefined,
@@ -203,6 +207,11 @@ const maintenanceRouteCases = (routeBudgetId = budgetId) => [
     method: "DELETE" as const,
     url: `/api/v1/budgets/${routeBudgetId}/categories/category-1`,
     payload: { transferCategoryId: null },
+  },
+  {
+    method: "POST" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/schedules/schedule-1/actions`,
+    payload: { action: "post" },
   },
 ];
 
@@ -1134,6 +1143,120 @@ describe("budget maintenance routes", () => {
     expect(invalid.statusCode).toBe(400);
     expect(failed.statusCode).toBe(502);
     expect(failed.body).not.toContain("private Actual detail");
+    await fake.app.close();
+  });
+
+  it("journals schedule edits and actions with budget scope and stable retries", async () => {
+    const fake = await createApi();
+    const path = `/api/v1/budgets/${budgetId}/schedules/schedule-1/actions`;
+    const renameHeaders = {
+      ...testHeaders(),
+      "idempotency-key": "schedule-rename-1",
+    };
+    const rename = () =>
+      fake.app.inject({
+        method: "POST",
+        url: path,
+        headers: renameHeaders,
+        payload: { action: "rename", name: "Home rent" },
+      });
+
+    const firstRename = await rename();
+    const replayedRename = await rename();
+    const skip = await fake.app.inject({
+      method: "POST",
+      url: path,
+      headers: testHeaders(),
+      payload: { action: "skip" },
+    });
+    const post = await fake.app.inject({
+      method: "POST",
+      url: path,
+      headers: testHeaders(),
+      payload: { action: "post" },
+    });
+    const deleted = await fake.app.inject({
+      method: "POST",
+      url: path,
+      headers: testHeaders(),
+      payload: { action: "delete" },
+    });
+    const outOfScope = await fake.app.inject({
+      method: "POST",
+      url: "/api/v1/budgets/other-budget/schedules/schedule-1/actions",
+      headers: testHeaders(),
+      payload: { action: "skip" },
+    });
+    const missingName = await fake.app.inject({
+      method: "POST",
+      url: path,
+      headers: testHeaders(),
+      payload: { action: "rename" },
+    });
+    const extraName = await fake.app.inject({
+      method: "POST",
+      url: path,
+      headers: testHeaders(),
+      payload: { action: "skip", name: "Should not be accepted" },
+    });
+
+    expect([
+      firstRename.statusCode,
+      replayedRename.statusCode,
+      skip.statusCode,
+      post.statusCode,
+      deleted.statusCode,
+    ]).toEqual([200, 200, 200, 200, 200]);
+    expect(outOfScope.statusCode).toBe(404);
+    expect(missingName.statusCode).toBe(400);
+    expect(extraName.statusCode).toBe(400);
+    expect(fake.budgetMaintenanceApi.renameSchedule).toHaveBeenCalledOnce();
+    expect(fake.budgetMaintenanceApi.renameSchedule).toHaveBeenCalledWith(
+      budgetId,
+      "schedule-1",
+      "Home rent",
+      undefined,
+    );
+    expect(fake.budgetMaintenanceApi.skipSchedule).toHaveBeenCalledOnce();
+    expect(fake.budgetMaintenanceApi.postSchedule).toHaveBeenCalledOnce();
+    expect(fake.budgetMaintenanceApi.deleteSchedule).toHaveBeenCalledOnce();
+    expect([...fake.operations.values()].map(({ action }) => action)).toEqual([
+      "schedule-rename",
+      "schedule-skip",
+      "schedule-post",
+      "schedule-delete",
+    ]);
+    await fake.app.close();
+  });
+
+  it("sanitizes schedule validation and Actual failures", async () => {
+    const fake = await createApi();
+    const url = `/api/v1/budgets/${budgetId}/schedules/schedule-1/actions`;
+    vi.mocked(fake.budgetMaintenanceApi.skipSchedule).mockRejectedValueOnce(
+      new BudgetMaintenanceInputError(
+        "A one-time schedule has no next date to skip",
+      ),
+    );
+    const rejected = await fake.app.inject({
+      method: "POST",
+      url,
+      headers: testHeaders(),
+      payload: { action: "skip" },
+    });
+    vi.mocked(fake.budgetMaintenanceApi.postSchedule).mockRejectedValueOnce(
+      new Error("private Actual schedule details"),
+    );
+    const failed = await fake.app.inject({
+      method: "POST",
+      url,
+      headers: testHeaders(),
+      payload: { action: "post" },
+    });
+
+    expect(rejected.statusCode).toBe(400);
+    expect(rejected.json().error.code).toBe("invalid_request");
+    expect(failed.statusCode).toBe(502);
+    expect(failed.body).not.toContain("private Actual schedule details");
     await fake.app.close();
   });
 

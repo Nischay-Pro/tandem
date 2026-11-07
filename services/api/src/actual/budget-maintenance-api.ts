@@ -72,6 +72,27 @@ export interface BudgetMaintenanceApiPort {
     transferCategoryId: string | null,
     encryptionPassword?: string,
   ): Promise<void>;
+  renameSchedule(
+    budgetId: string,
+    scheduleId: string,
+    name: string,
+    encryptionPassword?: string,
+  ): Promise<void>;
+  skipSchedule(
+    budgetId: string,
+    scheduleId: string,
+    encryptionPassword?: string,
+  ): Promise<void>;
+  postSchedule(
+    budgetId: string,
+    scheduleId: string,
+    encryptionPassword?: string,
+  ): Promise<void>;
+  deleteSchedule(
+    budgetId: string,
+    scheduleId: string,
+    encryptionPassword?: string,
+  ): Promise<void>;
 }
 
 export interface ActualBudgetMaintenanceSession {
@@ -119,6 +140,10 @@ type ActualBudgetMaintenanceClient = Pick<
   | "getPayees"
   | "updateCategory"
   | "deleteCategory"
+  | "getSchedules"
+  | "updateSchedule"
+  | "deleteSchedule"
+  | "internal"
 >;
 
 export function createBudgetMaintenanceApi(
@@ -526,6 +551,126 @@ export function createBudgetMaintenanceApi(
               categoryId,
               transferCategoryId ?? undefined,
             );
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    async renameSchedule(budgetId, scheduleId, name, encryptionPassword) {
+      const normalizedName = name.trim();
+      if (!normalizedName || normalizedName.length > 100) {
+        throw new BudgetMaintenanceInputError(
+          "Schedule names must be between 1 and 100 characters",
+        );
+      }
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const schedules = await client.getSchedules();
+            const schedule = schedules.find(
+              (candidate) => candidate.id === scheduleId,
+            );
+            if (!schedule || schedule.completed) {
+              throw new BudgetMaintenanceInputError(
+                "Choose an active schedule in this budget",
+              );
+            }
+            const duplicate = schedules.some(
+              (candidate) =>
+                candidate.id !== scheduleId &&
+                candidate.name?.trim() === normalizedName,
+            );
+            if (duplicate) {
+              throw new BudgetMaintenanceInputError(
+                "A schedule with this name already exists",
+              );
+            }
+            // A name-only edit must keep an occurrence that was skipped.
+            await client.updateSchedule(
+              scheduleId,
+              { name: normalizedName },
+              false,
+            );
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    skipSchedule(budgetId, scheduleId, encryptionPassword) {
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const schedule = (await client.getSchedules()).find(
+              (candidate) => candidate.id === scheduleId,
+            );
+            if (!schedule || schedule.completed) {
+              throw new BudgetMaintenanceInputError(
+                "Choose an active schedule in this budget",
+              );
+            }
+            if (
+              typeof schedule.date !== "object" ||
+              schedule.date === null ||
+              !("frequency" in schedule.date)
+            ) {
+              throw new BudgetMaintenanceInputError(
+                "A one-time schedule has no next date to skip",
+              );
+            }
+            const internal = client.internal;
+            if (!internal) {
+              throw new Error("Actual schedule actions are unavailable");
+            }
+            await internal.send("schedule/skip-next-date", { id: scheduleId });
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    postSchedule(budgetId, scheduleId, encryptionPassword) {
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const schedule = (await client.getSchedules()).find(
+              (candidate) => candidate.id === scheduleId,
+            );
+            if (!schedule || schedule.completed) {
+              throw new BudgetMaintenanceInputError(
+                "Choose an active schedule in this budget",
+              );
+            }
+            if (!schedule.account) {
+              throw new BudgetMaintenanceInputError(
+                "Choose an account before posting this schedule",
+              );
+            }
+            const internal = client.internal;
+            if (!internal) {
+              throw new Error("Actual schedule actions are unavailable");
+            }
+            await internal.send("schedule/post-transaction", {
+              id: scheduleId,
+            });
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    deleteSchedule(budgetId, scheduleId, encryptionPassword) {
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const schedules = await client.getSchedules();
+            if (!schedules.some((candidate) => candidate.id === scheduleId)) {
+              throw new BudgetMaintenanceInputError(
+                "Schedule does not exist in this budget",
+              );
+            }
+            await client.deleteSchedule(scheduleId);
           },
           writeOptions(encryptionPassword),
         ),

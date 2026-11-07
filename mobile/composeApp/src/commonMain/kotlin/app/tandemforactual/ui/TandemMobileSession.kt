@@ -763,6 +763,33 @@ internal class TandemMobileSession(
             apiClient.deleteBudgetCategory(budgetId, categoryId, transferCategoryId, encryptionPassword)
         }
 
+    suspend fun manageBudgetSchedule(
+        budgetId: String,
+        scheduleId: String,
+        action: String,
+        name: String?,
+        encryptionPassword: String?,
+    ): Boolean {
+        val cleanName = name?.trim()
+        if (action == "rename" && cleanName.isNullOrBlank()) {
+            budgetActionMessage = "Enter a schedule name."
+            return false
+        }
+        if (cleanName != null && cleanName.length > 100) {
+            budgetActionMessage = "Schedule names can be up to 100 characters."
+            return false
+        }
+        return performBudgetAction(budgetId, encryptionPassword, "Couldn’t update this schedule. Try again.") {
+            apiClient.manageBudgetSchedule(
+                budgetId,
+                scheduleId,
+                action,
+                cleanName,
+                encryptionPassword,
+            )
+        }
+    }
+
     private suspend fun performBudgetAction(
         budgetId: String,
         encryptionPassword: String?,

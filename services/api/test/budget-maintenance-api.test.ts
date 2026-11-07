@@ -39,6 +39,35 @@ function createFake() {
     },
   ];
   const payees: Array<{ id: string; name: string; transfer_acct: string }> = [];
+  const schedules: Array<{
+    id: string;
+    name?: string;
+    completed?: boolean;
+    account?: string;
+    date: string | { frequency: string; start: string };
+  }> = [
+    {
+      id: "monthly-rent",
+      name: "Rent",
+      completed: false,
+      account: "checking",
+      date: { frequency: "monthly", start: "2026-01-01" },
+    },
+    {
+      id: "one-time",
+      name: "One time",
+      completed: false,
+      account: "checking",
+      date: "2026-12-01",
+    },
+    {
+      id: "completed",
+      name: "Completed",
+      completed: true,
+      account: "checking",
+      date: { frequency: "monthly", start: "2026-01-01" },
+    },
+  ];
   const runBudgetCalls: Array<{
     budgetId: string;
     options: BudgetOperationOptions | undefined;
@@ -114,6 +143,12 @@ function createFake() {
       if (category && fields.name) category.name = fields.name;
     }),
     deleteCategory: vi.fn(async () => undefined),
+    getSchedules: vi.fn(async () => [...schedules]),
+    updateSchedule: vi.fn(async () => "monthly-rent"),
+    deleteSchedule: vi.fn(async () => undefined),
+    internal: {
+      send: vi.fn(async () => undefined),
+    },
   };
   const api = createBudgetMaintenanceApi(
     { withBudgetLock } as unknown as BudgetLockPort,
@@ -332,6 +367,112 @@ describe("Actual budget maintenance API", () => {
       fake.api.createPayee("budget-1", " corner market "),
     ).rejects.toThrow("A payee with this name already exists");
     expect(fake.client.createPayee).toHaveBeenCalledOnce();
+  });
+
+  it("renames schedules without resetting a skipped occurrence", async () => {
+    const fake = createFake();
+
+    await fake.api.renameSchedule(
+      "budget-1",
+      "monthly-rent",
+      " Home rent ",
+      "secret",
+    );
+
+    expect(fake.client.updateSchedule).toHaveBeenCalledWith(
+      "monthly-rent",
+      { name: "Home rent" },
+      false,
+    );
+    expect(fake.runBudgetCalls.at(-1)?.options).toEqual({
+      encryptionPassword: "secret",
+      synchronizeAfterWrite: true,
+    });
+    await expect(
+      fake.api.renameSchedule("budget-1", "monthly-rent", "One time"),
+    ).rejects.toThrow("A schedule with this name already exists");
+    await expect(
+      fake.api.renameSchedule("budget-1", "missing", "New name"),
+    ).rejects.toThrow("Choose an active schedule in this budget");
+    await expect(
+      fake.api.renameSchedule("budget-1", "monthly-rent", "  "),
+    ).rejects.toThrow("Schedule names must be between 1 and 100 characters");
+
+    const caseSensitiveName = createFake();
+    await caseSensitiveName.api.renameSchedule(
+      "budget-1",
+      "monthly-rent",
+      "one time",
+    );
+    expect(caseSensitiveName.client.updateSchedule).toHaveBeenCalledWith(
+      "monthly-rent",
+      { name: "one time" },
+      false,
+    );
+  });
+
+  it("uses Actual schedule handlers to skip and post scheduled transactions", async () => {
+    const fake = createFake();
+
+    await fake.api.skipSchedule("budget-1", "monthly-rent");
+    await fake.api.postSchedule("budget-1", "monthly-rent");
+
+    expect(fake.client.internal.send).toHaveBeenNthCalledWith(
+      1,
+      "schedule/skip-next-date",
+      { id: "monthly-rent" },
+    );
+    expect(fake.client.internal.send).toHaveBeenNthCalledWith(
+      2,
+      "schedule/post-transaction",
+      { id: "monthly-rent" },
+    );
+    expect(fake.runBudgetCalls.slice(-2).map(({ options }) => options)).toEqual(
+      [{ synchronizeAfterWrite: true }, { synchronizeAfterWrite: true }],
+    );
+
+    await expect(fake.api.skipSchedule("budget-1", "one-time")).rejects.toThrow(
+      "A one-time schedule has no next date to skip",
+    );
+    await expect(fake.api.postSchedule("budget-1", "missing")).rejects.toThrow(
+      "Choose an active schedule in this budget",
+    );
+    await expect(
+      fake.api.skipSchedule("budget-1", "completed"),
+    ).rejects.toThrow("Choose an active schedule in this budget");
+    expect(fake.client.internal.send).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports when this Actual client does not expose schedule handlers", async () => {
+    const fake = createFake();
+    Object.assign(fake.client, { internal: undefined });
+
+    await expect(
+      fake.api.skipSchedule("budget-1", "monthly-rent"),
+    ).rejects.toThrow("Actual schedule actions are unavailable");
+    await expect(
+      fake.api.postSchedule("budget-1", "monthly-rent"),
+    ).rejects.toThrow("Actual schedule actions are unavailable");
+  });
+
+  it("rejects posting a schedule without an account and deletes only existing schedules", async () => {
+    const fake = createFake();
+    fake.client.getSchedules.mockResolvedValueOnce([
+      {
+        id: "no-account",
+        date: "2026-12-01",
+        name: "No account",
+      },
+    ] as never);
+
+    await expect(
+      fake.api.postSchedule("budget-1", "no-account"),
+    ).rejects.toThrow("Choose an account before posting this schedule");
+    await fake.api.deleteSchedule("budget-1", "monthly-rent");
+    await expect(
+      fake.api.deleteSchedule("budget-1", "missing"),
+    ).rejects.toThrow("Schedule does not exist in this budget");
+    expect(fake.client.deleteSchedule).toHaveBeenCalledOnce();
   });
 
   it("sets the selected month's assigned category amount through Actual", async () => {

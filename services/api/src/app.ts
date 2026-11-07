@@ -972,6 +972,10 @@ interface BudgetCategoryRouteParams extends BudgetRouteParams {
   categoryId: string;
 }
 
+interface BudgetScheduleRouteParams extends BudgetRouteParams {
+  scheduleId: string;
+}
+
 interface BudgetAccountCreateBody {
   name: string;
   offbudget: boolean;
@@ -1014,6 +1018,11 @@ interface BudgetMoveMoneyBody {
 
 interface BudgetCategoryDeleteBody {
   transferCategoryId: string | null;
+}
+
+interface BudgetScheduleActionBody {
+  action: "rename" | "post" | "skip" | "delete";
+  name?: string;
 }
 
 interface BudgetChangeQuery {
@@ -2332,6 +2341,165 @@ function registerBudgetMaintenanceRoutes(
           request.params.categoryId,
         );
         reportTransactionFailure("Actual category delete failed", error);
+        return actualRequestFailed(reply);
+      }
+    },
+  );
+
+  app.post<{
+    Params: BudgetScheduleRouteParams;
+    Headers: BudgetReadHeaders;
+    Body: BudgetScheduleActionBody;
+  }>(
+    "/api/v1/budgets/:budgetId/schedules/:scheduleId/actions",
+    {
+      schema: {
+        tags: ["Budgets"],
+        operationId: "manageBudgetSchedule",
+        summary: "Post, skip, rename, or delete an Actual Budget schedule",
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          properties: {
+            budgetId: paramsSchema.properties.budgetId,
+            scheduleId: {
+              type: "string",
+              minLength: 1,
+              maxLength: 500,
+              pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+            },
+          },
+          required: ["budgetId", "scheduleId"],
+          additionalProperties: false,
+        },
+        headers: headersSchema,
+        body: {
+          type: "object",
+          properties: {
+            action: {
+              type: "string",
+              enum: ["rename", "post", "skip", "delete"],
+            },
+            name: {
+              type: "string",
+              minLength: 1,
+              maxLength: 100,
+              pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+            },
+          },
+          required: ["action"],
+          additionalProperties: false,
+        },
+        response: commonResponseSchema,
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(deviceAuth, request, reply);
+      if (!device) return reply;
+      if (request.validationError) return invalidBudgetRequest(reply);
+      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
+        return transactionNotFound(reply);
+      if (!maintenanceApi) return actualNotConfigured(reply);
+      if (!journal) return actualNotConfigured(reply);
+      const { action } = request.body;
+      const name = (request.body.name ?? "").trim();
+      if (
+        (action === "rename" && !name) ||
+        (action !== "rename" && request.body.name !== undefined)
+      ) {
+        return invalidBudgetRequest(reply);
+      }
+      try {
+        const patch: { [key: string]: JsonValue } = { action };
+        if (action === "rename") patch.name = name;
+        const result = await runMaintenanceOperation(
+          journal,
+          request,
+          device,
+          request.params.budgetId,
+          `schedule-${action}`,
+          request.params.scheduleId,
+          patch,
+          async () => {
+            const password = request.headers["x-budget-encryption-password"];
+            switch (action) {
+              case "rename":
+                await maintenanceApi.renameSchedule(
+                  request.params.budgetId,
+                  request.params.scheduleId,
+                  name,
+                  password,
+                );
+                break;
+              case "post":
+                await maintenanceApi.postSchedule(
+                  request.params.budgetId,
+                  request.params.scheduleId,
+                  password,
+                );
+                break;
+              case "skip":
+                await maintenanceApi.skipSchedule(
+                  request.params.budgetId,
+                  request.params.scheduleId,
+                  password,
+                );
+                break;
+              case "delete":
+                await maintenanceApi.deleteSchedule(
+                  request.params.budgetId,
+                  request.params.scheduleId,
+                  password,
+                );
+                break;
+            }
+            return { status: "ok" };
+          },
+        );
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          `schedule_${action}`,
+          "success",
+          request.params.scheduleId,
+        );
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send(result);
+      } catch (error) {
+        if (error instanceof BudgetMaintenanceInputError) {
+          logBudgetMaintenanceEvent(
+            request,
+            device,
+            request.params.budgetId,
+            `schedule_${action}`,
+            "rejected",
+            request.params.scheduleId,
+          );
+          return reply
+            .code(
+              error instanceof MaintenanceOperationConflictError ? 409 : 400,
+            )
+            .send({
+              error: {
+                code:
+                  error instanceof MaintenanceOperationConflictError
+                    ? error.code
+                    : "invalid_request",
+                message: error.message,
+              },
+            });
+        }
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          `schedule_${action}`,
+          "failed",
+          request.params.scheduleId,
+        );
+        reportTransactionFailure("Actual schedule action failed", error);
         return actualRequestFailed(reply);
       }
     },

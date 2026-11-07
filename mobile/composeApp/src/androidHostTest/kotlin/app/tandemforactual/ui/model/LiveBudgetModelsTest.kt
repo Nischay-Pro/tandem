@@ -3,7 +3,9 @@ package app.tandemforactual.ui.model
 import app.tandemforactual.data.database.BudgetRecordEntity
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class LiveBudgetModelsTest {
     @Test
@@ -133,7 +135,8 @@ class LiveBudgetModelsTest {
                     json =
                         """
                         {"id":"rent","name":"Rent","payee":"landlord","account":"checking",
-                         "amount":150000,"next_date":"2026-11-15","completed":false}
+                         "amount":150000,"next_date":"2026-11-15","completed":false,
+                         "date":{"frequency":"monthly","start":"2026-11-15"}}
                         """.trimIndent(),
                 ),
                 record(
@@ -142,7 +145,8 @@ class LiveBudgetModelsTest {
                     json =
                         """
                         {"id":"variable","payee":"utility","account":"checking",
-                         "amount":{"num1":5000,"num2":12000},"next_date":"2026-11-18"}
+                         "amount":{"num1":5000,"num2":12000},"next_date":"2026-11-18",
+                         "date":"2026-11-18"}
                         """.trimIndent(),
                 ),
                 record(
@@ -168,6 +172,8 @@ class LiveBudgetModelsTest {
         assertEquals("Household Checking", upcoming.first().accountName)
         assertEquals(150_000, upcoming.first().amountMinor)
         assertEquals(5_000L to 12_000L, upcoming.last().amountRangeMinor)
+        assertTrue(upcoming.first().canSkip)
+        assertFalse(upcoming.last().canSkip)
     }
 }
 

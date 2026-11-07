@@ -52,6 +52,7 @@ internal data class LiveScheduleSummary(
     val accountName: String?,
     val amountMinor: Long?,
     val amountRangeMinor: Pair<Long, Long>?,
+    val canSkip: Boolean,
 )
 
 internal fun BudgetRecordEntity.recordBody(): JsonObject? {
@@ -168,6 +169,7 @@ internal fun liveScheduleSummaries(
             val accountId = body.stringValue("account")
             val amountElement = body["amount"]
             val amountObject = amountElement as? JsonObject
+            val dateObject = body["date"] as? JsonObject
             val amountRange =
                 amountObject?.let { amount ->
                     val first = amount.longValue("num1")
@@ -181,6 +183,7 @@ internal fun liveScheduleSummaries(
                 accountName = accountId?.let(accounts::get),
                 amountMinor = if (amountRange == null) body.longValue("amount") else null,
                 amountRangeMinor = amountRange,
+                canSkip = dateObject?.stringValue("frequency") != null,
             )
         }.sortedBy(LiveScheduleSummary::nextDate)
 }

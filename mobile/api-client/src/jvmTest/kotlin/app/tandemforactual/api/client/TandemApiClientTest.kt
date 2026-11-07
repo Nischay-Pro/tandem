@@ -21,6 +21,8 @@ import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import io.ktor.http.takeFrom
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -473,6 +475,10 @@ class TandemApiClientTest {
                 client.setBudgetCategoryAmount("budget-1", "category-1", "2026-11", 125_000, "budget-password")
                 client.moveMoneyBetweenCategories("budget-1", "2026-11", "category-1", "category-2", 12_500, "budget-password")
                 client.deleteBudgetCategory("budget-1", "category-1", null, null)
+                client.manageBudgetSchedule("budget-1", "schedule-1", "rename", "Rent", "budget-password")
+                client.manageBudgetSchedule("budget-1", "schedule-1", "skip", null, null)
+                client.manageBudgetSchedule("budget-1", "schedule-1", "post", null, null)
+                client.manageBudgetSchedule("budget-1", "schedule-1", "delete", null, null)
                 client.withGeneratedApi {
                     BudgetsApi.runBudgetBankSync(idempotencyKey = "direct-1", budgetId = "budget-1")
                     BudgetsApi.createBudgetAccount(idempotencyKey = "direct-2", budgetId = "budget-1")
@@ -485,6 +491,12 @@ class TandemApiClientTest {
                     BudgetsApi.setBudgetCategoryAmount(idempotencyKey = "direct-9", budgetId = "budget-1", categoryId = "category-1")
                     BudgetsApi.moveMoneyBetweenCategories(idempotencyKey = "direct-10", budgetId = "budget-1")
                     BudgetsApi.deleteBudgetCategory(idempotencyKey = "direct-11", budgetId = "budget-1", categoryId = "category-1")
+                    BudgetsApi.manageBudgetSchedule(
+                        idempotencyKey = "direct-12",
+                        budgetId = "budget-1",
+                        scheduleId = "schedule-1",
+                        body = buildJsonObject { put("action", "skip") }.toMap(),
+                    )
                     BudgetsApi.getBudgetSnapshot(budgetId = "budget-1")
                     BudgetsApi.getBudgetSnapshotPage(budgetId = "budget-1")
                     BudgetsApi.getBudgetChanges(budgetId = "budget-1", generation = "generation", cursor = "0")
@@ -504,17 +516,21 @@ class TandemApiClientTest {
                         "PUT /api/v1/budgets/budget-1/categories/category-1/budget-amount",
                         "POST /api/v1/budgets/budget-1/categories/move-money",
                         "DELETE /api/v1/budgets/budget-1/categories/category-1",
+                        "POST /api/v1/budgets/budget-1/schedules/schedule-1/actions",
+                        "POST /api/v1/budgets/budget-1/schedules/schedule-1/actions",
+                        "POST /api/v1/budgets/budget-1/schedules/schedule-1/actions",
+                        "POST /api/v1/budgets/budget-1/schedules/schedule-1/actions",
                     ),
-                    requests.take(11).map { "${it.method.value} ${it.url.encodedPath}" },
+                    requests.take(15).map { "${it.method.value} ${it.url.encodedPath}" },
                 )
                 assertEquals(null, requests[0].headers["x-budget-encryption-password"])
                 assertEquals("budget-password", requests[1].headers["x-budget-encryption-password"])
                 assertEquals("budget-password", requests[2].headers["x-budget-encryption-password"])
                 assertEquals("budget-password", requests[8].headers["x-budget-encryption-password"])
                 assertEquals("budget-password", requests[9].headers["x-budget-encryption-password"])
-                val idempotencyKeys = requests.take(11).map { it.headers["Idempotency-Key"] }
+                val idempotencyKeys = requests.take(15).map { it.headers["Idempotency-Key"] }
                 assertTrue(idempotencyKeys.all { key -> key?.let { runCatching { Uuid.parse(it) }.isSuccess } == true })
-                assertEquals(11, idempotencyKeys.distinct().size)
+                assertEquals(15, idempotencyKeys.distinct().size)
                 assertTrue((requests[1].body as TextContent).text.contains("\"name\":\"Savings\""))
                 assertTrue((requests[1].body as TextContent).text.contains("\"offbudget\":true"))
                 assertTrue((requests[1].body as TextContent).text.contains("\"accountGroupId\":\"credit-group\""))
@@ -529,6 +545,12 @@ class TandemApiClientTest {
                 assertTrue((requests[9].body as TextContent).text.contains("\"fromCategoryId\":\"category-1\""))
                 assertTrue((requests[9].body as TextContent).text.contains("\"toCategoryId\":\"category-2\""))
                 assertTrue((requests[10].body as TextContent).text.contains("\"transferCategoryId\":null"))
+                assertEquals("budget-password", requests[11].headers["x-budget-encryption-password"])
+                assertTrue((requests[11].body as TextContent).text.contains("\"action\":\"rename\""))
+                assertTrue((requests[11].body as TextContent).text.contains("\"name\":\"Rent\""))
+                assertTrue((requests[12].body as TextContent).text.contains("\"action\":\"skip\""))
+                assertTrue((requests[13].body as TextContent).text.contains("\"action\":\"post\""))
+                assertTrue((requests[14].body as TextContent).text.contains("\"action\":\"delete\""))
             } finally {
                 cleanup()
                 Api.baseUrl = previousBaseUrl

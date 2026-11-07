@@ -2894,7 +2894,7 @@ private fun ScreenContent(
         AppRoute.MONTH_PICKER -> MonthPickerScreen(state, navigation)
         AppRoute.CATEGORY_GROUP -> CategoryGroupScreen(state, navigation, liveBudgetMonth)
         AppRoute.CATEGORY_DETAIL -> CategoryDetailScreen(state, navigation, liveBudgetMonth, mobileSession)
-        AppRoute.SCHEDULES -> UpcomingSchedulesScreen(state, liveSchedules)
+        AppRoute.SCHEDULES -> UpcomingSchedulesScreen(state, mobileSession, liveSchedules)
         AppRoute.BUDGET_RULES ->
             BudgetRulesScreen(
                 mobileSession.ruleRecords,
@@ -5287,8 +5287,15 @@ private fun LiveUpcomingBillsCard(
 @Composable
 private fun UpcomingSchedulesScreen(
     state: AppState,
+    mobileSession: TandemMobileSession,
     schedules: List<LiveScheduleSummary>,
 ) {
+    var selectedScheduleId by rememberSaveable(state.selectedBudgetId) { mutableStateOf<String?>(null) }
+    var editingName by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
+    var confirmingDelete by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
+    var nameDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) { mutableStateOf("") }
+    val selectedSchedule = schedules.firstOrNull { it.id == selectedScheduleId }
+    val scope = rememberCoroutineScope()
     PageLazyColumn {
         item(key = "upcoming-schedules-heading") { Heading("Upcoming bills") }
         if (schedules.isEmpty()) {
@@ -5305,12 +5312,220 @@ private fun UpcomingSchedulesScreen(
             items(schedules.size, key = { index -> schedules[index].id }) { index ->
                 val schedule = schedules[index]
                 SurfaceCard {
-                    ListRow(
-                        schedule.name,
-                        listOfNotNull(formatLiveDate(schedule.nextDate), schedule.accountName).joinToString(" · "),
-                        schedule.amountLabel(state),
-                        leading = RowLeading.Icon(Lucide.CalendarDays),
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ListRow(
+                            schedule.name,
+                            listOfNotNull(formatLiveDate(schedule.nextDate), schedule.accountName).joinToString(" · "),
+                            schedule.amountLabel(state),
+                            leading = RowLeading.Icon(Lucide.CalendarDays),
+                            onClick = {
+                                selectedScheduleId = schedule.id
+                                nameDraft = schedule.name
+                                editingName = false
+                                confirmingDelete = false
+                            },
+                        )
+                        TandemIconButton(
+                            Lucide.ChevronRight,
+                            "Schedule actions",
+                            modifier = Modifier.padding(end = TandemSpacing.small),
+                            sizeDp = 40,
+                            iconSizeDp = 18,
+                            containerColor = tandemPalette.raised,
+                        ) {
+                            selectedScheduleId = schedule.id
+                            nameDraft = schedule.name
+                            editingName = false
+                            confirmingDelete = false
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (selectedSchedule != null) {
+        Dialog(
+            onDismissRequest = {
+                if (!mobileSession.isPerformingBudgetAction) {
+                    selectedScheduleId = null
+                    editingName = false
+                    confirmingDelete = false
+                }
+            },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            SurfaceCard(
+                Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 480.dp)
+                    .padding(horizontal = TandemSpacing.large),
+            ) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(TandemSpacing.large)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        Icon(
+                            if (editingName) Lucide.Pencil else Lucide.CalendarDays,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = tandemPalette.accent,
+                        )
+                        Text(
+                            when {
+                                confirmingDelete -> "Delete schedule?"
+                                editingName -> "Edit schedule"
+                                else -> selectedSchedule.name
+                            },
+                            modifier = Modifier.weight(1f),
+                            color = tandemPalette.text,
+                            fontSize = TandemTypography.sectionTitle,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        TandemIconButton(
+                            Lucide.X,
+                            "Close",
+                            sizeDp = 40,
+                            iconSizeDp = 18,
+                            containerColor = tandemPalette.raised,
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                        ) {
+                            selectedScheduleId = null
+                            editingName = false
+                            confirmingDelete = false
+                        }
+                    }
+                    when {
+                        confirmingDelete -> {
+                            TandemActionButton(
+                                "Delete",
+                                TandemActionButtonTone.DESTRUCTIVE,
+                                modifier = Modifier.fillMaxWidth(),
+                                icon = Lucide.Trash2,
+                                enabled = !mobileSession.isPerformingBudgetAction,
+                                loading = mobileSession.isPerformingBudgetAction,
+                            ) {
+                                scope.launch {
+                                    val deleted =
+                                        mobileSession.manageBudgetSchedule(
+                                            state.selectedBudgetId,
+                                            selectedSchedule.id,
+                                            "delete",
+                                            null,
+                                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                                        )
+                                    if (deleted) selectedScheduleId = null
+                                }
+                            }
+                            TandemActionButton(
+                                "Keep schedule",
+                                TandemActionButtonTone.NEUTRAL,
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !mobileSession.isPerformingBudgetAction,
+                            ) { confirmingDelete = false }
+                        }
+                        editingName -> {
+                            TextFieldCard("Name", nameDraft, { nameDraft = it })
+                            mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                            TandemActionButton(
+                                if (mobileSession.isPerformingBudgetAction) "Saving…" else "Save",
+                                TandemActionButtonTone.PRIMARY,
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !mobileSession.isPerformingBudgetAction && nameDraft.isNotBlank(),
+                                loading = mobileSession.isPerformingBudgetAction,
+                            ) {
+                                scope.launch {
+                                    val saved =
+                                        mobileSession.manageBudgetSchedule(
+                                            state.selectedBudgetId,
+                                            selectedSchedule.id,
+                                            "rename",
+                                            nameDraft,
+                                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                                        )
+                                    if (saved) {
+                                        selectedScheduleId = null
+                                        editingName = false
+                                    }
+                                }
+                            }
+                            TandemActionButton(
+                                "Cancel",
+                                TandemActionButtonTone.NEUTRAL,
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !mobileSession.isPerformingBudgetAction,
+                            ) { editingName = false }
+                        }
+                        else -> {
+                            mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                            TandemActionButton(
+                                "Post now",
+                                TandemActionButtonTone.PRIMARY,
+                                modifier = Modifier.fillMaxWidth(),
+                                icon = Lucide.CalendarDays,
+                                enabled = !mobileSession.isPerformingBudgetAction,
+                                loading = mobileSession.isPerformingBudgetAction,
+                            ) {
+                                scope.launch {
+                                    val posted =
+                                        mobileSession.manageBudgetSchedule(
+                                            state.selectedBudgetId,
+                                            selectedSchedule.id,
+                                            "post",
+                                            null,
+                                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                                        )
+                                    if (posted) selectedScheduleId = null
+                                }
+                            }
+                            if (selectedSchedule.canSkip) {
+                                TandemActionButton(
+                                    "Skip next date",
+                                    TandemActionButtonTone.NEUTRAL,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    icon = Lucide.CalendarDays,
+                                    enabled = !mobileSession.isPerformingBudgetAction,
+                                    loading = mobileSession.isPerformingBudgetAction,
+                                ) {
+                                    scope.launch {
+                                        val skipped =
+                                            mobileSession.manageBudgetSchedule(
+                                                state.selectedBudgetId,
+                                                selectedSchedule.id,
+                                                "skip",
+                                                null,
+                                                state.encryptedPassword.takeIf { it.isNotBlank() },
+                                            )
+                                        if (skipped) selectedScheduleId = null
+                                    }
+                                }
+                            }
+                            TandemActionButton(
+                                "Edit name",
+                                TandemActionButtonTone.NEUTRAL,
+                                modifier = Modifier.fillMaxWidth(),
+                                icon = Lucide.Pencil,
+                                enabled = !mobileSession.isPerformingBudgetAction,
+                            ) {
+                                nameDraft = selectedSchedule.name
+                                mobileSession.clearBudgetActionMessage()
+                                editingName = true
+                            }
+                            TandemActionButton(
+                                "Delete",
+                                TandemActionButtonTone.DESTRUCTIVE,
+                                modifier = Modifier.fillMaxWidth(),
+                                icon = Lucide.Trash2,
+                                enabled = !mobileSession.isPerformingBudgetAction,
+                            ) { confirmingDelete = true }
+                        }
+                    }
                 }
             }
         }
