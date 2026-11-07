@@ -13,6 +13,7 @@ import app.tandemforactual.ui.model.recordBody
 import app.tandemforactual.ui.model.stringValue
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlin.math.roundToLong
 
 internal enum class ReportKind(
     val title: String,
@@ -30,12 +31,25 @@ internal enum class ReportPeriodMode {
     RANGE,
 }
 
+internal enum class ReportRangePreset(
+    val label: String,
+    val monthCount: Int?,
+) {
+    LAST_3_MONTHS("Last 3 months", 3),
+    LAST_6_MONTHS("Last 6 months", 6),
+    LAST_12_MONTHS("Last 12 months", 12),
+    YEAR_TO_DATE("Year to date", null),
+    LAST_YEAR("Last year", null),
+    ALL_DATES("All dates", null),
+}
+
 internal data class ReportWindow(
     val startDate: String,
     val throughDate: String,
     val startMonthId: String,
     val endMonthId: String,
     val monthIds: List<String>,
+    val allDates: Boolean = false,
 ) {
     val monthCount: Int get() = monthIds.size
 }
@@ -67,9 +81,25 @@ internal data class BudgetedSpentPoint(
 internal data class NetWorthPoint(
     val monthId: String,
     val month: String,
-    val allAccountsMinor: Long,
-    val onBudgetMinor: Long,
-)
+    val allAccountsAssetsMinor: Long,
+    val allAccountsDebtsMinor: Long,
+    val onBudgetAssetsMinor: Long,
+    val onBudgetDebtsMinor: Long,
+) {
+    val allAccountsMinor: Long get() = allAccountsAssetsMinor - allAccountsDebtsMinor
+    val onBudgetMinor: Long get() = onBudgetAssetsMinor - onBudgetDebtsMinor
+}
+
+internal fun categoryPercentage(
+    amount: Long,
+    total: Long,
+): String {
+    if (total <= 0L || amount <= 0L) return "0%"
+    val tenths = (amount.toDouble() * 1_000.0 / total.toDouble()).roundToLong()
+    val whole = tenths / 10
+    val fraction = tenths % 10
+    return if (fraction == 0L) "$whole%" else "$whole.$fraction%"
+}
 
 internal fun createReportWindow(
     endMonthId: String,
@@ -84,6 +114,70 @@ internal fun createReportWindow(
     val lastDay = reportDaysInMonth(end.year, end.month)
     val throughDate = "${months.last()}-${lastDay.toString().padStart(2, '0')}"
     return ReportWindow(firstDate, throughDate, reportMonthId(start), reportMonthId(end), months)
+}
+
+internal fun createReportWindow(
+    endMonthId: String,
+    mode: ReportPeriodMode,
+    rangePreset: ReportRangePreset,
+    todayIsoDate: String,
+): ReportWindow? {
+    if (mode == ReportPeriodMode.MONTH) return createReportWindow(endMonthId, mode, 1)
+    rangePreset.monthCount?.let { count -> return createReportWindow(endMonthId, ReportPeriodMode.RANGE, count) }
+
+    val today = todayIsoDate.takeIf { it.length >= 10 } ?: return null
+    val todayMonthId = today.take(7)
+    val todayMonth = parseReportMonth(todayMonthId) ?: return null
+    return when (rangePreset) {
+        ReportRangePreset.YEAR_TO_DATE -> {
+            val startMonth = "${todayMonth.year.toString().padStart(4, '0')}-01"
+            ReportWindow(
+                "${todayMonth.year.toString().padStart(4, '0')}-01-01",
+                today,
+                startMonth,
+                todayMonthId,
+                reportMonthsBetween(startMonth, todayMonthId),
+            )
+        }
+        ReportRangePreset.LAST_YEAR -> {
+            val year = todayMonth.year - 1
+            val firstMonth = "${year.toString().padStart(4, '0')}-01"
+            val lastMonth = "${year.toString().padStart(4, '0')}-12"
+            ReportWindow(
+                "$firstMonth-01",
+                "$lastMonth-31",
+                firstMonth,
+                lastMonth,
+                reportMonthsBetween(firstMonth, lastMonth),
+            )
+        }
+        ReportRangePreset.ALL_DATES ->
+            ReportWindow(
+                "0001-01-01",
+                today,
+                "",
+                todayMonthId,
+                emptyList(),
+                allDates = true,
+            )
+        else -> createReportWindow(endMonthId, ReportPeriodMode.RANGE, 6)
+    }
+}
+
+private fun reportMonthsBetween(
+    startMonthId: String,
+    endMonthId: String,
+): List<String> {
+    val start = parseReportMonth(startMonthId) ?: return emptyList()
+    val end = parseReportMonth(endMonthId) ?: return emptyList()
+    if (start.year * 12 + start.month > end.year * 12 + end.month) return emptyList()
+    val result = mutableListOf<String>()
+    var current = start
+    while (current.year < end.year || current.year == end.year && current.month <= end.month) {
+        result += reportMonthId(current)
+        current = shiftReportMonth(current, 1)
+    }
+    return result
 }
 
 internal fun reportMonthIds(
@@ -120,7 +214,14 @@ internal fun monthlyMoneyPoints(
     window: ReportWindow,
 ): List<MonthlyMoneyPoint> {
     val totals = aggregates.associateBy(MonthlyIncomeSpendingAggregate::monthId)
-    return window.monthIds.map { monthId ->
+    val monthIds =
+        if (window.allDates) {
+            val firstMonthId = totals.keys.minOrNull() ?: return emptyList()
+            reportMonthsBetween(firstMonthId, window.endMonthId)
+        } else {
+            window.monthIds
+        }
+    return monthIds.map { monthId ->
         val month = parseReportMonth(monthId)
         val total = totals[monthId]
         MonthlyMoneyPoint(
@@ -143,7 +244,7 @@ internal fun budgetedSpentPoints(
     val resolvedNames = categoryNames.toMutableMap()
     budgetMonthRecords
         .asSequence()
-        .filter { it.recordId in selectedMonthIds && !it.localDeleted && !it.remoteDeleted }
+        .filter { (window.allDates || it.recordId in selectedMonthIds) && !it.localDeleted && !it.remoteDeleted }
         .mapNotNull { record -> record.recordBody()?.get("categoryGroups") as? JsonArray }
         .flatMap { it.asSequence() }
         .mapNotNull { it as? JsonObject }
@@ -159,7 +260,7 @@ internal fun budgetedSpentPoints(
         }
     val spent =
         spendingByCategoryMonth
-            .filter { it.monthId in selectedMonthIds }
+            .filter { window.allDates || it.monthId in selectedMonthIds }
             .groupBy(CategoryMonthAggregate::categoryId)
             .mapValues { (_, values) -> values.sumOf(CategoryMonthAggregate::spendingMinor) }
     return (budgeted.keys + spent.keys)
@@ -212,8 +313,18 @@ internal fun netWorthPoints(
             NetWorthPoint(
                 monthId,
                 formatMonth(month.year, month.month),
-                balances.values.sum(),
-                balances.filterKeys { it in onBudgetIds }.values.sum(),
+                balances.values.filter { it > 0 }.sum(),
+                balances.values.filter { it < 0 }.sumOf { -it },
+                balances
+                    .filterKeys { it in onBudgetIds }
+                    .values
+                    .filter { it > 0 }
+                    .sum(),
+                balances
+                    .filterKeys { it in onBudgetIds }
+                    .values
+                    .filter { it < 0 }
+                    .sumOf { -it },
             )
     }
     return pointsDescending.asReversed()

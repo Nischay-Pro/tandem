@@ -180,6 +180,7 @@ import app.tandemforactual.ui.model.recordName
 import app.tandemforactual.ui.model.stringValue
 import app.tandemforactual.ui.reports.ReportKind
 import app.tandemforactual.ui.reports.ReportPeriodMode
+import app.tandemforactual.ui.reports.ReportRangePreset
 import app.tandemforactual.ui.reports.ReportWindow
 import app.tandemforactual.ui.reports.reportMonthLabel
 import com.composables.icons.lucide.Bell
@@ -758,7 +759,7 @@ internal fun resolveAppStartupDestination(
 private const val AUTOMATIC_SYNC_COOLDOWN_MS = 30_000L
 
 private val LocalRouteScrollState = staticCompositionLocalOf<ScrollState?> { null }
-private val LocalRouteLazyListState = staticCompositionLocalOf<LazyListState?> { null }
+internal val LocalRouteLazyListState = staticCompositionLocalOf<LazyListState?> { null }
 
 private fun decodeScrollPositions(serialized: String?): Map<String, Int> =
     serialized
@@ -807,6 +808,7 @@ internal class AppState {
     var reportsBudgetId by mutableStateOf("")
     var reportsPeriodMode by mutableStateOf(ReportPeriodMode.MONTH.name)
     var reportsRangeMonths by mutableStateOf(6)
+    var reportsRangePreset by mutableStateOf(ReportRangePreset.LAST_6_MONTHS.name)
     var reportsNetWorthScope by mutableStateOf("All accounts")
     var activitySearchQuery by mutableStateOf("")
     var activitySearchFilters by mutableStateOf<List<ActivitySearchFilter>>(emptyList())
@@ -872,6 +874,7 @@ internal class AppState {
             "reportsBudgetId" to reportsBudgetId,
             "reportsPeriodMode" to reportsPeriodMode,
             "reportsRangeMonths" to reportsRangeMonths.toString(),
+            "reportsRangePreset" to reportsRangePreset,
             "reportsNetWorthScope" to reportsNetWorthScope,
             "reduceMotionMode" to (reduceMotionOverride?.let { if (it) "on" else "off" } ?: "system"),
             "syncOnOpen" to syncOnOpen.toString(),
@@ -898,6 +901,7 @@ internal class AppState {
         reportsBudgetId = saved["reportsBudgetId"] ?: reportsBudgetId
         reportsPeriodMode = saved["reportsPeriodMode"] ?: reportsPeriodMode
         reportsRangeMonths = saved["reportsRangeMonths"]?.toIntOrNull()?.coerceIn(3, 12) ?: reportsRangeMonths
+        reportsRangePreset = saved["reportsRangePreset"] ?: reportsRangePreset
         reportsNetWorthScope = saved["reportsNetWorthScope"] ?: reportsNetWorthScope
         reduceMotionOverride =
             when (saved["reduceMotionMode"]) {
@@ -935,6 +939,7 @@ internal class AppState {
                         "reportsBudgetId" to state.reportsBudgetId,
                         "reportsPeriodMode" to state.reportsPeriodMode,
                         "reportsRangeMonths" to state.reportsRangeMonths,
+                        "reportsRangePreset" to state.reportsRangePreset,
                         "reportsNetWorthScope" to state.reportsNetWorthScope,
                         "selectedAccountId" to state.selectedAccountId,
                         "selectedCategoryGroupId" to state.selectedCategoryGroupId,
@@ -986,6 +991,7 @@ internal class AppState {
                         reportsBudgetId = saved["reportsBudgetId"] as? String ?: reportsBudgetId
                         reportsPeriodMode = saved["reportsPeriodMode"] as? String ?: reportsPeriodMode
                         reportsRangeMonths = (saved["reportsRangeMonths"] as? Int)?.coerceIn(3, 12) ?: reportsRangeMonths
+                        reportsRangePreset = saved["reportsRangePreset"] as? String ?: reportsRangePreset
                         reportsNetWorthScope = saved["reportsNetWorthScope"] as? String ?: reportsNetWorthScope
                         selectedAccountId = saved["selectedAccountId"] as? String ?: selectedAccountId
                         selectedCategoryGroupId = saved["selectedCategoryGroupId"] as? String ?: selectedCategoryGroupId
@@ -1121,6 +1127,7 @@ fun TandemApp(
     val saveableStateHolder = rememberSaveableStateHolder()
     val routeScrollStates = remember { mutableMapOf<String, ScrollState>() }
     val routeLazyListStates = remember { mutableMapOf<String, LazyListState>() }
+    val reportsDataCache = remember { ReportsDataCache() }
     SideEffect { state.systemReduceMotionEnabled = systemReduceMotion }
     val reduceMotion = state.reduceMotionOverride ?: systemReduceMotion
     val apiClient = remember(allowInsecureLoopback) { TandemApiClient(allowInsecureLoopback) }
@@ -1389,6 +1396,10 @@ fun TandemApp(
                 if (next == AppRoute.NEW_TRANSACTION) {
                     newTransaction(null)
                 } else {
+                    if (next.isReportDetail() && backStack.lastOrNull()?.route != AppRoute.REPORTS) {
+                        backStack.clear()
+                        backStack.add(newRouteEntry(AppRoute.REPORTS))
+                    }
                     routeTransitionDirection = 1f
                     backStack.add(newRouteEntry(next))
                 }
@@ -1399,6 +1410,14 @@ fun TandemApp(
                     routeTransitionDirection = 0f
                     backStack.clear()
                     backStack.add(newRouteEntry(it))
+                    if (it == AppRoute.REPORTS) {
+                        val reportsStateKey = "tab-${AppRoute.REPORTS.name}"
+                        state.scrollPositions[reportsStateKey] = 0
+                        state.lazyScrollPositions[reportsStateKey] = 0 to 0
+                        routeLazyListStates[reportsStateKey]?.let { listState ->
+                            listState.requestScrollToItem(0)
+                        }
+                    }
                 }
             },
             back = handleBack,
@@ -1920,6 +1939,7 @@ fun TandemApp(
                                 deviceName = deviceName,
                                 navigation = navigation,
                                 mobileSession = mobileSession,
+                                reportsDataCache = reportsDataCache,
                                 onPairDevice = pairDevice,
                                 onRetryStoredSession = retryStoredSession,
                                 onSelectBudget = selectBudget,
@@ -2020,19 +2040,8 @@ fun TandemApp(
                     .background(appBackgroundBrush(state.backgroundStyle, palette))
                     .safeDrawingPadding(),
         ) {
-            val stationaryTabShell = route.isTab() && routeTransitionDirection == 0f
-            if (stationaryTabShell) {
-                AnimatedContent(
-                    targetState = route,
-                    modifier = Modifier.fillMaxWidth().clipToBounds(),
-                    transitionSpec = {
-                        val (enter, exit) = crossfadeTransitions(reduceMotion, TandemMotion.TAB_MILLIS)
-                        enter togetherWith exit using null
-                    },
-                    contentAlignment = Alignment.CenterStart,
-                    label = "tandem-tab-header-transition",
-                ) { headerRoute -> renderHeader(headerRoute) }
-            }
+            val stationaryTabShell = route.isTab()
+            if (stationaryTabShell) renderHeader(route)
             Box(
                 modifier =
                     Modifier
@@ -2123,6 +2132,13 @@ private fun AppRoute.isTab(): Boolean =
         this == AppRoute.ACTIVITY ||
         this == AppRoute.REPORTS ||
         this == AppRoute.SETTINGS
+
+private fun AppRoute.isReportDetail(): Boolean =
+    this == AppRoute.REPORT_SPENDING_BY_CATEGORY ||
+        this == AppRoute.REPORT_SPENDING_OVER_TIME ||
+        this == AppRoute.REPORT_INCOME_AND_SPENDING ||
+        this == AppRoute.REPORT_BUDGETED_AND_SPENT ||
+        this == AppRoute.REPORT_NET_WORTH
 
 private fun AppRoute.tabOrder(): Int =
     when (this) {
@@ -2531,6 +2547,7 @@ private fun ScreenContent(
     deviceName: String,
     navigation: AppNavigation,
     mobileSession: TandemMobileSession,
+    reportsDataCache: ReportsDataCache,
     onPairDevice: () -> Unit,
     onRetryStoredSession: () -> Unit,
     onSelectBudget: (BudgetCatalogItem) -> Unit,
@@ -2584,6 +2601,7 @@ private fun ScreenContent(
                 state,
                 mobileSession,
                 liveAccounts,
+                reportsDataCache,
                 onOpenReport = { kind -> navigation.open(reportRoute(kind)) },
                 onOpenCategoryActivity = { categoryId, categoryName, window ->
                     openReportCategoryActivity(state, navigation, categoryId, categoryName, window)
@@ -2603,6 +2621,7 @@ private fun ScreenContent(
                 state,
                 mobileSession,
                 liveAccounts,
+                reportsDataCache,
                 onOpenCategoryActivity = { categoryId, categoryName, window ->
                     openReportCategoryActivity(state, navigation, categoryId, categoryName, window)
                 },
@@ -4958,18 +4977,25 @@ private fun openReportCategoryActivity(
 ) {
     state.activitySearchQuery = ""
     val dateFilter =
-        if (window.monthCount == 1) {
-            ActivitySearchFilter(
-                ActivitySearchField.DATE_MONTH,
-                window.endMonthId,
-                "Date: ${reportMonthLabel(window.endMonthId)}",
-            )
-        } else {
-            ActivitySearchFilter(
-                ActivitySearchField.DATE_RANGE,
-                "${window.startDate}..${window.throughDate}",
-                "Date: ${reportMonthLabel(window.startMonthId)} – ${reportMonthLabel(window.endMonthId)}",
-            )
+        when {
+            window.allDates ->
+                ActivitySearchFilter(
+                    ActivitySearchField.DATE_RANGE,
+                    "${window.startDate}..${window.throughDate}",
+                    "Date: All dates",
+                )
+            window.monthCount == 1 ->
+                ActivitySearchFilter(
+                    ActivitySearchField.DATE_MONTH,
+                    window.endMonthId,
+                    "Date: ${reportMonthLabel(window.endMonthId)}",
+                )
+            else ->
+                ActivitySearchFilter(
+                    ActivitySearchField.DATE_RANGE,
+                    "${window.startDate}..${window.throughDate}",
+                    "Date: ${reportMonthLabel(window.startMonthId)} – ${reportMonthLabel(window.endMonthId)}",
+                )
         }
     state.activitySearchFilters =
         listOf(

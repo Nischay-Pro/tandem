@@ -5,6 +5,7 @@ package app.tandemforactual.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,13 +20,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.DropdownMenu
+import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,6 +43,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -65,8 +73,10 @@ import app.tandemforactual.ui.reports.MonthlyMoneyPoint
 import app.tandemforactual.ui.reports.NetWorthPoint
 import app.tandemforactual.ui.reports.ReportKind
 import app.tandemforactual.ui.reports.ReportPeriodMode
+import app.tandemforactual.ui.reports.ReportRangePreset
 import app.tandemforactual.ui.reports.ReportWindow
 import app.tandemforactual.ui.reports.budgetedSpentSummary
+import app.tandemforactual.ui.reports.categoryPercentage
 import app.tandemforactual.ui.reports.categorySpendingPoints
 import app.tandemforactual.ui.reports.categorySpendingSummary
 import app.tandemforactual.ui.reports.createReportWindow
@@ -78,15 +88,29 @@ import app.tandemforactual.ui.reports.reportMonthAxisLabel
 import app.tandemforactual.ui.reports.reportMonthLabel
 import app.tandemforactual.ui.reports.shiftReportMonthId
 import app.tandemforactual.ui.reports.spendingOverTimeSummary
+import com.composables.icons.lucide.ChartColumn
+import com.composables.icons.lucide.ChartColumnIncreasing
+import com.composables.icons.lucide.ChartNoAxesCombined
+import com.composables.icons.lucide.ChartPie
+import com.composables.icons.lucide.ChevronDown
+import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleAlert
+import com.composables.icons.lucide.CreditCard
+import com.composables.icons.lucide.Landmark
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.TrendingUp
 import kotlinx.coroutines.flow.flowOf
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.sqrt
 
 @Composable
 internal fun ReportsScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
     accounts: List<LiveAccountSummary>,
+    reportsDataCache: ReportsDataCache,
     onOpenReport: (ReportKind) -> Unit,
     onOpenCategoryActivity: (String, String, ReportWindow) -> Unit,
     onOpenActivity: () -> Unit,
@@ -101,7 +125,11 @@ internal fun ReportsScreen(
     val periodMode =
         ReportPeriodMode.entries.firstOrNull { it.name == state.reportsPeriodMode }
             ?: ReportPeriodMode.MONTH
-    val window = createReportWindow(state.reportsMonthId, periodMode, state.reportsRangeMonths)
+    val rangePreset = ReportRangePreset.entries.firstOrNull { it.name == state.reportsRangePreset } ?: ReportRangePreset.LAST_6_MONTHS
+    val today = platformTodayIsoDate()
+    val window = createReportWindow(state.reportsMonthId, periodMode, rangePreset, today)
+    val netWorthWindow =
+        createReportWindow(today.take(7), ReportPeriodMode.RANGE, ReportRangePreset.LAST_6_MONTHS, today)
     val dataWindow =
         window
             ?: ReportWindow(
@@ -111,8 +139,10 @@ internal fun ReportsScreen(
                 "2026-05",
                 listOf("2026-05"),
             )
-    val data = rememberReportData(state, mobileSession, accounts, dataWindow)
+    val data = rememberReportData(state, mobileSession, accounts, dataWindow, netWorthWindow ?: dataWindow, reportsDataCache)
+    val listState = LocalRouteLazyListState.current ?: rememberLazyListState()
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize().padding(horizontal = TandemSpacing.screen),
         contentPadding = PaddingValues(vertical = TandemSpacing.medium),
         verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
@@ -121,10 +151,13 @@ internal fun ReportsScreen(
             ReportPeriodSelector(
                 monthId = state.reportsMonthId,
                 mode = periodMode,
-                rangeMonths = state.reportsRangeMonths,
+                rangePreset = rangePreset,
                 onMonthChange = { state.reportsMonthId = it },
                 onModeChange = { state.reportsPeriodMode = it.name },
-                onRangeChange = { state.reportsRangeMonths = it },
+                onRangePresetChange = {
+                    state.reportsRangePreset = it.name
+                    it.monthCount?.let { months -> state.reportsRangeMonths = months }
+                },
             )
         }
         if (window == null) {
@@ -143,7 +176,7 @@ internal fun ReportsScreen(
                     ReportCard(
                         kind,
                         data,
-                        window,
+                        if (kind == ReportKind.NET_WORTH) netWorthWindow ?: window else window,
                         state.reportsNetWorthScope,
                         onNetWorthScopeChange = { state.reportsNetWorthScope = it },
                         onSeeAll = { onOpenReport(kind) },
@@ -163,34 +196,45 @@ internal fun ReportDetailScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
     accounts: List<LiveAccountSummary>,
+    reportsDataCache: ReportsDataCache,
     onOpenCategoryActivity: (String, String, ReportWindow) -> Unit,
     onEmptyAction: () -> Unit,
 ) {
     val periodMode =
         ReportPeriodMode.entries.firstOrNull { it.name == state.reportsPeriodMode }
             ?: ReportPeriodMode.MONTH
-    val window = createReportWindow(state.reportsMonthId, periodMode, state.reportsRangeMonths)
+    val rangePreset = ReportRangePreset.entries.firstOrNull { it.name == state.reportsRangePreset } ?: ReportRangePreset.LAST_6_MONTHS
+    val today = platformTodayIsoDate()
+    val window = createReportWindow(state.reportsMonthId, periodMode, rangePreset, today)
     if (window == null) {
         Column(Modifier.fillMaxSize().padding(TandemSpacing.screen), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
             EmptyState("Choose a report period", "Choose a month to see this report.")
         }
         return
     }
-    val data = rememberReportData(state, mobileSession, accounts, window)
+    val netWorthWindow = createReportWindow(today.take(7), ReportPeriodMode.RANGE, ReportRangePreset.LAST_6_MONTHS, today) ?: window
+    val data = rememberReportData(state, mobileSession, accounts, window, netWorthWindow, reportsDataCache)
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = TandemSpacing.screen),
         contentPadding = PaddingValues(vertical = TandemSpacing.medium),
         verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
     ) {
         item(key = "report-detail-period") {
-            ReportPeriodSelector(
-                monthId = state.reportsMonthId,
-                mode = periodMode,
-                rangeMonths = state.reportsRangeMonths,
-                onMonthChange = { state.reportsMonthId = it },
-                onModeChange = { state.reportsPeriodMode = it.name },
-                onRangeChange = { state.reportsRangeMonths = it },
-            )
+            if (kind == ReportKind.NET_WORTH) {
+                FixedReportPeriod("Last 6 months")
+            } else {
+                ReportPeriodSelector(
+                    monthId = state.reportsMonthId,
+                    mode = periodMode,
+                    rangePreset = rangePreset,
+                    onMonthChange = { state.reportsMonthId = it },
+                    onModeChange = { state.reportsPeriodMode = it.name },
+                    onRangePresetChange = {
+                        state.reportsRangePreset = it.name
+                        it.monthCount?.let { months -> state.reportsRangeMonths = months }
+                    },
+                )
+            }
         }
         if (reportHasNoData(kind, data)) {
             item(key = "report-detail-empty") {
@@ -206,7 +250,7 @@ internal fun ReportDetailScreen(
             }
         } else {
             item(key = "report-detail-chart") {
-                ReportDetailChart(kind, data, state)
+                ReportDetailChart(kind, data, state, if (kind == ReportKind.NET_WORTH) netWorthWindow else window, onOpenCategoryActivity)
             }
             item(key = "report-detail-table") {
                 ReportDataTable(
@@ -222,7 +266,21 @@ internal fun ReportDetailScreen(
     }
 }
 
-private data class ReportDataBundle(
+@Composable
+private fun FixedReportPeriod(label: String) {
+    SurfaceCard {
+        Row(
+            Modifier.fillMaxWidth().padding(TandemSpacing.large),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Period", color = tandemPalette.muted, fontSize = TandemTypography.caption, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.weight(1f))
+            Text(label, color = tandemPalette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+internal data class ReportDataBundle(
     val categories: List<CategorySpendingPoint>,
     val monthly: List<MonthlyMoneyPoint>,
     val incomeAndSpending: List<MonthlyMoneyPoint>,
@@ -231,12 +289,33 @@ private data class ReportDataBundle(
     val displaySettings: BudgetDisplaySettings?,
 )
 
+internal class ReportsDataCache {
+    private val reports = mutableMapOf<String, ReportDataBundle>()
+
+    fun get(key: String): ReportDataBundle? = reports[key]
+
+    fun put(
+        key: String,
+        value: ReportDataBundle,
+    ) {
+        reports[key] = value
+        if (reports.size > 24) reports.remove(reports.keys.first())
+    }
+}
+
+private data class ReportChartSelection(
+    val index: Int,
+    val income: Boolean = false,
+)
+
 @Composable
 private fun rememberReportData(
     state: AppState,
     mobileSession: TandemMobileSession,
     accounts: List<LiveAccountSummary>,
     window: ReportWindow,
+    netWorthWindow: ReportWindow,
+    reportsDataCache: ReportsDataCache,
 ): ReportDataBundle {
     val budgetId = state.selectedBudgetId
     val categoryNames =
@@ -277,24 +356,32 @@ private fun rememberReportData(
         }
     val today = platformTodayIsoDate()
     val netWorthFlow =
-        remember(mobileSession.reportViewModels, budgetId, window, today, accounts) {
+        remember(mobileSession.reportViewModels, budgetId, netWorthWindow, today, accounts) {
             if (budgetId.isNotBlank() && mobileSession.reportViewModels != null) {
-                mobileSession.reportViewModels.netWorth.observe(budgetId, window.monthIds, today, accounts)
+                mobileSession.reportViewModels.netWorth.observe(budgetId, netWorthWindow.monthIds, today, accounts)
             } else {
-                flowOf(sampleNetWorth(window.monthIds, today))
+                flowOf(sampleNetWorth(netWorthWindow.monthIds, today))
             }
         }
+    val cacheKey =
+        "$budgetId|${window.startDate}|${window.throughDate}|${window.allDates}|" +
+            "${netWorthWindow.monthIds}|${categoryNames.hashCode()}|${accounts.hashCode()}"
+    val cachedData = reportsDataCache.get(cacheKey)
     val categoryInitial = if (budgetId.isBlank()) sampleCategorySpending(window) else emptyList()
     val monthlyInitial = if (budgetId.isBlank()) sampleMonthlyMoney(window) else emptyList()
     val incomeAndSpendingInitial = if (budgetId.isBlank()) sampleMonthlyMoney(window) else emptyList()
     val budgetedInitial = if (budgetId.isBlank()) sampleBudgetedSpent(window) else emptyList()
-    val netWorthInitial = if (budgetId.isBlank()) sampleNetWorth(window.monthIds, today) else emptyList()
-    val categoriesBySpend by categoryFlow.collectAsState(categoryInitial)
-    val monthly by monthlyFlow.collectAsState(monthlyInitial)
-    val incomeAndSpending by incomeAndSpendingFlow.collectAsState(incomeAndSpendingInitial)
-    val budgetedSpent by budgetedFlow.collectAsState(budgetedInitial)
-    val netWorth by netWorthFlow.collectAsState(netWorthInitial)
-    return ReportDataBundle(categoriesBySpend, monthly, incomeAndSpending, budgetedSpent, netWorth, state.budgetDisplaySettings)
+    val netWorthInitial = if (budgetId.isBlank()) sampleNetWorth(netWorthWindow.monthIds, today) else emptyList()
+    val categoriesBySpend by categoryFlow.collectAsState(cachedData?.categories ?: categoryInitial)
+    val monthly by monthlyFlow.collectAsState(cachedData?.monthly ?: monthlyInitial)
+    val incomeAndSpending by incomeAndSpendingFlow.collectAsState(cachedData?.incomeAndSpending ?: incomeAndSpendingInitial)
+    val budgetedSpent by budgetedFlow.collectAsState(cachedData?.budgetedSpent ?: budgetedInitial)
+    val netWorth by netWorthFlow.collectAsState(cachedData?.netWorth ?: netWorthInitial)
+    val data = ReportDataBundle(categoriesBySpend, monthly, incomeAndSpending, budgetedSpent, netWorth, state.budgetDisplaySettings)
+    SideEffect {
+        if (reportsDataCache.get(cacheKey) != data) reportsDataCache.put(cacheKey, data)
+    }
+    return data
 }
 
 private fun sampleCategorySpending(window: ReportWindow): List<CategorySpendingPoint> {
@@ -373,10 +460,10 @@ private fun sampleNetWorth(
 private fun ReportPeriodSelector(
     monthId: String,
     mode: ReportPeriodMode,
-    rangeMonths: Int,
+    rangePreset: ReportRangePreset,
     onMonthChange: (String) -> Unit,
     onModeChange: (ReportPeriodMode) -> Unit,
-    onRangeChange: (Int) -> Unit,
+    onRangePresetChange: (ReportRangePreset) -> Unit,
 ) {
     SurfaceCard {
         Column(
@@ -388,27 +475,95 @@ private fun ReportPeriodSelector(
                 listOf("Month" to (mode == ReportPeriodMode.MONTH), "Range" to (mode == ReportPeriodMode.RANGE)),
             ) { index -> onModeChange(if (index == 0) ReportPeriodMode.MONTH else ReportPeriodMode.RANGE) }
             if (mode == ReportPeriodMode.RANGE) {
-                val options = listOf(3, 6, 12)
-                ReportSegmentedSelector(options.map { months -> "Last $months months" to (rangeMonths == months) }) { index ->
-                    onRangeChange(options[index])
+                ReportRangePresetDropdown(rangePreset, onRangePresetChange)
+                val rangeWindow = createReportWindow(monthId, mode, rangePreset, platformTodayIsoDate())
+                when (rangePreset) {
+                    ReportRangePreset.LAST_3_MONTHS,
+                    ReportRangePreset.LAST_6_MONTHS,
+                    ReportRangePreset.LAST_12_MONTHS,
+                    -> {
+                        PeriodStepper(
+                            title = reportMonthLabel(monthId),
+                            previousLabel = "Previous end month",
+                            nextLabel = "Next end month",
+                            onPrevious = { shiftReportMonthId(monthId, -1)?.let(onMonthChange) },
+                            onNext = { shiftReportMonthId(monthId, 1)?.let(onMonthChange) },
+                        )
+                        rangeWindow?.let { window ->
+                            Text(
+                                "${reportMonthLabel(window.startMonthId)} – ${reportMonthLabel(window.endMonthId)}",
+                                modifier = Modifier.fillMaxWidth(),
+                                color = tandemPalette.muted,
+                                fontSize = TandemTypography.caption,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                    ReportRangePreset.YEAR_TO_DATE ->
+                        Text(
+                            "January ${platformTodayIsoDate().take(4)} – ${reportMonthLabel(platformTodayIsoDate().take(7))}",
+                            modifier = Modifier.fillMaxWidth(),
+                            color = tandemPalette.muted,
+                            fontSize = TandemTypography.caption,
+                            textAlign = TextAlign.Center,
+                        )
+                    ReportRangePreset.LAST_YEAR ->
+                        Text(
+                            "January – December ${platformTodayIsoDate().take(4).toIntOrNull()?.minus(1) ?: ""}",
+                            modifier = Modifier.fillMaxWidth(),
+                            color = tandemPalette.muted,
+                            fontSize = TandemTypography.caption,
+                            textAlign = TextAlign.Center,
+                        )
+                    ReportRangePreset.ALL_DATES ->
+                        Text(
+                            "All available dates",
+                            modifier = Modifier.fillMaxWidth(),
+                            color = tandemPalette.muted,
+                            fontSize = TandemTypography.caption,
+                            textAlign = TextAlign.Center,
+                        )
                 }
-            }
-            PeriodStepper(
-                title = reportMonthLabel(monthId),
-                previousLabel = "Previous month",
-                nextLabel = "Next month",
-                onPrevious = { shiftReportMonthId(monthId, -1)?.let(onMonthChange) },
-                onNext = { shiftReportMonthId(monthId, 1)?.let(onMonthChange) },
-            )
-            if (mode == ReportPeriodMode.RANGE) {
-                val first = shiftReportMonthId(monthId, -(rangeMonths - 1)) ?: monthId
-                Text(
-                    "${reportMonthLabel(first)} – ${reportMonthLabel(monthId)}",
-                    modifier = Modifier.fillMaxWidth(),
-                    color = tandemPalette.muted,
-                    fontSize = TandemTypography.caption,
-                    textAlign = TextAlign.Center,
+            } else {
+                PeriodStepper(
+                    title = reportMonthLabel(monthId),
+                    previousLabel = "Previous month",
+                    nextLabel = "Next month",
+                    onPrevious = { shiftReportMonthId(monthId, -1)?.let(onMonthChange) },
+                    onNext = { shiftReportMonthId(monthId, 1)?.let(onMonthChange) },
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReportRangePresetDropdown(
+    selected: ReportRangePreset,
+    onSelect: (ReportRangePreset) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(TandemShapes.control))
+                .background(tandemPalette.raised)
+                .clickable(role = Role.Button, onClickLabel = "Choose report range", onClick = { expanded = true })
+                .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(selected.label, modifier = Modifier.weight(1f), color = tandemPalette.text, fontSize = TandemTypography.body)
+            Icon(Lucide.ChevronDown, contentDescription = null, modifier = Modifier.size(20.dp), tint = tandemPalette.muted)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            ReportRangePreset.entries.forEach { preset ->
+                DropdownMenuItem(onClick = {
+                    expanded = false
+                    onSelect(preset)
+                }) {
+                    Text(preset.label, color = tandemPalette.text, fontSize = TandemTypography.compactBody)
+                }
             }
         }
     }
@@ -494,7 +649,16 @@ private fun ReportCard(
             Modifier.padding(TandemSpacing.large),
             verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(TandemShapes.medium))
+                    .clickable(role = Role.Button, onClickLabel = "Open ${kind.title}", onClick = onSeeAll)
+                    .padding(vertical = TandemSpacing.extraSmall),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+            ) {
+                Icon(reportIcon(kind), contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
                 Text(
                     kind.title,
                     modifier = Modifier.weight(1f),
@@ -502,13 +666,14 @@ private fun ReportCard(
                     fontSize = TandemTypography.cardTitle,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Text(
-                    "See all",
-                    modifier = Modifier.clickable(role = Role.Button, onClickLabel = "See all ${kind.title}", onClick = onSeeAll),
-                    color = tandemPalette.accent,
-                    fontSize = TandemTypography.action,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.muted)
+            }
+            if (kind != ReportKind.NET_WORTH && !empty) {
+                ReportSummary(kind, data, netWorthScope, compact = true)
+            }
+            if (kind == ReportKind.NET_WORTH && !empty) {
+                Text("Last 6 months", color = tandemPalette.muted, fontSize = TandemTypography.caption)
+                ReportSummary(kind, data, netWorthScope, compact = true)
             }
             if (empty) {
                 EmptyState(
@@ -522,7 +687,15 @@ private fun ReportCard(
                     NetWorthScopeSelector(netWorthScope, onNetWorthScopeChange)
                 }
                 ReportLegend(kind, data)
-                ReportChart(kind, data, netWorthScope, 150.dp, compact = true)
+                ReportChart(
+                    kind,
+                    data,
+                    netWorthScope,
+                    150.dp,
+                    compact = true,
+                    window = window,
+                    onOpenCategoryActivity = onOpenCategoryActivity,
+                )
                 if (kind == ReportKind.SPENDING_BY_CATEGORY) {
                     data.categories.take(5).forEach { point ->
                         ListRow(
@@ -533,12 +706,6 @@ private fun ReportCard(
                         )
                     }
                 }
-                Text(
-                    reportSummary(kind, data, netWorthScope),
-                    color = reportSummaryColor(kind, data),
-                    fontSize = TandemTypography.body,
-                    lineHeight = TandemTypography.bodyLineHeight,
-                )
             }
         }
     }
@@ -549,23 +716,79 @@ private fun ReportDetailChart(
     kind: ReportKind,
     data: ReportDataBundle,
     state: AppState,
+    window: ReportWindow,
+    onOpenCategoryActivity: (String, String, ReportWindow) -> Unit,
 ) {
     SurfaceCard {
         Column(
             Modifier.padding(TandemSpacing.large),
             verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
         ) {
-            if (kind == ReportKind.NET_WORTH) NetWorthScopeSelector(state.reportsNetWorthScope) { state.reportsNetWorthScope = it }
+            if (kind == ReportKind.NET_WORTH) {
+                ReportSummary(kind, data, state.reportsNetWorthScope, compact = false)
+                NetWorthScopeSelector(state.reportsNetWorthScope) { state.reportsNetWorthScope = it }
+            }
+            if (kind != ReportKind.NET_WORTH) {
+                ReportSummary(kind, data, state.reportsNetWorthScope, compact = false)
+            }
             ReportLegend(kind, data)
-            ReportChart(kind, data, state.reportsNetWorthScope, 220.dp, compact = false)
-            Text(
-                reportSummary(kind, data, state.reportsNetWorthScope),
-                color = reportSummaryColor(kind, data),
-                fontSize = TandemTypography.action,
-                lineHeight = TandemTypography.actionLineHeight,
-                fontWeight = FontWeight.Medium,
+            ReportChart(
+                kind,
+                data,
+                state.reportsNetWorthScope,
+                220.dp,
+                compact = false,
+                window = window,
+                onOpenCategoryActivity = onOpenCategoryActivity,
             )
         }
+    }
+}
+
+@Composable
+private fun ReportSummary(
+    kind: ReportKind,
+    data: ReportDataBundle,
+    netWorthScope: String,
+    compact: Boolean,
+) {
+    if (kind == ReportKind.NET_WORTH) {
+        val point = data.netWorth.lastOrNull() ?: return
+        val assets = if (netWorthScope == "On budget") point.onBudgetAssetsMinor else point.allAccountsAssetsMinor
+        val debts = if (netWorthScope == "On budget") point.onBudgetDebtsMinor else point.allAccountsDebtsMinor
+        val netWorth = assets - debts
+        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+            Text(
+                formatReportCurrency(netWorth, data.displaySettings),
+                color = netAmountColor(netWorth),
+                fontSize = if (compact) TandemTypography.amount else TandemTypography.amountField,
+                fontWeight = FontWeight.Bold,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                Icon(Lucide.TrendingUp, contentDescription = null, modifier = Modifier.size(20.dp), tint = tandemPalette.positive)
+                Text(
+                    "Assets: ${formatReportCurrency(assets, data.displaySettings)}",
+                    color = tandemPalette.positive,
+                    fontSize = TandemTypography.caption,
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                Icon(Lucide.CreditCard, contentDescription = null, modifier = Modifier.size(20.dp), tint = tandemPalette.negative)
+                Text(
+                    "Debts: ${formatReportCurrency(debts, data.displaySettings)}",
+                    color = tandemPalette.negative,
+                    fontSize = TandemTypography.caption,
+                )
+            }
+        }
+    } else {
+        Text(
+            reportSummary(kind, data, netWorthScope),
+            color = reportSummaryColor(kind, data),
+            fontSize = if (compact) TandemTypography.body else TandemTypography.action,
+            lineHeight = if (compact) TandemTypography.bodyLineHeight else TandemTypography.actionLineHeight,
+            fontWeight = if (compact) FontWeight.Normal else FontWeight.Medium,
+        )
     }
 }
 
@@ -576,10 +799,15 @@ private fun ReportChart(
     netWorthScope: String,
     height: Dp,
     compact: Boolean,
+    window: ReportWindow,
+    onOpenCategoryActivity: (String, String, ReportWindow) -> Unit,
 ) {
     when (kind) {
         ReportKind.SPENDING_OVER_TIME, ReportKind.INCOME_AND_SPENDING -> MonthlyReportChart(kind, data, height)
-        ReportKind.BUDGETED_AND_SPENT -> BudgetedSpentChart(data, if (compact) 5 else null)
+        ReportKind.BUDGETED_AND_SPENT ->
+            BudgetedSpentChart(data, if (compact) 5 else null) { categoryId, category ->
+                onOpenCategoryActivity(categoryId, category, window)
+            }
         else -> ReportCanvas(kind, data, netWorthScope, Modifier.fillMaxWidth().height(height))
     }
 }
@@ -681,12 +909,23 @@ private fun evenlySpacedMonthIndexes(monthCount: Int): List<Int> {
 private fun BudgetedSpentChart(
     data: ReportDataBundle,
     maxRows: Int?,
+    onOpenCategoryActivity: (String, String) -> Unit,
 ) {
     val points = maxRows?.let { data.budgetedSpent.take(it) } ?: data.budgetedSpent
     val maximum = points.maxOfOrNull { maxOf(it.budgetedMinor, it.spentMinor) }?.coerceAtLeast(1L) ?: 1L
     Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
         points.forEach { point ->
-            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(TandemShapes.control))
+                    .clickable(
+                        role = Role.Button,
+                        onClickLabel = "View ${point.category} activity",
+                        onClick = { onOpenCategoryActivity(point.categoryId, point.category) },
+                    ).padding(vertical = TandemSpacing.extraSmall),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+            ) {
                 Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -709,6 +948,7 @@ private fun BudgetedSpentChart(
                             tint = tandemPalette.warning,
                         )
                     }
+                    Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp), tint = tandemPalette.muted)
                 }
                 BudgetedSpentValueBar("Budgeted", point.budgetedMinor, maximum, tandemPalette.positive, data.displaySettings)
                 BudgetedSpentValueBar("Spent", point.spentMinor, maximum, tandemPalette.negative, data.displaySettings)
@@ -771,6 +1011,15 @@ private fun NetWorthScopeSelector(
     }
 }
 
+private fun reportIcon(kind: ReportKind): ImageVector =
+    when (kind) {
+        ReportKind.SPENDING_BY_CATEGORY -> Lucide.ChartPie
+        ReportKind.SPENDING_OVER_TIME -> Lucide.ChartColumnIncreasing
+        ReportKind.INCOME_AND_SPENDING -> Lucide.ChartNoAxesCombined
+        ReportKind.BUDGETED_AND_SPENT -> Lucide.ChartColumn
+        ReportKind.NET_WORTH -> Lucide.Landmark
+    }
+
 @Composable
 private fun ReportLegend(
     kind: ReportKind,
@@ -814,146 +1063,313 @@ private fun ReportCanvas(
     showMonthlyGuides: Boolean = false,
 ) {
     val palette = tandemPalette
-    val description = reportChartDescription(kind, data, netWorthScope)
     val monthly = monthlyPoints(kind, data)
-    Canvas(modifier.semantics { contentDescription = description }) {
-        val inset = 8.dp.toPx()
-        val chartTop = inset
-        val chartBottom = size.height - inset
-        val chartHeight = (chartBottom - chartTop).coerceAtLeast(1f)
-        if (showMonthlyGuides) {
-            drawLine(palette.border, Offset(inset, chartTop), Offset(size.width - inset, chartTop), 1.dp.toPx())
-            drawLine(palette.border, Offset(inset, chartBottom), Offset(size.width - inset, chartBottom), 1.dp.toPx())
+    var selection by remember(kind, monthly, data.categories) { mutableStateOf<ReportChartSelection?>(null) }
+    val selectedCategory = selection?.takeIf { kind == ReportKind.SPENDING_BY_CATEGORY }?.let { data.categories.getOrNull(it.index) }
+    val selectedValue =
+        selection?.takeIf { kind == ReportKind.SPENDING_OVER_TIME || kind == ReportKind.INCOME_AND_SPENDING }?.let { selected ->
+            monthly.getOrNull(selected.index)?.let { point ->
+                if (kind == ReportKind.SPENDING_OVER_TIME || !selected.income) point.spendingMinor else point.incomeMinor
+            }
         }
-        when (kind) {
-            ReportKind.SPENDING_BY_CATEGORY -> {
-                val values = data.categories.map(CategorySpendingPoint::spendingMinor)
-                val total = values.sum()
-                val diameter = minOf(size.width, size.height) - inset * 2
-                val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
-                if (total <= 0L) {
-                    drawArc(palette.border, -90f, 360f, false, topLeft, Size(diameter, diameter), style = Stroke(26.dp.toPx()))
-                } else {
-                    val colors = listOf(palette.accent, palette.syncing, palette.positive, palette.warning, palette.negative, palette.muted)
-                    var startAngle = -90f
+    val categoryTotal = data.categories.sumOf { it.spendingMinor.coerceAtLeast(0L) }
+    val callout =
+        selectedCategory?.let { point ->
+            "${categoryPercentage(
+                point.spendingMinor,
+                categoryTotal,
+            )} · ${formatReportCurrency(positiveAmount(point.spendingMinor), data.displaySettings)}"
+        } ?: selectedValue?.let { formatReportCurrency(positiveAmount(it), data.displaySettings) }
+    val description = reportChartDescription(kind, data, netWorthScope)
+    Box(modifier) {
+        Canvas(
+            Modifier
+                .fillMaxSize()
+                .semantics {
+                    contentDescription =
+                        if (callout == null) description else "$description Selected: $callout"
+                }.pointerInput(kind, monthly, data.categories) {
+                    detectTapGestures { offset ->
+                        selection =
+                            reportSelectionAt(
+                                kind,
+                                data.categories,
+                                monthly,
+                                offset,
+                                size.width.toFloat(),
+                                size.height.toFloat(),
+                                density,
+                            )
+                    }
+                },
+        ) {
+            val inset = 8.dp.toPx()
+            val chartTop = inset
+            val chartBottom = size.height - inset
+            val chartHeight = (chartBottom - chartTop).coerceAtLeast(1f)
+            if (showMonthlyGuides) {
+                drawLine(palette.border, Offset(inset, chartTop), Offset(size.width - inset, chartTop), 1.dp.toPx())
+                drawLine(palette.border, Offset(inset, chartBottom), Offset(size.width - inset, chartBottom), 1.dp.toPx())
+            }
+            when (kind) {
+                ReportKind.SPENDING_BY_CATEGORY -> {
+                    val values = data.categories.map(CategorySpendingPoint::spendingMinor)
+                    val total = values.sum()
+                    val diameter = minOf(size.width, size.height) - inset * 2
+                    val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
+                    if (total <= 0L) {
+                        drawArc(palette.border, -90f, 360f, false, topLeft, Size(diameter, diameter), style = Stroke(26.dp.toPx()))
+                    } else {
+                        val colors =
+                            listOf(
+                                palette.accent,
+                                palette.syncing,
+                                palette.positive,
+                                palette.warning,
+                                palette.negative,
+                                palette.muted,
+                            )
+                        var startAngle = -90f
+                        values.forEachIndexed { index, value ->
+                            val sweep = value.toDouble().div(total).toFloat() * 360f
+                            drawArc(
+                                color =
+                                    if (selection == null || selection?.index == index) {
+                                        colors[index % colors.size]
+                                    } else {
+                                        palette.muted.copy(alpha = 0.3f + (index % 4) * 0.13f)
+                                    },
+                                startAngle = startAngle,
+                                sweepAngle = sweep,
+                                useCenter = false,
+                                topLeft = topLeft,
+                                size = Size(diameter, diameter),
+                                style = Stroke(width = 28.dp.toPx(), cap = StrokeCap.Butt),
+                            )
+                            startAngle += sweep
+                        }
+                    }
+                }
+                ReportKind.SPENDING_OVER_TIME -> {
+                    val values = monthly.map(MonthlyMoneyPoint::spendingMinor)
+                    val maxValue = maxOf(values.maxOrNull() ?: 0L, values.averageLong()).coerceAtLeast(1L).toDouble()
+                    val barSlot = size.width / values.size.coerceAtLeast(1)
+                    val barWidth = barSlot * 0.5f
                     values.forEachIndexed { index, value ->
-                        val sweep = value.toDouble().div(total).toFloat() * 360f
-                        drawArc(
-                            color = colors[index % colors.size],
-                            startAngle = startAngle,
-                            sweepAngle = sweep,
-                            useCenter = false,
-                            topLeft = topLeft,
-                            size = Size(diameter, diameter),
-                            style = Stroke(width = 28.dp.toPx(), cap = StrokeCap.Butt),
+                        val barHeight = chartHeight * (value.coerceAtLeast(0L).toDouble() / maxValue).toFloat()
+                        val barColor =
+                            if (selection?.let { it.index == index && !it.income } != false) {
+                                palette.negative
+                            } else {
+                                palette.muted.copy(alpha = 0.48f)
+                            }
+                        drawRoundRect(
+                            barColor,
+                            Offset(index * barSlot + (barSlot - barWidth) / 2f, chartBottom - barHeight),
+                            Size(barWidth, barHeight.coerceAtLeast(2f)),
+                            CornerRadius(TandemShapes.small.toPx()),
                         )
-                        startAngle += sweep
+                    }
+                    val average = values.averageLong().toDouble()
+                    val averageY = chartBottom - chartHeight * (average / maxValue).toFloat()
+                    drawLine(palette.syncing, Offset(inset, averageY), Offset(size.width - inset, averageY), 2.dp.toPx())
+                }
+                ReportKind.INCOME_AND_SPENDING -> {
+                    val maxValue =
+                        monthly
+                            .maxOfOrNull { maxOf(it.incomeMinor, it.spendingMinor) }
+                            ?.coerceAtLeast(1L)
+                            ?.toDouble() ?: 1.0
+                    val slot = size.width / monthly.size.coerceAtLeast(1)
+                    val barWidth = slot * 0.28f
+                    monthly.forEachIndexed { index, value ->
+                        val left = index * slot + slot * 0.2f
+                        val incomeHeight = chartHeight * (value.incomeMinor.coerceAtLeast(0L).toDouble() / maxValue).toFloat()
+                        val spendingHeight = chartHeight * (value.spendingMinor.coerceAtLeast(0L).toDouble() / maxValue).toFloat()
+                        val incomeSelected = selection?.let { it.index == index && it.income } != false
+                        val spendingSelected = selection?.let { it.index == index && !it.income } != false
+                        drawRoundRect(
+                            if (incomeSelected) palette.positive else palette.muted.copy(alpha = 0.48f),
+                            Offset(left, chartBottom - incomeHeight),
+                            Size(barWidth, incomeHeight.coerceAtLeast(2f)),
+                            CornerRadius(TandemShapes.small.toPx()),
+                        )
+                        drawRoundRect(
+                            if (spendingSelected) palette.negative else palette.muted.copy(alpha = 0.48f),
+                            Offset(left + barWidth + slot * 0.08f, chartBottom - spendingHeight),
+                            Size(barWidth, spendingHeight.coerceAtLeast(2f)),
+                            CornerRadius(TandemShapes.small.toPx()),
+                        )
+                    }
+                }
+                ReportKind.BUDGETED_AND_SPENT -> {
+                    val values = data.budgetedSpent.take(8)
+                    val maxValue = values.maxOfOrNull { maxOf(it.budgetedMinor, it.spentMinor) }?.coerceAtLeast(1L)?.toDouble() ?: 1.0
+                    val rowHeight = chartHeight / values.size.coerceAtLeast(1)
+                    val labelInset = inset + rowHeight * 0.24f
+                    val trackWidth = size.width - inset * 2
+                    values.forEachIndexed { index, value ->
+                        val y = chartTop + index * rowHeight + labelInset
+                        val budgetWidth = trackWidth * (value.budgetedMinor.toDouble() / maxValue).toFloat()
+                        val spentWidth = trackWidth * (value.spentMinor.toDouble() / maxValue).toFloat()
+                        drawRoundRect(
+                            palette.positive,
+                            Offset(inset, y),
+                            Size(budgetWidth.coerceAtLeast(1f), 5.dp.toPx()),
+                            CornerRadius(TandemShapes.small.toPx()),
+                        )
+                        drawRoundRect(
+                            palette.negative,
+                            Offset(inset, y + 8.dp.toPx()),
+                            Size(spentWidth.coerceAtLeast(1f), 7.dp.toPx()),
+                            CornerRadius(TandemShapes.small.toPx()),
+                        )
+                    }
+                }
+                ReportKind.NET_WORTH -> {
+                    val values =
+                        data.netWorth.map {
+                            if (netWorthScope == "On budget") it.onBudgetMinor else it.allAccountsMinor
+                        }
+                    if (values.isNotEmpty()) {
+                        val observedMin = (values.minOrNull() ?: 0L).toDouble()
+                        val observedMax = (values.maxOrNull() ?: 0L).toDouble()
+                        val observedSpread = observedMax - observedMin
+                        val padding =
+                            if (observedSpread == 0.0) {
+                                maxOf(abs(observedMin) * 0.05, 1.0)
+                            } else {
+                                maxOf(observedSpread * 0.08, 1.0)
+                            }
+                        val minValue = observedMin - padding
+                        val maxValue = observedMax + padding
+                        val spread = (maxValue - minValue).coerceAtLeast(1.0)
+                        val points =
+                            values.mapIndexed { index, value ->
+                                val x =
+                                    if (values.size == 1) {
+                                        size.width / 2f
+                                    } else {
+                                        inset + (size.width - inset * 2) * index / (values.size - 1)
+                                    }
+                                val y = chartBottom - chartHeight * ((value - minValue) / spread).toFloat()
+                                Offset(x, y)
+                            }
+                        val line =
+                            Path().apply {
+                                moveTo(points.first().x, points.first().y)
+                                points.drop(1).forEach { lineTo(it.x, it.y) }
+                            }
+                        val fill =
+                            Path().apply {
+                                moveTo(points.first().x, chartBottom)
+                                points.forEach { lineTo(it.x, it.y) }
+                                lineTo(points.last().x, chartBottom)
+                                close()
+                            }
+                        drawPath(fill, palette.accent.copy(alpha = 0.18f))
+                        drawPath(line, palette.accent, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
+                        points.forEach { drawCircle(palette.accent, 4.dp.toPx(), it) }
                     }
                 }
             }
-            ReportKind.SPENDING_OVER_TIME -> {
-                val values = monthly.map(MonthlyMoneyPoint::spendingMinor)
-                val maxValue = maxOf(values.maxOrNull() ?: 0L, values.averageLong()).coerceAtLeast(1L).toDouble()
-                val barSlot = size.width / values.size.coerceAtLeast(1)
-                val barWidth = barSlot * 0.5f
-                values.forEachIndexed { index, value ->
-                    val barHeight = chartHeight * (value.toDouble() / maxValue).toFloat()
-                    drawRoundRect(
-                        palette.negative,
-                        Offset(index * barSlot + (barSlot - barWidth) / 2f, chartBottom - barHeight),
-                        Size(barWidth, barHeight.coerceAtLeast(2f)),
-                        CornerRadius(TandemShapes.small.toPx()),
-                    )
-                }
-                val average = values.averageLong().toDouble()
-                val averageY = chartBottom - chartHeight * (average / maxValue).toFloat()
-                drawLine(palette.syncing, Offset(inset, averageY), Offset(size.width - inset, averageY), 2.dp.toPx())
-            }
-            ReportKind.INCOME_AND_SPENDING -> {
-                val maxValue =
-                    monthly
-                        .maxOfOrNull { maxOf(it.incomeMinor, it.spendingMinor) }
-                        ?.coerceAtLeast(1L)
-                        ?.toDouble() ?: 1.0
-                val slot = size.width / monthly.size.coerceAtLeast(1)
-                val barWidth = slot * 0.28f
-                monthly.forEachIndexed { index, value ->
-                    val left = index * slot + slot * 0.2f
-                    val incomeHeight = chartHeight * (value.incomeMinor.toDouble() / maxValue).toFloat()
-                    val spendingHeight = chartHeight * (value.spendingMinor.toDouble() / maxValue).toFloat()
-                    drawRoundRect(
-                        palette.positive,
-                        Offset(left, chartBottom - incomeHeight),
-                        Size(barWidth, incomeHeight.coerceAtLeast(2f)),
-                        CornerRadius(TandemShapes.small.toPx()),
-                    )
-                    drawRoundRect(
-                        palette.negative,
-                        Offset(left + barWidth + slot * 0.08f, chartBottom - spendingHeight),
-                        Size(barWidth, spendingHeight.coerceAtLeast(2f)),
-                        CornerRadius(TandemShapes.small.toPx()),
-                    )
-                }
-            }
-            ReportKind.BUDGETED_AND_SPENT -> {
-                val values = data.budgetedSpent.take(8)
-                val maxValue = values.maxOfOrNull { maxOf(it.budgetedMinor, it.spentMinor) }?.coerceAtLeast(1L)?.toDouble() ?: 1.0
-                val rowHeight = chartHeight / values.size.coerceAtLeast(1)
-                val labelInset = inset + rowHeight * 0.24f
-                val trackWidth = size.width - inset * 2
-                values.forEachIndexed { index, value ->
-                    val y = chartTop + index * rowHeight + labelInset
-                    val budgetWidth = trackWidth * (value.budgetedMinor.toDouble() / maxValue).toFloat()
-                    val spentWidth = trackWidth * (value.spentMinor.toDouble() / maxValue).toFloat()
-                    drawRoundRect(
-                        palette.positive,
-                        Offset(inset, y),
-                        Size(budgetWidth.coerceAtLeast(1f), 5.dp.toPx()),
-                        CornerRadius(TandemShapes.small.toPx()),
-                    )
-                    drawRoundRect(
-                        palette.negative,
-                        Offset(inset, y + 8.dp.toPx()),
-                        Size(spentWidth.coerceAtLeast(1f), 7.dp.toPx()),
-                        CornerRadius(TandemShapes.small.toPx()),
-                    )
-                }
-            }
-            ReportKind.NET_WORTH -> {
-                val values =
-                    data.netWorth.map {
-                        if (netWorthScope == "On budget") it.onBudgetMinor else it.allAccountsMinor
-                    }
-                if (values.isNotEmpty()) {
-                    val minValue = minOf(0L, values.minOrNull() ?: 0L).toDouble()
-                    val maxValue = maxOf(1L, values.maxOrNull() ?: 1L).toDouble()
-                    val spread = (maxValue - minValue).coerceAtLeast(1.0)
-                    val points =
-                        values.mapIndexed { index, value ->
-                            val x = inset + (size.width - inset * 2) * index / (values.size - 1).coerceAtLeast(1)
-                            val y = chartBottom - chartHeight * ((value - minValue) / spread).toFloat()
-                            Offset(x, y)
-                        }
-                    val line =
-                        Path().apply {
-                            moveTo(points.first().x, points.first().y)
-                            points.drop(1).forEach { lineTo(it.x, it.y) }
-                        }
-                    val fill =
-                        Path().apply {
-                            moveTo(points.first().x, chartBottom)
-                            points.forEach { lineTo(it.x, it.y) }
-                            lineTo(points.last().x, chartBottom)
-                            close()
-                        }
-                    drawPath(fill, palette.accent.copy(alpha = 0.18f))
-                    drawPath(line, palette.accent, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
-                    points.forEach { drawCircle(palette.accent, 4.dp.toPx(), it) }
-                }
-            }
+        }
+        if (callout != null) {
+            Text(
+                callout,
+                modifier =
+                    Modifier
+                        .align(if (selectedCategory != null) Alignment.Center else Alignment.TopCenter)
+                        .clip(RoundedCornerShape(TandemShapes.pill))
+                        .background(tandemPalette.raised)
+                        .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.extraSmall),
+                color = tandemPalette.text,
+                fontSize = TandemTypography.caption,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+            )
         }
     }
 }
+
+private fun reportSelectionAt(
+    kind: ReportKind,
+    categories: List<CategorySpendingPoint>,
+    monthly: List<MonthlyMoneyPoint>,
+    tap: Offset,
+    width: Float,
+    height: Float,
+    density: Float,
+): ReportChartSelection? {
+    val inset = 8f * density
+    val chartTop = inset
+    val chartBottom = height - inset
+    val chartHeight = (chartBottom - chartTop).coerceAtLeast(1f)
+    if (kind == ReportKind.SPENDING_BY_CATEGORY) {
+        val total = categories.sumOf { it.spendingMinor.coerceAtLeast(0L) }
+        if (total <= 0L) return null
+        val diameter = minOf(width, height) - inset * 2f
+        val centerX = width / 2f
+        val centerY = height / 2f
+        val dx = tap.x - centerX
+        val dy = tap.y - centerY
+        val radius = sqrt(dx * dx + dy * dy)
+        val ringRadius = diameter / 2f
+        if (radius !in (ringRadius - 28f * density / 2f - 10f * density)..(ringRadius + 28f * density / 2f + 10f * density)) return null
+        val degrees = (atan2(dy.toDouble(), dx.toDouble()) * 180.0 / PI + 450.0) % 360.0
+        var segmentStart = 0.0
+        categories.forEachIndexed { index, point ->
+            val amount = point.spendingMinor.coerceAtLeast(0L)
+            val sweep = amount.toDouble() * 360.0 / total.toDouble()
+            if (sweep > 0.0 && degrees >= segmentStart && degrees < segmentStart + sweep) {
+                return ReportChartSelection(index)
+            }
+            segmentStart += sweep
+        }
+        return null
+    }
+    if (kind != ReportKind.SPENDING_OVER_TIME && kind != ReportKind.INCOME_AND_SPENDING) return null
+    if (monthly.isEmpty()) return null
+    val selectedMax =
+        monthly
+            .maxOfOrNull { point ->
+                if (kind == ReportKind.SPENDING_OVER_TIME) point.spendingMinor else maxOf(point.incomeMinor, point.spendingMinor)
+            }?.coerceAtLeast(1L)
+            ?.toDouble() ?: 1.0
+    if (kind == ReportKind.SPENDING_OVER_TIME) {
+        val values = monthly.map(MonthlyMoneyPoint::spendingMinor)
+        val maxValue = maxOf(values.maxOrNull() ?: 0L, values.averageLong()).coerceAtLeast(1L).toDouble()
+        val slot = width / monthly.size.coerceAtLeast(1)
+        val barWidth = slot * 0.5f
+        val index = (tap.x / slot).toInt().coerceIn(0, monthly.lastIndex)
+        val value = monthly[index].spendingMinor.coerceAtLeast(0L)
+        val barHeight = (chartHeight * (value.toDouble() / maxValue).toFloat()).coerceAtLeast(2f)
+        val barLeft = index * slot + (slot - barWidth) / 2f
+        return if (tap.x in barLeft..(barLeft + barWidth) && tap.y in (chartBottom - barHeight)..chartBottom) {
+            ReportChartSelection(index)
+        } else {
+            null
+        }
+    }
+    val slot = width / monthly.size.coerceAtLeast(1)
+    val barWidth = slot * 0.28f
+    val left = (tap.x / slot).toInt().coerceIn(0, monthly.lastIndex) * slot + slot * 0.2f
+    val index = (tap.x / slot).toInt().coerceIn(0, monthly.lastIndex)
+    val point = monthly[index]
+    val incomeHeight = (chartHeight * (point.incomeMinor.coerceAtLeast(0L).toDouble() / selectedMax).toFloat()).coerceAtLeast(2f)
+    val spendingHeight = (chartHeight * (point.spendingMinor.coerceAtLeast(0L).toDouble() / selectedMax).toFloat()).coerceAtLeast(2f)
+    val incomeLeft = left
+    val spendingLeft = left + barWidth + slot * 0.08f
+    return when {
+        tap.x in incomeLeft..(incomeLeft + barWidth) && tap.y in (chartBottom - incomeHeight)..chartBottom ->
+            ReportChartSelection(index, income = true)
+        tap.x in spendingLeft..(spendingLeft + barWidth) && tap.y in (chartBottom - spendingHeight)..chartBottom ->
+            ReportChartSelection(index, income = false)
+        else -> null
+    }
+}
+
+private fun positiveAmount(value: Long): Long = if (value < 0L) -value else value
 
 private fun reportHasNoData(
     kind: ReportKind,
@@ -1055,8 +1471,16 @@ private fun reportChartDescription(
                 }
             ReportKind.NET_WORTH ->
                 data.netWorth.joinToString { point ->
-                    val value = if (netWorthScope == "On budget") point.onBudgetMinor else point.allAccountsMinor
-                    "${point.month}: ${formatReportCurrency(value, data.displaySettings)}"
+                    val assets = if (netWorthScope == "On budget") point.onBudgetAssetsMinor else point.allAccountsAssetsMinor
+                    val debts = if (netWorthScope == "On budget") point.onBudgetDebtsMinor else point.allAccountsDebtsMinor
+                    val value = assets - debts
+                    "${point.month}: net worth ${formatReportCurrency(
+                        value,
+                        data.displaySettings,
+                    )}, assets ${formatReportCurrency(
+                        assets,
+                        data.displaySettings,
+                    )}, debts ${formatReportCurrency(debts, data.displaySettings)}"
                 }
         }
 
@@ -1095,16 +1519,43 @@ private fun ReportDataTable(
             ReportKind.BUDGETED_AND_SPENT ->
                 data.budgetedSpent.forEachIndexed { index, point ->
                     if (index > 0) DividerLine()
-                    BudgetedSpentTableRow(point, displaySettings)
+                    BudgetedSpentTableRow(point, displaySettings) {
+                        onOpenCategoryActivity(point.categoryId, point.category, window)
+                    }
                 }
             ReportKind.NET_WORTH -> {
                 data.netWorth.forEachIndexed { index, point ->
                     if (index > 0) DividerLine()
-                    val value = if (netWorthScope == "On budget") point.onBudgetMinor else point.allAccountsMinor
-                    ReportTableRow(point.month, formatReportCurrency(value, displaySettings))
+                    val assets = if (netWorthScope == "On budget") point.onBudgetAssetsMinor else point.allAccountsAssetsMinor
+                    val debts = if (netWorthScope == "On budget") point.onBudgetDebtsMinor else point.allAccountsDebtsMinor
+                    NetWorthTableRow(point.month, assets, debts, displaySettings)
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun NetWorthTableRow(
+    month: String,
+    assets: Long,
+    debts: Long,
+    displaySettings: BudgetDisplaySettings?,
+) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium)) {
+        Text(month, color = tandemPalette.text, fontSize = TandemTypography.action, fontWeight = FontWeight.Medium)
+        Text(
+            formatReportCurrency(assets - debts, displaySettings),
+            color = netAmountColor(assets - debts),
+            fontSize = TandemTypography.compactBody,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            "Assets: ${formatReportCurrency(assets, displaySettings)}",
+            color = tandemPalette.positive,
+            fontSize = TandemTypography.caption,
+        )
+        Text("Debts: ${formatReportCurrency(debts, displaySettings)}", color = tandemPalette.negative, fontSize = TandemTypography.caption)
     }
 }
 
@@ -1147,8 +1598,18 @@ private fun IncomeAndSpendingTableRow(
 private fun BudgetedSpentTableRow(
     point: BudgetedSpentPoint,
     displaySettings: BudgetDisplaySettings?,
+    onClick: () -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium)) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(TandemShapes.control))
+            .clickable(
+                role = Role.Button,
+                onClickLabel = "View ${point.category} activity",
+                onClick = onClick,
+            ).padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+    ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 point.category,
@@ -1165,6 +1626,7 @@ private fun BudgetedSpentTableRow(
                     tint = tandemPalette.warning,
                 )
             }
+            Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp), tint = tandemPalette.muted)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
             Text(

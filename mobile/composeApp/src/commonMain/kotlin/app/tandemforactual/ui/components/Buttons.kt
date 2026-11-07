@@ -200,8 +200,13 @@ private fun TandemButton(
                 .fillMaxWidth()
                 .heightIn(min = 52.dp)
                 .clip(shape)
-                .then(if (primary) Modifier.background(backgroundColor) else Modifier.border(1.dp, borderColor, shape))
-                .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
+                .then(
+                    if (primary) {
+                        Modifier.background(backgroundColor)
+                    } else {
+                        Modifier.background(palette.surface).border(1.dp, borderColor, shape)
+                    },
+                ).clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
                 .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.medium),
         contentAlignment = Alignment.Center,
     ) {

@@ -25,6 +25,31 @@ class ReportsPresentationTest {
     }
 
     @Test
+    fun reportRangePresetsCoverYearToDateLastYearAndAllDates() {
+        val yearToDate = createReportWindow("2024-03", ReportPeriodMode.RANGE, ReportRangePreset.YEAR_TO_DATE, "2024-03-15")
+        assertEquals("2024-01-01", yearToDate?.startDate)
+        assertEquals("2024-03-15", yearToDate?.throughDate)
+        assertEquals(listOf("2024-01", "2024-02", "2024-03"), yearToDate?.monthIds)
+
+        val lastYear = createReportWindow("2024-03", ReportPeriodMode.RANGE, ReportRangePreset.LAST_YEAR, "2024-03-15")
+        assertEquals("2023-01-01", lastYear?.startDate)
+        assertEquals("2023-12-31", lastYear?.throughDate)
+        assertEquals(12, lastYear?.monthCount)
+
+        val allDates = createReportWindow("2024-03", ReportPeriodMode.RANGE, ReportRangePreset.ALL_DATES, "2024-03-15")
+        assertEquals("0001-01-01", allDates?.startDate)
+        assertEquals("2024-03-15", allDates?.throughDate)
+        assertTrue(allDates?.allDates == true)
+    }
+
+    @Test
+    fun netWorthRangeAlwaysHasSixMonths() {
+        val window = createReportWindow("2024-03", ReportPeriodMode.RANGE, ReportRangePreset.LAST_6_MONTHS, "2024-03-15")
+
+        assertEquals(listOf("2023-10", "2023-11", "2023-12", "2024-01", "2024-02", "2024-03"), window?.monthIds)
+    }
+
+    @Test
     fun categoryPointsSumAcrossMonthsAndRankByAmount() {
         val points =
             categorySpendingPoints(
@@ -39,6 +64,14 @@ class ReportsPresentationTest {
 
         assertEquals(listOf("Other", "Rent", "Groceries"), points.map(CategorySpendingPoint::category))
         assertEquals(listOf(50_000L, 50_000L, 20_000L), points.map(CategorySpendingPoint::spendingMinor))
+    }
+
+    @Test
+    fun categoryPercentageShowsShareToOneDecimalAndHandlesWholePercentages() {
+        assertEquals("33.3%", categoryPercentage(1, 3))
+        assertEquals("25%", categoryPercentage(1, 4))
+        assertEquals("0%", categoryPercentage(0, 4))
+        assertEquals("0%", categoryPercentage(4, 0))
     }
 
     @Test
@@ -57,6 +90,22 @@ class ReportsPresentationTest {
         assertEquals(listOf(300_000L, 0L, 100_000L), points.map(MonthlyMoneyPoint::incomeMinor))
         assertEquals(listOf(125_050L, 0L, 250_025L), points.map(MonthlyMoneyPoint::spendingMinor))
         assertEquals(listOf(174_950L, 0L, -150_025L), points.map(MonthlyMoneyPoint::netMinor))
+    }
+
+    @Test
+    fun allDatesMonthlyPointsSpanFromEarliestActivityThroughSelectedMonth() {
+        val window = createReportWindow("2025-03", ReportPeriodMode.RANGE, ReportRangePreset.ALL_DATES, "2025-03-15")!!
+        val points =
+            monthlyMoneyPoints(
+                listOf(
+                    MonthlyIncomeSpendingAggregate("2024-12", 300_000, 125_050),
+                    MonthlyIncomeSpendingAggregate("2025-02", 100_000, 250_025),
+                ),
+                window,
+            )
+
+        assertEquals(listOf("2024-12", "2025-01", "2025-02", "2025-03"), points.map(MonthlyMoneyPoint::monthId))
+        assertEquals(listOf(300_000L, 0L, 100_000L, 0L), points.map(MonthlyMoneyPoint::incomeMinor))
     }
 
     @Test
@@ -103,6 +152,7 @@ class ReportsPresentationTest {
             listOf(
                 LiveAccountSummary("savings", "Savings", 10_000, "savings", offBudget = true),
                 LiveAccountSummary("checking", "Checking", 5_000, "checking", offBudget = false),
+                LiveAccountSummary("credit", "Credit card", -3_000, "credit", offBudget = false),
             )
         val points =
             netWorthPoints(
@@ -119,8 +169,27 @@ class ReportsPresentationTest {
             )
 
         assertEquals(listOf("2024-01", "2024-02", "2024-03"), points.map(NetWorthPoint::monthId))
-        assertEquals(listOf(14_200L, 14_000L, 15_000L), points.map(NetWorthPoint::allAccountsMinor))
-        assertEquals(listOf(4_700L, 5_000L, 5_000L), points.map(NetWorthPoint::onBudgetMinor))
+        assertEquals(listOf(11_200L, 11_000L, 12_000L), points.map(NetWorthPoint::allAccountsMinor))
+        assertEquals(listOf(1_700L, 2_000L, 2_000L), points.map(NetWorthPoint::onBudgetMinor))
+        assertEquals(listOf(14_200L, 14_000L, 15_000L), points.map(NetWorthPoint::allAccountsAssetsMinor))
+        assertEquals(listOf(3_000L, 3_000L, 3_000L), points.map(NetWorthPoint::allAccountsDebtsMinor))
+        assertEquals(listOf(4_700L, 5_000L, 5_000L), points.map(NetWorthPoint::onBudgetAssetsMinor))
+        assertEquals(listOf(3_000L, 3_000L, 3_000L), points.map(NetWorthPoint::onBudgetDebtsMinor))
+    }
+
+    @Test
+    fun netWorthCanBeNegativeWhenDebtsExceedAssets() {
+        val points =
+            netWorthPoints(
+                emptyList(),
+                listOf(LiveAccountSummary("credit", "Credit card", -25_000, "credit", offBudget = false)),
+                listOf("2025-01"),
+                "2025-01-31",
+            )
+
+        assertEquals(-25_000L, points.single().allAccountsMinor)
+        assertEquals(0L, points.single().allAccountsAssetsMinor)
+        assertEquals(25_000L, points.single().allAccountsDebtsMinor)
     }
 
     @Test
