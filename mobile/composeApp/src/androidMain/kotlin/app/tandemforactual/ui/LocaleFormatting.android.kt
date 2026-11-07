@@ -149,6 +149,14 @@ internal actual fun platformFormatMonth(
 
 internal actual fun platformFormatInteger(value: Int): String = NumberFormat.getIntegerInstance(Locale.getDefault()).format(value)
 
+internal actual fun platformFormatReportPercentage(ratio: Double): String =
+    NumberFormat
+        .getPercentInstance(Locale.getDefault())
+        .apply {
+            minimumFractionDigits = 0
+            maximumFractionDigits = 1
+        }.format(ratio.coerceAtLeast(0.0))
+
 internal actual fun platformCurrencyCode(): String =
     runCatching { Currency.getInstance(Locale.getDefault()).currencyCode }.getOrDefault("XXX")
 

@@ -173,9 +173,12 @@ import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
 import app.tandemforactual.ui.model.LiveCategoryGroupSummary
 import app.tandemforactual.ui.model.LiveCategorySummary
+import app.tandemforactual.ui.model.booleanValue
+import app.tandemforactual.ui.model.liveAccountGroupLabel
 import app.tandemforactual.ui.model.liveAccountSummaries
 import app.tandemforactual.ui.model.liveBudgetMonthSummary
 import app.tandemforactual.ui.model.longValue
+import app.tandemforactual.ui.model.recordBody
 import app.tandemforactual.ui.model.recordName
 import app.tandemforactual.ui.model.stringValue
 import app.tandemforactual.ui.reports.ReportKind
@@ -188,6 +191,7 @@ import com.composables.icons.lucide.BriefcaseBusiness
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.CarFront
 import com.composables.icons.lucide.Carrot
+import com.composables.icons.lucide.ChartNoAxesCombined
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronLeft
@@ -200,14 +204,17 @@ import com.composables.icons.lucide.CloudCheck
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Coffee
+import com.composables.icons.lucide.CreditCard
 import com.composables.icons.lucide.Database
 import com.composables.icons.lucide.Eye
 import com.composables.icons.lucide.FingerprintPattern
 import com.composables.icons.lucide.FolderKey
+import com.composables.icons.lucide.HandCoins
 import com.composables.icons.lucide.HeartPulse
 import com.composables.icons.lucide.House
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.KeyRound
+import com.composables.icons.lucide.Landmark
 import com.composables.icons.lucide.LayoutDashboard
 import com.composables.icons.lucide.LockKeyhole
 import com.composables.icons.lucide.Lucide
@@ -216,6 +223,8 @@ import com.composables.icons.lucide.NotepadText
 import com.composables.icons.lucide.PaintbrushVertical
 import com.composables.icons.lucide.Palette
 import com.composables.icons.lucide.PawPrint
+import com.composables.icons.lucide.Pencil
+import com.composables.icons.lucide.PiggyBank
 import com.composables.icons.lucide.Plane
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Receipt
@@ -394,8 +403,11 @@ private data class MerchantIconNotice(
 
 internal data class MerchantIconMatcherPack(
     private val matcher: MerchantAliasMatcher<DrawableResource>,
+    private val accountMatcher: MerchantAliasMatcher<DrawableResource>,
 ) {
     fun iconFor(payee: String): DrawableResource? = matcher.findPayeeIcon(payee)
+
+    fun accountIconFor(accountName: String): DrawableResource? = accountMatcher.findAccountIcon(accountName)
 }
 
 internal data class ActivitySearchCache(
@@ -442,6 +454,7 @@ private suspend fun loadMerchantIconMatcherPack(): MerchantIconMatcherPack {
     val matcher = MerchantAliasMatcher<DrawableResource>()
     val resourcesBySlug = mutableMapOf<String, DrawableResource>()
     val prioritiesBySlug = mutableMapOf<String, Int>()
+    val accountMatcher = MerchantAliasMatcher<DrawableResource>()
 
     for (line in index.lineSequence()) {
         if (line.isBlank()) continue
@@ -456,6 +469,7 @@ private suspend fun loadMerchantIconMatcherPack(): MerchantIconMatcherPack {
         resourcesBySlug[slug] = resource
         prioritiesBySlug[slug] = licensePriority
         matcher.add(label, resource, licensePriority, isTitle)
+        if (slug in accountIssuerSlugs) accountMatcher.add(label, resource, licensePriority, isTitle)
     }
 
     for ((slug, aliases) in supplementaryMerchantAliases) {
@@ -464,7 +478,13 @@ private suspend fun loadMerchantIconMatcherPack(): MerchantIconMatcherPack {
         aliases.forEach { alias -> matcher.add(alias, resource, licensePriority, isTitle = false) }
     }
 
-    return MerchantIconMatcherPack(matcher)
+    for ((slug, aliases) in supplementaryAccountIssuerAliases) {
+        val resource = resourcesBySlug[slug] ?: continue
+        val licensePriority = prioritiesBySlug[slug] ?: continue
+        aliases.forEach { alias -> accountMatcher.add(alias, resource, licensePriority, isTitle = false) }
+    }
+
+    return MerchantIconMatcherPack(matcher, accountMatcher)
 }
 
 private suspend fun loadMerchantIconCatalog(): MerchantIconCatalog {
@@ -802,9 +822,9 @@ internal class AppState {
     var selectedBudgetEncrypted by mutableStateOf(false)
     var cachedBudgetCatalogJson by mutableStateOf("")
     var budgetDisplaySettings by mutableStateOf<BudgetDisplaySettings?>(null)
-    var selectedMonth by mutableStateOf(formatMonth(2026, 5))
-    var selectedMonthId by mutableStateOf("2026-05")
-    var reportsMonthId by mutableStateOf("2026-05")
+    var selectedMonth by mutableStateOf(currentMonthLabel())
+    var selectedMonthId by mutableStateOf(currentMonthId())
+    var reportsMonthId by mutableStateOf(currentMonthId())
     var reportsBudgetId by mutableStateOf("")
     var reportsPeriodMode by mutableStateOf(ReportPeriodMode.MONTH.name)
     var reportsRangeMonths by mutableStateOf(6)
@@ -819,6 +839,10 @@ internal class AppState {
     var selectedCategoryGroupId by mutableStateOf("")
     var selectedCategoryId by mutableStateOf("")
     var selectedTransactionRecordId by mutableStateOf("")
+    var selectedTransactionAccountId by mutableStateOf("")
+    var selectedTransactionPayeeId by mutableStateOf("")
+    var selectedTransactionCategoryId by mutableStateOf("")
+    var selectedTransactionDate by mutableStateOf("")
     var selectedConflictOperationId by mutableStateOf("")
     var serverUrl by mutableStateOf("https://budget.example.com")
     var pairingCode by mutableStateOf("")
@@ -841,6 +865,7 @@ internal class AppState {
     var homeLayout by mutableStateOf("Comfortable")
     var collapsedBudgetSections by mutableStateOf("")
     var pinnedCategoryIds by mutableStateOf("")
+    var categoryIconOverrides by mutableStateOf("")
     var readOnlyMode by mutableStateOf(false)
     var reduceMotionOverride by mutableStateOf<Boolean?>(null)
     var systemReduceMotionEnabled by mutableStateOf(false)
@@ -865,6 +890,7 @@ internal class AppState {
             "homeLayout" to homeLayout,
             "collapsedBudgetSections" to collapsedBudgetSections,
             "pinnedCategoryIds" to pinnedCategoryIds,
+            "categoryIconOverrides" to categoryIconOverrides,
             "readOnlyMode" to readOnlyMode.toString(),
             "selectedBudget" to selectedBudget,
             "selectedBudgetId" to selectedBudgetId,
@@ -892,6 +918,7 @@ internal class AppState {
         homeLayout = (saved["homeLayout"] ?: homeLayout).let { if (it == "Essentials first") "Essentials" else it }
         collapsedBudgetSections = saved["collapsedBudgetSections"] ?: collapsedBudgetSections
         pinnedCategoryIds = saved["pinnedCategoryIds"] ?: pinnedCategoryIds
+        categoryIconOverrides = saved["categoryIconOverrides"] ?: categoryIconOverrides
         readOnlyMode = saved["readOnlyMode"]?.toBooleanStrictOrNull() ?: readOnlyMode
         selectedBudget = saved["selectedBudget"] ?: selectedBudget
         selectedBudgetId = saved["selectedBudgetId"] ?: selectedBudgetId
@@ -945,6 +972,10 @@ internal class AppState {
                         "selectedCategoryGroupId" to state.selectedCategoryGroupId,
                         "selectedCategoryId" to state.selectedCategoryId,
                         "selectedTransactionRecordId" to state.selectedTransactionRecordId,
+                        "selectedTransactionAccountId" to state.selectedTransactionAccountId,
+                        "selectedTransactionPayeeId" to state.selectedTransactionPayeeId,
+                        "selectedTransactionCategoryId" to state.selectedTransactionCategoryId,
+                        "selectedTransactionDate" to state.selectedTransactionDate,
                         "selectedConflictOperationId" to state.selectedConflictOperationId,
                         "serverUrl" to state.serverUrl,
                         "transactionAmount" to state.transactionAmount,
@@ -964,6 +995,7 @@ internal class AppState {
                         "homeLayout" to state.homeLayout,
                         "collapsedBudgetSections" to state.collapsedBudgetSections,
                         "pinnedCategoryIds" to state.pinnedCategoryIds,
+                        "categoryIconOverrides" to state.categoryIconOverrides,
                         "readOnlyMode" to state.readOnlyMode,
                         "reduceMotionOverride" to state.reduceMotionOverride,
                         "syncOnOpen" to state.syncOnOpen,
@@ -997,6 +1029,10 @@ internal class AppState {
                         selectedCategoryGroupId = saved["selectedCategoryGroupId"] as? String ?: selectedCategoryGroupId
                         selectedCategoryId = saved["selectedCategoryId"] as? String ?: selectedCategoryId
                         selectedTransactionRecordId = saved["selectedTransactionRecordId"] as? String ?: selectedTransactionRecordId
+                        selectedTransactionAccountId = saved["selectedTransactionAccountId"] as? String ?: selectedTransactionAccountId
+                        selectedTransactionPayeeId = saved["selectedTransactionPayeeId"] as? String ?: selectedTransactionPayeeId
+                        selectedTransactionCategoryId = saved["selectedTransactionCategoryId"] as? String ?: selectedTransactionCategoryId
+                        selectedTransactionDate = saved["selectedTransactionDate"] as? String ?: selectedTransactionDate
                         selectedConflictOperationId = saved["selectedConflictOperationId"] as? String ?: selectedConflictOperationId
                         serverUrl = saved["serverUrl"] as? String ?: serverUrl
                         transactionAmount = saved["transactionAmount"] as? String ?: transactionAmount
@@ -1019,6 +1055,7 @@ internal class AppState {
                             }
                         collapsedBudgetSections = saved["collapsedBudgetSections"] as? String ?: collapsedBudgetSections
                         pinnedCategoryIds = saved["pinnedCategoryIds"] as? String ?: pinnedCategoryIds
+                        categoryIconOverrides = saved["categoryIconOverrides"] as? String ?: categoryIconOverrides
                         readOnlyMode = saved["readOnlyMode"] as? Boolean ?: readOnlyMode
                         selectedBudgetId = saved["selectedBudgetId"] as? String ?: selectedBudgetId
                         reduceMotionOverride =
@@ -1052,6 +1089,66 @@ private fun AppState.toggleBudgetSection(sectionKey: String) {
 private fun AppState.isCategoryPinned(categoryId: String): Boolean =
     pinnedCategoryIds.split('\u001f').any { it == categoryPinKey(categoryId) || it == categoryId }
 
+private val categoryIconChoices =
+    listOf(
+        "Automatic",
+        "Home",
+        "Food",
+        "Shopping",
+        "Travel",
+        "Transport",
+        "Health",
+        "Pet",
+        "Income",
+        "Money",
+    )
+
+private fun categoryIconVector(choice: String): ImageVector? =
+    when (choice) {
+        "Home" -> Lucide.House
+        "Food" -> Lucide.Carrot
+        "Shopping" -> Lucide.ShoppingCart
+        "Travel" -> Lucide.Plane
+        "Transport" -> Lucide.CarFront
+        "Health" -> Lucide.HeartPulse
+        "Pet" -> Lucide.PawPrint
+        "Income" -> Lucide.BriefcaseBusiness
+        "Money" -> Lucide.WalletCards
+        else -> null
+    }
+
+private fun AppState.categoryIconChoice(categoryId: String): String? {
+    val key = categoryPinKey(categoryId)
+    return categoryIconOverrides
+        .split('\u001f')
+        .firstNotNullOfOrNull { entry ->
+            val delimiter = entry.indexOf('\u001e')
+            if (delimiter < 0 || entry.substring(0, delimiter) != key) null else entry.substring(delimiter + 1)
+        }
+}
+
+private fun AppState.setCategoryIconChoice(
+    categoryId: String,
+    choice: String,
+) {
+    val key = categoryPinKey(categoryId)
+    val choices =
+        categoryIconOverrides
+            .split('\u001f')
+            .mapNotNull { entry ->
+                val delimiter = entry.indexOf('\u001e')
+                if (delimiter < 0) null else entry.substring(0, delimiter) to entry.substring(delimiter + 1)
+            }.toMap()
+            .toMutableMap()
+    if (choice == "Automatic") choices.remove(key) else choices[key] = choice
+    categoryIconOverrides = choices.entries.joinToString("\u001f") { (id, icon) -> "$id\u001e$icon" }
+}
+
+private fun AppState.categoryIconFor(
+    categoryId: String,
+    categoryName: String,
+): ImageVector = categoryIconChoice(categoryId)?.let(::categoryIconVector) ?: financeIcon(categoryName) ?: Lucide.Receipt
+
 private fun AppState.togglePinnedCategory(categoryId: String) {
     val pinned = pinnedCategoryIds.split('\u001f').filter(String::isNotBlank).toMutableSet()
     val key = categoryPinKey(categoryId)
@@ -1068,6 +1165,8 @@ private fun AppState.categoryPinKey(categoryId: String): String = "${selectedBud
 
 private data class AppNavigation(
     val open: (AppRoute) -> Unit,
+    val reset: (AppRoute) -> Unit,
+    val replaceTop: (AppRoute) -> Unit,
     val newTransaction: (accountId: String?) -> Unit,
     val selectTab: (AppRoute) -> Unit,
     val back: () -> Unit,
@@ -1279,6 +1378,9 @@ fun TandemApp(
             .forEach { (name, value) -> localChanges[name] = value }
         localSettingsObserver.cancel()
         state.restorePersistentSettings(storedPreferences + localChanges)
+        state.selectedMonthId = currentMonthId()
+        state.selectedMonth = currentMonthLabel()
+        state.reportsMonthId = state.selectedMonthId
         state.settingsStorageReady = true
         var lastSavedPreferences = if (localChanges.isEmpty()) state.persistentSettings() else emptyMap()
         var lastAttemptedRetry = state.settingsStorageRetry
@@ -1345,6 +1447,10 @@ fun TandemApp(
             state.transactionType = "Spending"
             state.transactionNotes = ""
             state.selectedTransactionRecordId = ""
+            state.selectedTransactionAccountId = ""
+            state.selectedTransactionPayeeId = ""
+            state.selectedTransactionCategoryId = ""
+            state.selectedTransactionDate = ""
             state.selectedTransactionAmountMinor = null
             state.selectedTransactionIsLive = false
             backStack.add(newRouteEntry(AppRoute.NEW_TRANSACTION))
@@ -1356,11 +1462,31 @@ fun TandemApp(
             backStack.removeAt(backStack.lastIndex)
         }
     }
+    val selectTab: (AppRoute) -> Unit = { selectedTab ->
+        if (backStack.lastOrNull()?.route != selectedTab) {
+            routeTransitionDirection = 0f
+            backStack.clear()
+            backStack.add(newRouteEntry(AppRoute.BUDGET))
+            if (selectedTab != AppRoute.BUDGET) backStack.add(newRouteEntry(selectedTab))
+            if (selectedTab == AppRoute.REPORTS) {
+                val reportsStateKey = "tab-${AppRoute.REPORTS.name}"
+                state.scrollPositions[reportsStateKey] = 0
+                state.lazyScrollPositions[reportsStateKey] = 0 to 0
+                routeLazyListStates[reportsStateKey]?.let { listState ->
+                    listState.requestScrollToItem(0)
+                }
+            }
+        }
+    }
     val handleBack: () -> Unit = {
+        val backAnimationWasRunning = backGestureCancelJob != null
         backGestureCancelJob?.cancel()
         backGestureCancelJob = null
-        if (backGestureCommitPending) {
+        if (backGestureCommitPending || backAnimationWasRunning) {
             backGestureCommitPending = false
+            backGestureProgress = 0f
+            backGestureOutgoingEntry = null
+            backPreviewRoute = null
             skipNextRouteTransition = true
             popRoute()
         } else if (backStack.size > 1) {
@@ -1397,29 +1523,24 @@ fun TandemApp(
                     newTransaction(null)
                 } else {
                     if (next.isReportDetail() && backStack.lastOrNull()?.route != AppRoute.REPORTS) {
-                        backStack.clear()
-                        backStack.add(newRouteEntry(AppRoute.REPORTS))
+                        selectTab(AppRoute.REPORTS)
                     }
                     routeTransitionDirection = 1f
                     backStack.add(newRouteEntry(next))
                 }
             },
-            newTransaction = newTransaction,
-            selectTab = {
-                if (backStack.lastOrNull()?.route != it) {
-                    routeTransitionDirection = 0f
-                    backStack.clear()
-                    backStack.add(newRouteEntry(it))
-                    if (it == AppRoute.REPORTS) {
-                        val reportsStateKey = "tab-${AppRoute.REPORTS.name}"
-                        state.scrollPositions[reportsStateKey] = 0
-                        state.lazyScrollPositions[reportsStateKey] = 0 to 0
-                        routeLazyListStates[reportsStateKey]?.let { listState ->
-                            listState.requestScrollToItem(0)
-                        }
-                    }
-                }
+            reset = { next ->
+                routeTransitionDirection = 0f
+                backStack.clear()
+                backStack.add(newRouteEntry(next))
             },
+            replaceTop = { next ->
+                routeTransitionDirection = 1f
+                if (backStack.isNotEmpty()) backStack.removeAt(backStack.lastIndex)
+                backStack.add(newRouteEntry(next))
+            },
+            newTransaction = newTransaction,
+            selectTab = selectTab,
             back = handleBack,
             backToList = {
                 if (backStack.size > 2) {
@@ -1433,7 +1554,7 @@ fun TandemApp(
         )
     val routeEntry = backStack.last()
     val route = routeEntry.route
-    val merchantMatcherNeeded = mobileSession.transactionRecords.isNotEmpty()
+    val merchantMatcherNeeded = mobileSession.transactionRecords.isNotEmpty() || mobileSession.accountRecords.isNotEmpty()
     LaunchedEffect(mobileSession, merchantMatcherNeeded) {
         if (merchantIconMatcher == null && merchantIconMatcherLoadError == null && merchantMatcherNeeded) {
             try {
@@ -1620,7 +1741,10 @@ fun TandemApp(
             }
     }
     LaunchedEffect(accountRecords) {
-        liveAccounts = withContext(Dispatchers.Default) { liveAccountSummaries(accountRecords) }
+        liveAccounts =
+            withContext(Dispatchers.Default) {
+                liveAccountSummaries(accountRecords, mobileSession.accountGroupRecords)
+            }
     }
     var liveBudgetMonth by remember { mutableStateOf<LiveBudgetMonthSummary?>(null) }
     LaunchedEffect(
@@ -1645,7 +1769,7 @@ fun TandemApp(
                 mobileSession.pair(state.serverUrl, state.pairingCode, deviceName)
                 if (mobileSession.pairedDevice != null) {
                     state.pairingCode = ""
-                    backStack.add(newRouteEntry(AppRoute.PAIRING_RESULT))
+                    navigation.reset(AppRoute.PAIRING_RESULT)
                 }
             }
         }
@@ -1686,9 +1810,9 @@ fun TandemApp(
             coroutineScope.launch {
                 val isCached = mobileSession.hasCachedBudgetSnapshot(selected.budgetId)
                 when {
-                    isCached -> backStack.add(newRouteEntry(AppRoute.BUDGET))
-                    selected.isEncrypted && state.encryptedPassword.isBlank() -> backStack.add(newRouteEntry(AppRoute.UNLOCK_BUDGET))
-                    else -> backStack.add(newRouteEntry(AppRoute.FIRST_SYNC))
+                    isCached -> navigation.reset(AppRoute.BUDGET)
+                    selected.isEncrypted && state.encryptedPassword.isBlank() -> navigation.reset(AppRoute.UNLOCK_BUDGET)
+                    else -> navigation.reset(AppRoute.FIRST_SYNC)
                 }
             }
         }
@@ -1714,13 +1838,22 @@ fun TandemApp(
                         transactionId = transactionId,
                         amountText = state.transactionAmount,
                         notes = state.transactionNotes,
+                        accountId = state.newTransactionAccountId,
+                        payeeId = state.newTransactionPayeeId.takeIf(String::isNotBlank),
+                        categoryId = state.newTransactionCategoryId.takeIf(String::isNotBlank),
+                        date = state.transactionDate,
                         originalAmountMinor = originalAmount,
                         displaySettings = state.budgetDisplaySettings,
+                        updateDetails = true,
                     )
                 if (saved) {
                     val amount = state.parseAmountMinorUnits(state.transactionAmount) ?: kotlin.math.abs(originalAmount)
                     state.selectedTransactionAmountMinor = if (originalAmount < 0) -amount else amount
                     state.selectedTransactionNotes = state.transactionNotes
+                    state.selectedTransactionAccountId = state.newTransactionAccountId
+                    state.selectedTransactionPayeeId = state.newTransactionPayeeId
+                    state.selectedTransactionCategoryId = state.newTransactionCategoryId
+                    state.selectedTransactionDate = state.transactionDate
                 }
                 onComplete(saved)
             }
@@ -2591,10 +2724,17 @@ private fun ScreenContent(
         AppRoute.BUDGET -> BudgetScreen(state, navigation, mobileSession, liveTransactions, liveBudgetMonth, onSyncNow)
         AppRoute.MONTH_PICKER -> MonthPickerScreen(state, navigation)
         AppRoute.CATEGORY_GROUP -> CategoryGroupScreen(state, navigation, liveBudgetMonth)
-        AppRoute.CATEGORY_DETAIL -> CategoryDetailScreen(state, navigation, liveBudgetMonth)
-        AppRoute.ACCOUNTS -> AccountsScreen(state, navigation, liveAccounts, mobileSession.isSyncing, onSyncNow)
+        AppRoute.CATEGORY_DETAIL -> CategoryDetailScreen(state, navigation, liveBudgetMonth, mobileSession)
+        AppRoute.ACCOUNTS ->
+            AccountsScreen(
+                state,
+                navigation,
+                liveAccounts,
+                merchantIconMatcher,
+                mobileSession,
+            )
         AppRoute.ACCOUNT_DETAIL -> AccountDetailScreen(state, navigation, liveAccounts, liveTransactions)
-        AppRoute.ACCOUNT_OPTIONS -> AccountOptionsScreen(state, liveAccounts)
+        AppRoute.ACCOUNT_OPTIONS -> AccountOptionsScreen(state, liveAccounts, mobileSession, navigation)
         AppRoute.ACTIVITY -> ActivityScreen(state, navigation, liveTransactions, mobileSession.isSyncing, onSyncNow)
         AppRoute.REPORTS ->
             ReportsScreen(
@@ -2921,7 +3061,15 @@ private fun appBackgroundBrush(
     when (style) {
         "Solid surface" -> Brush.verticalGradient(listOf(palette.background, palette.background))
         "Low-motion glow" -> Brush.radialGradient(listOf(palette.accentSurface, palette.background), radius = 1_300f)
-        else -> Brush.verticalGradient(listOf(palette.background, palette.surface, palette.background))
+        else ->
+            Brush.verticalGradient(
+                colorStops =
+                    arrayOf(
+                        0f to palette.surface,
+                        0.42f to palette.background,
+                        1f to palette.background,
+                    ),
+            )
     }
 
 @Composable
@@ -4117,7 +4265,7 @@ private fun PairingResultScreen(
         }
         mobileSession.budgetError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
         PrimaryButton("Choose a budget", enabled = mobileSession.pairedDevice != null) {
-            navigation.open(AppRoute.BUDGET_CHOOSER)
+            navigation.reset(AppRoute.BUDGET_CHOOSER)
         }
     }
 }
@@ -4231,7 +4379,7 @@ private fun UnlockBudgetScreen(
             TextFieldOptions(placeholder = "Enter password", isSecret = true),
         )
         InfoBubble("Tandem uses this password only to unlock the encrypted budget. It’s cleared after the first sync and never saved.")
-        PrimaryButton("Unlock budget", enabled = state.encryptedPassword.isNotBlank()) { navigation.open(AppRoute.FIRST_SYNC) }
+        PrimaryButton("Unlock budget", enabled = state.encryptedPassword.isNotBlank()) { navigation.replaceTop(AppRoute.FIRST_SYNC) }
     }
 }
 
@@ -4458,20 +4606,30 @@ private fun BudgetScreen(
             }
         } else {
             item(key = summaryKey) {
-                CollapsibleSectionCard(
-                    "${state.selectedMonth} summary",
-                    if (isLiveBudget) "${groups.sumOf { it.categories.size }} categories" else "Ready to assign",
-                    state.formatCurrency(readyToAssignMinor),
-                    expanded = !state.isBudgetSectionCollapsed(summaryKey),
-                    onToggleExpanded = { state.toggleBudgetSection(summaryKey) },
-                ) {
-                    ListRow(
-                        if (isLiveBudget) "Ready to assign" else "Available this month",
-                        if (isLiveBudget) state.selectedMonth else "On track",
+                val summaryExpanded = !state.isBudgetSectionCollapsed(summaryKey)
+                Column {
+                    CollapsibleSectionCard(
+                        "${state.selectedMonth} summary",
+                        if (isLiveBudget) "${groups.sumOf { it.categories.size }} categories" else "Ready to assign",
                         state.formatCurrency(readyToAssignMinor),
-                        leading = RowLeading.Icon(Lucide.WalletCards),
-                        options = ListRowOptions(trailingColor = palette.positive),
-                    )
+                        expanded = summaryExpanded,
+                        onToggleExpanded = { state.toggleBudgetSection(summaryKey) },
+                    ) {}
+                    AnimatedVisibility(
+                        visible = summaryExpanded,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
+                        SurfaceCard(Modifier.padding(top = sectionSpacing)) {
+                            ListRow(
+                                if (isLiveBudget) "Ready to assign" else "Available this month",
+                                if (isLiveBudget) state.selectedMonth else "On track",
+                                state.formatCurrency(readyToAssignMinor),
+                                leading = RowLeading.Icon(Lucide.WalletCards),
+                                options = ListRowOptions(trailingColor = palette.positive),
+                            )
+                        }
+                    }
                 }
             }
             if (!isLiveBudget && essentialsFirst) {
@@ -4503,7 +4661,7 @@ private fun BudgetScreen(
                                             category.name,
                                             group.name,
                                             state.formatCurrency(category.balanceMinor),
-                                            leading = RowLeading.Icon(financeIcon(category.name)),
+                                            leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
                                         ) {
                                             state.selectedCategoryGroupId = group.id
                                             state.selectedCategoryId = category.id
@@ -4571,7 +4729,7 @@ private fun BudgetScreen(
                                                 kotlin.math.abs(category.activityMinor),
                                             )} · ${state.formatCurrency(category.balanceMinor)} available",
                                             state.formatCurrency(category.assignedMinor),
-                                            leading = RowLeading.Icon(financeIcon(category.name)),
+                                            leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
                                             options =
                                                 ListRowOptions(
                                                     trailingColor = if (category.balanceMinor >= 0) palette.positive else palette.warning,
@@ -4769,7 +4927,14 @@ private fun openTransaction(
     state.transactionPayee = transaction.payee
     state.transactionCategory = transaction.category
     state.transactionAccount = transaction.account
-    state.transactionDate = transaction.dateLabel
+    state.transactionDate = transaction.dateIso.ifBlank { transaction.dateLabel }
+    state.newTransactionAccountId = transaction.accountId.orEmpty()
+    state.newTransactionPayeeId = transaction.payeeId.orEmpty()
+    state.newTransactionCategoryId = transaction.categoryId.orEmpty()
+    state.selectedTransactionAccountId = transaction.accountId.orEmpty()
+    state.selectedTransactionPayeeId = transaction.payeeId.orEmpty()
+    state.selectedTransactionCategoryId = transaction.categoryId.orEmpty()
+    state.selectedTransactionDate = state.transactionDate
     state.transactionNotes = transaction.notes
     state.transactionAmount = formatAmount(kotlin.math.abs(transaction.amountMinorUnits), state.budgetDisplaySettings)
     state.selectedTransactionAmountMinor = transaction.amountMinorUnits
@@ -4878,7 +5043,7 @@ private fun CategoryGroupScreen(
                             kotlin.math.abs(category.activityMinor),
                         )} · ${state.formatCurrency(category.balanceMinor)} available",
                         state.formatCurrency(category.assignedMinor),
-                        leading = RowLeading.Icon(financeIcon(category.name)),
+                        leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
                         options = ListRowOptions(trailingColor = if (category.balanceMinor >= 0) palette.positive else palette.warning),
                     ) {
                         state.selectedCategoryGroupId = group.id
@@ -4896,7 +5061,9 @@ private fun CategoryDetailScreen(
     state: AppState,
     navigation: AppNavigation,
     liveBudgetMonth: LiveBudgetMonthSummary?,
+    mobileSession: TandemMobileSession,
 ) {
+    val scope = rememberCoroutineScope()
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     val category =
         if (isLiveBudget) {
@@ -4912,13 +5079,48 @@ private fun CategoryDetailScreen(
                 ?.firstOrNull { it.id == state.selectedCategoryId }
                 ?: previewCategoryGroups.first().categories.first()
         }
+    var showEditDialog by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf(false) }
+    var showDeleteDialog by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf(false) }
+    var editName by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf("") }
+    var selectedIconChoice by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf("Automatic") }
+    var deleteDestinationId by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf<String?>(null) }
+    val currentIncomeType =
+        mobileSession.categoryRecords
+            .firstOrNull { it.recordId == state.selectedCategoryId }
+            ?.recordBody()
+            ?.booleanValue("is_income") ?: false
+    val deleteDestinations =
+        liveBudgetMonth?.groups.orEmpty().flatMap { it.categories }.filter { candidate ->
+            candidate.id != state.selectedCategoryId &&
+                (
+                    mobileSession.categoryRecords
+                        .firstOrNull { it.recordId == candidate.id }
+                        ?.recordBody()
+                        ?.booleanValue("is_income") ?: false
+                ) == currentIncomeType
+        }
     PageColumn {
         if (!isLiveBudget) SampleBanner()
         if (category == null) {
             Heading("Category details", state.selectedMonth)
             BodyText("This category isn’t in the saved plan for this month.")
         } else {
-            Heading(category.name, state.selectedMonth)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                Column(Modifier.weight(1f)) { Heading(category.name, state.selectedMonth) }
+                if (isLiveBudget) {
+                    TandemIconButton(
+                        Lucide.Pencil,
+                        "Edit category",
+                        enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                        tint = tandemPalette.accent,
+                    ) {
+                        editName = category.name
+                        selectedIconChoice = state.categoryIconChoice(category.id) ?: "Automatic"
+                        mobileSession.clearBudgetActionMessage()
+                        showEditDialog = true
+                    }
+                }
+            }
             AmountHero(
                 "Available",
                 state.formatCurrency(category.balanceMinor),
@@ -4938,6 +5140,12 @@ private fun CategoryDetailScreen(
                     onClick = { openCategoryActivity(state, navigation, category.id, category.name) },
                 )
                 DividerLine()
+                ListRow(
+                    "Icon",
+                    state.categoryIconChoice(category.id) ?: "Automatic",
+                    leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
+                )
+                DividerLine()
                 ListRow("Available", "Assigned plus activity", state.formatCurrency(category.balanceMinor))
             }
             if (isLiveBudget) {
@@ -4946,6 +5154,153 @@ private fun CategoryDetailScreen(
                 ) { state.togglePinnedCategory(category.id) }
             }
         }
+    }
+    if (showEditDialog && category != null) {
+        AlertDialog(
+            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showEditDialog = false },
+            title = { Text("Edit category", color = tandemPalette.text) },
+            text = {
+                Column(
+                    Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                ) {
+                    TextFieldCard("Name", editName, { editName = it }, TextFieldOptions(placeholder = category.name))
+                    Text("Icon", color = tandemPalette.muted, fontSize = TandemTypography.caption, fontWeight = FontWeight.SemiBold)
+                    categoryIconChoices.chunked(3).forEach { rowChoices ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                            rowChoices.forEach { choice ->
+                                val icon = categoryIconVector(choice) ?: financeIcon(category.name) ?: Lucide.Receipt
+                                SelectableTile(
+                                    selected = selectedIconChoice == choice,
+                                    contentDescription = choice,
+                                    onSelect = { selectedIconChoice = choice },
+                                    modifier = Modifier.weight(1f).height(68.dp),
+                                    shape = RoundedCornerShape(TandemShapes.control),
+                                    selectedBackground = tandemPalette.accentSurface,
+                                    unselectedBackground = tandemPalette.surface,
+                                    selectedBorder = tandemPalette.accent,
+                                    unselectedBorder = tandemPalette.border,
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
+                                    ) {
+                                        Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp), tint = tandemPalette.accent)
+                                        Text(choice, color = tandemPalette.text, fontSize = TandemTypography.micro, maxLines = 1)
+                                    }
+                                }
+                            }
+                            repeat(3 - rowChoices.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
+                    mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !mobileSession.isPerformingBudgetAction && editName.isNotBlank(),
+                    onClick = {
+                        scope.launch {
+                            val renamed =
+                                editName.trim() == category.name ||
+                                    mobileSession.renameBudgetCategory(
+                                        state.selectedBudgetId,
+                                        category.id,
+                                        editName,
+                                        state.encryptedPassword.takeIf { it.isNotBlank() },
+                                    )
+                            if (renamed) {
+                                state.setCategoryIconChoice(category.id, selectedIconChoice)
+                                showEditDialog = false
+                            }
+                        }
+                    },
+                ) {
+                    Text(if (mobileSession.isPerformingBudgetAction) "Saving…" else "Save", color = tandemPalette.accent)
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(
+                        enabled = !mobileSession.isPerformingBudgetAction,
+                        onClick = {
+                            showEditDialog = false
+                            deleteDestinationId = null
+                            mobileSession.clearBudgetActionMessage()
+                            showDeleteDialog = true
+                        },
+                    ) {
+                        Text("Delete", color = tandemPalette.negative)
+                    }
+                    TextButton(
+                        enabled = !mobileSession.isPerformingBudgetAction,
+                        onClick = { showEditDialog = false },
+                    ) {
+                        Text("Cancel", color = tandemPalette.muted)
+                    }
+                }
+            },
+            backgroundColor = tandemPalette.surface,
+        )
+    }
+    if (showDeleteDialog && category != null) {
+        AlertDialog(
+            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showDeleteDialog = false },
+            title = { Text("Delete ${category.name}?", color = tandemPalette.text) },
+            text = {
+                Column(
+                    Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                ) {
+                    BodyText("Move its transactions to a category or leave them unassigned.")
+                    ChoiceRow(
+                        "Unassigned",
+                        selected = deleteDestinationId == null,
+                        onClick = { deleteDestinationId = null },
+                    )
+                    deleteDestinations.forEach { destination ->
+                        ChoiceRow(
+                            destination.name,
+                            selected = deleteDestinationId == destination.id,
+                            onClick = { deleteDestinationId = destination.id },
+                        )
+                    }
+                    mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !mobileSession.isPerformingBudgetAction,
+                    onClick = {
+                        scope.launch {
+                            val deleted =
+                                mobileSession.deleteBudgetCategory(
+                                    state.selectedBudgetId,
+                                    category.id,
+                                    deleteDestinationId,
+                                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                                )
+                            if (deleted) {
+                                state.setCategoryIconChoice(category.id, "Automatic")
+                                showDeleteDialog = false
+                                navigation.back()
+                            }
+                        }
+                    },
+                ) {
+                    Text(if (mobileSession.isPerformingBudgetAction) "Deleting…" else "Delete category", color = tandemPalette.negative)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !mobileSession.isPerformingBudgetAction,
+                    onClick = { showDeleteDialog = false },
+                ) {
+                    Text("Cancel", color = tandemPalette.muted)
+                }
+            },
+            backgroundColor = tandemPalette.surface,
+        )
     }
 }
 
@@ -5006,7 +5361,6 @@ private fun openReportCategoryActivity(
             ),
             dateFilter,
         )
-    navigation.selectTab(AppRoute.ACTIVITY)
     navigation.open(AppRoute.ACTIVITY_SEARCH)
 }
 
@@ -5035,6 +5389,7 @@ private data class AccountListItemUi(
     val description: String,
     val balance: String,
     val offBudget: Boolean,
+    val closed: Boolean = false,
 )
 
 private data class AccountListGroupUi(
@@ -5052,44 +5407,77 @@ private data class AccountListUi(
     val showAccountOptions: Boolean,
 )
 
+internal fun accountTypeIcon(accountName: String): ImageVector {
+    val name = accountName.lowercase()
+    return when {
+        "savings" in name || "saving" in name -> Lucide.PiggyBank
+        "checking" in name || "chequing" in name -> Lucide.Landmark
+        listOf("credit", "card", "visa", "mastercard", "amex", "discover").any { it in name } -> Lucide.CreditCard
+        listOf("loan", "mortgage", "debt").any { it in name } -> Lucide.HandCoins
+        listOf("investment", "brokerage", "401k", "403b", "ira", "retirement", "stocks").any { it in name } ->
+            Lucide.ChartNoAxesCombined
+        else -> Lucide.WalletCards
+    }
+}
+
 @Composable
 private fun AccountsScreen(
     state: AppState,
     navigation: AppNavigation,
     liveAccounts: List<LiveAccountSummary>,
-    isRefreshing: Boolean,
-    onSyncNow: () -> Unit,
+    merchantIconMatcher: MerchantIconMatcherPack?,
+    mobileSession: TandemMobileSession,
 ) {
+    val scope = rememberCoroutineScope()
+    var addAccountDialog by rememberSaveable { mutableStateOf(false) }
+    var newAccountName by rememberSaveable { mutableStateOf("") }
+    var newAccountOffBudget by rememberSaveable { mutableStateOf(false) }
+    val isRefreshing = mobileSession.isSyncing || mobileSession.isPerformingBudgetAction
+    val runBankSync: () -> Unit = {
+        if (!isRefreshing && !state.readOnlyMode && state.selectedBudgetId.isNotBlank()) {
+            scope.launch {
+                mobileSession.runBankSync(
+                    state.selectedBudgetId,
+                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                )
+            }
+        }
+    }
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     val model =
         if (isLiveBudget) {
-            val onBudgetAccounts = liveAccounts.filterNot { it.offBudget }
+            val onBudgetAccounts = liveAccounts.filterNot { it.offBudget || it.closed }
+            val groupOrder = listOf("Cash", "Credit", "Loans", "Investments", "Tracking", "Closed", "Accounts")
             val groupedAccounts =
-                listOf("Cash", "Credit", "Tracking").mapNotNull { groupName ->
-                    val accounts =
-                        liveAccounts.filter { account ->
-                            when (groupName) {
-                                "Tracking" -> account.offBudget
-                                "Credit" -> !account.offBudget && account.type.orEmpty().contains("credit", ignoreCase = true)
-                                else -> !account.offBudget && !account.type.orEmpty().contains("credit", ignoreCase = true)
-                            }
-                        }
-                    groupName.takeIf { accounts.isNotEmpty() }?.let { name ->
+                liveAccounts
+                    .groupBy(::liveAccountGroupLabel)
+                    .entries
+                    .sortedWith(
+                        compareBy(
+                            { groupOrder.indexOf(it.key).let { index -> if (index < 0) groupOrder.size else index } },
+                            { it.key },
+                        ),
+                    ).map { (groupName, accounts) ->
                         AccountListGroupUi(
-                            name,
-                            "${accounts.size} Actual accounts",
+                            groupName,
+                            "${accounts.size} ${if (accounts.size == 1) "account" else "accounts"}",
                             accounts.map { account ->
                                 AccountListItemUi(
                                     account.id,
                                     account.name,
-                                    if (account.offBudget) "Tracking · off budget" else account.type ?: "On budget",
+                                    when {
+                                        account.closed -> "Closed"
+                                        account.offBudget -> "Tracking · off budget"
+                                        account.accountGroupName != null -> account.accountGroupName
+                                        else -> account.type?.takeIf { it.isNotBlank() && it != "account" } ?: "On budget"
+                                    },
                                     account.balanceMinor?.let(state::formatCurrency) ?: "Unavailable",
                                     account.offBudget,
+                                    account.closed,
                                 )
                             },
                         )
                     }
-                }
             AccountListUi(
                 "Synced account balances from Actual.",
                 state.formatCurrency(onBudgetAccounts.sumOf { it.balanceMinor ?: 0L }),
@@ -5128,7 +5516,7 @@ private fun AccountsScreen(
 
     PageLazyColumn(
         isRefreshing = isRefreshing,
-        onRefresh = onSyncNow.takeIf { isLiveBudget },
+        onRefresh = runBankSync.takeIf { isLiveBudget && !state.readOnlyMode },
     ) {
         if (model.isSample) item(key = "accounts-preview-banner") { SampleBanner() }
         item(key = "accounts-title") { Heading("Balances", model.subtitle) }
@@ -5138,6 +5526,32 @@ private fun AccountsScreen(
                 model.totalOnBudget,
                 "Across ${model.onBudgetCount} ${if (model.isSample) "sample accounts" else "on-budget accounts"}",
             )
+        }
+        if (isLiveBudget) {
+            item(key = "account-actions") {
+                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    PrimaryButton(
+                        "Add account",
+                        enabled = !isRefreshing && !state.readOnlyMode,
+                        onClick = {
+                            newAccountName = ""
+                            newAccountOffBudget = false
+                            mobileSession.clearBudgetActionMessage()
+                            addAccountDialog = true
+                        },
+                    )
+                    SecondaryButton(
+                        "Sync bank accounts",
+                        enabled = !isRefreshing && !state.readOnlyMode,
+                        onClick = runBankSync,
+                    )
+                }
+            }
+            mobileSession.budgetActionMessage?.let { message ->
+                item(key = "account-action-message") {
+                    InlineMessage(message, InlineMessageKind.ERROR)
+                }
+            }
         }
         if (model.groups.isEmpty()) {
             item(key = "accounts-empty") {
@@ -5160,9 +5574,15 @@ private fun AccountsScreen(
                             account.name,
                             account.description,
                             account.balance,
+                            leading =
+                                RowLeading.Merchant(
+                                    merchantIconMatcher?.accountIconFor(account.name),
+                                    fallback = accountTypeIcon(account.name),
+                                ),
                             options =
                                 ListRowOptions(
-                                    trailingColor = if (account.offBudget) tandemPalette.muted else tandemPalette.text,
+                                    trailingColor =
+                                        if (account.offBudget || account.closed) tandemPalette.muted else tandemPalette.text,
                                 ),
                         ) {
                             state.selectedAccountId = account.id
@@ -5177,6 +5597,53 @@ private fun AccountsScreen(
                 SecondaryButton("Account options") { navigation.open(AppRoute.ACCOUNT_OPTIONS) }
             }
         }
+    }
+    if (addAccountDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) addAccountDialog = false },
+            title = { Text("Add account", color = tandemPalette.text) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    TextFieldCard("Name", newAccountName, { newAccountName = it }, TextFieldOptions(placeholder = "Checking"))
+                    CheckBoxRow(
+                        "Tracking account",
+                        "Keep it outside the budget",
+                        checked = newAccountOffBudget,
+                        enabled = !mobileSession.isPerformingBudgetAction,
+                        onChange = { newAccountOffBudget = it },
+                    )
+                    mobileSession.budgetActionMessage?.let { BodyText(it) }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !mobileSession.isPerformingBudgetAction && newAccountName.isNotBlank(),
+                    onClick = {
+                        scope.launch {
+                            val created =
+                                mobileSession.createBudgetAccount(
+                                    state.selectedBudgetId,
+                                    newAccountName,
+                                    newAccountOffBudget,
+                                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                                )
+                            if (created) addAccountDialog = false
+                        }
+                    },
+                ) {
+                    Text(if (mobileSession.isPerformingBudgetAction) "Adding…" else "Add", color = tandemPalette.accent)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !mobileSession.isPerformingBudgetAction,
+                    onClick = { addAccountDialog = false },
+                ) {
+                    Text("Cancel", color = tandemPalette.muted)
+                }
+            },
+            backgroundColor = tandemPalette.surface,
+        )
     }
 }
 
@@ -5239,7 +5706,7 @@ private fun AccountDetailScreen(
             }
             SettingRow(
                 "Account options",
-                if (isLiveBudget) "Read-only account details" else "$accountName settings",
+                if (isLiveBudget) "Close account" else "$accountName settings",
                 onClick = { navigation.open(AppRoute.ACCOUNT_OPTIONS) },
             )
         }
@@ -5250,7 +5717,10 @@ private fun AccountDetailScreen(
 private fun AccountOptionsScreen(
     state: AppState,
     liveAccounts: List<LiveAccountSummary>,
+    mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
 ) {
+    val scope = rememberCoroutineScope()
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     val liveAccount = if (isLiveBudget) liveAccounts.firstOrNull { it.id == state.selectedAccountId } else null
     val previewAccount = if (isLiveBudget) null else previewAccountById(state.selectedAccountId)
@@ -5260,6 +5730,16 @@ private fun AccountOptionsScreen(
             ?: previewAccount?.balanceMinor?.let(::formatCurrency)
             ?: "Unavailable"
     val accountScope = if (liveAccount?.offBudget ?: previewAccount?.offBudget ?: false) "Off budget" else "On budget"
+    var confirmClose by rememberSaveable(state.selectedAccountId) { mutableStateOf(false) }
+    var transferAccountId by rememberSaveable(state.selectedAccountId) { mutableStateOf("") }
+    var transferCategoryId by rememberSaveable(state.selectedAccountId) { mutableStateOf("") }
+    val nonZeroBalance = liveAccount?.balanceMinor?.let { it != 0L } ?: false
+    val transferAccounts = liveAccounts.filter { it.id != liveAccount?.id && !it.closed }
+    val transferCategories =
+        mobileSession.categoryRecords
+            .mapNotNull { record -> record.recordName()?.let { SelectorItem(record.recordId, it) } }
+            .distinctBy(SelectorItem::id)
+    val canClose = isLiveBudget && liveAccount != null && !liveAccount.closed && liveAccount.balanceMinor != null && !state.readOnlyMode
     PageColumn {
         if (!isLiveBudget) SampleBanner()
         if (accountName == null) {
@@ -5273,6 +5753,120 @@ private fun AccountOptionsScreen(
                 ListRow("Balance", "Current balance", accountBalance)
                 DividerLine()
                 ListRow("Budget status", "Account scope", accountScope)
+            }
+            if (isLiveBudget && liveAccount != null) {
+                if (liveAccount.closed) {
+                    InlineMessage("This account is closed.", InlineMessageKind.INFO)
+                } else {
+                    SecondaryButton(
+                        "Close account",
+                        enabled = canClose && !mobileSession.isPerformingBudgetAction,
+                        onClick = {
+                            transferAccountId = ""
+                            transferCategoryId = ""
+                            mobileSession.clearBudgetActionMessage()
+                            confirmClose = true
+                        },
+                    )
+                }
+                mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+            }
+        }
+    }
+    if (confirmClose && liveAccount != null) {
+        AlertDialog(
+            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) confirmClose = false },
+            title = { Text("Close ${liveAccount.name}?", color = tandemPalette.text) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    BodyText("Actual will close this account and unlink its bank connection.")
+                    if (nonZeroBalance) {
+                        AccountActionDropdown(
+                            title = "Move balance to",
+                            selectedLabel = transferAccounts.firstOrNull { it.id == transferAccountId }?.name ?: "Choose account",
+                            options = transferAccounts.map { it.name to it.id },
+                            onSelect = { transferAccountId = it.orEmpty() },
+                        )
+                        AccountActionDropdown(
+                            title = "Category",
+                            selectedLabel = transferCategories.firstOrNull { it.id == transferCategoryId }?.label ?: "Uncategorized",
+                            options = listOf("Uncategorized" to null) + transferCategories.map { it.label to it.id },
+                            onSelect = { transferCategoryId = it.orEmpty() },
+                        )
+                    }
+                    mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled =
+                        !mobileSession.isPerformingBudgetAction &&
+                            (!nonZeroBalance || transferAccountId.isNotBlank()),
+                    onClick = {
+                        scope.launch {
+                            val closed =
+                                mobileSession.closeBudgetAccount(
+                                    state.selectedBudgetId,
+                                    liveAccount.id,
+                                    transferAccountId.takeIf(String::isNotBlank),
+                                    transferCategoryId.takeIf(String::isNotBlank),
+                                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                                )
+                            if (closed) {
+                                confirmClose = false
+                                navigation.selectTab(AppRoute.ACCOUNTS)
+                            }
+                        }
+                    },
+                ) {
+                    Text(if (mobileSession.isPerformingBudgetAction) "Closing…" else "Close account", color = tandemPalette.negative)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !mobileSession.isPerformingBudgetAction,
+                    onClick = { confirmClose = false },
+                ) {
+                    Text("Cancel", color = tandemPalette.muted)
+                }
+            },
+            backgroundColor = tandemPalette.surface,
+        )
+    }
+}
+
+@Composable
+private fun AccountActionDropdown(
+    title: String,
+    selectedLabel: String,
+    options: List<Pair<String, String?>>,
+    onSelect: (String?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        SurfaceCard(onClick = { expanded = true }) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+                    Text(title, color = tandemPalette.muted, fontSize = TandemTypography.caption)
+                    Text(selectedLabel, color = tandemPalette.text, fontSize = TandemTypography.body, maxLines = 1)
+                }
+                Icon(Lucide.ChevronDown, contentDescription = null, modifier = Modifier.size(20.dp), tint = tandemPalette.muted)
+            }
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { (label, value) ->
+                DropdownMenuItem(
+                    onClick = {
+                        expanded = false
+                        onSelect(value)
+                    },
+                ) {
+                    Text(label, color = tandemPalette.text, fontSize = TandemTypography.compactBody)
+                }
             }
         }
     }
@@ -5662,6 +6256,7 @@ private fun ActivitySearchScreen(
     var sortedResultIndices by remember(state.selectedBudgetId) {
         mutableStateOf(cachedEvaluation?.indices ?: emptyList())
     }
+    val resultsListState = LocalRouteLazyListState.current ?: rememberLazyListState()
     val selectedSortOrder = state.activitySortOrder
     LaunchedEffect(resultIndices, searchableRecords, selectedSortOrder) {
         sortedResultIndices =
@@ -5776,6 +6371,7 @@ private fun ActivitySearchScreen(
             }
         } else {
             LazyColumn(
+                state = resultsListState,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
             ) {
@@ -5987,7 +6583,10 @@ private fun TransactionDetailScreen(
     val isLive = state.selectedTransactionIsLive
     val amount = state.selectedTransactionAmountMinor ?: -4_218L
     val merchantIcon = remember(merchantIconMatcher, state.transactionPayee) { merchantIconMatcher?.iconFor(state.transactionPayee) }
-    val categoryIcon = remember(state.transactionCategory) { financeIcon(state.transactionCategory) ?: Lucide.Receipt }
+    val categoryIcon =
+        remember(state.categoryIconOverrides, state.transactionCategory, state.newTransactionCategoryId) {
+            state.categoryIconFor(state.newTransactionCategoryId, state.transactionCategory)
+        }
     val hasUnsentTransactionChange =
         mobileSession.pendingWrites.any { operation ->
             operation.recordType == "transaction" &&
@@ -6317,7 +6916,13 @@ private fun TransactionFormScreen(
         var confirmDelete by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf(false) }
         val parsedAmount = state.parseAmountMinorUnits(state.transactionAmount)
         val baselineAmount = originalAmountMinor?.let { kotlin.math.abs(it) }
-        val hasChanges = parsedAmount != baselineAmount || state.transactionNotes != originalNotes
+        val hasChanges =
+            parsedAmount != baselineAmount ||
+                state.transactionNotes != originalNotes ||
+                state.newTransactionAccountId != state.selectedTransactionAccountId ||
+                state.newTransactionPayeeId != state.selectedTransactionPayeeId ||
+                state.newTransactionCategoryId != state.selectedTransactionCategoryId ||
+                state.transactionDate != state.selectedTransactionDate
         val routeScrollState = LocalRouteScrollState.current
         val compactSave by remember(routeScrollState) {
             derivedStateOf { (routeScrollState?.value ?: 0) > 72 }
@@ -6343,14 +6948,22 @@ private fun TransactionFormScreen(
                     { state.transactionNotes = it },
                     TextFieldOptions(placeholder = "Add a note", singleLine = false),
                 )
-                SectionCard("Transaction details") {
-                    ListRow("Account", state.transactionAccount, leading = RowLeading.Icon(Lucide.WalletCards))
+                SectionCard(title = "") {
+                    TransactionPickerRow(state.transactionAccount, "Choose account", Lucide.WalletCards) {
+                        navigation.open(AppRoute.CHOOSE_ACCOUNT)
+                    }
                     DividerLine()
-                    ListRow("Payee", state.transactionPayee, leading = RowLeading.Icon(Lucide.Receipt))
+                    TransactionPickerRow(state.transactionPayee, "Choose payee", Lucide.Receipt) {
+                        navigation.open(AppRoute.CHOOSE_PAYEE)
+                    }
                     DividerLine()
-                    ListRow("Category", state.transactionCategory, leading = RowLeading.Icon(Lucide.Tags))
+                    TransactionPickerRow(state.transactionCategory, "Choose category", Lucide.Tags) {
+                        navigation.open(AppRoute.CHOOSE_CATEGORY)
+                    }
                     DividerLine()
-                    ListRow("Date", state.transactionDate, leading = RowLeading.Icon(Lucide.CalendarDays))
+                    TransactionPickerRow(displayTransactionDate(state.transactionDate), "Choose date", Lucide.CalendarDays) {
+                        navigation.open(AppRoute.CHOOSE_DATE)
+                    }
                 }
                 mobileSession.transactionWriteMessage?.let { message ->
                     SurfaceCard {
@@ -6555,6 +7168,15 @@ private fun DatePickerScreen(
             }
         }
     }
+}
+
+private fun currentMonthId(): String = platformTodayIsoDate().take(7).takeIf { it.length == 7 } ?: "2026-05"
+
+private fun currentMonthLabel(): String {
+    val parts = currentMonthId().split('-')
+    val year = parts.getOrNull(0)?.toIntOrNull() ?: 2026
+    val month = parts.getOrNull(1)?.toIntOrNull()?.takeIf { it in 1..12 } ?: 5
+    return formatMonth(year, month)
 }
 
 private fun parseIsoDate(value: String): Triple<Int, Int, Int>? {
@@ -7334,17 +7956,6 @@ private fun AccentColorScreen(state: AppState) {
 @Composable
 private fun BackgroundScreen(state: AppState) {
     PageColumn {
-        SurfaceCard {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(88.dp)
-                    .clip(RoundedCornerShape(TandemShapes.medium))
-                    .background(appBackgroundBrush(state.backgroundStyle, tandemPalette)),
-                contentAlignment = Alignment.Center,
-            ) {
-            }
-        }
         listOf(
             "Soft gradient" to "A subtle vertical blend behind the cards",
             "Solid surface" to "A single steady canvas color",

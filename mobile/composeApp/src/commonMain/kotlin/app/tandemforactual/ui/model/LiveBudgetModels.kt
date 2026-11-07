@@ -14,6 +14,9 @@ internal data class LiveAccountSummary(
     val balanceMinor: Long?,
     val type: String?,
     val offBudget: Boolean,
+    val closed: Boolean = false,
+    val accountGroupId: String? = null,
+    val accountGroupName: String? = null,
 )
 
 internal data class LiveCategorySummary(
@@ -62,17 +65,43 @@ internal fun JsonObject.longValue(name: String): Long? =
 
 internal fun JsonObject.booleanValue(name: String): Boolean? = (this[name] as? JsonPrimitive)?.booleanOrNull
 
-internal fun liveAccountSummaries(accountRecords: List<BudgetRecordEntity>): List<LiveAccountSummary> =
-    accountRecords.mapNotNull { record ->
+internal fun liveAccountSummaries(
+    accountRecords: List<BudgetRecordEntity>,
+    accountGroupRecords: List<BudgetRecordEntity> = emptyList(),
+): List<LiveAccountSummary> {
+    val groupNames = accountGroupRecords.associate { it.recordId to (it.recordName() ?: it.recordId) }
+    return accountRecords.mapNotNull { record ->
         val body = record.recordBody() ?: return@mapNotNull null
+        val accountGroupId = body.stringValue("account_group_id") ?: body.stringValue("accountGroupId")
         LiveAccountSummary(
             id = record.recordId,
             name = record.recordName() ?: return@mapNotNull null,
             balanceMinor = body.longValue("balance_current"),
             type = body.stringValue("type"),
             offBudget = body.booleanValue("offbudget") ?: body.booleanValue("offBudget") ?: false,
+            closed = body.booleanValue("closed") ?: false,
+            accountGroupId = accountGroupId,
+            accountGroupName = accountGroupId?.let(groupNames::get),
         )
     }
+}
+
+internal fun liveAccountGroupLabel(account: LiveAccountSummary): String {
+    if (account.closed) return "Closed"
+    if (account.offBudget) return "Tracking"
+
+    val description = listOfNotNull(account.type, account.name, account.accountGroupName).joinToString(" ").lowercase()
+    return when {
+        listOf("credit", "credit card", "visa", "mastercard", "discover", "amex", "american express")
+            .any { description.contains(it) } -> "Credit"
+        listOf("loan", "mortgage", "debt").any { description.contains(it) } -> "Loans"
+        listOf("investment", "brokerage", "401k", "403b", "ira", "retirement", "stocks")
+            .any { description.contains(it) } -> "Investments"
+        listOf("checking", "savings", "cash").any { description.contains(it) } -> "Cash"
+        !account.accountGroupName.isNullOrBlank() -> account.accountGroupName
+        else -> "Accounts"
+    }
+}
 
 internal fun liveBudgetMonthSummary(
     monthRecord: BudgetRecordEntity?,

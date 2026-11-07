@@ -8,6 +8,57 @@ internal val supplementaryMerchantAliases =
         "costco" to listOf("Costco Gas"),
     )
 
+internal val accountIssuerSlugs =
+    setOf(
+        "aib",
+        "american-express",
+        "anb",
+        "axis-bank",
+        "bank-of-america",
+        "barclays",
+        "bbk",
+        "bnp-paribas",
+        "brex",
+        "caixabank",
+        "capital-one",
+        "chase",
+        "chime",
+        "citibank",
+        "commerzbank",
+        "commonwealth-bank",
+        "credit-suisse",
+        "deutsche-bank",
+        "discover",
+        "hdfc-bank",
+        "hsbc",
+        "icici-bank",
+        "mastercard",
+        "maybank",
+        "monzo",
+        "n26",
+        "nab",
+        "nubank",
+        "punjab-national-bank",
+        "raiffeisen-bank-international",
+        "revolut",
+        "santander",
+        "sberbank",
+        "starling-bank",
+        "visa",
+        "wells-fargo",
+        "wise",
+    )
+
+internal val supplementaryAccountIssuerAliases =
+    mapOf(
+        "american-express" to listOf("Amex"),
+        "bank-of-america" to listOf("BofA", "BoA"),
+        "hdfc-bank" to listOf("HDFC"),
+        "icici-bank" to listOf("ICICI"),
+        "mastercard" to listOf("Master Card"),
+        "punjab-national-bank" to listOf("PNB"),
+    )
+
 internal class MerchantAliasMatcher<T> {
     private class Node<T> {
         val children = mutableMapOf<String, Node<T>>()
@@ -52,6 +103,29 @@ internal class MerchantAliasMatcher<T> {
             val value = node.value ?: continue
             val suffix = words.drop(index + 1)
             if (suffix.isEmpty() || isStoreNumberSuffix(suffix)) bestValue = value
+        }
+        return bestValue
+    }
+
+    fun findAccountIcon(accountName: String): T? {
+        val words = labelWords(accountName)
+        if (words.isEmpty()) return null
+
+        var bestValue: T? = null
+        var bestLength = 0
+        var bestPriority = Int.MAX_VALUE
+        for (start in words.indices) {
+            var node = root
+            for (end in start until words.size) {
+                node = node.children[words[end]] ?: break
+                val value = node.value ?: continue
+                val matchLength = end - start + 1
+                if (matchLength > bestLength || (matchLength == bestLength && node.licensePriority < bestPriority)) {
+                    bestValue = value
+                    bestLength = matchLength
+                    bestPriority = node.licensePriority
+                }
+            }
         }
         return bestValue
     }

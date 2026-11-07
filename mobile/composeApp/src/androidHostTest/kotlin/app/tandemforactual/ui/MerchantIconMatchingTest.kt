@@ -2,7 +2,10 @@ package app.tandemforactual.ui
 
 import com.composables.icons.lucide.CarFront
 import com.composables.icons.lucide.Carrot
+import com.composables.icons.lucide.CreditCard
+import com.composables.icons.lucide.Landmark
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.PiggyBank
 import com.composables.icons.lucide.Plane
 import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.Shirt
@@ -11,6 +14,7 @@ import com.composables.icons.lucide.WalletCards
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class MerchantIconMatchingTest {
     @Test
@@ -82,5 +86,31 @@ class MerchantIconMatchingTest {
         assertEquals("walmart", matcher.findPayeeIcon("Walmart #1234"))
         assertEquals("walmart", matcher.findPayeeIcon("Walmart location 231"))
         assertEquals("whole-foods", matcher.findPayeeIcon("Whole Foods Store 42"))
+    }
+
+    @Test
+    fun accountRowsUseTypeIconsAndKnownIssuerArtwork() {
+        assertEquals(Lucide.PiggyBank, accountTypeIcon("Household Savings"))
+        assertEquals(Lucide.Landmark, accountTypeIcon("Household Checking"))
+        assertEquals(Lucide.CreditCard, accountTypeIcon("Rewards Card"))
+
+        val issuerMatcher =
+            MerchantAliasMatcher<String>().apply {
+                add("Chase", "chase", licensePriority = 0, isTitle = true)
+                add("American Express", "american-express", licensePriority = 0, isTitle = true)
+                supplementaryAccountIssuerAliases["american-express"].orEmpty().forEach {
+                    add(it, "american-express", licensePriority = 0, isTitle = false)
+                }
+            }
+        assertEquals("chase", issuerMatcher.findAccountIcon("Chase Checking"))
+        assertEquals("chase", issuerMatcher.findAccountIcon("Household Checking - JPMorgan Chase"))
+        assertEquals("american-express", issuerMatcher.findAccountIcon("Amex Blue Cash"))
+        assertNull(issuerMatcher.findAccountIcon("Household Checking"))
+
+        assertTrue(
+            accountIssuerSlugs.containsAll(
+                setOf("bank-of-america", "chase", "american-express", "barclays", "hdfc-bank", "icici-bank"),
+            ),
+        )
     }
 }

@@ -36,6 +36,41 @@ class LiveBudgetModelsTest {
     }
 
     @Test
+    fun mapsAccountGroupsAndClosedStateAndClassifiesKnownAccountNames() {
+        val accounts =
+            liveAccountSummaries(
+                listOf(
+                    record(
+                        type = "account",
+                        id = "checking",
+                        name = "Chase Checking",
+                        json = """{"id":"checking","account_group_id":"daily","balance_current":12000}""",
+                    ),
+                    record(
+                        type = "account",
+                        id = "visa",
+                        name = "Visa Signature",
+                        json = """{"id":"visa","balance_current":-2000}""",
+                    ),
+                    record(
+                        type = "account",
+                        id = "closed",
+                        name = "Old Savings",
+                        json = """{"id":"closed","closed":true,"balance_current":0}""",
+                    ),
+                ),
+                listOf(record(type = "account-group", id = "daily", name = "Everyday")),
+            )
+
+        assertEquals("Everyday", accounts.first().accountGroupName)
+        assertEquals("daily", accounts.first().accountGroupId)
+        assertEquals("Cash", liveAccountGroupLabel(accounts[0]))
+        assertEquals("Credit", liveAccountGroupLabel(accounts[1]))
+        assertEquals("Closed", liveAccountGroupLabel(accounts[2]))
+        assertEquals(true, accounts[2].closed)
+    }
+
+    @Test
     fun mapsVisibleBudgetGroupsAndCategoriesWithRecordNameFallbacks() {
         val month =
             record(

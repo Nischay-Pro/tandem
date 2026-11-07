@@ -46,6 +46,8 @@ internal expect fun platformFormatMonth(
 
 internal expect fun platformFormatInteger(value: Int): String
 
+internal expect fun platformFormatReportPercentage(ratio: Double): String
+
 internal expect fun platformCurrencyCode(): String
 
 internal expect fun platformFirstWeekday(): Int
@@ -107,6 +109,8 @@ internal fun formatShortMonth(
 ): String = platformFormatMonth(year, month, abbreviated = true)
 
 internal fun formatInteger(value: Int): String = platformFormatInteger(value)
+
+internal fun formatReportPercentage(ratio: Double): String = platformFormatReportPercentage(ratio)
 
 internal fun formatWeekday(
     year: Int,

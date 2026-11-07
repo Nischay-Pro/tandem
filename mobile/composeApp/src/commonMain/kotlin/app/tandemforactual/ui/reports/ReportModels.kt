@@ -5,6 +5,7 @@ import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.CategoryMonthAggregate
 import app.tandemforactual.data.database.MonthlyIncomeSpendingAggregate
 import app.tandemforactual.ui.formatMonth
+import app.tandemforactual.ui.formatReportPercentage
 import app.tandemforactual.ui.formatShortMonth
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.booleanValue
@@ -13,7 +14,6 @@ import app.tandemforactual.ui.model.recordBody
 import app.tandemforactual.ui.model.stringValue
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import kotlin.math.roundToLong
 
 internal enum class ReportKind(
     val title: String,
@@ -40,7 +40,6 @@ internal enum class ReportRangePreset(
     LAST_12_MONTHS("Last 12 months", 12),
     YEAR_TO_DATE("Year to date", null),
     LAST_YEAR("Last year", null),
-    ALL_DATES("All dates", null),
 }
 
 internal data class ReportWindow(
@@ -93,13 +92,7 @@ internal data class NetWorthPoint(
 internal fun categoryPercentage(
     amount: Long,
     total: Long,
-): String {
-    if (total <= 0L || amount <= 0L) return "0%"
-    val tenths = (amount.toDouble() * 1_000.0 / total.toDouble()).roundToLong()
-    val whole = tenths / 10
-    val fraction = tenths % 10
-    return if (fraction == 0L) "$whole%" else "$whole.$fraction%"
-}
+): String = formatReportPercentage(if (total <= 0L || amount <= 0L) 0.0 else amount.toDouble() / total.toDouble())
 
 internal fun createReportWindow(
     endMonthId: String,
@@ -151,17 +144,30 @@ internal fun createReportWindow(
                 reportMonthsBetween(firstMonth, lastMonth),
             )
         }
-        ReportRangePreset.ALL_DATES ->
-            ReportWindow(
-                "0001-01-01",
-                today,
-                "",
-                todayMonthId,
-                emptyList(),
-                allDates = true,
-            )
         else -> createReportWindow(endMonthId, ReportPeriodMode.RANGE, 6)
     }
+}
+
+internal fun createReportHistoryWindow(
+    availableMonthIds: List<String>,
+    todayIsoDate: String,
+): ReportWindow? {
+    val today = todayIsoDate.takeIf { it.length >= 10 } ?: return null
+    val todayMonthId = today.take(7)
+    if (parseReportMonth(todayMonthId) == null) return null
+    val startMonthId =
+        availableMonthIds
+            .filter { parseReportMonth(it) != null && it <= todayMonthId }
+            .minOrNull()
+            ?.takeIf { it <= todayMonthId } ?: todayMonthId
+    return ReportWindow(
+        startDate = "$startMonthId-01",
+        throughDate = today,
+        startMonthId = startMonthId,
+        endMonthId = todayMonthId,
+        monthIds = reportMonthsBetween(startMonthId, todayMonthId),
+        allDates = true,
+    )
 }
 
 private fun reportMonthsBetween(
@@ -205,7 +211,7 @@ internal fun categorySpendingPoints(
             CategorySpendingPoint(
                 categoryId,
                 categoryNames[categoryId] ?: categoryId,
-                monthlyValues.sumOf(CategoryMonthAggregate::spendingMinor),
+                monthlyValues.sumOf(CategoryMonthAggregate::spendingMinor).coerceAtLeast(0L),
             )
         }.sortedWith(compareByDescending<CategorySpendingPoint> { it.spendingMinor }.thenBy { it.category.lowercase() })
 
@@ -228,7 +234,7 @@ internal fun monthlyMoneyPoints(
             monthId,
             month?.let { formatMonth(it.year, it.month) } ?: monthId,
             total?.incomeMinor ?: 0,
-            total?.spendingMinor ?: 0,
+            (total?.spendingMinor ?: 0).coerceAtLeast(0L),
         )
     }
 }
@@ -262,7 +268,7 @@ internal fun budgetedSpentPoints(
         spendingByCategoryMonth
             .filter { window.allDates || it.monthId in selectedMonthIds }
             .groupBy(CategoryMonthAggregate::categoryId)
-            .mapValues { (_, values) -> values.sumOf(CategoryMonthAggregate::spendingMinor) }
+            .mapValues { (_, values) -> values.sumOf(CategoryMonthAggregate::spendingMinor).coerceAtLeast(0L) }
     return (budgeted.keys + spent.keys)
         .map { categoryId ->
             BudgetedSpentPoint(

@@ -2,6 +2,10 @@ package app.tandemforactual.ui
 
 import app.tandemforactual.api.client.TandemApiClient
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -9,6 +13,53 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class TandemMobileSessionTest {
+    @Test
+    fun transactionEditPatchIncludesPayeeCategoryDateAndAccountChanges() {
+        val base =
+            Json
+                .parseToJsonElement(
+                    """{"account":"account-1","amount":-1200,"date":"2026-11-01","payee":"payee-1","category":"category-1","notes":"before"}""",
+                ).jsonObject
+
+        val patch =
+            buildTransactionEditPatch(
+                base = base,
+                signedAmount = -1_200,
+                fallbackCurrentAmount = -1_200,
+                notes = "after",
+                details = TransactionEditDetails("account-2", "payee-2", "category-2", "2026-11-05"),
+            )
+
+        assertEquals("account-2", patch.getValue("account").jsonPrimitive.content)
+        assertEquals("payee-2", patch.getValue("payee").jsonPrimitive.content)
+        assertEquals("category-2", patch.getValue("category").jsonPrimitive.content)
+        assertEquals("2026-11-05", patch.getValue("date").jsonPrimitive.content)
+        assertEquals("after", patch.getValue("notes").jsonPrimitive.content)
+    }
+
+    @Test
+    fun transactionEditPatchCanClearOptionalFields() {
+        val base =
+            Json
+                .parseToJsonElement(
+                    """{"account":"account-1","amount":100,"date":"2026-11-01","payee":"payee-1","category":"category-1"}""",
+                ).jsonObject
+
+        val patch =
+            buildTransactionEditPatch(
+                base = base,
+                signedAmount = 100,
+                fallbackCurrentAmount = 0,
+                notes = "",
+                details = TransactionEditDetails("account-1", null, null, "2026-11-01"),
+            )
+
+        assertEquals(
+            JsonObject(mapOf("payee" to kotlinx.serialization.json.JsonNull, "category" to kotlinx.serialization.json.JsonNull)),
+            patch,
+        )
+    }
+
     @Test
     fun transactionWritesRejectAmountsAboveTheApiLimitBeforeStorageAccess() =
         runBlocking {

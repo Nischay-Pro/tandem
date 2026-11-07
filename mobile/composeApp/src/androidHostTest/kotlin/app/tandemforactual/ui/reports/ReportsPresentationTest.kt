@@ -5,6 +5,7 @@ import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.CategoryMonthAggregate
 import app.tandemforactual.data.database.MonthlyIncomeSpendingAggregate
 import app.tandemforactual.ui.model.LiveAccountSummary
+import java.util.Locale
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -25,7 +26,7 @@ class ReportsPresentationTest {
     }
 
     @Test
-    fun reportRangePresetsCoverYearToDateLastYearAndAllDates() {
+    fun reportRangePresetsCoverYearToDateAndLastYear() {
         val yearToDate = createReportWindow("2024-03", ReportPeriodMode.RANGE, ReportRangePreset.YEAR_TO_DATE, "2024-03-15")
         assertEquals("2024-01-01", yearToDate?.startDate)
         assertEquals("2024-03-15", yearToDate?.throughDate)
@@ -35,11 +36,6 @@ class ReportsPresentationTest {
         assertEquals("2023-01-01", lastYear?.startDate)
         assertEquals("2023-12-31", lastYear?.throughDate)
         assertEquals(12, lastYear?.monthCount)
-
-        val allDates = createReportWindow("2024-03", ReportPeriodMode.RANGE, ReportRangePreset.ALL_DATES, "2024-03-15")
-        assertEquals("0001-01-01", allDates?.startDate)
-        assertEquals("2024-03-15", allDates?.throughDate)
-        assertTrue(allDates?.allDates == true)
     }
 
     @Test
@@ -68,10 +64,29 @@ class ReportsPresentationTest {
 
     @Test
     fun categoryPercentageShowsShareToOneDecimalAndHandlesWholePercentages() {
-        assertEquals("33.3%", categoryPercentage(1, 3))
-        assertEquals("25%", categoryPercentage(1, 4))
-        assertEquals("0%", categoryPercentage(0, 4))
-        assertEquals("0%", categoryPercentage(4, 0))
+        val original = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.US)
+            assertEquals("33.3%", categoryPercentage(1, 3))
+            assertEquals("25%", categoryPercentage(1, 4))
+            assertEquals("0%", categoryPercentage(0, 4))
+            assertEquals("0%", categoryPercentage(4, 0))
+        } finally {
+            Locale.setDefault(original)
+        }
+    }
+
+    @Test
+    fun categoryPercentageUsesTheCurrentLocale() {
+        val original = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.GERMANY)
+            val percentage = categoryPercentage(1, 3)
+            assertTrue(percentage.contains("33,3"))
+            assertTrue(percentage.contains("%"))
+        } finally {
+            Locale.setDefault(original)
+        }
     }
 
     @Test
@@ -93,8 +108,8 @@ class ReportsPresentationTest {
     }
 
     @Test
-    fun allDatesMonthlyPointsSpanFromEarliestActivityThroughSelectedMonth() {
-        val window = createReportWindow("2025-03", ReportPeriodMode.RANGE, ReportRangePreset.ALL_DATES, "2025-03-15")!!
+    fun historicalMonthlyPointsSpanFromEarliestActivityThroughToday() {
+        val window = createReportHistoryWindow(listOf("2024-12", "2025-02"), "2025-03-15")!!
         val points =
             monthlyMoneyPoints(
                 listOf(
@@ -106,6 +121,15 @@ class ReportsPresentationTest {
 
         assertEquals(listOf("2024-12", "2025-01", "2025-02", "2025-03"), points.map(MonthlyMoneyPoint::monthId))
         assertEquals(listOf(300_000L, 0L, 100_000L, 0L), points.map(MonthlyMoneyPoint::incomeMinor))
+    }
+
+    @Test
+    fun historicalWindowFallsBackToCurrentMonthWhenNoPriorMonthIsAvailable() {
+        val window = createReportHistoryWindow(emptyList(), "2025-03-15")
+
+        assertEquals(listOf("2025-03"), window?.monthIds)
+        assertEquals("2025-03-01", window?.startDate)
+        assertEquals("2025-03-15", window?.throughDate)
     }
 
     @Test

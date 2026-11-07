@@ -55,6 +55,37 @@ internal data class SyncPresentationState(
     fun stopped(): SyncPresentationState = copy(isSyncing = false)
 }
 
+internal data class TransactionEditDetails(
+    val accountId: String,
+    val payeeId: String?,
+    val categoryId: String?,
+    val date: String,
+)
+
+internal fun buildTransactionEditPatch(
+    base: JsonObject,
+    signedAmount: Long,
+    fallbackCurrentAmount: Long?,
+    notes: String,
+    details: TransactionEditDetails?,
+): JsonObject =
+    buildJsonObject {
+        val currentAmount = base.longValue("amount") ?: fallbackCurrentAmount
+        val currentNotes = base.stringValue("notes") ?: ""
+        if (signedAmount != currentAmount) put("amount", JsonPrimitive(signedAmount))
+        if (notes != currentNotes) put("notes", JsonPrimitive(notes))
+        details?.let { requested ->
+            if (requested.accountId != base.stringValue("account")) put("account", JsonPrimitive(requested.accountId))
+            if (requested.payeeId != base.stringValue("payee")) {
+                put("payee", requested.payeeId?.let(::JsonPrimitive) ?: JsonNull)
+            }
+            if (requested.categoryId != base.stringValue("category")) {
+                put("category", requested.categoryId?.let(::JsonPrimitive) ?: JsonNull)
+            }
+            if (requested.date != base.stringValue("date")) put("date", JsonPrimitive(requested.date))
+        }
+    }
+
 /** In-memory session state. Device credentials use a platform store; budget passwords are never persisted. */
 internal class TandemMobileSession(
     private val apiClient: TandemApiClient,
@@ -158,10 +189,20 @@ internal class TandemMobileSession(
     var transactionWriteMessage by mutableStateOf<String?>(null)
         private set
 
+    var isPerformingBudgetAction by mutableStateOf(false)
+        private set
+
+    var budgetActionMessage by mutableStateOf<String?>(null)
+        private set
+
     private var readOnlyMode = false
 
     fun setReadOnlyMode(enabled: Boolean) {
         readOnlyMode = enabled
+    }
+
+    fun clearBudgetActionMessage() {
+        budgetActionMessage = null
     }
 
     private fun refuseWriteInReadOnlyMode(): Boolean {
@@ -207,6 +248,9 @@ internal class TandemMobileSession(
         private set
 
     var accountRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
+        private set
+
+    var accountGroupRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
         private set
 
     val isAuthenticated: Boolean
@@ -397,6 +441,118 @@ internal class TandemMobileSession(
         }
     }
 
+    suspend fun runBankSync(
+        budgetId: String,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Actual bank sync failed. Check its provider setup and try again.") {
+            apiClient.runBudgetBankSync(budgetId, encryptionPassword)
+        }
+
+    suspend fun createBudgetAccount(
+        budgetId: String,
+        name: String,
+        offbudget: Boolean,
+        encryptionPassword: String?,
+    ): Boolean {
+        val cleanName = name.trim()
+        if (cleanName.isBlank()) {
+            budgetActionMessage = "Enter an account name."
+            return false
+        }
+        if (cleanName.length > 100) {
+            budgetActionMessage = "Account names can be up to 100 characters."
+            return false
+        }
+        return performBudgetAction(budgetId, encryptionPassword, "Couldn’t add this account. Try again.") {
+            apiClient.createBudgetAccount(budgetId, cleanName, offbudget, encryptionPassword)
+        }
+    }
+
+    suspend fun closeBudgetAccount(
+        budgetId: String,
+        accountId: String,
+        transferAccountId: String?,
+        transferCategoryId: String?,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Couldn’t close this account. Check its balance and try again.") {
+            apiClient.closeBudgetAccount(
+                budgetId,
+                accountId,
+                transferAccountId,
+                transferCategoryId,
+                encryptionPassword,
+            )
+        }
+
+    suspend fun renameBudgetCategory(
+        budgetId: String,
+        categoryId: String,
+        name: String,
+        encryptionPassword: String?,
+    ): Boolean {
+        val cleanName = name.trim()
+        if (cleanName.isBlank()) {
+            budgetActionMessage = "Enter a category name."
+            return false
+        }
+        if (cleanName.length > 100) {
+            budgetActionMessage = "Category names can be up to 100 characters."
+            return false
+        }
+        return performBudgetAction(budgetId, encryptionPassword, "Couldn’t rename this category. Try again.") {
+            apiClient.renameBudgetCategory(budgetId, categoryId, cleanName, encryptionPassword)
+        }
+    }
+
+    suspend fun deleteBudgetCategory(
+        budgetId: String,
+        categoryId: String,
+        transferCategoryId: String?,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Couldn’t delete this category. Try again.") {
+            apiClient.deleteBudgetCategory(budgetId, categoryId, transferCategoryId, encryptionPassword)
+        }
+
+    private suspend fun performBudgetAction(
+        budgetId: String,
+        encryptionPassword: String?,
+        failureMessage: String,
+        action: suspend () -> Unit,
+    ): Boolean {
+        budgetActionMessage = null
+        if (refuseWriteInReadOnlyMode()) {
+            budgetActionMessage = transactionWriteMessage
+            return false
+        }
+        if (budgetId.isBlank() || !apiClient.isAuthenticated) {
+            budgetActionMessage = "Pair this device and open a budget before changing it."
+            return false
+        }
+        if (isPerformingBudgetAction) return false
+        isPerformingBudgetAction = true
+        try {
+            apiClient.withExclusiveSession { action() }
+            if (synchronize(budgetId, encryptionPassword) == null) {
+                budgetActionMessage = syncError ?: "Actual was updated, but this device couldn’t refresh the budget."
+                return false
+            }
+            return true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: TandemApiException) {
+            budgetActionMessage = error.message ?: failureMessage
+            return false
+        } catch (_: Exception) {
+            budgetActionMessage = failureMessage
+            return false
+        } finally {
+            isPerformingBudgetAction = false
+        }
+    }
+
     suspend fun updateTransaction(
         budgetId: String,
         transactionId: String,
@@ -404,6 +560,11 @@ internal class TandemMobileSession(
         notes: String,
         originalAmountMinor: Long,
         displaySettings: BudgetDisplaySettings? = null,
+        accountId: String? = null,
+        payeeId: String? = null,
+        categoryId: String? = null,
+        date: String? = null,
+        updateDetails: Boolean = false,
     ): Boolean {
         transactionWriteMessage = null
         if (refuseWriteInReadOnlyMode()) return false
@@ -433,14 +594,59 @@ internal class TandemMobileSession(
             transactionWriteMessage = "Couldn’t read this transaction. Sync the budget before editing."
             return false
         }
-        val signedAmount = if (originalAmountMinor < 0) -enteredAmount else enteredAmount
-        val currentAmount = base.longValue("amount") ?: current.amountMinor
-        val currentNotes = base.stringValue("notes") ?: ""
-        val patch =
-            buildMap<String, kotlinx.serialization.json.JsonElement> {
-                if (signedAmount != currentAmount) put("amount", JsonPrimitive(signedAmount))
-                if (notes != currentNotes) put("notes", JsonPrimitive(notes))
+        val requestedDate = if (updateDetails) normalizeTransactionDate(date.orEmpty()) else null
+        val requestedAccountId = if (updateDetails) accountId?.takeIf(String::isNotBlank) else null
+        if (updateDetails && requestedAccountId == null) {
+            transactionWriteMessage = "Choose an account from this budget before saving."
+            return false
+        }
+        if (requestedAccountId != null) {
+            val account = accountRecords.firstOrNull { it.recordId == requestedAccountId }
+            val accountBody = account?.recordBody()
+            if (account == null || accountBody?.booleanValue("closed") == true) {
+                transactionWriteMessage = "Choose an open account from this budget."
+                return false
             }
+            if (accountBody?.booleanValue("offbudget") == true || accountBody?.booleanValue("offBudget") == true) {
+                transactionWriteMessage = "Choose an on-budget account for this transaction."
+                return false
+            }
+        }
+        if (updateDetails && payeeId != null && payeeRecords.none { it.recordId == payeeId }) {
+            transactionWriteMessage = "Choose an existing payee or clear the payee field."
+            return false
+        }
+        if (updateDetails && categoryId != null && categoryRecords.none { it.recordId == categoryId }) {
+            transactionWriteMessage = "Choose a category from this budget before saving."
+            return false
+        }
+        if (updateDetails && requestedDate == null) {
+            transactionWriteMessage = "Choose a valid transaction date."
+            return false
+        }
+        if (requestedDate != null && requestedDate < "1995-01-01") {
+            transactionWriteMessage = "Choose a date on or after January 1, 1995."
+            return false
+        }
+        val signedAmount = if (originalAmountMinor < 0) -enteredAmount else enteredAmount
+        val patch =
+            buildTransactionEditPatch(
+                base = base,
+                signedAmount = signedAmount,
+                fallbackCurrentAmount = current.amountMinor,
+                notes = notes,
+                details =
+                    if (updateDetails) {
+                        TransactionEditDetails(
+                            accountId = checkNotNull(requestedAccountId),
+                            payeeId = payeeId,
+                            categoryId = categoryId,
+                            date = checkNotNull(requestedDate),
+                        )
+                    } else {
+                        null
+                    },
+            )
         if (patch.isEmpty()) {
             transactionWriteMessage = "There are no transaction changes to save."
             return false
@@ -867,6 +1073,7 @@ internal class TandemMobileSession(
         cachedTransactionCount =
             localRepository.countVisibleRecords(budgetId, "transaction").coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
         accountRecords = localRepository.findRecords(budgetId, "account")
+        accountGroupRecords = localRepository.findRecords(budgetId, "account-group")
         payeeRecords = localRepository.findRecords(budgetId, "payee")
         categoryRecords = localRepository.findRecords(budgetId, "category")
         categoryGroupRecords = localRepository.findRecords(budgetId, "category-group")
@@ -891,6 +1098,7 @@ internal class TandemMobileSession(
                 }
             }
             launch { localRepository.observeRecords(budgetId, "account").collect { accountRecords = it } }
+            launch { localRepository.observeRecords(budgetId, "account-group").collect { accountGroupRecords = it } }
             launch { localRepository.observeRecords(budgetId, "payee").collect { payeeRecords = it } }
             launch { localRepository.observeRecords(budgetId, "category").collect { categoryRecords = it } }
             launch { localRepository.observeRecords(budgetId, "category-group").collect { categoryGroupRecords = it } }

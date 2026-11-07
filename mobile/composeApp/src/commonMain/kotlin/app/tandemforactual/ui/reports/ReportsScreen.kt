@@ -6,13 +6,14 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.DropdownMenu
 import androidx.compose.material.DropdownMenuItem
@@ -33,7 +35,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -79,6 +83,7 @@ import app.tandemforactual.ui.reports.budgetedSpentSummary
 import app.tandemforactual.ui.reports.categoryPercentage
 import app.tandemforactual.ui.reports.categorySpendingPoints
 import app.tandemforactual.ui.reports.categorySpendingSummary
+import app.tandemforactual.ui.reports.createReportHistoryWindow
 import app.tandemforactual.ui.reports.createReportWindow
 import app.tandemforactual.ui.reports.incomeSpendingSummary
 import app.tandemforactual.ui.reports.monthlyMoneyPoints
@@ -128,8 +133,14 @@ internal fun ReportsScreen(
     val rangePreset = ReportRangePreset.entries.firstOrNull { it.name == state.reportsRangePreset } ?: ReportRangePreset.LAST_6_MONTHS
     val today = platformTodayIsoDate()
     val window = createReportWindow(state.reportsMonthId, periodMode, rangePreset, today)
+    val netWorthMonthIds =
+        if (state.selectedBudgetId.isBlank()) {
+            previewTransactions.mapNotNull { it.dateIso.takeIf(String::isNotBlank)?.take(7) }
+        } else {
+            mobileSession.budgetMonthIds
+        }
     val netWorthWindow =
-        createReportWindow(today.take(7), ReportPeriodMode.RANGE, ReportRangePreset.LAST_6_MONTHS, today)
+        remember(netWorthMonthIds, today) { createReportHistoryWindow(netWorthMonthIds, today) }
     val dataWindow =
         window
             ?: ReportWindow(
@@ -177,8 +188,6 @@ internal fun ReportsScreen(
                         kind,
                         data,
                         if (kind == ReportKind.NET_WORTH) netWorthWindow ?: window else window,
-                        state.reportsNetWorthScope,
-                        onNetWorthScopeChange = { state.reportsNetWorthScope = it },
                         onSeeAll = { onOpenReport(kind) },
                         onOpenCategoryActivity = onOpenCategoryActivity,
                         onEmptyAction = if (state.selectedBudgetId.isBlank()) onOpenActivity else onAddTransaction,
@@ -212,17 +221,22 @@ internal fun ReportDetailScreen(
         }
         return
     }
-    val netWorthWindow = createReportWindow(today.take(7), ReportPeriodMode.RANGE, ReportRangePreset.LAST_6_MONTHS, today) ?: window
+    val netWorthMonthIds =
+        if (state.selectedBudgetId.isBlank()) {
+            previewTransactions.mapNotNull { it.dateIso.takeIf(String::isNotBlank)?.take(7) }
+        } else {
+            mobileSession.budgetMonthIds
+        }
+    val netWorthWindow = createReportHistoryWindow(netWorthMonthIds, today) ?: window
+    val selectedWindow = if (kind == ReportKind.NET_WORTH) netWorthWindow else window
     val data = rememberReportData(state, mobileSession, accounts, window, netWorthWindow, reportsDataCache)
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = TandemSpacing.screen),
         contentPadding = PaddingValues(vertical = TandemSpacing.medium),
         verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
     ) {
-        item(key = "report-detail-period") {
-            if (kind == ReportKind.NET_WORTH) {
-                FixedReportPeriod("Last 6 months")
-            } else {
+        if (kind != ReportKind.NET_WORTH) {
+            item(key = "report-detail-period") {
                 ReportPeriodSelector(
                     monthId = state.reportsMonthId,
                     mode = periodMode,
@@ -250,15 +264,15 @@ internal fun ReportDetailScreen(
             }
         } else {
             item(key = "report-detail-chart") {
-                ReportDetailChart(kind, data, state, if (kind == ReportKind.NET_WORTH) netWorthWindow else window, onOpenCategoryActivity)
+                ReportDetailChart(kind, data, selectedWindow, onOpenCategoryActivity)
             }
             item(key = "report-detail-table") {
                 ReportDataTable(
                     kind,
                     data,
-                    window,
+                    selectedWindow,
                     state.budgetDisplaySettings,
-                    state.reportsNetWorthScope,
+                    "All accounts",
                     onOpenCategoryActivity = onOpenCategoryActivity,
                 )
             }
@@ -515,14 +529,6 @@ private fun ReportPeriodSelector(
                             fontSize = TandemTypography.caption,
                             textAlign = TextAlign.Center,
                         )
-                    ReportRangePreset.ALL_DATES ->
-                        Text(
-                            "All available dates",
-                            modifier = Modifier.fillMaxWidth(),
-                            color = tandemPalette.muted,
-                            fontSize = TandemTypography.caption,
-                            textAlign = TextAlign.Center,
-                        )
                 }
             } else {
                 PeriodStepper(
@@ -636,14 +642,13 @@ private fun ReportCard(
     kind: ReportKind,
     data: ReportDataBundle,
     window: ReportWindow,
-    netWorthScope: String,
-    onNetWorthScopeChange: (String) -> Unit,
     onSeeAll: () -> Unit,
     onOpenCategoryActivity: (String, String, ReportWindow) -> Unit,
     onEmptyAction: () -> Unit,
     emptyActionLabel: String,
 ) {
     val empty = reportHasNoData(kind, data)
+    var selectedNetWorthIndex by remember(data.netWorth) { mutableStateOf<Int?>(null) }
     SurfaceCard {
         Column(
             Modifier.padding(TandemSpacing.large),
@@ -669,11 +674,10 @@ private fun ReportCard(
                 Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.muted)
             }
             if (kind != ReportKind.NET_WORTH && !empty) {
-                ReportSummary(kind, data, netWorthScope, compact = true)
+                ReportSummary(kind, data, compact = true)
             }
             if (kind == ReportKind.NET_WORTH && !empty) {
-                Text("Last 6 months", color = tandemPalette.muted, fontSize = TandemTypography.caption)
-                ReportSummary(kind, data, netWorthScope, compact = true)
+                ReportSummary(kind, data, compact = true, selectedNetWorthIndex = selectedNetWorthIndex)
             }
             if (empty) {
                 EmptyState(
@@ -683,18 +687,15 @@ private fun ReportCard(
                     onAction = onEmptyAction,
                 )
             } else {
-                if (kind == ReportKind.NET_WORTH) {
-                    NetWorthScopeSelector(netWorthScope, onNetWorthScopeChange)
-                }
                 ReportLegend(kind, data)
                 ReportChart(
                     kind,
                     data,
-                    netWorthScope,
                     150.dp,
                     compact = true,
                     window = window,
                     onOpenCategoryActivity = onOpenCategoryActivity,
+                    onNetWorthSelectionChange = { selectedNetWorthIndex = it },
                 )
                 if (kind == ReportKind.SPENDING_BY_CATEGORY) {
                     data.categories.take(5).forEach { point ->
@@ -715,31 +716,30 @@ private fun ReportCard(
 private fun ReportDetailChart(
     kind: ReportKind,
     data: ReportDataBundle,
-    state: AppState,
     window: ReportWindow,
     onOpenCategoryActivity: (String, String, ReportWindow) -> Unit,
 ) {
+    var selectedNetWorthIndex by remember(data.netWorth) { mutableStateOf<Int?>(null) }
     SurfaceCard {
         Column(
             Modifier.padding(TandemSpacing.large),
             verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
         ) {
             if (kind == ReportKind.NET_WORTH) {
-                ReportSummary(kind, data, state.reportsNetWorthScope, compact = false)
-                NetWorthScopeSelector(state.reportsNetWorthScope) { state.reportsNetWorthScope = it }
+                ReportSummary(kind, data, compact = false, selectedNetWorthIndex = selectedNetWorthIndex)
             }
             if (kind != ReportKind.NET_WORTH) {
-                ReportSummary(kind, data, state.reportsNetWorthScope, compact = false)
+                ReportSummary(kind, data, compact = false)
             }
             ReportLegend(kind, data)
             ReportChart(
                 kind,
                 data,
-                state.reportsNetWorthScope,
                 220.dp,
                 compact = false,
                 window = window,
                 onOpenCategoryActivity = onOpenCategoryActivity,
+                onNetWorthSelectionChange = { selectedNetWorthIndex = it },
             )
         }
     }
@@ -749,13 +749,13 @@ private fun ReportDetailChart(
 private fun ReportSummary(
     kind: ReportKind,
     data: ReportDataBundle,
-    netWorthScope: String,
     compact: Boolean,
+    selectedNetWorthIndex: Int? = null,
 ) {
     if (kind == ReportKind.NET_WORTH) {
-        val point = data.netWorth.lastOrNull() ?: return
-        val assets = if (netWorthScope == "On budget") point.onBudgetAssetsMinor else point.allAccountsAssetsMinor
-        val debts = if (netWorthScope == "On budget") point.onBudgetDebtsMinor else point.allAccountsDebtsMinor
+        val point = selectedNetWorthIndex?.let(data.netWorth::getOrNull) ?: data.netWorth.lastOrNull() ?: return
+        val assets = point.allAccountsAssetsMinor
+        val debts = point.allAccountsDebtsMinor
         val netWorth = assets - debts
         Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
             Text(
@@ -783,7 +783,7 @@ private fun ReportSummary(
         }
     } else {
         Text(
-            reportSummary(kind, data, netWorthScope),
+            reportSummary(kind, data, "All accounts"),
             color = reportSummaryColor(kind, data),
             fontSize = if (compact) TandemTypography.body else TandemTypography.action,
             lineHeight = if (compact) TandemTypography.bodyLineHeight else TandemTypography.actionLineHeight,
@@ -796,66 +796,81 @@ private fun ReportSummary(
 private fun ReportChart(
     kind: ReportKind,
     data: ReportDataBundle,
-    netWorthScope: String,
     height: Dp,
     compact: Boolean,
     window: ReportWindow,
     onOpenCategoryActivity: (String, String, ReportWindow) -> Unit,
+    onNetWorthSelectionChange: (Int?) -> Unit = {},
 ) {
     when (kind) {
-        ReportKind.SPENDING_OVER_TIME, ReportKind.INCOME_AND_SPENDING -> MonthlyReportChart(kind, data, height)
+        ReportKind.SPENDING_OVER_TIME, ReportKind.INCOME_AND_SPENDING, ReportKind.NET_WORTH ->
+            TimeSeriesReportChart(kind, data, height, onNetWorthSelectionChange)
         ReportKind.BUDGETED_AND_SPENT ->
             BudgetedSpentChart(data, if (compact) 5 else null) { categoryId, category ->
                 onOpenCategoryActivity(categoryId, category, window)
             }
-        else -> ReportCanvas(kind, data, netWorthScope, Modifier.fillMaxWidth().height(height))
+        else -> ReportCanvas(kind, data, "All accounts", Modifier.fillMaxWidth().height(height))
     }
 }
 
 @Composable
-private fun MonthlyReportChart(
+private fun TimeSeriesReportChart(
     kind: ReportKind,
     data: ReportDataBundle,
     height: Dp,
+    onNetWorthSelectionChange: (Int?) -> Unit = {},
 ) {
     val monthly = monthlyPoints(kind, data)
-    val maximum =
-        monthly
-            .maxOfOrNull { point ->
-                if (kind == ReportKind.SPENDING_OVER_TIME) point.spendingMinor else maxOf(point.incomeMinor, point.spendingMinor)
-            }?.coerceAtLeast(1L) ?: 1L
-    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-        Row(
-            Modifier.fillMaxWidth().height(height),
-            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-        ) {
-            Column(
-                Modifier.width(84.dp).fillMaxHeight(),
-                verticalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    reportAxisValue(maximum, maximum, data.displaySettings),
-                    color = tandemPalette.muted,
-                    fontSize = TandemTypography.caption,
-                    maxLines = 1,
-                    overflow = TextOverflow.Clip,
-                )
-                Text(
-                    reportAxisValue(0L, maximum, data.displaySettings),
-                    color = tandemPalette.muted,
-                    fontSize = TandemTypography.caption,
-                    maxLines = 1,
-                )
-            }
-            ReportCanvas(
-                kind,
-                data,
-                netWorthScope = "All accounts",
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                showMonthlyGuides = true,
-            )
+    val monthIds = if (kind == ReportKind.NET_WORTH) data.netWorth.map(NetWorthPoint::monthId) else monthly.map(MonthlyMoneyPoint::monthId)
+    val axisValues = reportChartAxisValues(kind, data)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val yAxisWidth = 72.dp
+        val axisGap = TandemSpacing.small
+        val viewportWidth = maxOf(1.dp, maxWidth - yAxisWidth - axisGap)
+        val slotWidth = viewportWidth / 6
+        val chartWidth = maxOf(viewportWidth, slotWidth * monthIds.size.coerceAtLeast(1))
+        val scrollState = rememberScrollState()
+        LaunchedEffect(monthIds, chartWidth) {
+            withFrameNanos { }
+            scrollState.scrollTo(scrollState.maxValue)
         }
-        ReportMonthAxis(monthly)
+        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(axisGap),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Column(
+                    Modifier.width(yAxisWidth).height(height).padding(vertical = 8.dp),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    axisValues.forEach { value ->
+                        Text(
+                            reportAxisValue(value, axisValues.maxOfOrNull { kotlin.math.abs(it) } ?: 1L, data.displaySettings),
+                            color = tandemPalette.muted,
+                            fontSize = TandemTypography.caption,
+                            maxLines = 1,
+                            overflow = TextOverflow.Clip,
+                        )
+                    }
+                }
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .horizontalScroll(scrollState),
+                ) {
+                    ReportCanvas(
+                        kind,
+                        data,
+                        netWorthScope = "All accounts",
+                        modifier = Modifier.width(chartWidth).height(height),
+                        showMonthlyGuides = true,
+                        onNetWorthSelectionChange = onNetWorthSelectionChange,
+                    )
+                    ReportMonthAxis(monthIds, chartWidth, chartWidth / monthIds.size.coerceAtLeast(1))
+                }
+            }
+        }
     }
 }
 
@@ -873,36 +888,55 @@ private fun reportAxisValue(
     return formatReportCurrency(amountMinor, displaySettings)
 }
 
-@Composable
-private fun ReportMonthAxis(monthly: List<MonthlyMoneyPoint>) {
-    val indexes = evenlySpacedMonthIndexes(monthly.size)
-    val currentMonthId = platformTodayIsoDate().take(7)
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Spacer(Modifier.width(84.dp + TandemSpacing.small))
-        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.SpaceBetween) {
-            indexes.forEach { index ->
-                val point = monthly[index]
-                val isCurrentMonth = point.monthId == currentMonthId
-                Text(
-                    reportMonthAxisLabel(point.monthId),
-                    modifier = Modifier.weight(1f),
-                    color = if (isCurrentMonth) tandemPalette.accent else tandemPalette.muted,
-                    fontSize = TandemTypography.caption,
-                    fontWeight = if (isCurrentMonth) FontWeight.Bold else FontWeight.Normal,
-                    maxLines = 1,
-                    textAlign = TextAlign.Center,
-                    overflow = TextOverflow.Clip,
-                )
-            }
-        }
+private fun reportChartAxisValues(
+    kind: ReportKind,
+    data: ReportDataBundle,
+): List<Long> {
+    if (kind == ReportKind.NET_WORTH) {
+        val values = data.netWorth.map(NetWorthPoint::allAccountsMinor)
+        if (values.isEmpty()) return listOf(0L, 0L, 0L, 0L, 0L)
+        val (minimum, maximum) = netWorthValueRange(values)
+        val spread = (maximum - minimum).coerceAtLeast(1.0)
+        return (0..4).map { tick -> (maximum - spread * tick / 4.0).toLong() }
     }
+    val values =
+        monthlyPoints(kind, data).map { point ->
+            if (kind == ReportKind.SPENDING_OVER_TIME) point.spendingMinor else maxOf(point.incomeMinor, point.spendingMinor)
+        }
+    val maximum = values.maxOrNull()?.coerceAtLeast(1L) ?: 1L
+    return (0..4).map { tick -> maximum * (4 - tick) / 4 }
 }
 
-private fun evenlySpacedMonthIndexes(monthCount: Int): List<Int> {
-    if (monthCount <= 0) return emptyList()
-    val labelCount = minOf(monthCount, 6)
-    if (labelCount == 1) return listOf(0)
-    return (0 until labelCount).map { index -> index * (monthCount - 1) / (labelCount - 1) }
+private fun netWorthValueRange(values: List<Long>): Pair<Double, Double> {
+    val observedMin = (values.minOrNull() ?: 0L).toDouble()
+    val observedMax = (values.maxOrNull() ?: 0L).toDouble()
+    val observedSpread = observedMax - observedMin
+    val padding = if (observedSpread == 0.0) maxOf(abs(observedMin) * 0.05, 1.0) else maxOf(observedSpread * 0.08, 1.0)
+    return (observedMin - padding) to (observedMax + padding)
+}
+
+@Composable
+private fun ReportMonthAxis(
+    monthIds: List<String>,
+    width: Dp,
+    slotWidth: Dp,
+) {
+    val currentMonthId = platformTodayIsoDate().take(7)
+    Row(Modifier.width(width), verticalAlignment = Alignment.CenterVertically) {
+        monthIds.forEach { monthId ->
+            val isCurrentMonth = monthId == currentMonthId
+            Text(
+                reportMonthAxisLabel(monthId),
+                modifier = Modifier.width(slotWidth),
+                color = if (isCurrentMonth) tandemPalette.accent else tandemPalette.muted,
+                fontSize = TandemTypography.caption,
+                fontWeight = if (isCurrentMonth) FontWeight.Bold else FontWeight.Normal,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+                overflow = TextOverflow.Clip,
+            )
+        }
+    }
 }
 
 @Composable
@@ -1000,17 +1034,6 @@ private fun ReportTableRow(
     }
 }
 
-@Composable
-private fun NetWorthScopeSelector(
-    selected: String,
-    onSelect: (String) -> Unit,
-) {
-    Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-        ReportChoiceTile("All accounts", selected == "All accounts", Modifier.weight(1f)) { onSelect("All accounts") }
-        ReportChoiceTile("On budget", selected == "On budget", Modifier.weight(1f)) { onSelect("On budget") }
-    }
-}
-
 private fun reportIcon(kind: ReportKind): ImageVector =
     when (kind) {
         ReportKind.SPENDING_BY_CATEGORY -> Lucide.ChartPie
@@ -1061,15 +1084,22 @@ private fun ReportCanvas(
     netWorthScope: String,
     modifier: Modifier,
     showMonthlyGuides: Boolean = false,
+    onNetWorthSelectionChange: (Int?) -> Unit = {},
 ) {
     val palette = tandemPalette
     val monthly = monthlyPoints(kind, data)
-    var selection by remember(kind, monthly, data.categories) { mutableStateOf<ReportChartSelection?>(null) }
+    var selection by remember(kind, monthly, data.categories, data.netWorth) { mutableStateOf<ReportChartSelection?>(null) }
+    val selectionCallback by rememberUpdatedState(onNetWorthSelectionChange)
     val selectedCategory = selection?.takeIf { kind == ReportKind.SPENDING_BY_CATEGORY }?.let { data.categories.getOrNull(it.index) }
     val selectedValue =
-        selection?.takeIf { kind == ReportKind.SPENDING_OVER_TIME || kind == ReportKind.INCOME_AND_SPENDING }?.let { selected ->
-            monthly.getOrNull(selected.index)?.let { point ->
-                if (kind == ReportKind.SPENDING_OVER_TIME || !selected.income) point.spendingMinor else point.incomeMinor
+        selection?.let { selected ->
+            when (kind) {
+                ReportKind.SPENDING_OVER_TIME, ReportKind.INCOME_AND_SPENDING ->
+                    monthly.getOrNull(selected.index)?.let { point ->
+                        if (kind == ReportKind.SPENDING_OVER_TIME || !selected.income) point.spendingMinor else point.incomeMinor
+                    }
+                ReportKind.NET_WORTH -> data.netWorth.getOrNull(selected.index)?.allAccountsMinor
+                else -> null
             }
         }
     val categoryTotal = data.categories.sumOf { it.spendingMinor.coerceAtLeast(0L) }
@@ -1079,7 +1109,13 @@ private fun ReportCanvas(
                 point.spendingMinor,
                 categoryTotal,
             )} · ${formatReportCurrency(positiveAmount(point.spendingMinor), data.displaySettings)}"
-        } ?: selectedValue?.let { formatReportCurrency(positiveAmount(it), data.displaySettings) }
+        } ?: selectedValue?.let {
+            if (kind == ReportKind.NET_WORTH) {
+                formatReportCurrency(it, data.displaySettings)
+            } else {
+                formatReportCurrency(positiveAmount(it), data.displaySettings)
+            }
+        }
     val description = reportChartDescription(kind, data, netWorthScope)
     Box(modifier) {
         Canvas(
@@ -1088,18 +1124,21 @@ private fun ReportCanvas(
                 .semantics {
                     contentDescription =
                         if (callout == null) description else "$description Selected: $callout"
-                }.pointerInput(kind, monthly, data.categories) {
+                }.pointerInput(kind, monthly, data.categories, data.netWorth) {
                     detectTapGestures { offset ->
-                        selection =
+                        val nextSelection =
                             reportSelectionAt(
                                 kind,
                                 data.categories,
                                 monthly,
+                                data.netWorth,
                                 offset,
                                 size.width.toFloat(),
                                 size.height.toFloat(),
                                 density,
                             )
+                        selection = nextSelection
+                        if (kind == ReportKind.NET_WORTH) selectionCallback(nextSelection?.index)
                     }
                 },
         ) {
@@ -1108,8 +1147,10 @@ private fun ReportCanvas(
             val chartBottom = size.height - inset
             val chartHeight = (chartBottom - chartTop).coerceAtLeast(1f)
             if (showMonthlyGuides) {
-                drawLine(palette.border, Offset(inset, chartTop), Offset(size.width - inset, chartTop), 1.dp.toPx())
-                drawLine(palette.border, Offset(inset, chartBottom), Offset(size.width - inset, chartBottom), 1.dp.toPx())
+                (0..4).forEach { tick ->
+                    val y = chartTop + chartHeight * tick / 4f
+                    drawLine(palette.border, Offset(inset, y), Offset(size.width - inset, y), 1.dp.toPx())
+                }
             }
             when (kind) {
                 ReportKind.SPENDING_BY_CATEGORY -> {
@@ -1227,22 +1268,9 @@ private fun ReportCanvas(
                     }
                 }
                 ReportKind.NET_WORTH -> {
-                    val values =
-                        data.netWorth.map {
-                            if (netWorthScope == "On budget") it.onBudgetMinor else it.allAccountsMinor
-                        }
+                    val values = data.netWorth.map(NetWorthPoint::allAccountsMinor)
                     if (values.isNotEmpty()) {
-                        val observedMin = (values.minOrNull() ?: 0L).toDouble()
-                        val observedMax = (values.maxOrNull() ?: 0L).toDouble()
-                        val observedSpread = observedMax - observedMin
-                        val padding =
-                            if (observedSpread == 0.0) {
-                                maxOf(abs(observedMin) * 0.05, 1.0)
-                            } else {
-                                maxOf(observedSpread * 0.08, 1.0)
-                            }
-                        val minValue = observedMin - padding
-                        val maxValue = observedMax + padding
+                        val (minValue, maxValue) = netWorthValueRange(values)
                         val spread = (maxValue - minValue).coerceAtLeast(1.0)
                         val points =
                             values.mapIndexed { index, value ->
@@ -1269,7 +1297,10 @@ private fun ReportCanvas(
                             }
                         drawPath(fill, palette.accent.copy(alpha = 0.18f))
                         drawPath(line, palette.accent, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
-                        points.forEach { drawCircle(palette.accent, 4.dp.toPx(), it) }
+                        points.forEachIndexed { index, point ->
+                            val isSelected = selection?.index == index
+                            drawCircle(palette.accent, if (isSelected) 7.dp.toPx() else 4.dp.toPx(), point)
+                        }
                     }
                 }
             }
@@ -1296,6 +1327,7 @@ private fun reportSelectionAt(
     kind: ReportKind,
     categories: List<CategorySpendingPoint>,
     monthly: List<MonthlyMoneyPoint>,
+    netWorth: List<NetWorthPoint>,
     tap: Offset,
     width: Float,
     height: Float,
@@ -1327,6 +1359,28 @@ private fun reportSelectionAt(
             segmentStart += sweep
         }
         return null
+    }
+    if (kind == ReportKind.NET_WORTH) {
+        val values = netWorth.map(NetWorthPoint::allAccountsMinor)
+        if (values.isEmpty()) return null
+        val (minimum, maximum) = netWorthValueRange(values)
+        val spread = (maximum - minimum).coerceAtLeast(1.0)
+        val points =
+            values.mapIndexed { index, value ->
+                val x = if (values.size == 1) width / 2f else inset + (width - inset * 2f) * index / (values.size - 1)
+                val y = chartBottom - chartHeight * ((value - minimum) / spread).toFloat()
+                Offset(x, y)
+            }
+        val nearest =
+            points.indices.minByOrNull { index ->
+                val dx = tap.x - points[index].x
+                val dy = tap.y - points[index].y
+                dx * dx + dy * dy
+            } ?: return null
+        val dx = tap.x - points[nearest].x
+        val dy = tap.y - points[nearest].y
+        val hitRadius = 28f * density
+        return if (dx * dx + dy * dy <= hitRadius * hitRadius) ReportChartSelection(nearest) else null
     }
     if (kind != ReportKind.SPENDING_OVER_TIME && kind != ReportKind.INCOME_AND_SPENDING) return null
     if (monthly.isEmpty()) return null

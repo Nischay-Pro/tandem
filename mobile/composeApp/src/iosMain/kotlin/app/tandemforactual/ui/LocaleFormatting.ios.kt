@@ -14,6 +14,7 @@ import platform.Foundation.NSNumber
 import platform.Foundation.NSNumberFormatter
 import platform.Foundation.NSNumberFormatterCurrencyStyle
 import platform.Foundation.NSNumberFormatterDecimalStyle
+import platform.Foundation.NSNumberFormatterPercentStyle
 import platform.Foundation.currentLocale
 import kotlin.math.abs
 import kotlin.math.pow
@@ -161,6 +162,15 @@ internal actual fun platformFormatInteger(value: Int): String {
         }
     return formatter.stringFromNumber(NSNumber(value)) ?: value.toString()
 }
+
+internal actual fun platformFormatReportPercentage(ratio: Double): String =
+    NSNumberFormatter()
+        .apply {
+            locale = NSLocale.currentLocale
+            numberStyle = NSNumberFormatterPercentStyle
+            minimumFractionDigits = 0uL
+            maximumFractionDigits = 1uL
+        }.stringFromNumber(NSNumber(ratio.coerceAtLeast(0.0))) ?: "0%"
 
 internal actual fun platformCurrencyCode(): String = NSLocale.currentLocale.objectForKey(NSLocaleCurrencyCode) as String
 
