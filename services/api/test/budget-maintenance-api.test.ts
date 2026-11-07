@@ -131,8 +131,11 @@ function createFake() {
     deleteRule: vi.fn(async () => true),
     setBudgetAmount: vi.fn(async () => undefined),
     setBudgetCarryover: vi.fn(async () => undefined),
+    holdBudgetForNextMonth: vi.fn(async () => true),
+    resetBudgetHold: vi.fn(async () => undefined),
     getPreferences: vi.fn(async () => ({ budgetType: "envelope" })),
     getBudgetMonth: vi.fn(async () => ({
+      toBudget: 50_000,
       categoryGroups: [
         {
           categories: [
@@ -770,6 +773,40 @@ describe("Actual budget maintenance API", () => {
     await expect(
       fake.api.copyBudgetMonth("budget-1", "2026-00"),
     ).rejects.toThrow("Choose a valid budget month");
+  });
+
+  it("holds only available envelope money and resets the held amount", async () => {
+    const fake = createFake();
+
+    await fake.api.holdBudgetForNextMonth("budget-1", "2026-11", 12_500, "secret");
+    expect(fake.client.holdBudgetForNextMonth).toHaveBeenCalledWith("2026-11", 12_500);
+    expect(fake.runBudgetCalls.at(-1)?.options).toEqual({
+      encryptionPassword: "secret",
+      synchronizeAfterWrite: true,
+    });
+
+    fake.client.getBudgetMonth.mockResolvedValueOnce({
+      toBudget: 10_000,
+      categoryGroups: [],
+    } as never);
+    await expect(
+      fake.api.holdBudgetForNextMonth("budget-1", "2026-11", 12_500),
+    ).rejects.toThrow("The hold cannot exceed the amount ready to assign");
+    expect(fake.client.holdBudgetForNextMonth).toHaveBeenCalledOnce();
+
+    fake.client.getPreferences.mockResolvedValueOnce({ budgetType: "tracking" } as never);
+    await expect(
+      fake.api.holdBudgetForNextMonth("budget-1", "2026-11", 100),
+    ).rejects.toThrow("only available in an envelope budget");
+    await expect(
+      fake.api.holdBudgetForNextMonth("budget-1", "2026-11", 0),
+    ).rejects.toThrow("Enter a positive amount");
+
+    await fake.api.resetBudgetHold("budget-1", "2026-11");
+    expect(fake.client.resetBudgetHold).toHaveBeenCalledWith("2026-11");
+    await expect(fake.api.resetBudgetHold("budget-1", "2026-13")).rejects.toThrow(
+      "Choose a valid budget month",
+    );
   });
 
   it("moves category money in one Actual budget batch", async () => {

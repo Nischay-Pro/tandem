@@ -44,6 +44,7 @@ internal data class LiveBudgetMonthSummary(
     val totalBudgetedMinor: Long?,
     val totalSpentMinor: Long?,
     val groups: List<LiveCategoryGroupSummary>,
+    val heldForNextMonthMinor: Long? = null,
 )
 
 internal data class LiveScheduleSummary(
@@ -156,6 +157,7 @@ internal fun liveBudgetMonthSummary(
         totalBudgetedMinor = month.longValue("totalBudgeted"),
         totalSpentMinor = month.longValue("totalSpent"),
         groups = groups,
+        heldForNextMonthMinor = month.longValue("forNextMonth"),
     )
 }
 

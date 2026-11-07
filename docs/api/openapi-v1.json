@@ -3746,7 +3746,7 @@
     "/api/v1/budgets/{budgetId}/months/{month}/actions": {
       "post": {
         "operationId": "manageBudgetMonth",
-        "summary": "Copy the prior month's category assignments",
+        "summary": "Manage a month's carryover and category assignments",
         "tags": ["Budgets"],
         "requestBody": {
           "required": true,
@@ -3755,7 +3755,15 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "action": { "type": "string", "enum": ["copy-last-month"] }
+                  "action": {
+                    "type": "string",
+                    "enum": ["copy-last-month", "hold-next-month", "reset-hold"]
+                  },
+                  "amountMinor": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000000000
+                  }
                 },
                 "required": ["action"],
                 "additionalProperties": false

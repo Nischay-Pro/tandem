@@ -4861,6 +4861,7 @@ private fun BudgetScreen(
     val palette = tandemPalette
     val scope = rememberCoroutineScope()
     var showCopyLastMonthDialog by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
+    var showNextMonthHoldDialog by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     val isTrackingBudget = isLiveBudget && state.budgetDisplaySettings?.budgetType == "tracking"
     val compact = state.homeLayout == "Compact"
@@ -4878,6 +4879,10 @@ private fun BudgetScreen(
     val conflictCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "conflict" } else 0
     val rejectedCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "rejected" } else 0
     val readyToAssignMinor = if (isLiveBudget) liveBudgetMonth?.toBudgetMinor ?: 0 else 124_000L
+    val heldForNextMonthMinor = liveBudgetMonth?.heldForNextMonthMinor?.coerceAtLeast(0) ?: 0L
+    var nextMonthHoldAmountDraft by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) {
+        mutableStateOf(state.formatAmount(readyToAssignMinor.coerceAtLeast(0)))
+    }
     val readyToAssignColor =
         when {
             readyToAssignMinor < 0 -> palette.negative
@@ -5022,13 +5027,28 @@ private fun BudgetScreen(
                             exit = shrinkVertically() + fadeOut(),
                         ) {
                             SurfaceCard(Modifier.padding(top = sectionSpacing)) {
-                                ListRow(
-                                    if (isLiveBudget) "Ready to assign" else "Available this month",
-                                    if (isLiveBudget) state.selectedMonth else "On track",
-                                    state.formatCurrency(readyToAssignMinor),
-                                    leading = RowLeading.Icon(Lucide.WalletCards),
-                                    options = ListRowOptions(trailingColor = readyToAssignColor),
-                                )
+                                Column {
+                                    ListRow(
+                                        if (isLiveBudget) "Ready to assign" else "Available this month",
+                                        if (isLiveBudget) state.selectedMonth else "On track",
+                                        state.formatCurrency(readyToAssignMinor),
+                                        leading = RowLeading.Icon(Lucide.WalletCards),
+                                        options = ListRowOptions(trailingColor = readyToAssignColor),
+                                    )
+                                    if (isLiveBudget) {
+                                        DividerLine()
+                                        ListRow(
+                                            "Hold for next month",
+                                            trailing = state.formatCurrency(heldForNextMonthMinor),
+                                            leading = RowLeading.Icon(Lucide.CalendarDays),
+                                            onClick = {
+                                                nextMonthHoldAmountDraft = state.formatAmount(readyToAssignMinor.coerceAtLeast(0))
+                                                mobileSession.clearBudgetActionMessage()
+                                                showNextMonthHoldDialog = true
+                                            },
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -5296,6 +5316,101 @@ private fun BudgetScreen(
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !mobileSession.isPerformingBudgetAction,
                     ) { showCopyLastMonthDialog = false }
+                }
+            }
+        }
+    }
+    if (showNextMonthHoldDialog && isLiveBudget && !isTrackingBudget) {
+        val parsedHoldAmount = state.parseAmountMinorUnits(nextMonthHoldAmountDraft)
+        Dialog(
+            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showNextMonthHoldDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
+                Column(
+                    Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        Icon(Lucide.CalendarDays, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
+                        Text(
+                            "Hold for next month",
+                            modifier = Modifier.weight(1f),
+                            color = tandemPalette.text,
+                            fontSize = TandemTypography.sectionTitle,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        TandemIconButton(
+                            Lucide.X,
+                            "Close",
+                            sizeDp = 40,
+                            iconSizeDp = 18,
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                        ) { showNextMonthHoldDialog = false }
+                    }
+                    ListRow("Ready to assign", trailing = state.formatCurrency(readyToAssignMinor))
+                    ListRow("Held", trailing = state.formatCurrency(heldForNextMonthMinor))
+                    TextFieldCard(
+                        "Amount to hold",
+                        nextMonthHoldAmountDraft,
+                        { nextMonthHoldAmountDraft = it },
+                        TextFieldOptions(
+                            placeholder = state.formatAmount(0),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            textAlign = TextAlign.Center,
+                            large = true,
+                        ),
+                    )
+                    mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        TandemActionButton(
+                            if (heldForNextMonthMinor > 0) "Reset hold" else "Close",
+                            TandemActionButtonTone.NEUTRAL,
+                            Modifier.weight(1f),
+                            enabled =
+                                !mobileSession.isPerformingBudgetAction &&
+                                    (heldForNextMonthMinor == 0L || !state.readOnlyMode),
+                            loading = mobileSession.isPerformingBudgetAction && heldForNextMonthMinor > 0,
+                        ) {
+                            if (heldForNextMonthMinor > 0) {
+                                scope.launch {
+                                    val reset =
+                                        mobileSession.resetBudgetHold(
+                                            state.selectedBudgetId,
+                                            state.selectedMonthId,
+                                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                                        )
+                                    if (reset) showNextMonthHoldDialog = false
+                                }
+                            } else {
+                                showNextMonthHoldDialog = false
+                            }
+                        }
+                        TandemActionButton(
+                            if (mobileSession.isPerformingBudgetAction) "Holding…" else "Hold amount",
+                            TandemActionButtonTone.PRIMARY,
+                            Modifier.weight(1f),
+                            icon = Lucide.Check,
+                            enabled =
+                                !state.readOnlyMode &&
+                                    !mobileSession.isPerformingBudgetAction &&
+                                    parsedHoldAmount != null &&
+                                    parsedHoldAmount > 0 &&
+                                    parsedHoldAmount <= readyToAssignMinor,
+                            loading = mobileSession.isPerformingBudgetAction,
+                        ) {
+                            scope.launch {
+                                val held =
+                                    mobileSession.holdBudgetForNextMonth(
+                                        state.selectedBudgetId,
+                                        state.selectedMonthId,
+                                        parsedHoldAmount ?: 0L,
+                                        state.encryptedPassword.takeIf { it.isNotBlank() },
+                                    )
+                                if (held) showNextMonthHoldDialog = false
+                            }
+                        }
+                    }
                 }
             }
         }

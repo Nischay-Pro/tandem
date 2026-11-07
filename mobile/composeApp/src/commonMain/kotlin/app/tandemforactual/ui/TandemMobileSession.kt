@@ -749,6 +749,25 @@ internal class TandemMobileSession(
             apiClient.copyBudgetMonth(budgetId, month, encryptionPassword)
         }
 
+    suspend fun holdBudgetForNextMonth(
+        budgetId: String,
+        month: String,
+        amountMinor: Long,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Couldn’t hold this money for next month. Try again.") {
+            apiClient.holdBudgetForNextMonth(budgetId, month, amountMinor, encryptionPassword)
+        }
+
+    suspend fun resetBudgetHold(
+        budgetId: String,
+        month: String,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Couldn’t reset the next-month hold. Try again.") {
+            apiClient.resetBudgetHold(budgetId, month, encryptionPassword)
+        }
+
     suspend fun moveBudgetMoney(
         budgetId: String,
         month: String,

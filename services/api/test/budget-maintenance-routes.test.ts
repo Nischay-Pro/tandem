@@ -43,6 +43,8 @@ async function createApi(
     setBudgetAmount: vi.fn(async () => undefined),
     setBudgetCarryover: vi.fn(async () => undefined),
     copyBudgetMonth: vi.fn(async () => undefined),
+    holdBudgetForNextMonth: vi.fn(async () => undefined),
+    resetBudgetHold: vi.fn(async () => undefined),
     moveMoney: vi.fn(async () => undefined),
     closeAccount: vi.fn(async () => undefined),
     renameAccount: vi.fn(async () => undefined),
@@ -209,6 +211,16 @@ const maintenanceRouteCases = (routeBudgetId = budgetId) => [
     method: "POST" as const,
     url: `/api/v1/budgets/${routeBudgetId}/months/2026-11/actions`,
     payload: { action: "copy-last-month" },
+  },
+  {
+    method: "POST" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/months/2026-11/actions`,
+    payload: { action: "hold-next-month", amountMinor: 1200 },
+  },
+  {
+    method: "POST" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/months/2026-11/actions`,
+    payload: { action: "reset-hold" },
   },
   {
     method: "POST" as const,
@@ -663,7 +675,7 @@ describe("budget maintenance routes", () => {
     await fake.app.close();
   });
 
-  it("journals carryover changes and last-month copies", async () => {
+  it("journals carryover, copy, and next-month hold changes", async () => {
     const fake = await createApi();
     const carryover = await fake.app.inject({
       method: "PUT",
@@ -688,6 +700,32 @@ describe("budget maintenance routes", () => {
     });
     expect(copy.statusCode).toBe(200);
     expect(fake.budgetMaintenanceApi.copyBudgetMonth).toHaveBeenCalledWith(
+      budgetId,
+      "2026-11",
+      undefined,
+    );
+    const hold = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/months/2026-11/actions`,
+      headers: testHeaders(),
+      payload: { action: "hold-next-month", amountMinor: 1200 },
+    });
+    expect(hold.statusCode).toBe(200);
+    expect(fake.budgetMaintenanceApi.holdBudgetForNextMonth).toHaveBeenCalledWith(
+      budgetId,
+      "2026-11",
+      1200,
+      undefined,
+    );
+
+    const reset = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/months/2026-11/actions`,
+      headers: testHeaders(),
+      payload: { action: "reset-hold" },
+    });
+    expect(reset.statusCode).toBe(200);
+    expect(fake.budgetMaintenanceApi.resetBudgetHold).toHaveBeenCalledWith(
       budgetId,
       "2026-11",
       undefined,

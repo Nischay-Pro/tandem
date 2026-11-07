@@ -209,6 +209,27 @@ describe.skipIf(!compatibilityTestEnabled)(
           { synchronizeAfterWrite: true },
         );
 
+        await firstDevice.runBudget(
+          budget.groupId,
+          async () => {
+            const incomeCategory = (await Actual.getCategories()).find(
+              (category) => category.is_income,
+            );
+            if (!incomeCategory) {
+              throw new Error("Actual did not return its income category");
+            }
+            await Actual.addTransactions(transferAccountId, [
+              {
+                date: transactionDate,
+                amount: 50_000,
+                category: incomeCategory.id,
+                notes: "ABC synthetic income for next-month hold",
+              },
+            ]);
+          },
+          { synchronizeAfterWrite: true },
+        );
+
         const initialData = await firstDevice.runBudget(
           budget.groupId,
           async () => {
@@ -445,6 +466,36 @@ describe.skipIf(!compatibilityTestEnabled)(
                 ),
             ),
           ).toBe(false);
+          const holdResponse = await reconciliationApp.inject({
+            method: "POST",
+            url: `/api/v1/budgets/${budget.groupId}/months/2026-10/actions`,
+            headers: {
+              ...authorizationHeaders,
+              "idempotency-key": `compat-hold-next-month-${randomUUID()}`,
+            },
+            payload: { action: "hold-next-month", amountMinor: 10_000 },
+          });
+          expect(holdResponse.statusCode).toBe(200);
+          const heldMonth = await firstDevice.runBudget(
+            budget.groupId,
+            () => Actual.getBudgetMonth("2026-10"),
+          );
+          expect(heldMonth.forNextMonth).toBe(10_000);
+          const resetHoldResponse = await reconciliationApp.inject({
+            method: "POST",
+            url: `/api/v1/budgets/${budget.groupId}/months/2026-10/actions`,
+            headers: {
+              ...authorizationHeaders,
+              "idempotency-key": `compat-reset-hold-${randomUUID()}`,
+            },
+            payload: { action: "reset-hold" },
+          });
+          expect(resetHoldResponse.statusCode).toBe(200);
+          const resetMonth = await firstDevice.runBudget(
+            budget.groupId,
+            () => Actual.getBudgetMonth("2026-10"),
+          );
+          expect(resetMonth.forNextMonth).toBe(0);
 
           const createResponse = await reconciliationApp.inject({
             method: "POST",

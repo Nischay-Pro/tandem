@@ -1031,7 +1031,8 @@ interface BudgetCategoryCarryoverBody {
 }
 
 interface BudgetMonthActionBody {
-  action: "copy-last-month";
+  action: "copy-last-month" | "hold-next-month" | "reset-hold";
+  amountMinor?: number;
 }
 
 interface BudgetMoveMoneyBody {
@@ -2337,7 +2338,7 @@ function registerBudgetMaintenanceRoutes(
       schema: {
         tags: ["Budgets"],
         operationId: "manageBudgetMonth",
-        summary: "Copy the prior month's category assignments",
+        summary: "Manage a month's carryover and category assignments",
         security: [{ bearerAuth: [] }],
         params: {
           type: "object",
@@ -2351,7 +2352,17 @@ function registerBudgetMaintenanceRoutes(
         headers: headersSchema,
         body: {
           type: "object",
-          properties: { action: { type: "string", enum: ["copy-last-month"] } },
+          properties: {
+            action: {
+              type: "string",
+              enum: ["copy-last-month", "hold-next-month", "reset-hold"],
+            },
+            amountMinor: {
+              type: "integer",
+              minimum: 1,
+              maximum: MAX_BUDGET_AMOUNT_MINOR,
+            },
+          },
           required: ["action"],
           additionalProperties: false,
         },
@@ -2367,21 +2378,53 @@ function registerBudgetMaintenanceRoutes(
         return transactionNotFound(reply);
       if (!maintenanceApi) return actualNotConfigured(reply);
       if (!journal) return actualNotConfigured(reply);
+      const action = request.body.action;
+      if (
+        (action === "hold-next-month" && request.body.amountMinor === undefined) ||
+        (action !== "hold-next-month" && request.body.amountMinor !== undefined)
+      ) {
+        return invalidBudgetRequest(reply);
+      }
+      const auditAction = `budget_month_${action.replaceAll("-", "_")}`;
+      const patch: { [key: string]: JsonValue } = { action };
+      if (action === "hold-next-month") {
+        patch.amountMinor = request.body.amountMinor!;
+      }
       try {
         const result = await runMaintenanceOperation(
           journal,
           request,
           device,
           request.params.budgetId,
-          "budget-month-copy",
+          `budget-month-${action}`,
           request.params.month,
-          { action: request.body.action },
+          patch,
           async () => {
-            await maintenanceApi.copyBudgetMonth(
-              request.params.budgetId,
-              request.params.month,
-              request.headers["x-budget-encryption-password"],
-            );
+            const password = request.headers["x-budget-encryption-password"];
+            switch (action) {
+              case "copy-last-month":
+                await maintenanceApi.copyBudgetMonth(
+                  request.params.budgetId,
+                  request.params.month,
+                  password,
+                );
+                break;
+              case "hold-next-month":
+                await maintenanceApi.holdBudgetForNextMonth(
+                  request.params.budgetId,
+                  request.params.month,
+                  request.body.amountMinor!,
+                  password,
+                );
+                break;
+              case "reset-hold":
+                await maintenanceApi.resetBudgetHold(
+                  request.params.budgetId,
+                  request.params.month,
+                  password,
+                );
+                break;
+            }
             return { status: "ok" };
           },
         );
@@ -2389,7 +2432,7 @@ function registerBudgetMaintenanceRoutes(
           request,
           device,
           request.params.budgetId,
-          "budget_month_copy",
+          auditAction,
           "success",
           request.params.month,
         );
@@ -2401,7 +2444,7 @@ function registerBudgetMaintenanceRoutes(
             request,
             device,
             request.params.budgetId,
-            "budget_month_copy",
+            auditAction,
             "rejected",
             request.params.month,
           );
@@ -2423,11 +2466,11 @@ function registerBudgetMaintenanceRoutes(
           request,
           device,
           request.params.budgetId,
-          "budget_month_copy",
+          auditAction,
           "failed",
           request.params.month,
         );
-        reportTransactionFailure("Actual budget month copy failed", error);
+        reportTransactionFailure("Actual budget month action failed", error);
         return actualRequestFailed(reply);
       }
     },

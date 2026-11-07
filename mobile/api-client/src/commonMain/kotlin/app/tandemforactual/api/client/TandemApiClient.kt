@@ -463,6 +463,53 @@ class TandemApiClient(
         }
     }
 
+    suspend fun holdBudgetForNextMonth(
+        budgetId: String,
+        month: String,
+        amountMinor: Long,
+        encryptionPassword: String?,
+    ) {
+        withMaintenanceOperation(
+            maintenanceSignature("budget-month-hold-next", budgetId, month, amountMinor.toString()),
+        ) { idempotencyKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.manageBudgetMonth(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        month = month,
+                        body =
+                            buildJsonObject {
+                                put("action", "hold-next-month")
+                                put("amountMinor", amountMinor)
+                            }.toMap(),
+                    ),
+                )
+            }
+        }
+    }
+
+    suspend fun resetBudgetHold(
+        budgetId: String,
+        month: String,
+        encryptionPassword: String?,
+    ) {
+        withMaintenanceOperation(maintenanceSignature("budget-month-reset-hold", budgetId, month)) { idempotencyKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.manageBudgetMonth(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        month = month,
+                        body = buildJsonObject { put("action", "reset-hold") }.toMap(),
+                    ),
+                )
+            }
+        }
+    }
+
     suspend fun moveMoneyBetweenCategories(
         budgetId: String,
         month: String,

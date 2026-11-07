@@ -505,6 +505,8 @@ class TandemApiClientTest {
                 client.manageBudgetPayee("budget-1", "payee-1", "merge", null, "payee-2", null)
                 client.manageBudgetPayee("budget-1", "payee-1", "delete", null, null, "budget-password")
                 client.manageBudgetPayee("budget-1", "payee-1", "default-category", null, null, "budget-password", null)
+                client.holdBudgetForNextMonth("budget-1", "2026-11", 12_500, "budget-password")
+                client.resetBudgetHold("budget-1", "2026-11", null)
                 client.withGeneratedApi {
                     BudgetsApi.runBudgetBankSync(idempotencyKey = "direct-1", budgetId = "budget-1")
                     BudgetsApi.createBudgetAccount(idempotencyKey = "direct-2", budgetId = "budget-1")
@@ -575,8 +577,10 @@ class TandemApiClientTest {
                         "POST /api/v1/budgets/budget-1/payees/payee-1/actions",
                         "POST /api/v1/budgets/budget-1/payees/payee-1/actions",
                         "POST /api/v1/budgets/budget-1/payees/payee-1/actions",
+                        "POST /api/v1/budgets/budget-1/months/2026-11/actions",
+                        "POST /api/v1/budgets/budget-1/months/2026-11/actions",
                     ),
-                    requests.take(22).map { "${it.method.value} ${it.url.encodedPath}" },
+                    requests.take(24).map { "${it.method.value} ${it.url.encodedPath}" },
                 )
                 assertEquals(null, requests[0].headers["x-budget-encryption-password"])
                 assertEquals("budget-password", requests[1].headers["x-budget-encryption-password"])
@@ -584,9 +588,9 @@ class TandemApiClientTest {
                 assertEquals("budget-password", requests[8].headers["x-budget-encryption-password"])
                 assertEquals("budget-password", requests[9].headers["x-budget-encryption-password"])
                 assertEquals("budget-password", requests[10].headers["x-budget-encryption-password"])
-                val idempotencyKeys = requests.take(22).map { it.headers["Idempotency-Key"] }
+                val idempotencyKeys = requests.take(24).map { it.headers["Idempotency-Key"] }
                 assertTrue(idempotencyKeys.all { key -> key?.let { runCatching { Uuid.parse(it) }.isSuccess } == true })
-                assertEquals(22, idempotencyKeys.distinct().size)
+                assertEquals(24, idempotencyKeys.distinct().size)
                 assertTrue((requests[1].body as TextContent).text.contains("\"name\":\"Savings\""))
                 assertTrue((requests[1].body as TextContent).text.contains("\"offbudget\":true"))
                 assertTrue((requests[1].body as TextContent).text.contains("\"accountGroupId\":\"credit-group\""))
@@ -620,6 +624,10 @@ class TandemApiClientTest {
                 assertTrue((requests[21].body as TextContent).text.contains("\"action\":\"default-category\""))
                 assertTrue((requests[21].body as TextContent).text.contains("\"categoryId\":null"))
                 assertEquals("budget-password", requests[21].headers["x-budget-encryption-password"])
+                assertTrue((requests[22].body as TextContent).text.contains("\"action\":\"hold-next-month\""))
+                assertTrue((requests[22].body as TextContent).text.contains("\"amountMinor\":12500"))
+                assertEquals("budget-password", requests[22].headers["x-budget-encryption-password"])
+                assertTrue((requests[23].body as TextContent).text.contains("\"action\":\"reset-hold\""))
             } finally {
                 cleanup()
                 Api.baseUrl = previousBaseUrl

@@ -267,6 +267,17 @@ export interface BudgetMaintenanceApiPort {
     month: string,
     encryptionPassword?: string,
   ): Promise<void>;
+  holdBudgetForNextMonth(
+    budgetId: string,
+    month: string,
+    amountMinor: number,
+    encryptionPassword?: string,
+  ): Promise<void>;
+  resetBudgetHold(
+    budgetId: string,
+    month: string,
+    encryptionPassword?: string,
+  ): Promise<void>;
   moveMoney(
     budgetId: string,
     month: string,
@@ -348,6 +359,8 @@ type ActualBudgetMaintenanceClient = Pick<
   | "getCategoryGroups"
   | "setBudgetAmount"
   | "setBudgetCarryover"
+  | "holdBudgetForNextMonth"
+  | "resetBudgetHold"
   | "getBudgetMonth"
   | "getPreferences"
   | "batchBudgetUpdates"
@@ -806,6 +819,64 @@ export function createBudgetMaintenanceApi(
               }
             });
           },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    holdBudgetForNextMonth(budgetId, month, amountMinor, encryptionPassword) {
+      if (
+        !/^\d{4}-(0[1-9]|1[0-2])$/.test(month) ||
+        !Number.isSafeInteger(amountMinor) ||
+        amountMinor <= 0 ||
+        amountMinor > MAX_BUDGET_AMOUNT_MINOR
+      ) {
+        return Promise.reject(
+          new BudgetMaintenanceInputError(
+            "Enter a positive amount to hold for next month",
+          ),
+        );
+      }
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const preferences = await client.getPreferences();
+            if (preferences.budgetType === "tracking") {
+              throw new BudgetMaintenanceInputError(
+                "Hold for next month is only available in an envelope budget",
+              );
+            }
+            const monthData = await client.getBudgetMonth(month);
+            const available = readSafeAmount(
+              monthData.toBudget ?? 0,
+              "ready-to-assign amount",
+            );
+            if (amountMinor > available) {
+              throw new BudgetMaintenanceInputError(
+                "The hold cannot exceed the amount ready to assign",
+              );
+            }
+            const held = await client.holdBudgetForNextMonth(month, amountMinor);
+            if (!held) {
+              throw new BudgetMaintenanceInputError(
+                "There is no money ready to assign in this month",
+              );
+            }
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    resetBudgetHold(budgetId, month, encryptionPassword) {
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+        return Promise.reject(
+          new BudgetMaintenanceInputError("Choose a valid budget month"),
+        );
+      }
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          () => client.resetBudgetHold(month),
           writeOptions(encryptionPassword),
         ),
       );
