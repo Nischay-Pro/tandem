@@ -371,7 +371,9 @@ export class TransactionReconciler {
             };
           }
           if (latest.transferId !== null) {
-            const counterpartRaw = await this.transactions.read(latest.transferId);
+            const counterpartRaw = await this.transactions.read(
+              latest.transferId,
+            );
             if (counterpartRaw === undefined) {
               return {
                 kind: "conflict",

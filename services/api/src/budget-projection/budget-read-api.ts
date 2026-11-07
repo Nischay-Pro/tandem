@@ -120,7 +120,7 @@ export class BudgetReadApi implements BudgetReadApiPort {
           request.encryptionPassword,
         );
         displaySettings = result.displaySettings;
-        let cached = result.unchanged
+        const cached = result.unchanged
           ? await this.store.readSnapshot(request.budgetId)
           : undefined;
         if (result.unchanged && !cached) {

@@ -682,19 +682,25 @@ describe("transaction snapshots and merge planning", () => {
     });
     const transfer = createSnapshot({ transferId: "counterpart-transaction" });
 
-    expect(planTransactionUpdate(split, split, { amount: -1200 })).toMatchObject({
+    expect(
+      planTransactionUpdate(split, split, { amount: -1200 }),
+    ).toMatchObject({
       kind: "conflict",
       conflictingFields: expect.arrayContaining(["subtransactions"]),
     });
     expect(planTransactionDeletion(split, split)).toMatchObject({
-        kind: "conflict",
+      kind: "conflict",
       conflictingFields: expect.arrayContaining(["subtransactions"]),
     });
-    expect(planTransactionUpdate(transfer, transfer, { amount: -1200 })).toEqual({
+    expect(
+      planTransactionUpdate(transfer, transfer, { amount: -1200 }),
+    ).toEqual({
       kind: "apply",
       patch: { amount: -1200 },
     });
-    expect(planTransactionDeletion(transfer, transfer)).toEqual({ kind: "delete" });
+    expect(planTransactionDeletion(transfer, transfer)).toEqual({
+      kind: "delete",
+    });
   });
 
   it("blocks structured update and delete plans when either snapshot is structured", () => {

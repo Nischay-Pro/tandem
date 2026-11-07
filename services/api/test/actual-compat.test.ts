@@ -894,7 +894,10 @@ describe.skipIf(!compatibilityTestEnabled)(
             incoming: await transactionStore.read(transferIncomingId),
           }),
         );
-        expect(deletedLegs).toEqual({ outgoing: undefined, incoming: undefined });
+        expect(deletedLegs).toEqual({
+          outgoing: undefined,
+          incoming: undefined,
+        });
 
         await reconciliationApp.close();
 

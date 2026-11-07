@@ -180,9 +180,8 @@ export function createActualTransactionStore(
           transferPayee = validatedPayee.transferAccount;
         } else {
           transferPayee = Boolean(
-            (await client.getPayees()).find(
-              (payee) => payee.id === input.payee,
-            )?.transfer_acct,
+            (await client.getPayees()).find((payee) => payee.id === input.payee)
+              ?.transfer_acct,
           );
         }
       }
