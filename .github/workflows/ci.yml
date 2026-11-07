@@ -139,7 +139,7 @@ jobs:
       - name: Check deployment scripts and Compose configuration
         run: |
           bash -n deploy/backup.sh deploy/restore.sh scripts/test-production-deployment.sh scripts/test-dockerignore-secrets.sh
-          docker compose --env-file deploy/compose/.env.example -f deploy/compose/production.yml config --quiet
+          TRUST_PROXY=127.0.0.1/32 docker compose --env-file deploy/compose/.env.example -f deploy/compose/production.yml config --quiet
 
       - name: Verify secrets are excluded from Docker build contexts
         run: ./scripts/test-dockerignore-secrets.sh
