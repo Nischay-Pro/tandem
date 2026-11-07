@@ -71,7 +71,7 @@ class TandemApiProtocolException(
 
 /** Owns the generated API client's server address and in-memory device credential. */
 class TandemApiClient(
-    private val allowInsecureLoopback: Boolean = false,
+    private val allowInsecurePrivateNetwork: Boolean = false,
 ) {
     private val sessionMutex = Mutex()
     private val maintenanceKeyMutex = Mutex()
@@ -149,7 +149,7 @@ class TandemApiClient(
         deviceName: String,
     ): PairedDevice =
         sessionMutex.withLock {
-            val parsedUrl = parseServerUrl(serverUrl, allowInsecureLoopback)
+            val parsedUrl = parseServerUrl(serverUrl, allowInsecurePrivateNetwork)
             this.serverUrl = parsedUrl.toString()
             accessToken = null
             pairedDevice = null
@@ -574,7 +574,7 @@ class TandemApiClient(
             throw TandemApiException("not-paired")
         }
         GeneratedApiAccess.ensureContentEncoding()
-        Api.baseUrl = parseServerUrl(currentServerUrl, allowInsecureLoopback)
+        Api.baseUrl = parseServerUrl(currentServerUrl, allowInsecurePrivateNetwork)
         setGeneratedAuthProvider(bearerAuth)
     }
 
@@ -595,7 +595,7 @@ class TandemApiClient(
         val sessionToken =
             token.takeIf { it.isNotBlank() }
                 ?: throw TandemApiProtocolException("Stored device credential is empty")
-        val parsedUrl = parseServerUrl(serverUrl, allowInsecureLoopback)
+        val parsedUrl = parseServerUrl(serverUrl, allowInsecurePrivateNetwork)
         GeneratedApiAccess.mutex.withLock {
             clearGeneratedAuthProvider()
             this.serverUrl = parsedUrl.toString()
@@ -694,6 +694,7 @@ internal object GeneratedApiAccess {
         if (Api.client.pluginOrNull(ContentEncoding) != null) return
         Api.updateClient(
             decorator = {
+                followRedirects = false
                 install(ContentEncoding) {
                     gzip()
                     deflate()
@@ -705,7 +706,7 @@ internal object GeneratedApiAccess {
 
 private fun parseServerUrl(
     value: String,
-    allowInsecureLoopback: Boolean,
+    allowInsecurePrivateNetwork: Boolean,
 ): Url {
     val address = value.trim().trimEnd('/')
     val hasExplicitHost =
@@ -722,14 +723,42 @@ private fun parseServerUrl(
             throw TandemApiException("invalid-server-url", cause = error)
         }
     val secure = url.protocol.name == "https"
-    val allowedLoopback =
-        allowInsecureLoopback &&
-            url.protocol.name == "http" &&
-            url.host.lowercase() in setOf("localhost", "127.0.0.1")
-    if (!hasExplicitHost || url.host.isBlank() || (!secure && !allowedLoopback) || url.user != null || url.password != null) {
+    val allowedLocalHttp = allowInsecurePrivateNetwork && url.protocol.name == "http" && isLocalNetworkHost(url.host)
+    if (!hasExplicitHost || url.host.isBlank() || (!secure && !allowedLocalHttp) || url.user != null || url.password != null) {
         throw TandemApiException("invalid-server-url")
     }
     return url
+}
+
+private fun isLocalNetworkHost(value: String): Boolean {
+    val host =
+        value
+            .lowercase()
+            .removePrefix("[")
+            .removeSuffix("]")
+            .removeSuffix(".")
+    if (
+        host == "localhost" ||
+        host == "::1" ||
+        host.endsWith(".localhost") ||
+        host.endsWith(".local") ||
+        host.endsWith(".lan") ||
+        host.endsWith(".home")
+    ) {
+        return true
+    }
+    val octets = host.split('.').mapNotNull(String::toIntOrNull)
+    if (octets.size == 4 && octets.all { it in 0..255 }) {
+        val (first, second) = octets
+        return first == 10 ||
+            (first == 172 && second in 16..31) ||
+            (first == 192 && second == 168) ||
+            first == 127 ||
+            (first == 169 && second == 254)
+    }
+    val firstIpv6Segment = host.substringBefore(':').toIntOrNull(16) ?: return false
+    return firstIpv6Segment in 0xfc00..0xfdff ||
+        firstIpv6Segment in 0xfe80..0xfebf
 }
 
 private fun maintenanceSignature(vararg fields: String?): String =

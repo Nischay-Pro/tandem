@@ -78,7 +78,7 @@ class MainActivity : ComponentActivity() {
         database = database,
         deviceCredentialStore = if (openPreview) null else AndroidDeviceCredentialStore(applicationContext),
         nowEpochMillis = { System.currentTimeMillis() },
-        allowInsecureLoopback = BuildConfig.DEBUG,
+        allowInsecurePrivateNetwork = true,
         onBackgroundSyncSettingsChanged = onBackgroundSyncSettingsChanged,
         onRequestNotificationPermission = { requestNotificationPermission() },
         onOpenNotificationSettings = { openNotificationSettings() },

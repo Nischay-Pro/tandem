@@ -186,6 +186,8 @@ class TandemApiClientTest {
                 assertEquals("invalid-server-url", invalidUrl.errorCode)
                 val insecureLoopbackUrl = captureApiException { client.pair("http://localhost:19753", "4DF7-J1M9", "Phone") }
                 assertEquals("invalid-server-url", insecureLoopbackUrl.errorCode)
+                val unconfiguredLanUrl = captureApiException { client.pair("http://192.168.1.20", "4DF7-J1M9", "Phone") }
+                assertEquals("invalid-server-url", unconfiguredLanUrl.errorCode)
                 val malformedUrl = captureApiException { client.pair("https://tandem.example:invalid", "4DF7-J1M9", "Phone") }
                 assertEquals("invalid-server-url", malformedUrl.errorCode)
                 val blankHostUrl = captureApiException { client.pair("https://?budget=1", "4DF7-J1M9", "Phone") }
@@ -213,7 +215,7 @@ class TandemApiClientTest {
         }
 
     @Test
-    fun debugClientAllowsHttpOnlyForLoopbackHosts() =
+    fun clientAllowsHttpOnlyForPrivateNetworkHosts() =
         runBlocking {
             val requests = mutableListOf<HttpRequestData>()
             val engine =
@@ -223,19 +225,50 @@ class TandemApiClientTest {
                 }
             val previousClient = Api.client
             val previousBaseUrl = Api.baseUrl
-            val client = TandemApiClient(allowInsecureLoopback = true)
+            val client = TandemApiClient(allowInsecurePrivateNetwork = true)
             val cleanup = configureApi(engine, client.bearerAuth)
             try {
-                client.pair("http://localhost:19753", "4DF7-J1M9", "Pixel 10a")
-                val requestUrl = requests.single().url
-                assertEquals("localhost", requestUrl.host)
+                client.pair("http://192.168.1.20:19753", "4DF7-J1M9", "Phone")
+                val requestUrl = requests.last().url
+                assertEquals("192.168.1.20", requestUrl.host)
                 assertEquals("http", requestUrl.protocol.name)
+                client.pair("http://10.0.0.12:19753", "4DF7-J1M9", "Phone")
+                client.pair("http://172.31.0.8:19753", "4DF7-J1M9", "Phone")
+                client.pair("http://[fd12::1]:19753", "4DF7-J1M9", "Phone")
+                client.pair("http://actual.local:19753", "4DF7-J1M9", "Phone")
 
-                val publicHost = captureApiException { client.pair("http://tandem.example", "4DF7-J1M9", "Pixel 10a") }
+                val publicHost = captureApiException { client.pair("http://tandem.example", "4DF7-J1M9", "Phone") }
                 assertEquals("invalid-server-url", publicHost.errorCode)
-                val lanHost = captureApiException { client.pair("http://192.168.1.20", "4DF7-J1M9", "Pixel 10a") }
-                assertEquals("invalid-server-url", lanHost.errorCode)
+                assertEquals(5, requests.size)
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
+    fun serverRedirectsAreNotFollowed() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            val engine =
+                MockEngine { request ->
+                    requests += request
+                    respond(
+                        "",
+                        HttpStatusCode.Found,
+                        headersOf(HttpHeaders.Location, "http://public.example/api/v1/auth/pair"),
+                    )
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                captureApiException { client.pair("https://tandem.example", "4DF7-J1M9", "Phone") }
                 assertEquals(1, requests.size)
+                assertEquals("tandem.example", requests.single().url.host)
             } finally {
                 cleanup()
                 Api.baseUrl = previousBaseUrl
@@ -640,6 +673,7 @@ class TandemApiClientTest {
         Api.updateClient(
             createHttpClient = {
                 HttpClient(engine) {
+                    followRedirects = false
                     install(ContentNegotiation) { json(Api.json) }
                     if (installContentEncoding) {
                         install(ContentEncoding) {

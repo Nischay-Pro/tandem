@@ -74,7 +74,7 @@ class BackgroundBudgetSyncWorker(
             if (preferences["backgroundSyncEnabled"] != "true") return Result.success()
             val budgetId = preferences["selectedBudgetId"]?.takeIf { it.isNotBlank() } ?: return Result.success()
             val storedSession = credentialStore.read() ?: return Result.success()
-            val sessionClient = TandemApiClient(allowInsecureLoopback = BuildConfig.DEBUG)
+            val sessionClient = TandemApiClient(allowInsecurePrivateNetwork = true)
             apiClient = sessionClient
             val pairedDevice = sessionClient.restoreStoredSession(storedSession)
             if (budgetId !in pairedDevice.budgetIds) return Result.success()

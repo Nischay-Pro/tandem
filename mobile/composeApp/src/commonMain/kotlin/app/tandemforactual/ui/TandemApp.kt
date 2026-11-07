@@ -1320,7 +1320,7 @@ fun TandemApp(
     database: TandemDatabase? = null,
     deviceCredentialStore: DeviceCredentialStore? = null,
     nowEpochMillis: () -> Long = { 0L },
-    allowInsecureLoopback: Boolean = false,
+    allowInsecurePrivateNetwork: Boolean = false,
     onBackgroundSyncSettingsChanged: ((enabled: Boolean, unmeteredOnly: Boolean, budgetId: String) -> Unit)? = null,
     onSystemAppearanceChanged: ((isDark: Boolean, followsSystem: Boolean) -> Unit)? = null,
     onRequestNotificationPermission: (() -> Unit)? = null,
@@ -1341,7 +1341,7 @@ fun TandemApp(
     val activitySortCache = remember { ActivityTransactionSortCache() }
     SideEffect { state.systemReduceMotionEnabled = systemReduceMotion }
     val reduceMotion = state.reduceMotionOverride ?: systemReduceMotion
-    val apiClient = remember(allowInsecureLoopback) { TandemApiClient(allowInsecureLoopback) }
+    val apiClient = remember(allowInsecurePrivateNetwork) { TandemApiClient(allowInsecurePrivateNetwork) }
     val mobileSession =
         remember(apiClient, database, deviceCredentialStore) {
             TandemMobileSession(apiClient, database, nowEpochMillis, deviceCredentialStore)

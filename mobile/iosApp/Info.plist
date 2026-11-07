@@ -26,6 +26,11 @@
   <true/>
   <key>NSLocalNetworkUsageDescription</key>
   <string>Connect to your Actual Budget server on your local network.</string>
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsLocalNetworking</key>
+    <true/>
+  </dict>
   <key>UIApplicationSceneManifest</key>
   <dict>
     <key>UIApplicationSupportsMultipleScenes</key>
