@@ -16,7 +16,10 @@ export interface ScheduleAmountRange {
 export interface ScheduleRecurrenceConfig {
   frequency: "daily" | "weekly" | "monthly" | "yearly";
   interval?: number;
-  patterns?: Array<{ value: number; type: "SU" | "MO" | "TU" | "WE" | "TH" | "FR" | "SA" | "day" }>;
+  patterns?: Array<{
+    value: number;
+    type: "SU" | "MO" | "TU" | "WE" | "TH" | "FR" | "SA" | "day";
+  }>;
   skipWeekend?: boolean;
   start: string;
   endMode?: "never" | "after_n_occurrences" | "on_date";
@@ -40,6 +43,20 @@ export interface BudgetTemplateAssignment {
   amountMinor: number;
 }
 
+export interface StatementTransactionImport {
+  date: string;
+  amountMinor: number;
+  payeeName: string;
+  notes?: string;
+  importedId: string;
+}
+
+export interface StatementImportResult {
+  added: number;
+  updated: number;
+  errors: string[];
+}
+
 function validateBudgetScheduleEdit(edit: BudgetScheduleEdit): void {
   if (Object.keys(edit).length === 0) {
     throw new BudgetMaintenanceInputError("Add at least one schedule change");
@@ -50,7 +67,7 @@ function validateBudgetScheduleEdit(edit: BudgetScheduleEdit): void {
   if (edit.payeeId !== undefined && !edit.payeeId.trim()) {
     throw new BudgetMaintenanceInputError("Choose a payee");
   }
-  if (edit.name !== undefined && /[\u0000-\u001f\u007f]/u.test(edit.name)) {
+  if (edit.name !== undefined && containsControlCharacters(edit.name)) {
     throw new BudgetMaintenanceInputError(
       "Schedule names must not contain control characters",
     );
@@ -92,17 +109,21 @@ function validateBudgetScheduleEdit(edit: BudgetScheduleEdit): void {
       );
     }
   } else if (edit.amountOp !== undefined) {
-    throw new BudgetMaintenanceInputError(
-      "An amount rule requires an amount",
-    );
+    throw new BudgetMaintenanceInputError("An amount rule requires an amount");
   }
 
   if (edit.date !== undefined) validateScheduleDate(edit.date);
 }
 
-function validateScheduleDate(
-  value: string | ScheduleRecurrenceConfig,
-): void {
+function containsControlCharacters(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
+function validateScheduleDate(value: string | ScheduleRecurrenceConfig): void {
   if (typeof value === "string") {
     if (!isIsoDate(value)) {
       throw new BudgetMaintenanceInputError(
@@ -120,13 +141,18 @@ function validateScheduleDate(
   }
   if (
     value.interval !== undefined &&
-    (!Number.isSafeInteger(value.interval) || value.interval < 1 || value.interval > 999)
+    (!Number.isSafeInteger(value.interval) ||
+      value.interval < 1 ||
+      value.interval > 999)
   ) {
     throw new BudgetMaintenanceInputError(
       "Repeat interval must be between 1 and 999",
     );
   }
-  if (value.skipWeekend !== undefined && typeof value.skipWeekend !== "boolean") {
+  if (
+    value.skipWeekend !== undefined &&
+    typeof value.skipWeekend !== "boolean"
+  ) {
     throw new BudgetMaintenanceInputError("Invalid weekend setting");
   }
   if (
@@ -162,8 +188,8 @@ function validateScheduleDate(
   if (
     value.endMode === "after_n_occurrences" &&
     (!Number.isSafeInteger(value.endOccurrences) ||
-      (value.endOccurrences ?? 0) < 1 ||
-      (value.endOccurrences ?? 0) > 100_000)
+      value.endOccurrences! < 1 ||
+      value.endOccurrences! > 100_000)
   ) {
     throw new BudgetMaintenanceInputError(
       "Occurrence count must be between 1 and 100,000",
@@ -182,12 +208,20 @@ function validateScheduleDate(
 function isIsoDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(parsed.getTime()) &&
-    parsed.toISOString().slice(0, 10) === value;
+  return (
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === value
+  );
 }
 
 export interface BudgetMaintenanceApiPort {
   runBankSync(budgetId: string, encryptionPassword?: string): Promise<void>;
+  importStatementTransactions(
+    budgetId: string,
+    accountId: string,
+    transactions: readonly StatementTransactionImport[],
+    encryptionPassword?: string,
+  ): Promise<StatementImportResult>;
   createAccount(
     budgetId: string,
     name: string,
@@ -245,6 +279,7 @@ export interface BudgetMaintenanceApiPort {
     action: "hide" | "show" | "move",
     targetCategoryId?: string | null,
     encryptionPassword?: string,
+    targetGroupId?: string | null,
   ): Promise<void>;
   createCategory(
     budgetId: string,
@@ -386,6 +421,7 @@ export class BudgetMaintenanceBusyError extends Error {
 type ActualBudgetMaintenanceClient = Pick<
   typeof actualApi,
   | "runBankSync"
+  | "importTransactions"
   | "createAccount"
   | "updateAccount"
   | "getAccountGroups"
@@ -429,7 +465,11 @@ async function getAllCategoryGroups(
     client.getCategoryGroups(),
     client.getCategoryGroups({ hidden: true }),
   ]);
-  return [...new Map([...visible, ...hidden].map((group) => [group.id, group])).values()];
+  return [
+    ...new Map(
+      [...visible, ...hidden].map((group) => [group.id, group]),
+    ).values(),
+  ];
 }
 
 async function getAllCategories(
@@ -439,7 +479,11 @@ async function getAllCategories(
     client.getCategories(),
     client.getCategories({ hidden: true }),
   ]);
-  return [...new Map([...visible, ...hidden].map((category) => [category.id, category])).values()];
+  return [
+    ...new Map(
+      [...visible, ...hidden].map((category) => [category.id, category]),
+    ).values(),
+  ];
 }
 
 export function createBudgetMaintenanceApi(
@@ -480,6 +524,81 @@ export function createBudgetMaintenanceApi(
           bankSyncs.delete(budgetId);
         });
       return waitForCompletion(sync, BANK_SYNC_TIMEOUT_MS);
+    },
+    importStatementTransactions(
+      budgetId,
+      accountId,
+      transactions,
+      encryptionPassword,
+    ) {
+      if (!accountId.trim()) {
+        return Promise.reject(
+          new BudgetMaintenanceInputError("Choose an account"),
+        );
+      }
+      if (transactions.length === 0 || transactions.length > 1_000) {
+        return Promise.reject(
+          new BudgetMaintenanceInputError(
+            "Import between 1 and 1,000 transactions at a time",
+          ),
+        );
+      }
+      const seenIds = new Set<string>();
+      for (const transaction of transactions) {
+        if (
+          !isIsoDate(transaction.date) ||
+          !Number.isSafeInteger(transaction.amountMinor) ||
+          transaction.amountMinor === 0 ||
+          Math.abs(transaction.amountMinor) > MAX_TRANSACTION_AMOUNT ||
+          !transaction.payeeName.trim() ||
+          transaction.payeeName.length > 200 ||
+          (transaction.notes?.length ?? 0) > 500 ||
+          !transaction.importedId.trim() ||
+          transaction.importedId.length > 200 ||
+          seenIds.has(transaction.importedId)
+        ) {
+          return Promise.reject(
+            new BudgetMaintenanceInputError(
+              "The statement contains an invalid or duplicate transaction row",
+            ),
+          );
+        }
+        seenIds.add(transaction.importedId);
+      }
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const account = (await client.getAccounts()).find(
+              (candidate) => candidate.id === accountId && !candidate.closed,
+            );
+            if (!account)
+              throw new BudgetMaintenanceInputError(
+                "Choose an open account in this budget",
+              );
+            const result = await client.importTransactions(
+              accountId,
+              transactions.map((transaction) => ({
+                account: accountId,
+                date: transaction.date,
+                amount: transaction.amountMinor,
+                payee_name: transaction.payeeName.trim(),
+                imported_id: transaction.importedId,
+                ...(transaction.notes === undefined
+                  ? {}
+                  : { notes: transaction.notes }),
+              })),
+              { defaultCleared: false },
+            );
+            return {
+              added: result.added.length,
+              updated: result.updated.length,
+              errors: result.errors.map((error) => error.message),
+            };
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
     },
     createAccount(
       budgetId,
@@ -713,20 +832,21 @@ export function createBudgetMaintenanceApi(
               return;
             }
 
-            const categoryActionIndexes = rule.actions.flatMap((action, index) =>
-              "field" in action &&
-                  action.field === "category" &&
-                  action.op === "set"
-                ? [index]
-                : [],
+            const categoryActionIndexes = rule.actions.flatMap(
+              (action, index) =>
+                "field" in action &&
+                action.field === "category" &&
+                action.op === "set"
+                  ? [index]
+                  : [],
             );
             if (categoryActionIndexes.length > 1) {
               throw new BudgetMaintenanceInputError(
                 "This payee has multiple category actions. Edit the rule in Actual first.",
               );
             }
-            const categoryActionIndex = categoryActionIndexes[0] ?? -1;
-            if (categoryActionIndex < 0) return;
+            // matchingRules only retains rules with at least one category-set action.
+            const categoryActionIndex = categoryActionIndexes[0]!;
 
             if (categoryId === null) {
               const actions = rule.actions.filter(
@@ -740,20 +860,14 @@ export function createBudgetMaintenanceApi(
               return;
             }
 
-            const actions = [...rule.actions];
-            const categoryAction = actions[categoryActionIndex];
-            if (
-              !categoryAction ||
-              !("field" in categoryAction) ||
-              categoryAction.field !== "category" ||
-              categoryAction.op !== "set"
-            ) {
-              return;
-            }
-            actions[categoryActionIndex] = {
-              ...categoryAction,
-              value: categoryId,
-            };
+            const actions = rule.actions.map((action, index) =>
+              index === categoryActionIndex &&
+              "field" in action &&
+              action.field === "category" &&
+              action.op === "set"
+                ? { ...action, value: categoryId }
+                : action,
+            );
             await client.updateRule({ ...rule, actions });
           },
           writeOptions(encryptionPassword),
@@ -885,10 +999,16 @@ export function createBudgetMaintenanceApi(
     },
     applyBudgetTemplate(budgetId, month, assignments, encryptionPassword) {
       if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
-        return Promise.reject(new BudgetMaintenanceInputError("Choose a valid budget month"));
+        return Promise.reject(
+          new BudgetMaintenanceInputError("Choose a valid budget month"),
+        );
       }
       if (assignments.length === 0 || assignments.length > 500) {
-        return Promise.reject(new BudgetMaintenanceInputError("Choose a template with 1 to 500 categories"));
+        return Promise.reject(
+          new BudgetMaintenanceInputError(
+            "Choose a template with 1 to 500 categories",
+          ),
+        );
       }
       const seen = new Set<string>();
       for (const assignment of assignments) {
@@ -899,7 +1019,11 @@ export function createBudgetMaintenanceApi(
           assignment.amountMinor < 0 ||
           assignment.amountMinor > MAX_BUDGET_AMOUNT_MINOR
         ) {
-          return Promise.reject(new BudgetMaintenanceInputError("The template contains an invalid category amount"));
+          return Promise.reject(
+            new BudgetMaintenanceInputError(
+              "The template contains an invalid category amount",
+            ),
+          );
         }
         seen.add(assignment.categoryId);
       }
@@ -918,13 +1042,27 @@ export function createBudgetMaintenanceApi(
                   .filter((id): id is string => typeof id === "string"),
               ),
             );
-            const activeCategoryIds = new Set(categories.map((category) => category.id));
-            if (assignments.some(({ categoryId }) => !activeCategoryIds.has(categoryId) || !monthCategoryIds.has(categoryId))) {
-              throw new BudgetMaintenanceInputError("A template category is no longer active in this month");
+            const activeCategoryIds = new Set(
+              categories.map((category) => category.id),
+            );
+            if (
+              assignments.some(
+                ({ categoryId }) =>
+                  !activeCategoryIds.has(categoryId) ||
+                  !monthCategoryIds.has(categoryId),
+              )
+            ) {
+              throw new BudgetMaintenanceInputError(
+                "A template category is no longer active in this month",
+              );
             }
             await client.batchBudgetUpdates(async () => {
               for (const assignment of assignments) {
-                await client.setBudgetAmount(month, assignment.categoryId, assignment.amountMinor);
+                await client.setBudgetAmount(
+                  month,
+                  assignment.categoryId,
+                  assignment.amountMinor,
+                );
               }
             });
           },
@@ -965,7 +1103,10 @@ export function createBudgetMaintenanceApi(
                 "The hold cannot exceed the amount ready to assign",
               );
             }
-            const held = await client.holdBudgetForNextMonth(month, amountMinor);
+            const held = await client.holdBudgetForNextMonth(
+              month,
+              amountMinor,
+            );
             if (!held) {
               throw new BudgetMaintenanceInputError(
                 "There is no money ready to assign in this month",
@@ -1186,15 +1327,20 @@ export function createBudgetMaintenanceApi(
           budgetId,
           async () => {
             const accounts = await client.getAccounts();
-            const account = accounts.find((candidate) => candidate.id === accountId);
+            const account = accounts.find(
+              (candidate) => candidate.id === accountId,
+            );
             if (!account) {
               throw new BudgetMaintenanceInputError(
                 "Account does not exist in this budget",
               );
             }
-            const target = targetAccountId == null
-              ? undefined
-              : accounts.find((candidate) => candidate.id === targetAccountId);
+            const target =
+              targetAccountId == null
+                ? undefined
+                : accounts.find(
+                    (candidate) => candidate.id === targetAccountId,
+                  );
             if (targetAccountId != null && !target) {
               throw new BudgetMaintenanceInputError(
                 "Choose an account in this budget",
@@ -1205,7 +1351,11 @@ export function createBudgetMaintenanceApi(
                 "Choose a different account position",
               );
             }
-            if (target && (Boolean(target.closed) !== Boolean(account.closed) || Boolean(target.offbudget) !== Boolean(account.offbudget))) {
+            if (
+              target &&
+              (Boolean(target.closed) !== Boolean(account.closed) ||
+                Boolean(target.offbudget) !== Boolean(account.offbudget))
+            ) {
               throw new BudgetMaintenanceInputError(
                 "Accounts can only be reordered within the same section",
               );
@@ -1362,6 +1512,7 @@ export function createBudgetMaintenanceApi(
       action,
       targetCategoryId,
       encryptionPassword,
+      targetGroupId,
     ) {
       return locks.withBudgetLock(budgetId, () =>
         session.runBudget(
@@ -1379,6 +1530,44 @@ export function createBudgetMaintenanceApi(
             if (action === "hide" || action === "show") {
               await client.updateCategory(categoryId, {
                 hidden: action === "hide",
+              });
+              return;
+            }
+            const destinationGroupId = targetGroupId ?? category.group_id;
+            if (
+              targetGroupId != null &&
+              destinationGroupId !== category.group_id
+            ) {
+              const groups = await getAllCategoryGroups(client);
+              const destinationGroup = groups.find(
+                (candidate) =>
+                  candidate.id === destinationGroupId && !candidate.hidden,
+              );
+              if (!destinationGroup) {
+                throw new BudgetMaintenanceInputError(
+                  "Choose a visible category group in this budget",
+                );
+              }
+              if (destinationGroup.is_income !== category.is_income) {
+                throw new BudgetMaintenanceInputError(
+                  "Income categories must stay in an income group",
+                );
+              }
+              if (targetCategoryId != null) {
+                throw new BudgetMaintenanceInputError(
+                  "A category moved to another group starts at the end of that group",
+                );
+              }
+              const internal = client.internal;
+              if (!internal) {
+                throw new BudgetMaintenanceInputError(
+                  "This Actual version does not support moving categories between groups",
+                );
+              }
+              await internal.send("category-move", {
+                id: categoryId,
+                groupId: destinationGroupId,
+                targetId: null,
               });
               return;
             }
@@ -1500,7 +1689,10 @@ export function createBudgetMaintenanceApi(
     async editSchedule(budgetId, scheduleId, edit, encryptionPassword) {
       validateBudgetScheduleEdit(edit);
       const normalizedName = edit.name?.trim();
-      if (edit.name !== undefined && (!normalizedName || normalizedName.length > 100)) {
+      if (
+        edit.name !== undefined &&
+        (!normalizedName || normalizedName.length > 100)
+      ) {
         throw new BudgetMaintenanceInputError(
           "Schedule names must be between 1 and 100 characters",
         );

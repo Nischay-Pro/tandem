@@ -814,6 +814,59 @@ describe("transaction snapshots and merge planning", () => {
     ).toEqual({ kind: "conflict", conflictingFields: ["subtransactions"] });
   });
 
+  it("conflicts on parent category changes and split child metadata edits", () => {
+    const child = createSnapshot({
+      id: "split-child",
+      isChild: true,
+      parentId: "split-parent",
+    });
+    const parent = createSnapshot({ isParent: true, subtransactions: [child] });
+    expect(
+      planTransactionUpdate(
+        parent,
+        createSnapshot({
+          isParent: true,
+          category: "remote-category",
+          subtransactions: [child],
+        }),
+        { category: "local-category" },
+      ),
+    ).toEqual({ kind: "conflict", conflictingFields: ["category"] });
+
+    const splitChild = createSnapshot({
+      id: "split-child",
+      isChild: true,
+      parentId: "split-parent",
+    });
+    const childBase = createSnapshot({
+      id: "split-child",
+      isChild: true,
+      parentId: "split-parent",
+    });
+    const cases = [
+      {
+        field: "account",
+        local: "local-account",
+        remote: "remote-account",
+      },
+      { field: "date", local: "2026-11-01", remote: "2026-11-02" },
+      { field: "cleared", local: true, remote: null },
+      { field: "reconciled", local: true, remote: null },
+    ] as const;
+
+    for (const scenario of cases) {
+      const local = { [scenario.field]: scenario.local };
+      const remote = createSnapshot({
+        ...splitChild,
+        [scenario.field]: scenario.remote,
+      });
+      expect(planTransactionUpdate(childBase, remote, local)).toEqual({
+        kind: "conflict",
+        conflictingFields: [scenario.field],
+      });
+    }
+  });
+
   it("reports overlapping same-field edits and does not apply the safe subset", () => {
     const base = createSnapshot();
     expect(

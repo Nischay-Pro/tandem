@@ -1291,6 +1291,58 @@ describe("Actual transaction reconciliation", () => {
     );
   });
 
+  it.each([
+    {
+      label: "a transfer joined to a split parent",
+      latest: createSnapshot({ transferId: "peer", isParent: true }),
+      fields: ["transferId", "isParent"],
+    },
+    {
+      label: "a split parent",
+      latest: createSnapshot({ isParent: true }),
+      fields: ["isParent"],
+    },
+    {
+      label: "a split child",
+      latest: createSnapshot({ isChild: true, parentId: "parent" }),
+      fields: ["isChild", "parentId"],
+    },
+    {
+      label: "a parent reference",
+      latest: createSnapshot({ parentId: "parent" }),
+      fields: ["parentId"],
+    },
+    {
+      label: "split children",
+      latest: createSnapshot({
+        subtransactions: [
+          createSnapshot({
+            id: "child",
+            isChild: true,
+            parentId: "transaction-1",
+          }),
+        ],
+      }),
+      fields: ["subtransactions"],
+    },
+  ])("reviews $label introduced while saving", async ({ latest, fields }) => {
+    const base = createSnapshot();
+    const request = createRequest({
+      baseSnapshot: base as unknown as JsonValue,
+      baseRevision: createTransactionRevision(base),
+    });
+    const harness = createHarness(request);
+    harness.actual = actualFrom(base);
+    harness.setReadResults([USE_CURRENT, actualFrom(latest)]);
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.conflict).toMatchObject({
+      conflictType: "transaction-structure-changed-during-write",
+      conflictingFields: fields,
+    });
+  });
+
   it("requires a valid paired Actual leg before changing a transfer", async () => {
     const base = createSnapshot({ transferId: "transfer-1" });
     const request = createRequest({

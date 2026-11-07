@@ -33,6 +33,11 @@ async function createApi(
 ) {
   const budgetMaintenanceApi: BudgetMaintenanceApiPort = {
     runBankSync: vi.fn(async () => undefined),
+    importStatementTransactions: vi.fn(async () => ({
+      added: 1,
+      updated: 0,
+      errors: [],
+    })),
     createAccount: vi.fn(async () => undefined),
     createCategory: vi.fn(async () => "category-created"),
     createCategoryGroup: vi.fn(async () => "category-group-created"),
@@ -167,6 +172,20 @@ const maintenanceRouteCases = (routeBudgetId = budgetId) => [
   {
     method: "POST" as const,
     url: `/api/v1/budgets/${routeBudgetId}/bank-sync`,
+  },
+  {
+    method: "POST" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/accounts/account-1/transactions/import`,
+    payload: {
+      transactions: [
+        {
+          date: "2026-11-01",
+          amountMinor: -1200,
+          payeeName: "Market",
+          importedId: "statement-row-1",
+        },
+      ],
+    },
   },
   {
     method: "POST" as const,
@@ -313,6 +332,12 @@ describe("budget maintenance routes", () => {
       headers: testHeaders(),
       payload: { action: "hide" },
     });
+    const movedCategory = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/categories/category-1/actions`,
+      headers: testHeaders(),
+      payload: { action: "move", targetGroupId: "group-2" },
+    });
     const movedAccount = await fake.app.inject({
       method: "POST",
       url: `/api/v1/budgets/${budgetId}/accounts/account-1/move`,
@@ -320,10 +345,18 @@ describe("budget maintenance routes", () => {
       payload: { targetAccountId: null },
     });
 
-    expect([created.statusCode, renamed.statusCode, reordered.statusCode, hidden.statusCode, movedAccount.statusCode]).toEqual([
-      200, 200, 200, 200, 200,
-    ]);
-    expect(created.json()).toEqual({ status: "ok", categoryGroupId: "category-group-created" });
+    expect([
+      created.statusCode,
+      renamed.statusCode,
+      reordered.statusCode,
+      hidden.statusCode,
+      movedCategory.statusCode,
+      movedAccount.statusCode,
+    ]).toEqual([200, 200, 200, 200, 200, 200]);
+    expect(created.json()).toEqual({
+      status: "ok",
+      categoryGroupId: "category-group-created",
+    });
     expect(fake.budgetMaintenanceApi.createCategoryGroup).toHaveBeenCalledWith(
       budgetId,
       "Bills",
@@ -344,6 +377,15 @@ describe("budget maintenance routes", () => {
       "hide",
       undefined,
       undefined,
+      undefined,
+    );
+    expect(fake.budgetMaintenanceApi.manageCategory).toHaveBeenCalledWith(
+      budgetId,
+      "category-1",
+      "move",
+      undefined,
+      undefined,
+      "group-2",
     );
     expect(fake.budgetMaintenanceApi.moveAccount).toHaveBeenCalledWith(
       budgetId,
@@ -564,6 +606,72 @@ describe("budget maintenance routes", () => {
     await fake.app.close();
   });
 
+  it("imports a statement through Actual and journals only a content fingerprint", async () => {
+    const fake = await createApi();
+    const transactions = [
+      {
+        date: "2026-11-01",
+        amountMinor: -1_234,
+        payeeName: "Market",
+        notes: "Groceries",
+        importedId: "row-1",
+      },
+      {
+        date: "2026-11-02",
+        amountMinor: 25_000,
+        payeeName: "Employer",
+        importedId: "row-2",
+      },
+    ];
+    const headers = testHeaders();
+    const url = `/api/v1/budgets/${budgetId}/accounts/account-1/transactions/import`;
+    const first = await fake.app.inject({
+      method: "POST",
+      url,
+      headers,
+      payload: { transactions },
+    });
+    const replay = await fake.app.inject({
+      method: "POST",
+      url,
+      headers,
+      payload: { transactions },
+    });
+
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toEqual({
+      status: "ok",
+      added: 1,
+      updated: 0,
+      errorCount: 0,
+    });
+    expect(replay.json()).toEqual(first.json());
+    expect(
+      fake.budgetMaintenanceApi.importStatementTransactions,
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      fake.budgetMaintenanceApi.importStatementTransactions,
+    ).toHaveBeenCalledWith(budgetId, "account-1", transactions, undefined);
+    const importOperation = [...fake.operations.values()].find(
+      (operation) => operation.action === "statement-import",
+    );
+    expect(importOperation?.patch).toEqual({
+      rowCount: 2,
+      rowsHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
+    expect(JSON.stringify(importOperation?.patch)).not.toContain("Groceries");
+    expect(JSON.stringify(importOperation?.patch)).not.toContain("Employer");
+
+    const duplicateIds = await fake.app.inject({
+      method: "POST",
+      url,
+      headers: testHeaders(),
+      payload: { transactions: [transactions[0], transactions[0]] },
+    });
+    expect(duplicateIds.statusCode).toBe(400);
+    await fake.app.close();
+  });
+
   it("replays a completed maintenance write without calling Actual twice", async () => {
     const fake = await createApi();
     const headers = testHeaders();
@@ -727,9 +835,15 @@ describe("budget maintenance routes", () => {
       ),
     );
 
-    expect(responses.map((response) => response.statusCode)).toEqual(
-      maintenanceRouteCases().map(() => 409),
-    );
+    expect(
+      responses.map((response) => response.statusCode),
+      JSON.stringify(
+        responses.map((response) => ({
+          status: response.statusCode,
+          body: response.json(),
+        })),
+      ),
+    ).toEqual(maintenanceRouteCases().map(() => 409));
     expect(responses.map((response) => response.json().error.code)).toEqual(
       maintenanceRouteCases().map(() => "operation_in_progress"),
     );
@@ -802,12 +916,9 @@ describe("budget maintenance routes", () => {
       payload: { action: "hold-next-month", amountMinor: 1200 },
     });
     expect(hold.statusCode).toBe(200);
-    expect(fake.budgetMaintenanceApi.holdBudgetForNextMonth).toHaveBeenCalledWith(
-      budgetId,
-      "2026-11",
-      1200,
-      undefined,
-    );
+    expect(
+      fake.budgetMaintenanceApi.holdBudgetForNextMonth,
+    ).toHaveBeenCalledWith(budgetId, "2026-11", 1200, undefined);
 
     const reset = await fake.app.inject({
       method: "POST",
@@ -1130,6 +1241,53 @@ describe("budget maintenance routes", () => {
         },
         action: vi.mocked(fake.budgetMaintenanceApi.moveMoney),
       },
+      {
+        method: "POST" as const,
+        url: `/api/v1/budgets/${budgetId}/accounts/account-1/transactions/import`,
+        payload: {
+          transactions: [
+            {
+              date: "2026-11-01",
+              amountMinor: -1200,
+              payeeName: "Market",
+              importedId: "statement-row-1",
+            },
+          ],
+        },
+        action: vi.mocked(
+          fake.budgetMaintenanceApi.importStatementTransactions,
+        ),
+      },
+      {
+        method: "POST" as const,
+        url: `/api/v1/budgets/${budgetId}/payees/payee-1/actions`,
+        payload: { action: "default-category", categoryId: "category-1" },
+        action: vi.mocked(fake.budgetMaintenanceApi.setPayeeDefaultCategory),
+      },
+      {
+        method: "POST" as const,
+        url: `/api/v1/budgets/${budgetId}/accounts/account-1/move`,
+        payload: { targetAccountId: null },
+        action: vi.mocked(fake.budgetMaintenanceApi.moveAccount),
+      },
+      {
+        method: "POST" as const,
+        url: `/api/v1/budgets/${budgetId}/category-groups`,
+        payload: { name: "Bills", isIncome: false },
+        action: vi.mocked(fake.budgetMaintenanceApi.createCategoryGroup),
+      },
+      {
+        method: "PATCH" as const,
+        url: `/api/v1/budgets/${budgetId}/category-groups/group-1`,
+        payload: { action: "rename", name: "Needs" },
+        action: vi.mocked(fake.budgetMaintenanceApi.manageCategoryGroup),
+      },
+      {
+        method: "POST" as const,
+        url: `/api/v1/budgets/${budgetId}/categories/category-1/actions`,
+        payload: { action: "hide" },
+        action: vi.mocked(fake.budgetMaintenanceApi.manageCategory),
+      },
     ];
 
     for (const route of routes) {
@@ -1151,6 +1309,61 @@ describe("budget maintenance routes", () => {
       expect(failed.statusCode).toBe(502);
       expect(failed.body).not.toContain("private Actual detail");
     }
+    await fake.app.close();
+  });
+
+  it("rejects incomplete category actions and month action bodies", async () => {
+    const fake = await createApi();
+    const invalidRequests = [
+      {
+        method: "PATCH" as const,
+        url: `/api/v1/budgets/${budgetId}/category-groups/group-1`,
+        payload: { action: "rename" },
+      },
+      {
+        method: "PATCH" as const,
+        url: `/api/v1/budgets/${budgetId}/category-groups/group-1`,
+        payload: { action: "move" },
+      },
+      {
+        method: "POST" as const,
+        url: `/api/v1/budgets/${budgetId}/categories/category-1/actions`,
+        payload: { action: "move" },
+      },
+      {
+        method: "POST" as const,
+        url: `/api/v1/budgets/${budgetId}/months/2026-11/actions`,
+        payload: { action: "hold-next-month" },
+      },
+      {
+        method: "POST" as const,
+        url: `/api/v1/budgets/${budgetId}/months/2026-11/actions`,
+        payload: { action: "reset-hold", amountMinor: 100 },
+      },
+      {
+        method: "POST" as const,
+        url: `/api/v1/budgets/${budgetId}/months/2026-11/actions`,
+        payload: { action: "apply-template" },
+      },
+      {
+        method: "POST" as const,
+        url: `/api/v1/budgets/${budgetId}/months/2026-11/actions`,
+        payload: {
+          action: "reset-hold",
+          assignments: [{ categoryId: "cat", amountMinor: 0 }],
+        },
+      },
+    ];
+
+    const responses = await Promise.all(
+      invalidRequests.map((request) =>
+        fake.app.inject({ ...request, headers: testHeaders() }),
+      ),
+    );
+
+    expect(responses.map((response) => response.statusCode)).toEqual(
+      invalidRequests.map(() => 400),
+    );
     await fake.app.close();
   });
 
@@ -1491,6 +1704,32 @@ describe("budget maintenance routes", () => {
     await fake.app.close();
   });
 
+  it("journals a schedule edit with an amount range", async () => {
+    const fake = await createApi();
+    const response = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/schedules/schedule-1/actions`,
+      headers: { ...testHeaders(), "idempotency-key": "schedule-range-edit-1" },
+      payload: {
+        action: "edit",
+        amountRangeMinor: { num1: -200_000, num2: -100_000 },
+        amountOp: "isbetween",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(fake.budgetMaintenanceApi.editSchedule).toHaveBeenCalledWith(
+      budgetId,
+      "schedule-1",
+      {
+        amountRangeMinor: { num1: -200_000, num2: -100_000 },
+        amountOp: "isbetween",
+      },
+      undefined,
+    );
+    await fake.app.close();
+  });
+
   it("journals payee rename, merge, and delete actions", async () => {
     const fake = await createApi();
     const path = `/api/v1/budgets/${budgetId}/payees/payee-1/actions`;
@@ -1596,20 +1835,12 @@ describe("budget maintenance routes", () => {
       undefined,
     );
     expect(fake.budgetMaintenanceApi.deletePayee).toHaveBeenCalledOnce();
-    expect(fake.budgetMaintenanceApi.setPayeeDefaultCategory).toHaveBeenNthCalledWith(
-      1,
-      budgetId,
-      "payee-1",
-      "category-1",
-      undefined,
-    );
-    expect(fake.budgetMaintenanceApi.setPayeeDefaultCategory).toHaveBeenNthCalledWith(
-      2,
-      budgetId,
-      "payee-1",
-      null,
-      undefined,
-    );
+    expect(
+      fake.budgetMaintenanceApi.setPayeeDefaultCategory,
+    ).toHaveBeenNthCalledWith(1, budgetId, "payee-1", "category-1", undefined);
+    expect(
+      fake.budgetMaintenanceApi.setPayeeDefaultCategory,
+    ).toHaveBeenNthCalledWith(2, budgetId, "payee-1", null, undefined);
     expect([...fake.operations.values()].map(({ action }) => action)).toEqual([
       "payee-rename",
       "payee-merge",

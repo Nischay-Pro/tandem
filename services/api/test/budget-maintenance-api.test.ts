@@ -4,7 +4,11 @@ import {
   createBudgetMaintenanceApi,
 } from "../src/actual/budget-maintenance-api.js";
 import type { BudgetOperationOptions } from "../src/actual/actual-session.js";
-import type { ActualBudgetMaintenanceSession } from "../src/actual/budget-maintenance-api.js";
+import type {
+  ActualBudgetMaintenanceSession,
+  BudgetScheduleEdit,
+  StatementTransactionImport,
+} from "../src/actual/budget-maintenance-api.js";
 import type { BudgetLockPort } from "../src/actual/transaction-reconciler.js";
 
 function createFake() {
@@ -41,7 +45,7 @@ function createFake() {
   const payees: Array<{ id: string; name: string; transfer_acct: string }> = [];
   const rules: Array<{
     id: string;
-    stage: "pre" | "post" | null;
+    stage: "pre" | "post" | "default" | null;
     conditionsOp: "and" | "or";
     conditions: Array<{ field: string; op: string; value: string }>;
     actions: Array<{ field: string; op: string; value: unknown }>;
@@ -98,6 +102,11 @@ function createFake() {
   );
   const client = {
     runBankSync: vi.fn(async () => undefined),
+    importTransactions: vi.fn(async () => ({
+      added: ["imported-1"],
+      updated: [] as string[],
+      errors: [] as Array<{ message: string }>,
+    })),
     createAccount: vi.fn(async () => "new-account"),
     updateAccount: vi.fn(async () => undefined),
     reopenAccount: vi.fn(async () => undefined),
@@ -112,6 +121,7 @@ function createFake() {
     getCategories: vi.fn(async () => [...categories]),
     getCategoryGroups: vi.fn(async () => [
       { id: "group-1", name: "Food", is_income: false, hidden: false },
+      { id: "group-2", name: "Travel", is_income: false, hidden: false },
     ]),
     createCategoryGroup: vi.fn(async () => "new-group"),
     updateCategoryGroup: vi.fn(async () => undefined),
@@ -158,11 +168,14 @@ function createFake() {
       ],
     })),
     batchBudgetUpdates: vi.fn(async (work: () => Promise<void>) => work()),
-    updateCategory: vi.fn(async (id: string, fields: { name?: string; hidden?: boolean }) => {
-      const category = categories.find((candidate) => candidate.id === id);
-      if (category && fields.name) category.name = fields.name;
-      if (category && fields.hidden !== undefined) category.hidden = fields.hidden;
-    }),
+    updateCategory: vi.fn(
+      async (id: string, fields: { name?: string; hidden?: boolean }) => {
+        const category = categories.find((candidate) => candidate.id === id);
+        if (category && fields.name) category.name = fields.name;
+        if (category && fields.hidden !== undefined)
+          category.hidden = fields.hidden;
+      },
+    ),
     deleteCategory: vi.fn(async () => undefined),
     getSchedules: vi.fn(async () => [...schedules]),
     updateSchedule: vi.fn(async () => "monthly-rent"),
@@ -306,9 +319,55 @@ describe("Actual budget maintenance API", () => {
     await expect(fake.api.reopenAccount("budget-1", "missing")).rejects.toThrow(
       "Account does not exist in this budget",
     );
-    await expect(fake.api.moveAccount("budget-1", "source", "closed")).rejects.toThrow(
-      "Accounts can only be reordered within the same section",
+    await expect(
+      fake.api.moveAccount("budget-1", "source", "closed"),
+    ).rejects.toThrow("Accounts can only be reordered within the same section");
+  });
+
+  it("validates account ordering targets and uses the account group", async () => {
+    const fake = createFake();
+
+    await expect(
+      fake.api.moveAccount("budget-1", "missing", null),
+    ).rejects.toThrow("Account does not exist in this budget");
+    await expect(
+      fake.api.moveAccount("budget-1", "source", "missing"),
+    ).rejects.toThrow("Choose an account in this budget");
+    await expect(
+      fake.api.moveAccount("budget-1", "source", "source"),
+    ).rejects.toThrow("Choose a different account position");
+
+    fake.client.getAccounts.mockResolvedValueOnce([
+      { id: "source", closed: false, offbudget: false },
+      { id: "destination", closed: false, offbudget: true },
+    ] as never);
+    await expect(
+      fake.api.moveAccount("budget-1", "source", "destination"),
+    ).rejects.toThrow("same section");
+
+    fake.client.getAccounts.mockResolvedValueOnce([
+      {
+        id: "source",
+        closed: false,
+        offbudget: false,
+        account_group_id: "checking-group",
+      },
+      { id: "destination", closed: false, offbudget: false },
+    ] as never);
+    await fake.api.moveAccount("budget-1", "source", null);
+    expect(fake.client.internal?.send).toHaveBeenLastCalledWith(
+      "account-move",
+      {
+        id: "source",
+        targetId: null,
+        accountGroupId: "checking-group",
+      },
     );
+
+    fake.client.internal = undefined as never;
+    await expect(
+      fake.api.moveAccount("budget-1", "source", null),
+    ).rejects.toThrow("does not support account ordering");
   });
 
   it("creates a category in an active group and rejects duplicate names", async () => {
@@ -346,33 +405,87 @@ describe("Actual budget maintenance API", () => {
   it("creates, renames, hides, and reorders category groups and categories", async () => {
     const fake = createFake();
 
-    await expect(fake.api.createCategoryGroup("budget-1", "Bills", false)).resolves.toBe("new-group");
+    await expect(
+      fake.api.createCategoryGroup("budget-1", "Bills", false),
+    ).resolves.toBe("new-group");
     expect(fake.client.createCategoryGroup).toHaveBeenCalledWith({
       name: "Bills",
       is_income: false,
       hidden: false,
     });
-    await fake.api.manageCategoryGroup("budget-1", "group-1", "rename", "Needs");
-    expect(fake.client.updateCategoryGroup).toHaveBeenCalledWith("group-1", { name: "Needs" });
-    await fake.api.manageCategoryGroup("budget-1", "group-1", "hide");
-    expect(fake.client.updateCategoryGroup).toHaveBeenCalledWith("group-1", { hidden: true });
-    await fake.api.manageCategoryGroup("budget-1", "group-1", "move", undefined, null);
-    expect(fake.client.internal?.send).toHaveBeenCalledWith("category-group-move", {
-      id: "group-1",
-      targetId: null,
+    await fake.api.manageCategoryGroup(
+      "budget-1",
+      "group-1",
+      "rename",
+      "Needs",
+    );
+    expect(fake.client.updateCategoryGroup).toHaveBeenCalledWith("group-1", {
+      name: "Needs",
     });
+    await fake.api.manageCategoryGroup("budget-1", "group-1", "hide");
+    expect(fake.client.updateCategoryGroup).toHaveBeenCalledWith("group-1", {
+      hidden: true,
+    });
+    await fake.api.manageCategoryGroup(
+      "budget-1",
+      "group-1",
+      "move",
+      undefined,
+      null,
+    );
+    expect(fake.client.internal?.send).toHaveBeenCalledWith(
+      "category-group-move",
+      {
+        id: "group-1",
+        targetId: null,
+      },
+    );
 
     await fake.api.manageCategory("budget-1", "expense", "hide");
-    expect(fake.client.updateCategory).toHaveBeenCalledWith("expense", { hidden: true });
+    expect(fake.client.updateCategory).toHaveBeenCalledWith("expense", {
+      hidden: true,
+    });
     await fake.api.manageCategory("budget-1", "expense", "move", "expense-2");
     expect(fake.client.internal?.send).toHaveBeenCalledWith("category-move", {
       id: "expense",
       groupId: "group-1",
       targetId: "expense-2",
     });
-    await expect(fake.api.manageCategory("budget-1", "expense", "move", "income")).rejects.toThrow(
-      "Choose a category in the same group",
+    fake.client.getCategoryGroups
+      .mockResolvedValueOnce([
+        { id: "group-1", name: "Food", is_income: false, hidden: false },
+        { id: "group-2", name: "Travel", is_income: false, hidden: false },
+      ])
+      .mockResolvedValueOnce([]);
+    await fake.api.manageCategory(
+      "budget-1",
+      "expense",
+      "move",
+      null,
+      undefined,
+      "group-2",
     );
+    expect(fake.client.internal?.send).toHaveBeenLastCalledWith(
+      "category-move",
+      {
+        id: "expense",
+        groupId: "group-2",
+        targetId: null,
+      },
+    );
+    await expect(
+      fake.api.manageCategory("budget-1", "expense", "move", "income"),
+    ).rejects.toThrow("Choose a category in the same group");
+    await expect(
+      fake.api.manageCategory(
+        "budget-1",
+        "income",
+        "move",
+        null,
+        undefined,
+        "group-2",
+      ),
+    ).rejects.toThrow("Income categories must stay in an income group");
   });
 
   it("rejects inactive category groups and defaults missing income metadata", async () => {
@@ -409,6 +522,158 @@ describe("Actual budget maintenance API", () => {
       is_income: false,
       hidden: false,
     });
+  });
+
+  it("validates category group names, rename conflicts, and move targets", async () => {
+    const fake = createFake();
+
+    expect(() => fake.api.createCategoryGroup("budget-1", " ", false)).toThrow(
+      "Category group names must be between 1 and 100 characters",
+    );
+    expect(() =>
+      fake.api.createCategoryGroup("budget-1", "G".repeat(101), false),
+    ).toThrow("Category group names must be between 1 and 100 characters");
+    await expect(
+      fake.api.createCategoryGroup("budget-1", " food ", false),
+    ).rejects.toThrow("A category group with this name already exists");
+
+    await expect(
+      fake.api.manageCategoryGroup("budget-1", "missing", "rename", "Other"),
+    ).rejects.toThrow("Category group does not exist in this budget");
+    await expect(
+      fake.api.manageCategoryGroup("budget-1", "group-1", "rename", " "),
+    ).rejects.toThrow(
+      "Category group names must be between 1 and 100 characters",
+    );
+    await expect(
+      fake.api.manageCategoryGroup("budget-1", "group-1", "rename"),
+    ).rejects.toThrow(
+      "Category group names must be between 1 and 100 characters",
+    );
+    await expect(
+      fake.api.manageCategoryGroup(
+        "budget-1",
+        "group-1",
+        "rename",
+        "G".repeat(101),
+      ),
+    ).rejects.toThrow(
+      "Category group names must be between 1 and 100 characters",
+    );
+    await expect(
+      fake.api.manageCategoryGroup("budget-1", "group-1", "rename", "travel"),
+    ).rejects.toThrow("A category group with this name already exists");
+    await fake.api.manageCategoryGroup("budget-1", "group-1", "show");
+    expect(fake.client.updateCategoryGroup).toHaveBeenCalledWith("group-1", {
+      hidden: false,
+    });
+    await expect(
+      fake.api.manageCategoryGroup(
+        "budget-1",
+        "group-1",
+        "move",
+        undefined,
+        "group-1",
+      ),
+    ).rejects.toThrow("Choose a different category group position");
+    await expect(
+      fake.api.manageCategoryGroup(
+        "budget-1",
+        "group-1",
+        "move",
+        undefined,
+        "missing",
+      ),
+    ).rejects.toThrow("Choose a category group in this budget");
+
+    fake.client.internal = undefined as never;
+    await expect(
+      fake.api.manageCategoryGroup("budget-1", "group-1", "move"),
+    ).rejects.toThrow("does not support category group ordering");
+  });
+
+  it("validates category membership and cross-group move rules", async () => {
+    const fake = createFake();
+
+    await expect(
+      fake.api.manageCategory("budget-1", "missing", "hide"),
+    ).rejects.toThrow("Category does not exist in this budget");
+    await fake.api.manageCategory("budget-1", "expense", "show");
+    expect(fake.client.updateCategory).toHaveBeenCalledWith("expense", {
+      hidden: false,
+    });
+    await expect(
+      fake.api.manageCategory("budget-1", "expense", "move", "expense"),
+    ).rejects.toThrow("Choose a different category position");
+    await expect(
+      fake.api.manageCategory("budget-1", "expense", "move", "missing"),
+    ).rejects.toThrow("Choose a category in the same group");
+    await fake.api.manageCategory(
+      "budget-1",
+      "expense",
+      "move",
+      null,
+      undefined,
+      "group-1",
+    );
+    expect(fake.client.internal?.send).toHaveBeenLastCalledWith(
+      "category-move",
+      {
+        id: "expense",
+        groupId: "group-1",
+        targetId: null,
+      },
+    );
+    await expect(
+      fake.api.manageCategory(
+        "budget-1",
+        "expense",
+        "move",
+        null,
+        undefined,
+        "missing-group",
+      ),
+    ).rejects.toThrow("Choose a visible category group");
+    fake.client.getCategoryGroups
+      .mockResolvedValueOnce([
+        { id: "group-2", name: "Hidden", is_income: false, hidden: true },
+      ])
+      .mockResolvedValueOnce([]);
+    await expect(
+      fake.api.manageCategory(
+        "budget-1",
+        "expense",
+        "move",
+        null,
+        undefined,
+        "group-2",
+      ),
+    ).rejects.toThrow("Choose a visible category group");
+    await expect(
+      fake.api.manageCategory(
+        "budget-1",
+        "expense",
+        "move",
+        "expense-2",
+        undefined,
+        "group-2",
+      ),
+    ).rejects.toThrow("starts at the end of that group");
+
+    fake.client.internal = undefined as never;
+    await expect(
+      fake.api.manageCategory(
+        "budget-1",
+        "expense",
+        "move",
+        null,
+        undefined,
+        "group-2",
+      ),
+    ).rejects.toThrow("does not support moving categories between groups");
+    await expect(
+      fake.api.manageCategory("budget-1", "expense", "move", "expense-2"),
+    ).rejects.toThrow("does not support category ordering");
   });
 
   it("creates payees in Actual and rejects duplicate names case-insensitively", async () => {
@@ -564,6 +829,185 @@ describe("Actual budget maintenance API", () => {
 
   it.each([
     {
+      label: "an empty edit",
+      edit: {},
+      message: "Add at least one schedule change",
+    },
+    {
+      label: "a blank account",
+      edit: { accountId: "  " },
+      message: "Choose an account",
+    },
+    {
+      label: "a blank payee",
+      edit: { payeeId: "  " },
+      message: "Choose a payee",
+    },
+    {
+      label: "both amount formats",
+      edit: {
+        amountMinor: 100,
+        amountRangeMinor: { num1: 100, num2: 200 },
+        amountOp: "isbetween" as const,
+      },
+      message: "Choose a single amount or an amount range",
+    },
+    {
+      label: "an amount without an amount rule",
+      edit: { amountMinor: 100 },
+      message: "Choose an amount rule",
+    },
+    {
+      label: "an amount rule without an amount",
+      edit: { amountOp: "is" as const },
+      message: "An amount rule requires an amount",
+    },
+    {
+      label: "an unsafe amount",
+      edit: { amountMinor: Number.MAX_SAFE_INTEGER, amountOp: "is" as const },
+      message:
+        "Schedule amounts must be whole cents within the supported limit",
+    },
+    {
+      label: "a reversed amount range",
+      edit: {
+        amountRangeMinor: { num1: 500, num2: 100 },
+        amountOp: "isbetween" as const,
+      },
+      message: "The minimum amount must not exceed the maximum",
+    },
+    {
+      label: "an invalid one-time date",
+      edit: { date: "2026-02-30" },
+      message: "Enter a schedule date as YYYY-MM-DD",
+    },
+    {
+      label: "a one-time date with the wrong format",
+      edit: { date: "11/5/2026" },
+      message: "Enter a schedule date as YYYY-MM-DD",
+    },
+    {
+      label: "an unsupported recurrence frequency",
+      edit: {
+        date: { frequency: "hourly", start: "2026-01-01" } as never,
+      },
+      message: "Choose a valid recurrence and start date",
+    },
+    {
+      label: "an invalid recurrence interval",
+      edit: {
+        date: {
+          frequency: "weekly" as const,
+          start: "2026-01-01",
+          interval: 0,
+        },
+      },
+      message: "Repeat interval must be between 1 and 999",
+    },
+    {
+      label: "an invalid weekend setting",
+      edit: {
+        date: {
+          frequency: "weekly" as const,
+          start: "2026-01-01",
+          skipWeekend: "yes",
+        } as never,
+      },
+      message: "Invalid weekend setting",
+    },
+    {
+      label: "an unsupported weekend adjustment",
+      edit: {
+        date: {
+          frequency: "weekly" as const,
+          start: "2026-01-01",
+          weekendSolveMode: "nearest",
+        } as never,
+      },
+      message: "Choose a valid weekend adjustment",
+    },
+    {
+      label: "a malformed repeat pattern",
+      edit: {
+        date: {
+          frequency: "weekly" as const,
+          start: "2026-01-01",
+          patterns: [{ value: 32, type: "MO" }],
+        },
+      },
+      message: "Choose a valid repeat pattern",
+    },
+    {
+      label: "an unsupported repeat end mode",
+      edit: {
+        date: {
+          frequency: "weekly" as const,
+          start: "2026-01-01",
+          endMode: "forever",
+        } as never,
+      },
+      message: "Choose a valid repeat end",
+    },
+    {
+      label: "a missing occurrence count",
+      edit: {
+        date: {
+          frequency: "weekly" as const,
+          start: "2026-01-01",
+          endMode: "after_n_occurrences" as const,
+        },
+      },
+      message: "Occurrence count must be between 1 and 100,000",
+    },
+    {
+      label: "an occurrence count below one",
+      edit: {
+        date: {
+          frequency: "weekly" as const,
+          start: "2026-01-01",
+          endMode: "after_n_occurrences" as const,
+          endOccurrences: 0,
+        },
+      },
+      message: "Occurrence count must be between 1 and 100,000",
+    },
+    {
+      label: "an occurrence count above the maximum",
+      edit: {
+        date: {
+          frequency: "weekly" as const,
+          start: "2026-01-01",
+          endMode: "after_n_occurrences" as const,
+          endOccurrences: 100_001,
+        },
+      },
+      message: "Occurrence count must be between 1 and 100,000",
+    },
+    {
+      label: "an end date before the start date",
+      edit: {
+        date: {
+          frequency: "monthly" as const,
+          start: "2026-02-01",
+          endMode: "on_date" as const,
+          endDate: "2026-01-31",
+        },
+      },
+      message: "The end date must be on or after the start date",
+    },
+    {
+      label: "an end date with the wrong format",
+      edit: {
+        date: {
+          frequency: "monthly" as const,
+          start: "2026-02-01",
+          endMode: "on_date" as const,
+          endDate: "02/28/2026",
+        },
+      },
+      message: "The end date must be on or after the start date",
+    },
+    {
       label: "an amount range with a single-value operator",
       edit: {
         amountRangeMinor: { num1: 100, num2: 500 },
@@ -578,13 +1022,79 @@ describe("Actual budget maintenance API", () => {
       },
       message: "Choose a valid recurrence and start date",
     },
+    {
+      label: "a schedule name with a C0 control character",
+      edit: { name: "Rent\u0001" },
+      message: "Schedule names must not contain control characters",
+    },
+    {
+      label: "a schedule name with a DEL control character",
+      edit: { name: "Rent\u007f" },
+      message: "Schedule names must not contain control characters",
+    },
   ])("rejects $label before calling Actual", async ({ edit, message }) => {
     const fake = createFake();
 
     await expect(
-      fake.api.editSchedule("budget-1", "monthly-rent", edit),
+      fake.api.editSchedule(
+        "budget-1",
+        "monthly-rent",
+        edit as BudgetScheduleEdit,
+      ),
     ).rejects.toThrow(message);
     expect(fake.client.updateSchedule).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      label: "a valid one-time date",
+      edit: { date: "2026-11-05" },
+      expectedDate: "2026-11-05",
+    },
+    {
+      label: "an amount range with an is-between rule",
+      edit: {
+        amountRangeMinor: { num1: -500, num2: -100 },
+        amountOp: "isbetween" as const,
+      },
+      expectedAmount: { num1: -500, num2: -100 },
+    },
+    {
+      label: "a recurrence ending after occurrences",
+      edit: {
+        date: {
+          frequency: "weekly" as const,
+          start: "2026-01-01",
+          endMode: "after_n_occurrences" as const,
+          endOccurrences: 4,
+          patterns: [{ value: 2, type: "TU" as const }],
+        },
+      },
+      expectedDate: {
+        frequency: "weekly",
+        start: "2026-01-01",
+        endMode: "after_n_occurrences",
+        endOccurrences: 4,
+        patterns: [{ value: 2, type: "TU" }],
+      },
+    },
+  ])("accepts $label", async ({ edit, expectedAmount, expectedDate }) => {
+    const fake = createFake();
+
+    await fake.api.editSchedule(
+      "budget-1",
+      "monthly-rent",
+      edit as BudgetScheduleEdit,
+    );
+
+    expect(fake.client.updateSchedule).toHaveBeenCalledWith(
+      "monthly-rent",
+      expect.objectContaining({
+        ...(expectedAmount === undefined ? {} : { amount: expectedAmount }),
+        ...(expectedDate === undefined ? {} : { date: expectedDate }),
+      }),
+      expectedDate !== undefined,
+    );
   });
 
   it("requires a live schedule, open account, and existing payee for schedule edits", async () => {
@@ -612,6 +1122,28 @@ describe("Actual budget maintenance API", () => {
         payeeId: "missing",
       }),
     ).rejects.toThrow("Choose a payee in this budget");
+    expect(fake.client.updateSchedule).not.toHaveBeenCalled();
+  });
+
+  it("rejects blank, oversized, missing, and duplicate schedule edits", async () => {
+    const fake = createFake();
+
+    await expect(
+      fake.api.editSchedule("budget-1", "monthly-rent", { name: " " }),
+    ).rejects.toThrow("Schedule names must be between 1 and 100 characters");
+    await expect(
+      fake.api.editSchedule("budget-1", "monthly-rent", {
+        name: "R".repeat(101),
+      }),
+    ).rejects.toThrow("Schedule names must be between 1 and 100 characters");
+    await expect(
+      fake.api.editSchedule("budget-1", "missing", { name: "New rent" }),
+    ).rejects.toThrow("Choose an active schedule in this budget");
+    await expect(
+      fake.api.editSchedule("budget-1", "monthly-rent", {
+        name: "One time",
+      }),
+    ).rejects.toThrow("A schedule with this name already exists");
     expect(fake.client.updateSchedule).not.toHaveBeenCalled();
   });
 
@@ -662,9 +1194,83 @@ describe("Actual budget maintenance API", () => {
     });
   });
 
+  it("ignores rules that do not define one simple default category", async () => {
+    const fake = createFake();
+    fake.payees.push({ id: "payee-1", name: "Store", transfer_acct: "" });
+    const condition = { field: "payee", op: "is", value: "payee-1" };
+    const categoryAction = { field: "category", op: "set", value: "expense" };
+    fake.rules.push(
+      {
+        id: "pre-stage",
+        stage: "pre",
+        conditionsOp: "and",
+        conditions: [condition],
+        actions: [categoryAction],
+      },
+      {
+        id: "or-conditions",
+        stage: "default",
+        conditionsOp: "or",
+        conditions: [condition],
+        actions: [categoryAction],
+      },
+      {
+        id: "no-conditions",
+        stage: "default",
+        conditionsOp: "and",
+        conditions: [],
+        actions: [categoryAction],
+      },
+      {
+        id: "wrong-field",
+        stage: "default",
+        conditionsOp: "and",
+        conditions: [{ ...condition, field: "amount" }],
+        actions: [categoryAction],
+      },
+      {
+        id: "wrong-operator",
+        stage: "default",
+        conditionsOp: "and",
+        conditions: [{ ...condition, op: "contains" }],
+        actions: [categoryAction],
+      },
+      {
+        id: "wrong-payee",
+        stage: "default",
+        conditionsOp: "and",
+        conditions: [{ ...condition, value: "another-payee" }],
+        actions: [categoryAction],
+      },
+      {
+        id: "no-category-set",
+        stage: "default",
+        conditionsOp: "and",
+        conditions: [condition],
+        actions: [
+          { field: "category", op: "clear", value: null },
+          { field: "notes", op: "set", value: "Keep this note" },
+        ],
+      },
+    );
+
+    await fake.api.setPayeeDefaultCategory("budget-1", "payee-1", "expense");
+
+    expect(fake.client.createRule).toHaveBeenCalledWith({
+      stage: "default",
+      conditionsOp: "and",
+      conditions: [condition],
+      actions: [{ field: "category", op: "set", value: "expense" }],
+    });
+  });
+
   it("rejects transfer payees, hidden categories, and ambiguous category rules", async () => {
     const fake = createFake();
-    fake.payees.push({ id: "transfer", name: "Transfer: Checking", transfer_acct: "checking" });
+    fake.payees.push({
+      id: "transfer",
+      name: "Transfer: Checking",
+      transfer_acct: "checking",
+    });
     await expect(
       fake.api.setPayeeDefaultCategory("budget-1", "transfer", "expense"),
     ).rejects.toThrow("Choose a regular payee in this budget");
@@ -783,6 +1389,12 @@ describe("Actual budget maintenance API", () => {
     await expect(
       fake.api.setBudgetCarryover("budget-1", "expense", "2026-11", false),
     ).rejects.toThrow("Choose a category in this budget month");
+    fake.client.getBudgetMonth.mockResolvedValueOnce({
+      categoryGroups: [{}],
+    } as never);
+    await expect(
+      fake.api.setBudgetCarryover("budget-1", "expense", "2026-11", false),
+    ).rejects.toThrow("Choose a category in this budget month");
   });
 
   it("copies prior assignments for active categories in one Actual batch", async () => {
@@ -817,10 +1429,255 @@ describe("Actual budget maintenance API", () => {
     await expect(
       fake.api.copyBudgetMonth("budget-1", "2026-00"),
     ).rejects.toThrow("Choose a valid budget month");
+    await expect(
+      fake.api.copyBudgetMonth("budget-1", "0000-05"),
+    ).rejects.toThrow("Choose a valid budget month");
+    await expect(
+      fake.api.copyBudgetMonth("budget-1", "0001-01"),
+    ).rejects.toThrow("Choose a valid budget month");
+
+    const january = createFake();
+    january.client.getBudgetMonth
+      .mockResolvedValueOnce({
+        categoryGroups: [
+          {},
+          {
+            categories: [
+              { id: 4, budgeted: 900 },
+              { id: "expense", budgeted: null, assigned: 12_000 },
+              { id: "expense-2" },
+            ],
+          },
+        ],
+      } as never)
+      .mockResolvedValueOnce({
+        categoryGroups: [
+          {},
+          { categories: [{ id: "expense" }, { id: "expense-2" }, { id: 4 }] },
+        ],
+      } as never);
+
+    await january.api.copyBudgetMonth("budget-1", "2026-01");
+
+    expect(january.client.getBudgetMonth).toHaveBeenNthCalledWith(1, "2025-12");
+    expect(january.client.setBudgetAmount).toHaveBeenNthCalledWith(
+      1,
+      "2026-01",
+      "expense",
+      12_000,
+    );
+    expect(january.client.setBudgetAmount).toHaveBeenNthCalledWith(
+      2,
+      "2026-01",
+      "expense-2",
+      0,
+    );
+  });
+
+  it("imports statement rows through Actual with dedupe ids and an open budget account", async () => {
+    const fake = createFake();
+    const transactions = [
+      {
+        date: "2026-11-01",
+        amountMinor: -1_234,
+        payeeName: "Market",
+        notes: "Groceries",
+        importedId: "statement-row-1",
+      },
+      {
+        date: "2026-11-02",
+        amountMinor: 25_000,
+        payeeName: "Employer",
+        importedId: "statement-row-2",
+      },
+    ];
+
+    const result = await fake.api.importStatementTransactions(
+      "budget-1",
+      "source",
+      transactions,
+      "secret",
+    );
+
+    expect(result).toEqual({ added: 1, updated: 0, errors: [] });
+    expect(fake.client.importTransactions).toHaveBeenCalledWith(
+      "source",
+      [
+        {
+          account: "source",
+          date: "2026-11-01",
+          amount: -1_234,
+          payee_name: "Market",
+          notes: "Groceries",
+          imported_id: "statement-row-1",
+        },
+        {
+          account: "source",
+          date: "2026-11-02",
+          amount: 25_000,
+          payee_name: "Employer",
+          notes: undefined,
+          imported_id: "statement-row-2",
+        },
+      ],
+      { defaultCleared: false },
+    );
+    expect(fake.runBudgetCalls.at(-1)?.options).toEqual({
+      encryptionPassword: "secret",
+      synchronizeAfterWrite: true,
+    });
+
+    await expect(
+      fake.api.importStatementTransactions("budget-1", "missing", transactions),
+    ).rejects.toThrow("Choose an open account");
+    await expect(
+      fake.api.importStatementTransactions("budget-1", "source", [
+        transactions[0]!,
+        transactions[0]!,
+      ]),
+    ).rejects.toThrow("invalid or duplicate");
+  });
+
+  it("validates statement size, row contents, and Actual import errors", async () => {
+    const row: StatementTransactionImport = {
+      date: "2026-11-01",
+      amountMinor: -1200,
+      payeeName: "Market",
+      importedId: "row-1",
+    };
+    const invalidCases: Array<{
+      accountId: string;
+      rows: (typeof row)[];
+    }> = [
+      { accountId: " ", rows: [row] },
+      { accountId: "source", rows: [] },
+      {
+        accountId: "source",
+        rows: Array.from({ length: 1001 }, (_, index) => ({
+          ...row,
+          importedId: `row-${index}`,
+        })),
+      },
+      { accountId: "source", rows: [{ ...row, date: "2026-02-30" }] },
+      { accountId: "source", rows: [{ ...row, amountMinor: 0 }] },
+      {
+        accountId: "source",
+        rows: [{ ...row, amountMinor: Number.MAX_SAFE_INTEGER }],
+      },
+      { accountId: "source", rows: [{ ...row, payeeName: " " }] },
+      { accountId: "source", rows: [{ ...row, payeeName: "M".repeat(201) }] },
+      { accountId: "source", rows: [{ ...row, notes: "M".repeat(501) }] },
+      { accountId: "source", rows: [{ ...row, importedId: " " }] },
+      { accountId: "source", rows: [{ ...row, importedId: "i".repeat(201) }] },
+      { accountId: "source", rows: [row, row] },
+    ];
+
+    for (const invalid of invalidCases) {
+      const fake = createFake();
+      await expect(
+        fake.api.importStatementTransactions(
+          "budget-1",
+          invalid.accountId,
+          invalid.rows,
+        ),
+      ).rejects.toThrow();
+      expect(fake.client.importTransactions).not.toHaveBeenCalled();
+    }
+
+    const withErrors = createFake();
+    withErrors.client.importTransactions.mockResolvedValueOnce({
+      added: ["added"],
+      updated: ["updated"] as string[],
+      errors: [{ message: "Skipped unsupported row" }],
+    });
+    await expect(
+      withErrors.api.importStatementTransactions("budget-1", "source", [row]),
+    ).resolves.toEqual({
+      added: 1,
+      updated: 1,
+      errors: ["Skipped unsupported row"],
+    });
+  });
+
+  it("clears a sole payee category action and ignores rules without a default category", async () => {
+    const fake = createFake();
+    fake.payees.push({ id: "payee-1", name: "Store", transfer_acct: "" });
+
+    await expect(
+      fake.api.setPayeeDefaultCategory("budget-1", "payee-1", "  "),
+    ).rejects.toThrow("Choose a category or clear the default");
+
+    await fake.api.setPayeeDefaultCategory("budget-1", "payee-1", null);
+    expect(fake.client.deleteRule).not.toHaveBeenCalled();
+
+    fake.rules.push({
+      id: "rule-1",
+      stage: null,
+      conditionsOp: "and",
+      conditions: [{ field: "payee", op: "is", value: "payee-1" }],
+      actions: [{ field: "category", op: "set", value: "expense" }],
+    });
+    await fake.api.setPayeeDefaultCategory("budget-1", "payee-1", null);
+    expect(fake.client.deleteRule).toHaveBeenCalledWith("rule-1");
+    fake.rules.length = 0;
+
+    fake.rules.push({
+      id: "ambiguous-actions",
+      stage: null,
+      conditionsOp: "and",
+      conditions: [{ field: "payee", op: "is", value: "payee-1" }],
+      actions: [
+        { field: "category", op: "set", value: "expense" },
+        { field: "category", op: "set", value: "expense-2" },
+      ],
+    });
+    await expect(
+      fake.api.setPayeeDefaultCategory("budget-1", "payee-1", "income"),
+    ).rejects.toThrow("multiple category actions");
   });
 
   it("applies validated template assignments in one Actual batch", async () => {
     const fake = createFake();
+    await expect(
+      fake.api.applyBudgetTemplate("budget-1", "2026-13", [
+        { categoryId: "expense", amountMinor: 1 },
+      ]),
+    ).rejects.toThrow("Choose a valid budget month");
+    await expect(
+      fake.api.applyBudgetTemplate("budget-1", "2026-11", []),
+    ).rejects.toThrow("1 to 500 categories");
+    await expect(
+      fake.api.applyBudgetTemplate(
+        "budget-1",
+        "2026-11",
+        Array.from({ length: 501 }, (_, index) => ({
+          categoryId: `category-${index}`,
+          amountMinor: 0,
+        })),
+      ),
+    ).rejects.toThrow("1 to 500 categories");
+    await expect(
+      fake.api.applyBudgetTemplate("budget-1", "2026-11", [
+        { categoryId: " ", amountMinor: 1 },
+      ]),
+    ).rejects.toThrow("invalid category amount");
+    await expect(
+      fake.api.applyBudgetTemplate("budget-1", "2026-11", [
+        { categoryId: "expense", amountMinor: 1 },
+        { categoryId: "expense", amountMinor: 2 },
+      ]),
+    ).rejects.toThrow("invalid category amount");
+    await expect(
+      fake.api.applyBudgetTemplate("budget-1", "2026-11", [
+        { categoryId: "expense", amountMinor: 1.5 },
+      ]),
+    ).rejects.toThrow("invalid category amount");
+    await expect(
+      fake.api.applyBudgetTemplate("budget-1", "2026-11", [
+        { categoryId: "expense", amountMinor: 100_000_000_001 },
+      ]),
+    ).rejects.toThrow("invalid category amount");
+
     await fake.api.applyBudgetTemplate(
       "budget-1",
       "2026-11",
@@ -849,18 +1706,39 @@ describe("Actual budget maintenance API", () => {
     });
 
     await expect(
-      fake.api.applyBudgetTemplate("budget-1", "2026-11", [{ categoryId: "missing", amountMinor: 1 }]),
+      fake.api.applyBudgetTemplate("budget-1", "2026-11", [
+        { categoryId: "missing", amountMinor: 1 },
+      ]),
     ).rejects.toThrow("no longer active");
     await expect(
-      fake.api.applyBudgetTemplate("budget-1", "2026-11", [{ categoryId: "expense", amountMinor: -1 }]),
+      fake.api.applyBudgetTemplate("budget-1", "2026-11", [
+        { categoryId: "expense", amountMinor: -1 },
+      ]),
     ).rejects.toThrow("invalid category amount");
+
+    fake.client.getBudgetMonth.mockResolvedValueOnce({
+      categoryGroups: [{}],
+    } as never);
+    await expect(
+      fake.api.applyBudgetTemplate("budget-1", "2026-11", [
+        { categoryId: "expense", amountMinor: 100 },
+      ]),
+    ).rejects.toThrow("no longer active");
   });
 
   it("holds only available envelope money and resets the held amount", async () => {
     const fake = createFake();
 
-    await fake.api.holdBudgetForNextMonth("budget-1", "2026-11", 12_500, "secret");
-    expect(fake.client.holdBudgetForNextMonth).toHaveBeenCalledWith("2026-11", 12_500);
+    await fake.api.holdBudgetForNextMonth(
+      "budget-1",
+      "2026-11",
+      12_500,
+      "secret",
+    );
+    expect(fake.client.holdBudgetForNextMonth).toHaveBeenCalledWith(
+      "2026-11",
+      12_500,
+    );
     expect(fake.runBudgetCalls.at(-1)?.options).toEqual({
       encryptionPassword: "secret",
       synchronizeAfterWrite: true,
@@ -875,7 +1753,9 @@ describe("Actual budget maintenance API", () => {
     ).rejects.toThrow("The hold cannot exceed the amount ready to assign");
     expect(fake.client.holdBudgetForNextMonth).toHaveBeenCalledOnce();
 
-    fake.client.getPreferences.mockResolvedValueOnce({ budgetType: "tracking" } as never);
+    fake.client.getPreferences.mockResolvedValueOnce({
+      budgetType: "tracking",
+    } as never);
     await expect(
       fake.api.holdBudgetForNextMonth("budget-1", "2026-11", 100),
     ).rejects.toThrow("only available in an envelope budget");
@@ -883,11 +1763,23 @@ describe("Actual budget maintenance API", () => {
       fake.api.holdBudgetForNextMonth("budget-1", "2026-11", 0),
     ).rejects.toThrow("Enter a positive amount");
 
+    fake.client.getBudgetMonth.mockResolvedValueOnce({
+      categoryGroups: [],
+    } as never);
+    await expect(
+      fake.api.holdBudgetForNextMonth("budget-1", "2026-11", 1),
+    ).rejects.toThrow("The hold cannot exceed the amount ready to assign");
+
+    fake.client.holdBudgetForNextMonth.mockResolvedValueOnce(false);
+    await expect(
+      fake.api.holdBudgetForNextMonth("budget-1", "2026-11", 1),
+    ).rejects.toThrow("There is no money ready to assign in this month");
+
     await fake.api.resetBudgetHold("budget-1", "2026-11");
     expect(fake.client.resetBudgetHold).toHaveBeenCalledWith("2026-11");
-    await expect(fake.api.resetBudgetHold("budget-1", "2026-13")).rejects.toThrow(
-      "Choose a valid budget month",
-    );
+    await expect(
+      fake.api.resetBudgetHold("budget-1", "2026-13"),
+    ).rejects.toThrow("Choose a valid budget month");
   });
 
   it("moves category money in one Actual budget batch", async () => {

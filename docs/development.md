@@ -88,6 +88,16 @@ snapshot; the epoch must be backed up separately from PostgreSQL.
 
 Run the Compose integration-test command above for the per-change gate. Running `pnpm check:all` directly also requires `DATABASE_URL` to point to a disposable PostgreSQL database and `PAIRING_CODE_HASH_KEY` to contain at least 32 bytes. Run `pnpm test:mutation` for incremental mutation testing or `pnpm test:mutation:full` to force the full configured set.
 
+Install the local pre-commit checks once with:
+
+```sh
+./scripts/install-git-hooks.sh
+```
+
+The hook checks Prettier formatting and the mobile UI text and design-token
+rules. When staged files include Kotlin, it also runs KtLint for the API
+client, data, and Compose modules. CI remains the full verification gate.
+
 ## Database migrations
 
 The current unreleased point release has one timestamped migration in

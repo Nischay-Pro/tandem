@@ -389,7 +389,8 @@ describe.skipIf(!compatibilityTestEnabled)(
           expect(scheduleEditResponse.statusCode).toBe(200);
           const editedSchedule = await firstDevice.runBudget(
             budget.groupId,
-            async () => (await Actual.getSchedules()).find(({ id }) => id === scheduleId),
+            async () =>
+              (await Actual.getSchedules()).find(({ id }) => id === scheduleId),
           );
           expect(editedSchedule).toMatchObject({
             name: "ABC edited monthly schedule",
@@ -416,7 +417,23 @@ describe.skipIf(!compatibilityTestEnabled)(
             payload: { name: "ABC companion category group", isIncome: false },
           });
           expect(createGroupResponse.statusCode).toBe(200);
-          const companionGroupId = createGroupResponse.json().categoryGroupId as string;
+          const companionGroupId = createGroupResponse.json()
+            .categoryGroupId as string;
+          const destinationGroupResponse = await reconciliationApp.inject({
+            method: "POST",
+            url: `/api/v1/budgets/${budget.groupId}/category-groups`,
+            headers: {
+              ...authorizationHeaders,
+              "idempotency-key": `compat-category-group-destination-${randomUUID()}`,
+            },
+            payload: {
+              name: "ABC companion destination group",
+              isIncome: false,
+            },
+          });
+          expect(destinationGroupResponse.statusCode).toBe(200);
+          const destinationGroupId = destinationGroupResponse.json()
+            .categoryGroupId as string;
           const createCategoryResponse = await reconciliationApp.inject({
             method: "POST",
             url: `/api/v1/budgets/${budget.groupId}/categories`,
@@ -424,10 +441,14 @@ describe.skipIf(!compatibilityTestEnabled)(
               ...authorizationHeaders,
               "idempotency-key": `compat-category-create-${randomUUID()}`,
             },
-            payload: { name: "ABC companion category", categoryGroupId: companionGroupId },
+            payload: {
+              name: "ABC companion category",
+              categoryGroupId: companionGroupId,
+            },
           });
           expect(createCategoryResponse.statusCode).toBe(200);
-          const companionCategoryId = createCategoryResponse.json().categoryId as string;
+          const companionCategoryId = createCategoryResponse.json()
+            .categoryId as string;
           const renameGroupResponse = await reconciliationApp.inject({
             method: "PATCH",
             url: `/api/v1/budgets/${budget.groupId}/category-groups/${encodeURIComponent(companionGroupId)}`,
@@ -437,7 +458,10 @@ describe.skipIf(!compatibilityTestEnabled)(
             },
             payload: { action: "rename", name: "ABC companion group renamed" },
           });
-          expect(renameGroupResponse.statusCode, JSON.stringify(renameGroupResponse.json())).toBe(200);
+          expect(
+            renameGroupResponse.statusCode,
+            JSON.stringify(renameGroupResponse.json()),
+          ).toBe(200);
           const moveGroupResponse = await reconciliationApp.inject({
             method: "PATCH",
             url: `/api/v1/budgets/${budget.groupId}/category-groups/${encodeURIComponent(companionGroupId)}`,
@@ -458,6 +482,19 @@ describe.skipIf(!compatibilityTestEnabled)(
             payload: { action: "move", targetId: null },
           });
           expect(moveCategoryResponse.statusCode).toBe(200);
+          const moveAcrossGroupsResponse = await reconciliationApp.inject({
+            method: "POST",
+            url: `/api/v1/budgets/${budget.groupId}/categories/${encodeURIComponent(companionCategoryId)}/actions`,
+            headers: {
+              ...authorizationHeaders,
+              "idempotency-key": `compat-category-move-group-${randomUUID()}`,
+            },
+            payload: { action: "move", targetGroupId: destinationGroupId },
+          });
+          expect(
+            moveAcrossGroupsResponse.statusCode,
+            JSON.stringify(moveAcrossGroupsResponse.json()),
+          ).toBe(200);
           for (const [action, idempotencyKey] of [
             ["hide", `compat-category-hide-${randomUUID()}`],
             ["show", `compat-category-show-${randomUUID()}`],
@@ -465,7 +502,10 @@ describe.skipIf(!compatibilityTestEnabled)(
             const response = await reconciliationApp.inject({
               method: "POST",
               url: `/api/v1/budgets/${budget.groupId}/categories/${encodeURIComponent(companionCategoryId)}/actions`,
-              headers: { ...authorizationHeaders, "idempotency-key": idempotencyKey },
+              headers: {
+                ...authorizationHeaders,
+                "idempotency-key": idempotencyKey,
+              },
               payload: { action },
             });
             expect(response.statusCode).toBe(200);
@@ -477,22 +517,32 @@ describe.skipIf(!compatibilityTestEnabled)(
             const response = await reconciliationApp.inject({
               method: "PATCH",
               url: `/api/v1/budgets/${budget.groupId}/category-groups/${encodeURIComponent(companionGroupId)}`,
-              headers: { ...authorizationHeaders, "idempotency-key": idempotencyKey },
+              headers: {
+                ...authorizationHeaders,
+                "idempotency-key": idempotencyKey,
+              },
               payload: { action },
             });
             expect(response.statusCode).toBe(200);
           }
           const companionGroup = await firstDevice.runBudget(
             budget.groupId,
-            async () => (await Actual.getCategoryGroups()).find(({ id }) => id === companionGroupId),
+            async () =>
+              (await Actual.getCategoryGroups()).find(
+                ({ id }) => id === companionGroupId,
+              ),
           );
           const companionCategory = await firstDevice.runBudget(
             budget.groupId,
-            async () => (await Actual.getCategories()).find(({ id }) => id === companionCategoryId),
+            async () =>
+              (await Actual.getCategories()).find(
+                ({ id }) => id === companionCategoryId,
+              ),
           );
           expect(companionGroup?.name).toBe("ABC companion group renamed");
           expect(companionGroup?.hidden).toBe(false);
           expect(companionCategory?.hidden).toBe(false);
+          expect(companionCategory?.group_id).toBe(destinationGroupId);
           const defaultCategoryResponse = await reconciliationApp.inject({
             method: "POST",
             url: `/api/v1/budgets/${budget.groupId}/payees/${encodeURIComponent(schedulePayeeId)}/actions`,
@@ -508,21 +558,23 @@ describe.skipIf(!compatibilityTestEnabled)(
             () => Actual.getPayeeRules(schedulePayeeId),
           );
           expect(
-            defaultCategoryRules.some(
-              (rule) =>
-                rule.actions.some(
-                  (action) =>
-                    "field" in action &&
-                    action.field === "category" &&
-                    action.op === "set" &&
-                    action.value === categoryId,
-                ),
+            defaultCategoryRules.some((rule) =>
+              rule.actions.some(
+                (action) =>
+                  "field" in action &&
+                  action.field === "category" &&
+                  action.op === "set" &&
+                  action.value === categoryId,
+              ),
             ),
           ).toBe(true);
-          const scheduleSnapshot = await budgetReadApi.getSnapshot(budget.groupId);
+          const scheduleSnapshot = await budgetReadApi.getSnapshot(
+            budget.groupId,
+          );
           expect(
             scheduleSnapshot.records.some(
-              (record) => record.type === "schedule" && record.id === scheduleId,
+              (record) =>
+                record.type === "schedule" && record.id === scheduleId,
             ),
           ).toBe(true);
           expect(
@@ -543,14 +595,13 @@ describe.skipIf(!compatibilityTestEnabled)(
             () => Actual.getPayeeRules(schedulePayeeId),
           );
           expect(
-            clearedDefaultCategoryRules.some(
-              (rule) =>
-                rule.actions.some(
-                  (action) =>
-                    "field" in action &&
-                    action.field === "category" &&
-                    action.op === "set",
-                ),
+            clearedDefaultCategoryRules.some((rule) =>
+              rule.actions.some(
+                (action) =>
+                  "field" in action &&
+                  action.field === "category" &&
+                  action.op === "set",
+              ),
             ),
           ).toBe(false);
           const holdResponse = await reconciliationApp.inject({
@@ -563,9 +614,8 @@ describe.skipIf(!compatibilityTestEnabled)(
             payload: { action: "hold-next-month", amountMinor: 10_000 },
           });
           expect(holdResponse.statusCode).toBe(200);
-          const heldMonth = await firstDevice.runBudget(
-            budget.groupId,
-            () => Actual.getBudgetMonth("2026-10"),
+          const heldMonth = await firstDevice.runBudget(budget.groupId, () =>
+            Actual.getBudgetMonth("2026-10"),
           );
           expect(heldMonth.forNextMonth).toBe(10_000);
           const resetHoldResponse = await reconciliationApp.inject({
@@ -578,9 +628,8 @@ describe.skipIf(!compatibilityTestEnabled)(
             payload: { action: "reset-hold" },
           });
           expect(resetHoldResponse.statusCode).toBe(200);
-          const resetMonth = await firstDevice.runBudget(
-            budget.groupId,
-            () => Actual.getBudgetMonth("2026-10"),
+          const resetMonth = await firstDevice.runBudget(budget.groupId, () =>
+            Actual.getBudgetMonth("2026-10"),
           );
           expect(resetMonth.forNextMonth).toBe(0);
           const templateResponse = await reconciliationApp.inject({

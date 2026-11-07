@@ -1,5 +1,5 @@
 import swagger from "@fastify/swagger";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import Fastify, {
   type FastifyInstance,
   type FastifyRequest,
@@ -21,6 +21,7 @@ import {
   type BudgetTemplateAssignment,
   type BudgetMaintenanceApiPort,
   type BudgetScheduleEdit,
+  type StatementTransactionImport,
 } from "./actual/budget-maintenance-api.js";
 import type { BudgetReadApiPort } from "./budget-projection/budget-read-api.js";
 import {
@@ -37,6 +38,7 @@ import {
   type WriteOperation,
 } from "./write-journal/contracts.js";
 import { TransactionRequestValidationError } from "./actual/transaction-reconciler.js";
+import { MAX_TRANSACTION_AMOUNT } from "./actual/transaction-reconciliation.js";
 
 const statusOk = {
   type: "object",
@@ -1027,6 +1029,7 @@ interface BudgetCategoryGroupActionBody {
 interface BudgetCategoryActionBody {
   action: "hide" | "show" | "move";
   targetId?: string | null;
+  targetGroupId?: string | null;
 }
 
 interface BudgetCategoryCreateBody {
@@ -1056,9 +1059,14 @@ interface BudgetCategoryCarryoverBody {
 }
 
 interface BudgetMonthActionBody {
-  action: "copy-last-month" | "hold-next-month" | "reset-hold" | "apply-template";
+  action:
+    "copy-last-month" | "hold-next-month" | "reset-hold" | "apply-template";
   amountMinor?: number;
   assignments?: BudgetTemplateAssignment[];
+}
+
+interface BudgetStatementImportBody {
+  transactions: StatementTransactionImport[];
 }
 
 interface BudgetMoveMoneyBody {
@@ -1302,6 +1310,158 @@ function registerBudgetMaintenanceRoutes(
   );
 
   app.post<{
+    Params: BudgetRouteParams & { accountId: string };
+    Headers: BudgetReadHeaders;
+    Body: BudgetStatementImportBody;
+  }>(
+    "/api/v1/budgets/:budgetId/accounts/:accountId/transactions/import",
+    {
+      bodyLimit: 2 * 1024 * 1024,
+      schema: {
+        tags: ["Transactions"],
+        operationId: "importBudgetAccountTransactions",
+        summary: "Import a parsed bank statement into an Actual Budget account",
+        security: [{ bearerAuth: [] }],
+        params: accountParamsSchema,
+        headers: headersSchema,
+        body: {
+          type: "object",
+          properties: {
+            transactions: {
+              type: "array",
+              minItems: 1,
+              maxItems: 1_000,
+              items: {
+                type: "object",
+                properties: {
+                  date: { type: "string", format: "date" },
+                  amountMinor: {
+                    type: "integer",
+                    minimum: -MAX_TRANSACTION_AMOUNT,
+                    maximum: MAX_TRANSACTION_AMOUNT,
+                    not: { const: 0 },
+                  },
+                  payeeName: { type: "string", minLength: 1, maxLength: 200 },
+                  notes: { type: "string", maxLength: 500 },
+                  importedId: { type: "string", minLength: 1, maxLength: 200 },
+                },
+                required: ["date", "amountMinor", "payeeName", "importedId"],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ["transactions"],
+          additionalProperties: false,
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              status: { type: "string", const: "ok" },
+              added: { type: "integer", minimum: 0 },
+              updated: { type: "integer", minimum: 0 },
+              errorCount: { type: "integer", minimum: 0 },
+            },
+            required: ["status", "added", "updated", "errorCount"],
+            additionalProperties: false,
+          },
+          400: errorSchema,
+          401: errorSchema,
+          404: errorSchema,
+          409: errorSchema,
+          502: errorSchema,
+        },
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(deviceAuth, request, reply);
+      if (!device) return reply;
+      if (request.validationError) return invalidBudgetRequest(reply);
+      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
+        return transactionNotFound(reply);
+      if (!maintenanceApi) return actualNotConfigured(reply);
+      if (!journal) return actualNotConfigured(reply);
+      const transactions = request.body.transactions;
+      const uniqueImportedIds = new Set(
+        transactions.map((transaction) => transaction.importedId),
+      );
+      if (uniqueImportedIds.size !== transactions.length)
+        return invalidBudgetRequest(reply);
+      try {
+        const result = await runMaintenanceOperation(
+          journal,
+          request,
+          device,
+          request.params.budgetId,
+          "statement-import",
+          request.params.accountId,
+          statementImportJournalPatch(transactions),
+          async () => {
+            const imported = await maintenanceApi.importStatementTransactions(
+              request.params.budgetId,
+              request.params.accountId,
+              transactions,
+              request.headers["x-budget-encryption-password"],
+            );
+            return {
+              status: "ok",
+              added: imported.added,
+              updated: imported.updated,
+              errorCount: imported.errors.length,
+            };
+          },
+        );
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "statement_import",
+          "success",
+          request.params.accountId,
+        );
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send(result);
+      } catch (error) {
+        if (error instanceof MaintenanceOperationConflictError) {
+          return reply.code(409).send({
+            error: { code: error.code, message: error.message },
+          });
+        }
+        if (error instanceof BudgetMaintenanceInputError) {
+          logBudgetMaintenanceEvent(
+            request,
+            device,
+            request.params.budgetId,
+            "statement_import",
+            "rejected",
+            request.params.accountId,
+          );
+          return reply.code(400).send({
+            error: { code: "invalid_request", message: error.message },
+          });
+        }
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "statement_import",
+          "failed",
+          request.params.accountId,
+        );
+        reportTransactionFailure("Actual statement import failed", error);
+        return reply.code(502).send({
+          error: {
+            code: "actual_operation_failed",
+            message:
+              "Actual could not import these transactions. Review the statement and try again.",
+          },
+        });
+      }
+    },
+  );
+
+  app.post<{
     Params: BudgetRouteParams;
     Headers: BudgetReadHeaders;
     Body: BudgetAccountCreateBody;
@@ -1506,7 +1666,8 @@ function registerBudgetMaintenanceRoutes(
         const patch: { [key: string]: JsonValue } = { action };
         if (action === "rename") patch.name = name;
         if (action === "merge") patch.targetPayeeId = targetPayeeId!;
-        if (action === "default-category") patch.categoryId = categoryId ?? null;
+        if (action === "default-category")
+          patch.categoryId = categoryId ?? null;
         const result = await runMaintenanceOperation(
           journal,
           request,
@@ -1930,7 +2091,11 @@ function registerBudgetMaintenanceRoutes(
         body: {
           type: "object",
           properties: {
-            targetAccountId: { type: ["string", "null"], minLength: 1, maxLength: 500 },
+            targetAccountId: {
+              type: ["string", "null"],
+              minLength: 1,
+              maxLength: 500,
+            },
           },
           required: ["targetAccountId"],
           additionalProperties: false,
@@ -1943,7 +2108,8 @@ function registerBudgetMaintenanceRoutes(
       const device = await requireDevice(deviceAuth, request, reply);
       if (!device) return reply;
       if (request.validationError) return invalidBudgetRequest(reply);
-      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId)) return transactionNotFound(reply);
+      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
+        return transactionNotFound(reply);
       if (!maintenanceApi) return actualNotConfigured(reply);
       if (!journal) return actualNotConfigured(reply);
       try {
@@ -1965,20 +2131,48 @@ function registerBudgetMaintenanceRoutes(
             return { status: "ok" };
           },
         );
-        logBudgetMaintenanceEvent(request, device, request.params.budgetId, "account_move", "success", request.params.accountId);
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "account_move",
+          "success",
+          request.params.accountId,
+        );
         reply.header("cache-control", "no-store");
         return reply.code(200).send(result);
       } catch (error) {
         if (error instanceof BudgetMaintenanceInputError) {
-          logBudgetMaintenanceEvent(request, device, request.params.budgetId, "account_move", "rejected", request.params.accountId);
-          return reply.code(error instanceof MaintenanceOperationConflictError ? 409 : 400).send({
-            error: {
-              code: error instanceof MaintenanceOperationConflictError ? error.code : "invalid_request",
-              message: error.message,
-            },
-          });
+          logBudgetMaintenanceEvent(
+            request,
+            device,
+            request.params.budgetId,
+            "account_move",
+            "rejected",
+            request.params.accountId,
+          );
+          return reply
+            .code(
+              error instanceof MaintenanceOperationConflictError ? 409 : 400,
+            )
+            .send({
+              error: {
+                code:
+                  error instanceof MaintenanceOperationConflictError
+                    ? error.code
+                    : "invalid_request",
+                message: error.message,
+              },
+            });
         }
-        logBudgetMaintenanceEvent(request, device, request.params.budgetId, "account_move", "failed", request.params.accountId);
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "account_move",
+          "failed",
+          request.params.accountId,
+        );
         reportTransactionFailure("Actual account reorder failed", error);
         return actualRequestFailed(reply);
       }
@@ -2283,7 +2477,8 @@ function registerBudgetMaintenanceRoutes(
       const device = await requireDevice(deviceAuth, request, reply);
       if (!device) return reply;
       if (request.validationError) return invalidBudgetRequest(reply);
-      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId)) return transactionNotFound(reply);
+      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
+        return transactionNotFound(reply);
       if (!maintenanceApi) return actualNotConfigured(reply);
       if (!journal) return actualNotConfigured(reply);
       try {
@@ -2305,21 +2500,52 @@ function registerBudgetMaintenanceRoutes(
             ),
           }),
         );
-        logBudgetMaintenanceEvent(request, device, request.params.budgetId, "category_group_create", "success", result.categoryGroupId);
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "category_group_create",
+          "success",
+          result.categoryGroupId,
+        );
         reply.header("cache-control", "no-store");
-        return reply.code(200).send({ status: "ok", categoryGroupId: result.categoryGroupId });
+        return reply
+          .code(200)
+          .send({ status: "ok", categoryGroupId: result.categoryGroupId });
       } catch (error) {
         if (error instanceof BudgetMaintenanceInputError) {
-          logBudgetMaintenanceEvent(request, device, request.params.budgetId, "category_group_create", "rejected");
-          return reply.code(error instanceof MaintenanceOperationConflictError ? 409 : 400).send({
-            error: {
-              code: error instanceof MaintenanceOperationConflictError ? error.code : "invalid_request",
-              message: error.message,
-            },
-          });
+          logBudgetMaintenanceEvent(
+            request,
+            device,
+            request.params.budgetId,
+            "category_group_create",
+            "rejected",
+          );
+          return reply
+            .code(
+              error instanceof MaintenanceOperationConflictError ? 409 : 400,
+            )
+            .send({
+              error: {
+                code:
+                  error instanceof MaintenanceOperationConflictError
+                    ? error.code
+                    : "invalid_request",
+                message: error.message,
+              },
+            });
         }
-        logBudgetMaintenanceEvent(request, device, request.params.budgetId, "category_group_create", "failed");
-        reportTransactionFailure("Actual category group creation failed", error);
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "category_group_create",
+          "failed",
+        );
+        reportTransactionFailure(
+          "Actual category group creation failed",
+          error,
+        );
         return actualRequestFailed(reply);
       }
     },
@@ -2335,16 +2561,29 @@ function registerBudgetMaintenanceRoutes(
       schema: {
         tags: ["Budgets"],
         operationId: "manageBudgetCategoryGroup",
-        summary: "Rename, hide, show, or reorder an Actual Budget category group",
+        summary:
+          "Rename, hide, show, or reorder an Actual Budget category group",
         security: [{ bearerAuth: [] }],
         params: categoryGroupParamsSchema,
         headers: headersSchema,
         body: {
           type: "object",
           properties: {
-            action: { type: "string", enum: ["rename", "hide", "show", "move"] },
-            name: { type: "string", minLength: 1, maxLength: 100, pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$" },
-            targetId: { type: ["string", "null"], minLength: 1, maxLength: 500 },
+            action: {
+              type: "string",
+              enum: ["rename", "hide", "show", "move"],
+            },
+            name: {
+              type: "string",
+              minLength: 1,
+              maxLength: 100,
+              pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+            },
+            targetId: {
+              type: ["string", "null"],
+              minLength: 1,
+              maxLength: 500,
+            },
           },
           required: ["action"],
           additionalProperties: false,
@@ -2357,12 +2596,18 @@ function registerBudgetMaintenanceRoutes(
       const device = await requireDevice(deviceAuth, request, reply);
       if (!device) return reply;
       if (request.validationError) return invalidBudgetRequest(reply);
-      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId)) return transactionNotFound(reply);
+      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
+        return transactionNotFound(reply);
       if (!maintenanceApi) return actualNotConfigured(reply);
       if (!journal) return actualNotConfigured(reply);
       try {
-        if (request.body.action === "rename" && !request.body.name) return invalidBudgetRequest(reply);
-        if (request.body.action === "move" && request.body.targetId === undefined) return invalidBudgetRequest(reply);
+        if (request.body.action === "rename" && !request.body.name)
+          return invalidBudgetRequest(reply);
+        if (
+          request.body.action === "move" &&
+          request.body.targetId === undefined
+        )
+          return invalidBudgetRequest(reply);
         const action = request.body.action;
         const name = request.body.name?.trim();
         const result = await runMaintenanceOperation(
@@ -2389,20 +2634,48 @@ function registerBudgetMaintenanceRoutes(
             return { status: "ok" };
           },
         );
-        logBudgetMaintenanceEvent(request, device, request.params.budgetId, `category_group_${action}`, "success", request.params.groupId);
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          `category_group_${action}`,
+          "success",
+          request.params.groupId,
+        );
         reply.header("cache-control", "no-store");
         return reply.code(200).send(result);
       } catch (error) {
         if (error instanceof BudgetMaintenanceInputError) {
-          logBudgetMaintenanceEvent(request, device, request.params.budgetId, `category_group_${request.body.action}`, "rejected", request.params.groupId);
-          return reply.code(error instanceof MaintenanceOperationConflictError ? 409 : 400).send({
-            error: {
-              code: error instanceof MaintenanceOperationConflictError ? error.code : "invalid_request",
-              message: error.message,
-            },
-          });
+          logBudgetMaintenanceEvent(
+            request,
+            device,
+            request.params.budgetId,
+            `category_group_${request.body.action}`,
+            "rejected",
+            request.params.groupId,
+          );
+          return reply
+            .code(
+              error instanceof MaintenanceOperationConflictError ? 409 : 400,
+            )
+            .send({
+              error: {
+                code:
+                  error instanceof MaintenanceOperationConflictError
+                    ? error.code
+                    : "invalid_request",
+                message: error.message,
+              },
+            });
         }
-        logBudgetMaintenanceEvent(request, device, request.params.budgetId, `category_group_${request.body.action}`, "failed", request.params.groupId);
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          `category_group_${request.body.action}`,
+          "failed",
+          request.params.groupId,
+        );
         reportTransactionFailure("Actual category group change failed", error);
         return actualRequestFailed(reply);
       }
@@ -2419,7 +2692,7 @@ function registerBudgetMaintenanceRoutes(
       schema: {
         tags: ["Budgets"],
         operationId: "manageBudgetCategory",
-        summary: "Hide, show, or reorder an Actual Budget category",
+        summary: "Hide, show, reorder, or move an Actual Budget category",
         security: [{ bearerAuth: [] }],
         params: categoryParamsSchema,
         headers: headersSchema,
@@ -2427,7 +2700,16 @@ function registerBudgetMaintenanceRoutes(
           type: "object",
           properties: {
             action: { type: "string", enum: ["hide", "show", "move"] },
-            targetId: { type: ["string", "null"], minLength: 1, maxLength: 500 },
+            targetId: {
+              type: ["string", "null"],
+              minLength: 1,
+              maxLength: 500,
+            },
+            targetGroupId: {
+              type: ["string", "null"],
+              minLength: 1,
+              maxLength: 500,
+            },
           },
           required: ["action"],
           additionalProperties: false,
@@ -2440,11 +2722,17 @@ function registerBudgetMaintenanceRoutes(
       const device = await requireDevice(deviceAuth, request, reply);
       if (!device) return reply;
       if (request.validationError) return invalidBudgetRequest(reply);
-      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId)) return transactionNotFound(reply);
+      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
+        return transactionNotFound(reply);
       if (!maintenanceApi) return actualNotConfigured(reply);
       if (!journal) return actualNotConfigured(reply);
       try {
-        if (request.body.action === "move" && request.body.targetId === undefined) return invalidBudgetRequest(reply);
+        if (
+          request.body.action === "move" &&
+          request.body.targetId === undefined &&
+          request.body.targetGroupId === undefined
+        )
+          return invalidBudgetRequest(reply);
         const action = request.body.action;
         const result = await runMaintenanceOperation(
           journal,
@@ -2453,7 +2741,11 @@ function registerBudgetMaintenanceRoutes(
           request.params.budgetId,
           `category-${action}`,
           request.params.categoryId,
-          { action, targetId: request.body.targetId ?? null },
+          {
+            action,
+            targetId: request.body.targetId ?? null,
+            targetGroupId: request.body.targetGroupId ?? null,
+          },
           async () => {
             await maintenanceApi.manageCategory(
               request.params.budgetId,
@@ -2461,24 +2753,53 @@ function registerBudgetMaintenanceRoutes(
               action,
               request.body.targetId,
               request.headers["x-budget-encryption-password"],
+              request.body.targetGroupId,
             );
             return { status: "ok" };
           },
         );
-        logBudgetMaintenanceEvent(request, device, request.params.budgetId, `category_${action}`, "success", request.params.categoryId);
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          `category_${action}`,
+          "success",
+          request.params.categoryId,
+        );
         reply.header("cache-control", "no-store");
         return reply.code(200).send(result);
       } catch (error) {
         if (error instanceof BudgetMaintenanceInputError) {
-          logBudgetMaintenanceEvent(request, device, request.params.budgetId, `category_${request.body.action}`, "rejected", request.params.categoryId);
-          return reply.code(error instanceof MaintenanceOperationConflictError ? 409 : 400).send({
-            error: {
-              code: error instanceof MaintenanceOperationConflictError ? error.code : "invalid_request",
-              message: error.message,
-            },
-          });
+          logBudgetMaintenanceEvent(
+            request,
+            device,
+            request.params.budgetId,
+            `category_${request.body.action}`,
+            "rejected",
+            request.params.categoryId,
+          );
+          return reply
+            .code(
+              error instanceof MaintenanceOperationConflictError ? 409 : 400,
+            )
+            .send({
+              error: {
+                code:
+                  error instanceof MaintenanceOperationConflictError
+                    ? error.code
+                    : "invalid_request",
+                message: error.message,
+              },
+            });
         }
-        logBudgetMaintenanceEvent(request, device, request.params.budgetId, `category_${request.body.action}`, "failed", request.params.categoryId);
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          `category_${request.body.action}`,
+          "failed",
+          request.params.categoryId,
+        );
         reportTransactionFailure("Actual category change failed", error);
         return actualRequestFailed(reply);
       }
@@ -2726,7 +3047,12 @@ function registerBudgetMaintenanceRoutes(
           properties: {
             action: {
               type: "string",
-              enum: ["copy-last-month", "hold-next-month", "reset-hold", "apply-template"],
+              enum: [
+                "copy-last-month",
+                "hold-next-month",
+                "reset-hold",
+                "apply-template",
+              ],
             },
             amountMinor: {
               type: "integer",
@@ -2769,13 +3095,15 @@ function registerBudgetMaintenanceRoutes(
       if (!journal) return actualNotConfigured(reply);
       const action = request.body.action;
       if (
-        (action === "hold-next-month" && request.body.amountMinor === undefined) ||
+        (action === "hold-next-month" &&
+          request.body.amountMinor === undefined) ||
         (action !== "hold-next-month" && request.body.amountMinor !== undefined)
       ) {
         return invalidBudgetRequest(reply);
       }
       if (
-        (action === "apply-template" && request.body.assignments === undefined) ||
+        (action === "apply-template" &&
+          request.body.assignments === undefined) ||
         (action !== "apply-template" && request.body.assignments !== undefined)
       ) {
         return invalidBudgetRequest(reply);
@@ -3270,8 +3598,16 @@ function registerBudgetMaintenanceRoutes(
             amountRangeMinor: {
               type: "object",
               properties: {
-                num1: { type: "integer", minimum: -1_000_000_000, maximum: 1_000_000_000 },
-                num2: { type: "integer", minimum: -1_000_000_000, maximum: 1_000_000_000 },
+                num1: {
+                  type: "integer",
+                  minimum: -1_000_000_000,
+                  maximum: 1_000_000_000,
+                },
+                num2: {
+                  type: "integer",
+                  minimum: -1_000_000_000,
+                  maximum: 1_000_000_000,
+                },
               },
               required: ["num1", "num2"],
               additionalProperties: false,
@@ -3286,7 +3622,10 @@ function registerBudgetMaintenanceRoutes(
                 {
                   type: "object",
                   properties: {
-                    frequency: { type: "string", enum: ["daily", "weekly", "monthly", "yearly"] },
+                    frequency: {
+                      type: "string",
+                      enum: ["daily", "weekly", "monthly", "yearly"],
+                    },
                     interval: { type: "integer", minimum: 1, maximum: 999 },
                     patterns: {
                       type: "array",
@@ -3295,18 +3634,46 @@ function registerBudgetMaintenanceRoutes(
                         type: "object",
                         properties: {
                           value: { type: "integer", minimum: -31, maximum: 31 },
-                          type: { type: "string", enum: ["SU", "MO", "TU", "WE", "TH", "FR", "SA", "day"] },
+                          type: {
+                            type: "string",
+                            enum: [
+                              "SU",
+                              "MO",
+                              "TU",
+                              "WE",
+                              "TH",
+                              "FR",
+                              "SA",
+                              "day",
+                            ],
+                          },
                         },
                         required: ["value", "type"],
                         additionalProperties: false,
                       },
                     },
                     skipWeekend: { type: "boolean" },
-                    start: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
-                    endMode: { type: "string", enum: ["never", "after_n_occurrences", "on_date"] },
-                    endOccurrences: { type: "integer", minimum: 1, maximum: 100_000 },
-                    endDate: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
-                    weekendSolveMode: { type: "string", enum: ["before", "after"] },
+                    start: {
+                      type: "string",
+                      pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+                    },
+                    endMode: {
+                      type: "string",
+                      enum: ["never", "after_n_occurrences", "on_date"],
+                    },
+                    endOccurrences: {
+                      type: "integer",
+                      minimum: 1,
+                      maximum: 100_000,
+                    },
+                    endDate: {
+                      type: "string",
+                      pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+                    },
+                    weekendSolveMode: {
+                      type: "string",
+                      enum: ["before", "after"],
+                    },
                   },
                   required: ["frequency", "start"],
                   additionalProperties: false,
@@ -3348,7 +3715,8 @@ function registerBudgetMaintenanceRoutes(
       const hasEditFields = Object.keys(edit).length > 0;
       if (
         (action === "rename" && !name) ||
-        (action === "rename" && Object.keys(edit).some((field) => field !== "name")) ||
+        (action === "rename" &&
+          Object.keys(edit).some((field) => field !== "name")) ||
         (action === "edit" && !hasEditFields) ||
         (!(["rename", "edit"] as string[]).includes(action) && hasEditFields)
       ) {
@@ -3359,7 +3727,7 @@ function registerBudgetMaintenanceRoutes(
         if (action === "rename") patch.name = name!;
         if (action === "edit") {
           for (const [field, value] of Object.entries(edit)) {
-            if (value !== undefined) patch[field] = value as JsonValue;
+            patch[field] = value as JsonValue;
           }
         }
         const result = await runMaintenanceOperation(
@@ -3578,6 +3946,24 @@ async function runMaintenanceOperation<T extends JsonValue>(
     "operation_uncertain",
     "This change was not applied. Submit it again with a new request.",
   );
+}
+
+function statementImportJournalPatch(
+  transactions: readonly StatementTransactionImport[],
+): { rowCount: number; rowsHash: string } {
+  const canonicalRows = transactions
+    .map((transaction) => ({
+      date: transaction.date,
+      amountMinor: transaction.amountMinor,
+      payeeName: transaction.payeeName,
+      ...(transaction.notes === undefined ? {} : { notes: transaction.notes }),
+      importedId: transaction.importedId,
+    }))
+    .sort((left, right) => left.importedId.localeCompare(right.importedId));
+  const rowsHash = createHash("sha256")
+    .update(JSON.stringify(canonicalRows))
+    .digest("hex");
+  return { rowCount: transactions.length, rowsHash };
 }
 
 function logBudgetMaintenanceEvent(
