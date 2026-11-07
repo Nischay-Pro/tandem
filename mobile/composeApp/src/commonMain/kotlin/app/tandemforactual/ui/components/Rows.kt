@@ -242,7 +242,7 @@ internal fun SectionCard(
     animateDetail: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    SectionCardLayout(title, detail, action, onClick, animateDetail, null, content)
+    SectionCardLayout(title, detail, action, null, onClick, animateDetail, null, content)
 }
 
 private data class SectionCollapse(
@@ -255,13 +255,14 @@ internal fun CollapsibleSectionCard(
     title: String,
     detail: String? = null,
     action: String? = null,
+    actionColor: Color? = null,
     expanded: Boolean,
     onToggleExpanded: () -> Unit,
     onClick: (() -> Unit)? = null,
     animateDetail: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    SectionCardLayout(title, detail, action, onClick, animateDetail, SectionCollapse(expanded, onToggleExpanded), content)
+    SectionCardLayout(title, detail, action, actionColor, onClick, animateDetail, SectionCollapse(expanded, onToggleExpanded), content)
 }
 
 @Composable
@@ -269,6 +270,7 @@ private fun SectionCardLayout(
     title: String,
     detail: String?,
     action: String?,
+    actionColor: Color?,
     onClick: (() -> Unit)?,
     animateDetail: Boolean,
     collapse: SectionCollapse?,
@@ -314,7 +316,7 @@ private fun SectionCardLayout(
                     if (action != null) {
                         Text(
                             action,
-                            color = palette.accent,
+                            color = actionColor ?: palette.accent,
                             fontSize = TandemTypography.label,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,

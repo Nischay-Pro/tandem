@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -65,6 +66,72 @@ internal fun SecondaryButton(
     onClick: () -> Unit,
 ) {
     TandemButton(TandemButtonStyle.SECONDARY, label, enabled, modifier, loading = false, onClick = onClick)
+}
+
+internal enum class TandemActionButtonTone {
+    PRIMARY,
+    NEUTRAL,
+    DESTRUCTIVE,
+}
+
+@Composable
+internal fun TandemActionButton(
+    label: String,
+    tone: TandemActionButtonTone,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+    loading: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    val shape = RoundedCornerShape(TandemShapes.medium)
+    val containerColor =
+        when (tone) {
+            TandemActionButtonTone.PRIMARY -> if (enabled) palette.accent else palette.raised
+            TandemActionButtonTone.NEUTRAL -> palette.surface
+            TandemActionButtonTone.DESTRUCTIVE -> palette.negative.copy(alpha = 0.12f)
+        }
+    val contentColor =
+        when {
+            !enabled -> palette.muted
+            tone == TandemActionButtonTone.PRIMARY -> palette.accentContent
+            tone == TandemActionButtonTone.DESTRUCTIVE -> palette.negative
+            else -> palette.text
+        }
+    val outlineColor =
+        when (tone) {
+            TandemActionButtonTone.PRIMARY -> containerColor
+            TandemActionButtonTone.NEUTRAL -> palette.border
+            TandemActionButtonTone.DESTRUCTIVE -> palette.negative.copy(alpha = 0.32f)
+        }
+    Row(
+        modifier =
+            modifier
+                .height(50.dp)
+                .clip(shape)
+                .background(containerColor)
+                .border(1.dp, outlineColor, shape)
+                .clickable(enabled = enabled && !loading, role = Role.Button, onClickLabel = label, onClick = onClick)
+                .padding(horizontal = TandemSpacing.small),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (loading) {
+            TandemLoadingIndicator(Modifier.size(16.dp), contentColor, 2.dp)
+        } else if (icon != null) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(17.dp), tint = contentColor)
+        }
+        Text(
+            label,
+            modifier = if (loading || icon != null) Modifier.padding(start = TandemSpacing.extraSmall) else Modifier,
+            color = contentColor,
+            fontSize = TandemTypography.label,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 
 @Composable

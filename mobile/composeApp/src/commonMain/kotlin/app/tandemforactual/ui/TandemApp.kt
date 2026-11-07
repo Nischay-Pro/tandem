@@ -54,6 +54,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListScope
@@ -138,6 +139,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.data.database.BudgetRecordEntity
@@ -165,6 +168,8 @@ import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SelectableTile
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemIconButton
+import app.tandemforactual.ui.components.TandemActionButton
+import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.components.TandemLoadingIndicator
 import app.tandemforactual.ui.components.crossfadeTransitions
 import app.tandemforactual.ui.generated.resources.Res
@@ -187,7 +192,13 @@ import app.tandemforactual.ui.reports.ReportRangePreset
 import app.tandemforactual.ui.reports.ReportWindow
 import app.tandemforactual.ui.reports.reportMonthLabel
 import com.composables.icons.lucide.Bell
+import com.composables.icons.lucide.Baby
+import com.composables.icons.lucide.Banknote
+import com.composables.icons.lucide.Bike
+import com.composables.icons.lucide.BookOpen
 import com.composables.icons.lucide.BriefcaseBusiness
+import com.composables.icons.lucide.Building2
+import com.composables.icons.lucide.BusFront
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.CarFront
 import com.composables.icons.lucide.Carrot
@@ -204,44 +215,66 @@ import com.composables.icons.lucide.CloudCheck
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Coffee
+import com.composables.icons.lucide.Cat
 import com.composables.icons.lucide.CreditCard
 import com.composables.icons.lucide.Database
+import com.composables.icons.lucide.Dog
+import com.composables.icons.lucide.Droplets
+import com.composables.icons.lucide.Dumbbell
 import com.composables.icons.lucide.Eye
+import com.composables.icons.lucide.Flower2
 import com.composables.icons.lucide.FingerprintPattern
 import com.composables.icons.lucide.FolderKey
+import com.composables.icons.lucide.Fuel
+import com.composables.icons.lucide.Gamepad2
+import com.composables.icons.lucide.Gift
+import com.composables.icons.lucide.GraduationCap
 import com.composables.icons.lucide.HandCoins
+import com.composables.icons.lucide.HeartHandshake
 import com.composables.icons.lucide.HeartPulse
 import com.composables.icons.lucide.House
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.KeyRound
+import com.composables.icons.lucide.Leaf
 import com.composables.icons.lucide.Landmark
 import com.composables.icons.lucide.LayoutDashboard
+import com.composables.icons.lucide.Lightbulb
 import com.composables.icons.lucide.LockKeyhole
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Minus
+import com.composables.icons.lucide.Music2
 import com.composables.icons.lucide.NotepadText
 import com.composables.icons.lucide.PaintbrushVertical
 import com.composables.icons.lucide.Palette
 import com.composables.icons.lucide.PawPrint
 import com.composables.icons.lucide.Pencil
+import com.composables.icons.lucide.Pill
 import com.composables.icons.lucide.PiggyBank
 import com.composables.icons.lucide.Plane
 import com.composables.icons.lucide.Plus
+import com.composables.icons.lucide.PlugZap
 import com.composables.icons.lucide.Receipt
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.Server
 import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.Shirt
+import com.composables.icons.lucide.ShoppingBag
 import com.composables.icons.lucide.ShoppingCart
+import com.composables.icons.lucide.Sofa
 import com.composables.icons.lucide.Smartphone
+import com.composables.icons.lucide.Stethoscope
 import com.composables.icons.lucide.SunMoon
 import com.composables.icons.lucide.Tags
+import com.composables.icons.lucide.TrainFront
 import com.composables.icons.lucide.Trash2
+import com.composables.icons.lucide.Trees
+import com.composables.icons.lucide.Tv
 import com.composables.icons.lucide.Utensils
 import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.Wallpaper
 import com.composables.icons.lucide.Wifi
+import com.composables.icons.lucide.Wrench
 import com.composables.icons.lucide.X
 import com.composables.icons.lucide.Zap
 import kotlinx.coroutines.CancellationException
@@ -1093,27 +1126,101 @@ private val categoryIconChoices =
     listOf(
         "Automatic",
         "Home",
-        "Food",
+        "Rent",
+        "Furniture",
+        "Maintenance",
+        "Utilities",
+        "Water",
+        "Groceries",
+        "Dining",
+        "Coffee",
         "Shopping",
+        "Clothing",
         "Travel",
-        "Transport",
+        "Car",
+        "Fuel",
+        "Transit",
+        "Train",
+        "Bike",
         "Health",
+        "Medicine",
+        "Dental",
         "Pet",
+        "Cat",
+        "Dog",
+        "Family",
+        "Education",
+        "Books",
+        "Gifts",
         "Income",
+        "Paycheck",
+        "Savings",
         "Money",
+        "Insurance",
+        "Phone",
+        "Internet",
+        "Electricity",
+        "Entertainment",
+        "Music",
+        "Games",
+        "Fitness",
+        "Garden",
+        "Plants",
+        "Charity",
+        "Business",
+        "Taxes",
+        "Other",
     )
 
 private fun categoryIconVector(choice: String): ImageVector? =
     when (choice) {
         "Home" -> Lucide.House
         "Food" -> Lucide.Carrot
-        "Shopping" -> Lucide.ShoppingCart
-        "Travel" -> Lucide.Plane
         "Transport" -> Lucide.CarFront
+        "Rent" -> Lucide.Building2
+        "Furniture" -> Lucide.Sofa
+        "Maintenance" -> Lucide.Wrench
+        "Utilities" -> Lucide.PlugZap
+        "Water" -> Lucide.Droplets
+        "Groceries" -> Lucide.Carrot
+        "Dining" -> Lucide.Utensils
+        "Coffee" -> Lucide.Coffee
+        "Shopping" -> Lucide.ShoppingBag
+        "Clothing" -> Lucide.Shirt
+        "Travel" -> Lucide.Plane
+        "Car" -> Lucide.CarFront
+        "Fuel" -> Lucide.Fuel
+        "Transit" -> Lucide.BusFront
+        "Train" -> Lucide.TrainFront
+        "Bike" -> Lucide.Bike
         "Health" -> Lucide.HeartPulse
+        "Medicine" -> Lucide.Pill
+        "Dental" -> Lucide.Stethoscope
         "Pet" -> Lucide.PawPrint
+        "Cat" -> Lucide.Cat
+        "Dog" -> Lucide.Dog
+        "Family" -> Lucide.Baby
+        "Education" -> Lucide.GraduationCap
+        "Books" -> Lucide.BookOpen
+        "Gifts" -> Lucide.Gift
         "Income" -> Lucide.BriefcaseBusiness
+        "Paycheck" -> Lucide.Banknote
+        "Savings" -> Lucide.PiggyBank
         "Money" -> Lucide.WalletCards
+        "Insurance" -> Lucide.ShieldCheck
+        "Phone" -> Lucide.Smartphone
+        "Internet" -> Lucide.Wifi
+        "Electricity" -> Lucide.Zap
+        "Entertainment" -> Lucide.Tv
+        "Music" -> Lucide.Music2
+        "Games" -> Lucide.Gamepad2
+        "Fitness" -> Lucide.Dumbbell
+        "Garden" -> Lucide.Flower2
+        "Plants" -> Lucide.Leaf
+        "Charity" -> Lucide.HeartHandshake
+        "Business" -> Lucide.Landmark
+        "Taxes" -> Lucide.Receipt
+        "Other" -> Lucide.NotepadText
         else -> null
     }
 
@@ -4519,6 +4626,12 @@ private fun BudgetScreen(
     val conflictCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "conflict" } else 0
     val rejectedCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "rejected" } else 0
     val readyToAssignMinor = if (isLiveBudget) liveBudgetMonth?.toBudgetMinor ?: 0 else 124_000L
+    val readyToAssignColor =
+        when {
+            readyToAssignMinor < 0 -> palette.negative
+            readyToAssignMinor > 0 -> palette.positive
+            else -> palette.muted
+        }
     val summaryKey =
         if (isLiveBudget) {
             "live:${state.selectedBudgetId}:summary:${state.selectedMonthId}"
@@ -4612,6 +4725,7 @@ private fun BudgetScreen(
                         "${state.selectedMonth} summary",
                         if (isLiveBudget) "${groups.sumOf { it.categories.size }} categories" else "Ready to assign",
                         state.formatCurrency(readyToAssignMinor),
+                        actionColor = readyToAssignColor,
                         expanded = summaryExpanded,
                         onToggleExpanded = { state.toggleBudgetSection(summaryKey) },
                     ) {}
@@ -4626,7 +4740,7 @@ private fun BudgetScreen(
                                 if (isLiveBudget) state.selectedMonth else "On track",
                                 state.formatCurrency(readyToAssignMinor),
                                 leading = RowLeading.Icon(Lucide.WalletCards),
-                                options = ListRowOptions(trailingColor = palette.positive),
+                                options = ListRowOptions(trailingColor = readyToAssignColor),
                             )
                         }
                     }
@@ -5082,6 +5196,7 @@ private fun CategoryDetailScreen(
     var showEditDialog by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf(false) }
     var showDeleteDialog by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf(false) }
     var editName by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf("") }
+    var iconSearch by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf("") }
     var selectedIconChoice by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf("Automatic") }
     var deleteDestinationId by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf<String?>(null) }
     val currentIncomeType =
@@ -5115,7 +5230,13 @@ private fun CategoryDetailScreen(
                         tint = tandemPalette.accent,
                     ) {
                         editName = category.name
-                        selectedIconChoice = state.categoryIconChoice(category.id) ?: "Automatic"
+                        selectedIconChoice =
+                            when (state.categoryIconChoice(category.id)) {
+                                "Food" -> "Groceries"
+                                "Transport" -> "Car"
+                                else -> state.categoryIconChoice(category.id) ?: "Automatic"
+                            }
+                        iconSearch = ""
                         mobileSession.clearBudgetActionMessage()
                         showEditDialog = true
                     }
@@ -5156,151 +5277,254 @@ private fun CategoryDetailScreen(
         }
     }
     if (showEditDialog && category != null) {
-        AlertDialog(
+        Dialog(
             onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showEditDialog = false },
-            title = { Text("Edit category", color = tandemPalette.text) },
-            text = {
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 520.dp).padding(horizontal = 16.dp).heightIn(max = 720.dp)) {
                 Column(
-                    Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                    Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
                 ) {
-                    TextFieldCard("Name", editName, { editName = it }, TextFieldOptions(placeholder = category.name))
-                    Text("Icon", color = tandemPalette.muted, fontSize = TandemTypography.caption, fontWeight = FontWeight.SemiBold)
-                    categoryIconChoices.chunked(3).forEach { rowChoices ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                            rowChoices.forEach { choice ->
-                                val icon = categoryIconVector(choice) ?: financeIcon(category.name) ?: Lucide.Receipt
-                                SelectableTile(
-                                    selected = selectedIconChoice == choice,
-                                    contentDescription = choice,
-                                    onSelect = { selectedIconChoice = choice },
-                                    modifier = Modifier.weight(1f).height(68.dp),
-                                    shape = RoundedCornerShape(TandemShapes.control),
-                                    selectedBackground = tandemPalette.accentSurface,
-                                    unselectedBackground = tandemPalette.surface,
-                                    selectedBorder = tandemPalette.accent,
-                                    unselectedBorder = tandemPalette.border,
-                                ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        Box(
+                            Modifier.size(42.dp).clip(CircleShape).background(tandemPalette.accentSurface),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Lucide.Pencil, contentDescription = null, modifier = Modifier.size(20.dp), tint = tandemPalette.accent)
+                        }
+                        Text(
+                            "Edit category",
+                            modifier = Modifier.weight(1f),
+                            color = tandemPalette.text,
+                            fontSize = TandemTypography.sectionTitle,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        TandemIconButton(
+                            Lucide.X,
+                            "Close",
+                            sizeDp = 40,
+                            iconSizeDp = 18,
+                            containerColor = tandemPalette.raised,
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                        ) { showEditDialog = false }
+                    }
+                    Column(
+                        Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                    ) {
+                        TextFieldCard("Name", editName, { editName = it }, TextFieldOptions(placeholder = category.name))
+                        LabelText("Choose an icon")
+                        TextFieldCard("Find an icon", iconSearch, { iconSearch = it }, TextFieldOptions(placeholder = "e.g. groceries, rent"))
+                        val visibleIconChoices = categoryIconChoices.filter { it.contains(iconSearch.trim(), ignoreCase = true) }
+                        if (visibleIconChoices.isEmpty()) {
+                            BodyText("No icons match that search.")
+                        }
+                        visibleIconChoices.chunked(4).forEach { rowChoices ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                                rowChoices.forEach { choice ->
+                                    val icon = categoryIconVector(choice) ?: financeIcon(category.name) ?: Lucide.Receipt
+                                    SelectableTile(
+                                        selected = selectedIconChoice == choice,
+                                        contentDescription = if (choice == "Automatic") "Automatic icon" else choice,
+                                        onSelect = { selectedIconChoice = choice },
+                                        modifier = Modifier.weight(1f).height(66.dp),
+                                        shape = RoundedCornerShape(TandemShapes.control),
+                                        selectedBackground = tandemPalette.accentSurface,
+                                        unselectedBackground = tandemPalette.surface,
+                                        selectedBorder = tandemPalette.accent,
+                                        unselectedBorder = tandemPalette.border,
                                     ) {
-                                        Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp), tint = tandemPalette.accent)
-                                        Text(choice, color = tandemPalette.text, fontSize = TandemTypography.micro, maxLines = 1)
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
+                                        ) {
+                                            Icon(icon, contentDescription = null, modifier = Modifier.size(23.dp), tint = tandemPalette.accent)
+                                            Text(
+                                                if (choice == "Automatic") "Auto" else choice,
+                                                color = tandemPalette.text,
+                                                fontSize = TandemTypography.micro,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
                                     }
                                 }
+                                repeat(4 - rowChoices.size) { Spacer(Modifier.weight(1f)) }
                             }
-                            repeat(3 - rowChoices.size) { Spacer(Modifier.weight(1f)) }
                         }
+                        mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
                     }
-                    mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !mobileSession.isPerformingBudgetAction && editName.isNotBlank(),
-                    onClick = {
-                        scope.launch {
-                            val renamed =
-                                editName.trim() == category.name ||
-                                    mobileSession.renameBudgetCategory(
-                                        state.selectedBudgetId,
-                                        category.id,
-                                        editName,
-                                        state.encryptedPassword.takeIf { it.isNotBlank() },
-                                    )
-                            if (renamed) {
-                                state.setCategoryIconChoice(category.id, selectedIconChoice)
-                                showEditDialog = false
-                            }
-                        }
-                    },
-                ) {
-                    Text(if (mobileSession.isPerformingBudgetAction) "Saving…" else "Save", color = tandemPalette.accent)
-                }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(
-                        enabled = !mobileSession.isPerformingBudgetAction,
-                        onClick = {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        TandemActionButton(
+                            "Delete",
+                            TandemActionButtonTone.DESTRUCTIVE,
+                            modifier = Modifier.weight(1f),
+                            icon = Lucide.Trash2,
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                        ) {
                             showEditDialog = false
                             deleteDestinationId = null
                             mobileSession.clearBudgetActionMessage()
                             showDeleteDialog = true
-                        },
-                    ) {
-                        Text("Delete", color = tandemPalette.negative)
-                    }
-                    TextButton(
-                        enabled = !mobileSession.isPerformingBudgetAction,
-                        onClick = { showEditDialog = false },
-                    ) {
-                        Text("Cancel", color = tandemPalette.muted)
-                    }
-                }
-            },
-            backgroundColor = tandemPalette.surface,
-        )
-    }
-    if (showDeleteDialog && category != null) {
-        AlertDialog(
-            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showDeleteDialog = false },
-            title = { Text("Delete ${category.name}?", color = tandemPalette.text) },
-            text = {
-                Column(
-                    Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                ) {
-                    BodyText("Move its transactions to a category or leave them unassigned.")
-                    ChoiceRow(
-                        "Unassigned",
-                        selected = deleteDestinationId == null,
-                        onClick = { deleteDestinationId = null },
-                    )
-                    deleteDestinations.forEach { destination ->
-                        ChoiceRow(
-                            destination.name,
-                            selected = deleteDestinationId == destination.id,
-                            onClick = { deleteDestinationId = destination.id },
-                        )
-                    }
-                    mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !mobileSession.isPerformingBudgetAction,
-                    onClick = {
-                        scope.launch {
-                            val deleted =
-                                mobileSession.deleteBudgetCategory(
-                                    state.selectedBudgetId,
-                                    category.id,
-                                    deleteDestinationId,
-                                    state.encryptedPassword.takeIf { it.isNotBlank() },
-                                )
-                            if (deleted) {
-                                state.setCategoryIconChoice(category.id, "Automatic")
-                                showDeleteDialog = false
-                                navigation.back()
+                        }
+                        TandemActionButton(
+                            "Cancel",
+                            TandemActionButtonTone.NEUTRAL,
+                            modifier = Modifier.weight(1f),
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                        ) { showEditDialog = false }
+                        TandemActionButton(
+                            if (mobileSession.isPerformingBudgetAction) "Saving…" else "Save",
+                            TandemActionButtonTone.PRIMARY,
+                            modifier = Modifier.weight(1f),
+                            enabled = !mobileSession.isPerformingBudgetAction && editName.isNotBlank(),
+                            loading = mobileSession.isPerformingBudgetAction,
+                        ) {
+                            scope.launch {
+                                val renamed =
+                                    editName.trim() == category.name ||
+                                        mobileSession.renameBudgetCategory(
+                                            state.selectedBudgetId,
+                                            category.id,
+                                            editName,
+                                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                                        )
+                                if (renamed) {
+                                    state.setCategoryIconChoice(category.id, selectedIconChoice)
+                                    showEditDialog = false
+                                }
                             }
                         }
-                    },
-                ) {
-                    Text(if (mobileSession.isPerformingBudgetAction) "Deleting…" else "Delete category", color = tandemPalette.negative)
+                    }
                 }
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = !mobileSession.isPerformingBudgetAction,
-                    onClick = { showDeleteDialog = false },
+            }
+        }
+    }
+    if (showDeleteDialog && category != null) {
+        Dialog(
+            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showDeleteDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 520.dp).padding(horizontal = 16.dp).heightIn(max = 720.dp)) {
+                Column(
+                    Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
                 ) {
-                    Text("Cancel", color = tandemPalette.muted)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        Box(
+                            Modifier.size(42.dp).clip(CircleShape).background(tandemPalette.negative.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Lucide.Trash2, contentDescription = null, modifier = Modifier.size(20.dp), tint = tandemPalette.negative)
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "Delete category",
+                                color = tandemPalette.text,
+                                fontSize = TandemTypography.sectionTitle,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                category.name,
+                                color = tandemPalette.muted,
+                                fontSize = TandemTypography.caption,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        TandemIconButton(
+                            Lucide.X,
+                            "Close",
+                            sizeDp = 40,
+                            iconSizeDp = 18,
+                            containerColor = tandemPalette.raised,
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                        ) { showDeleteDialog = false }
+                    }
+                    LabelText("Move transactions to")
+                    Column(
+                        Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                    ) {
+                        val destinations: List<Pair<String?, String>> =
+                            listOf(null to "Leave unassigned") + deleteDestinations.map { it.id to it.name }
+                        destinations.forEach { (destinationId, destinationName) ->
+                            val selected = deleteDestinationId == destinationId
+                            SelectableTile(
+                                selected = selected,
+                                contentDescription = "Move to $destinationName",
+                                onSelect = { deleteDestinationId = destinationId },
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                shape = RoundedCornerShape(TandemShapes.control),
+                                selectedBackground = tandemPalette.accentSurface,
+                                unselectedBackground = tandemPalette.surface,
+                                selectedBorder = tandemPalette.accent,
+                                unselectedBorder = tandemPalette.border,
+                            ) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.medium),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                                ) {
+                                    Icon(
+                                        if (destinationId == null) Lucide.CircleDot else state.categoryIconFor(destinationId, destinationName),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(21.dp),
+                                        tint = tandemPalette.accent,
+                                    )
+                                    Text(
+                                        destinationName,
+                                        modifier = Modifier.weight(1f),
+                                        color = tandemPalette.text,
+                                        fontSize = TandemTypography.body,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    if (selected) Icon(Lucide.Check, contentDescription = "Selected", modifier = Modifier.size(18.dp), tint = tandemPalette.accent)
+                                }
+                            }
+                        }
+                        mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        TandemActionButton(
+                            "Cancel",
+                            TandemActionButtonTone.NEUTRAL,
+                            modifier = Modifier.weight(1f),
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                        ) { showDeleteDialog = false }
+                        TandemActionButton(
+                            if (mobileSession.isPerformingBudgetAction) "Deleting…" else "Delete",
+                            TandemActionButtonTone.DESTRUCTIVE,
+                            modifier = Modifier.weight(1f),
+                            icon = Lucide.Trash2,
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                            loading = mobileSession.isPerformingBudgetAction,
+                        ) {
+                            scope.launch {
+                                val deleted =
+                                    mobileSession.deleteBudgetCategory(
+                                        state.selectedBudgetId,
+                                        category.id,
+                                        deleteDestinationId,
+                                        state.encryptedPassword.takeIf { it.isNotBlank() },
+                                    )
+                                if (deleted) {
+                                    state.setCategoryIconChoice(category.id, "Automatic")
+                                    showDeleteDialog = false
+                                    navigation.back()
+                                }
+                            }
+                        }
+                    }
                 }
-            },
-            backgroundColor = tandemPalette.surface,
-        )
+            }
+        }
     }
 }
 
