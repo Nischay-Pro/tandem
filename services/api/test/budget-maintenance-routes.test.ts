@@ -35,6 +35,9 @@ async function createApi(
     runBankSync: vi.fn(async () => undefined),
     createAccount: vi.fn(async () => undefined),
     createCategory: vi.fn(async () => "category-created"),
+    createCategoryGroup: vi.fn(async () => "category-group-created"),
+    manageCategoryGroup: vi.fn(async () => undefined),
+    manageCategory: vi.fn(async () => undefined),
     createPayee: vi.fn(async () => "payee-created"),
     renamePayee: vi.fn(async () => undefined),
     mergePayee: vi.fn(async () => undefined),
@@ -49,6 +52,7 @@ async function createApi(
     closeAccount: vi.fn(async () => undefined),
     renameAccount: vi.fn(async () => undefined),
     reopenAccount: vi.fn(async () => undefined),
+    moveAccount: vi.fn(async () => undefined),
     renameCategory: vi.fn(async () => undefined),
     deleteCategory: vi.fn(async () => undefined),
     renameSchedule: vi.fn(async () => undefined),
@@ -184,6 +188,11 @@ const maintenanceRouteCases = (routeBudgetId = budgetId) => [
   },
   {
     method: "POST" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/accounts/account-1/move`,
+    payload: { targetAccountId: null },
+  },
+  {
+    method: "POST" as const,
     url: `/api/v1/budgets/${routeBudgetId}/payees`,
     payload: { name: "Corner Market" },
   },
@@ -196,6 +205,21 @@ const maintenanceRouteCases = (routeBudgetId = budgetId) => [
     method: "POST" as const,
     url: `/api/v1/budgets/${routeBudgetId}/categories`,
     payload: { name: "Dining", categoryGroupId: "group-1" },
+  },
+  {
+    method: "POST" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/category-groups`,
+    payload: { name: "Bills", isIncome: false },
+  },
+  {
+    method: "PATCH" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/category-groups/group-1`,
+    payload: { action: "rename", name: "Needs" },
+  },
+  {
+    method: "POST" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/categories/category-1/actions`,
+    payload: { action: "hide" },
   },
   {
     method: "PUT" as const,
@@ -262,6 +286,72 @@ const injectMaintenanceRequest = (
   });
 
 describe("budget maintenance routes", () => {
+  it("creates and manages category groups and categories with authorized journaled writes", async () => {
+    const fake = await createApi();
+    const created = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/category-groups`,
+      headers: testHeaders(),
+      payload: { name: "  Bills  ", isIncome: false },
+    });
+    const renamed = await fake.app.inject({
+      method: "PATCH",
+      url: `/api/v1/budgets/${budgetId}/category-groups/group-1`,
+      headers: testHeaders(),
+      payload: { action: "rename", name: "  Needs  " },
+    });
+    const reordered = await fake.app.inject({
+      method: "PATCH",
+      url: `/api/v1/budgets/${budgetId}/category-groups/group-1`,
+      headers: testHeaders(),
+      payload: { action: "move", targetId: null },
+    });
+    const hidden = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/categories/category-1/actions`,
+      headers: testHeaders(),
+      payload: { action: "hide" },
+    });
+    const movedAccount = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/accounts/account-1/move`,
+      headers: testHeaders(),
+      payload: { targetAccountId: null },
+    });
+
+    expect([created.statusCode, renamed.statusCode, reordered.statusCode, hidden.statusCode, movedAccount.statusCode]).toEqual([
+      200, 200, 200, 200, 200,
+    ]);
+    expect(created.json()).toEqual({ status: "ok", categoryGroupId: "category-group-created" });
+    expect(fake.budgetMaintenanceApi.createCategoryGroup).toHaveBeenCalledWith(
+      budgetId,
+      "Bills",
+      false,
+      undefined,
+    );
+    expect(fake.budgetMaintenanceApi.manageCategoryGroup).toHaveBeenCalledWith(
+      budgetId,
+      "group-1",
+      "rename",
+      "Needs",
+      undefined,
+      undefined,
+    );
+    expect(fake.budgetMaintenanceApi.manageCategory).toHaveBeenCalledWith(
+      budgetId,
+      "category-1",
+      "hide",
+      undefined,
+      undefined,
+    );
+    expect(fake.budgetMaintenanceApi.moveAccount).toHaveBeenCalledWith(
+      budgetId,
+      "account-1",
+      null,
+      undefined,
+    );
+  });
+
   it("applies auth, validation, budget-scope, and configuration gates to every route", async () => {
     const routes = maintenanceRouteCases();
     const unauthorizedFake = await createApi();

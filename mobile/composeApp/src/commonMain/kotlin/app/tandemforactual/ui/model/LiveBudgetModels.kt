@@ -17,6 +17,7 @@ internal data class LiveAccountSummary(
     val closed: Boolean = false,
     val accountGroupId: String? = null,
     val accountGroupName: String? = null,
+    val sortOrder: Long? = null,
 )
 
 internal data class LiveCategorySummary(
@@ -32,6 +33,7 @@ internal data class LiveCategoryGroupSummary(
     val id: String,
     val name: String,
     val categories: List<LiveCategorySummary>,
+    val isIncome: Boolean = false,
 ) {
     val assignedMinor: Long get() = categories.sumOf { it.assignedMinor }
     val activityMinor: Long get() = categories.sumOf { it.activityMinor }
@@ -98,6 +100,7 @@ internal fun liveAccountSummaries(
             closed = body.booleanValue("closed") ?: false,
             accountGroupId = accountGroupId,
             accountGroupName = accountGroupId?.let(groupNames::get),
+            sortOrder = body.longValue("sort_order"),
         )
     }
 }
@@ -149,6 +152,7 @@ internal fun liveBudgetMonthSummary(
                     id = groupId,
                     name = group.stringValue("name") ?: groupNames[groupId] ?: groupId,
                     categories = categories,
+                    isIncome = group.booleanValue("is_income") ?: group.booleanValue("isIncome") ?: false,
                 )
             }.orEmpty()
     return LiveBudgetMonthSummary(

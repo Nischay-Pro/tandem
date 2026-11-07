@@ -307,6 +307,30 @@ class TandemApiClient(
         }
     }
 
+    suspend fun moveBudgetAccount(
+        budgetId: String,
+        accountId: String,
+        targetAccountId: String?,
+        encryptionPassword: String?,
+    ) {
+        withMaintenanceOperation(maintenanceSignature("account-move", budgetId, accountId, targetAccountId)) { idempotencyKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.moveBudgetAccount(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        accountId = accountId,
+                        body =
+                            buildJsonObject {
+                                put("targetAccountId", targetAccountId?.let(::JsonPrimitive) ?: JsonNull)
+                            }.toMap(),
+                    ),
+                )
+            }
+        }
+    }
+
     suspend fun renameBudgetCategory(
         budgetId: String,
         categoryId: String,
@@ -359,6 +383,89 @@ class TandemApiClient(
                     )
             }
         }
+
+    suspend fun createBudgetCategoryGroup(
+        budgetId: String,
+        name: String,
+        isIncome: Boolean,
+        encryptionPassword: String?,
+    ): String =
+        withMaintenanceOperation(maintenanceSignature("category-group-create", budgetId, name, isIncome.toString())) { idempotencyKey ->
+            withGeneratedApi {
+                BudgetsApi
+                    .createBudgetCategoryGroup(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        body =
+                            buildJsonObject {
+                                put("name", name)
+                                put("isIncome", isIncome)
+                            }.toMap(),
+                    ).fold(
+                        { error -> throw error.toTandemApiException() },
+                        { response ->
+                            val groupId = (response.data["categoryGroupId"] as? JsonPrimitive)?.contentOrNull
+                            verifyApiStatus(isSuccessful = response.isSuccessful, hasExpectedStatus = groupId?.isNotBlank() == true)
+                            groupId ?: throw TandemApiProtocolException("Actual did not return the created category group ID")
+                        },
+                    )
+            }
+        }
+
+    suspend fun manageBudgetCategoryGroup(
+        budgetId: String,
+        groupId: String,
+        action: String,
+        name: String?,
+        targetId: String?,
+        encryptionPassword: String?,
+    ) {
+        withMaintenanceOperation(maintenanceSignature("category-group-$action", budgetId, groupId, name, targetId)) { idempotencyKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.manageBudgetCategoryGroup(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        groupId = groupId,
+                        body =
+                            buildJsonObject {
+                                put("action", action)
+                                if (name != null) put("name", name)
+                                if (action == "move") put("targetId", targetId?.let(::JsonPrimitive) ?: JsonNull)
+                            }.toMap(),
+                    ),
+                )
+            }
+        }
+    }
+
+    suspend fun manageBudgetCategory(
+        budgetId: String,
+        categoryId: String,
+        action: String,
+        targetId: String?,
+        encryptionPassword: String?,
+    ) {
+        withMaintenanceOperation(maintenanceSignature("category-$action", budgetId, categoryId, targetId)) { idempotencyKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.manageBudgetCategory(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        categoryId = categoryId,
+                        body =
+                            buildJsonObject {
+                                put("action", action)
+                                if (action == "move") put("targetId", targetId?.let(::JsonPrimitive) ?: JsonNull)
+                            }.toMap(),
+                    ),
+                )
+            }
+        }
+    }
 
     suspend fun createBudgetPayee(
         budgetId: String,

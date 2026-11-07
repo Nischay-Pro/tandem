@@ -527,6 +527,16 @@ internal class TandemMobileSession(
             apiClient.reopenBudgetAccount(budgetId, accountId, encryptionPassword)
         }
 
+    suspend fun moveBudgetAccount(
+        budgetId: String,
+        accountId: String,
+        targetAccountId: String?,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Couldn’t reorder this account. Try again.") {
+            apiClient.moveBudgetAccount(budgetId, accountId, targetAccountId, encryptionPassword)
+        }
+
     suspend fun markTransactionsReconciled(
         budgetId: String,
         accountId: String,
@@ -663,6 +673,53 @@ internal class TandemMobileSession(
             }
         return categoryId.takeIf { created }
     }
+
+    suspend fun createBudgetCategoryGroup(
+        budgetId: String,
+        name: String,
+        isIncome: Boolean,
+        encryptionPassword: String?,
+    ): String? {
+        val cleanName = name.trim()
+        if (cleanName.isBlank() || cleanName.length > 100) {
+            budgetActionMessage = "Enter a category group name up to 100 characters."
+            return null
+        }
+        var groupId: String? = null
+        val created =
+            performBudgetAction(budgetId, encryptionPassword, "Couldn’t create this category group. Try again.") {
+                groupId = apiClient.createBudgetCategoryGroup(budgetId, cleanName, isIncome, encryptionPassword)
+            }
+        return groupId.takeIf { created }
+    }
+
+    suspend fun manageBudgetCategoryGroup(
+        budgetId: String,
+        groupId: String,
+        action: String,
+        name: String?,
+        targetId: String?,
+        encryptionPassword: String?,
+    ): Boolean {
+        if (action == "rename" && name.isNullOrBlank()) {
+            budgetActionMessage = "Enter a category group name."
+            return false
+        }
+        return performBudgetAction(budgetId, encryptionPassword, "Couldn’t update this category group. Try again.") {
+            apiClient.manageBudgetCategoryGroup(budgetId, groupId, action, name?.trim(), targetId, encryptionPassword)
+        }
+    }
+
+    suspend fun manageBudgetCategory(
+        budgetId: String,
+        categoryId: String,
+        action: String,
+        targetId: String?,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Couldn’t update this category. Try again.") {
+            apiClient.manageBudgetCategory(budgetId, categoryId, action, targetId, encryptionPassword)
+        }
 
     suspend fun createBudgetPayee(
         budgetId: String,

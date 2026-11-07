@@ -113,6 +113,8 @@ function createFake() {
     getCategoryGroups: vi.fn(async () => [
       { id: "group-1", name: "Food", is_income: false, hidden: false },
     ]),
+    createCategoryGroup: vi.fn(async () => "new-group"),
+    updateCategoryGroup: vi.fn(async () => undefined),
     createCategory: vi.fn(async () => "new-category"),
     getPayees: vi.fn(async () => [...payees]),
     getPayeeRules: vi.fn(async () => [...rules]),
@@ -156,9 +158,10 @@ function createFake() {
       ],
     })),
     batchBudgetUpdates: vi.fn(async (work: () => Promise<void>) => work()),
-    updateCategory: vi.fn(async (id: string, fields: { name?: string }) => {
+    updateCategory: vi.fn(async (id: string, fields: { name?: string; hidden?: boolean }) => {
       const category = categories.find((candidate) => candidate.id === id);
       if (category && fields.name) category.name = fields.name;
+      if (category && fields.hidden !== undefined) category.hidden = fields.hidden;
     }),
     deleteCategory: vi.fn(async () => undefined),
     getSchedules: vi.fn(async () => [...schedules]),
@@ -283,11 +286,17 @@ describe("Actual budget maintenance API", () => {
 
     await fake.api.renameAccount("budget-1", "source", "Daily checking");
     await fake.api.reopenAccount("budget-1", "closed");
+    await fake.api.moveAccount("budget-1", "source", "destination");
 
     expect(fake.client.updateAccount).toHaveBeenCalledWith("source", {
       name: "Daily checking",
     });
     expect(fake.client.reopenAccount).toHaveBeenCalledWith("closed");
+    expect(fake.client.internal?.send).toHaveBeenCalledWith("account-move", {
+      id: "source",
+      targetId: "destination",
+      accountGroupId: null,
+    });
     await expect(
       fake.api.renameAccount("budget-1", "missing", "Checking"),
     ).rejects.toThrow("Account does not exist in this budget");
@@ -296,6 +305,9 @@ describe("Actual budget maintenance API", () => {
     );
     await expect(fake.api.reopenAccount("budget-1", "missing")).rejects.toThrow(
       "Account does not exist in this budget",
+    );
+    await expect(fake.api.moveAccount("budget-1", "source", "closed")).rejects.toThrow(
+      "Accounts can only be reordered within the same section",
     );
   });
 
@@ -329,6 +341,38 @@ describe("Actual budget maintenance API", () => {
       fake.api.createCategory("budget-1", " dining ", "group-1"),
     ).rejects.toThrow("A category with this name already exists in that group");
     expect(fake.client.createCategory).toHaveBeenCalledOnce();
+  });
+
+  it("creates, renames, hides, and reorders category groups and categories", async () => {
+    const fake = createFake();
+
+    await expect(fake.api.createCategoryGroup("budget-1", "Bills", false)).resolves.toBe("new-group");
+    expect(fake.client.createCategoryGroup).toHaveBeenCalledWith({
+      name: "Bills",
+      is_income: false,
+      hidden: false,
+    });
+    await fake.api.manageCategoryGroup("budget-1", "group-1", "rename", "Needs");
+    expect(fake.client.updateCategoryGroup).toHaveBeenCalledWith("group-1", { name: "Needs" });
+    await fake.api.manageCategoryGroup("budget-1", "group-1", "hide");
+    expect(fake.client.updateCategoryGroup).toHaveBeenCalledWith("group-1", { hidden: true });
+    await fake.api.manageCategoryGroup("budget-1", "group-1", "move", undefined, null);
+    expect(fake.client.internal?.send).toHaveBeenCalledWith("category-group-move", {
+      id: "group-1",
+      targetId: null,
+    });
+
+    await fake.api.manageCategory("budget-1", "expense", "hide");
+    expect(fake.client.updateCategory).toHaveBeenCalledWith("expense", { hidden: true });
+    await fake.api.manageCategory("budget-1", "expense", "move", "expense-2");
+    expect(fake.client.internal?.send).toHaveBeenCalledWith("category-move", {
+      id: "expense",
+      groupId: "group-1",
+      targetId: "expense-2",
+    });
+    await expect(fake.api.manageCategory("budget-1", "expense", "move", "income")).rejects.toThrow(
+      "Choose a category in the same group",
+    );
   });
 
   it("rejects inactive category groups and defaults missing income metadata", async () => {

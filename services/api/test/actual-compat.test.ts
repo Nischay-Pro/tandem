@@ -406,6 +406,93 @@ describe.skipIf(!compatibilityTestEnabled)(
               endMode: "never",
             },
           });
+          const createGroupResponse = await reconciliationApp.inject({
+            method: "POST",
+            url: `/api/v1/budgets/${budget.groupId}/category-groups`,
+            headers: {
+              ...authorizationHeaders,
+              "idempotency-key": `compat-category-group-create-${randomUUID()}`,
+            },
+            payload: { name: "ABC companion category group", isIncome: false },
+          });
+          expect(createGroupResponse.statusCode).toBe(200);
+          const companionGroupId = createGroupResponse.json().categoryGroupId as string;
+          const createCategoryResponse = await reconciliationApp.inject({
+            method: "POST",
+            url: `/api/v1/budgets/${budget.groupId}/categories`,
+            headers: {
+              ...authorizationHeaders,
+              "idempotency-key": `compat-category-create-${randomUUID()}`,
+            },
+            payload: { name: "ABC companion category", categoryGroupId: companionGroupId },
+          });
+          expect(createCategoryResponse.statusCode).toBe(200);
+          const companionCategoryId = createCategoryResponse.json().categoryId as string;
+          const renameGroupResponse = await reconciliationApp.inject({
+            method: "PATCH",
+            url: `/api/v1/budgets/${budget.groupId}/category-groups/${encodeURIComponent(companionGroupId)}`,
+            headers: {
+              ...authorizationHeaders,
+              "idempotency-key": `compat-category-group-rename-${randomUUID()}`,
+            },
+            payload: { action: "rename", name: "ABC companion group renamed" },
+          });
+          expect(renameGroupResponse.statusCode, JSON.stringify(renameGroupResponse.json())).toBe(200);
+          const moveGroupResponse = await reconciliationApp.inject({
+            method: "PATCH",
+            url: `/api/v1/budgets/${budget.groupId}/category-groups/${encodeURIComponent(companionGroupId)}`,
+            headers: {
+              ...authorizationHeaders,
+              "idempotency-key": `compat-category-group-move-${randomUUID()}`,
+            },
+            payload: { action: "move", targetId: null },
+          });
+          expect(moveGroupResponse.statusCode).toBe(200);
+          const moveCategoryResponse = await reconciliationApp.inject({
+            method: "POST",
+            url: `/api/v1/budgets/${budget.groupId}/categories/${encodeURIComponent(companionCategoryId)}/actions`,
+            headers: {
+              ...authorizationHeaders,
+              "idempotency-key": `compat-category-move-${randomUUID()}`,
+            },
+            payload: { action: "move", targetId: null },
+          });
+          expect(moveCategoryResponse.statusCode).toBe(200);
+          for (const [action, idempotencyKey] of [
+            ["hide", `compat-category-hide-${randomUUID()}`],
+            ["show", `compat-category-show-${randomUUID()}`],
+          ]) {
+            const response = await reconciliationApp.inject({
+              method: "POST",
+              url: `/api/v1/budgets/${budget.groupId}/categories/${encodeURIComponent(companionCategoryId)}/actions`,
+              headers: { ...authorizationHeaders, "idempotency-key": idempotencyKey },
+              payload: { action },
+            });
+            expect(response.statusCode).toBe(200);
+          }
+          for (const [action, idempotencyKey] of [
+            ["hide", `compat-category-group-hide-${randomUUID()}`],
+            ["show", `compat-category-group-show-${randomUUID()}`],
+          ]) {
+            const response = await reconciliationApp.inject({
+              method: "PATCH",
+              url: `/api/v1/budgets/${budget.groupId}/category-groups/${encodeURIComponent(companionGroupId)}`,
+              headers: { ...authorizationHeaders, "idempotency-key": idempotencyKey },
+              payload: { action },
+            });
+            expect(response.statusCode).toBe(200);
+          }
+          const companionGroup = await firstDevice.runBudget(
+            budget.groupId,
+            async () => (await Actual.getCategoryGroups()).find(({ id }) => id === companionGroupId),
+          );
+          const companionCategory = await firstDevice.runBudget(
+            budget.groupId,
+            async () => (await Actual.getCategories()).find(({ id }) => id === companionCategoryId),
+          );
+          expect(companionGroup?.name).toBe("ABC companion group renamed");
+          expect(companionGroup?.hidden).toBe(false);
+          expect(companionCategory?.hidden).toBe(false);
           const defaultCategoryResponse = await reconciliationApp.inject({
             method: "POST",
             url: `/api/v1/budgets/${budget.groupId}/payees/${encodeURIComponent(schedulePayeeId)}/actions`,

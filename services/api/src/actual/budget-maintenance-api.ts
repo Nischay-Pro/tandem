@@ -208,10 +208,37 @@ export interface BudgetMaintenanceApiPort {
     accountId: string,
     encryptionPassword?: string,
   ): Promise<void>;
+  moveAccount(
+    budgetId: string,
+    accountId: string,
+    targetAccountId: string | null,
+    encryptionPassword?: string,
+  ): Promise<void>;
   renameCategory(
     budgetId: string,
     categoryId: string,
     name: string,
+    encryptionPassword?: string,
+  ): Promise<void>;
+  createCategoryGroup(
+    budgetId: string,
+    name: string,
+    isIncome: boolean,
+    encryptionPassword?: string,
+  ): Promise<string>;
+  manageCategoryGroup(
+    budgetId: string,
+    groupId: string,
+    action: "rename" | "hide" | "show" | "move",
+    name?: string,
+    targetGroupId?: string | null,
+    encryptionPassword?: string,
+  ): Promise<void>;
+  manageCategory(
+    budgetId: string,
+    categoryId: string,
+    action: "hide" | "show" | "move",
+    targetCategoryId?: string | null,
     encryptionPassword?: string,
   ): Promise<void>;
   createCategory(
@@ -357,6 +384,8 @@ type ActualBudgetMaintenanceClient = Pick<
   | "getAccountBalance"
   | "getCategories"
   | "getCategoryGroups"
+  | "createCategoryGroup"
+  | "updateCategoryGroup"
   | "setBudgetAmount"
   | "setBudgetCarryover"
   | "holdBudgetForNextMonth"
@@ -381,6 +410,26 @@ type ActualBudgetMaintenanceClient = Pick<
   | "deleteSchedule"
   | "internal"
 >;
+
+async function getAllCategoryGroups(
+  client: ActualBudgetMaintenanceClient,
+): Promise<Awaited<ReturnType<typeof actualApi.getCategoryGroups>>> {
+  const [visible, hidden] = await Promise.all([
+    client.getCategoryGroups(),
+    client.getCategoryGroups({ hidden: true }),
+  ]);
+  return [...new Map([...visible, ...hidden].map((group) => [group.id, group])).values()];
+}
+
+async function getAllCategories(
+  client: ActualBudgetMaintenanceClient,
+): Promise<Awaited<ReturnType<typeof actualApi.getCategories>>> {
+  const [visible, hidden] = await Promise.all([
+    client.getCategories(),
+    client.getCategories({ hidden: true }),
+  ]);
+  return [...new Map([...visible, ...hidden].map((category) => [category.id, category])).values()];
+}
 
 export function createBudgetMaintenanceApi(
   locks: BudgetLockPort,
@@ -465,7 +514,7 @@ export function createBudgetMaintenanceApi(
                 "Choose an active category group",
               );
             }
-            const categories = await client.getCategories({ hidden: true });
+            const categories = await getAllCategories(client);
             const duplicate = categories.some(
               (candidate) =>
                 candidate.group_id === categoryGroupId &&
@@ -1071,6 +1120,52 @@ export function createBudgetMaintenanceApi(
         ),
       );
     },
+    moveAccount(budgetId, accountId, targetAccountId, encryptionPassword) {
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const accounts = await client.getAccounts();
+            const account = accounts.find((candidate) => candidate.id === accountId);
+            if (!account) {
+              throw new BudgetMaintenanceInputError(
+                "Account does not exist in this budget",
+              );
+            }
+            const target = targetAccountId == null
+              ? undefined
+              : accounts.find((candidate) => candidate.id === targetAccountId);
+            if (targetAccountId != null && !target) {
+              throw new BudgetMaintenanceInputError(
+                "Choose an account in this budget",
+              );
+            }
+            if (target?.id === account.id) {
+              throw new BudgetMaintenanceInputError(
+                "Choose a different account position",
+              );
+            }
+            if (target && (Boolean(target.closed) !== Boolean(account.closed) || Boolean(target.offbudget) !== Boolean(account.offbudget))) {
+              throw new BudgetMaintenanceInputError(
+                "Accounts can only be reordered within the same section",
+              );
+            }
+            const internal = client.internal;
+            if (!internal) {
+              throw new BudgetMaintenanceInputError(
+                "This Actual version does not support account ordering",
+              );
+            }
+            await internal.send("account-move", {
+              id: accountId,
+              targetId: targetAccountId,
+              accountGroupId: account.account_group_id ?? null,
+            });
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
     renameCategory(budgetId, categoryId, name, encryptionPassword) {
       return locks.withBudgetLock(budgetId, () =>
         session.runBudget(
@@ -1087,6 +1182,176 @@ export function createBudgetMaintenanceApi(
             if (category.name !== name) {
               await client.updateCategory(categoryId, { name });
             }
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    createCategoryGroup(budgetId, name, isIncome, encryptionPassword) {
+      const cleanName = name.trim();
+      if (!cleanName || cleanName.length > 100) {
+        throw new BudgetMaintenanceInputError(
+          "Category group names must be between 1 and 100 characters",
+        );
+      }
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const groups = await getAllCategoryGroups(client);
+            if (
+              groups.some(
+                (group) =>
+                  group.name.trim().toLocaleLowerCase() ===
+                  cleanName.toLocaleLowerCase(),
+              )
+            ) {
+              throw new BudgetMaintenanceInputError(
+                "A category group with this name already exists",
+              );
+            }
+            return client.createCategoryGroup({
+              name: cleanName,
+              is_income: isIncome,
+              hidden: false,
+            });
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    manageCategoryGroup(
+      budgetId,
+      groupId,
+      action,
+      name,
+      targetGroupId,
+      encryptionPassword,
+    ) {
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const groups = await getAllCategoryGroups(client);
+            const group = groups.find((candidate) => candidate.id === groupId);
+            if (!group) {
+              throw new BudgetMaintenanceInputError(
+                "Category group does not exist in this budget",
+              );
+            }
+            if (action === "rename") {
+              const cleanName = name?.trim() ?? "";
+              if (!cleanName || cleanName.length > 100) {
+                throw new BudgetMaintenanceInputError(
+                  "Category group names must be between 1 and 100 characters",
+                );
+              }
+              if (
+                groups.some(
+                  (candidate) =>
+                    candidate.id !== groupId &&
+                    candidate.name.trim().toLocaleLowerCase() ===
+                      cleanName.toLocaleLowerCase(),
+                )
+              ) {
+                throw new BudgetMaintenanceInputError(
+                  "A category group with this name already exists",
+                );
+              }
+              await client.updateCategoryGroup(groupId, { name: cleanName });
+              return;
+            }
+            if (action === "hide" || action === "show") {
+              await client.updateCategoryGroup(groupId, {
+                hidden: action === "hide",
+              });
+              return;
+            }
+            if (targetGroupId === groupId) {
+              throw new BudgetMaintenanceInputError(
+                "Choose a different category group position",
+              );
+            }
+            if (
+              targetGroupId !== null &&
+              targetGroupId !== undefined &&
+              !groups.some((candidate) => candidate.id === targetGroupId)
+            ) {
+              throw new BudgetMaintenanceInputError(
+                "Choose a category group in this budget",
+              );
+            }
+            const internal = client.internal;
+            if (!internal) {
+              throw new BudgetMaintenanceInputError(
+                "This Actual version does not support category group ordering",
+              );
+            }
+            await internal.send("category-group-move", {
+              id: groupId,
+              targetId: targetGroupId ?? null,
+            });
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    manageCategory(
+      budgetId,
+      categoryId,
+      action,
+      targetCategoryId,
+      encryptionPassword,
+    ) {
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const categories = await getAllCategories(client);
+            const category = categories.find(
+              (candidate) => candidate.id === categoryId,
+            );
+            if (!category) {
+              throw new BudgetMaintenanceInputError(
+                "Category does not exist in this budget",
+              );
+            }
+            if (action === "hide" || action === "show") {
+              await client.updateCategory(categoryId, {
+                hidden: action === "hide",
+              });
+              return;
+            }
+            if (targetCategoryId === categoryId) {
+              throw new BudgetMaintenanceInputError(
+                "Choose a different category position",
+              );
+            }
+            const target =
+              targetCategoryId == null
+                ? undefined
+                : categories.find(
+                    (candidate) => candidate.id === targetCategoryId,
+                  );
+            if (
+              targetCategoryId != null &&
+              (!target || target.group_id !== category.group_id)
+            ) {
+              throw new BudgetMaintenanceInputError(
+                "Choose a category in the same group",
+              );
+            }
+            const internal = client.internal;
+            if (!internal) {
+              throw new BudgetMaintenanceInputError(
+                "This Actual version does not support category ordering",
+              );
+            }
+            await internal.send("category-move", {
+              id: categoryId,
+              groupId: category.group_id,
+              targetId: targetCategoryId ?? null,
+            });
           },
           writeOptions(encryptionPassword),
         ),
