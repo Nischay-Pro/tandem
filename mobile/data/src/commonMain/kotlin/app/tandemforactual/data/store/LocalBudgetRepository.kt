@@ -260,6 +260,17 @@ class LocalBudgetRepository(
         limit: Int,
     ): Flow<List<BudgetRecordEntity>> = database.budgetRecordDao().observeRecentVisible(budgetId, recordType, limit).stabilized()
 
+    fun observeRecentTransactionsForAccount(
+        budgetId: String,
+        accountId: String,
+        limit: Int,
+    ): Flow<List<BudgetRecordEntity>> {
+        requireIdentifier(budgetId, "budgetId")
+        requireIdentifier(accountId, "accountId")
+        require(limit in 1..500) { "limit must be between 1 and 500" }
+        return database.budgetRecordDao().observeRecentTransactionsForAccount(budgetId, accountId, limit).stabilized()
+    }
+
     fun observeVisibleRecordCount(
         budgetId: String,
         recordType: String,

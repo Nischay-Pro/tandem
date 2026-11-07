@@ -214,6 +214,22 @@ interface BudgetRecordDao {
 
     @Query(
         """
+    SELECT * FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = 'transaction' AND accountId = :accountId
+      AND localDeleted = 0
+      AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))
+    ORDER BY recordDate DESC, recordId ASC
+    LIMIT :limit
+    """,
+    )
+    fun observeRecentTransactionsForAccount(
+        budgetId: String,
+        accountId: String,
+        limit: Int,
+    ): Flow<List<BudgetRecordEntity>>
+
+    @Query(
+        """
     SELECT COUNT(*) FROM budget_records
     WHERE budgetId = :budgetId AND recordType = :recordType
       AND localDeleted = 0

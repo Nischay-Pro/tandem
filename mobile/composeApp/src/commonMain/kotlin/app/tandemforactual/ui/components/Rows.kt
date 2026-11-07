@@ -137,7 +137,12 @@ internal fun ListRow(
     ) {
         if (leading != RowLeading.None) {
             Box(
-                modifier = Modifier.size(if (options.dense) 36.dp else 44.dp).clip(RoundedCornerShape(TandemShapes.medium)).background(palette.raised),
+                modifier =
+                    Modifier
+                        .size(
+                            if (options.dense) 36.dp else 44.dp,
+                        ).clip(RoundedCornerShape(TandemShapes.medium))
+                        .background(palette.raised),
                 contentAlignment = Alignment.Center,
             ) {
                 when {

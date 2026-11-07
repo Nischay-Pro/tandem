@@ -27,6 +27,7 @@ import app.tandemforactual.ui.reports.ReportsViewModels
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -1124,6 +1125,12 @@ internal class TandemMobileSession(
         selectedBudgetMonthRecord = null
         pendingWrites = localRepository.readPendingWrites(budgetId)
     }
+
+    fun observeAccountActivityRecords(
+        budgetId: String,
+        accountId: String,
+        limit: Int = 100,
+    ): Flow<List<BudgetRecordEntity>>? = repository?.observeRecentTransactionsForAccount(budgetId, accountId, limit)
 
     suspend fun observeLocalRecords(budgetId: String) {
         val localRepository = repository ?: return

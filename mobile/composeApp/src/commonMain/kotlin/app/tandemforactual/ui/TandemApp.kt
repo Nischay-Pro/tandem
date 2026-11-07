@@ -60,6 +60,7 @@ import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -2894,7 +2895,8 @@ private fun ScreenContent(
                 merchantIconMatcher,
                 mobileSession,
             )
-        AppRoute.ACCOUNT_DETAIL -> AccountDetailScreen(state, navigation, liveAccounts, liveTransactions)
+        AppRoute.ACCOUNT_DETAIL ->
+            AccountDetailScreen(state, navigation, liveAccounts, mobileSession, merchantIconMatcher)
         AppRoute.ACCOUNT_OPTIONS -> AccountOptionsScreen(state, liveAccounts, mobileSession, navigation)
         AppRoute.ACTIVITY ->
             ActivityScreen(
@@ -3027,79 +3029,91 @@ private fun ScreenContent(
                 values,
                 if (state.selectedBudgetId.isBlank()) state.transactionCategory else state.newTransactionCategoryId,
                 live = isLiveBudget,
-                noMatches = if (isLiveBudget) { query ->
-                    val newName = query.trim()
-                    if (newName.isBlank()) {
-                        EmptyState("Type a category name", modifier = Modifier.padding(TandemSpacing.large))
-                    } else {
-                        SurfaceCard {
-                            Column(
-                                Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                            ) {
-                                Text("Create category", color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
-                                if (categoryGroups.isEmpty()) {
-                                    BodyText("Add a ${state.transactionType.lowercase()} category group in Actual first.")
-                                } else {
-                                    Box {
-                                        val selectedGroup = categoryGroups.firstOrNull { it.id == createGroupId }
-                                        ListRow(
-                                            "Category group",
-                                            leading = RowLeading.Icon(Lucide.Tags),
-                                            trailing = selectedGroup?.label ?: "Choose group",
-                                            onClick = { createGroupMenuExpanded = true },
+                noMatches =
+                    if (isLiveBudget) {
+                        { query ->
+                            val newName = query.trim()
+                            if (newName.isBlank()) {
+                                EmptyState("Type a category name", modifier = Modifier.padding(TandemSpacing.large))
+                            } else {
+                                SurfaceCard {
+                                    Column(
+                                        Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                                    ) {
+                                        Text(
+                                            "Create category",
+                                            color = tandemPalette.text,
+                                            fontSize = TandemTypography.cardTitle,
+                                            fontWeight = FontWeight.SemiBold,
                                         )
-                                        DropdownMenu(
-                                            expanded = createGroupMenuExpanded,
-                                            onDismissRequest = { createGroupMenuExpanded = false },
-                                        ) {
-                                            categoryGroups.forEach { group ->
-                                                DropdownMenuItem(
-                                                    onClick = {
-                                                        createGroupId = group.id
-                                                        createGroupMenuExpanded = false
-                                                    },
+                                        if (categoryGroups.isEmpty()) {
+                                            BodyText("Add a ${state.transactionType.lowercase()} category group in Actual first.")
+                                        } else {
+                                            Box {
+                                                val selectedGroup = categoryGroups.firstOrNull { it.id == createGroupId }
+                                                ListRow(
+                                                    "Category group",
+                                                    leading = RowLeading.Icon(Lucide.Tags),
+                                                    trailing = selectedGroup?.label ?: "Choose group",
+                                                    onClick = { createGroupMenuExpanded = true },
+                                                )
+                                                DropdownMenu(
+                                                    expanded = createGroupMenuExpanded,
+                                                    onDismissRequest = { createGroupMenuExpanded = false },
                                                 ) {
-                                                    Text(group.label, color = tandemPalette.text, fontSize = TandemTypography.compactBody)
+                                                    categoryGroups.forEach { group ->
+                                                        DropdownMenuItem(
+                                                            onClick = {
+                                                                createGroupId = group.id
+                                                                createGroupMenuExpanded = false
+                                                            },
+                                                        ) {
+                                                            Text(
+                                                                group.label,
+                                                                color = tandemPalette.text,
+                                                                fontSize = TandemTypography.compactBody,
+                                                            )
+                                                        }
+                                                    }
                                                 }
                                             }
-                                        }
-                                    }
-                                    mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
-                                    TandemActionButton(
-                                        if (mobileSession.isPerformingBudgetAction) "Creating…" else "Create \"$newName\"",
-                                        TandemActionButtonTone.PRIMARY,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        enabled =
-                                            !state.readOnlyMode &&
-                                                !mobileSession.isPerformingBudgetAction &&
-                                                createGroupId.isNotBlank() &&
-                                                newName.length <= 100,
-                                        loading = mobileSession.isPerformingBudgetAction,
-                                    ) {
-                                        mobileSession.clearBudgetActionMessage()
-                                        scope.launch {
-                                            val categoryId =
-                                                mobileSession.createBudgetCategory(
-                                                    state.selectedBudgetId,
-                                                    newName,
-                                                    createGroupId,
-                                                    state.encryptedPassword.takeIf { it.isNotBlank() },
-                                                )
-                                            if (categoryId != null) {
-                                                state.transactionCategory = newName
-                                                state.newTransactionCategoryId = categoryId
-                                                navigation.back()
+                                            mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                                            TandemActionButton(
+                                                if (mobileSession.isPerformingBudgetAction) "Creating…" else "Create \"$newName\"",
+                                                TandemActionButtonTone.PRIMARY,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                enabled =
+                                                    !state.readOnlyMode &&
+                                                        !mobileSession.isPerformingBudgetAction &&
+                                                        createGroupId.isNotBlank() &&
+                                                        newName.length <= 100,
+                                                loading = mobileSession.isPerformingBudgetAction,
+                                            ) {
+                                                mobileSession.clearBudgetActionMessage()
+                                                scope.launch {
+                                                    val categoryId =
+                                                        mobileSession.createBudgetCategory(
+                                                            state.selectedBudgetId,
+                                                            newName,
+                                                            createGroupId,
+                                                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                                                        )
+                                                    if (categoryId != null) {
+                                                        state.transactionCategory = newName
+                                                        state.newTransactionCategoryId = categoryId
+                                                        navigation.back()
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
                         }
-                    }
-                } else {
-                    null
-                },
+                    } else {
+                        null
+                    },
             ) { item ->
                 state.transactionCategory = if (item.label == "Uncategorized") "" else item.label
                 state.newTransactionCategoryId = if (!isLiveBudget) "" else item.id
@@ -4776,10 +4790,12 @@ private fun BudgetScreen(
     val sectionSpacing = if (compact) 10.dp else 16.dp
     val groups = if (isLiveBudget) liveBudgetMonth?.groups.orEmpty() else previewCategoryGroups
     val recentTransactions =
-        if (isLiveBudget) {
-            liveTransactions.filterNot(TransactionItem::isSplitParent)
-        } else {
-            liveTransactions.takeIf { it.isNotEmpty() } ?: previewTransactions
+        remember(isLiveBudget, liveTransactions) {
+            if (isLiveBudget) {
+                liveTransactions.filterNot(TransactionItem::isSplitParent)
+            } else {
+                liveTransactions.takeIf { it.isNotEmpty() } ?: previewTransactions
+            }
         }
     val conflictCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "conflict" } else 0
     val rejectedCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "rejected" } else 0
@@ -4797,17 +4813,19 @@ private fun BudgetScreen(
             "summary:${state.selectedMonthId}"
         }
     val displayGroups =
-        if (essentialsFirst) {
-            groups
-                .withIndex()
-                .sortedWith(
-                    compareBy<IndexedValue<LiveCategoryGroupSummary>>(
-                        { essentialGroupOrder(it.value.name) },
-                        { it.index },
-                    ),
-                ).map { it.value }
-        } else {
-            groups
+        remember(essentialsFirst, groups) {
+            if (essentialsFirst) {
+                groups
+                    .withIndex()
+                    .sortedWith(
+                        compareBy<IndexedValue<LiveCategoryGroupSummary>>(
+                            { essentialGroupOrder(it.value.name) },
+                            { it.index },
+                        ),
+                    ).map { it.value }
+            } else {
+                groups
+            }
         }
     val pinnedCategories =
         groups.flatMap { group ->
@@ -5212,7 +5230,12 @@ private fun TransactionSelectionActions(
             Modifier.fillMaxWidth().padding(TandemSpacing.medium),
             verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
         ) {
-            Text("$selectedCount selected", color = tandemPalette.text, fontSize = TandemTypography.action, fontWeight = FontWeight.SemiBold)
+            Text(
+                "$selectedCount selected",
+                color = tandemPalette.text,
+                fontSize = TandemTypography.action,
+                fontWeight = FontWeight.SemiBold,
+            )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                 TandemActionButton(
                     if (allSelected) "Deselect all" else "Select all",
@@ -5259,7 +5282,7 @@ private fun TransactionBulkDeleteDialog(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     Icon(Lucide.Trash2, contentDescription = null, modifier = Modifier.size(22.dp), tint = tandemPalette.negative)
                     Text(
-                        "Delete $selectedCount transactions?",
+                        if (selectedCount == 1) "Delete this transaction?" else "Delete $selectedCount transactions?",
                         modifier = Modifier.weight(1f),
                         color = tandemPalette.text,
                         fontSize = TandemTypography.cardTitle,
@@ -5463,7 +5486,9 @@ private fun CategoryDetailScreen(
         }
     var showEditDialog by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf(false) }
     var showDeleteDialog by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf(false) }
-    var showAssignedAmountDialog by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId, state.selectedMonthId) { mutableStateOf(false) }
+    var showAssignedAmountDialog by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId, state.selectedMonthId) {
+        mutableStateOf(false)
+    }
     var assignedAmountDraft by
         rememberSaveable(state.selectedBudgetId, state.selectedCategoryId, state.selectedMonthId) {
             mutableStateOf("")
@@ -5631,7 +5656,8 @@ private fun CategoryDetailScreen(
                             TandemActionButtonTone.PRIMARY,
                             Modifier.weight(1f),
                             icon = Lucide.Check,
-                            enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction && parsedAmount != null && parsedAmount >= 0,
+                            enabled =
+                                !state.readOnlyMode && !mobileSession.isPerformingBudgetAction && parsedAmount != null && parsedAmount >= 0,
                             loading = mobileSession.isPerformingBudgetAction,
                         ) {
                             scope.launch {
@@ -5702,7 +5728,7 @@ private fun CategoryDetailScreen(
                             "Find an icon",
                             iconSearch,
                             { iconSearch = it },
-                            TextFieldOptions(placeholder = "e.g. groceries, rent"),
+                            TextFieldOptions(placeholder = "Search by name"),
                         )
                         val visibleIconChoices = categoryIconChoices.filter { it.contains(iconSearch.trim(), ignoreCase = true) }
                         if (visibleIconChoices.isEmpty()) {
@@ -6086,65 +6112,67 @@ private fun AccountsScreen(
     }
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     val model =
-        if (isLiveBudget) {
-            val groupOrder = listOf("Cash", "Credit", "Loans", "Investments", "Tracking", "Closed", "Accounts")
-            val groupedAccounts =
-                liveAccounts
-                    .groupBy(::liveAccountGroupLabel)
-                    .entries
-                    .sortedWith(
-                        compareBy(
-                            { groupOrder.indexOf(it.key).let { index -> if (index < 0) groupOrder.size else index } },
-                            { it.key },
-                        ),
-                    ).map { (groupName, accounts) ->
+        remember(isLiveBudget, liveAccounts, state.budgetDisplaySettings) {
+            if (isLiveBudget) {
+                val groupOrder = listOf("Cash", "Credit", "Loans", "Investments", "Tracking", "Closed", "Accounts")
+                val groupedAccounts =
+                    liveAccounts
+                        .groupBy(::liveAccountGroupLabel)
+                        .entries
+                        .sortedWith(
+                            compareBy(
+                                { groupOrder.indexOf(it.key).let { index -> if (index < 0) groupOrder.size else index } },
+                                { it.key },
+                            ),
+                        ).map { (groupName, accounts) ->
+                            AccountListGroupUi(
+                                groupName,
+                                state.formatCurrency(accounts.sumOf { it.balanceMinor ?: 0L }),
+                                accounts.map { account ->
+                                    AccountListItemUi(
+                                        account.id,
+                                        account.name,
+                                        when {
+                                            account.closed -> "Closed"
+                                            account.offBudget -> "Tracking · off budget"
+                                            account.accountGroupName != null -> account.accountGroupName
+                                            else -> account.type?.takeIf { it.isNotBlank() && it != "account" } ?: "On budget"
+                                        },
+                                        account.balanceMinor?.let(state::formatCurrency) ?: "Unavailable",
+                                        account.offBudget,
+                                        account.closed,
+                                    )
+                                },
+                            )
+                        }
+                AccountListUi(
+                    groupedAccounts,
+                    isSample = false,
+                    showAccountOptions = false,
+                )
+            } else {
+                val groupedAccounts =
+                    previewAccounts.groupBy { it.group }.map { (groupName, accounts) ->
                         AccountListGroupUi(
                             groupName,
-                            state.formatCurrency(accounts.sumOf { it.balanceMinor ?: 0L }),
+                            state.formatCurrency(accounts.sumOf { it.balanceMinor }),
                             accounts.map { account ->
                                 AccountListItemUi(
                                     account.id,
                                     account.name,
-                                    when {
-                                        account.closed -> "Closed"
-                                        account.offBudget -> "Tracking · off budget"
-                                        account.accountGroupName != null -> account.accountGroupName
-                                        else -> account.type?.takeIf { it.isNotBlank() && it != "account" } ?: "On budget"
-                                    },
-                                    account.balanceMinor?.let(state::formatCurrency) ?: "Unavailable",
+                                    account.description,
+                                    state.formatCurrency(account.balanceMinor),
                                     account.offBudget,
-                                    account.closed,
                                 )
                             },
                         )
                     }
-            AccountListUi(
-                groupedAccounts,
-                isSample = false,
-                showAccountOptions = false,
-            )
-        } else {
-            val groupedAccounts =
-                previewAccounts.groupBy { it.group }.map { (groupName, accounts) ->
-                    AccountListGroupUi(
-                        groupName,
-                        state.formatCurrency(accounts.sumOf { it.balanceMinor }),
-                        accounts.map { account ->
-                            AccountListItemUi(
-                                account.id,
-                                account.name,
-                                account.description,
-                                state.formatCurrency(account.balanceMinor),
-                                account.offBudget,
-                            )
-                        },
-                    )
-                }
-            AccountListUi(
-                groupedAccounts,
-                isSample = true,
-                showAccountOptions = true,
-            )
+                AccountListUi(
+                    groupedAccounts,
+                    isSample = true,
+                    showAccountOptions = true,
+                )
+            }
         }
 
     PageLazyColumn(
@@ -6174,7 +6202,12 @@ private fun AccountsScreen(
                             Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.small),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(group.name, color = tandemPalette.text, fontSize = TandemTypography.label, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                group.name,
+                                color = tandemPalette.text,
+                                fontSize = TandemTypography.label,
+                                fontWeight = FontWeight.SemiBold,
+                            )
                             Spacer(Modifier.weight(1f))
                             Text(group.total, color = tandemPalette.muted, fontSize = TandemTypography.caption, maxLines = 1)
                         }
@@ -6224,7 +6257,7 @@ private fun AccountsScreen(
                         addAccountDialog = true
                     }
                     TandemActionButton(
-                        "Manage Bank Connections",
+                        "Manage bank connections",
                         TandemActionButtonTone.NEUTRAL,
                         Modifier.fillMaxWidth(),
                         icon = Lucide.Landmark,
@@ -6256,7 +6289,12 @@ private fun AccountsScreen(
                             Modifier.size(42.dp).clip(CircleShape).background(tandemPalette.accentSurface),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Icon(Lucide.WalletCards, contentDescription = null, modifier = Modifier.size(22.dp), tint = tandemPalette.accent)
+                            Icon(
+                                Lucide.WalletCards,
+                                contentDescription = null,
+                                modifier = Modifier.size(22.dp),
+                                tint = tandemPalette.accent,
+                            )
                         }
                         Text(
                             "Add account",
@@ -6366,15 +6404,44 @@ private fun AccountDetailScreen(
     state: AppState,
     navigation: AppNavigation,
     liveAccounts: List<LiveAccountSummary>,
-    liveTransactions: List<TransactionItem>,
+    mobileSession: TandemMobileSession,
+    merchantIconMatcher: MerchantIconMatcherPack?,
 ) {
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     val liveAccount = if (isLiveBudget) liveAccounts.firstOrNull { it.id == state.selectedAccountId } else null
     val previewAccount = if (isLiveBudget) null else previewAccountById(state.selectedAccountId)
     val accountName = liveAccount?.name ?: previewAccount?.name
-    val accountActivity =
+    var accountActivity by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(emptyList<TransactionItem>()) }
+    LaunchedEffect(
+        state.selectedBudgetId,
+        liveAccount?.id,
+        mobileSession.accountRecords,
+        mobileSession.payeeRecords,
+        mobileSession.categoryRecords,
+        mobileSession.budgetDisplaySettings,
+        merchantIconMatcher,
+    ) {
+        val accountId = liveAccount?.id ?: return@LaunchedEffect
+        val accountActivityFlow =
+            mobileSession.observeAccountActivityRecords(state.selectedBudgetId, accountId)
+                ?: return@LaunchedEffect
+        accountActivityFlow.collect { records ->
+            accountActivity =
+                withContext(Dispatchers.Default) {
+                    buildLiveTransactionItems(
+                        records,
+                        mobileSession.accountRecords,
+                        mobileSession.payeeRecords,
+                        mobileSession.categoryRecords,
+                        mobileSession.budgetDisplaySettings,
+                        merchantIconMatcher,
+                    ).filterNot(TransactionItem::isSplitParent)
+                }
+        }
+    }
+    val shownAccountActivity =
         when {
-            liveAccount != null -> liveTransactions.filter { it.accountId == liveAccount.id && !it.isSplitParent }
+            liveAccount != null -> accountActivity
             previewAccount != null -> previewTransactions.filter { it.account == previewAccount.name }
             else -> emptyList()
         }
@@ -6406,13 +6473,13 @@ private fun AccountDetailScreen(
                     navigation.open(AppRoute.NEW_TRANSACTION)
                 }
             }
-            if (accountActivity.isEmpty()) {
+            if (shownAccountActivity.isEmpty()) {
                 SurfaceCard {
                     EmptyState("No recent activity", modifier = Modifier.padding(TandemSpacing.large))
                 }
             } else {
                 SectionCard("Recent activity", action = "See all", onClick = { navigation.selectTab(AppRoute.ACTIVITY) }) {
-                    accountActivity.take(6).forEachIndexed { index, item ->
+                    shownAccountActivity.take(6).forEachIndexed { index, item ->
                         if (index > 0) DividerLine()
                         TransactionRow(item) { openTransaction(state, navigation, item, isLive = isLiveBudget) }
                     }
@@ -6448,11 +6515,16 @@ private fun AccountOptionsScreen(
     var transferAccountId by rememberSaveable(state.selectedAccountId) { mutableStateOf("") }
     var transferCategoryId by rememberSaveable(state.selectedAccountId) { mutableStateOf("") }
     val nonZeroBalance = liveAccount?.balanceMinor?.let { it != 0L } ?: false
-    val transferAccounts = liveAccounts.filter { it.id != liveAccount?.id && !it.closed }
+    val transferAccounts =
+        remember(liveAccounts, liveAccount?.id) {
+            liveAccounts.filter { it.id != liveAccount?.id && !it.closed }
+        }
     val transferCategories =
-        mobileSession.categoryRecords
-            .mapNotNull { record -> record.recordName()?.let { SelectorItem(record.recordId, it) } }
-            .distinctBy(SelectorItem::id)
+        remember(mobileSession.categoryRecords) {
+            mobileSession.categoryRecords
+                .mapNotNull { record -> record.recordName()?.let { SelectorItem(record.recordId, it) } }
+                .distinctBy(SelectorItem::id)
+        }
     val canClose = isLiveBudget && liveAccount != null && !liveAccount.closed && liveAccount.balanceMinor != null && !state.readOnlyMode
     PageColumn {
         if (!isLiveBudget) SampleBanner()
@@ -6678,27 +6750,28 @@ private fun ActivityScreen(
             }
         } else {
             item(key = "activity-recent-title") { SectionCard("Recent transactions", recentDescription) {} }
-            items(
+            itemsIndexed(
                 sortedTransactions,
-                key = { transaction ->
+                key = { index, transaction ->
                     val prefix = if (isLiveBudget) "activity" else "sample"
-                    "$prefix:${transaction.recordId ?: "${transaction.dateLabel}:${transaction.payee}:${transaction.amountMinorUnits}"}"
+                    "$prefix:${transaction.recordId ?: "$index:${transaction.dateLabel}:${transaction.payee}:${transaction.amountMinorUnits}"}"
                 },
-            ) { transaction ->
+            ) { _, transaction ->
                 SurfaceCard(modifier = if (isLiveBudget) tandemListItemModifier(tandemReduceMotion) else Modifier) {
                     val transactionId = transaction.recordId
                     TransactionRow(
                         transaction,
                         selectionMode = selectionMode,
                         selected = transactionId != null && transactionId in selectedTransactionIds,
-                        onLongClick = if (isLiveBudget && !state.readOnlyMode && transactionId != null) {
-                            {
-                                selectionMode = true
-                                selectedTransactionIds = selectedTransactionIds + transactionId
-                            }
-                        } else {
-                            null
-                        },
+                        onLongClick =
+                            if (isLiveBudget && !state.readOnlyMode && transactionId != null) {
+                                {
+                                    selectionMode = true
+                                    selectedTransactionIds = selectedTransactionIds + transactionId
+                                }
+                            } else {
+                                null
+                            },
                     ) {
                         if (selectionMode && transactionId != null) {
                             selectedTransactionIds =
@@ -7201,14 +7274,15 @@ private fun ActivitySearchScreen(
                             transaction,
                             selectionMode = selectionMode,
                             selected = transactionId != null && transactionId in selectedTransactionIds,
-                            onLongClick = if (isLiveBudget && !state.readOnlyMode && transactionId != null) {
-                                {
-                                    selectionMode = true
-                                    selectedTransactionIds = selectedTransactionIds + transactionId
-                                }
-                            } else {
-                                null
-                            },
+                            onLongClick =
+                                if (isLiveBudget && !state.readOnlyMode && transactionId != null) {
+                                    {
+                                        selectionMode = true
+                                        selectedTransactionIds = selectedTransactionIds + transactionId
+                                    }
+                                } else {
+                                    null
+                                },
                         ) {
                             if (selectionMode && transactionId != null) {
                                 selectedTransactionIds =
