@@ -379,7 +379,11 @@ describe("Actual transaction store", () => {
     };
     const store = createActualTransactionStore(client);
 
-    await expect(store.create(id, input)).resolves.toEqual(transaction);
+    await expect(store.create(id, input)).resolves.toMatchObject({
+      id: "actual-generated-id",
+      account: "account-1",
+      imported_id: id,
+    });
     expect(client.addTransactions).toHaveBeenCalledWith(
       "account-1",
       [
@@ -399,6 +403,58 @@ describe("Actual transaction store", () => {
       filterExpressions: [{ imported_id: id }],
       tableOptions: { splits: "grouped" },
     });
+  });
+
+  it("uses Actual's transfer payee hook to create both linked legs", async () => {
+    const id = "tandem:8c88495a-65d9-4531-8392-93bff2c65375";
+    const outgoing = {
+      id: "actual-transfer-out",
+      account: "account-1",
+      amount: -1250,
+      date: "2026-11-01",
+      payee: "transfer-payee",
+      imported_id: id,
+      transfer_id: "actual-transfer-in",
+    };
+    const fake = createClient(
+      { data: [outgoing] },
+      {
+        payees: [
+          {
+            id: "transfer-payee",
+            name: "Transfer: Savings",
+            transfer_acct: "account-2",
+          },
+        ],
+      },
+    );
+    const store = createActualTransactionStore(fake.client);
+
+    await expect(
+      store.create(id, {
+        account: "account-1",
+        amount: -1250,
+        date: "2026-11-01",
+        payee: "transfer-payee",
+        category: null,
+        notes: "Move to savings",
+        cleared: false,
+      }),
+    ).resolves.toEqual(outgoing);
+    expect(fake.client.addTransactions).toHaveBeenCalledWith(
+      "account-1",
+      [
+        {
+          date: "2026-11-01",
+          amount: -1250,
+          payee: "transfer-payee",
+          notes: "Move to savings",
+          cleared: false,
+          imported_id: id,
+        },
+      ],
+      { runTransfers: true, learnCategories: false },
+    );
   });
 
   it("rejects transaction creation without a stable ID or Actual read-back", async () => {

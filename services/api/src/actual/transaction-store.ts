@@ -159,6 +159,12 @@ export function createActualTransactionStore(
       if (!isCompanionTransactionId(id)) {
         throw new Error("New transactions require a Companion transaction ID");
       }
+      const transferPayee =
+        input.payee === null
+          ? undefined
+          : (await client.getPayees()).find(
+              (payee) => payee.id === input.payee && payee.transfer_acct,
+            );
       await client.addTransactions(
         input.account,
         [
@@ -172,7 +178,7 @@ export function createActualTransactionStore(
             imported_id: id,
           },
         ],
-        { runTransfers: false, learnCategories: false },
+        { runTransfers: transferPayee !== undefined, learnCategories: false },
       );
       const created = await read(id);
       if (created === undefined) {

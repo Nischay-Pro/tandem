@@ -668,36 +668,33 @@ describe("transaction snapshots and merge planning", () => {
     ).toEqual({ kind: "unchanged" });
   });
 
-  it("rejects split and transfer changes in direct update and deletion plans", () => {
+  it("keeps split changes behind group review and allows transfer field changes", () => {
     const splitChild = createSnapshot({
       id: "split-child",
       amount: -1500,
       isChild: true,
       parentId: "split-parent",
     });
-    const structuredSnapshots = [
-      createSnapshot({
-        id: "split-parent",
-        isParent: true,
-        subtransactions: [splitChild],
-      }),
-      createSnapshot({ transferId: "counterpart-transaction" }),
-    ];
+    const split = createSnapshot({
+      id: "split-parent",
+      isParent: true,
+      subtransactions: [splitChild],
+    });
+    const transfer = createSnapshot({ transferId: "counterpart-transaction" });
 
-    for (const [index, snapshot] of structuredSnapshots.entries()) {
-      const expectedConflictField =
-        index === 0 ? "subtransactions" : "transferId";
-      expect(
-        planTransactionUpdate(snapshot, snapshot, { amount: -1200 }),
-      ).toMatchObject({
+    expect(planTransactionUpdate(split, split, { amount: -1200 })).toMatchObject({
+      kind: "conflict",
+      conflictingFields: expect.arrayContaining(["subtransactions"]),
+    });
+    expect(planTransactionDeletion(split, split)).toMatchObject({
         kind: "conflict",
-        conflictingFields: expect.arrayContaining([expectedConflictField]),
-      });
-      expect(planTransactionDeletion(snapshot, snapshot)).toMatchObject({
-        kind: "conflict",
-        conflictingFields: expect.arrayContaining([expectedConflictField]),
-      });
-    }
+      conflictingFields: expect.arrayContaining(["subtransactions"]),
+    });
+    expect(planTransactionUpdate(transfer, transfer, { amount: -1200 })).toEqual({
+      kind: "apply",
+      patch: { amount: -1200 },
+    });
+    expect(planTransactionDeletion(transfer, transfer)).toEqual({ kind: "delete" });
   });
 
   it("blocks structured update and delete plans when either snapshot is structured", () => {
@@ -724,6 +721,13 @@ describe("transaction snapshots and merge planning", () => {
         [structured, ordinary],
         [ordinary, structured],
       ] as const) {
+        if (structured.transferId !== null) {
+          expect(
+            planTransactionUpdate(base, remote, { amount: -1200 }).kind,
+          ).toBe("conflict");
+          expect(planTransactionDeletion(base, remote).kind).toBe("conflict");
+          continue;
+        }
         expect(
           planTransactionUpdate(base, remote, { amount: -1200 }).kind,
         ).toBe("conflict");
@@ -754,7 +758,7 @@ describe("transaction snapshots and merge planning", () => {
     ).toEqual({ kind: "conflict", conflictingFields: ["transferId"] });
     expect(
       planTransactionUpdate(transfer, transfer, { amount: -1200 }),
-    ).toEqual({ kind: "conflict", conflictingFields: ["transferId"] });
+    ).toEqual({ kind: "apply", patch: { amount: -1200 } });
     expect(planTransactionUpdate(split, split, { amount: -1200 })).toEqual({
       kind: "conflict",
       conflictingFields: ["isParent", "subtransactions"],

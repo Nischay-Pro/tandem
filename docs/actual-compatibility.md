@@ -94,14 +94,13 @@ verifies its absence from a third independent local data directory.
 The test also creates a synthetic transfer payee, sets its `transfer_acct`
 through `updatePayee`, and adds a transaction with `runTransfers: true`. Actual
 creates the paired transaction and each leg points to the other leg's ID; the
-outgoing leg keeps that link after download into the second workspace. Split
+outgoing leg keeps that link after download into the second workspace. The
+reconciliation flow edits one transfer leg through Actual's public
+`updateTransaction` method and verifies that Actual updates its counterpart,
+then deletes the other leg and verifies that Actual removes both. Split
 creation is verified through Actual's grouped transaction result and public AQL
-read. The compatibility check submits both update and delete operations for a
-split parent, split child, outgoing transfer leg, and incoming transfer leg.
-Each returns a `structured-transaction-unsupported` conflict, and the test
-checks that the Actual transaction revision remains unchanged. The reconciler
-treats both transfers and splits as structured records that need review rather
-than editing one leg or child independently.
+read. Split parent and child updates and deletions remain review conflicts until
+the mobile editor can submit the full split group as one change.
 
 The encrypted fixture uses the pinned package's internal `key-make` handler to
 enable encryption on synthetic data because the public API has no encryption

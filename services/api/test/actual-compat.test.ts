@@ -759,7 +759,7 @@ describe.skipIf(!compatibilityTestEnabled)(
           throw new Error("Actual did not return both synthetic transfer legs");
         }
 
-        const assertStructuredWriteConflict = async (
+        const assertSplitWriteConflict = async (
           transactionId: string,
           action: "update" | "delete",
         ) => {
@@ -797,7 +797,7 @@ describe.skipIf(!compatibilityTestEnabled)(
           expect(writeResponse.json()).toMatchObject({
             operation: { action, status: "conflict" },
             conflict: {
-              conflictType: "structured-transaction-unsupported",
+              conflictType: "split-transaction-requires-group-edit",
             },
           });
 
@@ -812,21 +812,89 @@ describe.skipIf(!compatibilityTestEnabled)(
           ).toBe(base.revision);
         };
 
-        for (const structuredTransactionId of [
-          splitParent.id,
-          splitChild.id,
-          transferOutgoingId,
-          transferIncomingId,
-        ]) {
-          await assertStructuredWriteConflict(
-            structuredTransactionId,
-            "update",
-          );
-          await assertStructuredWriteConflict(
-            structuredTransactionId,
-            "delete",
-          );
+        for (const splitTransactionId of [splitParent.id, splitChild.id]) {
+          await assertSplitWriteConflict(splitTransactionId, "update");
+          await assertSplitWriteConflict(splitTransactionId, "delete");
         }
+
+        const readTransfer = async (transactionId: string) => {
+          const response = await reconciliationApp.inject({
+            method: "GET",
+            url: `/api/v1/budgets/${budget.groupId}/transactions/${encodeURIComponent(transactionId)}`,
+            headers: authorizationHeaders,
+          });
+          expect(response.statusCode).toBe(200);
+          return response.json() as {
+            transaction: TransactionSnapshot;
+            revision: string;
+          };
+        };
+        const submitTransferWrite = async (
+          transactionId: string,
+          action: "update" | "delete",
+          patch: Record<string, unknown>,
+        ) => {
+          const base = await readTransfer(transactionId);
+          const operationId = randomUUID();
+          return reconciliationApp.inject({
+            method: "POST",
+            url: `/api/v1/budgets/${budget.groupId}/transactions/${encodeURIComponent(transactionId)}/operations`,
+            headers: {
+              ...authorizationHeaders,
+              "idempotency-key": `compat-transfer-${operationId}`,
+            },
+            payload: {
+              operationId,
+              action,
+              baseRevision: base.revision,
+              baseSnapshot: base.transaction,
+              patch,
+            },
+          });
+        };
+        const transferUpdate = await submitTransferWrite(
+          transferOutgoingId,
+          "update",
+          { amount: -500, notes: "Updated synthetic transfer" },
+        );
+        expect(transferUpdate.statusCode).toBe(200);
+        expect(transferUpdate.json().operation.status).toBe("committed");
+        const updatedLegs = await firstDevice.runBudget(
+          budget.groupId,
+          async () => {
+            const outgoing = await transactionStore.read(transferOutgoingId);
+            const incoming = await transactionStore.read(transferIncomingId);
+            return { outgoing, incoming };
+          },
+        );
+        expect(updatedLegs.outgoing).toMatchObject({
+          id: transferOutgoingId,
+          amount: -500,
+          notes: "Updated synthetic transfer",
+          transfer_id: transferIncomingId,
+        });
+        expect(updatedLegs.incoming).toMatchObject({
+          id: transferIncomingId,
+          amount: 500,
+          notes: "Updated synthetic transfer",
+          transfer_id: transferOutgoingId,
+        });
+
+        const transferDelete = await submitTransferWrite(
+          transferIncomingId,
+          "delete",
+          {},
+        );
+        expect(transferDelete.statusCode).toBe(200);
+        expect(transferDelete.json().operation.status).toBe("committed");
+        const deletedLegs = await firstDevice.runBudget(
+          budget.groupId,
+          async () => ({
+            outgoing: await transactionStore.read(transferOutgoingId),
+            incoming: await transactionStore.read(transferIncomingId),
+          }),
+        );
+        expect(deletedLegs).toEqual({ outgoing: undefined, incoming: undefined });
 
         await reconciliationApp.close();
 

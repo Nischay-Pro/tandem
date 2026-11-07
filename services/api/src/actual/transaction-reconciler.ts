@@ -7,7 +7,7 @@ import type { ActualTransactionStore } from "./transaction-store.js";
 import {
   createTransactionRevision,
   isCompanionTransactionId,
-  isStructuredTransaction,
+  isSplitTransaction,
   parseTransactionCreateInput,
   parseTransactionPatch,
   parseTransactionSnapshot,
@@ -353,16 +353,46 @@ export class TransactionReconciler {
           if (latest.id !== prepared.request.transactionId) {
             throw new Error("Actual returned a different transaction ID");
           }
-          if (
-            isStructuredTransaction(prepared.base) ||
-            isStructuredTransaction(latest)
-          ) {
+          if (isSplitTransaction(prepared.base) || isSplitTransaction(latest)) {
             return {
               kind: "conflict",
-              conflictType: "structured-transaction-unsupported",
+              conflictType: "split-transaction-requires-group-edit",
               remoteSnapshot: toJsonValue(latest),
               conflictingFields: structuredFields(prepared.base, latest),
             };
+          }
+
+          if (prepared.base.transferId !== latest.transferId) {
+            return {
+              kind: "conflict",
+              conflictType: "transfer-pair-changed",
+              remoteSnapshot: toJsonValue(latest),
+              conflictingFields: ["transferId"],
+            };
+          }
+          if (latest.transferId !== null) {
+            const counterpartRaw = await this.transactions.read(latest.transferId);
+            if (counterpartRaw === undefined) {
+              return {
+                kind: "conflict",
+                conflictType: "transfer-pair-incomplete",
+                remoteSnapshot: toJsonValue(latest),
+                conflictingFields: ["transferId"],
+              };
+            }
+            const counterpart = snapshotActualTransaction(counterpartRaw);
+            if (
+              counterpart.id !== latest.transferId ||
+              counterpart.transferId !== latest.id ||
+              counterpart.amount !== -latest.amount
+            ) {
+              return {
+                kind: "conflict",
+                conflictType: "transfer-pair-changed",
+                remoteSnapshot: toJsonValue(latest),
+                conflictingFields: ["transferId", "amount"],
+              };
+            }
           }
 
           if (operation.action === "update") {
@@ -490,10 +520,10 @@ export class TransactionReconciler {
     }
 
     const latest = snapshotActualTransaction(latestRaw);
-    if (isStructuredTransaction(latest)) {
+    if (isSplitTransaction(latest)) {
       return this.#recordConflict(operation, {
         kind: "conflict",
-        conflictType: "structured-transaction-after-write",
+        conflictType: "split-transaction-after-write",
         remoteSnapshot: toJsonValue(latest),
         conflictingFields: structuredFields(prepared.base, latest),
       });
@@ -506,6 +536,35 @@ export class TransactionReconciler {
         remoteSnapshot: toJsonValue(latest),
         conflictingFields,
       });
+    }
+
+    if (latest.transferId !== null) {
+      const counterpartRaw = await this.session.runBudget(
+        operation.budgetId,
+        () => this.transactions.read(latest.transferId!),
+        runOptions(prepared.request.encryptionPassword),
+      );
+      if (counterpartRaw === undefined) {
+        return this.#recordConflict(operation, {
+          kind: "conflict",
+          conflictType: "transfer-pair-incomplete-after-write",
+          remoteSnapshot: toJsonValue(latest),
+          conflictingFields: ["transferId"],
+        });
+      }
+      const counterpart = snapshotActualTransaction(counterpartRaw);
+      if (
+        counterpart.id !== latest.transferId ||
+        counterpart.transferId !== latest.id ||
+        counterpart.amount !== -latest.amount
+      ) {
+        return this.#recordConflict(operation, {
+          kind: "conflict",
+          conflictType: "transfer-pair-changed-after-write",
+          remoteSnapshot: toJsonValue(latest),
+          conflictingFields: ["transferId", "amount"],
+        });
+      }
     }
 
     const committed = await this.#markVerifiedCommitted(

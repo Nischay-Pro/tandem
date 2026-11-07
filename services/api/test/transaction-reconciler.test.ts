@@ -1265,7 +1265,7 @@ describe("Actual transaction reconciliation", () => {
     });
   });
 
-  it("rejects structured transaction edits", async () => {
+  it("keeps split transaction edits behind group review", async () => {
     const base = createSnapshot({ transferId: "transfer-1", isParent: true });
     const request = createRequest({
       baseSnapshot: base as unknown as JsonValue,
@@ -1277,9 +1277,27 @@ describe("Actual transaction reconciliation", () => {
     const result = await harness.reconciler.submit(request);
 
     expect(result.conflict).toMatchObject({
-      conflictType: "structured-transaction-unsupported",
+      conflictType: "split-transaction-requires-group-edit",
       conflictingFields: ["transferId", "isParent"],
     });
+  });
+
+  it("requires a valid paired Actual leg before changing a transfer", async () => {
+    const base = createSnapshot({ transferId: "transfer-1" });
+    const request = createRequest({
+      baseSnapshot: base as unknown as JsonValue,
+      baseRevision: createTransactionRevision(base),
+    });
+    const harness = createHarness(request);
+    harness.actual = actualFrom(base);
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.conflict).toMatchObject({
+      conflictType: "transfer-pair-changed",
+      conflictingFields: ["transferId", "amount"],
+    });
+    expect(harness.actual).toEqual(actualFrom(base));
   });
 
   it("records a same-field conflict without overwriting Actual", async () => {
@@ -1333,7 +1351,7 @@ describe("Actual transaction reconciliation", () => {
     }
   });
 
-  it("reports split children as the structured conflict field", async () => {
+  it("reports split children as the group-edit conflict field", async () => {
     const child = createSnapshot({
       id: "transaction-child",
       amount: -300,
@@ -1351,7 +1369,7 @@ describe("Actual transaction reconciliation", () => {
     const result = await harness.reconciler.submit(request);
 
     expect(result.conflict).toMatchObject({
-      conflictType: "structured-transaction-unsupported",
+      conflictType: "split-transaction-requires-group-edit",
       conflictingFields: ["subtransactions"],
     });
   });
@@ -1465,19 +1483,19 @@ describe("Actual transaction reconciliation", () => {
     });
   });
 
-  it("records structured transactions discovered after an update", async () => {
+  it("records a transfer pair that cannot be verified after an update", async () => {
     const request = createRequest();
     const harness = createHarness(request);
     harness.setReadResults([
       USE_CURRENT,
-      actualFrom(createSnapshot({ transferId: "transfer-2" })),
+      actualFrom(createSnapshot({ amount: 1200, transferId: "transfer-2" })),
     ]);
 
     const result = await harness.reconciler.submit(request);
 
     expect(result.conflict).toMatchObject({
-      conflictType: "structured-transaction-after-write",
-      conflictingFields: ["transferId"],
+      conflictType: "transfer-pair-changed-after-write",
+      conflictingFields: ["transferId", "amount"],
     });
   });
 

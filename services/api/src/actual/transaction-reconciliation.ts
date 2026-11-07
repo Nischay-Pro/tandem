@@ -323,11 +323,14 @@ export function planTransactionUpdate(
   if (base.id !== remote.id) {
     throw new Error("Transaction snapshot IDs do not match");
   }
-  if (isStructuredTransaction(base) || isStructuredTransaction(remote)) {
+  if (isSplitTransaction(base) || isSplitTransaction(remote)) {
     return {
       kind: "conflict",
       conflictingFields: structuredConflictFields(base, remote),
     };
+  }
+  if (base.transferId !== remote.transferId) {
+    return { kind: "conflict", conflictingFields: ["transferId"] };
   }
 
   const applicable: TransactionPatch = {};
@@ -368,11 +371,14 @@ export function planTransactionDeletion(
   if (base.id !== remote.id) {
     throw new Error("Transaction snapshot IDs do not match");
   }
-  if (isStructuredTransaction(base) || isStructuredTransaction(remote)) {
+  if (isSplitTransaction(base) || isSplitTransaction(remote)) {
     return {
       kind: "conflict",
       conflictingFields: structuredConflictFields(base, remote),
     };
+  }
+  if (base.transferId !== remote.transferId) {
+    return { kind: "conflict", conflictingFields: ["transferId"] };
   }
   const changed = DELETION_COMPARISON_FIELDS.filter(
     (field) => !sameSnapshotValue(field, base[field], remote[field]),
@@ -385,8 +391,11 @@ export function planTransactionDeletion(
 export function isStructuredTransaction(
   snapshot: TransactionSnapshot,
 ): boolean {
+  return snapshot.transferId !== null || isSplitTransaction(snapshot);
+}
+
+export function isSplitTransaction(snapshot: TransactionSnapshot): boolean {
   return (
-    snapshot.transferId !== null ||
     snapshot.isParent ||
     snapshot.isChild ||
     snapshot.parentId !== null ||
