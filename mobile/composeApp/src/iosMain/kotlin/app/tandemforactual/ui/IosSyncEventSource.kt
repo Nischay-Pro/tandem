@@ -21,7 +21,6 @@ internal class IosSyncEventSource {
     private val mutableNetworkRestoredEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val appActive = MutableStateFlow(true)
     private var pathAvailable: Boolean? = null
-    private var hasBeenActive = false
     private val pathMonitor = nw_path_monitor_create()
     private val becameActiveObserver =
         NSNotificationCenter.defaultCenter.addObserverForName(
@@ -29,9 +28,9 @@ internal class IosSyncEventSource {
             `object` = null,
             queue = null,
         ) { _ ->
+            val wasInactive = !appActive.value
             appActive.value = true
-            if (hasBeenActive) mutableAppResumeEvents.tryEmit(Unit)
-            hasBeenActive = true
+            if (wasInactive) mutableAppResumeEvents.tryEmit(Unit)
         }
     private val willResignActiveObserver =
         NSNotificationCenter.defaultCenter.addObserverForName(
