@@ -69,7 +69,7 @@ jobs:
       - name: Check mobile design tokens
         run: python3 scripts/check-mobile-design-tokens.py
 
-      - name: Compile and test Android, JVM, and iOS data and client targets
+      - name: Compile and test generated API client targets
         working-directory: mobile
         run: >-
           ./gradlew --no-daemon
@@ -80,6 +80,11 @@ jobs:
           :api-client:jvmTest
           :api-client:koverVerify
           :api-client:ktlintCheck
+
+      - name: Compile and test Android, JVM, and iOS data targets
+        working-directory: mobile
+        run: >-
+          ./gradlew --no-daemon
           :data:compileAndroidMain
           :data:compileAndroidDeviceTest
           :data:compileCommonMainKotlinMetadata
@@ -91,14 +96,33 @@ jobs:
           :data:iosSimulatorArm64Test
           :data:koverVerify
           :data:ktlintCheck
+
+      - name: Compile Compose app for Android and iOS
+        working-directory: mobile
+        run: >-
+          ./gradlew --no-daemon
           :composeApp:compileAndroidMain
           :composeApp:compileKotlinIosArm64
-          :composeApp:compileKotlinIosSimulatorArm64
-          :composeApp:allTests
-          :composeApp:ktlintCheck
-          :androidApp:testDebugUnitTest
-          :androidApp:lintRelease
-          :androidApp:assembleRelease
+
+      - name: Compile Compose app for iOS simulator
+        working-directory: mobile
+        run: ./gradlew --no-daemon :composeApp:compileKotlinIosSimulatorArm64
+
+      - name: Run Compose app tests and KtLint
+        working-directory: mobile
+        run: ./gradlew --no-daemon :composeApp:allTests :composeApp:ktlintCheck
+
+      - name: Run Android app unit tests
+        working-directory: mobile
+        run: ./gradlew --no-daemon :androidApp:testDebugUnitTest
+
+      - name: Run Android release lint
+        working-directory: mobile
+        run: ./gradlew --no-daemon :androidApp:lintRelease
+
+      - name: Assemble Android release
+        working-directory: mobile
+        run: ./gradlew --no-daemon :androidApp:assembleRelease
 
       - name: Build iOS app host with Xcode
         working-directory: mobile
