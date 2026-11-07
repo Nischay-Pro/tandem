@@ -329,10 +329,6 @@ export function planTransactionUpdate(
       conflictingFields: structuredConflictFields(base, remote),
     };
   }
-  if (base.transferId !== remote.transferId) {
-    return { kind: "conflict", conflictingFields: ["transferId"] };
-  }
-
   const applicable: TransactionPatch = {};
   const conflicts: TransactionConflictField[] = [];
 
@@ -406,9 +402,6 @@ export function planTransactionDeletion(
       kind: "conflict",
       conflictingFields: structuredConflictFields(base, remote),
     };
-  }
-  if (base.transferId !== remote.transferId) {
-    return { kind: "conflict", conflictingFields: ["transferId"] };
   }
   const changed = DELETION_COMPARISON_FIELDS.filter(
     (field) => !sameSnapshotValue(field, base[field], remote[field]),
