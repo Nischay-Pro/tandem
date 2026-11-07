@@ -69,6 +69,17 @@ jobs:
       - name: Check mobile design tokens
         run: python3 scripts/check-mobile-design-tokens.py
 
+      - name: Build iOS app host with Xcode
+        working-directory: mobile
+        run: |
+          xcodebuild \
+            -project iosApp/TandemForActual.xcodeproj \
+            -scheme TandemForActual \
+            -destination 'generic/platform=iOS Simulator' \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
       - name: Compile and test generated API client targets
         working-directory: mobile
         run: >-
@@ -123,17 +134,6 @@ jobs:
       - name: Assemble Android release
         working-directory: mobile
         run: ./gradlew --no-daemon :androidApp:assembleRelease
-
-      - name: Build iOS app host with Xcode
-        working-directory: mobile
-        run: |
-          xcodebuild \
-            -project iosApp/TandemForActual.xcodeproj \
-            -scheme TandemForActual \
-            -destination 'generic/platform=iOS Simulator' \
-            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
-            CODE_SIGNING_ALLOWED=NO \
-            build
 
       - name: Run Android database persistence test on emulator
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
