@@ -635,6 +635,9 @@ class LocalBudgetRepositoryTest {
                         optimistic = "{\"id\":\"txn-2\",\"amount\":1200}",
                     )
 
+                assertFails<IllegalArgumentException> {
+                    repository.enqueueWrites(listOf(first, second.copy(recordId = first.recordId)))
+                }
                 assertFails<InvalidLocalWriteException> {
                     repository.enqueueWrites(listOf(first, second.copy(baseRevision = "stale")))
                 }
@@ -645,6 +648,9 @@ class LocalBudgetRepositoryTest {
                 val results = repository.enqueueWrites(listOf(first, second))
 
                 assertEquals(2, results.size)
+                assertFails<LocalIdempotencyConflictException> {
+                    repository.enqueueWrites(listOf(first.copy(idempotencyKey = "different-key")))
+                }
                 assertEquals(setOf("batch-1", "batch-2"), repository.readPendingWrites(BUDGET).map { it.operationId }.toSet())
                 assertEquals("{\"id\":\"txn-1\",\"amount\":1200}", repository.findRecord(BUDGET, "transaction", "txn-1")?.localJson)
                 assertEquals("{\"id\":\"txn-2\",\"amount\":1200}", repository.findRecord(BUDGET, "transaction", "txn-2")?.localJson)
