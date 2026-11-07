@@ -7,7 +7,6 @@ import type { ActualTransactionStore } from "./transaction-store.js";
 import {
   createTransactionRevision,
   isCompanionTransactionId,
-  isSplitTransaction,
   parseTransactionCreateInput,
   parseTransactionPatch,
   parseTransactionSnapshot,
@@ -353,15 +352,6 @@ export class TransactionReconciler {
           if (latest.id !== prepared.request.transactionId) {
             throw new Error("Actual returned a different transaction ID");
           }
-          if (isSplitTransaction(prepared.base) || isSplitTransaction(latest)) {
-            return {
-              kind: "conflict",
-              conflictType: "split-transaction-requires-group-edit",
-              remoteSnapshot: toJsonValue(latest),
-              conflictingFields: structuredFields(prepared.base, latest),
-            };
-          }
-
           if (prepared.base.transferId !== latest.transferId) {
             return {
               kind: "conflict",
@@ -522,10 +512,10 @@ export class TransactionReconciler {
     }
 
     const latest = snapshotActualTransaction(latestRaw);
-    if (isSplitTransaction(latest)) {
+    if (transactionStructureChanged(prepared.base, latest)) {
       return this.#recordConflict(operation, {
         kind: "conflict",
-        conflictType: "split-transaction-after-write",
+        conflictType: "transaction-structure-changed-during-write",
         remoteSnapshot: toJsonValue(latest),
         conflictingFields: structuredFields(prepared.base, latest),
       });
@@ -952,6 +942,30 @@ function structuredFields(
     marked.push("subtransactions");
   }
   return [...new Set(marked)];
+}
+
+function transactionStructureChanged(
+  expected: TransactionSnapshot,
+  actual: TransactionSnapshot,
+): boolean {
+  if (
+    expected.isParent !== actual.isParent ||
+    expected.isChild !== actual.isChild ||
+    expected.parentId !== actual.parentId
+  ) {
+    return true;
+  }
+  if (
+    !expected.isParent &&
+    !actual.isParent &&
+    expected.subtransactions.length === 0 &&
+    actual.subtransactions.length === 0
+  ) {
+    return false;
+  }
+  const expectedChildIds = expected.subtransactions.map(({ id }) => id).sort();
+  const actualChildIds = actual.subtransactions.map(({ id }) => id).sort();
+  return JSON.stringify(expectedChildIds) !== JSON.stringify(actualChildIds);
 }
 
 function runOptions(

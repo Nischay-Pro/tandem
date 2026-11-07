@@ -677,6 +677,43 @@ describe.skipIf(!compatibilityTestEnabled)(
           throw new Error("Actual did not return the synthetic split child");
         }
 
+        await firstDevice.runBudget(
+          budget.groupId,
+          () =>
+            Actual.addTransactions(initialData.accountId, [
+              {
+                date: transactionDate,
+                amount: -700,
+                notes: "Synthetic split mutation parent",
+                subtransactions: [
+                  { amount: -250, notes: "Synthetic mutation child one" },
+                  { amount: -450, notes: "Synthetic mutation child two" },
+                ],
+              },
+            ]),
+          { synchronizeAfterWrite: true },
+        );
+        const splitMutationParent = await firstDevice.runBudget(
+          budget.groupId,
+          async () => {
+            const transactions = await Actual.getTransactions(
+              initialData.accountId,
+              transactionDate,
+              transactionDate,
+            );
+            return transactions.find(
+              (item) => item.notes === "Synthetic split mutation parent",
+            );
+          },
+        );
+        if (!splitMutationParent?.subtransactions?.length) {
+          throw new Error("Actual did not return the split mutation fixture");
+        }
+        const splitMutationChild = splitMutationParent.subtransactions[0];
+        if (!splitMutationChild) {
+          throw new Error("Actual did not return a split mutation child");
+        }
+
         const childByAql = await firstDevice.runBudget(budget.groupId, () =>
           transactionStore.read(splitChild.id),
         );
@@ -759,9 +796,10 @@ describe.skipIf(!compatibilityTestEnabled)(
           throw new Error("Actual did not return both synthetic transfer legs");
         }
 
-        const assertSplitWriteConflict = async (
+        const submitSplitWrite = async (
           transactionId: string,
           action: "update" | "delete",
+          patch: Record<string, unknown> = {},
         ) => {
           const transactionPath = `/api/v1/budgets/${budget.groupId}/transactions/${encodeURIComponent(transactionId)}`;
           const readResponse = await reconciliationApp.inject({
@@ -787,35 +825,75 @@ describe.skipIf(!compatibilityTestEnabled)(
               action,
               baseRevision: base.revision,
               baseSnapshot: base.transaction,
-              patch:
-                action === "update"
-                  ? { amount: base.transaction.amount + 1 }
-                  : {},
+              patch,
             },
           });
           expect(writeResponse.statusCode).toBe(200);
           expect(writeResponse.json()).toMatchObject({
-            operation: { action, status: "conflict" },
-            conflict: {
-              conflictType: "split-transaction-requires-group-edit",
-            },
+            operation: { action, status: "committed" },
+            conflict: null,
           });
-
-          const unchanged = await firstDevice.runBudget(budget.groupId, () =>
-            transactionStore.read(transactionId),
-          );
-          if (!unchanged) {
-            throw new Error("Structured Actual transaction disappeared");
-          }
-          expect(
-            createTransactionRevision(snapshotActualTransaction(unchanged)),
-          ).toBe(base.revision);
         };
 
-        for (const splitTransactionId of [splitParent.id, splitChild.id]) {
-          await assertSplitWriteConflict(splitTransactionId, "update");
-          await assertSplitWriteConflict(splitTransactionId, "delete");
-        }
+        await submitSplitWrite(splitMutationParent.id, "update", {
+          notes: "Updated synthetic split parent",
+        });
+        const updatedSplitParent = await firstDevice.runBudget(
+          budget.groupId,
+          () => transactionStore.read(splitMutationParent.id),
+        );
+        expect(updatedSplitParent).toMatchObject({
+          notes: "Updated synthetic split parent",
+          is_parent: true,
+        });
+
+        await submitSplitWrite(splitMutationChild.id, "update", {
+          notes: "Updated synthetic split child",
+        });
+        const updatedSplitChild = await firstDevice.runBudget(
+          budget.groupId,
+          () => transactionStore.read(splitMutationChild.id),
+        );
+        expect(updatedSplitChild).toMatchObject({
+          notes: "Updated synthetic split child",
+          is_child: true,
+          parent_id: splitMutationParent.id,
+        });
+
+        await submitSplitWrite(splitMutationChild.id, "delete");
+        const afterSplitChildDelete = await firstDevice.runBudget(
+          budget.groupId,
+          async () => ({
+            parent: await transactionStore.read(splitMutationParent.id),
+            child: await transactionStore.read(splitMutationChild.id),
+          }),
+        );
+        expect(afterSplitChildDelete.child).toBeUndefined();
+        expect(afterSplitChildDelete.parent).toMatchObject({
+          is_parent: true,
+          subtransactions: [{ is_child: true }],
+        });
+
+        const remainingSplitChild = (
+          afterSplitChildDelete.parent as {
+            subtransactions: Array<{ id: string }>;
+          }
+        ).subtransactions[0]?.id;
+        expect(remainingSplitChild).toBeDefined();
+        await submitSplitWrite(splitMutationParent.id, "delete");
+        const afterSplitParentDelete = await firstDevice.runBudget(
+          budget.groupId,
+          async () => ({
+            parent: await transactionStore.read(splitMutationParent.id),
+            child: remainingSplitChild
+              ? await transactionStore.read(remainingSplitChild)
+              : undefined,
+          }),
+        );
+        expect(afterSplitParentDelete).toEqual({
+          parent: undefined,
+          child: undefined,
+        });
 
         const readTransfer = async (transactionId: string) => {
           const response = await reconciliationApp.inject({
@@ -1011,7 +1089,7 @@ describe.skipIf(!compatibilityTestEnabled)(
         expect(findRuntimeRecord("transaction", splitChild.id)).toBeDefined();
         expect(
           findRuntimeRecord("transaction", transferLegs.outgoing?.id),
-        ).toBeDefined();
+        ).toBeUndefined();
         const firstChangePageResponse = await productionApp.inject({
           method: "GET",
           url: `/api/v1/budgets/${budget.groupId}/changes?generation=${runtimeSnapshot.generation}&cursor=0&limit=2`,
@@ -1076,9 +1154,7 @@ describe.skipIf(!compatibilityTestEnabled)(
           const downloadedTransfer = downloadedTransactions.find(
             (item) => item.id === transferLegs.outgoing?.id,
           );
-          expect(downloadedTransfer?.transfer_id).toBe(
-            transferLegs.incoming?.id,
-          );
+          expect(downloadedTransfer).toBeUndefined();
 
           await secondDevice.runBudget(
             budget.groupId,

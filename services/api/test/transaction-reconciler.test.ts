@@ -1267,21 +1267,28 @@ describe("Actual transaction reconciliation", () => {
     });
   });
 
-  it("keeps split transaction edits behind group review", async () => {
-    const base = createSnapshot({ transferId: "transfer-1", isParent: true });
+  it("allows a split parent update when its group structure is unchanged", async () => {
+    const child = createSnapshot({
+      id: "transaction-child",
+      amount: 600,
+      isChild: true,
+      parentId: "transaction-1",
+    });
+    const base = createSnapshot({ isParent: true, subtransactions: [child] });
     const request = createRequest({
+      patch: { notes: "Updated split purchase" },
       baseSnapshot: base as unknown as JsonValue,
       baseRevision: createTransactionRevision(base),
     });
     const harness = createHarness(request);
-    harness.actual = actualFrom(createSnapshot());
+    harness.actual = actualFrom(base);
 
     const result = await harness.reconciler.submit(request);
 
-    expect(result.conflict).toMatchObject({
-      conflictType: "split-transaction-requires-group-edit",
-      conflictingFields: ["transferId", "isParent"],
-    });
+    expect(result.operation.status).toBe("committed");
+    expect((harness.actual as Record<string, unknown>).notes).toBe(
+      "Updated split purchase",
+    );
   });
 
   it("requires a valid paired Actual leg before changing a transfer", async () => {
@@ -1417,28 +1424,65 @@ describe("Actual transaction reconciliation", () => {
     }
   });
 
-  it("reports split children as the group-edit conflict field", async () => {
-    const child = createSnapshot({
+  it("allows a split child field update without editing its parent", async () => {
+    const base = createSnapshot({
       id: "transaction-child",
       amount: -300,
+      category: "category-old",
       isChild: true,
       parentId: "transaction-1",
     });
-    const base = createSnapshot({ subtransactions: [child] });
     const request = createRequest({
+      transactionId: base.id,
+      patch: { category: "category-new" },
       baseSnapshot: base as unknown as JsonValue,
       baseRevision: createTransactionRevision(base),
     });
     const harness = createHarness(request);
-    harness.actual = actualFrom(createSnapshot());
+    harness.actual = actualFrom(base);
 
     const result = await harness.reconciler.submit(request);
 
-    expect(result.conflict).toMatchObject({
-      conflictType: "split-transaction-requires-group-edit",
-      conflictingFields: ["subtransactions"],
-    });
+    expect(result.operation.status).toBe("committed");
+    expect((harness.actual as Record<string, unknown>).category).toBe(
+      "category-new",
+    );
   });
+
+  it.each([
+    {
+      label: "split parent",
+      snapshot: createSnapshot({ isParent: true }),
+      transactionId: "transaction-1",
+    },
+    {
+      label: "split child",
+      snapshot: createSnapshot({
+        id: "transaction-child",
+        isChild: true,
+        parentId: "transaction-1",
+      }),
+      transactionId: "transaction-child",
+    },
+  ])(
+    "allows deletion of a $label through Actual's delete operation",
+    async ({ snapshot, transactionId }) => {
+      const request = createRequest({
+        action: "delete",
+        transactionId,
+        patch: {},
+        baseSnapshot: snapshot as unknown as JsonValue,
+        baseRevision: createTransactionRevision(snapshot),
+      });
+      const harness = createHarness(request);
+      harness.actual = actualFrom(snapshot);
+
+      const result = await harness.reconciler.submit(request);
+
+      expect(result.operation.status).toBe("committed");
+      expect(harness.actual).toBeUndefined();
+    },
+  );
 
   it.each([
     {

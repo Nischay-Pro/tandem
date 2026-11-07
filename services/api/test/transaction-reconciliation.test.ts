@@ -668,7 +668,7 @@ describe("transaction snapshots and merge planning", () => {
     ).toEqual({ kind: "unchanged" });
   });
 
-  it("keeps split changes behind group review and allows transfer field changes", () => {
+  it("allows split parent changes when the group is unchanged", () => {
     const splitChild = createSnapshot({
       id: "split-child",
       amount: -1500,
@@ -682,15 +682,12 @@ describe("transaction snapshots and merge planning", () => {
     });
     const transfer = createSnapshot({ transferId: "counterpart-transaction" });
 
-    expect(
-      planTransactionUpdate(split, split, { amount: -1200 }),
-    ).toMatchObject({
-      kind: "conflict",
-      conflictingFields: expect.arrayContaining(["subtransactions"]),
+    expect(planTransactionUpdate(split, split, { amount: -1200 })).toEqual({
+      kind: "apply",
+      patch: { amount: -1200 },
     });
-    expect(planTransactionDeletion(split, split)).toMatchObject({
-      kind: "conflict",
-      conflictingFields: expect.arrayContaining(["subtransactions"]),
+    expect(planTransactionDeletion(split, split)).toEqual({
+      kind: "delete",
     });
     expect(
       planTransactionUpdate(transfer, transfer, { amount: -1200 }),
@@ -742,7 +739,7 @@ describe("transaction snapshots and merge planning", () => {
     }
   });
 
-  it("reports exactly which split and transfer structures require review", () => {
+  it("allows stable split edits and reports changed structures for review", () => {
     const ordinary = createSnapshot();
     const transfer = createSnapshot({ transferId: "counterpart" });
     const child = createSnapshot({
@@ -766,13 +763,10 @@ describe("transaction snapshots and merge planning", () => {
       planTransactionUpdate(transfer, transfer, { amount: -1200 }),
     ).toEqual({ kind: "apply", patch: { amount: -1200 } });
     expect(planTransactionUpdate(split, split, { amount: -1200 })).toEqual({
-      kind: "conflict",
-      conflictingFields: ["isParent", "subtransactions"],
+      kind: "apply",
+      patch: { amount: -1200 },
     });
-    expect(planTransactionDeletion(split, split)).toEqual({
-      kind: "conflict",
-      conflictingFields: ["isParent", "subtransactions"],
-    });
+    expect(planTransactionDeletion(split, split)).toEqual({ kind: "delete" });
     const childTransaction = createSnapshot({
       isChild: true,
       parentId: "parent",
@@ -781,14 +775,11 @@ describe("transaction snapshots and merge planning", () => {
       planTransactionUpdate(childTransaction, childTransaction, {
         amount: -1200,
       }),
-    ).toEqual({
-      kind: "conflict",
-      conflictingFields: ["isChild", "parentId"],
-    });
+    ).toEqual({ kind: "apply", patch: { amount: -1200 } });
     const parentOnly = createSnapshot({ parentId: "parent" });
     expect(
       planTransactionUpdate(parentOnly, parentOnly, { amount: -1200 }),
-    ).toEqual({ kind: "conflict", conflictingFields: ["parentId"] });
+    ).toEqual({ kind: "apply", patch: { amount: -1200 } });
 
     const splitAdded = createSnapshot({ isParent: true });
     expect(

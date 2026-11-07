@@ -8,8 +8,8 @@ open a budget. The integration test establishes login, version check, synthetic
 budget/account/transaction creation, ordinary transaction update and deletion,
 transfer creation, split creation and readback, server sync, and readback through
 independent local workspaces. It also verifies the adapter's encrypted-budget
-read path and verifies that edits and deletions of split or transfer records
-are rejected without changing the Actual records.
+read path, split parent and child edits/deletes, and paired transfer edits and
+deletes.
 
 The version gate calls the official package's `getServerVersion()` method. In
 the pinned source, that method reads the server build version, is available
@@ -99,8 +99,11 @@ reconciliation flow edits one transfer leg through Actual's public
 `updateTransaction` method and verifies that Actual updates its counterpart,
 then deletes the other leg and verifies that Actual removes both. Split
 creation is verified through Actual's grouped transaction result and public AQL
-read. Split parent and child updates and deletions remain review conflicts until
-the mobile editor can submit the full split group as one change.
+read. The adapter edits split parents and children through Actual's public
+transaction methods. Parent deletion cascades through Actual's split group;
+child deletion follows Actual's native split recalculation behavior. A change to
+the split's parent/child structure between read and write is recorded as a
+conflict.
 
 The encrypted fixture uses the pinned package's internal `key-make` handler to
 enable encryption on synthetic data because the public API has no encryption

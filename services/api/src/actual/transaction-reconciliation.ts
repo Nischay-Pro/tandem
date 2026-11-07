@@ -323,7 +323,7 @@ export function planTransactionUpdate(
   if (base.id !== remote.id) {
     throw new Error("Transaction snapshot IDs do not match");
   }
-  if (isSplitTransaction(base) || isSplitTransaction(remote)) {
+  if (!sameSplitStructure(base, remote)) {
     return {
       kind: "conflict",
       conflictingFields: structuredConflictFields(base, remote),
@@ -355,8 +355,38 @@ export function planTransactionUpdate(
     }
   }
 
+  // Actual derives these values from the group parent when a split child is
+  // changed, and does not support assigning a category directly to a parent.
+  // Return a reviewable conflict instead of silently accepting a no-op.
+  if (
+    base.isParent &&
+    Object.hasOwn(local, "category") &&
+    !sameSnapshotValue("category", local.category, base.category) &&
+    !sameSnapshotValue("category", local.category, remote.category)
+  ) {
+    conflicts.push("category");
+  }
+  if (
+    base.isChild &&
+    (["account", "date", "cleared", "reconciled"] as const).some(
+      (field) =>
+        Object.hasOwn(local, field) &&
+        !sameSnapshotValue(field, local[field], base[field]) &&
+        !sameSnapshotValue(field, local[field], remote[field]),
+    )
+  ) {
+    conflicts.push(
+      ...(["account", "date", "cleared", "reconciled"] as const).filter(
+        (field) =>
+          Object.hasOwn(local, field) &&
+          !sameSnapshotValue(field, local[field], base[field]) &&
+          !sameSnapshotValue(field, local[field], remote[field]),
+      ),
+    );
+  }
+
   if (conflicts.length > 0) {
-    return { kind: "conflict", conflictingFields: conflicts };
+    return { kind: "conflict", conflictingFields: [...new Set(conflicts)] };
   }
   if (Object.keys(applicable).length === 0) {
     return { kind: "unchanged" };
@@ -371,7 +401,7 @@ export function planTransactionDeletion(
   if (base.id !== remote.id) {
     throw new Error("Transaction snapshot IDs do not match");
   }
-  if (isSplitTransaction(base) || isSplitTransaction(remote)) {
+  if (!sameSplitStructure(base, remote)) {
     return {
       kind: "conflict",
       conflictingFields: structuredConflictFields(base, remote),
@@ -383,9 +413,45 @@ export function planTransactionDeletion(
   const changed = DELETION_COMPARISON_FIELDS.filter(
     (field) => !sameSnapshotValue(field, base[field], remote[field]),
   );
+  if (
+    base.isParent &&
+    !sameSnapshotValue(
+      "subtransactions",
+      base.subtransactions,
+      remote.subtransactions,
+    )
+  ) {
+    changed.push("subtransactions");
+  }
   return changed.length === 0
     ? { kind: "delete" }
     : { kind: "conflict", conflictingFields: changed };
+}
+
+function sameSplitStructure(
+  base: TransactionSnapshot,
+  remote: TransactionSnapshot,
+): boolean {
+  if (
+    base.transferId !== remote.transferId ||
+    base.isParent !== remote.isParent ||
+    base.isChild !== remote.isChild ||
+    base.parentId !== remote.parentId
+  ) {
+    return false;
+  }
+  if (
+    !base.isParent &&
+    !remote.isParent &&
+    base.subtransactions.length === 0 &&
+    remote.subtransactions.length === 0
+  ) {
+    return true;
+  }
+
+  const baseChildIds = base.subtransactions.map(({ id }) => id).sort();
+  const remoteChildIds = remote.subtransactions.map(({ id }) => id).sort();
+  return JSON.stringify(baseChildIds) === JSON.stringify(remoteChildIds);
 }
 
 export function isStructuredTransaction(
@@ -545,6 +611,9 @@ function sameSnapshotValue(
   left: unknown,
   right: unknown,
 ): boolean {
+  if (field === "subtransactions") {
+    return JSON.stringify(left) === JSON.stringify(right);
+  }
   return (
     canonicalScalar(normalizeSnapshotValue(field, left)) ===
     canonicalScalar(normalizeSnapshotValue(field, right))

@@ -223,9 +223,10 @@ The public Actual transaction update/delete API has no revision precondition.
 The Tandem detects changes visible before a write and records them as
 conflicts, but cannot prevent an Actual edit racing between its last read and
 write. Stable create IDs are reserved to the `tandem:<uuid>` namespace;
-collisions are reported as conflicts. Transfers and split transactions are
-readable but remain non-editable through reconciliation until their mutation
-semantics are verified.
+collisions are reported as conflicts. Split parents and children can be edited
+or deleted through Actual's public transaction methods. Changes to the split
+group structure are checked before writing; parent deletion follows Actual's
+group cascade, and child deletion follows Actual's split recalculation rules.
 
 Actual API calls share one serialized process-wide client. Each Actual session
 call has a five-minute deadline. If one expires, in-flight writes remain
