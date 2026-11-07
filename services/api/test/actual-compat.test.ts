@@ -583,6 +583,28 @@ describe.skipIf(!compatibilityTestEnabled)(
             () => Actual.getBudgetMonth("2026-10"),
           );
           expect(resetMonth.forNextMonth).toBe(0);
+          const templateResponse = await reconciliationApp.inject({
+            method: "POST",
+            url: `/api/v1/budgets/${budget.groupId}/months/2026-10/actions`,
+            headers: {
+              ...authorizationHeaders,
+              "idempotency-key": `compat-template-${randomUUID()}`,
+            },
+            payload: {
+              action: "apply-template",
+              assignments: [{ categoryId, amountMinor: 12_345 }],
+            },
+          });
+          expect(templateResponse.statusCode).toBe(200);
+          const templateMonth = await firstDevice.runBudget(
+            budget.groupId,
+            () => Actual.getBudgetMonth("2026-10"),
+          );
+          expect(
+            templateMonth.categoryGroups
+              .flatMap((group) => group.categories ?? [])
+              .find((category) => category.id === categoryId)?.budgeted,
+          ).toBe(12_345);
 
           const createResponse = await reconciliationApp.inject({
             method: "POST",

@@ -18,6 +18,7 @@ import {
   BudgetMaintenanceBusyError,
   BudgetMaintenanceInputError,
   MAX_BUDGET_AMOUNT_MINOR,
+  type BudgetTemplateAssignment,
   type BudgetMaintenanceApiPort,
   type BudgetScheduleEdit,
 } from "./actual/budget-maintenance-api.js";
@@ -1055,8 +1056,9 @@ interface BudgetCategoryCarryoverBody {
 }
 
 interface BudgetMonthActionBody {
-  action: "copy-last-month" | "hold-next-month" | "reset-hold";
+  action: "copy-last-month" | "hold-next-month" | "reset-hold" | "apply-template";
   amountMinor?: number;
+  assignments?: BudgetTemplateAssignment[];
 }
 
 interface BudgetMoveMoneyBody {
@@ -2724,12 +2726,30 @@ function registerBudgetMaintenanceRoutes(
           properties: {
             action: {
               type: "string",
-              enum: ["copy-last-month", "hold-next-month", "reset-hold"],
+              enum: ["copy-last-month", "hold-next-month", "reset-hold", "apply-template"],
             },
             amountMinor: {
               type: "integer",
               minimum: 1,
               maximum: MAX_BUDGET_AMOUNT_MINOR,
+            },
+            assignments: {
+              type: "array",
+              minItems: 1,
+              maxItems: 500,
+              items: {
+                type: "object",
+                properties: {
+                  categoryId: { type: "string", minLength: 1, maxLength: 200 },
+                  amountMinor: {
+                    type: "integer",
+                    minimum: 0,
+                    maximum: MAX_BUDGET_AMOUNT_MINOR,
+                  },
+                },
+                required: ["categoryId", "amountMinor"],
+                additionalProperties: false,
+              },
             },
           },
           required: ["action"],
@@ -2754,10 +2774,22 @@ function registerBudgetMaintenanceRoutes(
       ) {
         return invalidBudgetRequest(reply);
       }
+      if (
+        (action === "apply-template" && request.body.assignments === undefined) ||
+        (action !== "apply-template" && request.body.assignments !== undefined)
+      ) {
+        return invalidBudgetRequest(reply);
+      }
       const auditAction = `budget_month_${action.replaceAll("-", "_")}`;
       const patch: { [key: string]: JsonValue } = { action };
       if (action === "hold-next-month") {
         patch.amountMinor = request.body.amountMinor!;
+      }
+      if (action === "apply-template") {
+        patch.assignments = request.body.assignments!.map((assignment) => ({
+          categoryId: assignment.categoryId,
+          amountMinor: assignment.amountMinor,
+        }));
       }
       try {
         const result = await runMaintenanceOperation(
@@ -2790,6 +2822,14 @@ function registerBudgetMaintenanceRoutes(
                 await maintenanceApi.resetBudgetHold(
                   request.params.budgetId,
                   request.params.month,
+                  password,
+                );
+                break;
+              case "apply-template":
+                await maintenanceApi.applyBudgetTemplate(
+                  request.params.budgetId,
+                  request.params.month,
+                  request.body.assignments!,
                   password,
                 );
                 break;

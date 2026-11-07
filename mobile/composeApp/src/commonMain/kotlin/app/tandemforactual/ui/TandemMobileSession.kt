@@ -806,6 +806,16 @@ internal class TandemMobileSession(
             apiClient.copyBudgetMonth(budgetId, month, encryptionPassword)
         }
 
+    suspend fun applyBudgetTemplate(
+        budgetId: String,
+        month: String,
+        assignments: List<Pair<String, Long>>,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Couldn’t apply this template. Try again.") {
+            apiClient.applyBudgetTemplate(budgetId, month, assignments, encryptionPassword)
+        }
+
     suspend fun holdBudgetForNextMonth(
         budgetId: String,
         month: String,

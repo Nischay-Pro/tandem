@@ -46,6 +46,7 @@ async function createApi(
     setBudgetAmount: vi.fn(async () => undefined),
     setBudgetCarryover: vi.fn(async () => undefined),
     copyBudgetMonth: vi.fn(async () => undefined),
+    applyBudgetTemplate: vi.fn(async () => undefined),
     holdBudgetForNextMonth: vi.fn(async () => undefined),
     resetBudgetHold: vi.fn(async () => undefined),
     moveMoney: vi.fn(async () => undefined),
@@ -818,6 +819,28 @@ describe("budget maintenance routes", () => {
     expect(fake.budgetMaintenanceApi.resetBudgetHold).toHaveBeenCalledWith(
       budgetId,
       "2026-11",
+      undefined,
+    );
+    const template = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/months/2026-11/actions`,
+      headers: testHeaders(),
+      payload: {
+        action: "apply-template",
+        assignments: [
+          { categoryId: "category-1", amountMinor: 1200 },
+          { categoryId: "category-2", amountMinor: 0 },
+        ],
+      },
+    });
+    expect(template.statusCode).toBe(200);
+    expect(fake.budgetMaintenanceApi.applyBudgetTemplate).toHaveBeenCalledWith(
+      budgetId,
+      "2026-11",
+      [
+        { categoryId: "category-1", amountMinor: 1200 },
+        { categoryId: "category-2", amountMinor: 0 },
+      ],
       undefined,
     );
     await fake.app.close();

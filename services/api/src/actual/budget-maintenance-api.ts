@@ -35,6 +35,11 @@ export interface BudgetScheduleEdit {
   date?: string | ScheduleRecurrenceConfig;
 }
 
+export interface BudgetTemplateAssignment {
+  categoryId: string;
+  amountMinor: number;
+}
+
 function validateBudgetScheduleEdit(edit: BudgetScheduleEdit): void {
   if (Object.keys(edit).length === 0) {
     throw new BudgetMaintenanceInputError("Add at least one schedule change");
@@ -292,6 +297,12 @@ export interface BudgetMaintenanceApiPort {
   copyBudgetMonth(
     budgetId: string,
     month: string,
+    encryptionPassword?: string,
+  ): Promise<void>;
+  applyBudgetTemplate(
+    budgetId: string,
+    month: string,
+    assignments: readonly BudgetTemplateAssignment[],
     encryptionPassword?: string,
   ): Promise<void>;
   holdBudgetForNextMonth(
@@ -865,6 +876,55 @@ export function createBudgetMaintenanceApi(
                   category.id,
                   sourceAmounts.get(category.id) ?? 0,
                 );
+              }
+            });
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    applyBudgetTemplate(budgetId, month, assignments, encryptionPassword) {
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+        return Promise.reject(new BudgetMaintenanceInputError("Choose a valid budget month"));
+      }
+      if (assignments.length === 0 || assignments.length > 500) {
+        return Promise.reject(new BudgetMaintenanceInputError("Choose a template with 1 to 500 categories"));
+      }
+      const seen = new Set<string>();
+      for (const assignment of assignments) {
+        if (
+          !assignment.categoryId.trim() ||
+          seen.has(assignment.categoryId) ||
+          !Number.isSafeInteger(assignment.amountMinor) ||
+          assignment.amountMinor < 0 ||
+          assignment.amountMinor > MAX_BUDGET_AMOUNT_MINOR
+        ) {
+          return Promise.reject(new BudgetMaintenanceInputError("The template contains an invalid category amount"));
+        }
+        seen.add(assignment.categoryId);
+      }
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const [monthData, categories] = await Promise.all([
+              client.getBudgetMonth(month),
+              client.getCategories({ hidden: false }),
+            ]);
+            const monthCategoryIds = new Set(
+              monthData.categoryGroups.flatMap((group) =>
+                (group.categories ?? [])
+                  .map((category) => category.id)
+                  .filter((id): id is string => typeof id === "string"),
+              ),
+            );
+            const activeCategoryIds = new Set(categories.map((category) => category.id));
+            if (assignments.some(({ categoryId }) => !activeCategoryIds.has(categoryId) || !monthCategoryIds.has(categoryId))) {
+              throw new BudgetMaintenanceInputError("A template category is no longer active in this month");
+            }
+            await client.batchBudgetUpdates(async () => {
+              for (const assignment of assignments) {
+                await client.setBudgetAmount(month, assignment.categoryId, assignment.amountMinor);
               }
             });
           },

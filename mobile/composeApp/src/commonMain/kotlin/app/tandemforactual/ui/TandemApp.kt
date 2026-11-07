@@ -4564,13 +4564,23 @@ private fun BudgetScreen(
     val palette = tandemPalette
     val scope = rememberCoroutineScope()
     var showCopyLastMonthDialog by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
+    var showBudgetTemplatesDialog by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
     var showNextMonthHoldDialog by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
+    var budgetTemplateNameDraft by rememberSaveable(state.selectedBudgetId) { mutableStateOf("") }
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     val isTrackingBudget = isLiveBudget && state.budgetDisplaySettings?.budgetType == "tracking"
     val compact = state.homeLayout == "Compact"
     val essentialsFirst = state.homeLayout == "Essentials"
     val sectionSpacing = if (compact) 10.dp else 16.dp
     val groups = if (isLiveBudget) liveBudgetMonth?.groups.orEmpty() else previewCategoryGroups
+    val currentBudgetTemplates =
+        remember(state.budgetTemplatesJson, state.selectedBudgetId) {
+            decodeBudgetTemplates(state.budgetTemplatesJson).filter { it.budgetId == state.selectedBudgetId }
+        }
+    val currentTemplateAssignments =
+        remember(groups) {
+            groups.flatMap { group -> group.categories }.map { it.id to it.assignedMinor }
+        }
     val recentTransactions =
         remember(isLiveBudget, liveTransactions) {
             if (isLiveBudget) {
@@ -4676,17 +4686,31 @@ private fun BudgetScreen(
         if (isLiveBudget && !isTrackingBudget && liveBudgetMonth != null) {
             item(key = "budget-copy-last-month") {
                 SurfaceCard {
-                    TandemActionButton(
-                        "Copy last month",
-                        TandemActionButtonTone.NEUTRAL,
-                        modifier = Modifier.fillMaxWidth().padding(TandemSpacing.small),
-                        icon = Lucide.CalendarDays,
-                        enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
-                        onClick = {
-                            mobileSession.clearBudgetActionMessage()
-                            showCopyLastMonthDialog = true
-                        },
-                    )
+                    Column(Modifier.fillMaxWidth().padding(TandemSpacing.small)) {
+                        TandemActionButton(
+                            "Copy last month",
+                            TandemActionButtonTone.NEUTRAL,
+                            modifier = Modifier.fillMaxWidth(),
+                            icon = Lucide.CalendarDays,
+                            enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                            onClick = {
+                                mobileSession.clearBudgetActionMessage()
+                                showCopyLastMonthDialog = true
+                            },
+                        )
+                        Spacer(Modifier.height(TandemSpacing.extraSmall))
+                        TandemActionButton(
+                            "Plan templates",
+                            TandemActionButtonTone.NEUTRAL,
+                            modifier = Modifier.fillMaxWidth(),
+                            icon = Lucide.CalendarDays,
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                            onClick = {
+                                mobileSession.clearBudgetActionMessage()
+                                showBudgetTemplatesDialog = true
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -5019,6 +5043,121 @@ private fun BudgetScreen(
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !mobileSession.isPerformingBudgetAction,
                     ) { showCopyLastMonthDialog = false }
+                }
+            }
+        }
+    }
+    if (showBudgetTemplatesDialog && isLiveBudget && !isTrackingBudget) {
+        val canSaveCurrentTemplate = currentTemplateAssignments.isNotEmpty() && currentTemplateAssignments.size <= 500
+        Dialog(
+            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showBudgetTemplatesDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 680.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(TandemSpacing.large),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        Icon(Lucide.CalendarDays, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
+                        Text(
+                            "Plan templates",
+                            modifier = Modifier.weight(1f),
+                            color = tandemPalette.text,
+                            fontSize = TandemTypography.sectionTitle,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        TandemIconButton(
+                            Lucide.X,
+                            "Close",
+                            sizeDp = 40,
+                            iconSizeDp = 18,
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                        ) { showBudgetTemplatesDialog = false }
+                    }
+                    TextFieldCard(
+                        "Template name",
+                        budgetTemplateNameDraft,
+                        { budgetTemplateNameDraft = it.take(60) },
+                        TextFieldOptions(placeholder = "e.g. Summer plan"),
+                    )
+                    TandemActionButton(
+                        "Save ${state.selectedMonth} plan",
+                        TandemActionButtonTone.PRIMARY,
+                        modifier = Modifier.fillMaxWidth(),
+                        icon = Lucide.Check,
+                        enabled =
+                            budgetTemplateNameDraft.isNotBlank() &&
+                                canSaveCurrentTemplate &&
+                                !mobileSession.isPerformingBudgetAction,
+                    ) {
+                        val saved =
+                            decodeBudgetTemplates(state.budgetTemplatesJson)
+                                .filterNot { it.budgetId == state.selectedBudgetId && it.name.equals(budgetTemplateNameDraft.trim(), true) }
+                        state.budgetTemplatesJson =
+                            encodeBudgetTemplates(
+                                saved + BudgetTemplate(state.selectedBudgetId, budgetTemplateNameDraft.trim(), currentTemplateAssignments),
+                            )
+                        budgetTemplateNameDraft = ""
+                    }
+                    if (currentTemplateAssignments.size > 500) {
+                        InlineMessage("This plan has more than 500 categories and cannot be saved as a template.", InlineMessageKind.INFO)
+                    }
+                    mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                    if (currentBudgetTemplates.isEmpty()) {
+                        Text("Saved templates will appear here.", color = tandemPalette.muted, fontSize = TandemTypography.body)
+                    } else {
+                        currentBudgetTemplates.forEach { template ->
+                            SurfaceCard {
+                                Column(Modifier.fillMaxWidth().padding(TandemSpacing.small)) {
+                                    ListRow(
+                                        template.name,
+                                        subtitle = "${template.assignments.size} categories",
+                                        leading = RowLeading.Icon(Lucide.CalendarDays),
+                                    )
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                                        TandemActionButton(
+                                            if (mobileSession.isPerformingBudgetAction) "Applying…" else "Apply",
+                                            TandemActionButtonTone.PRIMARY,
+                                            modifier = Modifier.weight(1f),
+                                            icon = Lucide.Check,
+                                            enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                                            loading = mobileSession.isPerformingBudgetAction,
+                                        ) {
+                                            scope.launch {
+                                                val applied =
+                                                    mobileSession.applyBudgetTemplate(
+                                                        state.selectedBudgetId,
+                                                        state.selectedMonthId,
+                                                        template.assignments,
+                                                        state.encryptedPassword.takeIf { it.isNotBlank() },
+                                                    )
+                                                if (applied) showBudgetTemplatesDialog = false
+                                            }
+                                        }
+                                        TandemIconButton(
+                                            Lucide.Trash2,
+                                            "Delete ${template.name}",
+                                            sizeDp = 48,
+                                            iconSizeDp = 20,
+                                            tint = tandemPalette.negative,
+                                            containerColor = tandemPalette.raised,
+                                            enabled = !mobileSession.isPerformingBudgetAction,
+                                        ) {
+                                            state.budgetTemplatesJson =
+                                                encodeBudgetTemplates(
+                                                    decodeBudgetTemplates(state.budgetTemplatesJson) - template,
+                                                )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

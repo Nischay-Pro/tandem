@@ -819,6 +819,43 @@ describe("Actual budget maintenance API", () => {
     ).rejects.toThrow("Choose a valid budget month");
   });
 
+  it("applies validated template assignments in one Actual batch", async () => {
+    const fake = createFake();
+    await fake.api.applyBudgetTemplate(
+      "budget-1",
+      "2026-11",
+      [
+        { categoryId: "expense", amountMinor: 12_500 },
+        { categoryId: "expense-2", amountMinor: 0 },
+      ],
+      "secret",
+    );
+    expect(fake.client.batchBudgetUpdates).toHaveBeenCalledOnce();
+    expect(fake.client.setBudgetAmount).toHaveBeenNthCalledWith(
+      1,
+      "2026-11",
+      "expense",
+      12_500,
+    );
+    expect(fake.client.setBudgetAmount).toHaveBeenNthCalledWith(
+      2,
+      "2026-11",
+      "expense-2",
+      0,
+    );
+    expect(fake.runBudgetCalls.at(-1)?.options).toEqual({
+      encryptionPassword: "secret",
+      synchronizeAfterWrite: true,
+    });
+
+    await expect(
+      fake.api.applyBudgetTemplate("budget-1", "2026-11", [{ categoryId: "missing", amountMinor: 1 }]),
+    ).rejects.toThrow("no longer active");
+    await expect(
+      fake.api.applyBudgetTemplate("budget-1", "2026-11", [{ categoryId: "expense", amountMinor: -1 }]),
+    ).rejects.toThrow("invalid category amount");
+  });
+
   it("holds only available envelope money and resets the held amount", async () => {
     const fake = createFake();
 

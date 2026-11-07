@@ -570,6 +570,56 @@ class TandemApiClient(
         }
     }
 
+    suspend fun applyBudgetTemplate(
+        budgetId: String,
+        month: String,
+        assignments: List<Pair<String, Long>>,
+        encryptionPassword: String?,
+    ) {
+        require(assignments.isNotEmpty() && assignments.size <= 500)
+        withMaintenanceOperation(
+            maintenanceSignature(
+                "budget-month-template",
+                budgetId,
+                month,
+                kotlinx.serialization.json.JsonArray(
+                    assignments.map { (categoryId, amountMinor) ->
+                        buildJsonObject {
+                            put("categoryId", categoryId)
+                            put("amountMinor", amountMinor)
+                        }
+                    },
+                ).toString(),
+            ),
+        ) { idempotencyKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.manageBudgetMonth(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        month = month,
+                        body =
+                            buildJsonObject {
+                                put("action", "apply-template")
+                                put(
+                                    "assignments",
+                                    kotlinx.serialization.json.JsonArray(
+                                        assignments.map { (categoryId, amountMinor) ->
+                                            buildJsonObject {
+                                                put("categoryId", categoryId)
+                                                put("amountMinor", amountMinor)
+                                            }
+                                        },
+                                    ),
+                                )
+                            }.toMap(),
+                    ),
+                )
+            }
+        }
+    }
+
     suspend fun holdBudgetForNextMonth(
         budgetId: String,
         month: String,

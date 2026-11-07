@@ -60,6 +60,7 @@ internal class AppState {
     var activitySearchQuery by mutableStateOf("")
     var activitySearchFilters by mutableStateOf<List<ActivitySearchFilter>>(emptyList())
     var savedActivitySearchesJson by mutableStateOf("")
+    var budgetTemplatesJson by mutableStateOf("")
     var activitySortOrder by mutableStateOf(ActivitySortOrder.NEWEST_FIRST)
     var activitySearchCache: ActivitySearchCache? = null
     var activitySearchResultCache: ActivitySearchResultCache? = null
@@ -131,6 +132,7 @@ internal class AppState {
             "reportsRangePreset" to reportsRangePreset,
             "reportsNetWorthScope" to reportsNetWorthScope,
             "savedActivitySearchesJson" to savedActivitySearchesJson,
+            "budgetTemplatesJson" to budgetTemplatesJson,
             "reduceMotionMode" to (reduceMotionOverride?.let { if (it) "on" else "off" } ?: "system"),
             "syncOnOpen" to syncOnOpen.toString(),
             "backgroundSyncEnabled" to backgroundSyncEnabled.toString(),
@@ -160,6 +162,7 @@ internal class AppState {
         reportsRangePreset = saved["reportsRangePreset"] ?: reportsRangePreset
         reportsNetWorthScope = saved["reportsNetWorthScope"] ?: reportsNetWorthScope
         savedActivitySearchesJson = saved["savedActivitySearchesJson"] ?: savedActivitySearchesJson
+        budgetTemplatesJson = saved["budgetTemplatesJson"] ?: budgetTemplatesJson
         reduceMotionOverride =
             when (saved["reduceMotionMode"]) {
                 "on" -> true
