@@ -81,12 +81,10 @@ Run:
 
 The script starts the pinned official Actual image on an internal Docker
 network, initializes a test-only password through the same bootstrap route used
-by Actual's UI, and runs against synthetic budget data. It uses only
-`.dev-tmp/actual/compat-gate-server`, `.dev-tmp/actual/compat-gate-client`, and
-`.dev-tmp/actual/compat-gate-postgres`, then clears those paths and stops its
-isolated Compose project. The household load fixture is stored separately in
-`.dev-tmp/actual/household-server` and is not touched by this test. It never
-connects to Tandem's configured production Actual server or uses a real budget.
+by Actual's UI, and runs against synthetic budget data in isolated temporary
+workspaces. It removes those workspaces and stops its isolated Compose project
+when the check completes. It never connects to Tandem's configured production
+Actual server or uses a real budget.
 
 The test creates, updates, and deletes a synthetic ordinary transaction
 through `@actual-app/api`. It syncs the update and verifies it from a second

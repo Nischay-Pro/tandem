@@ -1,297 +1,181 @@
-# Mobile synchronization
+# Mobile sync
 
-The mobile project includes the shared Room-backed local-first data and sync
-libraries, a Compose Multiplatform presentation module, and an installable
-Android host app. Android and iOS use the same Tandem design system and
-screens; the iOS host is `MainViewController()` in `mobile/composeApp`.
+Tandem is local-first: once a budget has synced, the app opens its Room cache
+without waiting for the server. The sync coordinator updates that cache in the
+background, and the screens observe Room directly.
 
-The shared app pairs devices through the generated API client, lists only
-server-authorized budgets, and syncs snapshots and changes into Room on Android
-and iOS. The budget overview, cached month/category plan, category group/detail,
-account balances, account activity, and transaction activity read the selected
-budget's local records. The Activity screen displays the newest 50 rows while
-Room retains the complete synced transaction set; Sync Center reports the full
-visible count. Initial setup selects the most recently active cached month when
-the prior selection is unavailable.
+## How the pieces fit
 
-App launch is local-first after a budget has synced once. Cache discovery,
-preference loading, and device-credential restoration run independently. The
-startup screen shows “Opening your budget” while local state is read, rather
-than presenting pairing or welcome UI first. The app opens the previously
-selected cached budget without waiting for the Tandem server, budget catalog,
-or a working device credential. If there is no saved selection, it opens the
-most recently synced cached budget. It uses the saved server catalog only to
-recover names and encryption metadata, and filters that catalog to budgets
-that really have a local snapshot. If the preference catalog is missing,
-cached budgets are discovered from Room and labeled using their saved currency
-when available.
-The app can then attempt sync in the background of the open screen; a network
-failure leaves the cached budget readable and offers retry through Sync Center.
-Pairing is only needed again for remote access when the server says the device
-credential is invalid.
+```mermaid
+flowchart LR
+  UI[Compose UI] --> DB[(Room cache)]
+  DB <--> Sync[Sync coordinator]
+  Worker[Android WorkManager or iOS background task] --> Sync
+  Sync <--> Client[Generated API client]
+  Client <--> API[Tandem API]
+  API <--> Projection[(Server projection and change feed)]
+  API <--> ActualAPI[@actual-app/api]
+  ActualAPI <--> Actual[Actual Budget server]
+```
 
-Snapshot and first-page change responses also carry an allowlist of the
-selected Actual budget's currency and display preferences. The mobile client
-persists these settings beside that budget's local records. The API carries
-Actual's own currency symbol, decimal places, default number format, and symbol
-placement for the pinned `@actual-app/api` release; Android and iOS use these
-values instead of their platform currency tables. An explicit budget
-number-format preference takes precedence. If currency preferences are
-disabled, Actual itself falls back to USD; if no number format is configured,
-the phone locale supplies separators. The `hideFraction` preference applies
-to displayed totals, while transaction edit fields retain the full editable
-precision so a notes-only edit cannot silently change an amount.
+The UI reads local records. The coordinator sends changes through the Tandem
+API, which reads and writes Actual through its supported API and maintains the
+server-side projection used for snapshots and change pages. Tandem does not
+write directly to Actual's database.
 
-The local Actual 26.10.0 load fixture contains two budgets and 15,000 synthetic
-purchase rows spanning seven years. A fresh Actual readback after the
-2026-11-04 probe cleanup found 2,194 total CAD transaction records and 13,236
-total USD records; those totals include non-purchase rows. The earlier Android
-first-sync checkpoint had 2,182 CAD and 13,164 USD records, and both budgets
-reached the `READY` state. One first attempt for USD hit a transient connection
-error; retry completed successfully. This test data and its seed script live
-only under ignored `.dev-tmp/` paths.
-The compatibility server also retains a separate older synthetic fixture. The
-The test device's current credential is scoped only to the CAD and USD household
-budget IDs, so the budget chooser shows exactly those two; the compatibility
-fixture is outside its authorized scope.
+## First sync
 
-Editing the amount and notes of an existing transaction enqueues an optimistic
-local update and sends it through the sync coordinator. Conflict review can
-keep Actual's copy or rebase and submit the device edit; uncertain and rejected
-writes have explicit review, retry, and discard controls. These UI write flows
-are wired to the API and local outbox. On an Android device, an existing synthetic
-Safeway transaction was changed from -$95.58 to -$100.00, confirmed by Actual,
-then restored to -$95.58 and confirmed again. Conflict review was also tested:
-the official Actual client changed that same row by one cent while the test device
-held the prior revision; the stale device edit produced a conflict showing
-both versions. Keeping Actual discarded the local draft, and the original
--$95.58 value was restored through the app and confirmed. New transactions use
-a caller-generated `tandem:<uuid>` ID persisted as Actual's `imported_id`. The
-projection and follow-up reads translate Actual's internal random ID back to
-this stable ID, so the local optimistic record, outbox, snapshot, change feed,
-reads, updates, and deletes all refer to one key. The server checks the ID is
-unused and reads the created transaction back from Actual before committing the
-journal entry. Sync preferences trigger the real coordinator for manual
-refreshes and, when enabled, on returns to a budget. The local-data page reads
-the full transaction count, cached account count, sync state, and
-queued/conflicted outbox rows from Room. Refresh uses the same sync action;
-clearing local data remains disabled to protect queued and uncertain writes.
+```mermaid
+sequenceDiagram
+  actor Person
+  participant App as Mobile app
+  participant API as Tandem API
+  participant Actual as Actual Budget
+  participant Room
+  Person->>App: Pair device and choose budget
+  App->>API: Pair, then list authorized budgets
+  API-->>App: Authorized budget list
+  opt Encrypted budget
+    Person->>App: Enter budget password
+  end
+  App->>API: Request full snapshot
+  API->>Actual: Read selected budget through official API
+  Actual-->>API: Budget records and display settings
+  API-->>App: Snapshot and sync checkpoint
+  App->>Room: Apply snapshot transactionally
+  Room-->>App: Notify screens from local data
+```
 
-Android can schedule a unique six-hour periodic WorkManager job. Its network
-constraint is `CONNECTED`, or `UNMETERED` when the unmetered-network option is
-enabled. That constraint permits Wi-Fi and other networks Android marks as
-unmetered. The worker reloads the selected budget and secure device credential
-from local storage, checks that the budget is authorized for that device, and
-uses the regular snapshot/change-feed and outbox coordinator. Foreground and
-worker syncs can use separate coordinator and Room instances, so all
-coordinators in the app process share one mutex; this prevents a second sync
-from treating another coordinator's active `sending` write as an interrupted
-process. Android Room builders enable multi-instance invalidation, and the open
-Compose session observes recent transactions, total transaction count, related
-budget records, outbox rows, and sync state as Room flows. Worker changes
-therefore appear in the open UI without a route reload. An Android device
-regression verified updates across two independently opened database
-instances. The worker skips encrypted budgets because budget passwords are
-never persisted. WorkManager may defer periodic execution to meet system power
-and network rules. On 2026-11-04, an Android device ran
-`BackgroundBudgetSyncWorker` against the original local Tandem/Actual API using
-the saved device credential. The actual six-hour periodic WorkManager job
-ran and returned `SUCCESS`; the selected CAD Room row remained `READY`, had no
-sync error, and its `lastSyncedAt` advanced to 2026-11-04 21:31:25 UTC. The saved
-credential remained active, confirming the scheduled run did not require
-pairing again. The schedule preference was restored to off after verification.
+After a successful first sync, Tandem remembers the selected budget locally.
+On later launches it opens that cached budget immediately, even if Tandem or
+Actual is unreachable. Pairing is needed again only when remote access is
+required and the server has explicitly rejected the saved device credential.
 
-iOS now has a native host target at `mobile/iosApp/TandemForActual.xcodeproj`.
-Its app delegate registers a `BGAppRefreshTask`, schedules the next request with
-a six-hour earliest start, and connects the background-sync preference to the
-shared Kotlin sync coordinator. iOS decides when an eligible refresh actually
-runs; the six-hour value is not a fixed execution interval. The Kotlin runner
-loads the selected budget and preferences from Room, the device session from
-Keychain, and honors the unmetered-network preference by waiting for a path not
-marked expensive or constrained. It skips encrypted budgets whose passwords
-are not stored. The Xcode target also owns the iOS app icon and dark launch
-screen assets. The shared appearance setting is forwarded to SwiftUI so iOS
-system chrome follows the selected light, dark, or system mode.
+## Later refreshes
 
-The macOS mobile CI job builds the iOS simulator app with Xcode, checking the
-Swift host, framework link, and asset catalog. This Linux workspace cannot run
-the iOS app. Scheduled refresh behavior still needs a simulator or device
-runtime check.
+Manual refresh, app resume, restored network access, and eligible scheduled
+work all use the same coordinator.
 
-Automatic sync runs when the app resumes or network access returns while a
-cached budget is visible. It requires the sync-on-open preference, a restored
-device session, and an encryption password for encrypted budgets. Resume and
-network events coalesce while a sync is active; a failed sync gets one queued
-follow-up, while a successful sync clears the queued event. Successful attempts
-have a 30-second cooldown per budget. Android uses Activity resume and
-default-network callbacks while the app is started. iOS listens for the
-app-active notification and Network framework path changes. Both iOS targets
-compile, but iOS runtime behavior has not been device-tested from this Linux
-workspace. The iOS host registers scheduled refresh, but its Swift integration
-and runtime scheduling remain unverified until an Xcode build runs on macOS.
+```mermaid
+flowchart TD
+  Trigger[Manual, resume, network, or scheduled trigger] --> Ready{Sync enabled and session available?}
+  Ready -->|No| Cache[Keep showing the local budget]
+  Ready -->|Yes| Cursor[Read saved cursor and pending writes]
+  Cursor --> Valid{Cursor still valid?}
+  Valid -->|Yes| Pages[Fetch change-feed pages]
+  Valid -->|No: expired or reset| Snapshot[Fetch a fresh snapshot]
+  Pages --> Apply[Apply records and cursor in one Room transaction]
+  Snapshot --> Apply
+  Apply --> UI[Room flows update the open screens]
+```
 
-Appearance and home-layout preferences now affect the shared UI: the selected
-background is applied to every screen, the budget overview supports roomy,
-compact, and essentials-first layouts, and Reduce Motion switches route changes
-to immediate transitions. Conflict, rejected-edit, and sync-reminder settings
-control in-app banners and alerts from scheduled background sync. Android and
-iOS ask for notification permission from the Notifications settings page;
-delivery remains controlled by OS permission and notification settings.
-If scheduled sync clears a device credential rejected by the server, Android
-asks the person to pair this device again with a new pairing code. Connectivity
-failures continue to offer a retry.
-Budget Preferences shows which planning values come from Actual and marks
-upcoming due-date data as unavailable because that data is not part of the
-current mobile sync. Biometric app lock and transaction deletion are not exposed
-as switches or actions until those features are implemented.
+Each paged run holds the server's `throughCursor` fixed. Tandem applies a page
+and its next cursor together; deleted records become tombstones. If the cursor
+expires or the server generation changes, the coordinator replaces the remote
+baseline from a fresh snapshot while retaining local pending edits. Every
+device keeps its own cursor over the shared change feed. See the
+[API contract](api/README.md#transaction-reads-and-reconciliation) for feed
+retention and reset behavior.
 
-The eight-character pairing code is shown as readable, centered text in the
-entry field. It accepts the server's `XXXX-XXXX` format, with or without the
-hyphen. The pairing code is never persisted. After pairing, the app stores the
-server URL, device bearer credential, device identity, and authorized budget
-IDs through the platform secure store. Android encrypts that record with
-AES-GCM and keeps the key in Android Keystore; iOS stores it as a Keychain
-generic-password item marked for this device only. The app restores the device
-session on launch and clears the saved credential only when the server explicitly
-reports that the device credential is invalid.
-“Forget this device” first revokes its server token, then removes the local
-credential. If Tandem is unreachable, the app keeps the pairing so you can retry.
-Idle device tokens expire after 90 days. Encrypted-budget passwords are not
-saved.
-Temporary wireframes, test data, and device review artifacts belong under
-ignored `.dev-tmp/` paths and must not be committed.
+## Saving edits and resolving errors
 
-## Components and entry point
+Saving a transaction writes to Room first. The UI shows that local change
+immediately while the durable outbox waits for the server.
 
-- `mobile/data` owns the Room SQLite database, local/remote record overlays,
-  change-feed checkpoint, durable write outbox, and `BudgetSyncCoordinator`.
-- `mobile/api-client` contains the generated OpenAPI client and the handwritten
-  `GeneratedBudgetSyncRemote` adapter that implements the data module's remote
-  protocol.
-- The Compose root creates the API client, local repository, and sync
-  coordinator. Pairing, budget catalog loading, and the first sync are wired to
-  onboarding. On launch, completed Room checkpoints are enough to open a local
-  budget; restoring the device credential and loading the server catalog are
-  not prerequisites for showing cached data. The most recently selected cached
-  budget is preferred, with the newest successful local snapshot as fallback.
-  A per-session lock protects a full multi-request sync from a
-  concurrent re-pair or credential removal. The generated API package also
-  keeps its base URL and auth provider process-wide, so requests select the
-  owning session under a shared request lock. The UI starts an initial sync
-  when a budget is opened and exposes manual sync in Sync Center. Android
-  background sync uses WorkManager as described above. Conflict, uncertain,
-  and rejected write review screens expose their supported keep/rebase, retry,
-  and discard actions. Resume and network-restoration signals trigger a
-  throttled selected-budget sync on Android and iOS; iOS scheduled background
-  work still requires a host target that is not present in this workspace.
-- Device bearer credentials are restored from platform secure storage when the
-  app launches. Android stores AES-GCM ciphertext in app-private preferences
-  with its encryption key in Android Keystore; iOS stores the serialized
-  session as a device-only Keychain generic-password item. A credential is
-  cleared only when the API response explicitly identifies an invalid device
-  credential. Other 401 responses and temporary secure-store read failures
-  preserve the saved credential and can be retried.
-  Forgetting the device clears its credential from this phone but does not
-  revoke the server-side device token. Pairing codes and encrypted-budget
-  passwords are never persisted; the budget password is cleared after a
-  successful initial sync.
-- The budget, account, and Activity screens read local Room records. Cached
-  budget months supply the available-to-budget, category-group, and category
-  values; account snapshots supply current balances; transaction records supply
-  recent activity and account filtering. Transaction details show the cached
-  record and expose the supported amount/notes editor. New transaction forms
-  choose accounts, payees, and categories from the selected Actual budget,
-  accept signed amounts and ISO dates, save optimistically to Room, and submit
-  through the durable outbox. Conflict resolution and uncertain/rejected write
-  review use the same coordinator.
+```mermaid
+stateDiagram-v2
+  [*] --> queued
+  queued --> sending: sync starts
+  sending --> committed: Actual read-back confirms write
+  sending --> conflict: remote revision changed
+  sending --> rejected: definitive validation error
+  sending --> uncertain: timeout or cancellation
+  uncertain --> committed: operation lookup finds write
+  uncertain --> queued: person explicitly retries
+  conflict --> superseded: edit rebased on latest revision
+  conflict --> discarded: person keeps Actual's copy
+  rejected --> discarded: person removes local draft
+  uncertain --> discarded: person removes local draft
+```
 
-The Android host handles system Back through the shared route stack and uses
-safe drawing insets for the status and navigation bars. Physical-device review
-confirmed that headers clear the status bar and that system-bar icon contrast
-tracks the selected light or dark theme. Screenshots are disposable review
-artifacts only when explicitly requested; they are not source assets and must
-not be committed.
+An uncertain write is checked by operation ID before the next sync. Tandem
+never automatically posts it again; retry is explicit and reuses the same
+operation ID and idempotency key. Conflicts keep the local draft for review.
+The person can keep Actual's version or rebase the edit on the newest server
+revision. If Actual deleted the transaction, the local conflict must be
+discarded.
 
-Pass an encrypted budget's password to `synchronize` when needed. It is sent
-only on the relevant budget requests and is not stored in the database or
-outbox. Device credentials are persisted only through the Android Keystore
-backed store or iOS Keychain implementation.
+Transaction creates use a stable `tandem:<uuid>` identifier. The API passes it
+to Actual as `imported_id` and reads the created row back before committing the
+journal entry. Updates, deletes, snapshots, and change-feed reconciliation use
+that same identifier. Transaction edits support amount, payee, category, date,
+account, and notes. Amounts stay in integer minor units.
 
-## Pulling a budget
+## What is available offline
 
-The first sync, an invalid checkpoint, an expired cursor, or a server generation
-reset starts with a complete snapshot. Applying the snapshot replaces the
-remote baseline transactionally while retaining local pending writes and their
-optimistic drafts. A snapshot captured against an older local checkpoint is
-retried instead of overwriting newer changes.
+| Screen or data      | Local behavior                                                                                                                         |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Budget              | Reads the cached month plan, category groups, and categories                                                                           |
+| Accounts            | Reads cached accounts and their latest Actual balances                                                                                 |
+| Activity and search | Uses the complete cached transaction set; the Activity overview shows its 50 newest rows                                               |
+| Reports             | Recomputes totals from Room's indexed transaction columns                                                                              |
+| Currency display    | Uses Actual's symbol, precision, and format preferences; device locale supplies separators when Actual has no number-format preference |
+| Upcoming bills      | Due-date data is not included in the current mobile sync                                                                               |
 
-Later syncs read the change feed from the saved decimal cursor. Each paginated
-run keeps the server's `throughCursor` fixed, applies each page and its next
-cursor in one database transaction, and continues until `hasMore` is false.
-Upserts replace remote records; deletion events create tombstones. If the server
-requires a reset or changes generation, the coordinator fetches a fresh
-snapshot. The Tandem's feed is shared server history, so independent device
-databases each advance their own cursor over the same changes.
+When a budget has no saved selection, Tandem opens the most recently synced
+local budget. It uses saved catalog metadata for its name and encryption state,
+and discovers cached budgets from Room if that metadata is missing.
 
-The change feed and snapshot behavior, including retention and generation
-resets, is described in [the API contract guide](api/README.md#transaction-reads-and-reconciliation).
+## Refresh schedule
 
-## Sending local edits
+| Trigger                    | Android                                                                                | iOS                                                                         |
+| -------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Foreground                 | Manual refresh; resume and network-restoration refresh when enabled                    | Manual refresh; app-active and network-restoration refresh when enabled     |
+| Periodic                   | Unique WorkManager request with a six-hour interval and a connected-network constraint | `BGAppRefreshTask` with a six-hour earliest start; iOS decides when it runs |
+| Metered network preference | Can require an unmetered network                                                       | Waits for a path that is not marked expensive or constrained                |
+| Encrypted budgets          | Background work skips these budgets because passwords are not stored                   | Background work skips these budgets for the same reason                     |
 
-Local edits are stored optimistically with their base revision, base snapshot,
-patch, operation UUID, and idempotency key. Unsent edits to one record can be
-coalesced while they share the same base. The Tandem write endpoint supports
-stable-ID creates and revision-based updates and deletions. A create carries its
-complete input in `patch`, has no remote base, and uses a `tandem:<uuid>` record
-ID. The server passes this identifier as Actual's `imported_id` through the
-official `addTransactions` API. The projection continues exposing that same ID
-even though Actual assigns a separate internal UUID. Room, the outbox, retries,
-and change-feed reconciliation therefore use the caller-generated key without
-writing to Actual's database directly.
+Android and iOS may defer scheduled work to satisfy their power and network
+rules. iOS scheduling has a native host target, but its background runtime
+behavior still needs a macOS simulator or device check. Foreground sync can use
+the password entered to unlock an encrypted budget.
 
-Create and update amounts are limited to ±1,000,000,000 Actual amount units,
-and dates before 1900-01-01 are rejected. A create also requires an existing
-open account; any non-null payee or category must exist in the selected budget.
-Those reference checks run under the budget lock before the Actual write. A
-failed check returns HTTP 400 and leaves a terminal rejected journal entry.
+Resume and network events coalesce while a sync is active. Successful attempts
+have a 30-second per-budget cooldown; a failed attempt can queue one follow-up.
+Android workers and the open app may use separate database instances, so Room
+multi-instance invalidation keeps the visible screens current.
 
-After posting, the coordinator reads the authoritative transaction before
-marking a create or update committed. A conflict keeps the local draft and stores the
-latest remote transaction for review. Resolving a conflict means enqueueing a
-new edit with the latest remote revision and snapshot; this atomically marks
-the previous conflict `superseded` and queues the new edit. If the remote
-transaction was deleted, discard the conflict instead of rebasing it.
+## Credentials and encryption
 
-HTTP 401, 403, and 404 responses leave the edit queued, record the error, and
-fail that sync attempt so credentials or budget access can be fixed before the
-next try. Definitive request errors (400, 409, or 422) mark the entry rejected
-and remove its optimistic record overlay; the rejected outbox entry and error
-remain available for review.
+| Item              | Handling                                                                                        |
+| ----------------- | ----------------------------------------------------------------------------------------------- |
+| Pairing code      | Used once for pairing; never persisted                                                          |
+| Device credential | Android stores an AES-GCM record with its key in Keystore; iOS uses a device-only Keychain item |
+| Budget password   | Sent only on requests that need it; never stored in Room or the outbox                          |
+| Cached budget     | Stored locally so the selected budget remains readable offline                                  |
 
-If a POST or its response has an uncertain outcome, the outbox entry remains
-`uncertain` and the coordinator polls its operation ID. Before every sync,
-interrupted `sending` entries are recovered as uncertain and polled, including
-after process restart. It does not
-automatically POST an uncertain operation again; if the operation cannot be
-read, the UI can call `repository.retryUncertainWrite(operationId)` to
-explicitly queue a retry with the same operation ID and idempotency key, or
-`repository.discardWrite(operationId)` to remove the local draft. Discarding a
-conflict, uncertain, rejected, or queued edit restores the current remote
-projection when no other active write remains for that record. Canceling the
-sync coroutine persists the write as uncertain, and
-the next sync recovers and polls it. No uncertain operation is automatically
-reposted.
+Actual-encrypted budgets are decrypted by Actual's API for Tandem's server-side
+projection and the mobile cache. Actual's encryption therefore does not protect
+those working copies. See [the architecture notes](architectural-design.md)
+for the server trust boundary and the fully encrypted alternative.
 
-Outbox states are `queued`, `sending`, `uncertain`, `conflict`, `committed`,
-`rejected`, `superseded`, and `discarded`. Rejected and discarded edits do not
-remain as active record overlays. Snapshot resets do not clear outbox entries.
-The UI should surface pending, uncertain, conflict, rejected, and discarded
-edits so users can understand what still needs attention.
+“Forget this device” revokes the server token before removing the local
+credential. If Tandem is unreachable, the credential stays available so the
+revocation can be retried. Device tokens expire after 90 days of inactivity.
 
-## Local verification
+## Code map
 
-From `mobile/`, run the JVM regression and coverage checks for the persistence,
-coordinator, and generated-client adapter, then compile the connected app:
+| Module                                  | Responsibility                                                                             |
+| --------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `mobile/data`                           | Room records, local overlays, change cursor, durable outbox, and sync coordinator          |
+| `mobile/api-client`                     | Generated OpenAPI client and adapter for the data module                                   |
+| `mobile/composeApp`                     | Shared Compose screens observing Room flows                                                |
+| `mobile/androidApp` and `mobile/iosApp` | Platform hosts, secure credential stores, and scheduled work                               |
+| `services/api`                          | Device authorization, budget projection, change feed, write journal, and Actual API access |
+
+## Local checks
+
+Run from `mobile/`:
 
 ```sh
 ./gradlew :data:jvmTest :data:koverVerify :data:ktlintCheck \
@@ -301,11 +185,4 @@ coordinator, and generated-client adapter, then compile the connected app:
   :androidApp:assembleDebug
 ```
 
-Android and iOS target compilation is covered by the mobile CI job; iOS
-simulator runtime tests require macOS. The Android build can be installed on an
-authorized device and started in sample preview mode as documented in the
-development setup. After pairing, account/category/transaction values come
-from the selected budget's local copy. A month without a cached budget record
-shows an explicit empty state. Use the ignored two-currency Actual fixture to
-exercise larger local snapshots; transaction editing and conflict handling
-still need physical-device write-path verification.
+The iOS simulator app and scheduled-refresh runtime checks require macOS.
