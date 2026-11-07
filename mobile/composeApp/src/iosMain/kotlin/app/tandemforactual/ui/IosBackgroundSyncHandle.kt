@@ -95,6 +95,8 @@ private suspend fun runSelectedBudgetBackgroundSync(): IosBackgroundSyncAlerts {
         summary.toAlerts(conflictAlertsEnabled, rejectedAlertsEnabled)
     } catch (error: CancellationException) {
         IosBackgroundSyncAlerts(taskSucceeded = false)
+    } catch (_: IosCredentialUnavailableBeforeFirstUnlockException) {
+        IosBackgroundSyncAlerts(taskSucceeded = false)
     } catch (error: TandemApiException) {
         if (error.errorCode == "invalid_device_credential") {
             apiClient?.let { client -> runCatching { client.forgetSession() } }

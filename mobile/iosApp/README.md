@@ -11,6 +11,7 @@ xcodebuild \
   -project iosApp/TandemForActual.xcodeproj \
   -scheme TandemForActual \
   -destination 'generic/platform=iOS Simulator' \
+  ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
   build
 ```
 

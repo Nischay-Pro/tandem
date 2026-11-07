@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.splashscreen.SplashScreen
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.openTandemDatabase
 import app.tandemforactual.data.database.tandemDatabaseBuilder
 import app.tandemforactual.ui.TandemApp
@@ -26,6 +27,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 
 class MainActivity : ComponentActivity() {
   private var appStartupComplete = false
+  private var tandemDatabase: TandemDatabase? = null
   private var notificationPermissionEnabled by mutableStateOf(false)
   private val notificationPermissionLauncher =
     registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -56,10 +58,12 @@ class MainActivity : ComponentActivity() {
       !appStartupComplete && SystemClock.uptimeMillis() < splashDeadline
     }
     super.onCreate(savedInstanceState)
-    val openPreview = intent.getBooleanExtra("preview", false)
+    val previewBuild = BuildConfig.DEBUG || BuildConfig.BUILD_TYPE == "nonMinifiedRelease"
+    val openPreview = previewBuild && intent.getBooleanExtra("preview", false)
     notificationPermissionEnabled = hasNotificationPermission()
     BudgetSystemNotifications.initialize(applicationContext)
     val database = openTandemDatabase(tandemDatabaseBuilder(applicationContext))
+    tandemDatabase = database
     setContent {
       val onBackgroundSyncSettingsChanged: (Boolean, Boolean, String) -> Unit = remember(applicationContext) {
         { enabled, unmeteredOnly, budgetId ->
@@ -166,6 +170,12 @@ class MainActivity : ComponentActivity() {
       syncSignalState.onActivityStopped()
     }
     super.onStop()
+  }
+
+  override fun onDestroy() {
+    super.onDestroy()
+    tandemDatabase?.close()
+    tandemDatabase = null
   }
 }
 

@@ -28,8 +28,11 @@ import platform.Security.SecItemCopyMatching
 import platform.Security.SecItemDelete
 import platform.Security.SecItemUpdate
 import platform.Security.errSecDuplicateItem
+import platform.Security.errSecInteractionNotAllowed
 import platform.Security.errSecItemNotFound
 import platform.Security.errSecSuccess
+
+internal class IosCredentialUnavailableBeforeFirstUnlockException : Exception()
 
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 internal class IosDeviceCredentialStore : DeviceCredentialStore {
@@ -42,6 +45,7 @@ internal class IosDeviceCredentialStore : DeviceCredentialStore {
                 }
             when (status) {
                 errSecItemNotFound -> null
+                errSecInteractionNotAllowed -> throw IosCredentialUnavailableBeforeFirstUnlockException()
                 errSecSuccess -> {
                     val data = CFBridgingRelease(result.value) as? NSData ?: error("Stored device credential is invalid")
                     val string = NSString.create(data, NSUTF8StringEncoding) ?: error("Stored device credential is invalid")
@@ -91,9 +95,7 @@ internal class IosDeviceCredentialStore : DeviceCredentialStore {
         }
         if (data != null) {
             query.setObject(data, forKey = NSString.create("v_Data"))
-            if (includeIdentity) {
-                query.setObject(NSString.create("aku"), forKey = NSString.create("pdmn"))
-            }
+            query.setObject(NSString.create(KEYCHAIN_ACCESSIBILITY), forKey = NSString.create("pdmn"))
         }
 
         // These values match Apple's Security string constants and bridge through Foundation.
@@ -109,5 +111,6 @@ internal class IosDeviceCredentialStore : DeviceCredentialStore {
     private companion object {
         const val KEYCHAIN_SERVICE = "app.tandemforactual.device-session"
         const val KEYCHAIN_ACCOUNT = "paired-device"
+        const val KEYCHAIN_ACCESSIBILITY = "cku"
     }
 }

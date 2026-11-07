@@ -16,12 +16,21 @@
   <string>0.1.0</string>
   <key>CFBundleVersion</key>
   <string>1</string>
+  <key>ITSAppUsesNonExemptEncryption</key>
+  <false/>
   <key>BGTaskSchedulerPermittedIdentifiers</key>
   <array>
     <string>app.tandemforactual.ios.background-sync</string>
   </array>
   <key>LSRequiresIPhoneOS</key>
   <true/>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>Connect to your Actual Budget server on your local network.</string>
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsLocalNetworking</key>
+    <true/>
+  </dict>
   <key>UIApplicationSceneManifest</key>
   <dict>
     <key>UIApplicationSupportsMultipleScenes</key>

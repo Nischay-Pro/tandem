@@ -2,9 +2,18 @@ package app.tandemforactual.android
 
 import app.tandemforactual.api.client.TandemApiException
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BackgroundSyncFailureActionTest {
+    @Test
+    fun missingAlertPreferencesKeepTheSharedDefaultEnabled() {
+        assertTrue(backgroundAlertEnabled(null))
+        assertTrue(backgroundAlertEnabled("true"))
+        assertFalse(backgroundAlertEnabled("false"))
+    }
+
     @Test
     fun rejectedDeviceCredentialRequiresPairingAgain() {
         val error = TandemApiException("invalid_device_credential", httpStatus = 401)

@@ -85,10 +85,10 @@ class BackgroundBudgetSyncWorker(
             val summary = sessionClient.withExclusiveSession {
                 BudgetSyncCoordinator(repository, GeneratedBudgetSyncRemote(sessionClient)).synchronize(budgetId)
             }
-            if (preferences["conflictReviewAlerts"] == "true") {
+            if (backgroundAlertEnabled(preferences["conflictReviewAlerts"])) {
                 BudgetSystemNotifications.conflicts(applicationContext, summary.writesConflicted)
             }
-            if (preferences["rejectedEditAlerts"] == "true") {
+            if (backgroundAlertEnabled(preferences["rejectedEditAlerts"])) {
                 BudgetSystemNotifications.rejected(applicationContext, summary.writesRejected)
             }
             Result.success()
@@ -99,31 +99,31 @@ class BackgroundBudgetSyncWorker(
                 BackgroundSyncFailureAction.PAIR_AGAIN -> {
                     apiClient?.let { client -> runCatching { client.forgetSession() } }
                     runCatching { credentialStore.clear() }
-                    if (notificationPreferences?.get("syncReminders") == "true") {
+                    if (backgroundAlertEnabled(notificationPreferences?.get("syncReminders"))) {
                         BudgetSystemNotifications.pairingRequired(applicationContext)
                     }
                     Result.success()
                 }
                 BackgroundSyncFailureAction.RETRY -> {
-                    if (notificationPreferences?.get("syncReminders") == "true") {
+                    if (backgroundAlertEnabled(notificationPreferences?.get("syncReminders"))) {
                         BudgetSystemNotifications.syncFailed(applicationContext)
                     }
                     Result.retry()
                 }
                 BackgroundSyncFailureAction.FINISH -> {
-                    if (notificationPreferences?.get("syncReminders") == "true") {
+                    if (backgroundAlertEnabled(notificationPreferences?.get("syncReminders"))) {
                         BudgetSystemNotifications.syncFailed(applicationContext)
                     }
                     Result.success()
                 }
             }
         } catch (error: BudgetSyncRemoteException) {
-            if (notificationPreferences?.get("syncReminders") == "true") {
+            if (backgroundAlertEnabled(notificationPreferences?.get("syncReminders"))) {
                 BudgetSystemNotifications.syncFailed(applicationContext)
             }
             error.httpStatus.toWorkResult()
         } catch (_: Exception) {
-            if (notificationPreferences?.get("syncReminders") == "true") {
+            if (backgroundAlertEnabled(notificationPreferences?.get("syncReminders"))) {
                 BudgetSystemNotifications.syncFailed(applicationContext)
             }
             Result.retry()
@@ -138,6 +138,8 @@ internal enum class BackgroundSyncFailureAction {
     RETRY,
     FINISH,
 }
+
+internal fun backgroundAlertEnabled(preference: String?): Boolean = preference != "false"
 
 internal fun TandemApiException.backgroundSyncFailureAction(): BackgroundSyncFailureAction {
     if (errorCode == "invalid_device_credential") return BackgroundSyncFailureAction.PAIR_AGAIN
