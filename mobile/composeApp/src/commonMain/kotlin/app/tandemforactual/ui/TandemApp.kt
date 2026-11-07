@@ -6880,11 +6880,16 @@ private fun AccountDetailScreen(
     mobileSession: TandemMobileSession,
     merchantIconMatcher: MerchantIconMatcherPack?,
 ) {
+    val scope = rememberCoroutineScope()
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     val liveAccount = if (isLiveBudget) liveAccounts.firstOrNull { it.id == state.selectedAccountId } else null
     val previewAccount = if (isLiveBudget) null else previewAccountById(state.selectedAccountId)
     val accountName = liveAccount?.name ?: previewAccount?.name
     var accountActivity by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(emptyList<TransactionItem>()) }
+    var clearedAccountBalanceMinor by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf<Long?>(null) }
+    var showReconcileDialog by rememberSaveable(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(false) }
+    var selectedReconciliationIds by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(emptySet<String>()) }
+    var statementBalanceText by rememberSaveable(state.selectedBudgetId, liveAccount?.id) { mutableStateOf("") }
     LaunchedEffect(
         state.selectedBudgetId,
         liveAccount?.id,
@@ -6896,7 +6901,7 @@ private fun AccountDetailScreen(
     ) {
         val accountId = liveAccount?.id ?: return@LaunchedEffect
         val accountActivityFlow =
-            mobileSession.observeAccountActivityRecords(state.selectedBudgetId, accountId)
+            mobileSession.observeAccountActivityRecords(state.selectedBudgetId, accountId, limit = 500)
                 ?: return@LaunchedEffect
         accountActivityFlow.collect { records ->
             accountActivity =
@@ -6912,6 +6917,11 @@ private fun AccountDetailScreen(
                 }
         }
     }
+    LaunchedEffect(state.selectedBudgetId, liveAccount?.id) {
+        val accountId = liveAccount?.id ?: return@LaunchedEffect
+        val clearedBalanceFlow = mobileSession.observeClearedAccountBalance(state.selectedBudgetId, accountId) ?: return@LaunchedEffect
+        clearedBalanceFlow.collect { clearedAccountBalanceMinor = it }
+    }
     val shownAccountActivity =
         when {
             liveAccount != null -> accountActivity
@@ -6919,6 +6929,8 @@ private fun AccountDetailScreen(
             else -> emptyList()
         }
     val offBudget = liveAccount?.offBudget ?: previewAccount?.offBudget ?: false
+    val reconciliationCandidates =
+        shownAccountActivity.filter { !it.isSplitParent && it.reconciled != true && it.recordId != null }
     val description =
         when {
             liveAccount != null -> if (liveAccount.offBudget) "Off budget" else "On budget"
@@ -6936,6 +6948,24 @@ private fun AccountDetailScreen(
             Heading("Account details", "This account isn’t saved on this device.")
         } else {
             AmountHero("Available balance", balance, "$accountName · $description")
+            if (isLiveBudget && liveAccount != null) {
+                TandemActionButton(
+                    "Reconcile",
+                    TandemActionButtonTone.NEUTRAL,
+                    Modifier.fillMaxWidth(),
+                    icon = Lucide.Check,
+                    enabled =
+                        !liveAccount.closed &&
+                            clearedAccountBalanceMinor != null &&
+                            reconciliationCandidates.isNotEmpty() &&
+                            !state.readOnlyMode,
+                ) {
+                    selectedReconciliationIds = reconciliationCandidates.filter { it.cleared == true }.mapNotNull { it.recordId }.toSet()
+                    statementBalanceText = clearedAccountBalanceMinor?.let(state::formatAmount).orEmpty()
+                    mobileSession.clearTransactionWriteMessage()
+                    showReconcileDialog = true
+                }
+            }
             PrimaryButton(
                 "Add transaction",
                 enabled = !offBudget && !state.readOnlyMode,
@@ -6963,6 +6993,161 @@ private fun AccountDetailScreen(
                 if (isLiveBudget) "Close account" else "$accountName settings",
                 onClick = { navigation.open(AppRoute.ACCOUNT_OPTIONS) },
             )
+        }
+    }
+    if (showReconcileDialog && liveAccount != null) {
+        val didReconcile = {
+            scope.launch {
+                if (
+                    mobileSession.markTransactionsReconciled(
+                        state.selectedBudgetId,
+                        liveAccount.id,
+                        reconciliationCandidates.mapNotNull { it.recordId }.toSet(),
+                        selectedReconciliationIds,
+                    )
+                ) {
+                    showReconcileDialog = false
+                }
+            }
+        }
+        AccountReconcileDialog(
+            state = state,
+            accountName = liveAccount.name,
+            clearedBalanceMinor = clearedAccountBalanceMinor,
+            transactions = reconciliationCandidates,
+            activityTruncated = accountActivity.size >= 500,
+            selectedIds = selectedReconciliationIds,
+            statementBalance = statementBalanceText,
+            busy = mobileSession.isSavingTransaction,
+            message = mobileSession.transactionWriteMessage,
+            onStatementBalanceChange = { statementBalanceText = it },
+            onSelectedChange = { id, selected ->
+                selectedReconciliationIds = if (selected) selectedReconciliationIds + id else selectedReconciliationIds - id
+            },
+            onDismiss = { if (!mobileSession.isSavingTransaction) showReconcileDialog = false },
+            onConfirm = { didReconcile() },
+        )
+    }
+}
+
+@Composable
+private fun AccountReconcileDialog(
+    state: AppState,
+    accountName: String,
+    clearedBalanceMinor: Long?,
+    transactions: List<TransactionItem>,
+    activityTruncated: Boolean,
+    selectedIds: Set<String>,
+    statementBalance: String,
+    busy: Boolean,
+    message: String?,
+    onStatementBalanceChange: (String) -> Unit,
+    onSelectedChange: (String, Boolean) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val statementMinor = state.parseAmountMinorUnits(statementBalance)
+    val projectedClearedBalance =
+        clearedBalanceMinor?.let { reconciliationClearedBalanceMinor(it, transactions, selectedIds) }
+    val differenceMinor =
+        if (statementMinor != null && projectedClearedBalance != null) {
+            statementMinor - projectedClearedBalance
+        } else {
+            null
+        }
+    val balanceMatches = differenceMinor == 0L
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = 16.dp)) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 720.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(TandemSpacing.large),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+            ) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                ) {
+                    Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
+                    Text(
+                        "Reconcile $accountName",
+                        modifier = Modifier.weight(1f),
+                        color = tandemPalette.text,
+                        fontSize = TandemTypography.sectionTitle,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    TandemIconButton(Lucide.X, "Close", sizeDp = 40, iconSizeDp = 18, enabled = !busy, onClick = onDismiss)
+                }
+                TextFieldCard(
+                    "Statement balance",
+                    statementBalance,
+                    onStatementBalanceChange,
+                    TextFieldOptions(
+                        placeholder = state.formatAmount(clearedBalanceMinor ?: 0L),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    ),
+                )
+                SurfaceCard {
+                    Column {
+                        ListRow("Cleared balance", trailing = projectedClearedBalance?.let(state::formatCurrency) ?: "Unavailable")
+                        DividerLine()
+                        ListRow(
+                            "Difference",
+                            trailing = differenceMinor?.let(state::formatCurrency) ?: "Enter a balance",
+                            leading = RowLeading.Icon(Lucide.Check),
+                            options =
+                                ListRowOptions(
+                                    trailingColor = if (balanceMatches) tandemPalette.positive else tandemPalette.warning,
+                                ),
+                        )
+                    }
+                }
+                InlineMessage(
+                    if (balanceMatches) {
+                        "Cleared transactions match this statement balance."
+                    } else {
+                        "Adjust the selected transactions until the difference is 0."
+                    },
+                    if (balanceMatches) InlineMessageKind.SUCCESS else InlineMessageKind.INFO,
+                )
+                if (activityTruncated) {
+                    InlineMessage("Only the latest 500 account transactions are loaded.", InlineMessageKind.INFO)
+                }
+                SectionCard("Transactions", "Select the items on this statement") {
+                    transactions.forEachIndexed { index, transaction ->
+                        val id = transaction.recordId ?: return@forEachIndexed
+                        CheckBoxRow(
+                            transaction.payee,
+                            "${transaction.dateLabel} · ${state.formatCurrency(transaction.amountMinorUnits)}",
+                            checked = id in selectedIds,
+                            enabled = !busy,
+                            onChange = { onSelectedChange(id, it) },
+                        )
+                        if (index < transactions.lastIndex) DividerLine()
+                    }
+                }
+                message?.let { InlineMessage(it, InlineMessageKind.INFO) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    TandemActionButton("Cancel", TandemActionButtonTone.NEUTRAL, Modifier.weight(1f), enabled = !busy, onClick = onDismiss)
+                    TandemActionButton(
+                        if (busy) "Working…" else "Mark reconciled",
+                        TandemActionButtonTone.PRIMARY,
+                        Modifier.weight(1f),
+                        icon = Lucide.Check,
+                        enabled = !busy && balanceMatches && selectedIds.isNotEmpty(),
+                        loading = busy,
+                        onClick = onConfirm,
+                    )
+                }
+            }
         }
     }
 }

@@ -47,6 +47,7 @@ internal enum class InlineMessageKind {
     ERROR,
     WARNING,
     INFO,
+    SUCCESS,
 }
 
 @Composable
@@ -61,6 +62,7 @@ internal fun InlineMessage(
             InlineMessageKind.ERROR -> palette.negative
             InlineMessageKind.WARNING -> palette.warning
             InlineMessageKind.INFO -> palette.muted
+            InlineMessageKind.SUCCESS -> palette.positive
         }
     Text(
         text,

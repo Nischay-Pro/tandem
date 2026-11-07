@@ -23,6 +23,33 @@ import kotlin.test.fail
 
 class LocalBudgetRepositoryTest {
     @Test
+    fun clearedAccountBalanceAggregatesOnlyVisibleClearedTransactions() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                repository.applySnapshot(
+                    BUDGET,
+                    GENERATION,
+                    "c1",
+                    listOf(
+                        transaction(bodyJson = "{\"id\":\"txn-1\",\"amount\":-200,\"cleared\":true}", amountMinor = -200L),
+                        transaction(
+                            recordId = "txn-2",
+                            bodyJson = "{\"id\":\"txn-2\",\"amount\":500,\"cleared\":false}",
+                            amountMinor = 500L,
+                        ),
+                    ),
+                )
+
+                assertEquals(-200L, repository.observeClearedAccountBalance(BUDGET, "checking").first())
+                assertEquals(0L, repository.observeClearedAccountBalance(BUDGET, "missing-account").first())
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun displayMetadataMigrationBackfillsLocalAndRemoteBodiesAndSkipsInvalidJson() =
         runBlocking {
             val connection = BundledSQLiteDriver().open(":memory:")
@@ -561,6 +588,46 @@ class LocalBudgetRepositoryTest {
                 assertEquals("create-2", result.operation.operationId)
                 assertEquals(listOf("create-2"), repository.readPendingWrites(BUDGET).map { it.operationId })
                 assertEquals(replacement.optimisticJson, repository.findRecords(BUDGET, "transaction").single().localJson)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun batchEnqueueValidatesAndAppliesAllWritesAtomically() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                repository.applySnapshot(
+                    BUDGET,
+                    GENERATION,
+                    "c1",
+                    listOf(transaction(), transaction(recordId = "txn-2")),
+                )
+                val first = updateRequest(operationId = "batch-1", idempotencyKey = "batch-key-1")
+                val second =
+                    updateRequest(
+                        operationId = "batch-2",
+                        idempotencyKey = "batch-key-2",
+                        recordId = "txn-2",
+                        baseSnapshot = "{\"id\":\"txn-2\",\"amount\":1000}",
+                        optimistic = "{\"id\":\"txn-2\",\"amount\":1200}",
+                    )
+
+                assertFails<InvalidLocalWriteException> {
+                    repository.enqueueWrites(listOf(first, second.copy(baseRevision = "stale")))
+                }
+                assertTrue(repository.readPendingWrites(BUDGET).isEmpty())
+                assertNull(repository.findRecord(BUDGET, "transaction", "txn-1")?.localJson)
+                assertNull(repository.findRecord(BUDGET, "transaction", "txn-2")?.localJson)
+
+                val results = repository.enqueueWrites(listOf(first, second))
+
+                assertEquals(2, results.size)
+                assertEquals(setOf("batch-1", "batch-2"), repository.readPendingWrites(BUDGET).map { it.operationId }.toSet())
+                assertEquals("{\"id\":\"txn-1\",\"amount\":1200}", repository.findRecord(BUDGET, "transaction", "txn-1")?.localJson)
+                assertEquals("{\"id\":\"txn-2\",\"amount\":1200}", repository.findRecord(BUDGET, "transaction", "txn-2")?.localJson)
             } finally {
                 database.close()
             }

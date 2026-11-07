@@ -243,6 +243,11 @@ class LocalBudgetRepository(
         throughDate: String,
     ): Flow<List<AccountDayAggregate>> = database.budgetRecordDao().observeAccountDailyActivity(budgetId, throughDate).stabilized()
 
+    fun observeClearedAccountBalance(
+        budgetId: String,
+        accountId: String,
+    ): Flow<Long> = database.budgetRecordDao().observeClearedAccountBalance(budgetId, accountId).stabilized()
+
     fun observeRecordIds(
         budgetId: String,
         recordType: String,
@@ -683,54 +688,67 @@ class LocalBudgetRepository(
 
     suspend fun enqueueWrite(request: LocalWriteRequest): EnqueuedLocalWrite {
         validateWriteRequest(request)
-        return database.withWriteTransaction {
-            val outbox = database.outboxDao()
-            val existingKey = outbox.findByIdempotencyKey(request.idempotencyKey)
-            if (existingKey != null) {
-                if (matchesRequest(existingKey, request)) {
-                    return@withWriteTransaction EnqueuedLocalWrite(existingKey, replayed = true, replacedUnsent = false)
-                }
-                throw LocalIdempotencyConflictException()
-            }
-            if (outbox.find(request.operationId) != null) {
-                throw LocalIdempotencyConflictException()
-            }
+        return database.withWriteTransaction { enqueueWriteInTransaction(request) }
+    }
 
-            val records = database.budgetRecordDao()
-            val current = records.find(request.budgetId, request.recordType, request.recordId)
-            validateWriteBase(request, current)
-            val unsent = outbox.findUnsentForRecord(request.budgetId, request.recordType, request.recordId)
-            val blocker = outbox.findBlockingForRecord(request.budgetId, request.recordType, request.recordId)
-            val resolvedConflict =
-                blocker?.takeIf {
-                    it.status == LocalWriteStatus.CONFLICT.name.lowercase() &&
-                        it.operationId != unsent?.operationId &&
-                        request.action != LocalWriteAction.CREATE
-                }
-            if (blocker != null && blocker.operationId != unsent?.operationId && resolvedConflict == null) {
-                throw LocalOperationConflictException()
-            }
-            if (unsent != null && !sameBase(unsent, request)) {
-                throw LocalOperationConflictException()
-            }
-
-            val operation = request.toEntity()
-            if (unsent != null) {
-                outbox.deleteUnsent(unsent.operationId)
-            }
-            resolvedConflict?.let {
-                outbox.put(
-                    it.copy(
-                        status = LocalWriteStatus.SUPERSEDED.name.lowercase(),
-                        lastErrorCode = "superseded-by-resolution",
-                        updatedAtEpochMs = now(),
-                    ),
-                )
-            }
-            outbox.insert(operation)
-            applyLocalOverlay(records, current, request)
-            EnqueuedLocalWrite(operation, replayed = false, replacedUnsent = unsent != null)
+    suspend fun enqueueWrites(requests: List<LocalWriteRequest>): List<EnqueuedLocalWrite> {
+        requests.forEach(::validateWriteRequest)
+        require(requests.map { it.operationId }.distinct().size == requests.size) { "operation IDs must be unique" }
+        require(requests.map { Triple(it.budgetId, it.recordType, it.recordId) }.distinct().size == requests.size) {
+            "a batch can contain only one write per record"
         }
+        return database.withWriteTransaction {
+            requests.map { request -> enqueueWriteInTransaction(request) }
+        }
+    }
+
+    private suspend fun enqueueWriteInTransaction(request: LocalWriteRequest): EnqueuedLocalWrite {
+        val outbox = database.outboxDao()
+        val existingKey = outbox.findByIdempotencyKey(request.idempotencyKey)
+        if (existingKey != null) {
+            if (matchesRequest(existingKey, request)) {
+                return EnqueuedLocalWrite(existingKey, replayed = true, replacedUnsent = false)
+            }
+            throw LocalIdempotencyConflictException()
+        }
+        if (outbox.find(request.operationId) != null) {
+            throw LocalIdempotencyConflictException()
+        }
+
+        val records = database.budgetRecordDao()
+        val current = records.find(request.budgetId, request.recordType, request.recordId)
+        validateWriteBase(request, current)
+        val unsent = outbox.findUnsentForRecord(request.budgetId, request.recordType, request.recordId)
+        val blocker = outbox.findBlockingForRecord(request.budgetId, request.recordType, request.recordId)
+        val resolvedConflict =
+            blocker?.takeIf {
+                it.status == LocalWriteStatus.CONFLICT.name.lowercase() &&
+                    it.operationId != unsent?.operationId &&
+                    request.action != LocalWriteAction.CREATE
+            }
+        if (blocker != null && blocker.operationId != unsent?.operationId && resolvedConflict == null) {
+            throw LocalOperationConflictException()
+        }
+        if (unsent != null && !sameBase(unsent, request)) {
+            throw LocalOperationConflictException()
+        }
+
+        val operation = request.toEntity()
+        if (unsent != null) {
+            outbox.deleteUnsent(unsent.operationId)
+        }
+        resolvedConflict?.let {
+            outbox.put(
+                it.copy(
+                    status = LocalWriteStatus.SUPERSEDED.name.lowercase(),
+                    lastErrorCode = "superseded-by-resolution",
+                    updatedAtEpochMs = now(),
+                ),
+            )
+        }
+        outbox.insert(operation)
+        applyLocalOverlay(records, current, request)
+        return EnqueuedLocalWrite(operation, replayed = false, replacedUnsent = unsent != null)
     }
 
     suspend fun claimNextWrite(budgetId: String): OutboxOperationEntity? {

@@ -193,6 +193,21 @@ interface BudgetRecordDao {
         throughDate: String,
     ): Flow<List<AccountDayAggregate>>
 
+    @Query(
+        """
+    SELECT COALESCE(SUM(amountMinor), 0)
+    FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = 'transaction' AND accountId = :accountId
+      AND amountMinor IS NOT NULL AND cleared = 1 AND isParent = 0
+      AND localDeleted = 0 AND remoteDeleted = 0
+      AND (localJson IS NOT NULL OR remoteJson IS NOT NULL)
+    """,
+    )
+    fun observeClearedAccountBalance(
+        budgetId: String,
+        accountId: String,
+    ): Flow<Long>
+
     @Query("SELECT recordType, recordId FROM budget_records WHERE budgetId = :budgetId AND remoteJson IS NOT NULL")
     suspend fun findRemoteRecordKeys(budgetId: String): List<RemoteBudgetRecordKey>
 

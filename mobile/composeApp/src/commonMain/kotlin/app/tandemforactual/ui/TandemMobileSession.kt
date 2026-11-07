@@ -206,6 +206,10 @@ internal class TandemMobileSession(
         budgetActionMessage = null
     }
 
+    fun clearTransactionWriteMessage() {
+        transactionWriteMessage = null
+    }
+
     private fun refuseWriteInReadOnlyMode(): Boolean {
         if (!readOnlyMode) return false
         transactionWriteMessage = "Read-only mode is on. Turn it off before changing this data."
@@ -522,6 +526,96 @@ internal class TandemMobileSession(
         performBudgetAction(budgetId, encryptionPassword, "Couldn’t reopen this account. Try again.") {
             apiClient.reopenBudgetAccount(budgetId, accountId, encryptionPassword)
         }
+
+    suspend fun markTransactionsReconciled(
+        budgetId: String,
+        accountId: String,
+        transactionIds: Set<String>,
+        selectedTransactionIds: Set<String>,
+    ): Boolean {
+        transactionWriteMessage = null
+        if (refuseWriteInReadOnlyMode()) return false
+        val localRepository = repository
+        if (localRepository == null || !isAuthenticated || budgetId.isBlank()) {
+            transactionWriteMessage = "Open a paired budget before reconciling transactions."
+            return false
+        }
+        val ids = transactionIds.filter(String::isNotBlank).distinct()
+        if (ids.isEmpty()) {
+            transactionWriteMessage = "There are no unreconciled transactions to review."
+            return false
+        }
+        val selectedIds = selectedTransactionIds.intersect(ids.toSet())
+        if (isSavingTransaction) return false
+        isSavingTransaction = true
+        try {
+            val requests = mutableListOf<LocalWriteRequest>()
+            for (transactionId in ids) {
+                val record = localRepository.findRecord(budgetId, "transaction", transactionId)
+                val baseJson = record?.remoteJson
+                val revision = record?.remoteRevision
+                if (
+                    record == null ||
+                    record.localDeleted ||
+                    record.remoteDeleted ||
+                    record.accountId != accountId ||
+                    record.isParent ||
+                    baseJson == null ||
+                    revision.isNullOrBlank() ||
+                    record.localJson != null
+                ) {
+                    transactionWriteMessage = "Sync pending edits before reconciling this account."
+                    return false
+                }
+                val base = runCatching { Json.parseToJsonElement(baseJson).jsonObject }.getOrNull()
+                if (base == null) {
+                    transactionWriteMessage = "Couldn’t read this transaction. Sync the budget and try again."
+                    return false
+                }
+                if (base.booleanValue("reconciled") == true) continue
+                val shouldBeCleared = transactionId in selectedIds
+                val currentlyCleared = base.booleanValue("cleared") == true
+                if (currentlyCleared == shouldBeCleared && !shouldBeCleared) continue
+                val patch =
+                    buildJsonObject {
+                        if (currentlyCleared != shouldBeCleared) put("cleared", shouldBeCleared)
+                        if (shouldBeCleared) put("reconciled", true)
+                    }
+                val optimistic = JsonObject(base + patch)
+                val operationId = Uuid.random().toString()
+                requests +=
+                    LocalWriteRequest(
+                        operationId = operationId,
+                        idempotencyKey = operationId,
+                        budgetId = budgetId,
+                        recordType = "transaction",
+                        recordId = transactionId,
+                        action = LocalWriteAction.UPDATE,
+                        baseRevision = revision,
+                        baseSnapshotJson = baseJson,
+                        patchJson = patch.toString(),
+                        optimisticJson = optimistic.toString(),
+                        createdAtEpochMs = nowEpochMillis(),
+                        optimisticProjection = optimistic.toProjection(),
+                    )
+            }
+            if (requests.isEmpty()) {
+                transactionWriteMessage = "No transaction changes to save."
+                return true
+            }
+            localRepository.enqueueWrites(requests)
+            transactionWriteMessage = "Reconciliation saved on this device. Sync when you’re ready."
+            loadLocalRecords(budgetId)
+            return true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            transactionWriteMessage = "Couldn’t queue reconciliation changes. Try again."
+            return false
+        } finally {
+            isSavingTransaction = false
+        }
+    }
 
     suspend fun renameBudgetCategory(
         budgetId: String,
@@ -1238,6 +1332,11 @@ internal class TandemMobileSession(
         accountId: String,
         limit: Int = 100,
     ): Flow<List<BudgetRecordEntity>>? = repository?.observeRecentTransactionsForAccount(budgetId, accountId, limit)
+
+    fun observeClearedAccountBalance(
+        budgetId: String,
+        accountId: String,
+    ): Flow<Long>? = repository?.observeClearedAccountBalance(budgetId, accountId)
 
     suspend fun observeLocalRecords(budgetId: String) {
         val localRepository = repository ?: return
