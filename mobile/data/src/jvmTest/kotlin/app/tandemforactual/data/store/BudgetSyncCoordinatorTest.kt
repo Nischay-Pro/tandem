@@ -587,6 +587,116 @@ class BudgetSyncCoordinatorTest {
         }
 
     @Test
+    fun snapshotRejectsMalformedPageBoundariesAndCheckpoints() =
+        runBlocking {
+            fun page(
+                budgetId: String = BUDGET,
+                generation: String = GENERATION,
+                cursor: String = "1",
+                records: List<RemoteBudgetRecord> = emptyList(),
+                hasMore: Boolean = false,
+                resetRequired: Boolean = false,
+                nextAfterType: String? = null,
+                nextAfterId: String? = null,
+            ) = RemoteBudgetSnapshotPage(
+                budgetId = budgetId,
+                generation = generation,
+                cursor = cursor,
+                records = records,
+                hasMore = hasMore,
+                resetRequired = resetRequired,
+                nextAfterType = nextAfterType,
+                nextAfterId = nextAfterId,
+            )
+
+            suspend fun expectProtocolFailure(
+                handler: suspend (String, String?, String?, String?, String?, Int, String?) -> RemoteBudgetSnapshotPage,
+            ) {
+                val database = newDatabase()
+                try {
+                    val remote = FakeBudgetSyncRemote(snapshot(records = emptyList()))
+                    remote.snapshotPageHandler = handler
+
+                    val error =
+                        runCatching {
+                            BudgetSyncCoordinator(LocalBudgetRepository(database) { 100L }, remote)
+                                .synchronize(BUDGET, sendQueuedWrites = false)
+                        }.exceptionOrNull()
+
+                    assertTrue(error is BudgetSyncProtocolException)
+                } finally {
+                    database.close()
+                }
+            }
+
+            expectProtocolFailure { _, _, _, afterType, _, _, _ ->
+                if (afterType == null) {
+                    page(records = listOf(transaction()), hasMore = true, nextAfterType = "transaction", nextAfterId = TXN)
+                } else {
+                    page(budgetId = "other-budget")
+                }
+            }
+            expectProtocolFailure { _, _, _, afterType, _, _, _ ->
+                if (afterType == null) {
+                    page(records = listOf(transaction()), hasMore = true, nextAfterType = "transaction", nextAfterId = TXN)
+                } else {
+                    page(resetRequired = true)
+                }
+            }
+            expectProtocolFailure {
+                _,
+                _,
+                _,
+                _,
+                _,
+                _,
+                _,
+                ->
+                page(records = listOf(transaction("z"), transaction("a")))
+            }
+            expectProtocolFailure { _, _, _, _, _, _, _ ->
+                page(records = listOf(transaction()), nextAfterType = "transaction", nextAfterId = TXN)
+            }
+            expectProtocolFailure { _, _, _, afterType, _, _, _ ->
+                if (afterType == null) {
+                    page(records = listOf(transaction()), hasMore = true, nextAfterType = "category", nextAfterId = TXN)
+                } else {
+                    page()
+                }
+            }
+            expectProtocolFailure { _, _, _, _, _, _, _ ->
+                page(generation = "invalid generation", cursor = "01")
+            }
+        }
+
+    @Test
+    fun statusOnlySyncRejectsInvalidOperationOptions() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val coordinator =
+                    BudgetSyncCoordinator(
+                        LocalBudgetRepository(database) { 100L },
+                        FakeBudgetSyncRemote(snapshot(records = emptyList())),
+                    )
+
+                val blankOperation =
+                    runCatching {
+                        coordinator.synchronize(BUDGET, reconcileUncertainOperationId = " ")
+                    }.exceptionOrNull()
+                val queuedWriteCheck =
+                    runCatching {
+                        coordinator.synchronize(BUDGET, reconcileUncertainOperationId = WRITE_OPERATION)
+                    }.exceptionOrNull()
+
+                assertEquals("Operation ID must not be blank", blankOperation?.message)
+                assertEquals("A status-only check cannot send queued writes", queuedWriteCheck?.message)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun snapshotsRetryStaleCheckpointsAndStopAfterThreeAttempts() =
         runBlocking {
             val database = newDatabase()
@@ -1124,17 +1234,25 @@ class BudgetSyncCoordinatorTest {
             afterId: String?,
             limit: Int,
             encryptionPassword: String?,
-        ): RemoteBudgetSnapshotPage =
-            snapshotPageHandler?.invoke(budgetId, generation, cursor, afterType, afterId, limit, encryptionPassword)
-                ?: super<BudgetSyncRemote>.readSnapshotPage(
-                    budgetId,
-                    generation,
-                    cursor,
-                    afterType,
-                    afterId,
-                    limit,
-                    encryptionPassword,
-                )
+        ): RemoteBudgetSnapshotPage {
+            snapshotPageHandler?.let { return it(budgetId, generation, cursor, afterType, afterId, limit, encryptionPassword) }
+            val snapshot = snapshotHandler(budgetId, encryptionPassword)
+            val resetRequired =
+                generation != null &&
+                    cursor != null &&
+                    (generation != snapshot.generation || cursor != snapshot.cursor)
+            return RemoteBudgetSnapshotPage(
+                budgetId = snapshot.budgetId,
+                generation = snapshot.generation,
+                cursor = snapshot.cursor,
+                records = if (resetRequired) emptyList() else snapshot.records,
+                hasMore = false,
+                resetRequired = resetRequired,
+                nextAfterType = null,
+                nextAfterId = null,
+                displaySettings = snapshot.displaySettings.takeIf { afterType == null },
+            )
+        }
 
         override suspend fun readChanges(
             budgetId: String,

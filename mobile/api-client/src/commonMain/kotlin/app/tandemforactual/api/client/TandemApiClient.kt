@@ -4,6 +4,7 @@ import app.tandemforactual.api.generated.Api
 import app.tandemforactual.api.generated.Auth
 import app.tandemforactual.api.generated.api.AuthenticationApi
 import app.tandemforactual.api.generated.api.BudgetsApi
+import app.tandemforactual.api.generated.models.ApiV1HealthReady200Response
 import arrow.core.Either
 import com.kroegerama.openapi.kmp.gen.companion.AuthItem
 import com.kroegerama.openapi.kmp.gen.companion.CallException
@@ -19,6 +20,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -48,9 +50,12 @@ class TandemApiException(
 ) : Exception(
         safeMessageOverride ?: when {
             errorCode == "not-paired" -> "Pair this device before loading its budgets."
-            httpStatus == 400 -> "Check the pairing code and try again."
             errorCode == "invalid_pairing_code" -> "The pairing code is invalid, expired, or already used."
             errorCode == "invalid_device_credential" -> "This device needs to be paired again."
+            errorCode == "bank_sync_failed" -> "Actual couldn’t complete bank sync. Check its provider setup and try again."
+            errorCode == "actual_operation_failed" -> "Actual couldn’t complete this change. Check the budget and try again."
+            errorCode == "invalid_request" -> "Check the details and try again."
+            httpStatus == 400 -> "The server rejected this request. Check the details and try again."
             httpStatus == 401 -> "The server couldn’t verify this request. Check the server address and try again."
             httpStatus == 403 -> "This device can’t open that budget."
             httpStatus in 500..599 -> "The Tandem server couldn’t read Actual. Try again later."
@@ -156,7 +161,20 @@ class TandemApiClient(
                 clearGeneratedAuthProvider()
                 Api.baseUrl = parsedUrl
                 setGeneratedAuthProvider(bearerAuth)
-                val payload = unwrap(AuthenticationApi.pairDevice(body))
+                val payload =
+                    try {
+                        unwrap(AuthenticationApi.pairDevice(body))
+                    } catch (error: TandemApiException) {
+                        if (error.httpStatus == 400 && error.errorCode == "invalid_request") {
+                            throw TandemApiException(
+                                error.errorCode,
+                                error.httpStatus,
+                                error,
+                                "Check the pairing code and try again.",
+                            )
+                        }
+                        throw error
+                    }
                 val deviceId = payload.requiredString("deviceId")
                 val principalId = payload.requiredString("principalId")
                 val budgetIds = payload.requiredStringArray("budgetIds")
@@ -170,6 +188,103 @@ class TandemApiClient(
         sessionMutex.withLock {
             withGeneratedApi { parseBudgetCatalog(BudgetsApi.listBudgets()) }
         }
+
+    suspend fun runBudgetBankSync(
+        budgetId: String,
+        encryptionPassword: String?,
+    ) {
+        withGeneratedApi {
+            requireOk(
+                BudgetsApi.runBudgetBankSync(
+                    xBudgetEncryptionPassword = encryptionPassword,
+                    budgetId = budgetId,
+                ),
+            )
+        }
+    }
+
+    suspend fun createBudgetAccount(
+        budgetId: String,
+        name: String,
+        offbudget: Boolean,
+        encryptionPassword: String?,
+    ) {
+        withGeneratedApi {
+            requireOk(
+                BudgetsApi.createBudgetAccount(
+                    xBudgetEncryptionPassword = encryptionPassword,
+                    budgetId = budgetId,
+                    body =
+                        buildJsonObject {
+                            put("name", name)
+                            put("offbudget", offbudget)
+                        }.toMap(),
+                ),
+            )
+        }
+    }
+
+    suspend fun closeBudgetAccount(
+        budgetId: String,
+        accountId: String,
+        transferAccountId: String?,
+        transferCategoryId: String?,
+        encryptionPassword: String?,
+    ) {
+        withGeneratedApi {
+            requireOk(
+                BudgetsApi.closeBudgetAccount(
+                    xBudgetEncryptionPassword = encryptionPassword,
+                    budgetId = budgetId,
+                    accountId = accountId,
+                    body =
+                        buildJsonObject {
+                            put("transferAccountId", transferAccountId?.let(::JsonPrimitive) ?: JsonNull)
+                            put("transferCategoryId", transferCategoryId?.let(::JsonPrimitive) ?: JsonNull)
+                        }.toMap(),
+                ),
+            )
+        }
+    }
+
+    suspend fun renameBudgetCategory(
+        budgetId: String,
+        categoryId: String,
+        name: String,
+        encryptionPassword: String?,
+    ) {
+        withGeneratedApi {
+            requireOk(
+                BudgetsApi.renameBudgetCategory(
+                    xBudgetEncryptionPassword = encryptionPassword,
+                    budgetId = budgetId,
+                    categoryId = categoryId,
+                    body = buildJsonObject { put("name", name) }.toMap(),
+                ),
+            )
+        }
+    }
+
+    suspend fun deleteBudgetCategory(
+        budgetId: String,
+        categoryId: String,
+        transferCategoryId: String?,
+        encryptionPassword: String?,
+    ) {
+        withGeneratedApi {
+            requireOk(
+                BudgetsApi.deleteBudgetCategory(
+                    xBudgetEncryptionPassword = encryptionPassword,
+                    budgetId = budgetId,
+                    categoryId = categoryId,
+                    body =
+                        buildJsonObject {
+                            put("transferCategoryId", transferCategoryId?.let(::JsonPrimitive) ?: JsonNull)
+                        }.toMap(),
+                ),
+            )
+        }
+    }
 
     /** Revokes this device on the server while its credential is still active. */
     suspend fun revokeCurrentDevice() {
@@ -188,9 +303,7 @@ class TandemApiClient(
                         { error -> throw error.toTandemApiException() },
                         { it },
                     )
-                if (!response.isSuccessful) {
-                    throw TandemApiException("device-revocation-failed")
-                }
+                verifyDeviceRevocationSuccessful(response.isSuccessful)
             }
         }
     }
@@ -280,12 +393,21 @@ class TandemApiClient(
             { response -> JsonObject(response.data) },
         )
 
+    private suspend fun requireOk(result: Either<CallException, HttpCallResponse<ApiV1HealthReady200Response>>) {
+        result.fold(
+            { error -> throw error.toTandemApiException() },
+            { response ->
+                verifyApiStatus(
+                    isSuccessful = response.isSuccessful,
+                    hasExpectedStatus = response.data.status == ApiV1HealthReady200Response.Status.OK,
+                )
+            },
+        )
+    }
+
     private suspend fun CallException.toTandemApiException(): TandemApiException =
         when (this) {
-            is HttpCallException -> {
-                val errorCode = if (code == 401) apiErrorCode() else null
-                TandemApiException(errorCode ?: "http-$code", code, this)
-            }
+            is HttpCallException -> TandemApiException(apiErrorCode() ?: "http-$code", code, this)
             else -> TandemApiException("network-error", cause = this)
         }
 
@@ -299,6 +421,19 @@ class TandemApiClient(
         } catch (_: Exception) {
             null
         }
+}
+
+internal fun verifyApiStatus(
+    isSuccessful: Boolean,
+    hasExpectedStatus: Boolean,
+) {
+    if (!isSuccessful || !hasExpectedStatus) {
+        throw TandemApiProtocolException("The server returned an unexpected response")
+    }
+}
+
+internal fun verifyDeviceRevocationSuccessful(isSuccessful: Boolean) {
+    if (!isSuccessful) throw TandemApiException("device-revocation-failed")
 }
 
 internal fun normalizeDeviceName(value: String): String {

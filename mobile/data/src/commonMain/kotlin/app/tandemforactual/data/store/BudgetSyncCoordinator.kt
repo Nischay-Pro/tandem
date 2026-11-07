@@ -293,8 +293,8 @@ class BudgetSyncCoordinator(
         budgetId: String,
         encryptionPassword: String?,
         generation: String,
-        reconcileUncertainOperationId: String? = null,
-        sendQueuedWrites: Boolean = true,
+        reconcileUncertainOperationId: String?,
+        sendQueuedWrites: Boolean,
     ): WriteCounts {
         val counts = WriteCounts()
         val pendingOperations = repository.readPendingWrites(budgetId)

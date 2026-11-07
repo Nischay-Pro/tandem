@@ -2,6 +2,8 @@ package app.tandemforactual.api.client
 
 import app.tandemforactual.api.generated.Api
 import app.tandemforactual.api.generated.Auth
+import app.tandemforactual.api.generated.api.BudgetsApi
+import app.tandemforactual.api.generated.api.TransactionsApi
 import com.kroegerama.openapi.kmp.gen.companion.AuthPlugin
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -9,6 +11,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.DefaultRequest
 import io.ktor.client.plugins.compression.ContentEncoding
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.pluginOrNull
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -23,6 +26,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -166,10 +170,11 @@ class TandemApiClientTest {
     fun invalidServerAndRejectedPairingReturnSanitizedErrors() =
         runBlocking {
             var status = HttpStatusCode.Unauthorized
+            var responseBody = """{"error":{"code":"invalid_pairing_code","message":"private server detail"}}"""
             val engine =
                 MockEngine { request ->
                     assertEquals("/api/v1/auth/pair", request.url.encodedPath)
-                    respond("""{"error":{"code":"invalid_pairing_code","message":"private server detail"}}""", status, jsonHeaders())
+                    respond(responseBody, status, jsonHeaders())
                 }
             val previousClient = Api.client
             val previousBaseUrl = Api.baseUrl
@@ -191,8 +196,9 @@ class TandemApiClientTest {
                 assertEquals("The pairing code is invalid, expired, or already used.", unauthorized.message)
 
                 status = HttpStatusCode.BadRequest
+                responseBody = """{"error":{"code":"invalid_request","message":"private server detail"}}"""
                 val rejected = captureApiException { client.pair("https://tandem.example", "NOPE-0000", "Phone") }
-                assertEquals("http-400", rejected.errorCode)
+                assertEquals("invalid_request", rejected.errorCode)
                 assertEquals(400, rejected.httpStatus)
                 assertEquals("Check the pairing code and try again.", rejected.message)
                 assertFalse(rejected.message.orEmpty().contains("host detail"))
@@ -267,6 +273,7 @@ class TandemApiClientTest {
                 assertEquals("This device needs to be paired again.", invalidCredential.message)
                 assertFalse(invalidCredential.message.orEmpty().contains("private server detail"))
 
+                responseBody = """{"error":{"message":"private server detail"}}"""
                 status = HttpStatusCode.Forbidden
                 val forbidden = captureApiException { client.listBudgets() }
                 assertEquals("http-403", forbidden.errorCode)
@@ -383,6 +390,65 @@ class TandemApiClientTest {
         }
 
     @Test
+    fun budgetMaintenanceRequestsForwardPasswordsAndSendExpectedBodies() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            val engine =
+                MockEngine { request ->
+                    requests += request
+                    respond("""{"status":"ok"}""", headers = jsonHeaders())
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                client.restoreSession("https://tandem.example", "device-token")
+                client.runBudgetBankSync("budget-1", null)
+                client.createBudgetAccount("budget-1", "Savings", true, "budget-password")
+                client.closeBudgetAccount("budget-1", "account-1", "account-2", "category-1", "budget-password")
+                client.renameBudgetCategory("budget-1", "category-1", "Home", null)
+                client.deleteBudgetCategory("budget-1", "category-1", null, null)
+                client.withGeneratedApi {
+                    BudgetsApi.runBudgetBankSync(budgetId = "budget-1")
+                    BudgetsApi.createBudgetAccount(budgetId = "budget-1")
+                    BudgetsApi.closeBudgetAccount(budgetId = "budget-1", accountId = "account-1")
+                    BudgetsApi.renameBudgetCategory(budgetId = "budget-1", categoryId = "category-1")
+                    BudgetsApi.deleteBudgetCategory(budgetId = "budget-1", categoryId = "category-1")
+                    BudgetsApi.getBudgetSnapshot(budgetId = "budget-1")
+                    BudgetsApi.getBudgetSnapshotPage(budgetId = "budget-1")
+                    BudgetsApi.getBudgetChanges(budgetId = "budget-1", generation = "generation", cursor = "0")
+                    TransactionsApi.getBudgetTransaction(budgetId = "budget-1", transactionId = "transaction-1")
+                }
+
+                assertEquals(
+                    listOf(
+                        "POST /api/v1/budgets/budget-1/bank-sync",
+                        "POST /api/v1/budgets/budget-1/accounts",
+                        "POST /api/v1/budgets/budget-1/accounts/account-1/close",
+                        "PATCH /api/v1/budgets/budget-1/categories/category-1",
+                        "DELETE /api/v1/budgets/budget-1/categories/category-1",
+                    ),
+                    requests.take(5).map { "${it.method.value} ${it.url.encodedPath}" },
+                )
+                assertEquals(null, requests[0].headers["x-budget-encryption-password"])
+                assertEquals("budget-password", requests[1].headers["x-budget-encryption-password"])
+                assertEquals("budget-password", requests[2].headers["x-budget-encryption-password"])
+                assertTrue((requests[1].body as TextContent).text.contains("\"name\":\"Savings\""))
+                assertTrue((requests[1].body as TextContent).text.contains("\"offbudget\":true"))
+                assertTrue((requests[2].body as TextContent).text.contains("\"transferAccountId\":\"account-2\""))
+                assertTrue((requests[2].body as TextContent).text.contains("\"transferCategoryId\":\"category-1\""))
+                assertTrue((requests[3].body as TextContent).text.contains("\"name\":\"Home\""))
+                assertTrue((requests[4].body as TextContent).text.contains("\"transferCategoryId\":null"))
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
     fun transportFailuresAreSanitized() =
         runBlocking {
             val engine = MockEngine { throw IllegalStateException("private transport detail") }
@@ -404,9 +470,129 @@ class TandemApiClientTest {
             }
         }
 
+    @Test
+    fun maintenanceErrorsUseSafeMessagesForActualAndHttpFailures() =
+        runBlocking {
+            var status = HttpStatusCode.BadGateway
+            var responseBody = """{"error":{"code":"bank_sync_failed","message":"private detail"}}"""
+            val engine = MockEngine { respond(responseBody, status, jsonHeaders()) }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                client.restoreSession("https://tandem.example", "device-token")
+                val bankFailure = captureApiException { client.runBudgetBankSync("budget-1", null) }
+                assertEquals("bank_sync_failed", bankFailure.errorCode)
+                assertEquals("Actual couldn’t complete bank sync. Check its provider setup and try again.", bankFailure.message)
+                assertFalse(bankFailure.message.orEmpty().contains("private detail"))
+
+                status = HttpStatusCode.InternalServerError
+                responseBody = """{"error":{"code":"actual_operation_failed","message":"private detail"}}"""
+                val operationFailure = captureApiException { client.createBudgetAccount("budget-1", "Savings", false, null) }
+                assertEquals("actual_operation_failed", operationFailure.errorCode)
+                assertEquals("Actual couldn’t complete this change. Check the budget and try again.", operationFailure.message)
+
+                status = HttpStatusCode.BadRequest
+                responseBody = """{"error":{"message":"private detail"}}"""
+                val requestFailure = captureApiException { client.renameBudgetCategory("budget-1", "category-1", "Home", null) }
+                assertEquals("http-400", requestFailure.errorCode)
+                assertEquals("The server rejected this request. Check the details and try again.", requestFailure.message)
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
+    fun missingContentEncodingIsInstalledBeforeGeneratedRequests() =
+        runBlocking {
+            val engine = MockEngine { respond(budgetsResponse(), headers = jsonHeaders()) }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth, installContentEncoding = false)
+            try {
+                assertNull(Api.client.pluginOrNull(ContentEncoding))
+                GeneratedApiAccess.ensureContentEncoding()
+                assertTrue(Api.client.pluginOrNull(ContentEncoding) != null)
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
+    fun malformedDeviceIdentityIsRejectedBeforeRevocation() =
+        runBlocking {
+            val client = TandemApiClient()
+            client.restoreStoredSession(
+                """{"serverUrl":"https://tandem.example","accessToken":"device-token","device":{"deviceId":"not-a-uuid","principalId":"person-1","budgetIds":["budget-1"]}}""",
+            )
+
+            val invalidId = captureProtocolException { client.revokeCurrentDevice() }
+
+            assertEquals("Stored device ID is invalid", invalidId.message)
+        }
+
+    @Test
+    fun unexpectedApiStatusIsReportedAsAProtocolError() =
+        runBlocking {
+            val error =
+                captureProtocolException {
+                    verifyApiStatus(isSuccessful = true, hasExpectedStatus = false)
+                }
+
+            assertEquals("The server returned an unexpected response", error.message)
+        }
+
+    @Test
+    fun unsuccessfulDeviceRevocationIsRejected() {
+        val error = assertFailsWith<TandemApiException> { verifyDeviceRevocationSuccessful(false) }
+
+        assertEquals("device-revocation-failed", error.errorCode)
+    }
+
+    @Test
+    fun revocationMapsApiErrorsAndUnexpectedHttpStatuses() =
+        runBlocking {
+            var status = HttpStatusCode.Unauthorized
+            var responseBody = """{"error":{"code":"invalid_device_credential","message":"private detail"}}"""
+            val engine = MockEngine { respond(responseBody, status, jsonHeaders()) }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                val deviceId = "6d860805-fdd6-4fe4-8e67-668c9900fe1f"
+                client.restoreStoredSession(
+                    """{"serverUrl":"https://tandem.example","accessToken":"device-token","device":{"deviceId":"$deviceId","principalId":"person-1","budgetIds":["budget-1"]}}""",
+                )
+                val unauthorized = captureApiException { client.revokeCurrentDevice() }
+                assertEquals("invalid_device_credential", unauthorized.errorCode)
+                assertEquals(401, unauthorized.httpStatus)
+                assertFalse(unauthorized.message.orEmpty().contains("private detail"))
+
+                status = HttpStatusCode.PaymentRequired
+                responseBody = "{}"
+                val unexpectedStatus = captureApiException { client.revokeCurrentDevice() }
+                assertEquals("http-402", unexpectedStatus.errorCode)
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
     private fun configureApi(
         engine: MockEngine,
         auth: Auth.BearerAuth,
+        installContentEncoding: Boolean = true,
     ): () -> Unit {
         Api.baseUrl = Url("https://tandem.example")
         Api.setAuthProvider(auth)
@@ -414,9 +600,11 @@ class TandemApiClientTest {
             createHttpClient = {
                 HttpClient(engine) {
                     install(ContentNegotiation) { json(Api.json) }
-                    install(ContentEncoding) {
-                        gzip()
-                        deflate()
+                    if (installContentEncoding) {
+                        install(ContentEncoding) {
+                            gzip()
+                            deflate()
+                        }
                     }
                     install(DefaultRequest) { url.takeFrom(Api.baseUrl) }
                     install(AuthPlugin) {

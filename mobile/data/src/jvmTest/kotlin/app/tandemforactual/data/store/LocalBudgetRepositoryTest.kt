@@ -346,6 +346,66 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
+    fun stagedSnapshotRejectsWrongGenerationsAndDuplicateRecords() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                repository.beginPagedSnapshot(BUDGET, GENERATION, "1", null)
+
+                val wrongGeneration =
+                    runCatching {
+                        repository.stageSnapshotPage(
+                            BUDGET,
+                            GENERATION,
+                            "1",
+                            listOf(transaction(generation = "generation-2")),
+                        )
+                    }.exceptionOrNull()
+                val duplicateRecords =
+                    runCatching {
+                        repository.stageSnapshotPage(
+                            BUDGET,
+                            GENERATION,
+                            "1",
+                            listOf(transaction("duplicate"), transaction("duplicate")),
+                        )
+                    }.exceptionOrNull()
+
+                assertEquals("A record generation must match its snapshot page", wrongGeneration?.message)
+                assertEquals("A snapshot page cannot contain duplicate records", duplicateRecords?.message)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun legacyUnclearedStateMapsToFalse() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                repository.applySnapshot(
+                    BUDGET,
+                    GENERATION,
+                    "1",
+                    listOf(transaction(bodyJson = """{"cleared":"uncleared"}""")),
+                )
+
+                assertEquals(
+                    false,
+                    repository
+                        .observeSearchableTransactions(BUDGET)
+                        .first()
+                        .single()
+                        .cleared,
+                )
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun pagedSnapshotWithAStaleCheckpointIsDiscardedWithoutReplacingTheCache() =
         runBlocking {
             val database = newDatabase()

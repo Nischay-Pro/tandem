@@ -68,6 +68,40 @@ class GeneratedBudgetSyncRemoteTest {
         }
 
     @Test
+    fun generatedClientMapsEverySnapshotContinuationRecordType() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            val engine =
+                MockEngine { request ->
+                    requests += request
+                    respond(snapshotPageJson(), headers = jsonHeaders())
+                }
+            val cleanup = configureApi(engine)
+            try {
+                val remote = GeneratedBudgetSyncRemote(testApiClient())
+                val recordTypes =
+                    listOf(
+                        "account",
+                        "account-group",
+                        "category",
+                        "category-group",
+                        "payee",
+                        "transaction",
+                        "budget-month",
+                    )
+                recordTypes.forEach { recordType ->
+                    remote.readSnapshotPage(BUDGET, null, null, recordType, "record-1", 100, null)
+                }
+                assertEquals(recordTypes, requests.map { it.url.parameters["afterType"] })
+                assertProtocolException {
+                    runBlocking { remote.readSnapshotPage(BUDGET, null, null, "unknown", "record-1", 100, null) }
+                }
+            } finally {
+                cleanup()
+            }
+        }
+
+    @Test
     fun generatedClientMapsSnapshotsFeedWritesAndTransactionReads() =
         runBlocking {
             val requests = mutableListOf<HttpRequestData>()
@@ -241,6 +275,30 @@ class GeneratedBudgetSyncRemoteTest {
                 "records" to Json.parseToJsonElement("[]"),
             )
         assertProtocolException { BudgetSyncJson.parseSnapshot(invalidCursor, BUDGET) }
+
+        val duplicatePage =
+            Json
+                .parseToJsonElement(snapshotPageJson().replace("[${recordJson()}]", "[${recordJson()},${recordJson()}]"))
+                .jsonObject
+        assertProtocolException { BudgetSyncJson.parseSnapshotPage(duplicatePage, BUDGET) }
+
+        val invalidPageContinuation =
+            Json
+                .parseToJsonElement(snapshotPageJson().replace("\"nextAfterId\":\"$TXN\"", "\"nextAfterId\":null"))
+                .jsonObject
+        assertProtocolException { BudgetSyncJson.parseSnapshotPage(invalidPageContinuation, BUDGET) }
+
+        val resetPageWithRecords =
+            Json
+                .parseToJsonElement(snapshotPageJson().replace("\"resetRequired\":false", "\"resetRequired\":true"))
+                .jsonObject
+        assertProtocolException { BudgetSyncJson.parseSnapshotPage(resetPageWithRecords, BUDGET) }
+
+        val invalidPageRecordType =
+            Json
+                .parseToJsonElement(snapshotPageJson().replace("\"nextAfterType\":\"transaction\"", "\"nextAfterType\":{}"))
+                .jsonObject
+        assertProtocolException { BudgetSyncJson.parseSnapshotPage(invalidPageRecordType, BUDGET) }
 
         val invalidDelete =
             Json

@@ -3,6 +3,7 @@ package app.tandemforactual.data.database
 import androidx.room3.Room
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.openTandemDatabase
+import app.tandemforactual.data.store.LocalBudgetRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -10,6 +11,50 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class ReportAggregateQueryTest {
+    @Test
+    fun refundsReduceExpenseSpendingAndIncomeCategoriesStayOutOfSpending() =
+        runBlocking {
+            val database =
+                openTandemDatabase(
+                    Room
+                        .inMemoryDatabaseBuilder<TandemDatabase>()
+                        .setQueryCoroutineContext(Dispatchers.IO),
+                )
+            try {
+                database.budgetRecordDao().putAll(
+                    listOf(
+                        category("groceries", isIncome = false),
+                        category("salary", isIncome = true),
+                        transaction("purchase", "2026-01-03", "checking", "groceries", -10_000),
+                        transaction("partial-refund", "2026-01-07", "checking", "groceries", 3_000),
+                        transaction("second-refund", "2026-01-08", "checking", "groceries", 2_000),
+                        transaction("paycheck", "2026-01-10", "checking", "salary", 50_000),
+                        transaction("uncategorized-income", "2026-01-12", "checking", null, 20_000),
+                    ),
+                )
+
+                assertEquals(
+                    listOf(CategoryMonthAggregate("2026-01", "groceries", 5_000)),
+                    database.budgetRecordDao().observeCategoryMonthAggregates(BUDGET, "2026-01-01", "2026-01-31").first(),
+                )
+                assertEquals(
+                    listOf(MonthlyIncomeSpendingAggregate("2026-01", 70_000, 5_000)),
+                    database.budgetRecordDao().observeMonthlyIncomeAndSpending(BUDGET, "2026-01-01", "2026-01-31").first(),
+                )
+                val repository = LocalBudgetRepository(database) { 100L }
+                assertEquals(
+                    database.budgetRecordDao().observeCategoryMonthAggregates(BUDGET, "2026-01-01", "2026-01-31").first(),
+                    repository.observeCategoryMonthAggregates(BUDGET, "2026-01-01", "2026-01-31").first(),
+                )
+                assertEquals(
+                    database.budgetRecordDao().observeMonthlyIncomeAndSpending(BUDGET, "2026-01-01", "2026-01-31").first(),
+                    repository.observeMonthlyIncomeAndSpending(BUDGET, "2026-01-01", "2026-01-31").first(),
+                )
+            } finally {
+                database.close()
+            }
+        }
+
     @Test
     fun categoryMonthMonthlyAndAccountDayAggregatesExcludeTransfersAndDeletedRows() =
         runBlocking {
@@ -111,6 +156,15 @@ class ReportAggregateQueryTest {
                     ),
                     database.budgetRecordDao().observeAccountDailyActivity(BUDGET, "2026-06-30").first(),
                 )
+                val repository = LocalBudgetRepository(database) { 100L }
+                assertEquals(
+                    database.budgetRecordDao().observeAccountDailyActivity(BUDGET, "2026-06-30").first(),
+                    repository.observeAccountDailyActivity(BUDGET, "2026-06-30").first(),
+                )
+                assertEquals(
+                    database.budgetRecordDao().observeVisibleRecordIds(BUDGET, "transaction").first(),
+                    repository.observeRecordIds(BUDGET, "transaction").first(),
+                )
             } finally {
                 database.close()
             }
@@ -146,6 +200,27 @@ class ReportAggregateQueryTest {
         budgetMonth = date.take(7),
         transfer = transfer,
         isParent = isParent,
+    )
+
+    private fun category(
+        recordId: String,
+        isIncome: Boolean,
+    ) = BudgetRecordEntity(
+        budgetId = BUDGET,
+        recordType = "category",
+        recordId = recordId,
+        remoteJson = """{"name":"$recordId","is_income":$isIncome}""",
+        remoteRevision = "revision-$recordId",
+        localJson = null,
+        localDeleted = false,
+        remoteDeleted = false,
+        syncGeneration = "generation",
+        recordDate = null,
+        accountId = null,
+        categoryId = null,
+        payeeId = null,
+        amountMinor = null,
+        budgetMonth = null,
     )
 
     private companion object {

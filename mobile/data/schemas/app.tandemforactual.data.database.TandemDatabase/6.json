@@ -134,11 +134,7 @@
         ],
         "primaryKey": {
           "autoGenerate": false,
-          "columnNames": [
-            "budgetId",
-            "recordType",
-            "recordId"
-          ]
+          "columnNames": ["budgetId", "recordType", "recordId"]
         },
         "indices": [
           {
@@ -168,27 +164,14 @@
           {
             "name": "index_budget_records_budgetId_recordType_recordDate_recordId",
             "unique": false,
-            "columnNames": [
-              "budgetId",
-              "recordType",
-              "recordDate",
-              "recordId"
-            ],
-            "orders": [
-              "ASC",
-              "ASC",
-              "DESC",
-              "ASC"
-            ],
+            "columnNames": ["budgetId", "recordType", "recordDate", "recordId"],
+            "orders": ["ASC", "ASC", "DESC", "ASC"],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_budget_records_budgetId_recordType_recordDate_recordId` ON `${TABLE_NAME}` (`budgetId` ASC, `recordType` ASC, `recordDate` DESC, `recordId` ASC)"
           },
           {
             "name": "index_budget_records_budgetId_syncGeneration",
             "unique": false,
-            "columnNames": [
-              "budgetId",
-              "syncGeneration"
-            ],
+            "columnNames": ["budgetId", "syncGeneration"],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_budget_records_budgetId_syncGeneration` ON `${TABLE_NAME}` (`budgetId`, `syncGeneration`)"
           }
@@ -315,12 +298,7 @@
         ],
         "primaryKey": {
           "autoGenerate": false,
-          "columnNames": [
-            "budgetId",
-            "snapshotKey",
-            "recordType",
-            "recordId"
-          ]
+          "columnNames": ["budgetId", "snapshotKey", "recordType", "recordId"]
         }
       },
       {
@@ -364,9 +342,7 @@
         ],
         "primaryKey": {
           "autoGenerate": false,
-          "columnNames": [
-            "budgetId"
-          ]
+          "columnNames": ["budgetId"]
         }
       },
       {
@@ -414,9 +390,7 @@
         ],
         "primaryKey": {
           "autoGenerate": false,
-          "columnNames": [
-            "budgetId"
-          ]
+          "columnNames": ["budgetId"]
         }
       },
       {
@@ -438,9 +412,7 @@
         ],
         "primaryKey": {
           "autoGenerate": false,
-          "columnNames": [
-            "name"
-          ]
+          "columnNames": ["name"]
         }
       },
       {
@@ -571,49 +543,34 @@
         ],
         "primaryKey": {
           "autoGenerate": false,
-          "columnNames": [
-            "operationId"
-          ]
+          "columnNames": ["operationId"]
         },
         "indices": [
           {
             "name": "index_sync_outbox_idempotencyKey",
             "unique": true,
-            "columnNames": [
-              "idempotencyKey"
-            ],
+            "columnNames": ["idempotencyKey"],
             "orders": [],
             "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_sync_outbox_idempotencyKey` ON `${TABLE_NAME}` (`idempotencyKey`)"
           },
           {
             "name": "index_sync_outbox_budgetId_status_createdAtEpochMs",
             "unique": false,
-            "columnNames": [
-              "budgetId",
-              "status",
-              "createdAtEpochMs"
-            ],
+            "columnNames": ["budgetId", "status", "createdAtEpochMs"],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_sync_outbox_budgetId_status_createdAtEpochMs` ON `${TABLE_NAME}` (`budgetId`, `status`, `createdAtEpochMs`)"
           },
           {
             "name": "index_sync_outbox_budgetId_recordType_recordId_status",
             "unique": false,
-            "columnNames": [
-              "budgetId",
-              "recordType",
-              "recordId",
-              "status"
-            ],
+            "columnNames": ["budgetId", "recordType", "recordId", "status"],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_sync_outbox_budgetId_recordType_recordId_status` ON `${TABLE_NAME}` (`budgetId`, `recordType`, `recordId`, `status`)"
           },
           {
             "name": "index_sync_outbox_serverOperationId",
             "unique": true,
-            "columnNames": [
-              "serverOperationId"
-            ],
+            "columnNames": ["serverOperationId"],
             "orders": [],
             "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_sync_outbox_serverOperationId` ON `${TABLE_NAME}` (`serverOperationId`)"
           }
