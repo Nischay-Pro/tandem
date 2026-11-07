@@ -240,6 +240,9 @@ class TandemApiClientTest {
                 client.pair("http://[fd12::1]:19753", "4DF7-J1M9", "Phone")
                 client.pair("http://[fe80::1]:19753", "4DF7-J1M9", "Phone")
                 client.pair("http://localhost:19753", "4DF7-J1M9", "Phone")
+                client.pair("http://tandem.localhost:19753", "4DF7-J1M9", "Phone")
+                client.pair("http://[fc00:0000:0000:0000:0000:0000:0000:0001]:19753", "4DF7-J1M9", "Phone")
+                client.pair("http://[fe80:0000:0000:0000:0000:0000:0000:0001]:19753", "4DF7-J1M9", "Phone")
 
                 listOf(
                     "http://1.1.1.1:19753",
@@ -248,6 +251,7 @@ class TandemApiClientTest {
                     "http://tandem.lan:19753",
                     "http://actual.local:19753",
                     "http://fe80:19753",
+                    "http://[2001:0db8:0000:0000:0000:0000:0000:0001]:19753",
                     "http://fd12:19753",
                     "http://fe80::not-an-address:19753",
                     "http://192.168..1:19753",
@@ -256,7 +260,7 @@ class TandemApiClientTest {
                     val rejected = captureApiException { client.pair(address, "4DF7-J1M9", "Phone") }
                     assertEquals("invalid-server-url", rejected.errorCode, address)
                 }
-                assertEquals(6, requests.size)
+                assertEquals(9, requests.size)
             } finally {
                 cleanup()
                 Api.baseUrl = previousBaseUrl
@@ -452,6 +456,8 @@ class TandemApiClientTest {
                             """{"status":"ok","categoryId":"category-created"}"""
                         } else if (request.url.encodedPath.endsWith("/payees") && request.method == HttpMethod.Post) {
                             """{"status":"ok","payeeId":"payee-created"}"""
+                        } else if (request.url.encodedPath.endsWith("/category-groups") && request.method == HttpMethod.Post) {
+                            """{"status":"ok","categoryGroupId":"group-created"}"""
                         } else {
                             """{"status":"ok"}"""
                         },
@@ -552,6 +558,13 @@ class TandemApiClientTest {
                     BudgetsApi.getBudgetChanges(budgetId = "budget-1", generation = "generation", cursor = "0")
                     TransactionsApi.getBudgetTransaction(budgetId = "budget-1", transactionId = "transaction-1")
                 }
+                client.moveBudgetAccount("budget-1", "account-1", "account-2", "budget-password")
+                assertEquals("group-created", client.createBudgetCategoryGroup("budget-1", "Needs", false, "budget-password"))
+                client.manageBudgetCategoryGroup("budget-1", "group-1", "rename", "Essentials", null, "budget-password")
+                client.manageBudgetCategoryGroup("budget-1", "group-2", "move", null, "group-1", null)
+                client.manageBudgetCategory("budget-1", "category-1", "move", "category-2", "budget-password")
+                client.manageBudgetCategory("budget-1", "category-3", "hide", null, null)
+                client.applyBudgetTemplate("budget-1", "2026-11", listOf("category-1" to 10_000L), "budget-password")
 
                 assertEquals(
                     listOf(
@@ -650,6 +663,43 @@ class TandemApiClientTest {
                 assertEquals("network-error", failure.errorCode)
                 assertEquals("Couldn’t reach the Tandem server. Check the address and connection.", failure.message)
                 assertFalse(failure.message.orEmpty().contains("private transport detail"))
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
+    fun categoryCreationOperationsMapGeneratedApiErrors() =
+        runBlocking {
+            val engine =
+                MockEngine {
+                    respond(
+                        """{"error":{"code":"invalid_request"}}""",
+                        HttpStatusCode.BadRequest,
+                        jsonHeaders(),
+                    )
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                client.restoreSession("https://tandem.example", "device-token")
+                val categoryError =
+                    captureApiException {
+                        client.createBudgetCategory("budget-1", "group-1", "Dining", null)
+                    }
+                val groupError =
+                    captureApiException {
+                        client.createBudgetCategoryGroup("budget-1", "Needs", false, null)
+                    }
+                val payeeError = captureApiException { client.createBudgetPayee("budget-1", "Market", null) }
+                assertEquals("invalid_request", categoryError.errorCode)
+                assertEquals("invalid_request", groupError.errorCode)
+                assertEquals("invalid_request", payeeError.errorCode)
             } finally {
                 cleanup()
                 Api.baseUrl = previousBaseUrl

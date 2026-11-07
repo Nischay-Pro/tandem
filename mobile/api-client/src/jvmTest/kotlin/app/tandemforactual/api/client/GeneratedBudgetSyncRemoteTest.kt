@@ -402,6 +402,18 @@ class GeneratedBudgetSyncRemoteTest {
                 BUDGET,
             )
         }
+        val unsupportedBudgetType =
+            displaySettingsJson.replace("\"currencyCode\":\"CAD\"", "\"budgetType\":\"unsupported\",\"currencyCode\":\"CAD\"")
+        assertProtocolException {
+            BudgetSyncJson.parseSnapshot(
+                Json
+                    .parseToJsonElement(
+                        snapshotJson().replace("\"records\":", "\"displaySettings\":$unsupportedBudgetType,\"records\":"),
+                    ).jsonObject,
+                BUDGET,
+            )
+        }
+
         val unsupportedNumberFormat = displaySettingsJson.replace("space-comma", "unsupported")
         assertProtocolException {
             BudgetSyncJson.parseChanges(

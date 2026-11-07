@@ -47,12 +47,7 @@ class GeneratedApiSurfaceTest {
             val engine =
                 MockEngine { request ->
                     capturedRequests += request
-                    val responseBody =
-                        if (request.url.encodedPath == "/api/v1/health/ready") {
-                            """{"status":"ok"}"""
-                        } else {
-                            "{}"
-                        }
+                    val responseBody = """{"status":"ok"}"""
                     respond(
                         content = ByteReadChannel(gzip(responseBody)),
                         status = HttpStatusCode.OK,
@@ -189,6 +184,64 @@ class GeneratedApiSurfaceTest {
                         ?.isSuccessful == true,
                 )
 
+                assertTrue(
+                    TransactionsApi
+                        .importBudgetAccountTransactions(
+                            idempotencyKey = "statement-defaults",
+                            budgetId = "budget-2",
+                            accountId = "account-2",
+                        ).getOrNull()
+                        ?.isSuccessful == true,
+                )
+                assertTrue(
+                    BudgetsApi
+                        .moveBudgetAccount(idempotencyKey = "account-move-defaults", budgetId = "budget-2", accountId = "account-2")
+                        .getOrNull()
+                        ?.isSuccessful == true,
+                )
+                assertTrue(
+                    BudgetsApi
+                        .createBudgetCategoryGroup(idempotencyKey = "group-create-defaults", budgetId = "budget-2")
+                        .getOrNull()
+                        ?.isSuccessful == true,
+                )
+                assertTrue(
+                    BudgetsApi
+                        .manageBudgetCategoryGroup(idempotencyKey = "group-manage-defaults", budgetId = "budget-2", groupId = "group-2")
+                        .getOrNull()
+                        ?.isSuccessful == true,
+                )
+                assertTrue(
+                    BudgetsApi
+                        .manageBudgetCategory(idempotencyKey = "category-manage-defaults", budgetId = "budget-2", categoryId = "category-2")
+                        .getOrNull()
+                        ?.isSuccessful == true,
+                )
+                assertTrue(
+                    BudgetsApi
+                        .setBudgetCategoryCarryover(idempotencyKey = "carryover-defaults", budgetId = "budget-2", categoryId = "category-2")
+                        .getOrNull()
+                        ?.isSuccessful == true,
+                )
+                assertTrue(
+                    BudgetsApi
+                        .manageBudgetMonth(idempotencyKey = "month-manage-defaults", budgetId = "budget-2", month = "2026-11")
+                        .getOrNull()
+                        ?.isSuccessful == true,
+                )
+                assertTrue(
+                    BudgetsApi
+                        .manageBudgetSchedule(idempotencyKey = "schedule-manage-defaults", budgetId = "budget-2", scheduleId = "schedule-2")
+                        .getOrNull()
+                        ?.isSuccessful == true,
+                )
+                assertTrue(
+                    BudgetsApi
+                        .manageBudgetPayee(idempotencyKey = "payee-manage-defaults", budgetId = "budget-2", payeeId = "payee-2")
+                        .getOrNull()
+                        ?.isSuccessful == true,
+                )
+
                 assertEquals(
                     listOf(
                         HttpMethod.Get to "/api/v1/health/live",
@@ -207,12 +260,21 @@ class GeneratedApiSurfaceTest {
                         HttpMethod.Get to "/api/v1/operations/$operationId",
                         HttpMethod.Get to "/api/v1/budgets/budget-2/transactions/transaction-2",
                         HttpMethod.Post to "/api/v1/budgets/budget-2/transactions/transaction-2/operations",
+                        HttpMethod.Post to "/api/v1/budgets/budget-2/accounts/account-2/transactions/import",
+                        HttpMethod.Post to "/api/v1/budgets/budget-2/accounts/account-2/move",
+                        HttpMethod.Post to "/api/v1/budgets/budget-2/category-groups",
+                        HttpMethod.Patch to "/api/v1/budgets/budget-2/category-groups/group-2",
+                        HttpMethod.Post to "/api/v1/budgets/budget-2/categories/category-2/actions",
+                        HttpMethod.Put to "/api/v1/budgets/budget-2/categories/category-2/carryover",
+                        HttpMethod.Post to "/api/v1/budgets/budget-2/months/2026-11/actions",
+                        HttpMethod.Post to "/api/v1/budgets/budget-2/schedules/schedule-2/actions",
+                        HttpMethod.Post to "/api/v1/budgets/budget-2/payees/payee-2/actions",
                     ),
                     capturedRequests.map { it.method to it.url.encodedPath },
                 )
 
                 capturedRequests.forEachIndexed { index, request ->
-                    if (index in 4..15) {
+                    if (index >= 4) {
                         assertEquals("Bearer device-token", request.headers[HttpHeaders.Authorization])
                     } else {
                         assertNull(request.headers[HttpHeaders.Authorization])
