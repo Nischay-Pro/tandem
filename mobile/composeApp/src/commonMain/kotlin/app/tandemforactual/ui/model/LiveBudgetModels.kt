@@ -88,19 +88,11 @@ internal fun liveAccountSummaries(
 
 internal fun liveAccountGroupLabel(account: LiveAccountSummary): String {
     if (account.closed) return "Closed"
-    if (account.offBudget) return "Tracking"
-
-    val description = listOfNotNull(account.type, account.name, account.accountGroupName).joinToString(" ").lowercase()
-    return when {
-        listOf("credit", "credit card", "visa", "mastercard", "discover", "amex", "american express")
-            .any { description.contains(it) } -> "Credit"
-        listOf("loan", "mortgage", "debt").any { description.contains(it) } -> "Loans"
-        listOf("investment", "brokerage", "401k", "403b", "ira", "retirement", "stocks")
-            .any { description.contains(it) } -> "Investments"
-        listOf("checking", "savings", "cash").any { description.contains(it) } -> "Cash"
-        !account.accountGroupName.isNullOrBlank() -> account.accountGroupName
-        else -> "Accounts"
-    }
+    account.accountGroupName
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?.let { return it }
+    return if (account.offBudget) "Off budget" else "On budget"
 }
 
 internal fun liveBudgetMonthSummary(

@@ -36,7 +36,7 @@ class LiveBudgetModelsTest {
     }
 
     @Test
-    fun mapsAccountGroupsAndClosedStateAndClassifiesKnownAccountNames() {
+    fun usesActualAccountGroupsAndBudgetStateInsteadOfGuessingFromNames() {
         val accounts =
             liveAccountSummaries(
                 listOf(
@@ -54,6 +54,12 @@ class LiveBudgetModelsTest {
                     ),
                     record(
                         type = "account",
+                        id = "loan",
+                        name = "Auto loan",
+                        json = """{"id":"loan","balance_current":-80000,"offbudget":true}""",
+                    ),
+                    record(
+                        type = "account",
                         id = "closed",
                         name = "Old Savings",
                         json = """{"id":"closed","closed":true,"balance_current":0}""",
@@ -64,10 +70,11 @@ class LiveBudgetModelsTest {
 
         assertEquals("Everyday", accounts.first().accountGroupName)
         assertEquals("daily", accounts.first().accountGroupId)
-        assertEquals("Cash", liveAccountGroupLabel(accounts[0]))
-        assertEquals("Credit", liveAccountGroupLabel(accounts[1]))
-        assertEquals("Closed", liveAccountGroupLabel(accounts[2]))
-        assertEquals(true, accounts[2].closed)
+        assertEquals("Everyday", liveAccountGroupLabel(accounts[0]))
+        assertEquals("On budget", liveAccountGroupLabel(accounts[1]))
+        assertEquals("Off budget", liveAccountGroupLabel(accounts[2]))
+        assertEquals("Closed", liveAccountGroupLabel(accounts[3]))
+        assertEquals(true, accounts[3].closed)
     }
 
     @Test

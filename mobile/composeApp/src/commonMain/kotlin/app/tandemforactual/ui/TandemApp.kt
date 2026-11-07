@@ -6114,7 +6114,7 @@ private fun AccountsScreen(
     val model =
         remember(isLiveBudget, liveAccounts, state.budgetDisplaySettings) {
             if (isLiveBudget) {
-                val groupOrder = listOf("Cash", "Credit", "Loans", "Investments", "Tracking", "Closed", "Accounts")
+                val groupOrder = listOf("On budget", "Off budget", "Closed")
                 val groupedAccounts =
                     liveAccounts
                         .groupBy(::liveAccountGroupLabel)
@@ -6134,9 +6134,9 @@ private fun AccountsScreen(
                                         account.name,
                                         when {
                                             account.closed -> "Closed"
-                                            account.offBudget -> "Tracking · off budget"
                                             account.accountGroupName != null -> account.accountGroupName
-                                            else -> account.type?.takeIf { it.isNotBlank() && it != "account" } ?: "On budget"
+                                            account.offBudget -> "Off budget"
+                                            else -> "On budget"
                                         },
                                         account.balanceMinor?.let(state::formatCurrency) ?: "Unavailable",
                                         account.offBudget,
@@ -6315,8 +6315,8 @@ private fun AccountsScreen(
                     TextFieldCard("Name", newAccountName, { newAccountName = it }, TextFieldOptions(placeholder = "Checking"))
                     SurfaceCard {
                         CheckBoxRow(
-                            "Tracking account",
-                            "Outside the budget",
+                            "Off budget",
+                            "Excluded from the budget",
                             checked = newAccountOffBudget,
                             enabled = !mobileSession.isPerformingBudgetAction,
                             onChange = { newAccountOffBudget = it },
