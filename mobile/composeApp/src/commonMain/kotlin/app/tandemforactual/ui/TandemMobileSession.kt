@@ -506,6 +506,49 @@ internal class TandemMobileSession(
         }
     }
 
+    suspend fun createBudgetCategory(
+        budgetId: String,
+        name: String,
+        categoryGroupId: String,
+        encryptionPassword: String?,
+    ): String? {
+        val cleanName = name.trim()
+        if (cleanName.isBlank()) {
+            budgetActionMessage = "Enter a category name."
+            return null
+        }
+        if (cleanName.length > 100) {
+            budgetActionMessage = "Category names can be up to 100 characters."
+            return null
+        }
+        var categoryId: String? = null
+        val created =
+            performBudgetAction(budgetId, encryptionPassword, "Couldn’t create this category. Try again.") {
+                categoryId = apiClient.createBudgetCategory(budgetId, categoryGroupId, cleanName, encryptionPassword)
+            }
+        return categoryId.takeIf { created }
+    }
+
+    suspend fun setBudgetCategoryAmount(
+        budgetId: String,
+        categoryId: String,
+        month: String,
+        amountMinor: Long,
+        encryptionPassword: String?,
+    ): Boolean {
+        if (amountMinor < 0L) {
+            budgetActionMessage = "Assigned amounts can’t be negative."
+            return false
+        }
+        if (amountMinor > 9_007_199_254_740_991L) {
+            budgetActionMessage = "Enter a smaller assigned amount."
+            return false
+        }
+        return performBudgetAction(budgetId, encryptionPassword, "Couldn’t update this assigned amount. Try again.") {
+            apiClient.setBudgetCategoryAmount(budgetId, categoryId, month, amountMinor, encryptionPassword)
+        }
+    }
+
     suspend fun deleteBudgetCategory(
         budgetId: String,
         categoryId: String,

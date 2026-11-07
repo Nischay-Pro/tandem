@@ -2899,6 +2899,7 @@ private fun ScreenContent(
         AppRoute.ACTIVITY ->
             ActivityScreen(
                 state,
+                mobileSession,
                 navigation,
                 liveTransactions,
                 activitySortCache,
@@ -2989,8 +2990,10 @@ private fun ScreenContent(
             }
         }
         AppRoute.CHOOSE_CATEGORY -> {
+            val scope = rememberCoroutineScope()
+            val isLiveBudget = state.selectedBudgetId.isNotBlank()
             val values =
-                if (state.selectedBudgetId.isBlank()) {
+                if (!isLiveBudget) {
                     listOf("Groceries", "Utilities", "Dining", "Rent", "Transport", "Personal")
                         .map { SelectorItem(it, it) }
                 } else {
@@ -3000,13 +3003,106 @@ private fun ScreenContent(
                                 record.recordName()?.let { SelectorItem(record.recordId, it) }
                             }.distinctBy { it.id }
                 }
+            val categoryGroups =
+                if (!isLiveBudget) {
+                    emptyList()
+                } else {
+                    mobileSession.categoryGroupRecords.mapNotNull { record ->
+                        val body = record.recordBody() ?: return@mapNotNull null
+                        val isIncomeGroup = body.booleanValue("is_income") ?: false
+                        if (isIncomeGroup != (state.transactionType == "Income") || body.booleanValue("hidden") == true) {
+                            return@mapNotNull null
+                        }
+                        record.recordName()?.let { SelectorItem(record.recordId, it) }
+                    }
+                }
+            var createGroupId by rememberSaveable(state.selectedBudgetId, state.transactionType) { mutableStateOf("") }
+            var createGroupMenuExpanded by rememberSaveable(state.selectedBudgetId, state.transactionType) { mutableStateOf(false) }
+            LaunchedEffect(categoryGroups) {
+                if (categoryGroups.none { it.id == createGroupId }) {
+                    createGroupId = categoryGroups.firstOrNull()?.id.orEmpty()
+                }
+            }
             SelectorScreen(
                 values,
                 if (state.selectedBudgetId.isBlank()) state.transactionCategory else state.newTransactionCategoryId,
-                live = state.selectedBudgetId.isNotBlank(),
+                live = isLiveBudget,
+                noMatches = if (isLiveBudget) { query ->
+                    val newName = query.trim()
+                    if (newName.isBlank()) {
+                        EmptyState("Type a category name", modifier = Modifier.padding(TandemSpacing.large))
+                    } else {
+                        SurfaceCard {
+                            Column(
+                                Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                            ) {
+                                Text("Create category", color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
+                                if (categoryGroups.isEmpty()) {
+                                    BodyText("Add a ${state.transactionType.lowercase()} category group in Actual first.")
+                                } else {
+                                    Box {
+                                        val selectedGroup = categoryGroups.firstOrNull { it.id == createGroupId }
+                                        ListRow(
+                                            "Category group",
+                                            leading = RowLeading.Icon(Lucide.Tags),
+                                            trailing = selectedGroup?.label ?: "Choose group",
+                                            onClick = { createGroupMenuExpanded = true },
+                                        )
+                                        DropdownMenu(
+                                            expanded = createGroupMenuExpanded,
+                                            onDismissRequest = { createGroupMenuExpanded = false },
+                                        ) {
+                                            categoryGroups.forEach { group ->
+                                                DropdownMenuItem(
+                                                    onClick = {
+                                                        createGroupId = group.id
+                                                        createGroupMenuExpanded = false
+                                                    },
+                                                ) {
+                                                    Text(group.label, color = tandemPalette.text, fontSize = TandemTypography.compactBody)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                                    TandemActionButton(
+                                        if (mobileSession.isPerformingBudgetAction) "Creating…" else "Create \"$newName\"",
+                                        TandemActionButtonTone.PRIMARY,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        enabled =
+                                            !state.readOnlyMode &&
+                                                !mobileSession.isPerformingBudgetAction &&
+                                                createGroupId.isNotBlank() &&
+                                                newName.length <= 100,
+                                        loading = mobileSession.isPerformingBudgetAction,
+                                    ) {
+                                        mobileSession.clearBudgetActionMessage()
+                                        scope.launch {
+                                            val categoryId =
+                                                mobileSession.createBudgetCategory(
+                                                    state.selectedBudgetId,
+                                                    newName,
+                                                    createGroupId,
+                                                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                                                )
+                                            if (categoryId != null) {
+                                                state.transactionCategory = newName
+                                                state.newTransactionCategoryId = categoryId
+                                                navigation.back()
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    null
+                },
             ) { item ->
                 state.transactionCategory = if (item.label == "Uncategorized") "" else item.label
-                state.newTransactionCategoryId = if (state.selectedBudgetId.isBlank()) "" else item.id
+                state.newTransactionCategoryId = if (!isLiveBudget) "" else item.id
                 navigation.back()
             }
         }
@@ -5073,6 +5169,9 @@ private fun UpcomingBillsCard(
 @Composable
 private fun TransactionRow(
     transaction: TransactionItem,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
@@ -5087,10 +5186,106 @@ private fun TransactionRow(
             transaction.payee,
             transaction.category,
             formatSignedCurrency(transaction.amountMinorUnits, transaction.displaySettings),
-            leading = RowLeading.Merchant(transaction.merchantIcon, fallback = transaction.categoryIcon ?: Lucide.Receipt),
+            leading =
+                if (selectionMode) {
+                    RowLeading.Icon(if (selected) Lucide.Check else Lucide.CircleDot)
+                } else {
+                    RowLeading.Merchant(transaction.merchantIcon, fallback = transaction.categoryIcon ?: Lucide.Receipt)
+                },
             options = ListRowOptions(trailingColor = if (transaction.amountMinorUnits > 0) palette.positive else palette.text),
             onClick = onClick,
+            onLongClick = onLongClick,
         )
+    }
+}
+
+@Composable
+private fun TransactionSelectionActions(
+    selectedCount: Int,
+    allSelected: Boolean,
+    onToggleAll: () -> Unit,
+    onDelete: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    SurfaceCard {
+        Column(
+            Modifier.fillMaxWidth().padding(TandemSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+        ) {
+            Text("$selectedCount selected", color = tandemPalette.text, fontSize = TandemTypography.action, fontWeight = FontWeight.SemiBold)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                TandemActionButton(
+                    if (allSelected) "Deselect all" else "Select all",
+                    TandemActionButtonTone.NEUTRAL,
+                    Modifier.weight(1f),
+                    icon = if (allSelected) Lucide.CircleDot else Lucide.Check,
+                    onClick = onToggleAll,
+                )
+                TandemActionButton(
+                    "Delete",
+                    TandemActionButtonTone.DESTRUCTIVE,
+                    Modifier.weight(1f),
+                    icon = Lucide.Trash2,
+                    enabled = selectedCount > 0,
+                    onClick = onDelete,
+                )
+                TandemIconButton(
+                    Lucide.X,
+                    "Cancel selection",
+                    containerColor = tandemPalette.raised,
+                    onClick = onCancel,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TransactionBulkDeleteDialog(
+    selectedCount: Int,
+    isDeleting: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    Dialog(
+        onDismissRequest = { if (!isDeleting) onDismiss() },
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = 16.dp)) {
+            Column(
+                Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    Icon(Lucide.Trash2, contentDescription = null, modifier = Modifier.size(22.dp), tint = tandemPalette.negative)
+                    Text(
+                        "Delete $selectedCount transactions?",
+                        modifier = Modifier.weight(1f),
+                        color = tandemPalette.text,
+                        fontSize = TandemTypography.cardTitle,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    TandemActionButton(
+                        "Cancel",
+                        TandemActionButtonTone.NEUTRAL,
+                        Modifier.weight(1f),
+                        enabled = !isDeleting,
+                        onClick = onDismiss,
+                    )
+                    TandemActionButton(
+                        if (isDeleting) "Deleting…" else "Delete",
+                        TandemActionButtonTone.DESTRUCTIVE,
+                        Modifier.weight(1f),
+                        icon = Lucide.Trash2,
+                        enabled = !isDeleting,
+                        loading = isDeleting,
+                        onClick = onConfirm,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -5118,6 +5313,17 @@ private fun openTransaction(
     state.selectedTransactionRecordId = transaction.recordId.orEmpty()
     state.selectedTransactionIsLive = isLive
     navigation.open(AppRoute.TRANSACTION_DETAIL)
+}
+
+private suspend fun deleteTransactionSelection(
+    mobileSession: TandemMobileSession,
+    budgetId: String,
+    transactionIds: Set<String>,
+): Boolean {
+    for (transactionId in transactionIds) {
+        if (!mobileSession.deleteTransaction(budgetId, transactionId)) return false
+    }
+    return true
 }
 
 @Composable
@@ -5257,6 +5463,11 @@ private fun CategoryDetailScreen(
         }
     var showEditDialog by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf(false) }
     var showDeleteDialog by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf(false) }
+    var showAssignedAmountDialog by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId, state.selectedMonthId) { mutableStateOf(false) }
+    var assignedAmountDraft by
+        rememberSaveable(state.selectedBudgetId, state.selectedCategoryId, state.selectedMonthId) {
+            mutableStateOf("")
+        }
     var editName by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf("") }
     var iconSearch by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf("") }
     var selectedIconChoice by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf("Automatic") }
@@ -5310,11 +5521,40 @@ private fun CategoryDetailScreen(
                 "${state.formatCurrency(category.assignedMinor)} assigned",
             )
             SectionCard("This month") {
-                ListRow(
-                    "Assigned",
-                    if (isLiveBudget) "Budgeted in Actual" else "Monthly target",
-                    state.formatCurrency(category.assignedMinor),
-                )
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 64.dp)
+                        .clickable(
+                            enabled = isLiveBudget && !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                            role = Role.Button,
+                            onClickLabel = "Edit assigned amount",
+                            onClick = {
+                                assignedAmountDraft = state.formatAmount(category.assignedMinor)
+                                mobileSession.clearBudgetActionMessage()
+                                showAssignedAmountDialog = true
+                            },
+                        ).padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                ) {
+                    Box(
+                        Modifier.size(44.dp).clip(RoundedCornerShape(TandemShapes.medium)).background(tandemPalette.raised),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Lucide.WalletCards, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
+                    }
+                    Text("Assigned", modifier = Modifier.weight(1f), color = tandemPalette.text, fontSize = TandemTypography.body)
+                    Text(state.formatCurrency(category.assignedMinor), color = tandemPalette.text, fontSize = TandemTypography.compactBody)
+                    if (isLiveBudget) {
+                        Icon(
+                            Lucide.Pencil,
+                            contentDescription = "Edit assigned amount",
+                            modifier = Modifier.size(19.dp),
+                            tint = if (state.readOnlyMode) tandemPalette.muted else tandemPalette.accent,
+                        )
+                    }
+                }
                 DividerLine()
                 ListRow(
                     "Activity",
@@ -5335,6 +5575,79 @@ private fun CategoryDetailScreen(
                 SecondaryButton(
                     if (state.isCategoryPinned(category.id)) "Unpin" else "Pin",
                 ) { state.togglePinnedCategory(category.id) }
+            }
+        }
+    }
+    if (showAssignedAmountDialog && category != null && isLiveBudget) {
+        val parsedAmount = state.parseAmountMinorUnits(assignedAmountDraft)
+        Dialog(
+            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showAssignedAmountDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 460.dp).padding(horizontal = 16.dp)) {
+                Column(
+                    Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        Icon(Lucide.WalletCards, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
+                        Text(
+                            "Assigned amount",
+                            modifier = Modifier.weight(1f),
+                            color = tandemPalette.text,
+                            fontSize = TandemTypography.sectionTitle,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        TandemIconButton(
+                            Lucide.X,
+                            "Close",
+                            sizeDp = 40,
+                            iconSizeDp = 18,
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                        ) { showAssignedAmountDialog = false }
+                    }
+                    Text("${category.name} · ${state.selectedMonth}", color = tandemPalette.muted, fontSize = TandemTypography.caption)
+                    TextFieldCard(
+                        "Amount",
+                        assignedAmountDraft,
+                        { assignedAmountDraft = it },
+                        TextFieldOptions(
+                            placeholder = state.formatAmount(0),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            textAlign = TextAlign.Center,
+                            large = true,
+                        ),
+                    )
+                    mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        TandemActionButton(
+                            "Cancel",
+                            TandemActionButtonTone.NEUTRAL,
+                            Modifier.weight(1f),
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                        ) { showAssignedAmountDialog = false }
+                        TandemActionButton(
+                            if (mobileSession.isPerformingBudgetAction) "Saving…" else "Save",
+                            TandemActionButtonTone.PRIMARY,
+                            Modifier.weight(1f),
+                            icon = Lucide.Check,
+                            enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction && parsedAmount != null && parsedAmount >= 0,
+                            loading = mobileSession.isPerformingBudgetAction,
+                        ) {
+                            scope.launch {
+                                val saved =
+                                    mobileSession.setBudgetCategoryAmount(
+                                        state.selectedBudgetId,
+                                        category.id,
+                                        state.selectedMonthId,
+                                        parsedAmount ?: 0L,
+                                        state.encryptedPassword.takeIf { it.isNotBlank() },
+                                    )
+                                if (saved) showAssignedAmountDialog = false
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -5644,6 +5957,15 @@ private fun openCategoryActivity(
     navigation.open(AppRoute.ACTIVITY_SEARCH)
 }
 
+private fun openGeneralActivitySearch(
+    state: AppState,
+    navigation: AppNavigation,
+) {
+    state.activitySearchQuery = ""
+    state.activitySearchFilters = emptyList()
+    navigation.open(AppRoute.ACTIVITY_SEARCH)
+}
+
 private fun openReportCategoryActivity(
     state: AppState,
     navigation: AppNavigation,
@@ -5715,14 +6037,11 @@ private data class AccountListItemUi(
 
 private data class AccountListGroupUi(
     val name: String,
-    val description: String,
+    val total: String,
     val accounts: List<AccountListItemUi>,
 )
 
 private data class AccountListUi(
-    val subtitle: String,
-    val totalOnBudget: String,
-    val onBudgetCount: Int,
     val groups: List<AccountListGroupUi>,
     val isSample: Boolean,
     val showAccountOptions: Boolean,
@@ -5751,6 +6070,7 @@ private fun AccountsScreen(
 ) {
     val scope = rememberCoroutineScope()
     var addAccountDialog by rememberSaveable { mutableStateOf(false) }
+    var showBankConnectionsDialog by rememberSaveable { mutableStateOf(false) }
     var newAccountName by rememberSaveable { mutableStateOf("") }
     var newAccountOffBudget by rememberSaveable { mutableStateOf(false) }
     val isRefreshing = mobileSession.isSyncing || mobileSession.isPerformingBudgetAction
@@ -5767,7 +6087,6 @@ private fun AccountsScreen(
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     val model =
         if (isLiveBudget) {
-            val onBudgetAccounts = liveAccounts.filterNot { it.offBudget || it.closed }
             val groupOrder = listOf("Cash", "Credit", "Loans", "Investments", "Tracking", "Closed", "Accounts")
             val groupedAccounts =
                 liveAccounts
@@ -5781,7 +6100,7 @@ private fun AccountsScreen(
                     ).map { (groupName, accounts) ->
                         AccountListGroupUi(
                             groupName,
-                            "${accounts.size} ${if (accounts.size == 1) "account" else "accounts"}",
+                            state.formatCurrency(accounts.sumOf { it.balanceMinor ?: 0L }),
                             accounts.map { account ->
                                 AccountListItemUi(
                                     account.id,
@@ -5800,20 +6119,16 @@ private fun AccountsScreen(
                         )
                     }
             AccountListUi(
-                "Synced account balances from Actual.",
-                state.formatCurrency(onBudgetAccounts.sumOf { it.balanceMinor ?: 0L }),
-                onBudgetAccounts.size,
                 groupedAccounts,
                 isSample = false,
                 showAccountOptions = false,
             )
         } else {
-            val onBudgetAccounts = previewAccounts.filterNot { it.offBudget }
             val groupedAccounts =
                 previewAccounts.groupBy { it.group }.map { (groupName, accounts) ->
                     AccountListGroupUi(
                         groupName,
-                        "${accounts.size} ${if (accounts.size == 1) "account" else "accounts"}",
+                        state.formatCurrency(accounts.sumOf { it.balanceMinor }),
                         accounts.map { account ->
                             AccountListItemUi(
                                 account.id,
@@ -5826,9 +6141,6 @@ private fun AccountsScreen(
                     )
                 }
             AccountListUi(
-                "Review account balances and recent activity.",
-                state.formatCurrency(onBudgetAccounts.sumOf { it.balanceMinor }),
-                onBudgetAccounts.size,
                 groupedAccounts,
                 isSample = true,
                 showAccountOptions = true,
@@ -5840,39 +6152,9 @@ private fun AccountsScreen(
         onRefresh = runBankSync.takeIf { isLiveBudget && !state.readOnlyMode },
     ) {
         if (model.isSample) item(key = "accounts-preview-banner") { SampleBanner() }
-        item(key = "accounts-title") { Heading("Balances", model.subtitle) }
-        item(key = "accounts-summary") {
-            AmountHero(
-                "Total on budget",
-                model.totalOnBudget,
-                "Across ${model.onBudgetCount} ${if (model.isSample) "sample accounts" else "on-budget accounts"}",
-            )
-        }
-        if (isLiveBudget) {
-            item(key = "account-actions") {
-                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    PrimaryButton(
-                        "Add account",
-                        enabled = !isRefreshing && !state.readOnlyMode,
-                        onClick = {
-                            newAccountName = ""
-                            newAccountOffBudget = false
-                            mobileSession.clearBudgetActionMessage()
-                            addAccountDialog = true
-                        },
-                    )
-                    SecondaryButton(
-                        "Sync bank accounts",
-                        enabled = !isRefreshing && !state.readOnlyMode,
-                        onClick = runBankSync,
-                    )
-                }
-            }
-            mobileSession.budgetActionMessage?.let { message ->
-                item(key = "account-action-message") {
-                    InlineMessage(message, InlineMessageKind.ERROR)
-                }
-            }
+        item(key = "accounts-title") { Heading("Accounts") }
+        mobileSession.budgetActionMessage?.let { message ->
+            item(key = "account-action-message") { InlineMessage(message, InlineMessageKind.ERROR) }
         }
         if (model.groups.isEmpty()) {
             item(key = "accounts-empty") {
@@ -5887,29 +6169,67 @@ private fun AccountsScreen(
         } else {
             model.groups.forEach { group ->
                 item(key = "account-group:${group.name}") {
-                    SectionCard(group.name, group.description, "") {}
-                }
-                items(group.accounts, key = { "account:${it.id}" }) { account ->
-                    SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
-                        ListRow(
-                            account.name,
-                            account.description,
-                            account.balance,
-                            leading =
-                                RowLeading.Merchant(
-                                    merchantIconMatcher?.accountIconFor(account.name),
-                                    fallback = accountTypeIcon(account.name),
-                                ),
-                            options =
-                                ListRowOptions(
-                                    trailingColor =
-                                        if (account.offBudget || account.closed) tandemPalette.muted else tandemPalette.text,
-                                ),
+                    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.small),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            state.selectedAccountId = account.id
-                            navigation.open(AppRoute.ACCOUNT_DETAIL)
+                            Text(group.name, color = tandemPalette.text, fontSize = TandemTypography.label, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.weight(1f))
+                            Text(group.total, color = tandemPalette.muted, fontSize = TandemTypography.caption, maxLines = 1)
+                        }
+                        SurfaceCard {
+                            Column {
+                                group.accounts.forEachIndexed { index, account ->
+                                    ListRow(
+                                        account.name,
+                                        trailing = account.balance,
+                                        leading =
+                                            RowLeading.Merchant(
+                                                merchantIconMatcher?.accountIconFor(account.name),
+                                                fallback = accountTypeIcon(account.name),
+                                            ),
+                                        options =
+                                            ListRowOptions(
+                                                dense = true,
+                                                trailingColor =
+                                                    if (account.offBudget || account.closed) tandemPalette.muted else tandemPalette.text,
+                                            ),
+                                        onClick = {
+                                            state.selectedAccountId = account.id
+                                            navigation.open(AppRoute.ACCOUNT_DETAIL)
+                                        },
+                                    )
+                                    if (index < group.accounts.lastIndex) DividerLine()
+                                }
+                            }
                         }
                     }
+                }
+            }
+        }
+        if (isLiveBudget) {
+            item(key = "account-bottom-actions") {
+                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    TandemActionButton(
+                        "Add Account",
+                        TandemActionButtonTone.PRIMARY,
+                        Modifier.fillMaxWidth(),
+                        icon = Lucide.Plus,
+                        enabled = !isRefreshing && !state.readOnlyMode,
+                    ) {
+                        newAccountName = ""
+                        newAccountOffBudget = false
+                        mobileSession.clearBudgetActionMessage()
+                        addAccountDialog = true
+                    }
+                    TandemActionButton(
+                        "Manage Bank Connections",
+                        TandemActionButtonTone.NEUTRAL,
+                        Modifier.fillMaxWidth(),
+                        icon = Lucide.Landmark,
+                        enabled = !isRefreshing,
+                    ) { showBankConnectionsDialog = true }
                 }
             }
         }
@@ -5920,51 +6240,124 @@ private fun AccountsScreen(
         }
     }
     if (addAccountDialog) {
-        AlertDialog(
+        Dialog(
             onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) addAccountDialog = false },
-            title = { Text("Add account", color = tandemPalette.text) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    TextFieldCard("Name", newAccountName, { newAccountName = it }, TextFieldOptions(placeholder = "Checking"))
-                    CheckBoxRow(
-                        "Tracking account",
-                        "Keep it outside the budget",
-                        checked = newAccountOffBudget,
-                        enabled = !mobileSession.isPerformingBudgetAction,
-                        onChange = { newAccountOffBudget = it },
-                    )
-                    mobileSession.budgetActionMessage?.let { BodyText(it) }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !mobileSession.isPerformingBudgetAction && newAccountName.isNotBlank(),
-                    onClick = {
-                        scope.launch {
-                            val created =
-                                mobileSession.createBudgetAccount(
-                                    state.selectedBudgetId,
-                                    newAccountName,
-                                    newAccountOffBudget,
-                                    state.encryptedPassword.takeIf { it.isNotBlank() },
-                                )
-                            if (created) addAccountDialog = false
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            SurfaceCard(
+                Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = 16.dp),
+            ) {
+                Column(
+                    Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        Box(
+                            Modifier.size(42.dp).clip(CircleShape).background(tandemPalette.accentSurface),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Lucide.WalletCards, contentDescription = null, modifier = Modifier.size(22.dp), tint = tandemPalette.accent)
                         }
-                    },
-                ) {
-                    Text(if (mobileSession.isPerformingBudgetAction) "Adding…" else "Add", color = tandemPalette.accent)
+                        Text(
+                            "Add account",
+                            modifier = Modifier.weight(1f),
+                            color = tandemPalette.text,
+                            fontSize = TandemTypography.sectionTitle,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                        )
+                        TandemIconButton(
+                            Lucide.X,
+                            "Close",
+                            sizeDp = 40,
+                            iconSizeDp = 18,
+                            containerColor = tandemPalette.raised,
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                        ) { addAccountDialog = false }
+                    }
+                    TextFieldCard("Name", newAccountName, { newAccountName = it }, TextFieldOptions(placeholder = "Checking"))
+                    SurfaceCard {
+                        CheckBoxRow(
+                            "Tracking account",
+                            "Outside the budget",
+                            checked = newAccountOffBudget,
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                            onChange = { newAccountOffBudget = it },
+                        )
+                    }
+                    mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        TandemActionButton(
+                            "Cancel",
+                            TandemActionButtonTone.NEUTRAL,
+                            Modifier.weight(1f),
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                        ) { addAccountDialog = false }
+                        TandemActionButton(
+                            if (mobileSession.isPerformingBudgetAction) "Adding…" else "Add account",
+                            TandemActionButtonTone.PRIMARY,
+                            Modifier.weight(1f),
+                            icon = Lucide.Plus,
+                            enabled = !mobileSession.isPerformingBudgetAction && newAccountName.isNotBlank(),
+                            loading = mobileSession.isPerformingBudgetAction,
+                        ) {
+                            scope.launch {
+                                val created =
+                                    mobileSession.createBudgetAccount(
+                                        state.selectedBudgetId,
+                                        newAccountName,
+                                        newAccountOffBudget,
+                                        state.encryptedPassword.takeIf { it.isNotBlank() },
+                                    )
+                                if (created) addAccountDialog = false
+                            }
+                        }
+                    }
                 }
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = !mobileSession.isPerformingBudgetAction,
-                    onClick = { addAccountDialog = false },
+            }
+        }
+    }
+    if (showBankConnectionsDialog) {
+        Dialog(
+            onDismissRequest = { if (!isRefreshing) showBankConnectionsDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = 16.dp)) {
+                Column(
+                    Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
                 ) {
-                    Text("Cancel", color = tandemPalette.muted)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        Icon(Lucide.Landmark, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
+                        Text(
+                            "Bank connections",
+                            modifier = Modifier.weight(1f),
+                            color = tandemPalette.text,
+                            fontSize = TandemTypography.sectionTitle,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        TandemIconButton(Lucide.X, "Close", sizeDp = 40, iconSizeDp = 18) { showBankConnectionsDialog = false }
+                    }
+                    InfoBubble("Review, add, or remove bank links in Actual Budget. Tandem syncs the connections configured there.")
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        TandemActionButton("Done", TandemActionButtonTone.NEUTRAL, Modifier.weight(1f)) {
+                            showBankConnectionsDialog = false
+                        }
+                        TandemActionButton(
+                            "Sync accounts",
+                            TandemActionButtonTone.PRIMARY,
+                            Modifier.weight(1f),
+                            icon = Lucide.RefreshCw,
+                            enabled = !isRefreshing && !state.readOnlyMode,
+                            loading = isRefreshing,
+                        ) {
+                            showBankConnectionsDialog = false
+                            runBankSync()
+                        }
+                    }
                 }
-            },
-            backgroundColor = tandemPalette.surface,
-        )
+            }
+        }
     }
 }
 
@@ -6196,13 +6589,19 @@ private fun AccountActionDropdown(
 @Composable
 private fun ActivityScreen(
     state: AppState,
+    mobileSession: TandemMobileSession,
     navigation: AppNavigation,
     liveTransactions: List<TransactionItem>,
     sortCache: ActivityTransactionSortCache,
     isRefreshing: Boolean,
     onSyncNow: () -> Unit,
 ) {
+    val scope = rememberCoroutineScope()
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    var selectionMode by remember(state.selectedBudgetId) { mutableStateOf(false) }
+    var selectedTransactionIds by remember(state.selectedBudgetId) { mutableStateOf<Set<String>>(emptySet()) }
+    var confirmBulkDelete by remember(state.selectedBudgetId) { mutableStateOf(false) }
+    var isDeletingSelection by remember(state.selectedBudgetId) { mutableStateOf(false) }
     val transactionSource = if (isLiveBudget) liveTransactions else previewTransactions
     val transactions = if (isLiveBudget) transactionSource.filterNot(TransactionItem::isSplitParent) else transactionSource
     val selectedSortOrder = state.activitySortOrder
@@ -6224,7 +6623,7 @@ private fun ActivityScreen(
     ) {
         if (!isLiveBudget) item(key = "activity-preview-banner") { SampleBanner() }
         item(key = "activity-search-entry") {
-            SurfaceCard(onClick = { navigation.open(AppRoute.ACTIVITY_SEARCH) }) {
+            SurfaceCard(onClick = { openGeneralActivitySearch(state, navigation) }) {
                 Row(
                     Modifier.fillMaxWidth().padding(TandemSpacing.medium),
                     verticalAlignment = Alignment.CenterVertically,
@@ -6243,6 +6642,28 @@ private fun ActivityScreen(
         }
         item(key = "activity-sort") {
             ActivitySortControl(state.activitySortOrder) { state.activitySortOrder = it }
+        }
+        val selectableIds = sortedTransactions.mapNotNull(TransactionItem::recordId).toSet()
+        if (selectionMode) {
+            item(key = "activity-selection-actions") {
+                TransactionSelectionActions(
+                    selectedCount = selectedTransactionIds.size,
+                    allSelected = selectableIds.isNotEmpty() && selectedTransactionIds.containsAll(selectableIds),
+                    onToggleAll = {
+                        selectedTransactionIds =
+                            if (selectableIds.isNotEmpty() && selectedTransactionIds.containsAll(selectableIds)) {
+                                emptySet()
+                            } else {
+                                selectableIds
+                            }
+                    },
+                    onDelete = { confirmBulkDelete = true },
+                    onCancel = {
+                        selectionMode = false
+                        selectedTransactionIds = emptySet()
+                    },
+                )
+            }
         }
         val recentDescription = if (isLiveBudget) state.activitySortOrder.label else "${transactions.size} sample entries"
         if (transactions.isEmpty()) {
@@ -6265,13 +6686,56 @@ private fun ActivityScreen(
                 },
             ) { transaction ->
                 SurfaceCard(modifier = if (isLiveBudget) tandemListItemModifier(tandemReduceMotion) else Modifier) {
-                    TransactionRow(transaction) {
-                        openTransaction(state, navigation, transaction, isLive = isLiveBudget)
+                    val transactionId = transaction.recordId
+                    TransactionRow(
+                        transaction,
+                        selectionMode = selectionMode,
+                        selected = transactionId != null && transactionId in selectedTransactionIds,
+                        onLongClick = if (isLiveBudget && !state.readOnlyMode && transactionId != null) {
+                            {
+                                selectionMode = true
+                                selectedTransactionIds = selectedTransactionIds + transactionId
+                            }
+                        } else {
+                            null
+                        },
+                    ) {
+                        if (selectionMode && transactionId != null) {
+                            selectedTransactionIds =
+                                if (transactionId in selectedTransactionIds) {
+                                    selectedTransactionIds - transactionId
+                                } else {
+                                    selectedTransactionIds + transactionId
+                                }
+                            if (selectedTransactionIds.isEmpty()) selectionMode = false
+                        } else {
+                            openTransaction(state, navigation, transaction, isLive = isLiveBudget)
+                        }
                     }
                 }
             }
         }
         if (!isLiveBudget) item(key = "activity-sample-note") { PreviewNote("Transactions use sample data.") }
+    }
+    mobileSession.transactionWriteMessage?.takeIf { selectionMode }?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+    if (confirmBulkDelete) {
+        TransactionBulkDeleteDialog(
+            selectedCount = selectedTransactionIds.size,
+            isDeleting = isDeletingSelection,
+            onDismiss = { confirmBulkDelete = false },
+            onConfirm = {
+                scope.launch {
+                    isDeletingSelection = true
+                    val deleted = deleteTransactionSelection(mobileSession, state.selectedBudgetId, selectedTransactionIds)
+                    isDeletingSelection = false
+                    confirmBulkDelete = false
+                    if (deleted) {
+                        selectedTransactionIds = emptySet()
+                        selectionMode = false
+                    }
+                }
+            },
+        )
     }
 }
 
@@ -6388,8 +6852,13 @@ private fun ActivitySearchScreen(
     navigation: AppNavigation,
     merchantIconMatcher: MerchantIconMatcherPack?,
 ) {
+    val scope = rememberCoroutineScope()
     var search by rememberSaveable { mutableStateOf(state.activitySearchQuery) }
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    var selectionMode by remember(state.selectedBudgetId) { mutableStateOf(false) }
+    var selectedTransactionIds by remember(state.selectedBudgetId) { mutableStateOf<Set<String>>(emptySet()) }
+    var confirmBulkDelete by remember(state.selectedBudgetId) { mutableStateOf(false) }
+    var isDeletingSelection by remember(state.selectedBudgetId) { mutableStateOf(false) }
     val filters = state.activitySearchFilters
     val cachedSearch = state.activitySearchCache?.takeIf { it.budgetId == state.selectedBudgetId }
     val cachedEvaluation =
@@ -6569,6 +7038,14 @@ private fun ActivitySearchScreen(
         mutableStateOf(cachedEvaluation?.indices ?: emptyList())
     }
     val resultsListState = LocalRouteLazyListState.current ?: rememberLazyListState()
+    val visibleTransactionIds =
+        remember(sortedResultIndices, searchableRecords) {
+            sortedResultIndices.mapNotNull { searchableRecords.getOrNull(it)?.recordId }.toSet()
+        }
+    LaunchedEffect(search, filters) {
+        selectionMode = false
+        selectedTransactionIds = emptySet()
+    }
     val selectedSortOrder = state.activitySortOrder
     LaunchedEffect(resultIndices, searchableRecords, selectedSortOrder) {
         sortedResultIndices =
@@ -6653,6 +7130,26 @@ private fun ActivitySearchScreen(
             }
             ActivitySortControl(state.activitySortOrder) { state.activitySortOrder = it }
         }
+        if (selectionMode) {
+            TransactionSelectionActions(
+                selectedCount = selectedTransactionIds.size,
+                allSelected = visibleTransactionIds.isNotEmpty() && selectedTransactionIds.containsAll(visibleTransactionIds),
+                onToggleAll = {
+                    selectedTransactionIds =
+                        if (visibleTransactionIds.isNotEmpty() && selectedTransactionIds.containsAll(visibleTransactionIds)) {
+                            emptySet()
+                        } else {
+                            visibleTransactionIds
+                        }
+                },
+                onDelete = { confirmBulkDelete = true },
+                onCancel = {
+                    selectionMode = false
+                    selectedTransactionIds = emptySet()
+                },
+            )
+            mobileSession.transactionWriteMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+        }
         if (
             isLiveBudget &&
             (
@@ -6699,11 +7196,55 @@ private fun ActivitySearchScreen(
                             remember(record, state.budgetDisplaySettings, merchantIconMatcher) {
                                 record.toTransactionItem(state.budgetDisplaySettings, merchantIconMatcher)
                             }
-                        TransactionRow(transaction) { openTransaction(state, navigation, transaction, isLive = isLiveBudget) }
+                        val transactionId = transaction.recordId
+                        TransactionRow(
+                            transaction,
+                            selectionMode = selectionMode,
+                            selected = transactionId != null && transactionId in selectedTransactionIds,
+                            onLongClick = if (isLiveBudget && !state.readOnlyMode && transactionId != null) {
+                                {
+                                    selectionMode = true
+                                    selectedTransactionIds = selectedTransactionIds + transactionId
+                                }
+                            } else {
+                                null
+                            },
+                        ) {
+                            if (selectionMode && transactionId != null) {
+                                selectedTransactionIds =
+                                    if (transactionId in selectedTransactionIds) {
+                                        selectedTransactionIds - transactionId
+                                    } else {
+                                        selectedTransactionIds + transactionId
+                                    }
+                                if (selectedTransactionIds.isEmpty()) selectionMode = false
+                            } else {
+                                openTransaction(state, navigation, transaction, isLive = isLiveBudget)
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+    if (confirmBulkDelete) {
+        TransactionBulkDeleteDialog(
+            selectedCount = selectedTransactionIds.size,
+            isDeleting = isDeletingSelection,
+            onDismiss = { confirmBulkDelete = false },
+            onConfirm = {
+                scope.launch {
+                    isDeletingSelection = true
+                    val deleted = deleteTransactionSelection(mobileSession, state.selectedBudgetId, selectedTransactionIds)
+                    isDeletingSelection = false
+                    confirmBulkDelete = false
+                    if (deleted) {
+                        selectedTransactionIds = emptySet()
+                        selectionMode = false
+                    }
+                }
+            },
+        )
     }
 }
 
@@ -7376,6 +7917,7 @@ private fun SelectorScreen(
     values: List<SelectorItem>,
     selected: String,
     live: Boolean = false,
+    noMatches: (@Composable (String) -> Unit)? = null,
     onSelect: (SelectorItem) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
@@ -7383,7 +7925,11 @@ private fun SelectorScreen(
         TextFieldCard("Search", query, { query = it }, TextFieldOptions(placeholder = "Start typing"))
         val filtered = values.filter { it.label.contains(query, ignoreCase = true) }
         if (filtered.isEmpty()) {
-            SurfaceCard { EmptyState("No matches", modifier = Modifier.padding(TandemSpacing.large)) }
+            if (noMatches != null) {
+                noMatches(query)
+            } else {
+                SurfaceCard { EmptyState("No matches", modifier = Modifier.padding(TandemSpacing.large)) }
+            }
         }
         filtered.forEach { item ->
             ChoiceRow(

@@ -11,6 +11,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -92,6 +93,7 @@ internal fun ListRow(
     leading: RowLeading = RowLeading.Automatic,
     options: ListRowOptions = ListRowOptions(),
     onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val palette = tandemPalette
     val merchantResource = (leading as? RowLeading.Merchant)?.resource
@@ -109,8 +111,14 @@ internal fun ListRow(
                 .fillMaxWidth()
                 .defaultMinSize(minHeight = if (options.dense) 56.dp else 64.dp)
                 .then(
-                    if (onClick != null) {
-                        Modifier.clickable(role = Role.Button, onClickLabel = title, onClick = onClick)
+                    if (onClick != null || onLongClick != null) {
+                        Modifier.combinedClickable(
+                            role = Role.Button,
+                            onClickLabel = title,
+                            onLongClickLabel = "Select $title",
+                            onClick = onClick ?: {},
+                            onLongClick = onLongClick,
+                        )
                     } else {
                         Modifier
                     },
@@ -129,7 +137,7 @@ internal fun ListRow(
     ) {
         if (leading != RowLeading.None) {
             Box(
-                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(TandemShapes.medium)).background(palette.raised),
+                modifier = Modifier.size(if (options.dense) 36.dp else 44.dp).clip(RoundedCornerShape(TandemShapes.medium)).background(palette.raised),
                 contentAlignment = Alignment.Center,
             ) {
                 when {
@@ -137,7 +145,7 @@ internal fun ListRow(
                         Image(
                             painter = resolvedPainter,
                             contentDescription = null,
-                            modifier = Modifier.size(32.dp).padding(TandemSpacing.xxSmall),
+                            modifier = Modifier.size(if (options.dense) 28.dp else 32.dp).padding(TandemSpacing.xxSmall),
                             contentScale = ContentScale.Fit,
                         )
                     }
@@ -145,7 +153,7 @@ internal fun ListRow(
                         Icon(
                             imageVector = resolvedVector,
                             contentDescription = null,
-                            modifier = Modifier.size(30.dp),
+                            modifier = Modifier.size(if (options.dense) 24.dp else 30.dp),
                             tint = palette.accent,
                         )
                     }
