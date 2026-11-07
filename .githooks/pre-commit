@@ -1,0 +1,25 @@
+#!/usr/bin/env sh
+set -eu
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+if [ -x "$repo_root/node_modules/.bin/prettier" ]; then
+  python3 scripts/check-prettier-files.py "$repo_root/node_modules/.bin/prettier"
+elif command -v pnpm >/dev/null 2>&1; then
+  python3 scripts/check-prettier-files.py "$(command -v pnpm)"
+else
+  printf '%s\n' 'Pre-commit checks need the JavaScript dependencies. Run pnpm install first.' >&2
+  exit 1
+fi
+
+python3 scripts/check-mobile-ui-apostrophes.py
+python3 scripts/check-mobile-design-tokens.py
+
+staged_mobile_kotlin=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^mobile/.*\.(kt|kts)$' || true)
+if [ -n "$staged_mobile_kotlin" ]; then
+  (
+    cd "$repo_root/mobile"
+    ./gradlew --no-daemon :api-client:ktlintCheck :data:ktlintCheck :composeApp:ktlintCheck
+  )
+fi

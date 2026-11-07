@@ -582,14 +582,15 @@ class TandemApiClient(
                 "budget-month-template",
                 budgetId,
                 month,
-                kotlinx.serialization.json.JsonArray(
-                    assignments.map { (categoryId, amountMinor) ->
-                        buildJsonObject {
-                            put("categoryId", categoryId)
-                            put("amountMinor", amountMinor)
-                        }
-                    },
-                ).toString(),
+                kotlinx.serialization.json
+                    .JsonArray(
+                        assignments.map { (categoryId, amountMinor) ->
+                            buildJsonObject {
+                                put("categoryId", categoryId)
+                                put("amountMinor", amountMinor)
+                            }
+                        },
+                    ).toString(),
             ),
         ) { idempotencyKey ->
             withGeneratedApi {

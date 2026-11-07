@@ -283,6 +283,14 @@ xcodebuild \
 
 ## Development checks
 
+Install the local Git hooks once after cloning the repository:
+
+```sh
+./scripts/install-git-hooks.sh
+```
+
+The pre-commit hook checks staged formatting and mobile source rules. The pre-push hook checks repository formatting and Kotlin lint before pushing. Install project dependencies before running the hooks.
+
 Run the API checks in the disposable Docker environment:
 
 ```sh
