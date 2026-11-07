@@ -429,18 +429,20 @@ describe("Actual transaction store", () => {
       },
     );
     const store = createActualTransactionStore(fake.client);
+    const input: TransactionCreateInput = {
+      account: "account-1",
+      amount: -1250,
+      date: "2026-11-01",
+      payee: "transfer-payee",
+      category: null,
+      notes: "Move to savings",
+      cleared: false,
+    };
 
-    await expect(
-      store.create(id, {
-        account: "account-1",
-        amount: -1250,
-        date: "2026-11-01",
-        payee: "transfer-payee",
-        category: null,
-        notes: "Move to savings",
-        cleared: false,
-      }),
-    ).resolves.toEqual(outgoing);
+    await expect(store.validateCreateInput(input)).resolves.toBeUndefined();
+
+    await expect(store.create(id, input)).resolves.toEqual(outgoing);
+    expect(fake.client.getPayees).toHaveBeenCalledOnce();
     expect(fake.client.addTransactions).toHaveBeenCalledWith(
       "account-1",
       [

@@ -39,6 +39,11 @@ export interface TransactionCreateValidationIssue {
 export function createActualTransactionStore(
   client: ActualTransactionApiClient = actualApi,
 ): ActualTransactionStore {
+  const validatedPayeeTransfers = new WeakMap<
+    TransactionCreateInput,
+    { id: string; transferAccount: boolean }
+  >();
+
   async function read(id: string): Promise<unknown | undefined> {
     const companionId = isCompanionTransactionId(id);
     const query = client
@@ -123,12 +128,20 @@ export function createActualTransactionStore(
 
     if (input.payee !== null) {
       const payees = await client.getPayees();
-      if (!payees.some((candidate) => candidate.id === input.payee)) {
+      const payee = payees.find((candidate) => candidate.id === input.payee);
+      if (!payee) {
+        validatedPayeeTransfers.delete(input);
         return {
           code: "payee-not-found",
           message: "Payee does not exist in this budget",
         };
       }
+      validatedPayeeTransfers.set(input, {
+        id: payee.id,
+        transferAccount: Boolean(payee.transfer_acct),
+      });
+    } else {
+      validatedPayeeTransfers.delete(input);
     }
 
     if (input.category !== null) {
@@ -159,12 +172,20 @@ export function createActualTransactionStore(
       if (!isCompanionTransactionId(id)) {
         throw new Error("New transactions require a Companion transaction ID");
       }
-      const transferPayee =
-        input.payee === null
-          ? undefined
-          : (await client.getPayees()).find(
-              (payee) => payee.id === input.payee && payee.transfer_acct,
-            );
+      let transferPayee: boolean | undefined;
+      if (input.payee !== null) {
+        const validatedPayee = validatedPayeeTransfers.get(input);
+        validatedPayeeTransfers.delete(input);
+        if (validatedPayee?.id === input.payee) {
+          transferPayee = validatedPayee.transferAccount;
+        } else {
+          transferPayee = Boolean(
+            (await client.getPayees()).find(
+              (payee) => payee.id === input.payee,
+            )?.transfer_acct,
+          );
+        }
+      }
       await client.addTransactions(
         input.account,
         [
@@ -178,7 +199,7 @@ export function createActualTransactionStore(
             imported_id: id,
           },
         ],
-        { runTransfers: transferPayee !== undefined, learnCategories: false },
+        { runTransfers: transferPayee === true, learnCategories: false },
       );
       const created = await read(id);
       if (created === undefined) {

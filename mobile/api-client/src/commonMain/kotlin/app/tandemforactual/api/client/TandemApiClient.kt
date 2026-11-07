@@ -55,6 +55,8 @@ class TandemApiException(
             errorCode == "bank_sync_failed" -> "Actual couldn’t complete bank sync. Check its provider setup and try again."
             errorCode == "bank_sync_busy" -> "A bank sync is already running. Try again shortly."
             errorCode == "actual_operation_failed" -> "Actual couldn’t complete this change. Check the budget and try again."
+            errorCode == "operation_uncertain" -> "Tandem couldn’t confirm this change. Check Actual before submitting it again."
+            errorCode == "operation_rejected" -> "This change was rejected. Correct it before submitting again."
             errorCode == "invalid_request" -> "Check the details and try again."
             httpStatus == 400 -> "The server rejected this request. Check the details and try again."
             httpStatus == 401 -> "The server couldn’t verify this request. Check the server address and try again."
@@ -517,6 +519,16 @@ class TandemApiClient(
             }
         } catch (error: TandemApiException) {
             if (error.httpStatus == 400 || error.httpStatus == 429) {
+                maintenanceKeyMutex.withLock {
+                    if (pendingMaintenanceKeys[signature] == idempotencyKey) {
+                        pendingMaintenanceKeys.remove(signature)
+                    }
+                }
+            }
+            if (error.errorCode == "operation_uncertain" || error.errorCode == "operation_rejected") {
+                // The server has definitively stopped processing this key. A later call is a
+                // deliberate user retry and must get a new key; uncertain results still tell
+                // the user to check Actual before submitting again.
                 maintenanceKeyMutex.withLock {
                     if (pendingMaintenanceKeys[signature] == idempotencyKey) {
                         pendingMaintenanceKeys.remove(signature)

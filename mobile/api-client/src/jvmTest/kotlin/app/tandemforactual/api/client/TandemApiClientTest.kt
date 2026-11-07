@@ -29,6 +29,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
@@ -577,6 +578,54 @@ class TandemApiClientTest {
                 Api.baseUrl = previousBaseUrl
                 Api.client.close()
                 previousClient.close()
+            }
+        }
+
+    @Test
+    fun maintenanceResubmissionAfterTerminalConflictUsesFreshIdempotencyKey() =
+        runBlocking {
+            for (errorCode in listOf("operation_uncertain", "operation_rejected")) {
+                val requests = mutableListOf<HttpRequestData>()
+                var responseCount = 0
+                val engine =
+                    MockEngine { request ->
+                        requests += request
+                        if (responseCount++ == 0) {
+                            respond(
+                                """{"error":{"code":"$errorCode"}}""",
+                                HttpStatusCode.Conflict,
+                                jsonHeaders(),
+                            )
+                        } else {
+                            respond(
+                                """{"status":"ok"}""",
+                                headers = jsonHeaders(),
+                            )
+                        }
+                    }
+                val previousClient = Api.client
+                val previousBaseUrl = Api.baseUrl
+                val client = TandemApiClient()
+                val cleanup = configureApi(engine, client.bearerAuth)
+                try {
+                    client.restoreSession("https://tandem.example", "device-token")
+                    val failure =
+                        captureApiException {
+                            client.createBudgetAccount("budget-1", "Savings", false, null, null)
+                        }
+                    assertEquals(errorCode, failure.errorCode)
+                    client.createBudgetAccount("budget-1", "Savings", false, null, null)
+                    assertEquals(2, requests.size)
+                    assertNotEquals(
+                        requests[0].headers["Idempotency-Key"],
+                        requests[1].headers["Idempotency-Key"],
+                    )
+                } finally {
+                    cleanup()
+                    Api.baseUrl = previousBaseUrl
+                    Api.client.close()
+                    previousClient.close()
+                }
             }
         }
 
