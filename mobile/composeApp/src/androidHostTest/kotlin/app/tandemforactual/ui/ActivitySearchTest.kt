@@ -28,6 +28,29 @@ class ActivitySearchTest {
     }
 
     @Test
+    fun savedSearchLimitIsTwentyPerBudget() {
+        val searches =
+            listOf("budget-a", "budget-b").flatMap { budgetId ->
+                (0..20).map { index ->
+                    SavedActivitySearch(
+                        budgetId = budgetId,
+                        name = "Search $index",
+                        query = "query $index",
+                        filters = emptyList(),
+                    )
+                }
+            }
+
+        val restored = decodeSavedActivitySearches(encodeSavedActivitySearches(searches))
+
+        assertEquals(20, restored.count { it.budgetId == "budget-a" })
+        assertEquals(20, restored.count { it.budgetId == "budget-b" })
+        assertEquals("Search 20", restored.last { it.budgetId == "budget-a" }.name)
+        assertFalse(restored.any { it.name == "Search 0" })
+        assertEquals(setOf("budget-a", "budget-b"), restored.map { it.budgetId }.toSet())
+    }
+
+    @Test
     fun actualHashTagsCanBeFilteredAndCombinedWithOtherFilters() {
         val tagged = record(notes = "hardware run #home #DIY #home")
         val escaped = record(notes = "literal ##not-a-tag")

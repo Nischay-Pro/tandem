@@ -68,9 +68,14 @@ internal data class SavedActivitySearch(
     val filters: List<ActivitySearchFilter>,
 )
 
-internal fun encodeSavedActivitySearches(searches: List<SavedActivitySearch>): String =
-    JsonArray(
-        searches.takeLast(20).map { saved ->
+internal fun encodeSavedActivitySearches(searches: List<SavedActivitySearch>): String {
+    val retained =
+        searches
+            .groupBy(SavedActivitySearch::budgetId)
+            .values
+            .flatMap { budgetSearches -> budgetSearches.takeLast(20) }
+    return JsonArray(
+        retained.map { saved ->
             buildJsonObject {
                 put("budgetId", JsonPrimitive(saved.budgetId))
                 put("name", JsonPrimitive(saved.name.take(80)))
@@ -90,6 +95,7 @@ internal fun encodeSavedActivitySearches(searches: List<SavedActivitySearch>): S
             }
         },
     ).toString()
+}
 
 internal fun decodeSavedActivitySearches(serialized: String): List<SavedActivitySearch> {
     val root =
@@ -119,7 +125,9 @@ internal fun decodeSavedActivitySearches(serialized: String): List<SavedActivity
                         ActivitySearchFilter(field, value, label)
                     }
             SavedActivitySearch(budgetId, name, query, filters)
-        }.takeLast(20)
+        }.groupBy(SavedActivitySearch::budgetId)
+        .values
+        .flatMap { budgetSearches -> budgetSearches.takeLast(20) }
 }
 
 private fun JsonObject.stringValue(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
