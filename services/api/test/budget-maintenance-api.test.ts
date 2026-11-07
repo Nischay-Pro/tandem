@@ -39,6 +39,13 @@ function createFake() {
     },
   ];
   const payees: Array<{ id: string; name: string; transfer_acct: string }> = [];
+  const rules: Array<{
+    id: string;
+    stage: "pre" | "post" | null;
+    conditionsOp: "and" | "or";
+    conditions: Array<{ field: string; op: string; value: string }>;
+    actions: Array<{ field: string; op: string; value: unknown }>;
+  }> = [];
   const schedules: Array<{
     id: string;
     name?: string;
@@ -108,6 +115,7 @@ function createFake() {
     ]),
     createCategory: vi.fn(async () => "new-category"),
     getPayees: vi.fn(async () => [...payees]),
+    getPayeeRules: vi.fn(async () => [...rules]),
     createPayee: vi.fn(
       async (payee: { name: string; transfer_acct: string }) => {
         const id = `payee-${payees.length + 1}`;
@@ -118,6 +126,9 @@ function createFake() {
     updatePayee: vi.fn(async () => undefined),
     mergePayees: vi.fn(async () => undefined),
     deletePayee: vi.fn(async () => undefined),
+    createRule: vi.fn(async () => ({ id: "default-category-rule" })),
+    updateRule: vi.fn(async () => ({ id: "default-category-rule" })),
+    deleteRule: vi.fn(async () => true),
     setBudgetAmount: vi.fn(async () => undefined),
     setBudgetCarryover: vi.fn(async () => undefined),
     getPreferences: vi.fn(async () => ({ budgetType: "envelope" })),
@@ -159,7 +170,7 @@ function createFake() {
     { runBudget },
     client as unknown as Parameters<typeof createBudgetMaintenanceApi>[2],
   );
-  return { api, client, events, runBudgetCalls, withBudgetLock };
+  return { api, client, events, runBudgetCalls, withBudgetLock, payees, rules };
 }
 
 describe("Actual budget maintenance API", () => {
@@ -555,6 +566,78 @@ describe("Actual budget maintenance API", () => {
       }),
     ).rejects.toThrow("Choose a payee in this budget");
     expect(fake.client.updateSchedule).not.toHaveBeenCalled();
+  });
+
+  it("creates, updates, and clears a simple Actual payee category rule", async () => {
+    const fake = createFake();
+    fake.payees.push({ id: "payee-1", name: "Store", transfer_acct: "" });
+
+    await fake.api.setPayeeDefaultCategory(
+      "budget-1",
+      "payee-1",
+      "expense",
+      "secret",
+    );
+    expect(fake.client.createRule).toHaveBeenCalledWith({
+      stage: "default",
+      conditionsOp: "and",
+      conditions: [{ field: "payee", op: "is", value: "payee-1" }],
+      actions: [{ field: "category", op: "set", value: "expense" }],
+    });
+
+    fake.rules.push({
+      id: "rule-1",
+      stage: null,
+      conditionsOp: "and",
+      conditions: [{ field: "payee", op: "is", value: "payee-1" }],
+      actions: [
+        { field: "category", op: "set", value: "expense" },
+        { field: "notes", op: "set", value: "Keep this note action" },
+      ],
+    });
+    await fake.api.setPayeeDefaultCategory("budget-1", "payee-1", "expense-2");
+    expect(fake.client.updateRule).toHaveBeenLastCalledWith({
+      ...fake.rules[0],
+      actions: [
+        { field: "category", op: "set", value: "expense-2" },
+        { field: "notes", op: "set", value: "Keep this note action" },
+      ],
+    });
+
+    await fake.api.setPayeeDefaultCategory("budget-1", "payee-1", null);
+    expect(fake.client.updateRule).toHaveBeenLastCalledWith({
+      ...fake.rules[0],
+      actions: [{ field: "notes", op: "set", value: "Keep this note action" }],
+    });
+    expect(fake.runBudgetCalls[0]?.options).toEqual({
+      encryptionPassword: "secret",
+      synchronizeAfterWrite: true,
+    });
+  });
+
+  it("rejects transfer payees, hidden categories, and ambiguous category rules", async () => {
+    const fake = createFake();
+    fake.payees.push({ id: "transfer", name: "Transfer: Checking", transfer_acct: "checking" });
+    await expect(
+      fake.api.setPayeeDefaultCategory("budget-1", "transfer", "expense"),
+    ).rejects.toThrow("Choose a regular payee in this budget");
+
+    fake.payees.push({ id: "payee-1", name: "Store", transfer_acct: "" });
+    await expect(
+      fake.api.setPayeeDefaultCategory("budget-1", "payee-1", "missing"),
+    ).rejects.toThrow("Choose an active category in this budget");
+
+    const matchingRule = {
+      id: "rule-1",
+      stage: null,
+      conditionsOp: "and" as const,
+      conditions: [{ field: "payee", op: "is", value: "payee-1" }],
+      actions: [{ field: "category", op: "set", value: "expense" }],
+    };
+    fake.rules.push(matchingRule, { ...matchingRule, id: "rule-2" });
+    await expect(
+      fake.api.setPayeeDefaultCategory("budget-1", "payee-1", "expense-2"),
+    ).rejects.toThrow("This payee has multiple category rules");
   });
 
   it("uses Actual schedule handlers to skip and post scheduled transactions", async () => {

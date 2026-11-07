@@ -432,7 +432,11 @@ class TandemApiClient(
                         idempotencyKey = idempotencyKey,
                         budgetId = budgetId,
                         categoryId = categoryId,
-                        body = buildJsonObject { put("month", month); put("enabled", enabled) }.toMap(),
+                        body =
+                            buildJsonObject {
+                                put("month", month)
+                                put("enabled", enabled)
+                            }.toMap(),
                     ),
                 )
             }
@@ -557,9 +561,10 @@ class TandemApiClient(
         name: String?,
         targetPayeeId: String?,
         encryptionPassword: String?,
+        categoryId: String? = null,
     ) {
         withMaintenanceOperation(
-            maintenanceSignature("payee-$action", budgetId, payeeId, name, targetPayeeId),
+            maintenanceSignature("payee-$action", budgetId, payeeId, name, targetPayeeId, categoryId),
         ) { idempotencyKey ->
             withGeneratedApi {
                 requireOk(
@@ -573,6 +578,9 @@ class TandemApiClient(
                                 put("action", action)
                                 name?.let { put("name", it) }
                                 targetPayeeId?.let { put("targetPayeeId", it) }
+                                if (action == "default-category") {
+                                    put("categoryId", categoryId?.let(::JsonPrimitive) ?: JsonNull)
+                                }
                             }.toMap(),
                     ),
                 )

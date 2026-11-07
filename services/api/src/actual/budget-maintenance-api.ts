@@ -242,6 +242,12 @@ export interface BudgetMaintenanceApiPort {
     payeeId: string,
     encryptionPassword?: string,
   ): Promise<void>;
+  setPayeeDefaultCategory(
+    budgetId: string,
+    payeeId: string,
+    categoryId: string | null,
+    encryptionPassword?: string,
+  ): Promise<void>;
   setBudgetAmount(
     budgetId: string,
     categoryId: string,
@@ -348,9 +354,13 @@ type ActualBudgetMaintenanceClient = Pick<
   | "createCategory"
   | "createPayee"
   | "getPayees"
+  | "getPayeeRules"
   | "updatePayee"
   | "mergePayees"
   | "deletePayee"
+  | "createRule"
+  | "updateRule"
+  | "deleteRule"
   | "updateCategory"
   | "deleteCategory"
   | "getSchedules"
@@ -557,6 +567,121 @@ export function createBudgetMaintenanceApi(
               );
             }
             await client.deletePayee(payeeId);
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    setPayeeDefaultCategory(budgetId, payeeId, categoryId, encryptionPassword) {
+      if (categoryId !== null && !categoryId.trim()) {
+        return Promise.reject(
+          new BudgetMaintenanceInputError(
+            "Choose a category or clear the default",
+          ),
+        );
+      }
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const payee = (await client.getPayees()).find(
+              (candidate) => candidate.id === payeeId,
+            );
+            if (!payee || payee.transfer_acct) {
+              throw new BudgetMaintenanceInputError(
+                "Choose a regular payee in this budget",
+              );
+            }
+            if (categoryId !== null) {
+              const category = (await client.getCategories()).find(
+                (candidate) => candidate.id === categoryId,
+              );
+              if (!category) {
+                throw new BudgetMaintenanceInputError(
+                  "Choose an active category in this budget",
+                );
+              }
+            }
+
+            const rules = await client.getPayeeRules(payeeId);
+            const matchingRules = rules.filter((rule) => {
+              const conditions = rule.conditions;
+              const stage = (rule as { stage: string | null }).stage;
+              return (
+                (stage === null || stage === "default") &&
+                rule.conditionsOp === "and" &&
+                conditions.length === 1 &&
+                conditions[0]?.field === "payee" &&
+                conditions[0]?.op === "is" &&
+                conditions[0]?.value === payeeId &&
+                rule.actions.some(
+                  (action) =>
+                    "field" in action &&
+                    action.field === "category" &&
+                    action.op === "set",
+                )
+              );
+            });
+            if (matchingRules.length > 1) {
+              throw new BudgetMaintenanceInputError(
+                "This payee has multiple category rules. Edit them in Actual first.",
+              );
+            }
+
+            const rule = matchingRules[0];
+            if (!rule) {
+              if (categoryId === null) return;
+              await client.createRule({
+                stage: "default",
+                conditionsOp: "and",
+                conditions: [{ field: "payee", op: "is", value: payeeId }],
+                actions: [{ field: "category", op: "set", value: categoryId }],
+              });
+              return;
+            }
+
+            const categoryActionIndexes = rule.actions.flatMap((action, index) =>
+              "field" in action &&
+                  action.field === "category" &&
+                  action.op === "set"
+                ? [index]
+                : [],
+            );
+            if (categoryActionIndexes.length > 1) {
+              throw new BudgetMaintenanceInputError(
+                "This payee has multiple category actions. Edit the rule in Actual first.",
+              );
+            }
+            const categoryActionIndex = categoryActionIndexes[0] ?? -1;
+            if (categoryActionIndex < 0) return;
+
+            if (categoryId === null) {
+              const actions = rule.actions.filter(
+                (_action, index) => index !== categoryActionIndex,
+              );
+              if (actions.length === 0) {
+                await client.deleteRule(rule.id);
+              } else {
+                await client.updateRule({ ...rule, actions });
+              }
+              return;
+            }
+
+            const actions = [...rule.actions];
+            const categoryAction = actions[categoryActionIndex];
+            if (
+              !categoryAction ||
+              !("field" in categoryAction) ||
+              categoryAction.field !== "category" ||
+              categoryAction.op !== "set"
+            ) {
+              return;
+            }
+            actions[categoryActionIndex] = {
+              ...categoryAction,
+              value: categoryId,
+            };
+            await client.updateRule({ ...rule, actions });
           },
           writeOptions(encryptionPassword),
         ),

@@ -2904,7 +2904,14 @@ private fun ScreenContent(
                 liveAccounts,
                 mobileSession.payeeRecords,
             )
-        AppRoute.MANAGE_PAYEES -> ManagePayeesScreen(state, mobileSession, mobileSession.payeeRecords)
+        AppRoute.MANAGE_PAYEES ->
+            ManagePayeesScreen(
+                state,
+                mobileSession,
+                mobileSession.payeeRecords,
+                mobileSession.categoryRecords,
+                mobileSession.ruleRecords,
+            )
         AppRoute.BUDGET_RULES ->
             BudgetRulesScreen(
                 mobileSession.ruleRecords,
@@ -6050,16 +6057,46 @@ private fun ScheduleDatePickerDialog(
     }
 }
 
+private fun defaultCategoryRulesByPayee(rules: List<BudgetRecordEntity>): Map<String, List<String>> {
+    val categoriesByPayee = mutableMapOf<String, MutableSet<String>>()
+    rules.forEach { record ->
+        if (record.localDeleted || record.remoteDeleted) return@forEach
+        val body = record.recordBody() ?: return@forEach
+        if (body.booleanValue("tombstone") == true) return@forEach
+        val stage = body["stage"]?.jsonPrimitive?.contentOrNull
+        if (stage != null && stage != "default") return@forEach
+        if (body.stringValue("conditionsOp") != "and") return@forEach
+        val conditions = (body["conditions"] as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
+        if (conditions.size != 1) return@forEach
+        val condition = conditions.single()
+        if (condition.stringValue("field") != "payee" || condition.stringValue("op") != "is") {
+            return@forEach
+        }
+        val payeeId = condition["value"]?.jsonPrimitive?.contentOrNull ?: return@forEach
+        val actions = (body["actions"] as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
+        actions.forEach { action ->
+            if (action.stringValue("field") == "category" && action.stringValue("op") == "set") {
+                val categoryId = action["value"]?.jsonPrimitive?.contentOrNull ?: return@forEach
+                categoriesByPayee.getOrPut(payeeId, ::mutableSetOf).add(categoryId)
+            }
+        }
+    }
+    return categoriesByPayee.mapValues { (_, categories) -> categories.sorted() }
+}
+
 @Composable
 private fun ManagePayeesScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
     payeeRecords: List<BudgetRecordEntity>,
+    categoryRecords: List<BudgetRecordEntity>,
+    ruleRecords: List<BudgetRecordEntity>,
 ) {
     var selectedPayeeId by rememberSaveable(state.selectedBudgetId) { mutableStateOf<String?>(null) }
     var mode by rememberSaveable(state.selectedBudgetId) { mutableStateOf("menu") }
     var nameDraft by rememberSaveable(state.selectedBudgetId, selectedPayeeId) { mutableStateOf("") }
     var mergeTargetId by rememberSaveable(state.selectedBudgetId, selectedPayeeId) { mutableStateOf<String?>(null) }
+    var defaultCategoryDraft by rememberSaveable(state.selectedBudgetId, selectedPayeeId) { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val payees =
         remember(payeeRecords) {
@@ -6074,8 +6111,28 @@ private fun ManagePayeesScreen(
                 .distinctBy { it.first }
                 .sortedBy { it.second.lowercase() }
         }
+    val defaultCategories = remember(ruleRecords) { defaultCategoryRulesByPayee(ruleRecords) }
+    val categoryOptions =
+        remember(categoryRecords) {
+            listOf("" to "No default") +
+                categoryRecords
+                    .filterNot { record ->
+                        record.localDeleted ||
+                            record.remoteDeleted ||
+                            record.recordBody()?.booleanValue("tombstone") == true ||
+                            record.recordBody()?.booleanValue("hidden") == true
+                    }.mapNotNull { record -> record.recordName()?.let { record.recordId to it } }
+                    .sortedBy { it.second.lowercase() }
+        }
     val selectedPayee = payees.firstOrNull { it.first == selectedPayeeId }
     val mergeTarget = payees.firstOrNull { it.first == mergeTargetId }
+    val selectedDefaultCategories = selectedPayeeId?.let(defaultCategories::get).orEmpty()
+    val selectedDefaultCategoryId = selectedDefaultCategories.singleOrNull()
+    val selectedDefaultCategoryLabel =
+        when {
+            selectedDefaultCategories.size > 1 -> "Multiple rules"
+            else -> categoryOptions.firstOrNull { it.first == selectedDefaultCategoryId }?.second ?: "No default"
+        }
 
     PageLazyColumn {
         item(key = "manage-payees-heading") { Heading("Payees") }
@@ -6100,6 +6157,7 @@ private fun ManagePayeesScreen(
                             selectedPayeeId = payeeId
                             nameDraft = name
                             mergeTargetId = null
+                            defaultCategoryDraft = defaultCategories[payeeId]?.singleOrNull().orEmpty()
                             mode = "menu"
                             mobileSession.clearBudgetActionMessage()
                         },
@@ -6144,6 +6202,7 @@ private fun ManagePayeesScreen(
                             when (mode) {
                                 "rename" -> "Rename payee"
                                 "merge", "confirm-merge" -> "Merge payee"
+                                "default-category" -> "Default category"
                                 "delete" -> "Delete payee?"
                                 else -> selectedPayee.second
                             },
@@ -6164,6 +6223,48 @@ private fun ManagePayeesScreen(
                         ) { selectedPayeeId = null }
                     }
                     when (mode) {
+                        "default-category" -> {
+                            ScheduleChoiceField(
+                                "Category",
+                                categoryOptions.firstOrNull { it.first == defaultCategoryDraft }?.second ?: "No default",
+                                categoryOptions,
+                            ) { defaultCategoryDraft = it }
+                            mobileSession.budgetActionMessage?.let {
+                                InlineMessage(it, InlineMessageKind.ERROR)
+                            }
+                            TandemActionButton(
+                                if (mobileSession.isPerformingBudgetAction) "Saving…" else "Save",
+                                TandemActionButtonTone.PRIMARY,
+                                modifier = Modifier.fillMaxWidth(),
+                                icon = Lucide.Check,
+                                enabled =
+                                    !state.readOnlyMode &&
+                                        !mobileSession.isPerformingBudgetAction &&
+                                        selectedDefaultCategories.size <= 1 &&
+                                        defaultCategoryDraft != selectedDefaultCategoryId.orEmpty(),
+                                loading = mobileSession.isPerformingBudgetAction,
+                            ) {
+                                scope.launch {
+                                    val saved =
+                                        mobileSession.manageBudgetPayee(
+                                            state.selectedBudgetId,
+                                            selectedPayee.first,
+                                            "default-category",
+                                            null,
+                                            null,
+                                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                                            defaultCategoryDraft.ifBlank { null },
+                                        )
+                                    if (saved) selectedPayeeId = null
+                                }
+                            }
+                            TandemActionButton(
+                                "Back",
+                                TandemActionButtonTone.NEUTRAL,
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !mobileSession.isPerformingBudgetAction,
+                            ) { mode = "menu" }
+                        }
                         "rename" -> {
                             TextFieldCard("Name", nameDraft, { nameDraft = it })
                             mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
@@ -6282,6 +6383,18 @@ private fun ManagePayeesScreen(
                         }
                         else -> {
                             mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                            SurfaceCard {
+                                ListRow(
+                                    "Default category",
+                                    selectedDefaultCategoryLabel,
+                                    leading = RowLeading.Icon(Lucide.Tags),
+                                    onClick = {
+                                        defaultCategoryDraft = selectedDefaultCategoryId.orEmpty()
+                                        mobileSession.clearBudgetActionMessage()
+                                        mode = "default-category"
+                                    },
+                                )
+                            }
                             TandemActionButton(
                                 "Rename",
                                 TandemActionButtonTone.NEUTRAL,

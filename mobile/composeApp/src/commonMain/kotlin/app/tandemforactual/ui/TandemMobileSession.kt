@@ -819,6 +819,7 @@ internal class TandemMobileSession(
         name: String?,
         targetPayeeId: String?,
         encryptionPassword: String?,
+        categoryId: String? = null,
     ): Boolean {
         val cleanName = name?.trim()
         if (action == "rename" && cleanName.isNullOrBlank()) {
@@ -841,6 +842,7 @@ internal class TandemMobileSession(
                 cleanName,
                 targetPayeeId,
                 encryptionPassword,
+                categoryId,
             )
         }
     }

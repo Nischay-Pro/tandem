@@ -39,6 +39,7 @@ async function createApi(
     renamePayee: vi.fn(async () => undefined),
     mergePayee: vi.fn(async () => undefined),
     deletePayee: vi.fn(async () => undefined),
+    setPayeeDefaultCategory: vi.fn(async () => undefined),
     setBudgetAmount: vi.fn(async () => undefined),
     setBudgetCarryover: vi.fn(async () => undefined),
     copyBudgetMonth: vi.fn(async () => undefined),
@@ -1367,6 +1368,24 @@ describe("budget maintenance routes", () => {
       headers: testHeaders(),
       payload: { action: "delete" },
     });
+    const defaultCategory = await fake.app.inject({
+      method: "POST",
+      url: path,
+      headers: testHeaders(),
+      payload: { action: "default-category", categoryId: "category-1" },
+    });
+    const clearedCategory = await fake.app.inject({
+      method: "POST",
+      url: path,
+      headers: testHeaders(),
+      payload: { action: "default-category", categoryId: null },
+    });
+    const missingCategory = await fake.app.inject({
+      method: "POST",
+      url: path,
+      headers: testHeaders(),
+      payload: { action: "default-category" },
+    });
     const missingName = await fake.app.inject({
       method: "POST",
       url: path,
@@ -1385,6 +1404,12 @@ describe("budget maintenance routes", () => {
       headers: testHeaders(),
       payload: { action: "delete", name: "Not allowed" },
     });
+    const extraCategory = await fake.app.inject({
+      method: "POST",
+      url: path,
+      headers: testHeaders(),
+      payload: { action: "delete", categoryId: "category-1" },
+    });
     const outOfScope = await fake.app.inject({
       method: "POST",
       url: "/api/v1/budgets/other-budget/payees/payee-1/actions",
@@ -1397,10 +1422,14 @@ describe("budget maintenance routes", () => {
       replayedRename.statusCode,
       merged.statusCode,
       deleted.statusCode,
-    ]).toEqual([200, 200, 200, 200]);
+      defaultCategory.statusCode,
+      clearedCategory.statusCode,
+    ]).toEqual([200, 200, 200, 200, 200, 200]);
+    expect(missingCategory.statusCode).toBe(400);
     expect(missingName.statusCode).toBe(400);
     expect(missingTarget.statusCode).toBe(400);
     expect(extraName.statusCode).toBe(400);
+    expect(extraCategory.statusCode).toBe(400);
     expect(outOfScope.statusCode).toBe(404);
     expect(fake.budgetMaintenanceApi.renamePayee).toHaveBeenCalledOnce();
     expect(fake.budgetMaintenanceApi.renamePayee).toHaveBeenCalledWith(
@@ -1416,10 +1445,26 @@ describe("budget maintenance routes", () => {
       undefined,
     );
     expect(fake.budgetMaintenanceApi.deletePayee).toHaveBeenCalledOnce();
+    expect(fake.budgetMaintenanceApi.setPayeeDefaultCategory).toHaveBeenNthCalledWith(
+      1,
+      budgetId,
+      "payee-1",
+      "category-1",
+      undefined,
+    );
+    expect(fake.budgetMaintenanceApi.setPayeeDefaultCategory).toHaveBeenNthCalledWith(
+      2,
+      budgetId,
+      "payee-1",
+      null,
+      undefined,
+    );
     expect([...fake.operations.values()].map(({ action }) => action)).toEqual([
       "payee-rename",
       "payee-merge",
       "payee-delete",
+      "payee-default-category",
+      "payee-default-category",
     ]);
     await fake.app.close();
   });

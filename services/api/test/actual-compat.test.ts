@@ -385,12 +385,66 @@ describe.skipIf(!compatibilityTestEnabled)(
               endMode: "never",
             },
           });
+          const defaultCategoryResponse = await reconciliationApp.inject({
+            method: "POST",
+            url: `/api/v1/budgets/${budget.groupId}/payees/${encodeURIComponent(schedulePayeeId)}/actions`,
+            headers: {
+              ...authorizationHeaders,
+              "idempotency-key": `compat-payee-category-${randomUUID()}`,
+            },
+            payload: { action: "default-category", categoryId },
+          });
+          expect(defaultCategoryResponse.statusCode).toBe(200);
+          const defaultCategoryRules = await firstDevice.runBudget(
+            budget.groupId,
+            () => Actual.getPayeeRules(schedulePayeeId),
+          );
+          expect(
+            defaultCategoryRules.some(
+              (rule) =>
+                rule.actions.some(
+                  (action) =>
+                    "field" in action &&
+                    action.field === "category" &&
+                    action.op === "set" &&
+                    action.value === categoryId,
+                ),
+            ),
+          ).toBe(true);
           const scheduleSnapshot = await budgetReadApi.getSnapshot(budget.groupId);
           expect(
             scheduleSnapshot.records.some(
               (record) => record.type === "schedule" && record.id === scheduleId,
             ),
           ).toBe(true);
+          expect(
+            scheduleSnapshot.records.some((record) => record.type === "rule"),
+          ).toBe(true);
+          const clearDefaultCategoryResponse = await reconciliationApp.inject({
+            method: "POST",
+            url: `/api/v1/budgets/${budget.groupId}/payees/${encodeURIComponent(schedulePayeeId)}/actions`,
+            headers: {
+              ...authorizationHeaders,
+              "idempotency-key": `compat-clear-payee-category-${randomUUID()}`,
+            },
+            payload: { action: "default-category", categoryId: null },
+          });
+          expect(clearDefaultCategoryResponse.statusCode).toBe(200);
+          const clearedDefaultCategoryRules = await firstDevice.runBudget(
+            budget.groupId,
+            () => Actual.getPayeeRules(schedulePayeeId),
+          );
+          expect(
+            clearedDefaultCategoryRules.some(
+              (rule) =>
+                rule.actions.some(
+                  (action) =>
+                    "field" in action &&
+                    action.field === "category" &&
+                    action.op === "set",
+                ),
+            ),
+          ).toBe(false);
 
           const createResponse = await reconciliationApp.inject({
             method: "POST",

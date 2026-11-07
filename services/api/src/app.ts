@@ -1014,9 +1014,10 @@ interface BudgetPayeeCreateBody {
 }
 
 interface BudgetPayeeActionBody {
-  action: "rename" | "merge" | "delete";
+  action: "rename" | "merge" | "delete" | "default-category";
   name?: string;
   targetPayeeId?: string;
+  categoryId?: string | null;
 }
 
 interface BudgetCategoryBudgetAmountBody {
@@ -1399,7 +1400,10 @@ function registerBudgetMaintenanceRoutes(
         body: {
           type: "object",
           properties: {
-            action: { type: "string", enum: ["rename", "merge", "delete"] },
+            action: {
+              type: "string",
+              enum: ["rename", "merge", "delete", "default-category"],
+            },
             name: {
               type: "string",
               minLength: 1,
@@ -1408,6 +1412,12 @@ function registerBudgetMaintenanceRoutes(
             },
             targetPayeeId: {
               type: "string",
+              minLength: 1,
+              maxLength: 500,
+              pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+            },
+            categoryId: {
+              type: ["string", "null"],
               minLength: 1,
               maxLength: 500,
               pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
@@ -1431,11 +1441,18 @@ function registerBudgetMaintenanceRoutes(
       const { action } = request.body;
       const name = (request.body.name ?? "").trim();
       const targetPayeeId = request.body.targetPayeeId;
+      const categoryId = request.body.categoryId;
+      const hasCategoryId = Object.prototype.hasOwnProperty.call(
+        request.body,
+        "categoryId",
+      );
       if (
         (action === "rename" && !name) ||
         (action !== "rename" && request.body.name !== undefined) ||
         (action === "merge" && targetPayeeId === undefined) ||
-        (action !== "merge" && targetPayeeId !== undefined)
+        (action !== "merge" && targetPayeeId !== undefined) ||
+        (action === "default-category" && !hasCategoryId) ||
+        (action !== "default-category" && hasCategoryId)
       ) {
         return invalidBudgetRequest(reply);
       }
@@ -1443,6 +1460,7 @@ function registerBudgetMaintenanceRoutes(
         const patch: { [key: string]: JsonValue } = { action };
         if (action === "rename") patch.name = name;
         if (action === "merge") patch.targetPayeeId = targetPayeeId!;
+        if (action === "default-category") patch.categoryId = categoryId ?? null;
         const result = await runMaintenanceOperation(
           journal,
           request,
@@ -1474,6 +1492,14 @@ function registerBudgetMaintenanceRoutes(
                 await maintenanceApi.deletePayee(
                   request.params.budgetId,
                   request.params.payeeId,
+                  password,
+                );
+                break;
+              case "default-category":
+                await maintenanceApi.setPayeeDefaultCategory(
+                  request.params.budgetId,
+                  request.params.payeeId,
+                  categoryId ?? null,
                   password,
                 );
                 break;

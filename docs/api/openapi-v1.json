@@ -1831,7 +1831,7 @@
                 "properties": {
                   "action": {
                     "type": "string",
-                    "enum": ["rename", "merge", "delete"]
+                    "enum": ["rename", "merge", "delete", "default-category"]
                   },
                   "name": {
                     "type": "string",
@@ -1841,6 +1841,12 @@
                   },
                   "targetPayeeId": {
                     "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                    "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$"
+                  },
+                  "categoryId": {
+                    "type": ["string", "null"],
                     "minLength": 1,
                     "maxLength": 500,
                     "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$"
