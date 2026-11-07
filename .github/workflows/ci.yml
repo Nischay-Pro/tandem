@@ -113,6 +113,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Prepare writable test workspaces
+        run: mkdir -p .dev-tmp/actual/api-workspace .dev-tmp/postgres .dev-tmp/stryker
+
       - name: Run formatting, lint, typecheck, integration tests, and coverage
         run: docker compose -f docker-compose.dev.yml --profile test run --build --rm integration-tests
 

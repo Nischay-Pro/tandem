@@ -1,6 +1,7 @@
 package app.tandemforactual.data.database
 
 import app.tandemforactual.data.store.LocalBudgetRepository
+import app.tandemforactual.data.store.LocalRecordProjection
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
 import kotlinx.coroutines.runBlocking
@@ -45,6 +46,7 @@ class IosDatabasePersistenceTest {
             patchJson = "{\"amount\":1200}",
             optimisticJson = "{\"id\":\"$RECORD_ID\",\"amount\":1200}",
             createdAtEpochMs = 100L,
+            optimisticProjection = LocalRecordProjection("2026-11-03", "checking", "groceries", "market", 1200L, null),
         )
 
     private companion object {

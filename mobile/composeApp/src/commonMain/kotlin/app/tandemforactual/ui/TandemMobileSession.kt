@@ -625,7 +625,7 @@ internal class TandemMobileSession(
             return false
         }
         if (requestedDate != null && requestedDate < "1995-01-01") {
-            transactionWriteMessage = "Choose a date on or after January 1, 1995."
+            transactionWriteMessage = "Choose a date on or after ${formatDate(SampleDate(1995, 1, 1))}."
             return false
         }
         val signedAmount = if (originalAmountMinor < 0) -enteredAmount else enteredAmount
