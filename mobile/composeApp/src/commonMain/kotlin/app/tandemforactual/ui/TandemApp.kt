@@ -6464,6 +6464,7 @@ private data class AccountListItemUi(
     val balance: String,
     val offBudget: Boolean,
     val closed: Boolean = false,
+    val accountType: String? = null,
 )
 
 private data class AccountListGroupUi(
@@ -6478,8 +6479,12 @@ private data class AccountListUi(
     val showAccountOptions: Boolean,
 )
 
-internal fun accountTypeIcon(accountName: String): ImageVector {
+internal fun accountTypeIcon(
+    accountName: String,
+    accountType: String? = null,
+): ImageVector {
     val name = accountName.lowercase()
+    val type = accountType.orEmpty().lowercase()
     return when {
         "savings" in name || "saving" in name -> Lucide.PiggyBank
         "checking" in name || "chequing" in name -> Lucide.Landmark
@@ -6487,6 +6492,9 @@ internal fun accountTypeIcon(accountName: String): ImageVector {
         listOf("loan", "mortgage", "debt").any { it in name } -> Lucide.HandCoins
         listOf("investment", "brokerage", "401k", "403b", "ira", "retirement", "stocks").any { it in name } ->
             Lucide.ChartNoAxesCombined
+        listOf("credit", "card").any { it in type } -> Lucide.CreditCard
+        listOf("loan", "debt").any { it in type } -> Lucide.HandCoins
+        listOf("tracking", "investment").any { it in type } -> Lucide.ChartNoAxesCombined
         else -> Lucide.WalletCards
     }
 }
@@ -6554,6 +6562,7 @@ private fun AccountsScreen(
                                         account.balanceMinor?.let(state::formatCurrency) ?: "Unavailable",
                                         account.offBudget,
                                         account.closed,
+                                        account.accountGroupName,
                                     )
                                 },
                             )
@@ -6576,6 +6585,7 @@ private fun AccountsScreen(
                                     account.description,
                                     state.formatCurrency(account.balanceMinor),
                                     account.offBudget,
+                                    accountType = account.group,
                                 )
                             },
                         )
@@ -6632,7 +6642,7 @@ private fun AccountsScreen(
                                         leading =
                                             RowLeading.Merchant(
                                                 merchantIconMatcher?.accountIconFor(account.name),
-                                                fallback = accountTypeIcon(account.name),
+                                                fallback = accountTypeIcon(account.name, account.accountType),
                                             ),
                                         options =
                                             ListRowOptions(
@@ -6729,7 +6739,7 @@ private fun AccountsScreen(
                     TextFieldCard("Name", newAccountName, { newAccountName = it }, TextFieldOptions(placeholder = "Checking"))
                     Box {
                         ListRow(
-                            "Account group",
+                            "Account type",
                             trailing = accountGroupOptions.firstOrNull { it.first == newAccountGroupId }?.second ?: "No group",
                             leading = RowLeading.Icon(Lucide.FolderKey),
                             onClick = { accountGroupMenuExpanded = true },

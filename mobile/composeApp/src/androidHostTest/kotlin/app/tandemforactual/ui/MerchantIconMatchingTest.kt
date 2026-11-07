@@ -2,7 +2,9 @@ package app.tandemforactual.ui
 
 import com.composables.icons.lucide.CarFront
 import com.composables.icons.lucide.Carrot
+import com.composables.icons.lucide.ChartNoAxesCombined
 import com.composables.icons.lucide.CreditCard
+import com.composables.icons.lucide.HandCoins
 import com.composables.icons.lucide.Landmark
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PiggyBank
@@ -93,6 +95,10 @@ class MerchantIconMatchingTest {
         assertEquals(Lucide.PiggyBank, accountTypeIcon("Household Savings"))
         assertEquals(Lucide.Landmark, accountTypeIcon("Household Checking"))
         assertEquals(Lucide.CreditCard, accountTypeIcon("Rewards Card"))
+        assertEquals(Lucide.CreditCard, accountTypeIcon("Primary", "Credit"))
+        assertEquals(Lucide.HandCoins, accountTypeIcon("Primary", "Loans"))
+        assertEquals(Lucide.ChartNoAxesCombined, accountTypeIcon("Primary", "Tracking"))
+        assertEquals(Lucide.WalletCards, accountTypeIcon("Primary", "Cash"))
 
         val issuerMatcher =
             MerchantAliasMatcher<String>().apply {
