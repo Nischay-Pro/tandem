@@ -50,9 +50,13 @@ internal data class LiveScheduleSummary(
     val id: String,
     val name: String,
     val nextDate: String,
+    val dateValueJson: String,
+    val accountId: String?,
     val accountName: String?,
+    val payeeId: String?,
     val amountMinor: Long?,
     val amountRangeMinor: Pair<Long, Long>?,
+    val amountOp: String,
     val canSkip: Boolean,
 )
 
@@ -182,9 +186,13 @@ internal fun liveScheduleSummaries(
                 id = record.recordId,
                 name = body.stringValue("name") ?: payeeId?.let(payees::get) ?: "Scheduled transaction",
                 nextDate = nextDate,
+                dateValueJson = body["date"]?.toString() ?: JsonPrimitive(nextDate).toString(),
+                accountId = accountId,
                 accountName = accountId?.let(accounts::get),
+                payeeId = payeeId,
                 amountMinor = if (amountRange == null) body.longValue("amount") else null,
                 amountRangeMinor = amountRange,
+                amountOp = body.stringValue("amountOp") ?: "is",
                 canSkip = dateObject?.stringValue("frequency") != null,
             )
         }.sortedBy(LiveScheduleSummary::nextDate)

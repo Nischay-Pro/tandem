@@ -526,6 +526,7 @@ class TandemApiClient(
         action: String,
         name: String?,
         encryptionPassword: String?,
+        fields: JsonObject? = null,
     ) {
         withMaintenanceOperation(
             maintenanceSignature("schedule-$action", budgetId, scheduleId, name),
@@ -541,6 +542,7 @@ class TandemApiClient(
                             buildJsonObject {
                                 put("action", action)
                                 name?.let { put("name", it) }
+                                fields?.forEach { (key, value) -> put(key, value) }
                             }.toMap(),
                     ),
                 )

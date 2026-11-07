@@ -4727,7 +4727,7 @@
     "/api/v1/budgets/{budgetId}/schedules/{scheduleId}/actions": {
       "post": {
         "operationId": "manageBudgetSchedule",
-        "summary": "Post, skip, rename, or delete an Actual Budget schedule",
+        "summary": "Edit or manage an Actual Budget schedule",
         "tags": ["Budgets"],
         "requestBody": {
           "required": true,
@@ -4738,13 +4738,121 @@
                 "properties": {
                   "action": {
                     "type": "string",
-                    "enum": ["rename", "post", "skip", "delete"]
+                    "enum": ["rename", "edit", "post", "skip", "delete"]
                   },
                   "name": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 100,
                     "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$"
+                  },
+                  "accountId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "payeeId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "amountMinor": {
+                    "type": "integer",
+                    "minimum": -1000000000,
+                    "maximum": 1000000000
+                  },
+                  "amountRangeMinor": {
+                    "type": "object",
+                    "properties": {
+                      "num1": {
+                        "type": "integer",
+                        "minimum": -1000000000,
+                        "maximum": 1000000000
+                      },
+                      "num2": {
+                        "type": "integer",
+                        "minimum": -1000000000,
+                        "maximum": 1000000000
+                      }
+                    },
+                    "required": ["num1", "num2"],
+                    "additionalProperties": false
+                  },
+                  "amountOp": {
+                    "type": "string",
+                    "enum": ["is", "isapprox", "isbetween"]
+                  },
+                  "date": {
+                    "oneOf": [
+                      { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "frequency": {
+                            "type": "string",
+                            "enum": ["daily", "weekly", "monthly", "yearly"]
+                          },
+                          "interval": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 999
+                          },
+                          "patterns": {
+                            "type": "array",
+                            "maxItems": 31,
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "type": "integer",
+                                  "minimum": -31,
+                                  "maximum": 31
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "SU",
+                                    "MO",
+                                    "TU",
+                                    "WE",
+                                    "TH",
+                                    "FR",
+                                    "SA",
+                                    "day"
+                                  ]
+                                }
+                              },
+                              "required": ["value", "type"],
+                              "additionalProperties": false
+                            }
+                          },
+                          "skipWeekend": { "type": "boolean" },
+                          "start": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          "endMode": {
+                            "type": "string",
+                            "enum": ["never", "after_n_occurrences", "on_date"]
+                          },
+                          "endOccurrences": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100000
+                          },
+                          "endDate": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          "weekendSolveMode": {
+                            "type": "string",
+                            "enum": ["before", "after"]
+                          }
+                        },
+                        "required": ["frequency", "start"],
+                        "additionalProperties": false
+                      }
+                    ]
                   }
                 },
                 "required": ["action"],

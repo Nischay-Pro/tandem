@@ -458,6 +458,105 @@ describe("Actual budget maintenance API", () => {
     );
   });
 
+  it("edits a schedule rule through Actual and resets its next date when needed", async () => {
+    const fake = createFake();
+    fake.client.getPayees.mockResolvedValue([
+      { id: "landlord", name: "Landlord", transfer_acct: "" },
+    ]);
+    const date = {
+      frequency: "monthly" as const,
+      interval: 1,
+      start: "2026-12-01",
+      endMode: "never" as const,
+      skipWeekend: true,
+      weekendSolveMode: "before" as const,
+    };
+
+    await fake.api.editSchedule(
+      "budget-1",
+      "monthly-rent",
+      {
+        name: "Home rent",
+        accountId: "destination",
+        payeeId: "landlord",
+        amountMinor: -180_000,
+        amountOp: "is",
+        date,
+      },
+      "secret",
+    );
+
+    expect(fake.client.updateSchedule).toHaveBeenCalledWith(
+      "monthly-rent",
+      {
+        name: "Home rent",
+        account: "destination",
+        payee: "landlord",
+        amount: -180_000,
+        amountOp: "is",
+        date,
+      },
+      true,
+    );
+    expect(fake.runBudgetCalls.at(-1)?.options).toEqual({
+      encryptionPassword: "secret",
+      synchronizeAfterWrite: true,
+    });
+  });
+
+  it.each([
+    {
+      label: "an amount range with a single-value operator",
+      edit: {
+        amountRangeMinor: { num1: 100, num2: 500 },
+        amountOp: "is" as const,
+      },
+      message: "The amount rule does not match the amount values",
+    },
+    {
+      label: "an invalid recurrence date",
+      edit: {
+        date: { frequency: "monthly" as const, start: "2026-02-30" },
+      },
+      message: "Choose a valid recurrence and start date",
+    },
+  ])("rejects $label before calling Actual", async ({ edit, message }) => {
+    const fake = createFake();
+
+    await expect(
+      fake.api.editSchedule("budget-1", "monthly-rent", edit),
+    ).rejects.toThrow(message);
+    expect(fake.client.updateSchedule).not.toHaveBeenCalled();
+  });
+
+  it("requires a live schedule, open account, and existing payee for schedule edits", async () => {
+    const fake = createFake();
+    fake.client.getPayees.mockResolvedValue([
+      { id: "landlord", name: "Landlord", transfer_acct: "" },
+    ]);
+    const validEdit = {
+      accountId: "destination",
+      payeeId: "landlord",
+    };
+
+    await expect(
+      fake.api.editSchedule("budget-1", "completed", validEdit),
+    ).rejects.toThrow("Choose an active schedule in this budget");
+    await expect(
+      fake.api.editSchedule("budget-1", "monthly-rent", {
+        ...validEdit,
+        accountId: "closed",
+      }),
+    ).rejects.toThrow("Choose an open account in this budget");
+    await expect(
+      fake.api.editSchedule("budget-1", "monthly-rent", {
+        ...validEdit,
+        payeeId: "missing",
+      }),
+    ).rejects.toThrow("Choose a payee in this budget");
+    expect(fake.client.updateSchedule).not.toHaveBeenCalled();
+  });
+
   it("uses Actual schedule handlers to skip and post scheduled transactions", async () => {
     const fake = createFake();
 

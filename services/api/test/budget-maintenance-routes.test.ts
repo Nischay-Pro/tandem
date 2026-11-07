@@ -49,6 +49,7 @@ async function createApi(
     renameCategory: vi.fn(async () => undefined),
     deleteCategory: vi.fn(async () => undefined),
     renameSchedule: vi.fn(async () => undefined),
+    editSchedule: vi.fn(async () => undefined),
     skipSchedule: vi.fn(async () => undefined),
     postSchedule: vi.fn(async () => undefined),
     deleteSchedule: vi.fn(async () => undefined),
@@ -1227,6 +1228,34 @@ describe("budget maintenance routes", () => {
 
     const firstRename = await rename();
     const replayedRename = await rename();
+    const editHeaders = {
+      ...testHeaders(),
+      "idempotency-key": "schedule-edit-1",
+    };
+    const editBody = {
+      action: "edit",
+      name: "House rent",
+      accountId: "checking-1",
+      payeeId: "landlord-1",
+      amountMinor: -180_000,
+      amountOp: "is",
+      date: {
+        frequency: "monthly",
+        interval: 1,
+        start: "2026-12-01",
+        endMode: "never",
+        skipWeekend: false,
+      },
+    };
+    const edit = () =>
+      fake.app.inject({
+        method: "POST",
+        url: path,
+        headers: editHeaders,
+        payload: editBody,
+      });
+    const firstEdit = await edit();
+    const replayedEdit = await edit();
     const skip = await fake.app.inject({
       method: "POST",
       url: path,
@@ -1267,10 +1296,12 @@ describe("budget maintenance routes", () => {
     expect([
       firstRename.statusCode,
       replayedRename.statusCode,
+      firstEdit.statusCode,
+      replayedEdit.statusCode,
       skip.statusCode,
       post.statusCode,
       deleted.statusCode,
-    ]).toEqual([200, 200, 200, 200, 200]);
+    ]).toEqual([200, 200, 200, 200, 200, 200, 200]);
     expect(outOfScope.statusCode).toBe(404);
     expect(missingName.statusCode).toBe(400);
     expect(extraName.statusCode).toBe(400);
@@ -1281,11 +1312,26 @@ describe("budget maintenance routes", () => {
       "Home rent",
       undefined,
     );
+    expect(fake.budgetMaintenanceApi.editSchedule).toHaveBeenCalledOnce();
+    expect(fake.budgetMaintenanceApi.editSchedule).toHaveBeenCalledWith(
+      budgetId,
+      "schedule-1",
+      {
+        name: "House rent",
+        accountId: "checking-1",
+        payeeId: "landlord-1",
+        amountMinor: -180_000,
+        amountOp: "is",
+        date: editBody.date,
+      },
+      undefined,
+    );
     expect(fake.budgetMaintenanceApi.skipSchedule).toHaveBeenCalledOnce();
     expect(fake.budgetMaintenanceApi.postSchedule).toHaveBeenCalledOnce();
     expect(fake.budgetMaintenanceApi.deleteSchedule).toHaveBeenCalledOnce();
     expect([...fake.operations.values()].map(({ action }) => action)).toEqual([
       "schedule-rename",
+      "schedule-edit",
       "schedule-skip",
       "schedule-post",
       "schedule-delete",

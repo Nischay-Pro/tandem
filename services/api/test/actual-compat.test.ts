@@ -13,6 +13,7 @@ import type {
 } from "../src/auth/device-auth.js";
 import { createActualSession } from "../src/actual/actual-session.js";
 import { ActualBudgetSnapshotReader } from "../src/actual/budget-snapshot-reader.js";
+import { createBudgetMaintenanceApi } from "../src/actual/budget-maintenance-api.js";
 import { createTransactionApi } from "../src/actual/transaction-api.js";
 import { TransactionReconciler } from "../src/actual/transaction-reconciler.js";
 import {
@@ -151,6 +152,8 @@ describe.skipIf(!compatibilityTestEnabled)(
       let categoryId = "";
       let hiddenCategoryId = "";
       let transferAccountId = "";
+      let scheduleId = "";
+      let schedulePayeeId = "";
 
       try {
         await firstDevice.execute(
@@ -235,6 +238,31 @@ describe.skipIf(!compatibilityTestEnabled)(
           throw new Error("Actual did not return the synthetic transaction");
         }
 
+        scheduleId = await firstDevice.runBudget(
+          budget.groupId,
+          async () => {
+            schedulePayeeId = await Actual.createPayee({
+              name: "ABC synthetic recurring payee",
+            });
+            return Actual.createSchedule({
+              name: "ABC synthetic monthly schedule",
+              posts_transaction: false,
+              payee: schedulePayeeId,
+              account: initialData.accountId,
+              amount: -15_000,
+              amountOp: "is",
+              date: {
+                frequency: "monthly",
+                interval: 1,
+                patterns: [{ type: "day", value: 1 }],
+                start: transactionDate,
+                skipWeekend: false,
+              },
+            });
+          },
+          { synchronizeAfterWrite: true },
+        );
+
         await firstDevice.runBudget(
           budget.groupId,
           () =>
@@ -291,7 +319,16 @@ describe.skipIf(!compatibilityTestEnabled)(
         );
         const reconciliationApp = await buildApiApp(
           { ping: () => database!.ping(), close: async () => undefined },
-          { deviceAuth, transactionApi, budgetReadApi },
+          {
+            deviceAuth,
+            transactionApi,
+            budgetReadApi,
+            budgetMaintenanceApi: createBudgetMaintenanceApi(
+              database,
+              firstDevice,
+            ),
+            maintenanceJournal: database.journal,
+          },
         );
         const authorizationHeaders = {
           authorization: `Bearer ${compatibilityToken}`,
@@ -303,6 +340,58 @@ describe.skipIf(!compatibilityTestEnabled)(
         const createOperationId = randomUUID();
         const companionTransactionPath = `/api/v1/budgets/${budget.groupId}/transactions/${encodeURIComponent(companionTransactionId)}`;
         try {
+          const scheduleEditResponse = await reconciliationApp.inject({
+            method: "POST",
+            url: `/api/v1/budgets/${budget.groupId}/schedules/${encodeURIComponent(scheduleId)}/actions`,
+            headers: {
+              ...authorizationHeaders,
+              "idempotency-key": `compat-schedule-edit-${randomUUID()}`,
+            },
+            payload: {
+              action: "edit",
+              name: "ABC edited monthly schedule",
+              accountId: transferAccountId,
+              payeeId: schedulePayeeId,
+              amountMinor: -18_000,
+              amountOp: "is",
+              date: {
+                frequency: "monthly",
+                interval: 2,
+                patterns: [{ type: "day", value: 15 }],
+                start: "2026-11-15",
+                skipWeekend: true,
+                weekendSolveMode: "before",
+                endMode: "never",
+              },
+            },
+          });
+          expect(scheduleEditResponse.statusCode).toBe(200);
+          const editedSchedule = await firstDevice.runBudget(
+            budget.groupId,
+            async () => (await Actual.getSchedules()).find(({ id }) => id === scheduleId),
+          );
+          expect(editedSchedule).toMatchObject({
+            name: "ABC edited monthly schedule",
+            account: transferAccountId,
+            amount: -18_000,
+            amountOp: "is",
+            date: {
+              frequency: "monthly",
+              interval: 2,
+              patterns: [{ type: "day", value: 15 }],
+              start: "2026-11-15",
+              skipWeekend: true,
+              weekendSolveMode: "before",
+              endMode: "never",
+            },
+          });
+          const scheduleSnapshot = await budgetReadApi.getSnapshot(budget.groupId);
+          expect(
+            scheduleSnapshot.records.some(
+              (record) => record.type === "schedule" && record.id === scheduleId,
+            ),
+          ).toBe(true);
+
           const createResponse = await reconciliationApp.inject({
             method: "POST",
             url: `${companionTransactionPath}/operations`,
@@ -352,7 +441,10 @@ describe.skipIf(!compatibilityTestEnabled)(
             url: `/api/v1/budgets/${budget.groupId}/snapshot`,
             headers: authorizationHeaders,
           });
-          expect(createdSnapshot.statusCode).toBe(200);
+          expect(
+            createdSnapshot.statusCode,
+            JSON.stringify(createdSnapshot.json()),
+          ).toBe(200);
           expect(
             createdSnapshot
               .json()

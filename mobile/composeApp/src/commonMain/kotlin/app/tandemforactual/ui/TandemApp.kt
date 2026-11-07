@@ -292,6 +292,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -2895,7 +2896,14 @@ private fun ScreenContent(
         AppRoute.MONTH_PICKER -> MonthPickerScreen(state, navigation)
         AppRoute.CATEGORY_GROUP -> CategoryGroupScreen(state, navigation, liveBudgetMonth)
         AppRoute.CATEGORY_DETAIL -> CategoryDetailScreen(state, navigation, liveBudgetMonth, mobileSession)
-        AppRoute.SCHEDULES -> UpcomingSchedulesScreen(state, mobileSession, liveSchedules)
+        AppRoute.SCHEDULES ->
+            UpcomingSchedulesScreen(
+                state,
+                mobileSession,
+                liveSchedules,
+                liveAccounts,
+                mobileSession.payeeRecords,
+            )
         AppRoute.MANAGE_PAYEES -> ManagePayeesScreen(state, mobileSession, mobileSession.payeeRecords)
         AppRoute.BUDGET_RULES ->
             BudgetRulesScreen(
@@ -5384,13 +5392,80 @@ private fun UpcomingSchedulesScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
     schedules: List<LiveScheduleSummary>,
+    accounts: List<LiveAccountSummary>,
+    payeeRecords: List<BudgetRecordEntity>,
 ) {
     var selectedScheduleId by rememberSaveable(state.selectedBudgetId) { mutableStateOf<String?>(null) }
-    var editingName by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
-    var confirmingDelete by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
-    var nameDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) { mutableStateOf("") }
+    var dialogMode by rememberSaveable(state.selectedBudgetId, selectedScheduleId) { mutableStateOf("menu") }
+    var nameDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
+        mutableStateOf(schedules.firstOrNull { it.id == selectedScheduleId }?.name.orEmpty())
+    }
+    var amountDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
+        val schedule = schedules.firstOrNull { it.id == selectedScheduleId }
+        mutableStateOf(state.formatAmount(schedule?.amountMinor ?: schedule?.amountRangeMinor?.first ?: 0L))
+    }
+    var amountMaxDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
+        val range = schedules.firstOrNull { it.id == selectedScheduleId }?.amountRangeMinor
+        mutableStateOf(range?.second?.let(state::formatAmount).orEmpty())
+    }
+    var amountRuleDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
+        mutableStateOf(schedules.firstOrNull { it.id == selectedScheduleId }?.amountOp ?: "is")
+    }
+    var accountIdDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
+        mutableStateOf(schedules.firstOrNull { it.id == selectedScheduleId }?.accountId.orEmpty())
+    }
+    var payeeIdDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
+        mutableStateOf(schedules.firstOrNull { it.id == selectedScheduleId }?.payeeId.orEmpty())
+    }
     val selectedSchedule = schedules.firstOrNull { it.id == selectedScheduleId }
+    val dateValue =
+        remember(selectedSchedule?.id, selectedSchedule?.dateValueJson) {
+            selectedSchedule?.dateValueJson?.let { runCatching { Json.parseToJsonElement(it) }.getOrNull() }
+        }
+    val dateConfig = dateValue as? JsonObject
+    var dateDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
+        mutableStateOf(
+            dateConfig?.get("start")?.jsonPrimitive?.contentOrNull
+                ?: (dateValue as? JsonPrimitive)?.contentOrNull
+                ?: selectedSchedule?.nextDate.orEmpty(),
+        )
+    }
+    var frequencyDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
+        mutableStateOf(dateConfig?.get("frequency")?.jsonPrimitive?.contentOrNull ?: "once")
+    }
+    var intervalDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
+        mutableStateOf(dateConfig?.get("interval")?.jsonPrimitive?.contentOrNull ?: "1")
+    }
+    var skipWeekendDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
+        mutableStateOf(dateConfig?.get("skipWeekend")?.jsonPrimitive?.booleanOrNull ?: false)
+    }
+    var endModeDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
+        mutableStateOf(dateConfig?.get("endMode")?.jsonPrimitive?.contentOrNull ?: "never")
+    }
+    var endOccurrencesDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
+        mutableStateOf(dateConfig?.get("endOccurrences")?.jsonPrimitive?.contentOrNull ?: "12")
+    }
+    var endDateDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
+        mutableStateOf(dateConfig?.get("endDate")?.jsonPrimitive?.contentOrNull ?: selectedSchedule?.nextDate.orEmpty())
+    }
+    var datePickerTarget by rememberSaveable(state.selectedBudgetId, selectedScheduleId) { mutableStateOf<String?>(null) }
+    var editError by rememberSaveable(state.selectedBudgetId, selectedScheduleId) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val payeeOptions =
+        remember(payeeRecords, selectedSchedule?.payeeId) {
+            val names =
+                payeeRecords
+                    .mapNotNull { record ->
+                        record.recordName()?.let { record.recordId to it }
+                    }.toMap()
+                    .toMutableMap()
+            selectedSchedule?.payeeId?.let { id -> if (id !in names) names[id] = id }
+            names.entries.sortedBy { it.value.lowercase() }.map { it.key to it.value }
+        }
+    val accountOptions =
+        remember(accounts) {
+            accounts.filterNot(LiveAccountSummary::closed).sortedBy { it.name.lowercase() }.map { it.id to it.name }
+        }
     PageLazyColumn {
         item(key = "upcoming-schedules-heading") { Heading("Upcoming bills") }
         if (schedules.isEmpty()) {
@@ -5415,9 +5490,8 @@ private fun UpcomingSchedulesScreen(
                             leading = RowLeading.Icon(Lucide.CalendarDays),
                             onClick = {
                                 selectedScheduleId = schedule.id
-                                nameDraft = schedule.name
-                                editingName = false
-                                confirmingDelete = false
+                                dialogMode = "menu"
+                                mobileSession.clearBudgetActionMessage()
                             },
                         )
                         TandemIconButton(
@@ -5429,9 +5503,8 @@ private fun UpcomingSchedulesScreen(
                             containerColor = tandemPalette.raised,
                         ) {
                             selectedScheduleId = schedule.id
-                            nameDraft = schedule.name
-                            editingName = false
-                            confirmingDelete = false
+                            dialogMode = "menu"
+                            mobileSession.clearBudgetActionMessage()
                         }
                     }
                 }
@@ -5444,8 +5517,7 @@ private fun UpcomingSchedulesScreen(
             onDismissRequest = {
                 if (!mobileSession.isPerformingBudgetAction) {
                     selectedScheduleId = null
-                    editingName = false
-                    confirmingDelete = false
+                    dialogMode = "menu"
                 }
             },
             properties = DialogProperties(usePlatformDefaultWidth = false),
@@ -5465,15 +5537,15 @@ private fun UpcomingSchedulesScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                         Icon(
-                            if (editingName) Lucide.Pencil else Lucide.CalendarDays,
+                            if (dialogMode == "edit") Lucide.Pencil else Lucide.CalendarDays,
                             contentDescription = null,
                             modifier = Modifier.size(24.dp),
                             tint = tandemPalette.accent,
                         )
                         Text(
                             when {
-                                confirmingDelete -> "Delete schedule?"
-                                editingName -> "Edit schedule"
+                                dialogMode == "delete" -> "Delete schedule?"
+                                dialogMode == "edit" -> "Edit schedule"
                                 else -> selectedSchedule.name
                             },
                             modifier = Modifier.weight(1f),
@@ -5492,12 +5564,11 @@ private fun UpcomingSchedulesScreen(
                             enabled = !mobileSession.isPerformingBudgetAction,
                         ) {
                             selectedScheduleId = null
-                            editingName = false
-                            confirmingDelete = false
+                            dialogMode = "menu"
                         }
                     }
                     when {
-                        confirmingDelete -> {
+                        dialogMode == "delete" -> {
                             TandemActionButton(
                                 "Delete",
                                 TandemActionButtonTone.DESTRUCTIVE,
@@ -5523,30 +5594,245 @@ private fun UpcomingSchedulesScreen(
                                 TandemActionButtonTone.NEUTRAL,
                                 modifier = Modifier.fillMaxWidth(),
                                 enabled = !mobileSession.isPerformingBudgetAction,
-                            ) { confirmingDelete = false }
+                            ) { dialogMode = "menu" }
                         }
-                        editingName -> {
+                        dialogMode == "edit" -> {
                             TextFieldCard("Name", nameDraft, { nameDraft = it })
-                            mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                            TextFieldCard(
+                                "Amount",
+                                amountDraft,
+                                { amountDraft = it },
+                                TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)),
+                            )
+                            ScheduleChoiceField(
+                                "Amount rule",
+                                when (amountRuleDraft) {
+                                    "isapprox" -> "About this amount"
+                                    "isbetween" -> "Between two amounts"
+                                    else -> "Exact amount"
+                                },
+                                listOf("is" to "Exact amount", "isapprox" to "About this amount", "isbetween" to "Between two amounts"),
+                            ) { amountRuleDraft = it }
+                            if (amountRuleDraft == "isbetween") {
+                                TextFieldCard(
+                                    "Maximum amount",
+                                    amountMaxDraft,
+                                    { amountMaxDraft = it },
+                                    TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)),
+                                )
+                            }
+                            ScheduleChoiceField(
+                                "Account",
+                                accountOptions.firstOrNull { it.first == accountIdDraft }?.second ?: "Choose account",
+                                accountOptions,
+                            ) { accountIdDraft = it }
+                            ScheduleChoiceField(
+                                "Payee",
+                                payeeOptions.firstOrNull { it.first == payeeIdDraft }?.second ?: "Choose payee",
+                                payeeOptions,
+                            ) { payeeIdDraft = it }
+                            ScheduleChoiceField(
+                                if (frequencyDraft == "once") "Repeats" else "Repeats every",
+                                when (frequencyDraft) {
+                                    "daily" -> "Daily"
+                                    "weekly" -> "Weekly"
+                                    "monthly" -> "Monthly"
+                                    "yearly" -> "Yearly"
+                                    else -> "One time"
+                                },
+                                listOf(
+                                    "once" to "One time",
+                                    "daily" to "Daily",
+                                    "weekly" to "Weekly",
+                                    "monthly" to "Monthly",
+                                    "yearly" to "Yearly",
+                                ),
+                            ) { frequencyDraft = it }
+                            if (frequencyDraft != "once") {
+                                TextFieldCard(
+                                    "Interval",
+                                    intervalDraft,
+                                    { intervalDraft = it.filter(Char::isDigit).take(3) },
+                                    TextFieldOptions(
+                                        placeholder = "1",
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    ),
+                                )
+                            }
+                            FieldFrame(
+                                if (frequencyDraft == "once") "Date" else "Start date",
+                                onClickLabel = "Choose date",
+                                onClick = { datePickerTarget = "start" },
+                            ) {
+                                Text(
+                                    formatLiveDate(dateDraft),
+                                    Modifier.weight(1f),
+                                    color = tandemPalette.text,
+                                    fontSize = TandemTypography.action,
+                                )
+                                Icon(
+                                    Lucide.ChevronDown,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = tandemPalette.muted,
+                                )
+                            }
+                            if (frequencyDraft != "once") {
+                                ToggleRow("Skip weekends", checked = skipWeekendDraft) { skipWeekendDraft = it }
+                                ScheduleChoiceField(
+                                    "Ends",
+                                    when (endModeDraft) {
+                                        "after_n_occurrences" -> "After a number of repeats"
+                                        "on_date" -> "On a date"
+                                        else -> "Never"
+                                    },
+                                    listOf(
+                                        "never" to "Never",
+                                        "after_n_occurrences" to "After a number of repeats",
+                                        "on_date" to "On a date",
+                                    ),
+                                ) { endModeDraft = it }
+                                if (endModeDraft == "after_n_occurrences") {
+                                    TextFieldCard(
+                                        "Number of repeats",
+                                        endOccurrencesDraft,
+                                        { endOccurrencesDraft = it.filter(Char::isDigit).take(6) },
+                                        TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)),
+                                    )
+                                }
+                                if (endModeDraft == "on_date") {
+                                    FieldFrame(
+                                        "End date",
+                                        onClickLabel = "Choose end date",
+                                        onClick = { datePickerTarget = "end" },
+                                    ) {
+                                        Text(
+                                            formatLiveDate(endDateDraft),
+                                            Modifier.weight(1f),
+                                            color = tandemPalette.text,
+                                            fontSize = TandemTypography.action,
+                                        )
+                                        Icon(
+                                            Lucide.ChevronDown,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = tandemPalette.muted,
+                                        )
+                                    }
+                                }
+                            }
+                            editError?.let {
+                                InlineMessage(it, InlineMessageKind.ERROR)
+                            }
+                            mobileSession.budgetActionMessage?.let {
+                                InlineMessage(it, InlineMessageKind.ERROR)
+                            }
                             TandemActionButton(
-                                if (mobileSession.isPerformingBudgetAction) "Saving…" else "Save",
+                                if (mobileSession.isPerformingBudgetAction) {
+                                    "Saving…"
+                                } else {
+                                    "Save schedule"
+                                },
                                 TandemActionButtonTone.PRIMARY,
                                 modifier = Modifier.fillMaxWidth(),
-                                enabled = !mobileSession.isPerformingBudgetAction && nameDraft.isNotBlank(),
+                                enabled =
+                                    !mobileSession.isPerformingBudgetAction &&
+                                        nameDraft.isNotBlank() &&
+                                        accountIdDraft.isNotBlank() &&
+                                        payeeIdDraft.isNotBlank(),
                                 loading = mobileSession.isPerformingBudgetAction,
                             ) {
-                                scope.launch {
-                                    val saved =
-                                        mobileSession.manageBudgetSchedule(
-                                            state.selectedBudgetId,
-                                            selectedSchedule.id,
-                                            "rename",
-                                            nameDraft,
-                                            state.encryptedPassword.takeIf { it.isNotBlank() },
-                                        )
-                                    if (saved) {
-                                        selectedScheduleId = null
-                                        editingName = false
+                                val amountMinor = state.parseAmountMinorUnits(amountDraft)
+                                val amountMaxMinor = state.parseAmountMinorUnits(amountMaxDraft)
+                                val interval = intervalDraft.toIntOrNull()
+                                val occurrences = endOccurrencesDraft.toIntOrNull()
+                                val dateIsValid = parseIsoDate(dateDraft) != null
+                                val endDateIsValid = endModeDraft != "on_date" || parseIsoDate(endDateDraft) != null
+                                val amountRangeIsInvalid =
+                                    amountRuleDraft == "isbetween" &&
+                                        amountMinor != null &&
+                                        amountMaxMinor != null &&
+                                        amountMinor > amountMaxMinor
+                                val intervalIsInvalid =
+                                    frequencyDraft != "once" && (interval == null || interval !in 1..999)
+                                val repeatCountIsInvalid =
+                                    frequencyDraft != "once" &&
+                                        endModeDraft == "after_n_occurrences" &&
+                                        (occurrences == null || occurrences !in 1..100_000)
+                                val endBeforeStart = endModeDraft == "on_date" && endDateDraft < dateDraft
+                                editError =
+                                    when {
+                                        amountMinor == null -> "Enter a valid amount."
+                                        amountRuleDraft == "isbetween" && amountMaxMinor == null ->
+                                            "Enter a valid maximum amount."
+                                        amountRangeIsInvalid -> "The minimum must not exceed the maximum."
+                                        intervalIsInvalid -> "Repeat interval must be between 1 and 999."
+                                        repeatCountIsInvalid -> "Enter a valid number of repeats."
+                                        !dateIsValid -> "Choose a valid start date."
+                                        !endDateIsValid -> "Choose a valid end date."
+                                        endBeforeStart -> "The end date must be on or after the start date."
+                                        else -> null
+                                    }
+                                if (editError == null) {
+                                    val editedDate =
+                                        if (frequencyDraft == "once") {
+                                            JsonPrimitive(dateDraft) as JsonElement
+                                        } else {
+                                            buildJsonObject {
+                                                dateConfig?.forEach { (key, value) ->
+                                                    if (key !in
+                                                        setOf(
+                                                            "frequency",
+                                                            "interval",
+                                                            "start",
+                                                            "skipWeekend",
+                                                            "endMode",
+                                                            "endOccurrences",
+                                                            "endDate",
+                                                        )
+                                                    ) {
+                                                        put(key, value)
+                                                    }
+                                                }
+                                                put("frequency", frequencyDraft)
+                                                put("interval", interval ?: 1)
+                                                put("start", dateDraft)
+                                                put("skipWeekend", skipWeekendDraft)
+                                                put("endMode", endModeDraft)
+                                                if (endModeDraft == "after_n_occurrences") put("endOccurrences", occurrences ?: 1)
+                                                if (endModeDraft == "on_date") put("endDate", endDateDraft)
+                                            }
+                                        }
+                                    val fields =
+                                        buildJsonObject {
+                                            put("name", nameDraft.trim())
+                                            put("accountId", accountIdDraft)
+                                            put("payeeId", payeeIdDraft)
+                                            put("amountOp", amountRuleDraft)
+                                            if (amountRuleDraft == "isbetween") {
+                                                put(
+                                                    "amountRangeMinor",
+                                                    buildJsonObject {
+                                                        put("num1", amountMinor ?: 0L)
+                                                        put("num2", amountMaxMinor ?: 0L)
+                                                    },
+                                                )
+                                            } else {
+                                                put("amountMinor", amountMinor ?: 0L)
+                                            }
+                                            put("date", editedDate)
+                                        }
+                                    scope.launch {
+                                        val saved =
+                                            mobileSession.manageBudgetSchedule(
+                                                state.selectedBudgetId,
+                                                selectedSchedule.id,
+                                                "edit",
+                                                null,
+                                                state.encryptedPassword.takeIf { it.isNotBlank() },
+                                                fields,
+                                            )
+                                        if (saved) selectedScheduleId = null
                                     }
                                 }
                             }
@@ -5555,7 +5841,7 @@ private fun UpcomingSchedulesScreen(
                                 TandemActionButtonTone.NEUTRAL,
                                 modifier = Modifier.fillMaxWidth(),
                                 enabled = !mobileSession.isPerformingBudgetAction,
-                            ) { editingName = false }
+                            ) { dialogMode = "menu" }
                         }
                         else -> {
                             mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
@@ -5602,15 +5888,14 @@ private fun UpcomingSchedulesScreen(
                                 }
                             }
                             TandemActionButton(
-                                "Edit name",
+                                "Edit schedule",
                                 TandemActionButtonTone.NEUTRAL,
                                 modifier = Modifier.fillMaxWidth(),
                                 icon = Lucide.Pencil,
                                 enabled = !mobileSession.isPerformingBudgetAction,
                             ) {
-                                nameDraft = selectedSchedule.name
                                 mobileSession.clearBudgetActionMessage()
-                                editingName = true
+                                dialogMode = "edit"
                             }
                             TandemActionButton(
                                 "Delete",
@@ -5618,10 +5903,148 @@ private fun UpcomingSchedulesScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 icon = Lucide.Trash2,
                                 enabled = !mobileSession.isPerformingBudgetAction,
-                            ) { confirmingDelete = true }
+                            ) { dialogMode = "delete" }
                         }
                     }
                 }
+            }
+        }
+    }
+    if (datePickerTarget != null) {
+        ScheduleDatePickerDialog(
+            initialDate = if (datePickerTarget == "end") endDateDraft else dateDraft,
+            onDismiss = { datePickerTarget = null },
+            onSelect = { value ->
+                if (datePickerTarget == "end") endDateDraft = value else dateDraft = value
+                datePickerTarget = null
+            },
+        )
+    }
+}
+
+@Composable
+private fun ScheduleChoiceField(
+    label: String,
+    selectedLabel: String,
+    options: List<Pair<String, String>>,
+    onSelect: (String) -> Unit,
+) {
+    var expanded by rememberSaveable(label) { mutableStateOf(false) }
+    FieldFrame(label, onClickLabel = "Choose $label", onClick = { expanded = true }) {
+        Text(
+            selectedLabel,
+            Modifier.weight(1f),
+            color = tandemPalette.text,
+            fontSize = TandemTypography.action,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Icon(Lucide.ChevronDown, contentDescription = null, modifier = Modifier.size(18.dp), tint = tandemPalette.muted)
+    }
+    if (expanded) {
+        Dialog(onDismissRequest = { expanded = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 420.dp).padding(horizontal = TandemSpacing.large)) {
+                Column(Modifier.verticalScroll(rememberScrollState()).padding(TandemSpacing.medium)) {
+                    options.forEach { (id, name) ->
+                        ListRow(
+                            name,
+                            trailing = if (name == selectedLabel) "✓" else null,
+                            onClick = {
+                                onSelect(id)
+                                expanded = false
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScheduleDatePickerDialog(
+    initialDate: String,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit,
+) {
+    val selectedDate = parseIsoDate(initialDate) ?: parseIsoDate(platformTodayIsoDate()) ?: Triple(2026, 1, 1)
+    var visibleYear by rememberSaveable(initialDate) { mutableStateOf(selectedDate.first) }
+    var visibleMonth by rememberSaveable(initialDate) { mutableStateOf(selectedDate.second) }
+    val firstDayOffset = (platformWeekday(visibleYear, visibleMonth, 1) - platformFirstWeekday() + 7) % 7
+    val cells = List<Int?>(firstDayOffset) { null } + (1..daysInMonth(visibleYear, visibleMonth)).map { it }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 420.dp).padding(horizontal = TandemSpacing.large)) {
+            Column(
+                Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TandemIconButton(Lucide.ChevronLeft, "Previous month", sizeDp = 40, iconSizeDp = 18) {
+                        if (visibleMonth == 1) {
+                            visibleMonth = 12
+                            visibleYear -= 1
+                        } else {
+                            visibleMonth -= 1
+                        }
+                    }
+                    Text(
+                        formatMonth(visibleYear, visibleMonth),
+                        Modifier.weight(1f),
+                        color = tandemPalette.text,
+                        textAlign = TextAlign.Center,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    TandemIconButton(Lucide.ChevronRight, "Next month", sizeDp = 40, iconSizeDp = 18) {
+                        if (visibleMonth == 12) {
+                            visibleMonth = 1
+                            visibleYear += 1
+                        } else {
+                            visibleMonth += 1
+                        }
+                    }
+                }
+                Row(Modifier.fillMaxWidth()) {
+                    (0..6).forEach { column ->
+                        val weekday = formatWeekday(visibleYear, visibleMonth, 1 + ((column - firstDayOffset + 7) % 7))
+                        Text(
+                            weekday.take(1),
+                            Modifier.weight(1f),
+                            color = tandemPalette.muted,
+                            textAlign = TextAlign.Center,
+                            fontSize = TandemTypography.caption,
+                        )
+                    }
+                }
+                cells.chunked(7).forEach { week ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+                        week.forEach { day ->
+                            if (day == null) {
+                                Spacer(Modifier.weight(1f).height(44.dp))
+                            } else {
+                                val value = transactionIsoDate(visibleYear, visibleMonth, day)
+                                val isSelected = value == initialDate
+                                SelectableTile(
+                                    selected = isSelected,
+                                    contentDescription = displayTransactionDate(value),
+                                    onSelect = { onSelect(value) },
+                                    modifier = Modifier.weight(1f).height(44.dp),
+                                    shape = CircleShape,
+                                    selectedBackground = tandemPalette.accentSurface,
+                                    unselectedBackground = Color.Transparent,
+                                ) {
+                                    Text(
+                                        day.toString(),
+                                        color = if (isSelected) tandemPalette.accent else tandemPalette.text,
+                                        fontSize = TandemTypography.label,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    )
+                                }
+                            }
+                        }
+                        repeat(7 - week.size) { Spacer(Modifier.weight(1f).height(44.dp)) }
+                    }
+                }
+                TandemActionButton("Cancel", TandemActionButtonTone.NEUTRAL, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
             }
         }
     }

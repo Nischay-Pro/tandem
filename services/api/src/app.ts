@@ -19,6 +19,7 @@ import {
   BudgetMaintenanceInputError,
   MAX_BUDGET_AMOUNT_MINOR,
   type BudgetMaintenanceApiPort,
+  type BudgetScheduleEdit,
 } from "./actual/budget-maintenance-api.js";
 import type { BudgetReadApiPort } from "./budget-projection/budget-read-api.js";
 import {
@@ -1043,9 +1044,8 @@ interface BudgetCategoryDeleteBody {
   transferCategoryId: string | null;
 }
 
-interface BudgetScheduleActionBody {
-  action: "rename" | "post" | "skip" | "delete";
-  name?: string;
+interface BudgetScheduleActionBody extends BudgetScheduleEdit {
+  action: "rename" | "edit" | "post" | "skip" | "delete";
 }
 
 interface BudgetChangeQuery {
@@ -2752,7 +2752,7 @@ function registerBudgetMaintenanceRoutes(
       schema: {
         tags: ["Budgets"],
         operationId: "manageBudgetSchedule",
-        summary: "Post, skip, rename, or delete an Actual Budget schedule",
+        summary: "Edit or manage an Actual Budget schedule",
         security: [{ bearerAuth: [] }],
         params: {
           type: "object",
@@ -2774,13 +2774,66 @@ function registerBudgetMaintenanceRoutes(
           properties: {
             action: {
               type: "string",
-              enum: ["rename", "post", "skip", "delete"],
+              enum: ["rename", "edit", "post", "skip", "delete"],
             },
             name: {
               type: "string",
               minLength: 1,
               maxLength: 100,
               pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+            },
+            accountId: { type: "string", minLength: 1, maxLength: 500 },
+            payeeId: { type: "string", minLength: 1, maxLength: 500 },
+            amountMinor: {
+              type: "integer",
+              minimum: -1_000_000_000,
+              maximum: 1_000_000_000,
+            },
+            amountRangeMinor: {
+              type: "object",
+              properties: {
+                num1: { type: "integer", minimum: -1_000_000_000, maximum: 1_000_000_000 },
+                num2: { type: "integer", minimum: -1_000_000_000, maximum: 1_000_000_000 },
+              },
+              required: ["num1", "num2"],
+              additionalProperties: false,
+            },
+            amountOp: { type: "string", enum: ["is", "isapprox", "isbetween"] },
+            date: {
+              oneOf: [
+                {
+                  type: "string",
+                  pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+                },
+                {
+                  type: "object",
+                  properties: {
+                    frequency: { type: "string", enum: ["daily", "weekly", "monthly", "yearly"] },
+                    interval: { type: "integer", minimum: 1, maximum: 999 },
+                    patterns: {
+                      type: "array",
+                      maxItems: 31,
+                      items: {
+                        type: "object",
+                        properties: {
+                          value: { type: "integer", minimum: -31, maximum: 31 },
+                          type: { type: "string", enum: ["SU", "MO", "TU", "WE", "TH", "FR", "SA", "day"] },
+                        },
+                        required: ["value", "type"],
+                        additionalProperties: false,
+                      },
+                    },
+                    skipWeekend: { type: "boolean" },
+                    start: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+                    endMode: { type: "string", enum: ["never", "after_n_occurrences", "on_date"] },
+                    endOccurrences: { type: "integer", minimum: 1, maximum: 100_000 },
+                    endDate: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+                    weekendSolveMode: { type: "string", enum: ["before", "after"] },
+                  },
+                  required: ["frequency", "start"],
+                  additionalProperties: false,
+                },
+              ],
             },
           },
           required: ["action"],
@@ -2798,17 +2851,39 @@ function registerBudgetMaintenanceRoutes(
         return transactionNotFound(reply);
       if (!maintenanceApi) return actualNotConfigured(reply);
       if (!journal) return actualNotConfigured(reply);
-      const { action } = request.body;
-      const name = (request.body.name ?? "").trim();
+      const body = request.body as BudgetScheduleActionBody;
+      const { action } = body;
+      const name = body.name?.trim();
+      const edit: BudgetScheduleEdit = {
+        ...(name === undefined ? {} : { name }),
+        ...(body.accountId === undefined ? {} : { accountId: body.accountId }),
+        ...(body.payeeId === undefined ? {} : { payeeId: body.payeeId }),
+        ...(body.amountMinor === undefined
+          ? {}
+          : { amountMinor: body.amountMinor }),
+        ...(body.amountRangeMinor === undefined
+          ? {}
+          : { amountRangeMinor: body.amountRangeMinor }),
+        ...(body.amountOp === undefined ? {} : { amountOp: body.amountOp }),
+        ...(body.date === undefined ? {} : { date: body.date }),
+      };
+      const hasEditFields = Object.keys(edit).length > 0;
       if (
         (action === "rename" && !name) ||
-        (action !== "rename" && request.body.name !== undefined)
+        (action === "rename" && Object.keys(edit).some((field) => field !== "name")) ||
+        (action === "edit" && !hasEditFields) ||
+        (!(["rename", "edit"] as string[]).includes(action) && hasEditFields)
       ) {
         return invalidBudgetRequest(reply);
       }
       try {
         const patch: { [key: string]: JsonValue } = { action };
-        if (action === "rename") patch.name = name;
+        if (action === "rename") patch.name = name!;
+        if (action === "edit") {
+          for (const [field, value] of Object.entries(edit)) {
+            if (value !== undefined) patch[field] = value as JsonValue;
+          }
+        }
         const result = await runMaintenanceOperation(
           journal,
           request,
@@ -2824,7 +2899,15 @@ function registerBudgetMaintenanceRoutes(
                 await maintenanceApi.renameSchedule(
                   request.params.budgetId,
                   request.params.scheduleId,
-                  name,
+                  name!,
+                  password,
+                );
+                break;
+              case "edit":
+                await maintenanceApi.editSchedule(
+                  request.params.budgetId,
+                  request.params.scheduleId,
+                  edit,
                   password,
                 );
                 break;

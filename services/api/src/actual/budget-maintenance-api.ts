@@ -1,11 +1,185 @@
 import * as actualApi from "@actual-app/api";
 import type { BudgetOperationOptions } from "./actual-session.js";
 import type { BudgetLockPort } from "./transaction-reconciler.js";
+import { MAX_TRANSACTION_AMOUNT } from "./transaction-reconciliation.js";
 
 /** Maximum category assignment: 1,000,000,000 major currency units. */
 export const MAX_BUDGET_AMOUNT_MINOR = 100_000_000_000;
 export const BANK_SYNC_COOLDOWN_MS = 60_000;
 export const BANK_SYNC_TIMEOUT_MS = 120_000;
+
+export interface ScheduleAmountRange {
+  num1: number;
+  num2: number;
+}
+
+export interface ScheduleRecurrenceConfig {
+  frequency: "daily" | "weekly" | "monthly" | "yearly";
+  interval?: number;
+  patterns?: Array<{ value: number; type: "SU" | "MO" | "TU" | "WE" | "TH" | "FR" | "SA" | "day" }>;
+  skipWeekend?: boolean;
+  start: string;
+  endMode?: "never" | "after_n_occurrences" | "on_date";
+  endOccurrences?: number;
+  endDate?: string;
+  weekendSolveMode?: "before" | "after";
+}
+
+export interface BudgetScheduleEdit {
+  name?: string;
+  accountId?: string;
+  payeeId?: string;
+  amountMinor?: number;
+  amountRangeMinor?: ScheduleAmountRange;
+  amountOp?: "is" | "isapprox" | "isbetween";
+  date?: string | ScheduleRecurrenceConfig;
+}
+
+function validateBudgetScheduleEdit(edit: BudgetScheduleEdit): void {
+  if (Object.keys(edit).length === 0) {
+    throw new BudgetMaintenanceInputError("Add at least one schedule change");
+  }
+  if (edit.accountId !== undefined && !edit.accountId.trim()) {
+    throw new BudgetMaintenanceInputError("Choose an account");
+  }
+  if (edit.payeeId !== undefined && !edit.payeeId.trim()) {
+    throw new BudgetMaintenanceInputError("Choose a payee");
+  }
+  if (edit.name !== undefined && /[\u0000-\u001f\u007f]/u.test(edit.name)) {
+    throw new BudgetMaintenanceInputError(
+      "Schedule names must not contain control characters",
+    );
+  }
+
+  const hasAmount = edit.amountMinor !== undefined;
+  const hasRange = edit.amountRangeMinor !== undefined;
+  if (hasAmount && hasRange) {
+    throw new BudgetMaintenanceInputError(
+      "Choose a single amount or an amount range",
+    );
+  }
+  if (hasAmount || hasRange) {
+    if (!edit.amountOp) {
+      throw new BudgetMaintenanceInputError("Choose an amount rule");
+    }
+    if (hasRange !== (edit.amountOp === "isbetween")) {
+      throw new BudgetMaintenanceInputError(
+        "The amount rule does not match the amount values",
+      );
+    }
+    const values = hasRange
+      ? [edit.amountRangeMinor!.num1, edit.amountRangeMinor!.num2]
+      : [edit.amountMinor!];
+    if (
+      values.some(
+        (value) =>
+          !Number.isSafeInteger(value) ||
+          Math.abs(value) > MAX_TRANSACTION_AMOUNT,
+      )
+    ) {
+      throw new BudgetMaintenanceInputError(
+        "Schedule amounts must be whole cents within the supported limit",
+      );
+    }
+    if (hasRange && values[0]! > values[1]!) {
+      throw new BudgetMaintenanceInputError(
+        "The minimum amount must not exceed the maximum",
+      );
+    }
+  } else if (edit.amountOp !== undefined) {
+    throw new BudgetMaintenanceInputError(
+      "An amount rule requires an amount",
+    );
+  }
+
+  if (edit.date !== undefined) validateScheduleDate(edit.date);
+}
+
+function validateScheduleDate(
+  value: string | ScheduleRecurrenceConfig,
+): void {
+  if (typeof value === "string") {
+    if (!isIsoDate(value)) {
+      throw new BudgetMaintenanceInputError(
+        "Enter a schedule date as YYYY-MM-DD",
+      );
+    }
+    return;
+  }
+
+  const frequencies = new Set(["daily", "weekly", "monthly", "yearly"]);
+  if (!frequencies.has(value.frequency) || !isIsoDate(value.start)) {
+    throw new BudgetMaintenanceInputError(
+      "Choose a valid recurrence and start date",
+    );
+  }
+  if (
+    value.interval !== undefined &&
+    (!Number.isSafeInteger(value.interval) || value.interval < 1 || value.interval > 999)
+  ) {
+    throw new BudgetMaintenanceInputError(
+      "Repeat interval must be between 1 and 999",
+    );
+  }
+  if (value.skipWeekend !== undefined && typeof value.skipWeekend !== "boolean") {
+    throw new BudgetMaintenanceInputError("Invalid weekend setting");
+  }
+  if (
+    value.weekendSolveMode !== undefined &&
+    value.weekendSolveMode !== "before" &&
+    value.weekendSolveMode !== "after"
+  ) {
+    throw new BudgetMaintenanceInputError("Choose a valid weekend adjustment");
+  }
+  if (value.patterns !== undefined) {
+    if (
+      !Array.isArray(value.patterns) ||
+      value.patterns.length > 31 ||
+      value.patterns.some(
+        (pattern) =>
+          !Number.isSafeInteger(pattern.value) ||
+          pattern.value < -31 ||
+          pattern.value > 31 ||
+          !["SU", "MO", "TU", "WE", "TH", "FR", "SA", "day"].includes(
+            pattern.type,
+          ),
+      )
+    ) {
+      throw new BudgetMaintenanceInputError("Choose a valid repeat pattern");
+    }
+  }
+  if (
+    value.endMode !== undefined &&
+    !["never", "after_n_occurrences", "on_date"].includes(value.endMode)
+  ) {
+    throw new BudgetMaintenanceInputError("Choose a valid repeat end");
+  }
+  if (
+    value.endMode === "after_n_occurrences" &&
+    (!Number.isSafeInteger(value.endOccurrences) ||
+      (value.endOccurrences ?? 0) < 1 ||
+      (value.endOccurrences ?? 0) > 100_000)
+  ) {
+    throw new BudgetMaintenanceInputError(
+      "Occurrence count must be between 1 and 100,000",
+    );
+  }
+  if (
+    value.endMode === "on_date" &&
+    (!value.endDate || !isIsoDate(value.endDate) || value.endDate < value.start)
+  ) {
+    throw new BudgetMaintenanceInputError(
+      "The end date must be on or after the start date",
+    );
+  }
+}
+
+function isIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === value;
+}
 
 export interface BudgetMaintenanceApiPort {
   runBankSync(budgetId: string, encryptionPassword?: string): Promise<void>;
@@ -105,6 +279,12 @@ export interface BudgetMaintenanceApiPort {
     budgetId: string,
     scheduleId: string,
     name: string,
+    encryptionPassword?: string,
+  ): Promise<void>;
+  editSchedule(
+    budgetId: string,
+    scheduleId: string,
+    edit: BudgetScheduleEdit,
     encryptionPassword?: string,
   ): Promise<void>;
   skipSchedule(
@@ -790,6 +970,84 @@ export function createBudgetMaintenanceApi(
               scheduleId,
               { name: normalizedName },
               false,
+            );
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    async editSchedule(budgetId, scheduleId, edit, encryptionPassword) {
+      validateBudgetScheduleEdit(edit);
+      const normalizedName = edit.name?.trim();
+      if (edit.name !== undefined && (!normalizedName || normalizedName.length > 100)) {
+        throw new BudgetMaintenanceInputError(
+          "Schedule names must be between 1 and 100 characters",
+        );
+      }
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const schedules = await client.getSchedules();
+            const schedule = schedules.find(
+              (candidate) => candidate.id === scheduleId,
+            );
+            if (!schedule || schedule.completed) {
+              throw new BudgetMaintenanceInputError(
+                "Choose an active schedule in this budget",
+              );
+            }
+            if (
+              normalizedName &&
+              schedules.some(
+                (candidate) =>
+                  candidate.id !== scheduleId &&
+                  candidate.name?.trim() === normalizedName,
+              )
+            ) {
+              throw new BudgetMaintenanceInputError(
+                "A schedule with this name already exists",
+              );
+            }
+
+            const fields: Parameters<typeof client.updateSchedule>[1] = {};
+            if (normalizedName !== undefined) fields.name = normalizedName;
+            if (edit.accountId !== undefined) {
+              const account = (await client.getAccounts()).find(
+                (candidate) => candidate.id === edit.accountId,
+              );
+              if (!account || account.closed) {
+                throw new BudgetMaintenanceInputError(
+                  "Choose an open account in this budget",
+                );
+              }
+              fields.account = edit.accountId;
+            }
+            if (edit.payeeId !== undefined) {
+              const payee = (await client.getPayees()).find(
+                (candidate) => candidate.id === edit.payeeId,
+              );
+              if (!payee) {
+                throw new BudgetMaintenanceInputError(
+                  "Choose a payee in this budget",
+                );
+              }
+              fields.payee = edit.payeeId;
+            }
+            if (edit.amountMinor !== undefined) {
+              fields.amount = edit.amountMinor;
+            } else if (edit.amountRangeMinor !== undefined) {
+              fields.amount = edit.amountRangeMinor;
+            }
+            if (edit.amountOp !== undefined) fields.amountOp = edit.amountOp;
+            if (edit.date !== undefined) {
+              fields.date = edit.date as NonNullable<typeof fields.date>;
+            }
+
+            await client.updateSchedule(
+              scheduleId,
+              fields,
+              edit.accountId !== undefined || edit.date !== undefined,
             );
           },
           writeOptions(encryptionPassword),
