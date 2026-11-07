@@ -5,6 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class ActivitySearchTest {
@@ -182,6 +183,24 @@ class ActivitySearchTest {
         assertEquals(listOf(2, 1, 0), sortActivitySearchIndices(indices, records, ActivitySortOrder.AMOUNT_HIGH_TO_LOW))
         assertEquals(listOf(0, 1, 2), sortActivitySearchIndices(indices, records, ActivitySortOrder.AMOUNT_LOW_TO_HIGH))
         assertEquals(listOf(1, 0, 2), sortActivitySearchIndices(indices, records, ActivitySortOrder.PAYEE_A_TO_Z))
+    }
+
+    @Test
+    fun activityListReusesItsSortedRowsAfterReturningFromAnotherScreen() {
+        val transactions =
+            listOf(
+                TransactionItem("Target", "", "Jan 1", -4_000, "", dateIso = "2026-01-01"),
+                TransactionItem("Costco", "", "Jan 3", -12_000, "", dateIso = "2026-01-03"),
+                TransactionItem("Walmart", "", "Jan 2", 20_000, "", dateIso = "2026-01-02"),
+            )
+        val cache = ActivityTransactionSortCache()
+        val sorted = sortActivityTransactions(transactions, ActivitySortOrder.OLDEST_FIRST)
+
+        assertEquals(listOf("Target", "Walmart", "Costco"), sorted.map { it.payee })
+        assertNull(cache.get("budget-1", transactions, ActivitySortOrder.OLDEST_FIRST))
+        cache.put("budget-1", transactions, ActivitySortOrder.OLDEST_FIRST, sorted)
+        assertSame(sorted, cache.get("budget-1", transactions, ActivitySortOrder.OLDEST_FIRST))
+        assertNull(cache.get("budget-2", transactions, ActivitySortOrder.OLDEST_FIRST))
     }
 
     @Test

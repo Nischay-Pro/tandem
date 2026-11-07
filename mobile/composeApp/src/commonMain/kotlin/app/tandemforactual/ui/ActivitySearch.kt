@@ -134,6 +134,64 @@ internal fun sortActivitySearchIndices(
         if (primary != 0) primary else second.dateIso.compareTo(first.dateIso)
     }
 
+internal fun sortActivityTransactions(
+    transactions: List<TransactionItem>,
+    order: ActivitySortOrder,
+): List<TransactionItem> =
+    if (order == ActivitySortOrder.NEWEST_FIRST) {
+        transactions
+    } else {
+        transactions.sortedWith { first, second ->
+            val primary =
+                when (order) {
+                    ActivitySortOrder.NEWEST_FIRST -> second.dateIso.compareTo(first.dateIso)
+                    ActivitySortOrder.OLDEST_FIRST -> first.dateIso.compareTo(second.dateIso)
+                    ActivitySortOrder.AMOUNT_HIGH_TO_LOW ->
+                        kotlin.math.abs(second.amountMinorUnits).compareTo(kotlin.math.abs(first.amountMinorUnits))
+                    ActivitySortOrder.AMOUNT_LOW_TO_HIGH ->
+                        kotlin.math.abs(first.amountMinorUnits).compareTo(kotlin.math.abs(second.amountMinorUnits))
+                    ActivitySortOrder.PAYEE_A_TO_Z -> first.payee.compareTo(second.payee, ignoreCase = true)
+                }
+            if (primary != 0) primary else second.dateIso.compareTo(first.dateIso)
+        }
+    }
+
+internal class ActivityTransactionSortCache {
+    private var budgetId: String? = null
+    private var source: List<TransactionItem>? = null
+    private val byOrder = mutableMapOf<ActivitySortOrder, List<TransactionItem>>()
+
+    fun get(
+        budgetId: String,
+        source: List<TransactionItem>,
+        order: ActivitySortOrder,
+    ): List<TransactionItem>? {
+        resetFor(budgetId, source)
+        return byOrder[order]
+    }
+
+    fun put(
+        budgetId: String,
+        source: List<TransactionItem>,
+        order: ActivitySortOrder,
+        sorted: List<TransactionItem>,
+    ) {
+        resetFor(budgetId, source)
+        byOrder[order] = sorted
+    }
+
+    private fun resetFor(
+        budgetId: String,
+        source: List<TransactionItem>,
+    ) {
+        if (this.budgetId != budgetId || this.source !== source) {
+            this.budgetId = budgetId
+            this.source = source
+            byOrder.clear()
+        }
+    }
+}
+
 private fun activityDateFilterCoversMonth(
     filter: ActivitySearchFilter,
     monthId: String,

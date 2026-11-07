@@ -98,6 +98,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -167,9 +168,9 @@ import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SelectableTile
 import app.tandemforactual.ui.components.SurfaceCard
-import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
+import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.TandemLoadingIndicator
 import app.tandemforactual.ui.components.crossfadeTransitions
 import app.tandemforactual.ui.generated.resources.Res
@@ -191,9 +192,9 @@ import app.tandemforactual.ui.reports.ReportPeriodMode
 import app.tandemforactual.ui.reports.ReportRangePreset
 import app.tandemforactual.ui.reports.ReportWindow
 import app.tandemforactual.ui.reports.reportMonthLabel
-import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.Baby
 import com.composables.icons.lucide.Banknote
+import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.Bike
 import com.composables.icons.lucide.BookOpen
 import com.composables.icons.lucide.BriefcaseBusiness
@@ -202,6 +203,7 @@ import com.composables.icons.lucide.BusFront
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.CarFront
 import com.composables.icons.lucide.Carrot
+import com.composables.icons.lucide.Cat
 import com.composables.icons.lucide.ChartNoAxesCombined
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
@@ -215,15 +217,14 @@ import com.composables.icons.lucide.CloudCheck
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Coffee
-import com.composables.icons.lucide.Cat
 import com.composables.icons.lucide.CreditCard
 import com.composables.icons.lucide.Database
 import com.composables.icons.lucide.Dog
 import com.composables.icons.lucide.Droplets
 import com.composables.icons.lucide.Dumbbell
 import com.composables.icons.lucide.Eye
-import com.composables.icons.lucide.Flower2
 import com.composables.icons.lucide.FingerprintPattern
+import com.composables.icons.lucide.Flower2
 import com.composables.icons.lucide.FolderKey
 import com.composables.icons.lucide.Fuel
 import com.composables.icons.lucide.Gamepad2
@@ -235,10 +236,9 @@ import com.composables.icons.lucide.HeartPulse
 import com.composables.icons.lucide.House
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.KeyRound
-import com.composables.icons.lucide.Leaf
 import com.composables.icons.lucide.Landmark
 import com.composables.icons.lucide.LayoutDashboard
-import com.composables.icons.lucide.Lightbulb
+import com.composables.icons.lucide.Leaf
 import com.composables.icons.lucide.LockKeyhole
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Minus
@@ -248,11 +248,11 @@ import com.composables.icons.lucide.PaintbrushVertical
 import com.composables.icons.lucide.Palette
 import com.composables.icons.lucide.PawPrint
 import com.composables.icons.lucide.Pencil
-import com.composables.icons.lucide.Pill
 import com.composables.icons.lucide.PiggyBank
+import com.composables.icons.lucide.Pill
 import com.composables.icons.lucide.Plane
-import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.PlugZap
+import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Receipt
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
@@ -261,14 +261,13 @@ import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.Shirt
 import com.composables.icons.lucide.ShoppingBag
 import com.composables.icons.lucide.ShoppingCart
-import com.composables.icons.lucide.Sofa
 import com.composables.icons.lucide.Smartphone
+import com.composables.icons.lucide.Sofa
 import com.composables.icons.lucide.Stethoscope
 import com.composables.icons.lucide.SunMoon
 import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.TrainFront
 import com.composables.icons.lucide.Trash2
-import com.composables.icons.lucide.Trees
 import com.composables.icons.lucide.Tv
 import com.composables.icons.lucide.Utensils
 import com.composables.icons.lucide.WalletCards
@@ -1334,6 +1333,7 @@ fun TandemApp(
     val routeScrollStates = remember { mutableMapOf<String, ScrollState>() }
     val routeLazyListStates = remember { mutableMapOf<String, LazyListState>() }
     val reportsDataCache = remember { ReportsDataCache() }
+    val activitySortCache = remember { ActivityTransactionSortCache() }
     SideEffect { state.systemReduceMotionEnabled = systemReduceMotion }
     val reduceMotion = state.reduceMotionOverride ?: systemReduceMotion
     val apiClient = remember(allowInsecureLoopback) { TandemApiClient(allowInsecureLoopback) }
@@ -1372,6 +1372,8 @@ fun TandemApp(
     var backGestureOutgoingEntry by remember { mutableStateOf<AppRouteEntry?>(null) }
     var backPreviewRoute by remember { mutableStateOf<AppRouteEntry?>(null) }
     var backGestureCancelJob by remember { mutableStateOf<Job?>(null) }
+    var backButtonTransitionRunning by remember { mutableStateOf(false) }
+    var queuedBackPresses by remember { mutableStateOf(0) }
     var skipNextRouteTransition by remember { mutableStateOf(false) }
     var nextRouteEntryId by rememberSaveable { mutableStateOf(2L) }
     val backStack =
@@ -1569,6 +1571,49 @@ fun TandemApp(
             backStack.removeAt(backStack.lastIndex)
         }
     }
+    lateinit var startBackButtonTransition: () -> Unit
+    startBackButtonTransition = {
+        if (backStack.size > 1) {
+            val outgoingEntry = backStack.last()
+            val incomingEntry = backStack.getOrNull(backStack.lastIndex - 1)
+            if (incomingEntry == null) {
+                popRoute()
+            } else {
+                backGestureProgress = 0f
+                backGestureDirection = 1f
+                backGestureOutgoingEntry = outgoingEntry
+                backPreviewRoute = incomingEntry
+                backButtonTransitionRunning = true
+                backGestureCancelJob =
+                    coroutineScope.launch {
+                        val returnAnimation = Animatable(0f)
+                        returnAnimation.animateTo(
+                            targetValue = 1f,
+                            animationSpec = tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS),
+                        ) {
+                            backGestureProgress = value
+                        }
+                        backButtonTransitionRunning = false
+                        skipNextRouteTransition = true
+                        popRoute()
+                        backGestureCancelJob = null
+                        if (queuedBackPresses > 0) {
+                            backButtonTransitionRunning = true
+                            coroutineScope.launch {
+                                withFrameNanos { }
+                                backButtonTransitionRunning = false
+                                if (queuedBackPresses > 0 && backStack.size > 1) {
+                                    queuedBackPresses -= 1
+                                    startBackButtonTransition()
+                                } else {
+                                    queuedBackPresses = 0
+                                }
+                            }
+                        }
+                    }
+            }
+        }
+    }
     val selectTab: (AppRoute) -> Unit = { selectedTab ->
         if (backStack.lastOrNull()?.route != selectedTab) {
             routeTransitionDirection = 0f
@@ -1586,40 +1631,22 @@ fun TandemApp(
         }
     }
     val handleBack: () -> Unit = {
-        val backAnimationWasRunning = backGestureCancelJob != null
-        backGestureCancelJob?.cancel()
-        backGestureCancelJob = null
-        if (backGestureCommitPending || backAnimationWasRunning) {
-            backGestureCommitPending = false
-            backGestureProgress = 0f
-            backGestureOutgoingEntry = null
-            backPreviewRoute = null
-            skipNextRouteTransition = true
-            popRoute()
-        } else if (backStack.size > 1) {
-            val outgoingEntry = backStack.last()
-            val incomingEntry = backStack.getOrNull(backStack.lastIndex - 1)
-            if (incomingEntry == null) {
-                popRoute()
-            } else {
-                // Button back runs the same route pair and progress transform as predictive back.
+        if (backButtonTransitionRunning) {
+            queuedBackPresses += 1
+        } else {
+            val backAnimationWasRunning = backGestureCancelJob != null
+            backGestureCancelJob?.cancel()
+            backGestureCancelJob = null
+            if (backGestureCommitPending || backAnimationWasRunning) {
+                backGestureCommitPending = false
                 backGestureProgress = 0f
-                backGestureDirection = 1f
-                backGestureOutgoingEntry = outgoingEntry
-                backPreviewRoute = incomingEntry
-                backGestureCancelJob =
-                    coroutineScope.launch {
-                        val returnAnimation = Animatable(0f)
-                        returnAnimation.animateTo(
-                            targetValue = 1f,
-                            animationSpec = tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS),
-                        ) {
-                            backGestureProgress = value
-                        }
-                        skipNextRouteTransition = true
-                        popRoute()
-                        backGestureCancelJob = null
-                    }
+                backGestureOutgoingEntry = null
+                backPreviewRoute = null
+                skipNextRouteTransition = true
+                popRoute()
+            } else if (backStack.size > 1) {
+                // Button back runs the same route pair and progress transform as predictive back.
+                startBackButtonTransition()
             }
         }
     }
@@ -2060,6 +2087,7 @@ fun TandemApp(
                 backGestureCommitPending = progress >= 1f
                 backGestureCancelJob?.cancel()
                 backGestureCancelJob = null
+                backButtonTransitionRunning = false
                 backGestureProgress = progress
                 if (backGestureOutgoingEntry == null) {
                     backGestureOutgoingEntry = backStack.lastOrNull()
@@ -2069,6 +2097,7 @@ fun TandemApp(
                 }
             } else if (backGestureProgress > 0f) {
                 backGestureCommitPending = false
+                backButtonTransitionRunning = false
                 backGestureCancelJob?.cancel()
                 backGestureCancelJob =
                     coroutineScope.launch {
@@ -2192,6 +2221,7 @@ fun TandemApp(
                                 merchantIconCatalog = merchantIconCatalog,
                                 merchantIconCatalogLoadError = merchantIconCatalogLoadError,
                                 liveTransactions = liveTransactions,
+                                activitySortCache = activitySortCache,
                                 liveAccounts = liveAccounts,
                                 liveBudgetMonth = liveBudgetMonth,
                                 onSyncNow = syncNow,
@@ -2280,8 +2310,14 @@ fun TandemApp(
                     .background(appBackgroundBrush(state.backgroundStyle, palette))
                     .safeDrawingPadding(),
         ) {
-            val stationaryTabShell = route.isTab()
-            if (stationaryTabShell) renderHeader(route)
+            val backTargetTab = backPreviewRoute?.route?.takeIf { it.isTab() }
+            val tabShellRoute =
+                route.takeIf { it.isTab() }
+                    ?: backTargetTab
+                    ?: backStack.dropLast(1).lastOrNull { it.route.isTab() }?.route
+            val stationaryTabShell = tabShellRoute != null
+            val shellHeaderRoute = if (backTargetTab != null) backTargetTab else route
+            if (tabShellRoute != null) renderHeader(shellHeaderRoute)
             Box(
                 modifier =
                     Modifier
@@ -2361,7 +2397,13 @@ fun TandemApp(
                     )
                 }
             }
-            if (stationaryTabShell) BottomNavigation(route, navigation.selectTab)
+            if (tabShellRoute != null) {
+                BottomNavigation(
+                    tabShellRoute,
+                    navigation.selectTab,
+                    visible = route.isTab() || backTargetTab != null,
+                )
+            }
         }
     }
 }
@@ -2600,6 +2642,7 @@ private fun Modifier.wrapContentAlignment(): Modifier = this
 private fun BottomNavigation(
     selected: AppRoute,
     selectTab: (AppRoute) -> Unit,
+    visible: Boolean = true,
 ) {
     val palette = tandemPalette
     val items =
@@ -2614,9 +2657,15 @@ private fun BottomNavigation(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .graphicsLayer { alpha = if (visible) 1f else 0f }
                 .background(
                     palette.surface,
-                ).padding(start = TandemSpacing.small, end = TandemSpacing.small, top = TandemSpacing.small, bottom = TandemSpacing.small),
+                ).padding(
+                    start = TandemSpacing.small,
+                    end = TandemSpacing.small,
+                    top = TandemSpacing.small,
+                    bottom = TandemSpacing.small,
+                ),
         horizontalArrangement = Arrangement.SpaceAround,
     ) {
         items.forEach { (route, label) ->
@@ -2640,12 +2689,16 @@ private fun BottomNavigation(
                         .clip(RoundedCornerShape(TandemShapes.medium))
                         .selectable(
                             selected = active,
+                            enabled = visible,
                             role = Role.Tab,
                             onClick = { selectTab(route) },
                         ).semantics(mergeDescendants = true) {
-                            contentDescription = label
-                            this.selected = active
-                        }.padding(vertical = TandemSpacing.extraSmall),
+                            if (visible) {
+                                contentDescription = label
+                                this.selected = active
+                            }
+                        }.then(if (visible) Modifier else Modifier.clearAndSetSemantics {})
+                        .padding(vertical = TandemSpacing.extraSmall),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
             ) {
@@ -2800,6 +2853,7 @@ private fun ScreenContent(
     merchantIconCatalog: MerchantIconCatalog?,
     merchantIconCatalogLoadError: String?,
     liveTransactions: List<TransactionItem>,
+    activitySortCache: ActivityTransactionSortCache,
     liveAccounts: List<LiveAccountSummary>,
     liveBudgetMonth: LiveBudgetMonthSummary?,
     onSyncNow: () -> Unit,
@@ -2842,7 +2896,15 @@ private fun ScreenContent(
             )
         AppRoute.ACCOUNT_DETAIL -> AccountDetailScreen(state, navigation, liveAccounts, liveTransactions)
         AppRoute.ACCOUNT_OPTIONS -> AccountOptionsScreen(state, liveAccounts, mobileSession, navigation)
-        AppRoute.ACTIVITY -> ActivityScreen(state, navigation, liveTransactions, mobileSession.isSyncing, onSyncNow)
+        AppRoute.ACTIVITY ->
+            ActivityScreen(
+                state,
+                navigation,
+                liveTransactions,
+                activitySortCache,
+                mobileSession.isSyncing,
+                onSyncNow,
+            )
         AppRoute.REPORTS ->
             ReportsScreen(
                 state,
@@ -5281,7 +5343,13 @@ private fun CategoryDetailScreen(
             onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showEditDialog = false },
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
-            SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 520.dp).padding(horizontal = 16.dp).heightIn(max = 720.dp)) {
+            SurfaceCard(
+                Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 520.dp)
+                    .padding(horizontal = 16.dp)
+                    .heightIn(max = 720.dp),
+            ) {
                 Column(
                     Modifier.fillMaxWidth().padding(TandemSpacing.large),
                     verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
@@ -5317,7 +5385,12 @@ private fun CategoryDetailScreen(
                     ) {
                         TextFieldCard("Name", editName, { editName = it }, TextFieldOptions(placeholder = category.name))
                         LabelText("Choose an icon")
-                        TextFieldCard("Find an icon", iconSearch, { iconSearch = it }, TextFieldOptions(placeholder = "e.g. groceries, rent"))
+                        TextFieldCard(
+                            "Find an icon",
+                            iconSearch,
+                            { iconSearch = it },
+                            TextFieldOptions(placeholder = "e.g. groceries, rent"),
+                        )
                         val visibleIconChoices = categoryIconChoices.filter { it.contains(iconSearch.trim(), ignoreCase = true) }
                         if (visibleIconChoices.isEmpty()) {
                             BodyText("No icons match that search.")
@@ -5341,7 +5414,12 @@ private fun CategoryDetailScreen(
                                             horizontalAlignment = Alignment.CenterHorizontally,
                                             verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
                                         ) {
-                                            Icon(icon, contentDescription = null, modifier = Modifier.size(23.dp), tint = tandemPalette.accent)
+                                            Icon(
+                                                icon,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(23.dp),
+                                                tint = tandemPalette.accent,
+                                            )
                                             Text(
                                                 if (choice == "Automatic") "Auto" else choice,
                                                 color = tandemPalette.text,
@@ -5408,7 +5486,13 @@ private fun CategoryDetailScreen(
             onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showDeleteDialog = false },
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
-            SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 520.dp).padding(horizontal = 16.dp).heightIn(max = 720.dp)) {
+            SurfaceCard(
+                Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 520.dp)
+                    .padding(horizontal = 16.dp)
+                    .heightIn(max = 720.dp),
+            ) {
                 Column(
                     Modifier.fillMaxWidth().padding(TandemSpacing.large),
                     verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
@@ -5472,7 +5556,13 @@ private fun CategoryDetailScreen(
                                     horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                                 ) {
                                     Icon(
-                                        if (destinationId == null) Lucide.CircleDot else state.categoryIconFor(destinationId, destinationName),
+                                        if (destinationId ==
+                                            null
+                                        ) {
+                                            Lucide.CircleDot
+                                        } else {
+                                            state.categoryIconFor(destinationId, destinationName)
+                                        },
                                         contentDescription = null,
                                         modifier = Modifier.size(21.dp),
                                         tint = tandemPalette.accent,
@@ -5485,7 +5575,14 @@ private fun CategoryDetailScreen(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
-                                    if (selected) Icon(Lucide.Check, contentDescription = "Selected", modifier = Modifier.size(18.dp), tint = tandemPalette.accent)
+                                    if (selected) {
+                                        Icon(
+                                            Lucide.Check,
+                                            contentDescription = "Selected",
+                                            modifier = Modifier.size(18.dp),
+                                            tint = tandemPalette.accent,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -6101,34 +6198,25 @@ private fun ActivityScreen(
     state: AppState,
     navigation: AppNavigation,
     liveTransactions: List<TransactionItem>,
+    sortCache: ActivityTransactionSortCache,
     isRefreshing: Boolean,
     onSyncNow: () -> Unit,
 ) {
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
-    val transactions = if (isLiveBudget) liveTransactions.filterNot(TransactionItem::isSplitParent) else previewTransactions
+    val transactionSource = if (isLiveBudget) liveTransactions else previewTransactions
+    val transactions = if (isLiveBudget) transactionSource.filterNot(TransactionItem::isSplitParent) else transactionSource
     val selectedSortOrder = state.activitySortOrder
-    var sortedTransactions by remember(state.selectedBudgetId) { mutableStateOf(transactions) }
-    LaunchedEffect(transactions, selectedSortOrder) {
+    val cachedSorted = sortCache.get(state.selectedBudgetId, transactionSource, selectedSortOrder)
+    var sortedTransactions by
+        remember(state.selectedBudgetId, transactionSource, selectedSortOrder) {
+            mutableStateOf(cachedSorted ?: transactions)
+        }
+    LaunchedEffect(state.selectedBudgetId, transactionSource, selectedSortOrder) {
         sortedTransactions =
-            if (selectedSortOrder == ActivitySortOrder.NEWEST_FIRST) {
-                transactions
-            } else {
-                withContext(Dispatchers.Default) {
-                    transactions.sortedWith { first, second ->
-                        val primary =
-                            when (selectedSortOrder) {
-                                ActivitySortOrder.NEWEST_FIRST -> second.dateIso.compareTo(first.dateIso)
-                                ActivitySortOrder.OLDEST_FIRST -> first.dateIso.compareTo(second.dateIso)
-                                ActivitySortOrder.AMOUNT_HIGH_TO_LOW ->
-                                    kotlin.math.abs(second.amountMinorUnits).compareTo(kotlin.math.abs(first.amountMinorUnits))
-                                ActivitySortOrder.AMOUNT_LOW_TO_HIGH ->
-                                    kotlin.math.abs(first.amountMinorUnits).compareTo(kotlin.math.abs(second.amountMinorUnits))
-                                ActivitySortOrder.PAYEE_A_TO_Z -> first.payee.compareTo(second.payee, ignoreCase = true)
-                            }
-                        if (primary != 0) primary else second.dateIso.compareTo(first.dateIso)
-                    }
-                }
-            }
+            sortCache.get(state.selectedBudgetId, transactionSource, selectedSortOrder)
+                ?: withContext(Dispatchers.Default) {
+                    sortActivityTransactions(transactions, selectedSortOrder)
+                }.also { sortCache.put(state.selectedBudgetId, transactionSource, selectedSortOrder, it) }
     }
     PageLazyColumn(
         isRefreshing = isRefreshing,
