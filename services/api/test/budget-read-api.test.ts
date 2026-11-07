@@ -187,6 +187,196 @@ describe("budget read API", () => {
     expect(fake.applySnapshot).toHaveBeenCalledOnce();
   });
 
+  it("uses an unchanged cached snapshot for a new snapshot page", async () => {
+    const fake = createApi();
+    const displaySettings = {
+      currencyCode: "CAD",
+      currencySymbol: "CA$",
+      currencyFractionDigits: 2,
+      numberFormat: null,
+      hideFraction: false,
+      currencySymbolPosition: "before" as const,
+      currencySpaceBetweenAmountAndSymbol: false,
+    };
+    const readWithSettings = vi.fn(async () => ({
+      records: [],
+      displaySettings,
+      unchanged: true,
+    }));
+    const readSnapshot = vi.fn(async () => snapshot);
+    const api = new BudgetReadApi(
+      { withBudgetLock: fake.lock } as BudgetLockPort,
+      {
+        read: fake.reader.read,
+        readWithSettings,
+      } as unknown as BudgetSnapshotReader,
+      {
+        readSnapshot,
+        readSnapshotPage: fake.readSnapshotPage,
+        applySnapshot: fake.applySnapshot,
+      } as unknown as BudgetProjectionStore,
+      "feed-epoch-1",
+    );
+
+    await expect(
+      api.getSnapshotPage({ budgetId: "budget-1", limit: 10 }),
+    ).resolves.toMatchObject({
+      generation: snapshot.generation,
+      cursor: snapshot.cursor,
+      displaySettings,
+    });
+    expect(readSnapshot).toHaveBeenCalledOnce();
+    expect(fake.applySnapshot).not.toHaveBeenCalled();
+  });
+
+  it("uses a full Actual read when an unchanged budget has no saved snapshot", async () => {
+    const fake = createApi();
+    const firstRead = {
+      records: [],
+      displaySettings: null,
+      unchanged: true,
+    };
+    const fullRead = { records: snapshot.records, displaySettings: null };
+    const readWithSettings = vi.fn(async () => firstRead);
+    const readFullWithSettings = vi.fn(async () => fullRead);
+    const reader = {
+      read: fake.reader.read,
+      readWithSettings,
+      readFullWithSettings,
+    } as unknown as BudgetSnapshotReader;
+    const readSnapshot = vi.fn(async () => undefined);
+    const api = new BudgetReadApi(
+      { withBudgetLock: fake.lock } as BudgetLockPort,
+      reader,
+      {
+        readSnapshot,
+        applySnapshot: fake.applySnapshot,
+        applySnapshotForRefresh: fake.applySnapshotForRefresh,
+        readSnapshotPage: fake.readSnapshotPage,
+      } as unknown as BudgetProjectionStore,
+      "feed-epoch-1",
+    );
+
+    await api.getSnapshot("budget-1");
+    await api.getSnapshotPage({ budgetId: "budget-1", limit: 10 });
+
+    expect(readWithSettings).toHaveBeenCalledTimes(2);
+    expect(readFullWithSettings).toHaveBeenCalledTimes(2);
+    expect(fake.applySnapshotForRefresh).toHaveBeenCalledOnce();
+  });
+
+  it("refreshes unchanged change feeds through stores with only full snapshots", async () => {
+    const fake = createApi();
+    const readWithSettings = vi.fn(async () => ({
+      records: [],
+      displaySettings: null,
+      unchanged: true,
+    }));
+    const readFullWithSettings = vi.fn(async () => ({
+      records: snapshot.records,
+      displaySettings: null,
+    }));
+    const readSnapshot = vi.fn(async () => undefined);
+    const api = new BudgetReadApi(
+      { withBudgetLock: fake.lock } as BudgetLockPort,
+      {
+        read: fake.reader.read,
+        readWithSettings,
+        readFullWithSettings,
+      } as unknown as BudgetSnapshotReader,
+      {
+        isSnapshotFresh: vi.fn(async () => false),
+        readSnapshot,
+        applySnapshot: fake.applySnapshot,
+        readChanges: fake.readChanges,
+      } as unknown as BudgetProjectionStore,
+      "feed-epoch-1",
+    );
+
+    await expect(
+      api.getChanges({
+        budgetId: "budget-1",
+        generation: snapshot.generation,
+        cursor: "2",
+        limit: 25,
+      }),
+    ).resolves.toMatchObject({ displaySettings: null });
+    expect(readFullWithSettings).toHaveBeenCalledOnce();
+    expect(fake.applySnapshot).toHaveBeenCalledOnce();
+  });
+
+  it("uses a cached snapshot when unchanged and refreshes with checkpoint support otherwise", async () => {
+    const fake = createApi();
+    const readWithSettings = vi.fn(async () => ({
+      records: [],
+      displaySettings: null,
+      unchanged: true,
+    }));
+    const cachedReader = {
+      read: fake.reader.read,
+      readWithSettings,
+    } as unknown as BudgetSnapshotReader;
+    const readSnapshot = vi.fn(async () => snapshot);
+    const cachedApi = new BudgetReadApi(
+      { withBudgetLock: fake.lock } as BudgetLockPort,
+      cachedReader,
+      {
+        isSnapshotFresh: vi.fn(async () => false),
+        readSnapshot,
+        readChanges: fake.readChanges,
+      } as unknown as BudgetProjectionStore,
+      "feed-epoch-1",
+    );
+
+    await expect(
+      cachedApi.getChanges({
+        budgetId: "budget-1",
+        generation: snapshot.generation,
+        cursor: "2",
+        limit: 10,
+      }),
+    ).resolves.toMatchObject({ displaySettings: null });
+    expect(readSnapshot).toHaveBeenCalledOnce();
+    expect(fake.reader.read).not.toHaveBeenCalled();
+
+    const checkpointFake = createApi();
+    const checkpointReader = {
+      read: checkpointFake.reader.read,
+      readWithSettings: vi.fn(async () => ({
+        records: [],
+        displaySettings: null,
+        unchanged: true,
+      })),
+      readFullWithSettings: vi.fn(async () => ({
+        records: snapshot.records,
+        displaySettings: null,
+      })),
+    } as unknown as BudgetSnapshotReader;
+    const noSnapshot = vi.fn(async () => undefined);
+    const checkpointApi = new BudgetReadApi(
+      { withBudgetLock: checkpointFake.lock } as BudgetLockPort,
+      checkpointReader,
+      {
+        isSnapshotFresh: vi.fn(async () => false),
+        readSnapshot: noSnapshot,
+        applySnapshotForRefresh: checkpointFake.applySnapshotForRefresh,
+        readChanges: checkpointFake.readChanges,
+      } as unknown as BudgetProjectionStore,
+      "feed-epoch-1",
+    );
+
+    await checkpointApi.getChanges({
+      budgetId: "budget-1",
+      generation: snapshot.generation,
+      cursor: "2",
+      limit: 10,
+    });
+
+    expect(noSnapshot).toHaveBeenCalledOnce();
+    expect(checkpointReader.readFullWithSettings).toHaveBeenCalledOnce();
+    expect(checkpointFake.applySnapshotForRefresh).toHaveBeenCalledOnce();
+  });
+
   it("fails clearly when a refresh does not create snapshot page state", async () => {
     const fake = createApi();
     const api = new BudgetReadApi(

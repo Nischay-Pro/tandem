@@ -423,7 +423,7 @@ function createHarness(
   let invokePredicateWith: unknown[] = [];
 
   const store: ActualTransactionStore = {
-    async read() {
+    async read(id) {
       readCount += 1;
       if (readErrors.has(readCount)) {
         throw readErrors.get(readCount);
@@ -436,7 +436,9 @@ function createHarness(
         if (next instanceof Error) {
           throw next;
         }
-        actual = next;
+        if (id === request.transactionId) {
+          actual = next;
+        }
         return next;
       }
       return actual;
@@ -1300,6 +1302,70 @@ describe("Actual transaction reconciliation", () => {
     expect(harness.actual).toEqual(actualFrom(base));
   });
 
+  it.each([
+    {
+      label: "a transfer link changed",
+      base: createSnapshot({ transferId: "transfer-1" }),
+      latest: createSnapshot(),
+      counterpart: undefined,
+    },
+    {
+      label: "a missing counterpart",
+      base: createSnapshot({ transferId: "transfer-1" }),
+      latest: createSnapshot({ transferId: "transfer-1" }),
+      counterpart: undefined,
+    },
+    {
+      label: "a counterpart with the wrong ID",
+      base: createSnapshot({ transferId: "transfer-1" }),
+      latest: createSnapshot({ transferId: "transfer-1" }),
+      counterpart: createSnapshot({
+        id: "wrong-id",
+        amount: -1500,
+        transferId: "transaction-1",
+      }),
+    },
+    {
+      label: "a counterpart linked to a different transaction",
+      base: createSnapshot({ transferId: "transfer-1" }),
+      latest: createSnapshot({ transferId: "transfer-1" }),
+      counterpart: createSnapshot({
+        id: "transfer-1",
+        amount: -1500,
+        transferId: "other-transaction",
+      }),
+    },
+    {
+      label: "a counterpart with an unbalanced amount",
+      base: createSnapshot({ transferId: "transfer-1" }),
+      latest: createSnapshot({ transferId: "transfer-1" }),
+      counterpart: createSnapshot({
+        id: "transfer-1",
+        amount: -1400,
+        transferId: "transaction-1",
+      }),
+    },
+  ])("rejects $label before editing a transfer", async (scenario) => {
+    const request = createRequest({
+      baseSnapshot: scenario.base as unknown as JsonValue,
+      baseRevision: createTransactionRevision(scenario.base),
+    });
+    const harness = createHarness(request);
+    const update = vi.spyOn(harness.store, "update");
+    harness.actual = actualFrom(scenario.latest);
+    harness.setReadResults([
+      USE_CURRENT,
+      scenario.counterpart === undefined
+        ? undefined
+        : actualFrom(scenario.counterpart),
+    ]);
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.conflict?.conflictType).toMatch(/transfer-pair/);
+    expect(update).not.toHaveBeenCalled();
+  });
+
   it("records a same-field conflict without overwriting Actual", async () => {
     const request = createRequest();
     const harness = createHarness(request);
@@ -1420,7 +1486,11 @@ describe("Actual transaction reconciliation", () => {
     });
     const request = createRequest();
     const harness = createHarness(request);
-    harness.actual = actualFrom(createSnapshot({ subtransactions: [child] }));
+    harness.actual = actualFrom(createSnapshot());
+    harness.setReadResults([
+      USE_CURRENT,
+      actualFrom(createSnapshot({ subtransactions: [child] })),
+    ]);
 
     const result = await harness.reconciler.submit(request);
 
@@ -1483,21 +1553,82 @@ describe("Actual transaction reconciliation", () => {
     });
   });
 
-  it("records a transfer pair that cannot be verified after an update", async () => {
-    const request = createRequest();
-    const harness = createHarness(request);
-    harness.setReadResults([
-      USE_CURRENT,
-      actualFrom(createSnapshot({ amount: 1200, transferId: "transfer-2" })),
-    ]);
+  it.each([
+    {
+      label: "a missing counterpart",
+      counterpart: undefined,
+      conflict: "transfer-pair-incomplete-after-write",
+    },
+    {
+      label: "a counterpart with the wrong ID",
+      counterpart: createSnapshot({
+        id: "wrong-id",
+        amount: -1200,
+        transferId: "transaction-1",
+      }),
+      conflict: "transfer-pair-changed-after-write",
+    },
+    {
+      label: "a counterpart linked to another transaction",
+      counterpart: createSnapshot({
+        id: "transfer-2",
+        amount: -1200,
+        transferId: "other-transaction",
+      }),
+      conflict: "transfer-pair-changed-after-write",
+    },
+    {
+      label: "an unbalanced counterpart",
+      counterpart: createSnapshot({
+        id: "transfer-2",
+        amount: -1500,
+        transferId: "transaction-1",
+      }),
+      conflict: "transfer-pair-changed-after-write",
+    },
+    {
+      label: "a balanced counterpart",
+      counterpart: createSnapshot({
+        id: "transfer-2",
+        amount: -1200,
+        transferId: "transaction-1",
+      }),
+      conflict: null,
+    },
+  ])(
+    "verifies the paired transfer after a write with $label",
+    async (scenario) => {
+      const base = createSnapshot({ transferId: "transfer-2" });
+      const request = createRequest({
+        baseSnapshot: base as unknown as JsonValue,
+        baseRevision: createTransactionRevision(base),
+      });
+      const harness = createHarness(request);
+      harness.setReadResults([
+        USE_CURRENT,
+        actualFrom(
+          createSnapshot({
+            id: "transfer-2",
+            amount: -1500,
+            transferId: "transaction-1",
+          }),
+        ),
+        USE_CURRENT,
+        scenario.counterpart === undefined
+          ? undefined
+          : actualFrom(scenario.counterpart),
+      ]);
 
-    const result = await harness.reconciler.submit(request);
+      const result = await harness.reconciler.submit(request);
 
-    expect(result.conflict).toMatchObject({
-      conflictType: "transfer-pair-changed-after-write",
-      conflictingFields: ["transferId", "amount"],
-    });
-  });
+      if (scenario.conflict === null) {
+        expect(result.operation.status).toBe("committed");
+        expect(result.conflict).toBeNull();
+      } else {
+        expect(result.conflict?.conflictType).toBe(scenario.conflict);
+      }
+    },
+  );
 
   it("records a conflict when Actual changes the written field before read-back", async () => {
     const request = createRequest();

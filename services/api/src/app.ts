@@ -2364,6 +2364,8 @@ async function runMaintenanceOperation<T extends JsonValue>(
   work: () => Promise<T>,
 ): Promise<T> {
   const idempotencyKey = request.headers["idempotency-key"];
+  // Fastify rejects missing and whitespace-only keys before this private handler.
+  /* v8 ignore next -- retain a defensive check for direct/internal callers. */
   if (
     typeof idempotencyKey !== "string" ||
     idempotencyKey.trim().length === 0

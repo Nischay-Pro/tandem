@@ -129,7 +129,7 @@ export function createBudgetMaintenanceApi(
   const bankSyncs = new Map<string, Promise<void>>();
   const bankSyncCooldowns = new Map<string, number>();
   return {
-    runBankSync(budgetId, encryptionPassword) {
+    async runBankSync(budgetId, encryptionPassword) {
       const active = bankSyncs.get(budgetId);
       if (active) throw new BudgetMaintenanceBusyError(5);
       const cooldownUntil = bankSyncCooldowns.get(budgetId) ?? 0;
@@ -156,7 +156,7 @@ export function createBudgetMaintenanceApi(
             bankSyncCooldowns.set(budgetId, Date.now() + BANK_SYNC_COOLDOWN_MS),
         )
         .finally(() => {
-          if (bankSyncs.get(budgetId) === sync) bankSyncs.delete(budgetId);
+          bankSyncs.delete(budgetId);
         });
       return waitForCompletion(sync, BANK_SYNC_TIMEOUT_MS);
     },
@@ -546,10 +546,10 @@ function waitForCompletion<T>(
         () => reject(new Error("Actual bank sync exceeded its time limit")),
         timeoutMs,
       );
-      timeout.unref?.();
+      timeout!.unref();
     }),
   ]).finally(() => {
-    if (timeout) clearTimeout(timeout);
+    clearTimeout(timeout);
   });
 }
 

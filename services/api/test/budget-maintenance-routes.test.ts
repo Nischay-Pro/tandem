@@ -27,7 +27,10 @@ const device: DeviceRecord = {
   revokedAt: null,
 };
 
-async function createApi(maintenanceConfigured = true) {
+async function createApi(
+  maintenanceConfigured = true,
+  journalConfigured = true,
+) {
   const budgetMaintenanceApi: BudgetMaintenanceApiPort = {
     runBankSync: vi.fn(async () => undefined),
     createAccount: vi.fn(async () => undefined),
@@ -125,12 +128,13 @@ async function createApi(maintenanceConfigured = true) {
     budgetMaintenanceApi,
     authenticate,
     journal,
+    operations,
     app: await buildApiApp(
       { ping, close },
       {
         deviceAuth,
         ...(maintenanceConfigured ? { budgetMaintenanceApi } : {}),
-        maintenanceJournal: journal,
+        ...(journalConfigured ? { maintenanceJournal: journal } : {}),
       },
     ),
   };
@@ -141,7 +145,138 @@ const testHeaders = () => ({
   "idempotency-key": randomUUID(),
 });
 
+const maintenanceRouteCases = (routeBudgetId = budgetId) => [
+  {
+    method: "POST" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/bank-sync`,
+  },
+  {
+    method: "POST" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/accounts`,
+    payload: { name: "Checking", offbudget: false },
+  },
+  {
+    method: "POST" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/accounts/account-1/close`,
+    payload: { transferAccountId: null, transferCategoryId: null },
+  },
+  {
+    method: "PATCH" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/accounts/account-1`,
+    payload: { name: "Daily checking" },
+  },
+  {
+    method: "POST" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/accounts/account-1/reopen`,
+  },
+  {
+    method: "POST" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/payees`,
+    payload: { name: "Corner Market" },
+  },
+  {
+    method: "POST" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/categories`,
+    payload: { name: "Dining", categoryGroupId: "group-1" },
+  },
+  {
+    method: "PUT" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/categories/category-1/budget-amount`,
+    payload: { month: "2026-11", amountMinor: 1200 },
+  },
+  {
+    method: "POST" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/categories/move-money`,
+    payload: {
+      month: "2026-11",
+      fromCategoryId: "category-1",
+      toCategoryId: "category-2",
+      amountMinor: 1200,
+    },
+  },
+  {
+    method: "PATCH" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/categories/category-1`,
+    payload: { name: "Home care" },
+  },
+  {
+    method: "DELETE" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/categories/category-1`,
+    payload: { transferCategoryId: null },
+  },
+];
+
+const injectMaintenanceRequest = (
+  app: Awaited<ReturnType<typeof buildApiApp>>,
+  route: ReturnType<typeof maintenanceRouteCases>[number],
+  headers?: ReturnType<typeof testHeaders>,
+) =>
+  app.inject({
+    method: route.method,
+    url: route.url,
+    ...(headers ? { headers } : {}),
+    ...(route.payload === undefined ? {} : { payload: route.payload }),
+  });
+
 describe("budget maintenance routes", () => {
+  it("applies auth, validation, budget-scope, and configuration gates to every route", async () => {
+    const routes = maintenanceRouteCases();
+    const unauthorizedFake = await createApi();
+    const unauthorized = await Promise.all(
+      routes.map((route) =>
+        injectMaintenanceRequest(unauthorizedFake.app, route),
+      ),
+    );
+    expect(unauthorized.map((response) => response.statusCode)).toEqual(
+      routes.map(() => 401),
+    );
+    await unauthorizedFake.app.close();
+
+    const invalidBudgetFake = await createApi();
+    const invalidBudget = await Promise.all(
+      maintenanceRouteCases("%20").map((route) =>
+        injectMaintenanceRequest(invalidBudgetFake.app, route, testHeaders()),
+      ),
+    );
+    expect(invalidBudget.map((response) => response.statusCode)).toEqual(
+      routes.map(() => 400),
+    );
+    await invalidBudgetFake.app.close();
+
+    const outOfScopeFake = await createApi();
+    const outOfScope = await Promise.all(
+      maintenanceRouteCases("other-budget").map((route) =>
+        injectMaintenanceRequest(outOfScopeFake.app, route, testHeaders()),
+      ),
+    );
+    expect(outOfScope.map((response) => response.statusCode)).toEqual(
+      routes.map(() => 404),
+    );
+    await outOfScopeFake.app.close();
+
+    const missingActualFake = await createApi(false);
+    const missingActual = await Promise.all(
+      routes.map((route) =>
+        injectMaintenanceRequest(missingActualFake.app, route, testHeaders()),
+      ),
+    );
+    expect(missingActual.map((response) => response.statusCode)).toEqual(
+      routes.map(() => 503),
+    );
+    await missingActualFake.app.close();
+
+    const missingJournalFake = await createApi(true, false);
+    const missingJournal = await Promise.all(
+      routes.map((route) =>
+        injectMaintenanceRequest(missingJournalFake.app, route, testHeaders()),
+      ),
+    );
+    expect(missingJournal.map((response) => response.statusCode)).toEqual(
+      routes.map(() => 503),
+    );
+    await missingJournalFake.app.close();
+  });
+
   it("requires a paired device and budget scope for bank sync", async () => {
     const fake = await createApi();
     const unauthorized = await fake.app.inject({
@@ -354,6 +489,122 @@ describe("budget maintenance routes", () => {
     await fake.app.close();
   });
 
+  it("handles replay states and journal failures without retrying Actual", async () => {
+    const route = {
+      method: "POST" as const,
+      url: `/api/v1/budgets/${budgetId}/accounts`,
+      payload: { name: "Savings", offbudget: false },
+    };
+
+    for (const [status, code] of [
+      ["applying", "operation_in_progress"],
+      ["uncertain", "operation_uncertain"],
+      ["rejected", "operation_rejected"],
+      ["conflict", "operation_uncertain"],
+    ] as const) {
+      const fake = await createApi();
+      const headers = testHeaders();
+      const first = await fake.app.inject({ ...route, headers });
+      const operation = fake.operations.values().next().value;
+      expect(first.statusCode).toBe(200);
+      expect(operation).toBeDefined();
+      operation!.status = status;
+      const replay = await fake.app.inject({ ...route, headers });
+
+      expect(replay.statusCode).toBe(409);
+      expect(replay.json().error.code).toBe(code);
+      expect(fake.budgetMaintenanceApi.createAccount).toHaveBeenCalledOnce();
+      await fake.app.close();
+    }
+
+    const queuedFake = await createApi();
+    const queuedHeaders = testHeaders();
+    await queuedFake.app.inject({ ...route, headers: queuedHeaders });
+    const queuedOperation = queuedFake.operations.values().next().value!;
+    queuedOperation.status = "queued";
+    vi.spyOn(queuedFake.journal, "claim").mockResolvedValueOnce({
+      operation: queuedOperation,
+      claimed: false,
+    });
+    const queuedReplay = await queuedFake.app.inject({
+      ...route,
+      headers: queuedHeaders,
+    });
+    expect(queuedReplay.statusCode).toBe(409);
+    expect(queuedReplay.json().error.code).toBe("operation_in_progress");
+    expect(
+      queuedFake.budgetMaintenanceApi.createAccount,
+    ).toHaveBeenCalledOnce();
+    await queuedFake.app.close();
+
+    const expiredFake = await createApi();
+    const expiredHeaders = testHeaders();
+    await expiredFake.app.inject({ ...route, headers: expiredHeaders });
+    const expiredOperation = expiredFake.operations.values().next().value!;
+    expiredOperation.status = "committed";
+    expiredOperation.actualResult = null;
+    const expiredReplay = await expiredFake.app.inject({
+      ...route,
+      headers: expiredHeaders,
+    });
+    expect(expiredReplay.statusCode).toBe(409);
+    expect(expiredReplay.json().error.code).toBe(
+      "operation_result_unavailable",
+    );
+    await expiredFake.app.close();
+
+    const missingKeyFake = await createApi();
+    const blankKey = await missingKeyFake.app.inject({
+      ...route,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        "idempotency-key": "   ",
+      },
+    });
+    expect(blankKey.statusCode).toBe(400);
+    expect(blankKey.json().error.code).toBe("invalid_request");
+    await missingKeyFake.app.close();
+
+    const enqueueFailureFake = await createApi();
+    vi.spyOn(enqueueFailureFake.journal, "enqueue").mockRejectedValueOnce(
+      new Error("private database detail"),
+    );
+    const enqueueFailure = await enqueueFailureFake.app.inject({
+      ...route,
+      headers: testHeaders(),
+    });
+    expect(enqueueFailure.statusCode).toBe(502);
+    expect(enqueueFailure.body).not.toContain("private database detail");
+    await enqueueFailureFake.app.close();
+  });
+
+  it("maps an in-progress replay consistently across every maintenance route", async () => {
+    const fake = await createApi();
+    const enqueue = fake.journal.enqueue.bind(fake.journal);
+    vi.spyOn(fake.journal, "enqueue").mockImplementation(async (input) => {
+      const result = await enqueue(input);
+      result.operation.status = "applying";
+      return result;
+    });
+
+    const responses = await Promise.all(
+      maintenanceRouteCases().map((route) =>
+        injectMaintenanceRequest(fake.app, route, testHeaders()),
+      ),
+    );
+
+    expect(responses.map((response) => response.statusCode)).toEqual(
+      maintenanceRouteCases().map(() => 409),
+    );
+    expect(responses.map((response) => response.json().error.code)).toEqual(
+      maintenanceRouteCases().map(() => "operation_in_progress"),
+    );
+    for (const action of Object.values(fake.budgetMaintenanceApi)) {
+      expect(action).not.toHaveBeenCalled();
+    }
+    await fake.app.close();
+  });
+
   it("moves money between categories through the journaled maintenance route", async () => {
     const fake = await createApi();
     const response = await fake.app.inject({
@@ -530,6 +781,150 @@ describe("budget maintenance routes", () => {
       125_000,
       undefined,
     );
+    await fake.app.close();
+  });
+
+  it("renames and reopens accounts and creates payees and categories", async () => {
+    const fake = await createApi();
+    const responses = await Promise.all([
+      fake.app.inject({
+        method: "PATCH",
+        url: `/api/v1/budgets/${budgetId}/accounts/account-1`,
+        headers: testHeaders(),
+        payload: { name: "  Daily checking  " },
+      }),
+      fake.app.inject({
+        method: "POST",
+        url: `/api/v1/budgets/${budgetId}/accounts/account-2/reopen`,
+        headers: testHeaders(),
+      }),
+      fake.app.inject({
+        method: "POST",
+        url: `/api/v1/budgets/${budgetId}/payees`,
+        headers: testHeaders(),
+        payload: { name: "  Corner Market  " },
+      }),
+      fake.app.inject({
+        method: "POST",
+        url: `/api/v1/budgets/${budgetId}/categories`,
+        headers: testHeaders(),
+        payload: { name: "  Dining out  ", categoryGroupId: "group-1" },
+      }),
+      fake.app.inject({
+        method: "PUT",
+        url: `/api/v1/budgets/${budgetId}/categories/category-1/budget-amount`,
+        headers: testHeaders(),
+        payload: { month: "2026-11", amountMinor: 1200 },
+      }),
+    ]);
+
+    expect(responses.map((response) => response.statusCode)).toEqual([
+      200, 200, 200, 200, 200,
+    ]);
+    expect(responses[2]?.json()).toEqual({
+      status: "ok",
+      payeeId: "payee-created",
+    });
+    expect(responses[3]?.json()).toEqual({
+      status: "ok",
+      categoryId: "category-created",
+    });
+    expect(fake.budgetMaintenanceApi.renameAccount).toHaveBeenCalledWith(
+      budgetId,
+      "account-1",
+      "Daily checking",
+      undefined,
+    );
+    expect(fake.budgetMaintenanceApi.reopenAccount).toHaveBeenCalledWith(
+      budgetId,
+      "account-2",
+      undefined,
+    );
+    expect(fake.budgetMaintenanceApi.createPayee).toHaveBeenCalledWith(
+      budgetId,
+      "Corner Market",
+      undefined,
+    );
+    expect(fake.budgetMaintenanceApi.createCategory).toHaveBeenCalledWith(
+      budgetId,
+      "Dining out",
+      "group-1",
+      undefined,
+    );
+    expect(fake.budgetMaintenanceApi.setBudgetAmount).toHaveBeenCalledWith(
+      budgetId,
+      "category-1",
+      "2026-11",
+      1200,
+      undefined,
+    );
+    await fake.app.close();
+  });
+
+  it("maps invalid maintenance results and sanitizes Actual failures", async () => {
+    const fake = await createApi();
+    const routes = [
+      {
+        method: "PATCH" as const,
+        url: `/api/v1/budgets/${budgetId}/accounts/account-1`,
+        payload: { name: "Daily checking" },
+        action: vi.mocked(fake.budgetMaintenanceApi.renameAccount),
+      },
+      {
+        method: "POST" as const,
+        url: `/api/v1/budgets/${budgetId}/accounts/account-1/reopen`,
+        action: vi.mocked(fake.budgetMaintenanceApi.reopenAccount),
+      },
+      {
+        method: "POST" as const,
+        url: `/api/v1/budgets/${budgetId}/payees`,
+        payload: { name: "Corner Market" },
+        action: vi.mocked(fake.budgetMaintenanceApi.createPayee),
+      },
+      {
+        method: "POST" as const,
+        url: `/api/v1/budgets/${budgetId}/categories`,
+        payload: { name: "Dining", categoryGroupId: "group-1" },
+        action: vi.mocked(fake.budgetMaintenanceApi.createCategory),
+      },
+      {
+        method: "PUT" as const,
+        url: `/api/v1/budgets/${budgetId}/categories/category-1/budget-amount`,
+        payload: { month: "2026-11", amountMinor: 1200 },
+        action: vi.mocked(fake.budgetMaintenanceApi.setBudgetAmount),
+      },
+      {
+        method: "POST" as const,
+        url: `/api/v1/budgets/${budgetId}/categories/move-money`,
+        payload: {
+          month: "2026-11",
+          fromCategoryId: "category-1",
+          toCategoryId: "category-2",
+          amountMinor: 1200,
+        },
+        action: vi.mocked(fake.budgetMaintenanceApi.moveMoney),
+      },
+    ];
+
+    for (const route of routes) {
+      route.action.mockRejectedValueOnce(
+        new BudgetMaintenanceInputError("Invalid change"),
+      );
+      const rejected = await fake.app.inject({
+        ...route,
+        headers: testHeaders(),
+      });
+      expect(rejected.statusCode).toBe(400);
+      expect(rejected.json().error.code).toBe("invalid_request");
+
+      route.action.mockRejectedValueOnce(new Error("private Actual detail"));
+      const failed = await fake.app.inject({
+        ...route,
+        headers: testHeaders(),
+      });
+      expect(failed.statusCode).toBe(502);
+      expect(failed.body).not.toContain("private Actual detail");
+    }
     await fake.app.close();
   });
 

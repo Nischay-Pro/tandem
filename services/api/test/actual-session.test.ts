@@ -26,6 +26,8 @@ interface FakeClient {
   failDownload(error?: Error): void;
   failSync(error: unknown): void;
   setSyncTables(tables: string[] | undefined): void;
+  setInitialized(value: unknown): void;
+  setNextSyncEvent(event: unknown): void;
 }
 
 function createFakeClient(): FakeClient {
@@ -39,6 +41,9 @@ function createFakeClient(): FakeClient {
   let syncError: unknown;
   let syncTables: string[] | undefined = [];
   let syncEventListener: ((event: unknown) => void) | undefined;
+  let initialized: unknown;
+  let hasNextSyncEvent = false;
+  let nextSyncEvent: unknown;
 
   const api: ActualApiPort = {
     init: vi.fn(async () => {
@@ -46,11 +51,13 @@ function createFakeClient(): FakeClient {
       if (initError) {
         throw initError;
       }
-      return {
-        on: (eventName: string, listener: (event: unknown) => void) => {
-          if (eventName === "sync-event") syncEventListener = listener;
-        },
-      };
+      return (
+        initialized ?? {
+          on: (eventName: string, listener: (event: unknown) => void) => {
+            if (eventName === "sync-event") syncEventListener = listener;
+          },
+        }
+      );
     }),
     getServerVersion: vi.fn(async () => {
       calls.push("version");
@@ -66,6 +73,11 @@ function createFakeClient(): FakeClient {
       calls.push("sync");
       if (syncError) {
         throw syncError;
+      }
+      if (hasNextSyncEvent) {
+        hasNextSyncEvent = false;
+        syncEventListener?.(nextSyncEvent);
+        return;
       }
       if (syncTables !== undefined) {
         syncEventListener?.({ type: "success", tables: syncTables });
@@ -99,6 +111,13 @@ function createFakeClient(): FakeClient {
     },
     setSyncTables(tables) {
       syncTables = tables;
+    },
+    setInitialized(value) {
+      initialized = value;
+    },
+    setNextSyncEvent(event) {
+      nextSyncEvent = event;
+      hasNextSyncEvent = true;
     },
   };
 }
@@ -187,6 +206,63 @@ describe("ActualSession", () => {
     await session.runBudgetSnapshot("budget-a", read);
 
     expect(changed).toEqual([true, false, true, true, false]);
+    await session.close();
+  });
+
+  it("handles old initialization results and malformed sync events", async () => {
+    const withoutListener = createFakeClient();
+    withoutListener.setInitialized({});
+    const oldClientSession = new ActualSession(withoutListener.api, config);
+    const oldClientChanges: boolean[] = [];
+    await oldClientSession.runBudgetSnapshot("budget-a", async (changed) => {
+      oldClientChanges.push(changed);
+      return undefined;
+    });
+    await oldClientSession.runBudgetSnapshot("budget-a", async (changed) => {
+      oldClientChanges.push(changed);
+      return undefined;
+    });
+    expect(oldClientChanges).toEqual([true, true]);
+    await oldClientSession.close();
+
+    const malformedEventClient = createFakeClient();
+    const malformedEventSession = new ActualSession(
+      malformedEventClient.api,
+      config,
+    );
+    const malformedEventChanges: boolean[] = [];
+    await malformedEventSession.runBudgetSnapshot(
+      "budget-a",
+      async (changed) => {
+        malformedEventChanges.push(changed);
+        return undefined;
+      },
+    );
+    malformedEventClient.setNextSyncEvent({ type: 42, tables: [] });
+    await malformedEventSession.runBudgetSnapshot(
+      "budget-a",
+      async (changed) => {
+        malformedEventChanges.push(changed);
+        return undefined;
+      },
+    );
+    expect(malformedEventChanges).toEqual([true, true]);
+    await malformedEventSession.close();
+  });
+
+  it("keeps only string table names from sync events", async () => {
+    const fake = createFakeClient();
+    const session = new ActualSession(fake.api, config);
+    await session.runBudgetSnapshot("budget-a", async () => undefined);
+
+    fake.setNextSyncEvent({ type: "success", tables: ["transactions", 42] });
+    await session.runBudgetSnapshot("budget-a", async () => undefined);
+    fake.setNextSyncEvent({ type: "success" });
+    await session.runBudgetSnapshot("budget-a", async () => undefined);
+    fake.setNextSyncEvent({ type: "success", tables: ["transactions"] });
+    await session.runBudgetSnapshot("budget-a", async () => undefined);
+
+    expect(fake.calls.filter((call) => call === "sync")).toHaveLength(3);
     await session.close();
   });
 

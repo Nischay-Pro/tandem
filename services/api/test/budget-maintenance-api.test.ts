@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { createBudgetMaintenanceApi } from "../src/actual/budget-maintenance-api.js";
+import {
+  BANK_SYNC_TIMEOUT_MS,
+  createBudgetMaintenanceApi,
+} from "../src/actual/budget-maintenance-api.js";
 import type { BudgetOperationOptions } from "../src/actual/actual-session.js";
 import type { ActualBudgetMaintenanceSession } from "../src/actual/budget-maintenance-api.js";
 import type { BudgetLockPort } from "../src/actual/transaction-reconciler.js";
@@ -121,6 +124,54 @@ function createFake() {
 }
 
 describe("Actual budget maintenance API", () => {
+  it("limits overlapping, failed, and recently completed bank syncs", async () => {
+    const fake = createFake();
+    let finishSync: (() => void) | undefined;
+    fake.client.runBankSync.mockImplementationOnce(
+      () =>
+        new Promise<undefined>((resolve) => {
+          finishSync = () => resolve(undefined);
+        }),
+    );
+
+    const firstSync = fake.api.runBankSync("budget-1");
+    await expect(fake.api.runBankSync("budget-1")).rejects.toThrow(
+      "A bank sync is already running",
+    );
+    finishSync?.();
+    await firstSync;
+    await expect(fake.api.runBankSync("budget-1")).rejects.toThrow(
+      "A bank sync is already running or was just completed",
+    );
+
+    const failedSync = createFake();
+    failedSync.client.runBankSync.mockRejectedValueOnce(new Error("offline"));
+    await expect(failedSync.api.runBankSync("budget-1")).rejects.toThrow(
+      "offline",
+    );
+    await expect(failedSync.api.runBankSync("budget-1")).rejects.toThrow(
+      "A bank sync is already running or was just completed",
+    );
+  });
+
+  it("times out a bank sync that never settles", async () => {
+    vi.useFakeTimers();
+    try {
+      const fake = createFake();
+      fake.client.runBankSync.mockImplementationOnce(
+        () => new Promise<undefined>(() => undefined),
+      );
+      const sync = fake.api.runBankSync("budget-1");
+      const rejection = expect(sync).rejects.toThrow(
+        "Actual bank sync exceeded its time limit",
+      );
+      await vi.advanceTimersByTimeAsync(BANK_SYNC_TIMEOUT_MS);
+      await rejection;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("runs configured bank sync under the budget lock and forwards encryption only to Actual", async () => {
     const fake = createFake();
 
@@ -164,6 +215,16 @@ describe("Actual budget maintenance API", () => {
     });
   });
 
+  it("rejects account groups that do not belong to the budget", async () => {
+    const fake = createFake();
+    fake.client.getAccountGroups.mockResolvedValueOnce([]);
+
+    await expect(
+      fake.api.createAccount("budget-1", "Travel card", false, "foreign"),
+    ).rejects.toThrow("Choose an account group in this budget");
+    expect(fake.client.createAccount).not.toHaveBeenCalled();
+  });
+
   it("renames and reopens only accounts in the selected Actual budget", async () => {
     const fake = createFake();
 
@@ -179,6 +240,9 @@ describe("Actual budget maintenance API", () => {
     ).rejects.toThrow("Account does not exist in this budget");
     await expect(fake.api.reopenAccount("budget-1", "source")).rejects.toThrow(
       "This account is already open",
+    );
+    await expect(fake.api.reopenAccount("budget-1", "missing")).rejects.toThrow(
+      "Account does not exist in this budget",
     );
   });
 
@@ -212,6 +276,42 @@ describe("Actual budget maintenance API", () => {
       fake.api.createCategory("budget-1", " dining ", "group-1"),
     ).rejects.toThrow("A category with this name already exists in that group");
     expect(fake.client.createCategory).toHaveBeenCalledOnce();
+  });
+
+  it("rejects inactive category groups and defaults missing income metadata", async () => {
+    const fake = createFake();
+    fake.client.getCategoryGroups
+      .mockResolvedValueOnce([
+        { id: "hidden", name: "Hidden", is_income: false, hidden: true },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: "group-1",
+          name: "Food",
+          hidden: false,
+        } as unknown as {
+          id: string;
+          name: string;
+          is_income: boolean;
+          hidden: boolean;
+        },
+      ]);
+
+    await expect(
+      fake.api.createCategory("budget-1", "Dining", "hidden"),
+    ).rejects.toThrow("Choose an active category group");
+    await expect(
+      fake.api.createCategory("budget-1", "Dining", "missing"),
+    ).rejects.toThrow("Choose an active category group");
+    await fake.api.createCategory("budget-1", "Dining", "group-1");
+
+    expect(fake.client.createCategory).toHaveBeenCalledWith({
+      name: "Dining",
+      group_id: "group-1",
+      is_income: false,
+      hidden: false,
+    });
   });
 
   it("creates payees in Actual and rejects duplicate names case-insensitively", async () => {
@@ -276,6 +376,18 @@ describe("Actual budget maintenance API", () => {
     );
   });
 
+  it("validates assigned amounts and category membership", async () => {
+    const fake = createFake();
+
+    await expect(
+      fake.api.setBudgetAmount("budget-1", "expense", "2026-11", -1),
+    ).rejects.toThrow("Enter a budget amount up to 1,000,000,000 major units");
+    await expect(
+      fake.api.setBudgetAmount("budget-1", "missing", "2026-11", 100),
+    ).rejects.toThrow("Category does not exist in this budget");
+    expect(fake.client.setBudgetAmount).not.toHaveBeenCalled();
+  });
+
   it("rejects category moves with insufficient available money or tracking mode", async () => {
     const fake = createFake();
 
@@ -291,6 +403,106 @@ describe("Actual budget maintenance API", () => {
       fake.api.moveMoney("budget-1", "2026-11", "expense", "expense-2", 10_000),
     ).rejects.toThrow("Money can only be moved in an envelope budget");
     expect(fake.client.batchBudgetUpdates).not.toHaveBeenCalled();
+  });
+
+  it("validates move pairs and reads Actual's alternate amount fields", async () => {
+    const fake = createFake();
+    const move = (from: string, to: string, amount = 1_000) =>
+      fake.api.moveMoney("budget-1", "2026-11", from, to, amount);
+
+    await expect(move("expense", "expense-2", 0)).rejects.toThrow(
+      "Enter a positive move amount up to 1,000,000,000 major units",
+    );
+    await expect(move("expense", "expense")).rejects.toThrow(
+      "Choose two different categories",
+    );
+    await expect(move("expense", "missing")).rejects.toThrow(
+      "Choose categories in this budget month",
+    );
+    fake.client.getBudgetMonth.mockResolvedValueOnce({
+      categoryGroups: [
+        {
+          categories: [
+            {
+              id: "expense",
+              is_income: false,
+              budgeted: 0,
+              balance: 2_000,
+            },
+            {
+              id: "income",
+              is_income: true,
+              budgeted: 0,
+              balance: 2_000,
+            },
+          ],
+        },
+      ],
+    } as unknown as Awaited<ReturnType<typeof fake.client.getBudgetMonth>>);
+    await expect(move("expense", "income")).rejects.toThrow(
+      "Move money between categories of the same type",
+    );
+
+    fake.client.getBudgetMonth.mockResolvedValueOnce({
+      categoryGroups: [
+        {},
+        { categories: [null, "bad-row"] },
+        {
+          categories: [
+            {
+              id: "expense",
+              is_income: false,
+              assigned: 30_000,
+              available: 20_000,
+            },
+            {
+              id: "expense-2",
+              is_income: false,
+              assigned: 10_000,
+              available: 5_000,
+            },
+          ],
+        },
+      ],
+    } as unknown as Awaited<ReturnType<typeof fake.client.getBudgetMonth>>);
+    await move("expense", "expense-2");
+    expect(fake.client.setBudgetAmount).toHaveBeenNthCalledWith(
+      1,
+      "2026-11",
+      "expense",
+      29_000,
+    );
+    expect(fake.client.setBudgetAmount).toHaveBeenNthCalledWith(
+      2,
+      "2026-11",
+      "expense-2",
+      11_000,
+    );
+
+    fake.client.getBudgetMonth.mockResolvedValueOnce({
+      categoryGroups: [
+        {
+          categories: [
+            {
+              id: "expense",
+              is_income: false,
+              budgeted: 10_000,
+              balance: "invalid",
+            },
+            {
+              id: "expense-2",
+              is_income: false,
+              budgeted: 0,
+              balance: 0,
+            },
+          ],
+        },
+      ],
+    } as unknown as Awaited<ReturnType<typeof fake.client.getBudgetMonth>>);
+    await expect(move("expense", "expense-2")).rejects.toThrow(
+      "Actual returned an invalid source available amount",
+    );
+    expect(fake.client.batchBudgetUpdates).toHaveBeenCalledOnce();
   });
 
   it("validates account close destinations before calling Actual", async () => {

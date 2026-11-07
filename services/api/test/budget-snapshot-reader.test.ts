@@ -124,6 +124,63 @@ describe("Actual budget snapshot reader", () => {
     expect(fake.actual.q).not.toHaveBeenCalled();
   });
 
+  it("reads a changed tracking budget with an encrypted session", async () => {
+    const fake = createApi({
+      getPreferences: vi.fn(async () => ({ budgetType: "tracking" })),
+    });
+    const runBudgetSnapshot = vi.fn(
+      async <T>(
+        _budgetId: string,
+        operation: (changed: boolean) => Promise<T>,
+      ) => ({ changed: true, value: await operation(true) }),
+    );
+    const reader = new ActualBudgetSnapshotReader(
+      {
+        runBudget: fake.runBudget,
+        runBudgetSnapshot,
+      } as ActualBudgetSessionPort,
+      fake.actual,
+    );
+
+    const result = await reader.readWithSettings("budget-1", "secret");
+
+    expect(result.displaySettings.budgetType).toBe("tracking");
+    expect(result.unchanged).toBeUndefined();
+    expect(runBudgetSnapshot).toHaveBeenCalledWith(
+      "budget-1",
+      expect.any(Function),
+      { encryptionPassword: "secret" },
+    );
+  });
+
+  it("passes no encryption options for unencrypted snapshot reads", async () => {
+    const fake = createApi();
+    const reader = new ActualBudgetSnapshotReader(fake.session, fake.actual);
+
+    await reader.read("budget-1");
+    await reader.readWithSettings("budget-1");
+    await reader.readWithSettings("budget-1", "encrypted-secret");
+
+    expect(fake.runBudget).toHaveBeenNthCalledWith(
+      1,
+      "budget-1",
+      expect.any(Function),
+      undefined,
+    );
+    expect(fake.runBudget).toHaveBeenNthCalledWith(
+      2,
+      "budget-1",
+      expect.any(Function),
+      undefined,
+    );
+    expect(fake.runBudget).toHaveBeenNthCalledWith(
+      3,
+      "budget-1",
+      expect.any(Function),
+      { encryptionPassword: "encrypted-secret" },
+    );
+  });
+
   it("reads supported Actual entities and pages grouped transactions", async () => {
     const firstPage = [
       {
