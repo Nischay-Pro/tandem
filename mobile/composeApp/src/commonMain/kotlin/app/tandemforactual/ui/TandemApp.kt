@@ -322,6 +322,7 @@ private enum class AppRoute(
     CATEGORY_GROUP("Essentials"),
     CATEGORY_DETAIL("Rent"),
     SCHEDULES("Upcoming bills"),
+    BUDGET_RULES("Rules"),
     ACCOUNTS("Accounts"),
     ACCOUNT_DETAIL("Checking"),
     ACCOUNT_OPTIONS("Account options"),
@@ -1644,9 +1645,7 @@ fun TandemApp(
             backGestureCancelJob = null
             if (backGestureCommitPending || backAnimationWasRunning) {
                 backGestureCommitPending = false
-                backGestureProgress = 0f
-                backGestureOutgoingEntry = null
-                backPreviewRoute = null
+                backGestureProgress = 1f
                 skipNextRouteTransition = true
                 popRoute()
             } else if (backStack.size > 1) {
@@ -1720,11 +1719,24 @@ fun TandemApp(
     LaunchedEffect(routeEntry) {
         if (route != AppRoute.STARTUP) onStartupComplete?.invoke()
         if (skipNextRouteTransition) {
-            backGestureProgress = 0f
-            backGestureCommitPending = false
-            backGestureOutgoingEntry = null
-            backPreviewRoute = null
             skipNextRouteTransition = false
+            backGestureCommitPending = false
+            if (backPreviewRoute == routeEntry) {
+                // Keep the interactive preview in place until AnimatedContent has
+                // promoted this same route entry to its foreground destination.
+                coroutineScope.launch {
+                    withFrameNanos { }
+                    if (backPreviewRoute == routeEntry) {
+                        backGestureProgress = 0f
+                        backGestureOutgoingEntry = null
+                        backPreviewRoute = null
+                    }
+                }
+            } else {
+                backGestureProgress = 0f
+                backGestureOutgoingEntry = null
+                backPreviewRoute = null
+            }
         }
     }
     var previousRoute by remember { mutableStateOf(route) }
@@ -2902,6 +2914,14 @@ private fun ScreenContent(
         AppRoute.CATEGORY_GROUP -> CategoryGroupScreen(state, navigation, liveBudgetMonth)
         AppRoute.CATEGORY_DETAIL -> CategoryDetailScreen(state, navigation, liveBudgetMonth, mobileSession)
         AppRoute.SCHEDULES -> UpcomingSchedulesScreen(state, liveSchedules)
+        AppRoute.BUDGET_RULES ->
+            BudgetRulesScreen(
+                mobileSession.ruleRecords,
+                mobileSession.accountRecords,
+                mobileSession.categoryRecords,
+                mobileSession.categoryGroupRecords,
+                mobileSession.payeeRecords,
+            )
         AppRoute.ACCOUNTS ->
             AccountsScreen(
                 state,
@@ -5322,6 +5342,92 @@ private fun UpcomingSchedulesScreen(
                         listOfNotNull(formatLiveDate(schedule.nextDate), schedule.accountName).joinToString(" · "),
                         schedule.amountLabel(state),
                         leading = RowLeading.Icon(Lucide.CalendarDays),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BudgetRulesScreen(
+    rules: List<BudgetRecordEntity>,
+    accountRecords: List<BudgetRecordEntity>,
+    categoryRecords: List<BudgetRecordEntity>,
+    categoryGroupRecords: List<BudgetRecordEntity>,
+    payeeRecords: List<BudgetRecordEntity>,
+) {
+    val namesByField =
+        remember(accountRecords, categoryRecords, categoryGroupRecords, payeeRecords) {
+            mapOf(
+                "account" to accountRecords.mapNotNull { it.recordName()?.let { name -> it.recordId to name } }.toMap(),
+                "category" to categoryRecords.mapNotNull { it.recordName()?.let { name -> it.recordId to name } }.toMap(),
+                "category_group" to categoryGroupRecords.mapNotNull { it.recordName()?.let { name -> it.recordId to name } }.toMap(),
+                "payee" to payeeRecords.mapNotNull { it.recordName()?.let { name -> it.recordId to name } }.toMap(),
+            )
+        }
+    val activeRules = remember(rules) { rules.filterNot { it.recordBody()?.booleanValue("tombstone") == true } }
+    PageLazyColumn {
+        item(key = "budget-rules-title") { Heading("Budget rules") }
+        if (activeRules.isEmpty()) {
+            item(key = "budget-rules-empty") {
+                SurfaceCard {
+                    EmptyState(
+                        "No rules",
+                        "Rules created in Actual will appear here.",
+                        modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                    )
+                }
+            }
+        } else {
+            items(activeRules.size, key = { index -> activeRules[index].recordId }) { index ->
+                val body = activeRules[index].recordBody()
+                val conditions = (body?.get("conditions") as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
+                val actions = (body?.get("actions") as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
+                val conditionSummary =
+                    conditions
+                        .joinToString(" · ") { condition ->
+                            val field = condition.stringValue("field")?.replace('_', ' ') ?: "Field"
+                            val operation = condition.stringValue("op")?.replace('_', ' ') ?: "matches"
+                            val rawValue =
+                                condition["value"]
+                                    ?.let { value -> (value as? JsonPrimitive)?.contentOrNull ?: value.toString() }
+                                    ?.trim('"')
+                            val mappedValue =
+                                rawValue?.let { value -> namesByField[condition.stringValue("field")]?.get(value) ?: value }
+                            listOfNotNull(field, operation, mappedValue).joinToString(" ")
+                        }.ifBlank { "Every transaction" }
+                val actionSummary =
+                    actions
+                        .joinToString(" · ") { action ->
+                            val field = action.stringValue("field")?.replace('_', ' ')
+                            val operation = action.stringValue("op")
+                            val rawValue =
+                                action["value"]
+                                    ?.let { value -> (value as? JsonPrimitive)?.contentOrNull ?: value.toString() }
+                                    ?.trim('"')
+                            val mappedValue = rawValue?.let { value -> namesByField[field?.replace(' ', '_')]?.get(value) ?: value }
+                            when (operation) {
+                                "append-notes" -> "Append note"
+                                "prepend-notes" -> "Add note"
+                                "delete-transaction" -> "Delete transaction"
+                                "link-schedule" -> "Link schedule"
+                                else -> listOfNotNull(field, mappedValue).joinToString(": ")
+                            }
+                        }.ifBlank { "No actions" }
+                val stage =
+                    when (body?.stringValue("stage")) {
+                        "pre" -> "Before import"
+                        "post" -> "After import"
+                        else -> "All stages"
+                    }
+                SurfaceCard {
+                    ListRow(
+                        conditionSummary,
+                        actionSummary,
+                        stage,
+                        leading = RowLeading.Icon(Lucide.Tags),
+                        options = ListRowOptions(trailingColor = tandemPalette.muted),
                     )
                 }
             }
@@ -9215,6 +9321,13 @@ private fun SettingsScreen(
             )
         }
         SectionCard("Support", "Help and project details") {
+            ListRow(
+                "Budget rules",
+                "Rules from Actual",
+                leading = RowLeading.Icon(Lucide.Tags),
+                onClick = { navigation.open(AppRoute.BUDGET_RULES) },
+            )
+            DividerLine()
             ListRow(
                 "About, help, and licenses",
                 "Version and open-source licenses",

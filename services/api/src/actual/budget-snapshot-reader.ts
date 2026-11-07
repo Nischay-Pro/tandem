@@ -28,6 +28,7 @@ export type ActualBudgetReadApi = Pick<
   | "getCategories"
   | "getCategoryGroups"
   | "getPayees"
+  | "getRules"
   | "getSchedules"
   | "getBudgetMonths"
   | "getBudgetMonth"
@@ -152,6 +153,9 @@ export class ActualBudgetSnapshotReader implements BudgetSnapshotReader {
       "schedules",
     );
     records.push(...schedules.map((value) => this.record("schedule", value)));
+
+    const rules = requireArray(await this.actual.getRules(), "rules");
+    records.push(...rules.map((value) => this.record("rule", value)));
 
     const months = requireArray(
       await this.actual.getBudgetMonths(),

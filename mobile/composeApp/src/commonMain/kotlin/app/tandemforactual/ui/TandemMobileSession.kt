@@ -257,6 +257,9 @@ internal class TandemMobileSession(
     var scheduleRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
         private set
 
+    var ruleRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
+        private set
+
     val isAuthenticated: Boolean
         get() = apiClient.isAuthenticated
 
@@ -1221,6 +1224,7 @@ internal class TandemMobileSession(
         accountRecords = localRepository.findRecords(budgetId, "account")
         accountGroupRecords = localRepository.findRecords(budgetId, "account-group")
         scheduleRecords = localRepository.findRecords(budgetId, "schedule")
+        ruleRecords = localRepository.findRecords(budgetId, "rule")
         payeeRecords = localRepository.findRecords(budgetId, "payee")
         categoryRecords = localRepository.findRecords(budgetId, "category")
         categoryGroupRecords = localRepository.findRecords(budgetId, "category-group")
@@ -1253,6 +1257,7 @@ internal class TandemMobileSession(
             launch { localRepository.observeRecords(budgetId, "account").collect { accountRecords = it } }
             launch { localRepository.observeRecords(budgetId, "account-group").collect { accountGroupRecords = it } }
             launch { localRepository.observeRecords(budgetId, "schedule").collect { scheduleRecords = it } }
+            launch { localRepository.observeRecords(budgetId, "rule").collect { ruleRecords = it } }
             launch { localRepository.observeRecords(budgetId, "payee").collect { payeeRecords = it } }
             launch { localRepository.observeRecords(budgetId, "category").collect { categoryRecords = it } }
             launch { localRepository.observeRecords(budgetId, "category-group").collect { categoryGroupRecords = it } }

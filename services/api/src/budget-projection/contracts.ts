@@ -6,6 +6,7 @@ export const BUDGET_ENTITY_TYPES = [
   "category",
   "category-group",
   "payee",
+  "rule",
   "schedule",
   "transaction",
   "budget-month",
