@@ -504,6 +504,36 @@ class TandemApiClient(
         }
     }
 
+    suspend fun manageBudgetPayee(
+        budgetId: String,
+        payeeId: String,
+        action: String,
+        name: String?,
+        targetPayeeId: String?,
+        encryptionPassword: String?,
+    ) {
+        withMaintenanceOperation(
+            maintenanceSignature("payee-$action", budgetId, payeeId, name, targetPayeeId),
+        ) { idempotencyKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.manageBudgetPayee(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        payeeId = payeeId,
+                        body =
+                            buildJsonObject {
+                                put("action", action)
+                                name?.let { put("name", it) }
+                                targetPayeeId?.let { put("targetPayeeId", it) }
+                            }.toMap(),
+                    ),
+                )
+            }
+        }
+    }
+
     /** Revokes this device on the server while its credential is still active. */
     suspend fun revokeCurrentDevice() {
         sessionMutex.withLock {

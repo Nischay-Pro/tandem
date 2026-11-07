@@ -976,6 +976,10 @@ interface BudgetScheduleRouteParams extends BudgetRouteParams {
   scheduleId: string;
 }
 
+interface BudgetPayeeRouteParams extends BudgetRouteParams {
+  payeeId: string;
+}
+
 interface BudgetAccountCreateBody {
   name: string;
   offbudget: boolean;
@@ -1002,6 +1006,12 @@ interface BudgetCategoryCreateBody {
 
 interface BudgetPayeeCreateBody {
   name: string;
+}
+
+interface BudgetPayeeActionBody {
+  action: "rename" | "merge" | "delete";
+  name?: string;
+  targetPayeeId?: string;
 }
 
 interface BudgetCategoryBudgetAmountBody {
@@ -1341,6 +1351,166 @@ function registerBudgetMaintenanceRoutes(
           "failed",
         );
         reportTransactionFailure("Actual account creation failed", error);
+        return actualRequestFailed(reply);
+      }
+    },
+  );
+
+  app.post<{
+    Params: BudgetPayeeRouteParams;
+    Headers: BudgetReadHeaders;
+    Body: BudgetPayeeActionBody;
+  }>(
+    "/api/v1/budgets/:budgetId/payees/:payeeId/actions",
+    {
+      schema: {
+        tags: ["Budgets"],
+        operationId: "manageBudgetPayee",
+        summary: "Rename, merge, or delete an Actual Budget payee",
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          properties: {
+            budgetId: paramsSchema.properties.budgetId,
+            payeeId: {
+              type: "string",
+              minLength: 1,
+              maxLength: 500,
+              pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+            },
+          },
+          required: ["budgetId", "payeeId"],
+          additionalProperties: false,
+        },
+        headers: headersSchema,
+        body: {
+          type: "object",
+          properties: {
+            action: { type: "string", enum: ["rename", "merge", "delete"] },
+            name: {
+              type: "string",
+              minLength: 1,
+              maxLength: 100,
+              pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+            },
+            targetPayeeId: {
+              type: "string",
+              minLength: 1,
+              maxLength: 500,
+              pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+            },
+          },
+          required: ["action"],
+          additionalProperties: false,
+        },
+        response: commonResponseSchema,
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(deviceAuth, request, reply);
+      if (!device) return reply;
+      if (request.validationError) return invalidBudgetRequest(reply);
+      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
+        return transactionNotFound(reply);
+      if (!maintenanceApi) return actualNotConfigured(reply);
+      if (!journal) return actualNotConfigured(reply);
+      const { action } = request.body;
+      const name = (request.body.name ?? "").trim();
+      const targetPayeeId = request.body.targetPayeeId;
+      if (
+        (action === "rename" && !name) ||
+        (action !== "rename" && request.body.name !== undefined) ||
+        (action === "merge" && targetPayeeId === undefined) ||
+        (action !== "merge" && targetPayeeId !== undefined)
+      ) {
+        return invalidBudgetRequest(reply);
+      }
+      try {
+        const patch: { [key: string]: JsonValue } = { action };
+        if (action === "rename") patch.name = name;
+        if (action === "merge") patch.targetPayeeId = targetPayeeId!;
+        const result = await runMaintenanceOperation(
+          journal,
+          request,
+          device,
+          request.params.budgetId,
+          `payee-${action}`,
+          request.params.payeeId,
+          patch,
+          async () => {
+            const password = request.headers["x-budget-encryption-password"];
+            switch (action) {
+              case "rename":
+                await maintenanceApi.renamePayee(
+                  request.params.budgetId,
+                  request.params.payeeId,
+                  name,
+                  password,
+                );
+                break;
+              case "merge":
+                await maintenanceApi.mergePayee(
+                  request.params.budgetId,
+                  request.params.payeeId,
+                  targetPayeeId!,
+                  password,
+                );
+                break;
+              case "delete":
+                await maintenanceApi.deletePayee(
+                  request.params.budgetId,
+                  request.params.payeeId,
+                  password,
+                );
+                break;
+            }
+            return { status: "ok" };
+          },
+        );
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          `payee_${action}`,
+          "success",
+          request.params.payeeId,
+        );
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send(result);
+      } catch (error) {
+        if (error instanceof BudgetMaintenanceInputError) {
+          logBudgetMaintenanceEvent(
+            request,
+            device,
+            request.params.budgetId,
+            `payee_${action}`,
+            "rejected",
+            request.params.payeeId,
+          );
+          return reply
+            .code(
+              error instanceof MaintenanceOperationConflictError ? 409 : 400,
+            )
+            .send({
+              error: {
+                code:
+                  error instanceof MaintenanceOperationConflictError
+                    ? error.code
+                    : "invalid_request",
+                message: error.message,
+              },
+            });
+        }
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          `payee_${action}`,
+          "failed",
+          request.params.payeeId,
+        );
+        reportTransactionFailure("Actual payee action failed", error);
         return actualRequestFailed(reply);
       }
     },

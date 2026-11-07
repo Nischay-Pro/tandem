@@ -51,6 +51,23 @@ export interface BudgetMaintenanceApiPort {
     name: string,
     encryptionPassword?: string,
   ): Promise<string>;
+  renamePayee(
+    budgetId: string,
+    payeeId: string,
+    name: string,
+    encryptionPassword?: string,
+  ): Promise<void>;
+  mergePayee(
+    budgetId: string,
+    payeeId: string,
+    targetPayeeId: string,
+    encryptionPassword?: string,
+  ): Promise<void>;
+  deletePayee(
+    budgetId: string,
+    payeeId: string,
+    encryptionPassword?: string,
+  ): Promise<void>;
   setBudgetAmount(
     budgetId: string,
     categoryId: string,
@@ -138,6 +155,9 @@ type ActualBudgetMaintenanceClient = Pick<
   | "createCategory"
   | "createPayee"
   | "getPayees"
+  | "updatePayee"
+  | "mergePayees"
+  | "deletePayee"
   | "updateCategory"
   | "deleteCategory"
   | "getSchedules"
@@ -269,6 +289,81 @@ export function createBudgetMaintenanceApi(
               );
             }
             return client.createPayee({ name, transfer_acct: "" });
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    async renamePayee(budgetId, payeeId, name, encryptionPassword) {
+      const normalizedName = name.trim();
+      if (!normalizedName || normalizedName.length > 100) {
+        throw new BudgetMaintenanceInputError(
+          "Payee names must be between 1 and 100 characters",
+        );
+      }
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const payee = (await client.getPayees()).find(
+              (candidate) => candidate.id === payeeId,
+            );
+            if (!payee || payee.transfer_acct) {
+              throw new BudgetMaintenanceInputError(
+                "Choose a payee in this budget",
+              );
+            }
+            await client.updatePayee(payeeId, { name: normalizedName });
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    async mergePayee(budgetId, payeeId, targetPayeeId, encryptionPassword) {
+      if (payeeId === targetPayeeId) {
+        throw new BudgetMaintenanceInputError(
+          "Choose a different payee to merge into",
+        );
+      }
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const payees = await client.getPayees();
+            const source = payees.find((candidate) => candidate.id === payeeId);
+            const target = payees.find(
+              (candidate) => candidate.id === targetPayeeId,
+            );
+            if (
+              !source ||
+              !target ||
+              source.transfer_acct ||
+              target.transfer_acct
+            ) {
+              throw new BudgetMaintenanceInputError(
+                "Choose two payees in this budget",
+              );
+            }
+            await client.mergePayees(targetPayeeId, [payeeId]);
+          },
+          writeOptions(encryptionPassword),
+        ),
+      );
+    },
+    deletePayee(budgetId, payeeId, encryptionPassword) {
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const payee = (await client.getPayees()).find(
+              (candidate) => candidate.id === payeeId,
+            );
+            if (!payee || payee.transfer_acct) {
+              throw new BudgetMaintenanceInputError(
+                "Choose a payee in this budget",
+              );
+            }
+            await client.deletePayee(payeeId);
           },
           writeOptions(encryptionPassword),
         ),

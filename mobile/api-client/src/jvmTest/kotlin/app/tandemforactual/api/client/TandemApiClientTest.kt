@@ -479,6 +479,9 @@ class TandemApiClientTest {
                 client.manageBudgetSchedule("budget-1", "schedule-1", "skip", null, null)
                 client.manageBudgetSchedule("budget-1", "schedule-1", "post", null, null)
                 client.manageBudgetSchedule("budget-1", "schedule-1", "delete", null, null)
+                client.manageBudgetPayee("budget-1", "payee-1", "rename", "Store", null, null)
+                client.manageBudgetPayee("budget-1", "payee-1", "merge", null, "payee-2", null)
+                client.manageBudgetPayee("budget-1", "payee-1", "delete", null, null, "budget-password")
                 client.withGeneratedApi {
                     BudgetsApi.runBudgetBankSync(idempotencyKey = "direct-1", budgetId = "budget-1")
                     BudgetsApi.createBudgetAccount(idempotencyKey = "direct-2", budgetId = "budget-1")
@@ -496,6 +499,12 @@ class TandemApiClientTest {
                         budgetId = "budget-1",
                         scheduleId = "schedule-1",
                         body = buildJsonObject { put("action", "skip") }.toMap(),
+                    )
+                    BudgetsApi.manageBudgetPayee(
+                        idempotencyKey = "direct-13",
+                        budgetId = "budget-1",
+                        payeeId = "payee-1",
+                        body = buildJsonObject { put("action", "delete") }.toMap(),
                     )
                     BudgetsApi.getBudgetSnapshot(budgetId = "budget-1")
                     BudgetsApi.getBudgetSnapshotPage(budgetId = "budget-1")
@@ -520,17 +529,20 @@ class TandemApiClientTest {
                         "POST /api/v1/budgets/budget-1/schedules/schedule-1/actions",
                         "POST /api/v1/budgets/budget-1/schedules/schedule-1/actions",
                         "POST /api/v1/budgets/budget-1/schedules/schedule-1/actions",
+                        "POST /api/v1/budgets/budget-1/payees/payee-1/actions",
+                        "POST /api/v1/budgets/budget-1/payees/payee-1/actions",
+                        "POST /api/v1/budgets/budget-1/payees/payee-1/actions",
                     ),
-                    requests.take(15).map { "${it.method.value} ${it.url.encodedPath}" },
+                    requests.take(18).map { "${it.method.value} ${it.url.encodedPath}" },
                 )
                 assertEquals(null, requests[0].headers["x-budget-encryption-password"])
                 assertEquals("budget-password", requests[1].headers["x-budget-encryption-password"])
                 assertEquals("budget-password", requests[2].headers["x-budget-encryption-password"])
                 assertEquals("budget-password", requests[8].headers["x-budget-encryption-password"])
                 assertEquals("budget-password", requests[9].headers["x-budget-encryption-password"])
-                val idempotencyKeys = requests.take(15).map { it.headers["Idempotency-Key"] }
+                val idempotencyKeys = requests.take(18).map { it.headers["Idempotency-Key"] }
                 assertTrue(idempotencyKeys.all { key -> key?.let { runCatching { Uuid.parse(it) }.isSuccess } == true })
-                assertEquals(15, idempotencyKeys.distinct().size)
+                assertEquals(18, idempotencyKeys.distinct().size)
                 assertTrue((requests[1].body as TextContent).text.contains("\"name\":\"Savings\""))
                 assertTrue((requests[1].body as TextContent).text.contains("\"offbudget\":true"))
                 assertTrue((requests[1].body as TextContent).text.contains("\"accountGroupId\":\"credit-group\""))
@@ -551,6 +563,10 @@ class TandemApiClientTest {
                 assertTrue((requests[12].body as TextContent).text.contains("\"action\":\"skip\""))
                 assertTrue((requests[13].body as TextContent).text.contains("\"action\":\"post\""))
                 assertTrue((requests[14].body as TextContent).text.contains("\"action\":\"delete\""))
+                assertTrue((requests[15].body as TextContent).text.contains("\"action\":\"rename\""))
+                assertTrue((requests[15].body as TextContent).text.contains("\"name\":\"Store\""))
+                assertTrue((requests[16].body as TextContent).text.contains("\"targetPayeeId\":\"payee-2\""))
+                assertEquals("budget-password", requests[17].headers["x-budget-encryption-password"])
             } finally {
                 cleanup()
                 Api.baseUrl = previousBaseUrl

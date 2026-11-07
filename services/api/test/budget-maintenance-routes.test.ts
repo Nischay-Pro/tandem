@@ -36,6 +36,9 @@ async function createApi(
     createAccount: vi.fn(async () => undefined),
     createCategory: vi.fn(async () => "category-created"),
     createPayee: vi.fn(async () => "payee-created"),
+    renamePayee: vi.fn(async () => undefined),
+    mergePayee: vi.fn(async () => undefined),
+    deletePayee: vi.fn(async () => undefined),
     setBudgetAmount: vi.fn(async () => undefined),
     moveMoney: vi.fn(async () => undefined),
     closeAccount: vi.fn(async () => undefined),
@@ -177,6 +180,11 @@ const maintenanceRouteCases = (routeBudgetId = budgetId) => [
     method: "POST" as const,
     url: `/api/v1/budgets/${routeBudgetId}/payees`,
     payload: { name: "Corner Market" },
+  },
+  {
+    method: "POST" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/payees/payee-1/actions`,
+    payload: { action: "delete" },
   },
   {
     method: "POST" as const,
@@ -1225,6 +1233,91 @@ describe("budget maintenance routes", () => {
       "schedule-skip",
       "schedule-post",
       "schedule-delete",
+    ]);
+    await fake.app.close();
+  });
+
+  it("journals payee rename, merge, and delete actions", async () => {
+    const fake = await createApi();
+    const path = `/api/v1/budgets/${budgetId}/payees/payee-1/actions`;
+    const renameHeaders = {
+      ...testHeaders(),
+      "idempotency-key": "payee-rename-1",
+    };
+    const rename = () =>
+      fake.app.inject({
+        method: "POST",
+        url: path,
+        headers: renameHeaders,
+        payload: { action: "rename", name: "Home store" },
+      });
+    const firstRename = await rename();
+    const replayedRename = await rename();
+    const merged = await fake.app.inject({
+      method: "POST",
+      url: path,
+      headers: testHeaders(),
+      payload: { action: "merge", targetPayeeId: "payee-2" },
+    });
+    const deleted = await fake.app.inject({
+      method: "POST",
+      url: path,
+      headers: testHeaders(),
+      payload: { action: "delete" },
+    });
+    const missingName = await fake.app.inject({
+      method: "POST",
+      url: path,
+      headers: testHeaders(),
+      payload: { action: "rename" },
+    });
+    const missingTarget = await fake.app.inject({
+      method: "POST",
+      url: path,
+      headers: testHeaders(),
+      payload: { action: "merge" },
+    });
+    const extraName = await fake.app.inject({
+      method: "POST",
+      url: path,
+      headers: testHeaders(),
+      payload: { action: "delete", name: "Not allowed" },
+    });
+    const outOfScope = await fake.app.inject({
+      method: "POST",
+      url: "/api/v1/budgets/other-budget/payees/payee-1/actions",
+      headers: testHeaders(),
+      payload: { action: "delete" },
+    });
+
+    expect([
+      firstRename.statusCode,
+      replayedRename.statusCode,
+      merged.statusCode,
+      deleted.statusCode,
+    ]).toEqual([200, 200, 200, 200]);
+    expect(missingName.statusCode).toBe(400);
+    expect(missingTarget.statusCode).toBe(400);
+    expect(extraName.statusCode).toBe(400);
+    expect(outOfScope.statusCode).toBe(404);
+    expect(fake.budgetMaintenanceApi.renamePayee).toHaveBeenCalledOnce();
+    expect(fake.budgetMaintenanceApi.renamePayee).toHaveBeenCalledWith(
+      budgetId,
+      "payee-1",
+      "Home store",
+      undefined,
+    );
+    expect(fake.budgetMaintenanceApi.mergePayee).toHaveBeenCalledWith(
+      budgetId,
+      "payee-1",
+      "payee-2",
+      undefined,
+    );
+    expect(fake.budgetMaintenanceApi.deletePayee).toHaveBeenCalledOnce();
+    expect([...fake.operations.values()].map(({ action }) => action)).toEqual([
+      "payee-rename",
+      "payee-merge",
+      "payee-delete",
     ]);
     await fake.app.close();
   });

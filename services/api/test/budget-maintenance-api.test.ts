@@ -115,6 +115,9 @@ function createFake() {
         return id;
       },
     ),
+    updatePayee: vi.fn(async () => undefined),
+    mergePayees: vi.fn(async () => undefined),
+    deletePayee: vi.fn(async () => undefined),
     setBudgetAmount: vi.fn(async () => undefined),
     getPreferences: vi.fn(async () => ({ budgetType: "envelope" })),
     getBudgetMonth: vi.fn(async () => ({
@@ -367,6 +370,49 @@ describe("Actual budget maintenance API", () => {
       fake.api.createPayee("budget-1", " corner market "),
     ).rejects.toThrow("A payee with this name already exists");
     expect(fake.client.createPayee).toHaveBeenCalledOnce();
+  });
+
+  it("renames, merges, and deletes only regular payees in the selected budget", async () => {
+    const fake = createFake();
+    const payees = [
+      { id: "source", name: "Old name", transfer_acct: "" },
+      { id: "target", name: "New name", transfer_acct: "" },
+      { id: "transfer", name: "Checking", transfer_acct: "account-1" },
+    ];
+    fake.client.getPayees.mockResolvedValue(payees);
+
+    await fake.api.renamePayee("budget-1", "source", " New name ", "secret");
+    await fake.api.mergePayee("budget-1", "source", "target");
+    await fake.api.deletePayee("budget-1", "source");
+
+    expect(fake.client.updatePayee).toHaveBeenCalledWith("source", {
+      name: "New name",
+    });
+    expect(fake.client.mergePayees).toHaveBeenCalledWith("target", ["source"]);
+    expect(fake.client.deletePayee).toHaveBeenCalledWith("source");
+    expect(fake.runBudgetCalls.slice(-3).map(({ options }) => options)).toEqual(
+      [
+        { encryptionPassword: "secret", synchronizeAfterWrite: true },
+        { synchronizeAfterWrite: true },
+        { synchronizeAfterWrite: true },
+      ],
+    );
+
+    await expect(
+      fake.api.renamePayee("budget-1", "missing", "Name"),
+    ).rejects.toThrow("Choose a payee in this budget");
+    await expect(fake.api.deletePayee("budget-1", "transfer")).rejects.toThrow(
+      "Choose a payee in this budget",
+    );
+    await expect(
+      fake.api.mergePayee("budget-1", "source", "missing"),
+    ).rejects.toThrow("Choose two payees in this budget");
+    await expect(
+      fake.api.mergePayee("budget-1", "source", "source"),
+    ).rejects.toThrow("Choose a different payee to merge into");
+    await expect(
+      fake.api.renamePayee("budget-1", "source", " "),
+    ).rejects.toThrow("Payee names must be between 1 and 100 characters");
   });
 
   it("renames schedules without resetting a skipped occurrence", async () => {
