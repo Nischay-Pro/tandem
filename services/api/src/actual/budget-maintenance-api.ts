@@ -52,6 +52,7 @@ type ActualBudgetMaintenanceClient = Pick<
   | "createAccount"
   | "closeAccount"
   | "getAccounts"
+  | "getAccountBalance"
   | "getCategories"
   | "updateCategory"
   | "deleteCategory"
@@ -100,6 +101,14 @@ export function createBudgetMaintenanceApi(
             if (!accounts.some((account) => account.id === accountId)) {
               throw new BudgetMaintenanceInputError(
                 "Account does not exist in this budget",
+              );
+            }
+            if (
+              transferAccountId === null &&
+              (await client.getAccountBalance(accountId)) !== 0
+            ) {
+              throw new BudgetMaintenanceInputError(
+                "Choose an account to move this balance before closing it",
               );
             }
             if (transferAccountId !== null) {

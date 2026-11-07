@@ -440,4 +440,81 @@ describe("budget maintenance routes", () => {
     expect(failed.body).not.toContain("private Actual detail");
     await fake.app.close();
   });
+
+  it("audits budget maintenance outcomes without logging passwords", async () => {
+    const fake = await createApi();
+    const auditLog = vi
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+    vi.mocked(fake.budgetMaintenanceApi.closeAccount).mockRejectedValueOnce(
+      new BudgetMaintenanceInputError("Choose a different open account"),
+    );
+
+    const requests = [
+      fake.app.inject({
+        method: "POST",
+        url: `/api/v1/budgets/${budgetId}/bank-sync`,
+        headers: { ...authHeaders, "x-budget-encryption-password": "secret" },
+      }),
+      fake.app.inject({
+        method: "POST",
+        url: `/api/v1/budgets/${budgetId}/accounts`,
+        headers: authHeaders,
+        payload: { name: "Savings", offbudget: false },
+      }),
+      fake.app.inject({
+        method: "POST",
+        url: `/api/v1/budgets/${budgetId}/accounts/account-1/close`,
+        headers: authHeaders,
+        payload: { transferAccountId: null, transferCategoryId: null },
+      }),
+      fake.app.inject({
+        method: "PATCH",
+        url: `/api/v1/budgets/${budgetId}/categories/category-1`,
+        headers: authHeaders,
+        payload: { name: "Home" },
+      }),
+      fake.app.inject({
+        method: "DELETE",
+        url: `/api/v1/budgets/${budgetId}/categories/category-1`,
+        headers: authHeaders,
+        payload: { transferCategoryId: null },
+      }),
+    ];
+    const responses = await Promise.all(requests);
+    const events = auditLog.mock.calls.map(
+      ([line]) => JSON.parse(String(line)) as Record<string, unknown>,
+    );
+
+    expect(responses.map((response) => response.statusCode)).toEqual([
+      200, 200, 400, 200, 200,
+    ]);
+    expect(events.map((event) => event.event).sort()).toEqual(
+      [
+        "budget.bank_sync",
+        "budget.account_create",
+        "budget.account_close",
+        "budget.category_rename",
+        "budget.category_delete",
+      ].sort(),
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        event: "budget.account_close",
+        outcome: "rejected",
+      }),
+    );
+    expect(events.filter((event) => event.outcome === "success")).toHaveLength(
+      4,
+    );
+    expect(
+      events.every(
+        (event) =>
+          event.deviceId === device.deviceId && event.budgetId === budgetId,
+      ),
+    ).toBe(true);
+    expect(JSON.stringify(events)).not.toContain("secret");
+    auditLog.mockRestore();
+    await fake.app.close();
+  });
 });

@@ -1116,9 +1116,23 @@ function registerBudgetMaintenanceRoutes(
           request.params.budgetId,
           request.headers["x-budget-encryption-password"],
         );
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "bank_sync",
+          "success",
+        );
         reply.header("cache-control", "no-store");
         return reply.code(200).send({ status: "ok" });
       } catch (error) {
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "bank_sync",
+          "failed",
+        );
         reportTransactionFailure("Actual bank sync failed", error);
         return reply.code(502).send({
           error: {
@@ -1178,14 +1192,35 @@ function registerBudgetMaintenanceRoutes(
           request.body.offbudget,
           request.headers["x-budget-encryption-password"],
         );
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "account_create",
+          "success",
+        );
         reply.header("cache-control", "no-store");
         return reply.code(200).send({ status: "ok" });
       } catch (error) {
         if (error instanceof BudgetMaintenanceInputError) {
+          logBudgetMaintenanceEvent(
+            request,
+            device,
+            request.params.budgetId,
+            "account_create",
+            "rejected",
+          );
           return reply.code(400).send({
             error: { code: "invalid_request", message: error.message },
           });
         }
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "account_create",
+          "failed",
+        );
         reportTransactionFailure("Actual account creation failed", error);
         return actualRequestFailed(reply);
       }
@@ -1242,14 +1277,38 @@ function registerBudgetMaintenanceRoutes(
           request.body.transferCategoryId,
           request.headers["x-budget-encryption-password"],
         );
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "account_close",
+          "success",
+          request.params.accountId,
+        );
         reply.header("cache-control", "no-store");
         return reply.code(200).send({ status: "ok" });
       } catch (error) {
         if (error instanceof BudgetMaintenanceInputError) {
+          logBudgetMaintenanceEvent(
+            request,
+            device,
+            request.params.budgetId,
+            "account_close",
+            "rejected",
+            request.params.accountId,
+          );
           return reply.code(400).send({
             error: { code: "invalid_request", message: error.message },
           });
         }
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "account_close",
+          "failed",
+          request.params.accountId,
+        );
         reportTransactionFailure("Actual account close failed", error);
         return actualRequestFailed(reply);
       }
@@ -1302,14 +1361,38 @@ function registerBudgetMaintenanceRoutes(
           name,
           request.headers["x-budget-encryption-password"],
         );
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "category_rename",
+          "success",
+          request.params.categoryId,
+        );
         reply.header("cache-control", "no-store");
         return reply.code(200).send({ status: "ok" });
       } catch (error) {
         if (error instanceof BudgetMaintenanceInputError) {
+          logBudgetMaintenanceEvent(
+            request,
+            device,
+            request.params.budgetId,
+            "category_rename",
+            "rejected",
+            request.params.categoryId,
+          );
           return reply.code(400).send({
             error: { code: "invalid_request", message: error.message },
           });
         }
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "category_rename",
+          "failed",
+          request.params.categoryId,
+        );
         reportTransactionFailure("Actual category rename failed", error);
         return actualRequestFailed(reply);
       }
@@ -1361,19 +1444,61 @@ function registerBudgetMaintenanceRoutes(
           request.body.transferCategoryId,
           request.headers["x-budget-encryption-password"],
         );
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "category_delete",
+          "success",
+          request.params.categoryId,
+        );
         reply.header("cache-control", "no-store");
         return reply.code(200).send({ status: "ok" });
       } catch (error) {
         if (error instanceof BudgetMaintenanceInputError) {
+          logBudgetMaintenanceEvent(
+            request,
+            device,
+            request.params.budgetId,
+            "category_delete",
+            "rejected",
+            request.params.categoryId,
+          );
           return reply.code(400).send({
             error: { code: "invalid_request", message: error.message },
           });
         }
+        logBudgetMaintenanceEvent(
+          request,
+          device,
+          request.params.budgetId,
+          "category_delete",
+          "failed",
+          request.params.categoryId,
+        );
         reportTransactionFailure("Actual category delete failed", error);
         return actualRequestFailed(reply);
       }
     },
   );
+}
+
+function logBudgetMaintenanceEvent(
+  request: FastifyRequest,
+  device: { deviceId: string },
+  budgetId: string,
+  action: string,
+  outcome: "success" | "failed" | "rejected",
+  targetId?: string,
+): void {
+  logSecurityAuditEvent({
+    event: `budget.${action}`,
+    outcome,
+    clientAddress: request.ip,
+    deviceId: device.deviceId,
+    budgetId,
+    ...(targetId === undefined ? {} : { targetId }),
+  });
 }
 
 function registerBudgetReadRoutes(

@@ -41,6 +41,7 @@ function createFake() {
       { id: "destination", closed: false },
       { id: "closed", closed: true },
     ]),
+    getAccountBalance: vi.fn(async () => 0),
     getCategories: vi.fn(async () => [...categories]),
     updateCategory: vi.fn(async (id: string, fields: { name?: string }) => {
       const category = categories.find((candidate) => candidate.id === id);
@@ -155,6 +156,18 @@ describe("Actual budget maintenance API", () => {
       undefined,
       undefined,
     );
+  });
+
+  it("requires a transfer account when closing an account with a balance", async () => {
+    const fake = createFake();
+    fake.client.getAccountBalance.mockResolvedValueOnce(-12_000);
+
+    await expect(
+      fake.api.closeAccount("budget-1", "source", null, null),
+    ).rejects.toThrow(
+      "Choose an account to move this balance before closing it",
+    );
+    expect(fake.client.closeAccount).not.toHaveBeenCalled();
   });
 
   it("moves deleted categories only to a valid category of the same type", async () => {
