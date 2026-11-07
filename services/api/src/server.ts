@@ -3,6 +3,7 @@ import { buildApiApp } from "./app.js";
 import type { ApiConfig } from "./config.js";
 import type { ServerDatabase } from "./database.js";
 import type { TransactionApiPort } from "./actual/transaction-api.js";
+import type { BudgetMaintenanceApiPort } from "./actual/budget-maintenance-api.js";
 import type { BudgetReadApiPort } from "./budget-projection/budget-read-api.js";
 import { WriteLeaseReaper } from "./write-journal/lease-reaper.js";
 
@@ -14,6 +15,7 @@ export type SignalRegistrar = (
 
 export interface ApiRuntime {
   transactionApi?: TransactionApiPort;
+  budgetMaintenanceApi?: BudgetMaintenanceApiPort;
   budgetReadApi?: BudgetReadApiPort;
   start?(): Promise<void>;
   close?(): Promise<void>;
@@ -44,6 +46,9 @@ export async function startApiServer(
       ...(runtime.transactionApi === undefined
         ? {}
         : { transactionApi: runtime.transactionApi }),
+      ...(runtime.budgetMaintenanceApi === undefined
+        ? {}
+        : { budgetMaintenanceApi: runtime.budgetMaintenanceApi }),
       ...(runtime.budgetReadApi === undefined
         ? {}
         : { budgetReadApi: runtime.budgetReadApi }),

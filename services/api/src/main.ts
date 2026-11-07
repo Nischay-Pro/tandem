@@ -6,6 +6,7 @@ import { startApiServer, type ApiRuntime } from "./server.js";
 import type { SignalRegistrar } from "./server.js";
 import { ActualSession } from "./actual/actual-session.js";
 import { createTransactionApi } from "./actual/transaction-api.js";
+import { createBudgetMaintenanceApi } from "./actual/budget-maintenance-api.js";
 import { TransactionReconciler } from "./actual/transaction-reconciler.js";
 import { createActualTransactionStore } from "./actual/transaction-store.js";
 import { ActualBudgetSnapshotReader } from "./actual/budget-snapshot-reader.js";
@@ -65,6 +66,7 @@ function createActualRuntime(
       reconciler,
       database.journal,
     ),
+    budgetMaintenanceApi: createBudgetMaintenanceApi(database, session),
     budgetReadApi,
     start: () => session.start(),
     close: () => session.close(),

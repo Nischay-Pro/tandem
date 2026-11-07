@@ -13,6 +13,10 @@ import {
 import { PairingRateLimiter } from "./auth/pairing-rate-limiter.js";
 import { logSecurityAuditEvent } from "./security-audit.js";
 import type { TransactionApiPort } from "./actual/transaction-api.js";
+import {
+  BudgetMaintenanceInputError,
+  type BudgetMaintenanceApiPort,
+} from "./actual/budget-maintenance-api.js";
 import type { BudgetReadApiPort } from "./budget-projection/budget-read-api.js";
 import {
   BUDGET_ENTITY_TYPES,
@@ -61,6 +65,7 @@ export interface ApiAppOptions {
   onClose?: () => Promise<void>;
   deviceAuth?: DeviceAuthorization;
   transactionApi?: TransactionApiPort;
+  budgetMaintenanceApi?: BudgetMaintenanceApiPort;
   budgetReadApi?: BudgetReadApiPort;
   trustProxy?: false | string[];
 }
@@ -130,6 +135,11 @@ export async function buildApiApp(
       options.trustProxy ?? false,
     );
     registerTransactionRoutes(app, options.deviceAuth, options.transactionApi);
+    registerBudgetMaintenanceRoutes(
+      app,
+      options.deviceAuth,
+      options.budgetMaintenanceApi,
+    );
     registerBudgetReadRoutes(app, options.deviceAuth, options.budgetReadApi);
   }
 
@@ -945,6 +955,32 @@ interface BudgetRouteParams {
   budgetId: string;
 }
 
+interface BudgetAccountRouteParams extends BudgetRouteParams {
+  accountId: string;
+}
+
+interface BudgetCategoryRouteParams extends BudgetRouteParams {
+  categoryId: string;
+}
+
+interface BudgetAccountCreateBody {
+  name: string;
+  offbudget: boolean;
+}
+
+interface BudgetAccountCloseBody {
+  transferAccountId: string | null;
+  transferCategoryId: string | null;
+}
+
+interface BudgetCategoryRenameBody {
+  name: string;
+}
+
+interface BudgetCategoryDeleteBody {
+  transferCategoryId: string | null;
+}
+
 interface BudgetChangeQuery {
   generation: string;
   cursor: string;
@@ -962,6 +998,382 @@ interface BudgetSnapshotPageQuery {
 
 interface BudgetReadHeaders {
   "x-budget-encryption-password"?: string;
+}
+
+function registerBudgetMaintenanceRoutes(
+  app: FastifyInstance,
+  deviceAuth: DeviceAuthorization,
+  maintenanceApi: BudgetMaintenanceApiPort | undefined,
+): void {
+  const paramsSchema = {
+    type: "object",
+    properties: {
+      budgetId: {
+        type: "string",
+        minLength: 1,
+        maxLength: 500,
+        pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+      },
+    },
+    required: ["budgetId"],
+    additionalProperties: false,
+  };
+  const accountParamsSchema = {
+    type: "object",
+    properties: {
+      budgetId: {
+        type: "string",
+        minLength: 1,
+        maxLength: 500,
+        pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+      },
+      accountId: {
+        type: "string",
+        minLength: 1,
+        maxLength: 500,
+        pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+      },
+    },
+    required: ["budgetId", "accountId"],
+    additionalProperties: false,
+  };
+  const categoryParamsSchema = {
+    type: "object",
+    properties: {
+      budgetId: {
+        type: "string",
+        minLength: 1,
+        maxLength: 500,
+        pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+      },
+      categoryId: {
+        type: "string",
+        minLength: 1,
+        maxLength: 500,
+        pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+      },
+    },
+    required: ["budgetId", "categoryId"],
+    additionalProperties: false,
+  };
+  const headersSchema = {
+    type: "object",
+    properties: {
+      "x-budget-encryption-password": {
+        type: "string",
+        minLength: 1,
+        maxLength: 1_024,
+      },
+    },
+    additionalProperties: true,
+  };
+  const errorSchema = {
+    type: "object",
+    properties: {
+      error: {
+        type: "object",
+        properties: { code: { type: "string" }, message: { type: "string" } },
+        required: ["code", "message"],
+        additionalProperties: false,
+      },
+    },
+    required: ["error"],
+    additionalProperties: false,
+  };
+  const commonResponseSchema = {
+    200: statusOk,
+    400: errorSchema,
+    401: errorSchema,
+    404: errorSchema,
+    502: errorSchema,
+    503: errorSchema,
+  };
+
+  app.post<{ Params: BudgetRouteParams; Headers: BudgetReadHeaders }>(
+    "/api/v1/budgets/:budgetId/bank-sync",
+    {
+      schema: {
+        tags: ["Budgets"],
+        operationId: "runBudgetBankSync",
+        summary:
+          "Run the configured Actual Budget bank sync and refresh its budget data",
+        security: [{ bearerAuth: [] }],
+        params: paramsSchema,
+        headers: headersSchema,
+        response: commonResponseSchema,
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(deviceAuth, request, reply);
+      if (!device) return reply;
+      if (request.validationError) return invalidBudgetRequest(reply);
+      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
+        return transactionNotFound(reply);
+      if (!maintenanceApi) return actualNotConfigured(reply);
+      try {
+        await maintenanceApi.runBankSync(
+          request.params.budgetId,
+          request.headers["x-budget-encryption-password"],
+        );
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send({ status: "ok" });
+      } catch (error) {
+        reportTransactionFailure("Actual bank sync failed", error);
+        return reply.code(502).send({
+          error: {
+            code: "bank_sync_failed",
+            message:
+              "Actual could not complete bank sync. Check its provider setup and try again.",
+          },
+        });
+      }
+    },
+  );
+
+  app.post<{
+    Params: BudgetRouteParams;
+    Headers: BudgetReadHeaders;
+    Body: BudgetAccountCreateBody;
+  }>(
+    "/api/v1/budgets/:budgetId/accounts",
+    {
+      schema: {
+        tags: ["Budgets"],
+        operationId: "createBudgetAccount",
+        summary: "Create an Actual Budget account",
+        security: [{ bearerAuth: [] }],
+        params: paramsSchema,
+        headers: headersSchema,
+        body: {
+          type: "object",
+          properties: {
+            name: {
+              type: "string",
+              minLength: 1,
+              maxLength: 100,
+              pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+            },
+            offbudget: { type: "boolean" },
+          },
+          required: ["name", "offbudget"],
+          additionalProperties: false,
+        },
+        response: commonResponseSchema,
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(deviceAuth, request, reply);
+      if (!device) return reply;
+      if (request.validationError) return invalidBudgetRequest(reply);
+      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
+        return transactionNotFound(reply);
+      if (!maintenanceApi) return actualNotConfigured(reply);
+      try {
+        const name = request.body.name.trim();
+        await maintenanceApi.createAccount(
+          request.params.budgetId,
+          name,
+          request.body.offbudget,
+          request.headers["x-budget-encryption-password"],
+        );
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send({ status: "ok" });
+      } catch (error) {
+        if (error instanceof BudgetMaintenanceInputError) {
+          return reply.code(400).send({
+            error: { code: "invalid_request", message: error.message },
+          });
+        }
+        reportTransactionFailure("Actual account creation failed", error);
+        return actualRequestFailed(reply);
+      }
+    },
+  );
+
+  app.post<{
+    Params: BudgetAccountRouteParams;
+    Headers: BudgetReadHeaders;
+    Body: BudgetAccountCloseBody;
+  }>(
+    "/api/v1/budgets/:budgetId/accounts/:accountId/close",
+    {
+      schema: {
+        tags: ["Budgets"],
+        operationId: "closeBudgetAccount",
+        summary: "Close an Actual Budget account",
+        security: [{ bearerAuth: [] }],
+        params: accountParamsSchema,
+        headers: headersSchema,
+        body: {
+          type: "object",
+          properties: {
+            transferAccountId: {
+              type: ["string", "null"],
+              minLength: 1,
+              maxLength: 500,
+            },
+            transferCategoryId: {
+              type: ["string", "null"],
+              minLength: 1,
+              maxLength: 500,
+            },
+          },
+          required: ["transferAccountId", "transferCategoryId"],
+          additionalProperties: false,
+        },
+        response: commonResponseSchema,
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(deviceAuth, request, reply);
+      if (!device) return reply;
+      if (request.validationError) return invalidBudgetRequest(reply);
+      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
+        return transactionNotFound(reply);
+      if (!maintenanceApi) return actualNotConfigured(reply);
+      try {
+        await maintenanceApi.closeAccount(
+          request.params.budgetId,
+          request.params.accountId,
+          request.body.transferAccountId,
+          request.body.transferCategoryId,
+          request.headers["x-budget-encryption-password"],
+        );
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send({ status: "ok" });
+      } catch (error) {
+        if (error instanceof BudgetMaintenanceInputError) {
+          return reply.code(400).send({
+            error: { code: "invalid_request", message: error.message },
+          });
+        }
+        reportTransactionFailure("Actual account close failed", error);
+        return actualRequestFailed(reply);
+      }
+    },
+  );
+
+  app.patch<{
+    Params: BudgetCategoryRouteParams;
+    Headers: BudgetReadHeaders;
+    Body: BudgetCategoryRenameBody;
+  }>(
+    "/api/v1/budgets/:budgetId/categories/:categoryId",
+    {
+      schema: {
+        tags: ["Budgets"],
+        operationId: "renameBudgetCategory",
+        summary: "Rename an Actual Budget category",
+        security: [{ bearerAuth: [] }],
+        params: categoryParamsSchema,
+        headers: headersSchema,
+        body: {
+          type: "object",
+          properties: {
+            name: {
+              type: "string",
+              minLength: 1,
+              maxLength: 100,
+              pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+            },
+          },
+          required: ["name"],
+          additionalProperties: false,
+        },
+        response: commonResponseSchema,
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(deviceAuth, request, reply);
+      if (!device) return reply;
+      if (request.validationError) return invalidBudgetRequest(reply);
+      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
+        return transactionNotFound(reply);
+      if (!maintenanceApi) return actualNotConfigured(reply);
+      try {
+        const name = request.body.name.trim();
+        await maintenanceApi.renameCategory(
+          request.params.budgetId,
+          request.params.categoryId,
+          name,
+          request.headers["x-budget-encryption-password"],
+        );
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send({ status: "ok" });
+      } catch (error) {
+        if (error instanceof BudgetMaintenanceInputError) {
+          return reply.code(400).send({
+            error: { code: "invalid_request", message: error.message },
+          });
+        }
+        reportTransactionFailure("Actual category rename failed", error);
+        return actualRequestFailed(reply);
+      }
+    },
+  );
+
+  app.delete<{
+    Params: BudgetCategoryRouteParams;
+    Headers: BudgetReadHeaders;
+    Body: BudgetCategoryDeleteBody;
+  }>(
+    "/api/v1/budgets/:budgetId/categories/:categoryId",
+    {
+      schema: {
+        tags: ["Budgets"],
+        operationId: "deleteBudgetCategory",
+        summary:
+          "Delete an Actual Budget category and reassign its transactions",
+        security: [{ bearerAuth: [] }],
+        params: categoryParamsSchema,
+        headers: headersSchema,
+        body: {
+          type: "object",
+          properties: {
+            transferCategoryId: {
+              type: ["string", "null"],
+              minLength: 1,
+              maxLength: 500,
+            },
+          },
+          required: ["transferCategoryId"],
+          additionalProperties: false,
+        },
+        response: commonResponseSchema,
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(deviceAuth, request, reply);
+      if (!device) return reply;
+      if (request.validationError) return invalidBudgetRequest(reply);
+      if (!DeviceAuthorization.canAccessBudget(device, request.params.budgetId))
+        return transactionNotFound(reply);
+      if (!maintenanceApi) return actualNotConfigured(reply);
+      try {
+        await maintenanceApi.deleteCategory(
+          request.params.budgetId,
+          request.params.categoryId,
+          request.body.transferCategoryId,
+          request.headers["x-budget-encryption-password"],
+        );
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send({ status: "ok" });
+      } catch (error) {
+        if (error instanceof BudgetMaintenanceInputError) {
+          return reply.code(400).send({
+            error: { code: "invalid_request", message: error.message },
+          });
+        }
+        reportTransactionFailure("Actual category delete failed", error);
+        return actualRequestFailed(reply);
+      }
+    },
+  );
 }
 
 function registerBudgetReadRoutes(
