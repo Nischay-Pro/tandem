@@ -36,6 +36,7 @@ import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.ListRow
+import app.tandemforactual.ui.components.ListRowAction
 import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SurfaceCard
@@ -50,6 +51,7 @@ import app.tandemforactual.ui.model.stringValue
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
+import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.X
@@ -91,13 +93,18 @@ internal fun defaultCategoryRulesByPayee(rules: List<BudgetRecordEntity>): Map<S
 @Composable
 internal fun ManagePayeesScreen(
     state: AppState,
+    navigation: AppNavigation,
     mobileSession: TandemMobileSession,
     payeeRecords: List<BudgetRecordEntity>,
     categoryRecords: List<BudgetRecordEntity>,
     ruleRecords: List<BudgetRecordEntity>,
+    merchantIconMatcher: MerchantIconMatcherPack?,
 ) {
     var selectedPayeeId by rememberSaveable(state.selectedBudgetId) { mutableStateOf<String?>(null) }
     var mode by rememberSaveable(state.selectedBudgetId) { mutableStateOf("menu") }
+    var searchQuery by rememberSaveable(state.selectedBudgetId) { mutableStateOf("") }
+    var showAddPayee by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
+    var newPayeeName by rememberSaveable(state.selectedBudgetId) { mutableStateOf("") }
     var nameDraft by rememberSaveable(state.selectedBudgetId, selectedPayeeId) { mutableStateOf("") }
     var mergeTargetId by rememberSaveable(state.selectedBudgetId, selectedPayeeId) { mutableStateOf<String?>(null) }
     var defaultCategoryDraft by rememberSaveable(state.selectedBudgetId, selectedPayeeId) { mutableStateOf("") }
@@ -129,6 +136,7 @@ internal fun ManagePayeesScreen(
                     .sortedBy { it.second.lowercase() }
         }
     val selectedPayee = payees.firstOrNull { it.first == selectedPayeeId }
+    val visiblePayees = remember(payees, searchQuery) { payees.filter { it.second.contains(searchQuery.trim(), ignoreCase = true) } }
     val mergeTarget = payees.firstOrNull { it.first == mergeTargetId }
     val selectedDefaultCategories = selectedPayeeId?.let(defaultCategories::get).orEmpty()
     val selectedDefaultCategoryId = selectedDefaultCategories.singleOrNull()
@@ -139,33 +147,150 @@ internal fun ManagePayeesScreen(
         }
 
     PageLazyColumn {
-        item(key = "manage-payees-heading") { Heading("Payees") }
+        item(key = "manage-payees-search") {
+            ActivitySearchInput(searchQuery, onValueChange = { searchQuery = it }, placeholder = "Find a payee")
+        }
+        item(key = "manage-payees-summary") {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.small),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    if (searchQuery.isBlank()) "${payees.size} payees" else "${visiblePayees.size} of ${payees.size} payees",
+                    modifier = Modifier.weight(1f),
+                    color = tandemPalette.muted,
+                    fontSize = TandemTypography.caption,
+                )
+                TandemIconButton(
+                    Lucide.Plus,
+                    "Add payee",
+                    enabled = !state.readOnlyMode,
+                    tint = tandemPalette.accent,
+                    containerColor = tandemPalette.accentSurface,
+                ) {
+                    newPayeeName = ""
+                    mobileSession.clearBudgetActionMessage()
+                    showAddPayee = true
+                }
+            }
+        }
         if (payees.isEmpty()) {
             item(key = "manage-payees-empty") {
                 SurfaceCard {
                     EmptyState(
                         "No payees",
-                        "Add a payee when entering a transaction.",
+                        "Add a payee to use it in a transaction.",
+                        modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                    )
+                }
+            }
+        } else if (visiblePayees.isEmpty()) {
+            item(key = "manage-payees-no-matches") {
+                SurfaceCard {
+                    EmptyState(
+                        "No matching payees",
                         modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large),
                     )
                 }
             }
         } else {
-            items(payees.size, key = { index -> payees[index].first }) { index ->
-                val (payeeId, name) = payees[index]
+            items(visiblePayees.size, key = { index -> visiblePayees[index].first }) { index ->
+                val (payeeId, name) = visiblePayees[index]
+                val openManagePayee = {
+                    selectedPayeeId = payeeId
+                    nameDraft = name
+                    mergeTargetId = null
+                    defaultCategoryDraft = defaultCategories[payeeId]?.singleOrNull().orEmpty()
+                    mode = "menu"
+                    mobileSession.clearBudgetActionMessage()
+                }
                 SurfaceCard {
                     ListRow(
                         name,
-                        leading = RowLeading.Icon(Lucide.Tags),
+                        leading = RowLeading.Merchant(merchantIconMatcher?.iconFor(name), fallback = Lucide.Tags),
+                        options =
+                            ListRowOptions(
+                                trailingAction =
+                                    ListRowAction(
+                                        Lucide.Pencil,
+                                        "Manage $name",
+                                        enabled = !state.readOnlyMode,
+                                        onClick = openManagePayee,
+                                    ),
+                            ),
                         onClick = {
-                            selectedPayeeId = payeeId
-                            nameDraft = name
-                            mergeTargetId = null
-                            defaultCategoryDraft = defaultCategories[payeeId]?.singleOrNull().orEmpty()
-                            mode = "menu"
-                            mobileSession.clearBudgetActionMessage()
+                            state.activitySearchQuery = ""
+                            state.activitySearchFocusRequest += 1
+                            state.activitySearchFilters =
+                                listOf(ActivitySearchFilter(ActivitySearchField.PAYEE_CONTAINS, payeeId, "Payee: $name"))
+                            navigation.open(AppRoute.ACTIVITY_SEARCH)
                         },
                     )
+                }
+            }
+        }
+    }
+
+    if (showAddPayee) {
+        Dialog(
+            onDismissRequest = {
+                if (!mobileSession.isPerformingBudgetAction) showAddPayee = false
+            },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            SurfaceCard(
+                Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 480.dp)
+                    .padding(horizontal = TandemSpacing.large),
+            ) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(TandemSpacing.large),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                ) {
+                    Text(
+                        "Add payee",
+                        color = tandemPalette.text,
+                        fontSize = TandemTypography.sectionTitle,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    TextFieldCard("Name", newPayeeName, { newPayeeName = it })
+                    mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                        TandemActionButton(
+                            "Cancel",
+                            TandemActionButtonTone.NEUTRAL,
+                            modifier = Modifier.weight(1f),
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                        ) { showAddPayee = false }
+                        TandemActionButton(
+                            if (mobileSession.isPerformingBudgetAction) "Adding…" else "Add",
+                            TandemActionButtonTone.PRIMARY,
+                            modifier = Modifier.weight(1f),
+                            icon = Lucide.Plus,
+                            enabled =
+                                !state.readOnlyMode &&
+                                    !mobileSession.isPerformingBudgetAction &&
+                                    newPayeeName.isNotBlank() &&
+                                    payees.none { it.second.equals(newPayeeName.trim(), ignoreCase = true) },
+                            loading = mobileSession.isPerformingBudgetAction,
+                        ) {
+                            scope.launch {
+                                val created =
+                                    mobileSession.createBudgetPayee(
+                                        state.selectedBudgetId,
+                                        newPayeeName.trim(),
+                                        state.encryptedPassword.takeIf { it.isNotBlank() },
+                                    )
+                                if (created != null) {
+                                    showAddPayee = false
+                                    newPayeeName = ""
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

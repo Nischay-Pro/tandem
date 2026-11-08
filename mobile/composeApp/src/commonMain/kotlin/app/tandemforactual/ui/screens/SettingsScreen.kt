@@ -63,12 +63,18 @@ internal fun SettingsScreen(
                 leading = RowLeading.Icon(Lucide.Palette),
                 onClick = { navigation.open(AppRoute.APPEARANCE) },
             )
-            DividerLine()
+        }
+        SectionCard("Budget") {
             ListRow(
                 "Budget preferences",
-                "Currency and planning choices",
                 leading = RowLeading.Icon(Lucide.WalletCards),
                 onClick = { navigation.open(AppRoute.BUDGET_PREFERENCES) },
+            )
+            DividerLine()
+            ListRow(
+                "Manage payees",
+                leading = RowLeading.Icon(Lucide.Tags),
+                onClick = { navigation.open(AppRoute.MANAGE_PAYEES) },
             )
         }
         SectionCard("Connection", "Sync and paired device") {

@@ -70,10 +70,9 @@ internal fun CategoryGroupScreen(
     var showHidden by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
     var selectedCategoryOrderId by rememberSaveable(state.selectedBudgetId, group?.id) { mutableStateOf<String?>(null) }
     var showGroupDialog by rememberSaveable(state.selectedBudgetId, group?.id) { mutableStateOf(false) }
-    var showCreateGroupDialog by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
+    var showCreateCategoryDialog by rememberSaveable(state.selectedBudgetId, group?.id) { mutableStateOf(false) }
     var groupNameDraft by rememberSaveable(state.selectedBudgetId, group?.id) { mutableStateOf(group?.name.orEmpty()) }
-    var newGroupName by rememberSaveable(state.selectedBudgetId) { mutableStateOf("") }
-    var newGroupIsIncome by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
+    var newCategoryName by rememberSaveable(state.selectedBudgetId, group?.id) { mutableStateOf("") }
     val hiddenGroupRecords =
         remember(mobileSession.categoryGroupRecords) {
             mobileSession.categoryGroupRecords.filter { it.recordBody()?.booleanValue("hidden") == true }
@@ -107,7 +106,7 @@ internal fun CategoryGroupScreen(
                         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                     ) {
                         Box(Modifier.weight(1f)) {
-                            Heading(group.name, state.selectedMonth)
+                            Heading(group.name, "${state.selectedMonth} · ${categoryCountLabel(group.categories.size)}")
                         }
                         if (isLiveBudget) {
                             TandemIconButton(
@@ -334,18 +333,17 @@ internal fun CategoryGroupScreen(
                 }
             }
         }
-        if (isLiveBudget) {
+        if (isLiveBudget && group != null) {
             FloatingAction(
                 compact = true,
                 enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
-                label = "Add category group",
-                contentDescription = "Add category group",
+                label = "Add category",
+                contentDescription = "Add category",
                 icon = Lucide.Plus,
                 onClick = {
-                    newGroupName = ""
-                    newGroupIsIncome = group?.isIncome ?: false
+                    newCategoryName = ""
                     mobileSession.clearBudgetActionMessage()
-                    showCreateGroupDialog = true
+                    showCreateCategoryDialog = true
                 },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 20.dp),
             )
@@ -358,6 +356,7 @@ internal fun CategoryGroupScreen(
             onNameChange = { groupNameDraft = it },
             busy = mobileSession.isPerformingBudgetAction,
             message = mobileSession.budgetActionMessage,
+            placeholder = group.name,
             onDismiss = { showGroupDialog = false },
             onSave = {
                 scope.launch {
@@ -376,26 +375,25 @@ internal fun CategoryGroupScreen(
             },
         )
     }
-    if (showCreateGroupDialog && isLiveBudget) {
+    if (showCreateCategoryDialog && isLiveBudget && group != null) {
         CategoryGroupNameDialog(
-            title = "Add category group",
-            name = newGroupName,
-            onNameChange = { newGroupName = it },
+            title = "Add category",
+            name = newCategoryName,
+            onNameChange = { newCategoryName = it },
             busy = mobileSession.isPerformingBudgetAction,
             message = mobileSession.budgetActionMessage,
-            isIncome = newGroupIsIncome,
-            onIncomeChange = { newGroupIsIncome = it },
-            onDismiss = { showCreateGroupDialog = false },
+            placeholder = "Groceries",
+            onDismiss = { showCreateCategoryDialog = false },
             onSave = {
                 scope.launch {
-                    if (mobileSession.createBudgetCategoryGroup(
+                    if (mobileSession.createBudgetCategory(
                             state.selectedBudgetId,
-                            newGroupName,
-                            newGroupIsIncome,
+                            newCategoryName,
+                            group.id,
                             state.encryptedPassword.takeIf { it.isNotBlank() },
                         ) != null
                     ) {
-                        showCreateGroupDialog = false
+                        showCreateCategoryDialog = false
                     }
                 }
             },
@@ -419,7 +417,7 @@ internal fun BudgetItemReorderActions(
             TandemIconButton(
                 if (isHidden) Lucide.Eye else Lucide.EyeOff,
                 if (isHidden) "Show $itemName" else "Hide $itemName",
-                sizeDp = 34,
+                sizeDp = 44,
                 iconSizeDp = 18,
                 enabled = enabled,
                 tint = if (isHidden) tandemPalette.positive else tandemPalette.muted,
@@ -429,7 +427,7 @@ internal fun BudgetItemReorderActions(
         TandemIconButton(
             Lucide.ChevronUp,
             "Move $itemName up",
-            sizeDp = 34,
+            sizeDp = 44,
             iconSizeDp = 18,
             enabled = enabled && canMoveUp,
             onClick = onMoveUp,
@@ -437,13 +435,15 @@ internal fun BudgetItemReorderActions(
         TandemIconButton(
             Lucide.ChevronDown,
             "Move $itemName down",
-            sizeDp = 34,
+            sizeDp = 44,
             iconSizeDp = 18,
             enabled = enabled && canMoveDown,
             onClick = onMoveDown,
         )
         ReorderDragHandle(
             enabled = enabled && (canMoveUp || canMoveDown),
+            canMoveUp = canMoveUp,
+            canMoveDown = canMoveDown,
             onMoveUp = onMoveUp,
             onMoveDown = onMoveDown,
         )
@@ -457,6 +457,7 @@ internal fun CategoryGroupNameDialog(
     onNameChange: (String) -> Unit,
     busy: Boolean,
     message: String?,
+    placeholder: String = "Essentials",
     isIncome: Boolean? = null,
     onIncomeChange: ((Boolean) -> Unit)? = null,
     onDismiss: () -> Unit,
@@ -466,7 +467,7 @@ internal fun CategoryGroupNameDialog(
         SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = 16.dp)) {
             Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 Text(title, color = tandemPalette.text, fontSize = TandemTypography.sectionTitle, fontWeight = FontWeight.Bold)
-                TextFieldCard("Name", name, onNameChange, TextFieldOptions(placeholder = "Essentials"))
+                TextFieldCard("Name", name, onNameChange, TextFieldOptions(placeholder = placeholder))
                 if (isIncome != null && onIncomeChange != null) {
                     ToggleRow("Income group", "For income categories", isIncome, !busy, onIncomeChange)
                 }

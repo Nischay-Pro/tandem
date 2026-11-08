@@ -363,6 +363,7 @@ class ActivitySearchTest {
     @Test
     fun serverAddressWarningMatchesTheCleartextHostPolicy() {
         assertFalse(serverAddressMayBeInsecure("https://budget.example.com"))
+        assertFalse(serverAddressMayBeInsecure("www.example.com"))
         assertFalse(serverAddressMayBeInsecure("http://192.168.1.40:5006"))
         assertFalse(serverAddressMayBeInsecure("http://10.0.0.12"))
         assertFalse(serverAddressMayBeInsecure("http://[fd12::1]:19753"))
@@ -373,7 +374,20 @@ class ActivitySearchTest {
         assertTrue(serverAddressMayBeInsecure("http://tandem.lan"))
         assertTrue(serverAddressMayBeInsecure("http://actual.local"))
         assertTrue(serverAddressMayBeInsecure("http://fe80"))
-        assertTrue(serverAddressMayBeInsecure("www.example.com"))
+    }
+
+    @Test
+    fun serverAddressRequiresAUsableHttpAddress() {
+        assertFalse(serverAddressIsValid(""))
+        assertFalse(serverAddressIsValid("https://"))
+        assertFalse(serverAddressIsValid("www.example.com"))
+        assertFalse(serverAddressIsValid("https://bad host.example"))
+        assertFalse(serverAddressIsValid("https://example.com:70000"))
+        assertTrue(serverAddressIsValid("https://tandem.example.com:19753"))
+        assertTrue(serverAddressIsValid("http://192.168.1.40:5006"))
+        assertTrue(serverAddressIsValid("http://[fd12::1]:19753"))
+        assertEquals("", cleanServerAddress("https://budget.example.com"))
+        assertEquals("https://my-tandem.home", cleanServerAddress(" https://my-tandem.home "))
     }
 
     private fun record(

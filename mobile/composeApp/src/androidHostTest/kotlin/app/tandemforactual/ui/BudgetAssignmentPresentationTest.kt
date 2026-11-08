@@ -27,4 +27,19 @@ class BudgetAssignmentPresentationTest {
             presentBudgetAssignment(0),
         )
     }
+
+    @Test
+    fun categoryCountsUseTheCorrectSingularAndPluralForms() {
+        assertEquals("0 categories", categoryCountLabel(0))
+        assertEquals("1 category", categoryCountLabel(1))
+        assertEquals("2 categories", categoryCountLabel(2))
+    }
+
+    @Test
+    fun budgetHeaderUsesWordsThatMatchTheSyncState() {
+        assertEquals("Sync off", mainCloudStatusLabel(MainCloudStatus.OFF))
+        assertEquals("Synced", mainCloudStatusLabel(MainCloudStatus.SYNCED))
+        assertEquals("Syncing", mainCloudStatusLabel(MainCloudStatus.SYNCING))
+        assertEquals("Sync needs attention", mainCloudStatusLabel(MainCloudStatus.ERROR))
+    }
 }

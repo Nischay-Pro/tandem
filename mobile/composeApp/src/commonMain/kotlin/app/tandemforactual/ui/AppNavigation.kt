@@ -164,7 +164,7 @@ internal fun AppHeader(
     val headerTitle =
         when (route) {
             AppRoute.NEW_TRANSACTION -> "Add transaction"
-            AppRoute.BUDGET -> budgetDisplayNameForHeader(state.selectedBudget)
+            AppRoute.BUDGET -> state.selectedBudget
             AppRoute.CATEGORY_GROUP ->
                 liveBudgetMonth?.groups?.firstOrNull { it.id == state.selectedCategoryGroupId }?.name
                     ?: if (state.selectedBudgetId.isBlank()) route.title else "Category group"
@@ -218,10 +218,11 @@ internal fun AppHeader(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = headerTitle,
+                        modifier = Modifier.weight(1f),
                         color = palette.text,
                         fontSize = TandemTypography.periodTitle,
                         fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
+                        maxLines = if (route == AppRoute.BUDGET) 2 else 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     if (route == AppRoute.BUDGET) {
@@ -236,7 +237,7 @@ internal fun AppHeader(
                 if (route == AppRoute.BUDGET) {
                     Text(
                         if (state.selectedBudgetId.isNotBlank()) {
-                            "${state.selectedMonth} · Actual"
+                            "${state.selectedMonth} · ${mainCloudStatusLabel(syncStatus)}"
                         } else {
                             "${state.selectedMonth} · Sample budget"
                         },

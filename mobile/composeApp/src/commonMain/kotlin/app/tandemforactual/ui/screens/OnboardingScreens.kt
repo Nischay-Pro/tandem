@@ -125,14 +125,13 @@ internal fun ServerAddressScreen(
     navigation: AppNavigation,
 ) {
     PageColumn {
-        Heading("Server address")
         TextFieldCard(
             "Server URL",
             state.serverUrl,
             { state.serverUrl = it },
-            TextFieldOptions(placeholder = "https://budget.example.com"),
+            TextFieldOptions(placeholder = "https://tandem.example.com:19753"),
         )
-        InfoBubble("Tandem uses the budget password only to unlock encrypted budgets.")
+        InfoBubble("Enter your Tandem server address. Use HTTPS over the internet; use HTTP only on a trusted local network.")
         if (serverAddressMayBeInsecure(state.serverUrl)) {
             val palette = tandemPalette
             Row(
@@ -154,18 +153,57 @@ internal fun ServerAddressScreen(
                 )
             }
         }
-        PrimaryButton("Continue", enabled = state.serverUrl.isNotBlank()) { navigation.open(AppRoute.PAIRING_OPTIONS) }
+        PrimaryButton("Continue", enabled = serverAddressIsValid(state.serverUrl)) { navigation.open(AppRoute.PAIRING_OPTIONS) }
     }
+}
+
+internal fun cleanServerAddress(value: String): String =
+    value.trim().takeUnless { it.equals("https://budget.example.com", ignoreCase = true) }.orEmpty()
+
+internal fun serverAddressIsValid(value: String): Boolean {
+    val address = value.trim()
+    if (address.isBlank() || address.any(Char::isWhitespace)) return false
+    val scheme =
+        when {
+            address.startsWith("https://", ignoreCase = true) -> "https"
+            address.startsWith("http://", ignoreCase = true) -> "http"
+            else -> return false
+        }
+    val authority =
+        address
+            .substring(scheme.length + 3)
+            .substringBefore('/')
+            .substringBefore('?')
+            .substringBefore('#')
+    if (authority.isBlank() || '@' in authority) return false
+    val host: String
+    val portText: String?
+    if (authority.startsWith("[")) {
+        val closingBracket = authority.indexOf(']')
+        if (closingBracket <= 1) return false
+        host = authority.substring(1, closingBracket)
+        val suffix = authority.substring(closingBracket + 1)
+        if (suffix.isNotEmpty() && !suffix.startsWith(':')) return false
+        portText = suffix.takeIf { it.isNotEmpty() }?.drop(1)
+        if (host.any { !(it.isDigit() || it.lowercaseChar() in 'a'..'f' || it == ':' || it == '.') }) return false
+    } else {
+        if (authority.count { it == ':' } > 1) return false
+        val separator = authority.lastIndexOf(':')
+        host = if (separator >= 0) authority.substring(0, separator) else authority
+        portText = if (separator >= 0) authority.substring(separator + 1) else null
+        if (host.isBlank() || host.startsWith('.') || host.endsWith('.') || ".." in host) return false
+        if (host.any { !(it.isLetterOrDigit() || it == '.' || it == '-') }) return false
+    }
+    if (portText != null && (portText.isEmpty() || portText.toIntOrNull()?.let { it in 1..65535 } != true)) return false
+    return host.isNotBlank()
 }
 
 internal fun serverAddressMayBeInsecure(value: String): Boolean {
     val address = value.trim().lowercase()
-    if (address.isBlank() || address.startsWith("https://")) return false
-    val hasHttpScheme = address.startsWith("http://")
+    if (!address.startsWith("http://")) return false
     val authority =
         address
             .removePrefix("http://")
-            .removePrefix("https://")
             .substringBefore('/')
             .substringBefore('?')
             .substringBefore('#')
@@ -174,9 +212,9 @@ internal fun serverAddressMayBeInsecure(value: String): Boolean {
             .removePrefix("www.")
             .trim()
     if (host.isBlank()) return false
-    if (hasHttpScheme && isLocalHttpHost(host)) return false
+    if (isLocalHttpHost(host)) return false
     if (host == "localhost" || host.endsWith(".localhost")) return false
-    return hasHttpScheme || host.startsWith("www.") || host.contains('.')
+    return true
 }
 
 @Composable

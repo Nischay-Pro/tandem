@@ -165,7 +165,7 @@ fun TandemApp(
     LaunchedEffect(mobileSession) {
         try {
             val storedServerUrl = mobileSession.restoreStoredSession()
-            if (storedServerUrl != null) state.serverUrl = storedServerUrl
+            if (storedServerUrl != null) state.serverUrl = cleanServerAddress(storedServerUrl)
         } finally {
             sessionRestoreComplete = true
         }
@@ -675,6 +675,8 @@ fun TandemApp(
     var liveActivityTransactions by remember { mutableStateOf(emptyList<TransactionItem>()) }
     val transactionRecords = mobileSession.transactionRecords
     val activityTransactionRecords = mobileSession.activityTransactionRecords
+    val activityTransactionRecordsVersion = mobileSession.activityTransactionRecordsVersion
+    val activityTransactionRecordsSnapshot = activityTransactionRecords.toList()
     val accountRecords = mobileSession.accountRecords
     val payeeRecords = mobileSession.payeeRecords
     val categoryRecords = mobileSession.categoryRecords
@@ -700,7 +702,7 @@ fun TandemApp(
             }
     }
     LaunchedEffect(
-        activityTransactionRecords,
+        activityTransactionRecordsVersion,
         accountRecords,
         payeeRecords,
         categoryRecords,
@@ -710,7 +712,7 @@ fun TandemApp(
         liveActivityTransactions =
             withContext(Dispatchers.Default) {
                 buildLiveTransactionItems(
-                    activityTransactionRecords,
+                    activityTransactionRecordsSnapshot,
                     accountRecords,
                     payeeRecords,
                     categoryRecords,
@@ -765,7 +767,7 @@ fun TandemApp(
         coroutineScope.launch {
             val storedServerUrl = mobileSession.restoreStoredSession()
             if (storedServerUrl != null) {
-                state.serverUrl = storedServerUrl
+                state.serverUrl = cleanServerAddress(storedServerUrl)
                 backStack.clear()
                 backStack.add(newRouteEntry(AppRoute.BUDGET_CHOOSER))
             }

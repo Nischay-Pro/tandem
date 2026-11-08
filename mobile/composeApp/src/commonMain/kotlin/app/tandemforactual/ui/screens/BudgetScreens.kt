@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -260,7 +261,7 @@ internal fun BudgetScreen(
                         CollapsibleSectionCard(
                             "${state.selectedMonth} summary",
                             if (isLiveBudget) {
-                                "${groups.sumOf { it.categories.size }} categories · ${assignmentPresentation.label}"
+                                "${categoryCountLabel(groups.sumOf { it.categories.size })} · ${assignmentPresentation.label}"
                             } else {
                                 "Ready to assign"
                             },
@@ -317,7 +318,7 @@ internal fun BudgetScreen(
                     Column {
                         CollapsibleSectionCard(
                             "Pinned",
-                            "${pinnedCategories.size} categories",
+                            categoryCountLabel(pinnedCategories.size),
                             expanded = pinnedExpanded,
                             onToggleExpanded = { state.toggleBudgetSection(pinnedSectionKey) },
                         ) {}
@@ -412,11 +413,11 @@ internal fun BudgetScreen(
                                     )
                                     Text(
                                         when {
-                                            isReordering -> "${group.categories.size} categories"
-                                            isTrackingBudget -> "${group.categories.size} categories"
+                                            isReordering -> categoryCountLabel(group.categories.size)
+                                            isTrackingBudget -> categoryCountLabel(group.categories.size)
                                             else -> "${state.formatCurrency(
                                                 group.assignedMinor,
-                                            )} assigned · ${group.categories.size} categories"
+                                            )} assigned · ${categoryCountLabel(group.categories.size)}"
                                         },
                                         color = palette.muted,
                                         fontSize = TandemTypography.caption,
@@ -456,13 +457,25 @@ internal fun BudgetScreen(
                                         },
                                     )
                                 } else {
-                                    Text(
-                                        state.formatCurrency(group.balanceMinor),
-                                        color = palette.accent,
-                                        fontSize = TandemTypography.compactBody,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 1,
-                                    )
+                                    Column(
+                                        horizontalAlignment = Alignment.End,
+                                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
+                                    ) {
+                                        Text(
+                                            state.formatCurrency(group.balanceMinor),
+                                            color = palette.accent,
+                                            fontSize = TandemTypography.compactBody,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            if (isTrackingBudget) "Balance" else "Available",
+                                            color = palette.muted,
+                                            fontSize = TandemTypography.micro,
+                                            maxLines = 1,
+                                        )
+                                    }
                                     TandemIconButton(
                                         if (groupExpanded) Lucide.ChevronDown else Lucide.ChevronRight,
                                         if (groupExpanded) "Collapse ${group.name}" else "Expand ${group.name}",
@@ -715,7 +728,7 @@ internal fun BudgetScreen(
                                 Column(Modifier.fillMaxWidth().padding(TandemSpacing.small)) {
                                     ListRow(
                                         template.name,
-                                        subtitle = "${template.assignments.size} categories",
+                                        subtitle = categoryCountLabel(template.assignments.size),
                                         leading = RowLeading.Icon(Lucide.CalendarDays),
                                     )
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {

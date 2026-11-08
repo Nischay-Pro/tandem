@@ -14,6 +14,14 @@ import kotlin.test.assertTrue
 
 class TandemMobileSessionTest {
     @Test
+    fun activityRefreshKeepsOnePageAndCapsLargeLists() {
+        assertEquals(50, activityTransactionRefreshLimit(0))
+        assertEquals(50, activityTransactionRefreshLimit(50))
+        assertEquals(125, activityTransactionRefreshLimit(125))
+        assertEquals(200, activityTransactionRefreshLimit(5_000))
+    }
+
+    @Test
     fun transactionEditPatchIncludesPayeeCategoryDateAndAccountChanges() {
         val base =
             Json

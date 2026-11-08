@@ -107,10 +107,12 @@ internal fun ScreenContent(
         AppRoute.MANAGE_PAYEES ->
             ManagePayeesScreen(
                 state,
+                navigation,
                 mobileSession,
                 mobileSession.payeeRecords,
                 mobileSession.categoryRecords,
                 mobileSession.ruleRecords,
+                merchantIconMatcher,
             )
         AppRoute.BUDGET_RULES ->
             BudgetRulesScreen(

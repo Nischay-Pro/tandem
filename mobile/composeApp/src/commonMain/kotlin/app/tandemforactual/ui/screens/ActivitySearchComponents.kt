@@ -54,14 +54,17 @@ internal fun ActivitySearchInput(
     value: String,
     onValueChange: (String) -> Unit,
     autoFocus: Boolean = false,
+    focusRequestKey: Int = 0,
+    placeholder: String = "Payee, account, category or amount",
 ) {
     val palette = tandemPalette
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
-    LaunchedEffect(autoFocus) {
+    LaunchedEffect(autoFocus, focusRequestKey) {
         if (autoFocus) {
-            delay(120)
+            delay(TandemMotion.ROUTE_MILLIS.toLong() + 40L)
             focusRequester.requestFocus()
+            delay(40)
             keyboardController?.show()
         }
     }
@@ -93,7 +96,7 @@ internal fun ActivitySearchInput(
                     ) {
                         if (value.isEmpty()) {
                             Text(
-                                "Payee, account, category or amount",
+                                placeholder,
                                 color = palette.muted,
                                 fontSize = TandemTypography.body,
                                 lineHeight = TandemTypography.bodyLineHeight,

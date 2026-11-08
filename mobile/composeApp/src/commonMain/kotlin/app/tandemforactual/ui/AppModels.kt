@@ -94,6 +94,16 @@ internal fun budgetDisplayNameForHeader(name: String): String {
     } ?: segments.firstOrNull().orEmpty()
 }
 
+internal fun categoryCountLabel(count: Int): String = "${count.coerceAtLeast(0)} ${if (count == 1) "category" else "categories"}"
+
+internal fun mainCloudStatusLabel(status: MainCloudStatus): String =
+    when (status) {
+        MainCloudStatus.OFF -> "Sync off"
+        MainCloudStatus.SYNCED -> "Synced"
+        MainCloudStatus.SYNCING -> "Syncing"
+        MainCloudStatus.ERROR -> "Sync needs attention"
+    }
+
 internal enum class AppRoute(
     val title: String,
 ) {

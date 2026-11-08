@@ -60,6 +60,7 @@ internal class AppState {
     var reportsRangePreset by mutableStateOf(ReportRangePreset.LAST_6_MONTHS.name)
     var reportsNetWorthScope by mutableStateOf("All accounts")
     var activitySearchQuery by mutableStateOf("")
+    var activitySearchFocusRequest by mutableStateOf(0)
     var activitySearchFilters by mutableStateOf<List<ActivitySearchFilter>>(emptyList())
     var savedActivitySearchesJson by mutableStateOf("")
     var budgetTemplatesJson by mutableStateOf("")
@@ -79,7 +80,7 @@ internal class AppState {
     var selectedTransactionPayeeName by mutableStateOf("")
     var selectedTransactionCategoryName by mutableStateOf("")
     var selectedConflictOperationId by mutableStateOf("")
-    var serverUrl by mutableStateOf("https://budget.example.com")
+    var serverUrl by mutableStateOf("")
     var pairingCode by mutableStateOf("")
     var encryptedPassword by mutableStateOf("")
     var transactionAmount by mutableStateOf(formatAmount(4_218))
@@ -295,7 +296,10 @@ internal class AppState {
                             saved["selectedTransactionCategoryName"] as? String ?: selectedTransactionCategoryName
                         selectedTransactionNotes = saved["selectedTransactionNotes"] as? String ?: selectedTransactionNotes
                         selectedConflictOperationId = saved["selectedConflictOperationId"] as? String ?: selectedConflictOperationId
-                        serverUrl = saved["serverUrl"] as? String ?: serverUrl
+                        serverUrl =
+                            (saved["serverUrl"] as? String)
+                                ?.takeUnless { it.trim().equals("https://budget.example.com", ignoreCase = true) }
+                                ?: serverUrl
                         transactionAmount = saved["transactionAmount"] as? String ?: transactionAmount
                         transactionAccount = saved["transactionAccount"] as? String ?: transactionAccount
                         newTransactionAccountId = saved["newTransactionAccountId"] as? String ?: newTransactionAccountId

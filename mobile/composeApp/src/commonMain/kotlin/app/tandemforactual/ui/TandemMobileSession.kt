@@ -1,8 +1,10 @@
 package app.tandemforactual.ui
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.PairedDevice
 import app.tandemforactual.api.client.StatementImportItem
@@ -234,7 +236,9 @@ internal class TandemMobileSession(
     var transactionRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
         private set
 
-    var activityTransactionRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
+    val activityTransactionRecords = mutableStateListOf<BudgetRecordEntity>()
+
+    var activityTransactionRecordsVersion by mutableStateOf(0)
         private set
 
     var activityTransactionPageBudgetId by mutableStateOf("")
@@ -1578,13 +1582,16 @@ internal class TandemMobileSession(
         activityTransactionPageMutex.lock()
         try {
             if (reset || activityTransactionPageBudgetId != budgetId) {
-                activityTransactionPageBudgetId = budgetId
-                activityTransactionRecords = emptyList()
+                Snapshot.withMutableSnapshot {
+                    activityTransactionPageBudgetId = budgetId
+                    activityTransactionRecords.clear()
+                    activityTransactionRecordsVersion += 1
+                    activityTransactionPageGeneration += 1
+                }
                 activityCursorDate = null
                 activityCursorId = ""
                 hasMoreActivityTransactions = true
                 activityTransactionPageError = null
-                activityTransactionPageGeneration += 1
             }
             if (!hasMoreActivityTransactions) return
             isLoadingActivityTransactions = true
@@ -1599,7 +1606,13 @@ internal class TandemMobileSession(
                     )
                 if (activityTransactionPageBudgetId != budgetId) return
                 val knownIds = activityTransactionRecords.asSequence().map(BudgetRecordEntity::recordId).toHashSet()
-                activityTransactionRecords = activityTransactionRecords + page.filterNot { it.recordId in knownIds }
+                val newRecords = page.filterNot { it.recordId in knownIds }
+                if (newRecords.isNotEmpty()) {
+                    Snapshot.withMutableSnapshot {
+                        activityTransactionRecords.addAll(newRecords)
+                        activityTransactionRecordsVersion += 1
+                    }
+                }
                 page.lastOrNull()?.let { last ->
                     activityCursorDate = last.recordDate
                     activityCursorId = last.recordId
@@ -1619,14 +1632,38 @@ internal class TandemMobileSession(
 
     private suspend fun refreshActivityTransactionPages(budgetId: String) {
         if (activityTransactionPageBudgetId != budgetId) return
-        val previousRecordCount = activityTransactionRecords.size
-        loadMoreActivityTransactions(budgetId, reset = true)
-        while (
-            activityTransactionRecords.size < previousRecordCount &&
-            hasMoreActivityTransactions &&
-            activityTransactionPageError == null
-        ) {
-            loadMoreActivityTransactions(budgetId)
+        val localRepository = repository ?: return
+        activityTransactionPageMutex.lock()
+        try {
+            if (activityTransactionPageBudgetId != budgetId) return
+            val refreshLimit = activityTransactionRefreshLimit(activityTransactionRecords.size)
+            isLoadingActivityTransactions = true
+            try {
+                val refreshed = localRepository.findTransactionPage(budgetId = budgetId, limit = refreshLimit)
+                if (activityTransactionPageBudgetId != budgetId) return
+                Snapshot.withMutableSnapshot {
+                    activityTransactionRecords.clear()
+                    activityTransactionRecords.addAll(refreshed)
+                    activityTransactionRecordsVersion += 1
+                }
+                refreshed.lastOrNull()?.let { last ->
+                    activityCursorDate = last.recordDate
+                    activityCursorId = last.recordId
+                } ?: run {
+                    activityCursorDate = null
+                    activityCursorId = ""
+                }
+                hasMoreActivityTransactions = refreshed.size == refreshLimit
+                activityTransactionPageError = null
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                activityTransactionPageError = "Couldn’t refresh transactions. Try again."
+            } finally {
+                isLoadingActivityTransactions = false
+            }
+        } finally {
+            activityTransactionPageMutex.unlock()
         }
     }
 
@@ -1760,6 +1797,13 @@ internal class TandemMobileSession(
 }
 
 private const val ACTIVITY_TRANSACTION_PAGE_SIZE = 50
+private const val ACTIVITY_TRANSACTION_REFRESH_LIMIT = 200
+
+internal fun activityTransactionRefreshLimit(loadedRecordCount: Int): Int =
+    minOf(
+        loadedRecordCount.coerceAtLeast(ACTIVITY_TRANSACTION_PAGE_SIZE),
+        ACTIVITY_TRANSACTION_REFRESH_LIMIT,
+    )
 
 private suspend fun LocalBudgetRepository.hasCachedSnapshot(budgetId: String): Boolean {
     val checkpoint = readSyncCheckpoint(budgetId) ?: return false

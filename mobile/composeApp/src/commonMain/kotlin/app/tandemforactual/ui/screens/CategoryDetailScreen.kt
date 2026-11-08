@@ -896,6 +896,7 @@ internal fun openCategoryActivity(
     categoryName: String,
 ) {
     state.activitySearchQuery = ""
+    state.activitySearchFocusRequest += 1
     state.activitySearchFilters =
         listOf(
             ActivitySearchFilter(
@@ -913,6 +914,7 @@ internal fun openGeneralActivitySearch(
     navigation: AppNavigation,
 ) {
     state.activitySearchQuery = ""
+    state.activitySearchFocusRequest += 1
     state.activitySearchFilters = emptyList()
     navigation.open(AppRoute.ACTIVITY_SEARCH)
 }
@@ -925,6 +927,7 @@ internal fun openReportCategoryActivity(
     window: ReportWindow,
 ) {
     state.activitySearchQuery = ""
+    state.activitySearchFocusRequest += 1
     val dateFilter =
         when {
             window.allDates ->

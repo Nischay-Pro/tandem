@@ -318,6 +318,7 @@ internal fun ActivitySearchScreen(
                     state.activitySearchQuery = it
                 },
                 autoFocus = autoFocusSearch,
+                focusRequestKey = state.activitySearchFocusRequest,
             )
             if (savedSearches.isNotEmpty()) {
                 Row(

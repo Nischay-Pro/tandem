@@ -26,7 +26,6 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -37,8 +36,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -175,6 +176,8 @@ internal fun TandemIconButton(
 @Composable
 internal fun ReorderDragHandle(
     enabled: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
 ) {
@@ -182,48 +185,73 @@ internal fun ReorderDragHandle(
     val stepPixels = with(density) { 52.dp.toPx() }
     val latestMoveUp by rememberUpdatedState(onMoveUp)
     val latestMoveDown by rememberUpdatedState(onMoveDown)
+    val latestCanMoveUp by rememberUpdatedState(canMoveUp)
+    val latestCanMoveDown by rememberUpdatedState(canMoveDown)
     var dragDistance by remember { mutableFloatStateOf(0f) }
-    var movedDuringDrag by remember { mutableStateOf(false) }
     val dragState =
         rememberDraggableState { delta ->
-            if (!movedDuringDrag) {
-                dragDistance += delta
-                when {
-                    dragDistance >= stepPixels -> {
-                        movedDuringDrag = true
-                        latestMoveDown()
-                    }
-                    dragDistance <= -stepPixels -> {
-                        movedDuringDrag = true
-                        latestMoveUp()
-                    }
-                }
+            dragDistance += delta
+            if (dragDistance >= stepPixels && latestCanMoveDown) {
+                latestMoveDown()
+                dragDistance -= stepPixels
+            }
+            if (dragDistance <= -stepPixels && latestCanMoveUp) {
+                latestMoveUp()
+                dragDistance += stepPixels
+            }
+            if (!latestCanMoveDown && dragDistance > 0f || !latestCanMoveUp && dragDistance < 0f) {
+                dragDistance = 0f
             }
         }
-    TandemIconButton(
-        Lucide.GripVertical,
-        "Drag to reorder",
-        sizeDp = 36,
-        iconSizeDp = 19,
-        enabled = enabled,
-        modifier =
-            Modifier.draggable(
+    val actionList =
+        buildList {
+            if (enabled && canMoveUp) {
+                add(
+                    CustomAccessibilityAction("Move up") {
+                        latestMoveUp()
+                        true
+                    },
+                )
+            }
+            if (enabled && canMoveDown) {
+                add(
+                    CustomAccessibilityAction("Move down") {
+                        latestMoveDown()
+                        true
+                    },
+                )
+            }
+        }
+    val tapLabel = if (canMoveDown) "Move down" else "Move up"
+    val reorderSemantics =
+        Modifier.semantics(mergeDescendants = true) {
+            contentDescription = "Reorder item"
+            customActions = actionList
+        }
+    val handleModifier =
+        Modifier
+            .size(44.dp)
+            .clip(RoundedCornerShape(TandemShapes.medium))
+            .background(tandemPalette.accentSurface)
+            .then(reorderSemantics)
+            .clickable(
+                enabled = enabled && (canMoveUp || canMoveDown),
+                role = Role.Button,
+                onClickLabel = tapLabel,
+                onClick = { if (canMoveDown) onMoveDown() else onMoveUp() },
+            ).draggable(
                 orientation = Orientation.Vertical,
                 state = dragState,
-                enabled = enabled,
-                onDragStarted = {
-                    dragDistance = 0f
-                    movedDuringDrag = false
-                },
-                onDragStopped = {
-                    dragDistance = 0f
-                    movedDuringDrag = false
-                },
-            ),
-        containerColor = tandemPalette.accentSurface,
-        tint = tandemPalette.accent,
-        onClick = {},
-    )
+                enabled = enabled && (canMoveUp || canMoveDown),
+                onDragStarted = { dragDistance = 0f },
+                onDragStopped = { dragDistance = 0f },
+            )
+    androidx.compose.foundation.layout.Box(
+        modifier = handleModifier,
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Lucide.GripVertical, contentDescription = null, modifier = Modifier.size(21.dp), tint = tandemPalette.accent)
+    }
 }
 
 @Composable
