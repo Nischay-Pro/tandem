@@ -129,7 +129,7 @@ internal fun ServerAddressScreen(
             "Server URL",
             state.serverUrl,
             { state.serverUrl = it },
-            TextFieldOptions(placeholder = "https://tandem.example.com:19753"),
+            TextFieldOptions(placeholder = "https://"),
         )
         InfoBubble("Enter your Tandem server address. Use HTTPS over the internet; use HTTP only on a trusted local network.")
         if (serverAddressMayBeInsecure(state.serverUrl)) {
