@@ -551,23 +551,12 @@ internal fun FloatingTransactionDeleteAction(
 internal fun ReadOnlyField(
     label: String,
     value: String,
-    leading: String = "",
-    leadingVector: ImageVector? = null,
+    leadingVector: ImageVector,
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
     FieldFrame(label, onClickLabel = "$label, $value", onClick = onClick) {
-        if (leadingVector != null) {
-            Icon(leadingVector, contentDescription = null, modifier = Modifier.size(30.dp), tint = palette.accent)
-        } else if (leading.isNotEmpty()) {
-            Text(
-                leading,
-                modifier = Modifier.clearAndSetSemantics {},
-                color = palette.accent,
-                fontSize = TandemTypography.action,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
+        Icon(leadingVector, contentDescription = null, modifier = Modifier.size(30.dp), tint = palette.accent)
         Text(value, color = palette.text, fontSize = TandemTypography.body, modifier = Modifier.weight(1f))
         Icon(
             Lucide.ChevronRight,

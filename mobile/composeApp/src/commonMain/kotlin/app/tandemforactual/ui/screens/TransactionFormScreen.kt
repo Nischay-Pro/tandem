@@ -479,12 +479,12 @@ internal fun TransactionFormScreen(
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             TransactionTypePicker(state.transactionType, onSelect = { state.transactionType = it })
         }
-        ReadOnlyField("Account", state.transactionAccount, "A") {
+        ReadOnlyField("Account", state.transactionAccount, leadingVector = Lucide.WalletCards) {
             showAccountPicker = true
         }
-        ReadOnlyField("Payee", state.transactionPayee, "P") { navigation.open(AppRoute.CHOOSE_PAYEE) }
-        ReadOnlyField("Category", state.transactionCategory, "C") { navigation.open(AppRoute.CHOOSE_CATEGORY) }
-        ReadOnlyField("Date", state.transactionDate, "▣") { showDatePicker = true }
+        ReadOnlyField("Payee", state.transactionPayee, leadingVector = Lucide.Receipt) { navigation.open(AppRoute.CHOOSE_PAYEE) }
+        ReadOnlyField("Category", state.transactionCategory, leadingVector = Lucide.Tags) { navigation.open(AppRoute.CHOOSE_CATEGORY) }
+        ReadOnlyField("Date", state.transactionDate, leadingVector = Lucide.CalendarDays) { showDatePicker = true }
         TextFieldCard(
             "Notes",
             state.transactionNotes,
