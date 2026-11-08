@@ -340,6 +340,17 @@ jobs:
           :composeApp:linkDebugFrameworkIosSimulatorArm64
           :composeApp:iosSimulatorArm64Test
 
+      - name: Upload Compose iOS test reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: compose-ios-test-reports-${{ github.sha }}
+          path: |
+            mobile/composeApp/build/reports/tests/iosSimulatorArm64Test
+            mobile/composeApp/build/test-results/iosSimulatorArm64Test
+          if-no-files-found: warn
+          retention-days: 7
+
   mobile:
     name: Android, iOS, and generated client gate
     needs:
