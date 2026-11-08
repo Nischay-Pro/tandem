@@ -10,6 +10,7 @@ import androidx.compose.animation.core.tween
 /** Shared timing for app transitions so navigation and state changes feel like one system. */
 internal object TandemMotion {
     const val ROUTE_MILLIS = 220
+    const val SHEET_MILLIS = 360
     const val COLOR_MILLIS = 200
     const val CONTROL_MILLIS = 180
     const val CONTENT_SIZE_MILLIS = 200

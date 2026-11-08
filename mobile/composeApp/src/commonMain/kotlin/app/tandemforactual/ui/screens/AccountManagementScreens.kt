@@ -112,8 +112,8 @@ internal fun AccountReconcileDialog(
     ) {
         AnimatedVisibility(
             visibleState = visibleState,
-            enter = slideInVertically(tandemMotionSpec(tandemReduceMotion, TandemMotion.ROUTE_MILLIS)) { it },
-            exit = slideOutVertically(tandemMotionSpec(tandemReduceMotion, TandemMotion.ROUTE_MILLIS)) { it },
+            enter = slideInVertically(tandemMotionSpec(tandemReduceMotion, TandemMotion.SHEET_MILLIS)) { it },
+            exit = slideOutVertically(tandemMotionSpec(tandemReduceMotion, TandemMotion.SHEET_MILLIS)) { it },
         ) {
             SurfaceCard(Modifier.fillMaxSize()) {
                 Column(
