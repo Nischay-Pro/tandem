@@ -2,9 +2,7 @@
 
 package app.tandemforactual.ui
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.AlertDialog
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
@@ -37,6 +36,7 @@ import app.tandemforactual.ui.components.BodyText
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
+import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.model.LiveAccountSummary
@@ -279,49 +279,54 @@ internal fun TransactionFormScreen(
                         modifier = Modifier.align(Alignment.BottomCenter),
                     )
                 }
-                FloatingTransactionSave(
-                    compact = compactSave,
-                    enabled =
-                        !mobileSession.isSavingTransaction &&
-                            state.newTransactionAccountId.isNotBlank() &&
-                            state.transactionPayee.isNotBlank() &&
-                            state.transactionCategory.isNotBlank() &&
-                            amountMinorUnits > 0,
-                    onClick = onCreateTransaction,
-                    modifier =
-                        Modifier
-                            .align(Alignment.BottomEnd)
-                            .imePadding()
-                            .padding(
-                                end = 18.dp,
-                                bottom = if (keypadVisible) AMOUNT_KEYPAD_HEIGHT + 12.dp else 12.dp,
-                            ),
-                )
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .imePadding()
+                        .padding(bottom = if (keypadVisible) AMOUNT_KEYPAD_HEIGHT + 12.dp else 12.dp),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().background(tandemPalette.surface).padding(horizontal = 18.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        SecondaryButton("Cancel", Modifier.width(112.dp), onClick = navigation.back)
+                        Spacer(Modifier.weight(1f))
+                        FloatingTransactionSave(
+                            compact = compactSave,
+                            enabled =
+                                !mobileSession.isSavingTransaction &&
+                                    state.newTransactionAccountId.isNotBlank() &&
+                                    state.transactionPayee.isNotBlank() &&
+                                    state.transactionCategory.isNotBlank() &&
+                                    amountMinorUnits > 0,
+                            onClick = onCreateTransaction,
+                        )
+                    }
+                }
             }
-            if (showAccountPicker) {
-                TransactionAccountPickerDialog(
-                    liveAccounts,
-                    state.newTransactionAccountId,
-                    state.transactionAccount,
-                    live = true,
-                    onSelect = { account ->
-                        state.transactionAccount = account.label
-                        state.newTransactionAccountId = account.id
-                        showAccountPicker = false
-                    },
-                    onDismiss = { showAccountPicker = false },
-                )
-            }
-            if (showDatePicker) {
-                TransactionDatePickerDialog(
-                    selectedDate = state.transactionDate,
-                    onSelect = {
-                        state.transactionDate = it
-                        showDatePicker = false
-                    },
-                    onDismiss = { showDatePicker = false },
-                )
-            }
+            TransactionAccountPickerDialog(
+                visible = showAccountPicker,
+                liveAccounts,
+                state.newTransactionAccountId,
+                state.transactionAccount,
+                live = true,
+                onSelect = { account ->
+                    state.transactionAccount = account.label
+                    state.newTransactionAccountId = account.id
+                    showAccountPicker = false
+                },
+                onDismiss = { showAccountPicker = false },
+            )
+            TransactionDatePickerDialog(
+                visible = showDatePicker,
+                selectedDate = state.transactionDate,
+                onSelect = {
+                    state.transactionDate = it
+                    showDatePicker = false
+                },
+                onDismiss = { showDatePicker = false },
+            )
             return
         }
         var originalAmountMinor by remember(state.selectedTransactionRecordId) { mutableStateOf(state.selectedTransactionAmountMinor) }
@@ -349,7 +354,6 @@ internal fun TransactionFormScreen(
         }
         Box(Modifier.fillMaxSize()) {
             PageColumn {
-                Heading("Edit transaction")
                 TextFieldCard(
                     "Amount",
                     state.transactionAmount,
@@ -388,57 +392,69 @@ internal fun TransactionFormScreen(
                 }
                 Spacer(Modifier.height(76.dp))
             }
-            Row(
-                Modifier.align(Alignment.BottomEnd).imePadding().padding(end = 18.dp, bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                verticalAlignment = Alignment.CenterVertically,
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .imePadding()
+                    .padding(bottom = 12.dp),
             ) {
-                AnimatedVisibility(visible = hasChanges || savedFeedback, enter = fadeIn(), exit = fadeOut()) {
-                    FloatingTransactionSave(
-                        compact = compactSave || savedFeedback,
-                        enabled = hasChanges && !mobileSession.isSavingTransaction && parsedAmount != null,
-                        saved = savedFeedback,
-                        onClick = {
-                            onSaveTransaction { saved ->
-                                if (saved) {
-                                    originalAmountMinor = state.selectedTransactionAmountMinor
-                                    originalNotes = state.selectedTransactionNotes
-                                    savedFeedback = true
-                                }
-                            }
-                        },
+                Row(
+                    Modifier.fillMaxWidth().background(tandemPalette.surface).padding(horizontal = 18.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    SecondaryButton("Cancel", Modifier.width(112.dp), onClick = navigation.back)
+                    Spacer(Modifier.weight(1f))
+                    FloatingTransactionDeleteAction(
+                        enabled = !mobileSession.isSavingTransaction,
+                        onClick = { confirmDelete = true },
                     )
+                    Spacer(Modifier.width(TandemSpacing.small))
+                    AnimatedVisibility(
+                        visible = hasChanges || savedFeedback,
+                        enter = tandemFadeEnter(tandemReduceMotion),
+                        exit = tandemFadeExit(tandemReduceMotion),
+                    ) {
+                        FloatingTransactionSave(
+                            compact = compactSave || savedFeedback,
+                            enabled = hasChanges && !mobileSession.isSavingTransaction && parsedAmount != null,
+                            saved = savedFeedback,
+                            onClick = {
+                                onSaveTransaction { saved ->
+                                    if (saved) {
+                                        originalAmountMinor = state.selectedTransactionAmountMinor
+                                        originalNotes = state.selectedTransactionNotes
+                                        savedFeedback = true
+                                    }
+                                }
+                            },
+                        )
+                    }
                 }
-                FloatingTransactionDeleteAction(
-                    enabled = !mobileSession.isSavingTransaction,
-                    onClick = { confirmDelete = true },
-                )
             }
         }
-        if (showAccountPicker) {
-            TransactionAccountPickerDialog(
-                liveAccounts,
-                state.newTransactionAccountId,
-                state.transactionAccount,
-                live = true,
-                onSelect = { account ->
-                    state.transactionAccount = account.label
-                    state.newTransactionAccountId = account.id
-                    showAccountPicker = false
-                },
-                onDismiss = { showAccountPicker = false },
-            )
-        }
-        if (showDatePicker) {
-            TransactionDatePickerDialog(
-                selectedDate = state.transactionDate,
-                onSelect = {
-                    state.transactionDate = it
-                    showDatePicker = false
-                },
-                onDismiss = { showDatePicker = false },
-            )
-        }
+        TransactionAccountPickerDialog(
+            visible = showAccountPicker,
+            liveAccounts,
+            state.newTransactionAccountId,
+            state.transactionAccount,
+            live = true,
+            onSelect = { account ->
+                state.transactionAccount = account.label
+                state.newTransactionAccountId = account.id
+                showAccountPicker = false
+            },
+            onDismiss = { showAccountPicker = false },
+        )
+        TransactionDatePickerDialog(
+            visible = showDatePicker,
+            selectedDate = state.transactionDate,
+            onSelect = {
+                state.transactionDate = it
+                showDatePicker = false
+            },
+            onDismiss = { showDatePicker = false },
+        )
         if (confirmDelete) {
             AlertDialog(
                 onDismissRequest = { if (!mobileSession.isSavingTransaction) confirmDelete = false },
@@ -499,28 +515,26 @@ internal fun TransactionFormScreen(
             },
         )
     }
-    if (showAccountPicker) {
-        TransactionAccountPickerDialog(
-            liveAccounts,
-            selectedId = "",
-            selectedName = state.transactionAccount,
-            live = false,
-            onSelect = { account ->
-                state.transactionAccount = account.label
-                state.newTransactionAccountId = ""
-                showAccountPicker = false
-            },
-            onDismiss = { showAccountPicker = false },
-        )
-    }
-    if (showDatePicker) {
-        TransactionDatePickerDialog(
-            selectedDate = state.transactionDate,
-            onSelect = {
-                state.transactionDate = it
-                showDatePicker = false
-            },
-            onDismiss = { showDatePicker = false },
-        )
-    }
+    TransactionAccountPickerDialog(
+        visible = showAccountPicker,
+        liveAccounts,
+        selectedId = "",
+        selectedName = state.transactionAccount,
+        live = false,
+        onSelect = { account ->
+            state.transactionAccount = account.label
+            state.newTransactionAccountId = ""
+            showAccountPicker = false
+        },
+        onDismiss = { showAccountPicker = false },
+    )
+    TransactionDatePickerDialog(
+        visible = showDatePicker,
+        selectedDate = state.transactionDate,
+        onSelect = {
+            state.transactionDate = it
+            showDatePicker = false
+        },
+        onDismiss = { showDatePicker = false },
+    )
 }

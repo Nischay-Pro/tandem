@@ -2,10 +2,6 @@
 
 package app.tandemforactual.ui
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -56,6 +52,7 @@ import app.tandemforactual.ui.components.SelectableTile
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
+import app.tandemforactual.ui.components.TandemChoiceDialog
 import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
 import app.tandemforactual.ui.model.LiveCategoryGroupSummary
@@ -274,8 +271,8 @@ internal fun BudgetScreen(
                         ) {}
                         AnimatedVisibility(
                             visible = summaryExpanded,
-                            enter = expandVertically() + fadeIn(),
-                            exit = shrinkVertically() + fadeOut(),
+                            enter = tandemRevealEnter(tandemReduceMotion),
+                            exit = tandemRevealExit(tandemReduceMotion),
                         ) {
                             SurfaceCard(Modifier.padding(top = sectionSpacing)) {
                                 Column {
@@ -326,8 +323,8 @@ internal fun BudgetScreen(
                         ) {}
                         AnimatedVisibility(
                             visible = pinnedExpanded,
-                            enter = expandVertically() + fadeIn(),
-                            exit = shrinkVertically() + fadeOut(),
+                            enter = tandemRevealEnter(tandemReduceMotion),
+                            exit = tandemRevealExit(tandemReduceMotion),
                         ) {
                             Column(
                                 Modifier.padding(top = sectionSpacing),
@@ -531,8 +528,8 @@ internal fun BudgetScreen(
                     ) {}
                     AnimatedVisibility(
                         visible = recentExpanded,
-                        enter = expandVertically() + fadeIn(),
-                        exit = shrinkVertically() + fadeOut(),
+                        enter = tandemRevealEnter(tandemReduceMotion),
+                        exit = tandemRevealExit(tandemReduceMotion),
                     ) {
                         Column(
                             Modifier.padding(top = sectionSpacing),
@@ -958,16 +955,16 @@ internal fun BudgetScreen(
             }
         }
     }
-    if (showMonthPicker) {
-        MonthPickerDialog(
-            state = state,
-            onDismiss = { showMonthPicker = false },
-        )
-    }
+    MonthPickerDialog(
+        visible = showMonthPicker,
+        state = state,
+        onDismiss = { showMonthPicker = false },
+    )
 }
 
 @Composable
 private fun MonthPickerDialog(
+    visible: Boolean,
     state: AppState,
     onDismiss: () -> Unit,
 ) {
@@ -975,7 +972,7 @@ private fun MonthPickerDialog(
         mutableStateOf(state.selectedMonthId.substringBefore('-').toIntOrNull() ?: 2026)
     }
     val months = (1..12).map { month -> month to formatShortMonth(selectedYear, month) }
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    TandemChoiceDialog(visible, onDismiss) {
         SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = TandemSpacing.large)) {
             Column(
                 Modifier.fillMaxWidth().padding(TandemSpacing.large),

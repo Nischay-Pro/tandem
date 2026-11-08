@@ -2,10 +2,6 @@
 
 package app.tandemforactual.ui
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -586,8 +582,8 @@ internal fun ActivitySearchScreen(
         AnimatedVisibility(
             visible = isLiveBudget && selectionMode,
             modifier = Modifier.align(Alignment.BottomCenter),
-            enter = slideInVertically { it } + fadeIn(),
-            exit = slideOutVertically { it } + fadeOut(),
+            enter = tandemFloatingEnter(tandemReduceMotion),
+            exit = tandemFloatingExit(tandemReduceMotion),
         ) {
             val allSelected = visibleTransactionIds.isNotEmpty() && selectedTransactionIds.containsAll(visibleTransactionIds)
             TransactionSelectionFloatingBar(

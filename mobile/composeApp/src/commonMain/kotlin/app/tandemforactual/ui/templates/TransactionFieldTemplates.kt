@@ -4,8 +4,6 @@ package app.tandemforactual.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -508,7 +506,7 @@ internal fun FloatingTransactionSave(
                 tint = if (saved) palette.background else palette.accent,
             )
         }
-        AnimatedVisibility(visible = !compact, enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(visible = !compact, enter = tandemFadeEnter(tandemReduceMotion), exit = tandemFadeExit(tandemReduceMotion)) {
             Text(
                 if (saved) "Saved" else "Save",
                 color = if (saved || enabled) palette.accentContent else palette.muted,

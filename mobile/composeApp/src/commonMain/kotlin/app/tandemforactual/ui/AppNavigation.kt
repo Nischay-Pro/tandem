@@ -5,8 +5,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -63,7 +61,6 @@ import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
-import com.composables.icons.lucide.X
 
 @Composable
 internal fun FloatingAction(
@@ -98,7 +95,7 @@ internal fun FloatingAction(
         } else {
             Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp), tint = actionColor)
         }
-        AnimatedVisibility(visible = !isCompact, enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(visible = !isCompact, enter = tandemFadeEnter(tandemReduceMotion), exit = tandemFadeExit(tandemReduceMotion)) {
             Text(
                 label,
                 color = actionColor,
@@ -199,10 +196,10 @@ internal fun AppHeader(
         modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (showBack) {
+        if (showBack && !route.isTransactionForm()) {
             TandemIconButton(
-                icon = if (route == AppRoute.NEW_TRANSACTION || route == AppRoute.EDIT_TRANSACTION) Lucide.X else Lucide.ChevronLeft,
-                contentDescription = if (route == AppRoute.NEW_TRANSACTION || route == AppRoute.EDIT_TRANSACTION) "Close" else "Back",
+                icon = Lucide.ChevronLeft,
+                contentDescription = "Back",
                 onClick = onBack,
                 iconSizeDp = 24,
             )

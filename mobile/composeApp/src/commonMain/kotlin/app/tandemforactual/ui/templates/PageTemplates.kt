@@ -8,7 +8,6 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -92,6 +91,7 @@ internal fun PageLazyColumn(
     }
 
     val density = LocalDensity.current
+    val reduceMotion = tandemReduceMotion
     val refreshThresholdPx = with(density) { 72.dp.toPx() }
     var pullDistancePx by remember(routeListState) { mutableStateOf(0f) }
     val latestIsRefreshing by rememberUpdatedState(isRefreshing)
@@ -149,7 +149,7 @@ internal fun PageLazyColumn(
     val indicatorOffset by
         animateDpAsState(
             targetValue = indicatorTarget,
-            animationSpec = spring(),
+            animationSpec = tandemMotionSpec(reduceMotion, TandemMotion.REVEAL_MILLIS),
             label = "pull-to-refresh-offset",
         )
     Box(modifier.fillMaxSize()) {
@@ -162,7 +162,7 @@ internal fun PageLazyColumn(
         )
         if (isRefreshing || pullDistancePx > 0f) {
             val rotation =
-                if (isRefreshing) {
+                if (isRefreshing && !reduceMotion) {
                     val transition = rememberInfiniteTransition(label = "pull-to-refresh-spin")
                     val spin by
                         transition.animateFloat(
@@ -172,6 +172,8 @@ internal fun PageLazyColumn(
                             label = "pull-to-refresh-rotation",
                         )
                     spin
+                } else if (reduceMotion) {
+                    0f
                 } else {
                     pullProgress * 360f
                 }

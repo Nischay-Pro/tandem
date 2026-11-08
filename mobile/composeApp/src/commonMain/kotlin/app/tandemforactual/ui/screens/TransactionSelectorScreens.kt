@@ -34,13 +34,12 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.PeriodStepper
 import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SelectableTile
 import app.tandemforactual.ui.components.SurfaceCard
+import app.tandemforactual.ui.components.TandemChoiceDialog
 import kotlinx.coroutines.flow.first
 
 @Composable
@@ -147,6 +146,7 @@ internal fun TransactionTypePicker(
 
 @Composable
 internal fun TransactionAccountPickerDialog(
+    visible: Boolean,
     accounts: List<app.tandemforactual.ui.model.LiveAccountSummary>,
     selectedId: String,
     selectedName: String,
@@ -162,7 +162,7 @@ internal fun TransactionAccountPickerDialog(
             listOf("Checking", "Savings", "Credit card", "Cash").map { SelectorItem(it, it) }
         }
     val filtered = values.filter { it.label.contains(query, ignoreCase = true) }
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    TandemChoiceDialog(visible, onDismiss) {
         SurfaceCard(Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large)) {
             Column(
                 Modifier.fillMaxWidth().heightIn(max = 640.dp).padding(TandemSpacing.large),
@@ -192,6 +192,7 @@ internal fun TransactionAccountPickerDialog(
 
 @Composable
 internal fun TransactionDatePickerDialog(
+    visible: Boolean,
     selectedDate: String,
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit,
@@ -203,7 +204,7 @@ internal fun TransactionDatePickerDialog(
     val firstDayOffset = (platformWeekday(visibleYear, visibleMonth, 1) - firstWeekday + 7) % 7
     val daysInVisibleMonth = daysInMonth(visibleYear, visibleMonth)
     val dayCells = List<Int?>(firstDayOffset) { null } + (1..daysInVisibleMonth).map { it }
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    TandemChoiceDialog(visible, onDismiss) {
         SurfaceCard(Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large)) {
             Column(
                 Modifier

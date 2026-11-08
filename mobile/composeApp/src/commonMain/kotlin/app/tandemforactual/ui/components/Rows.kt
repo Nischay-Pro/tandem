@@ -4,10 +4,6 @@ package app.tandemforactual.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -48,6 +44,8 @@ import app.tandemforactual.ui.financeIcon
 import app.tandemforactual.ui.tandemMotionSpec
 import app.tandemforactual.ui.tandemPalette
 import app.tandemforactual.ui.tandemReduceMotion
+import app.tandemforactual.ui.tandemRevealEnter
+import app.tandemforactual.ui.tandemRevealExit
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleDot
@@ -398,8 +396,8 @@ private fun SectionCardLayout(
             } else {
                 AnimatedVisibility(
                     visible = collapse.expanded,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut(),
+                    enter = tandemRevealEnter(tandemReduceMotion),
+                    exit = tandemRevealExit(tandemReduceMotion),
                 ) {
                     Column(content = content)
                 }

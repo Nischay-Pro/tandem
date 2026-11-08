@@ -10,9 +10,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -59,6 +57,7 @@ import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
+import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
 import app.tandemforactual.ui.model.LiveScheduleSummary
@@ -144,6 +143,8 @@ fun TandemApp(
     var queuedBackPresses by remember { mutableStateOf(0) }
     var skipNextRouteTransition by remember { mutableStateOf(false) }
     var showDiscardTransactionDialog by rememberSaveable { mutableStateOf(false) }
+    var transactionSheetClosing by remember { mutableStateOf(false) }
+    var transactionSheetPopCount by remember { mutableStateOf(1) }
     var nextRouteEntryId by rememberSaveable { mutableStateOf(2L) }
     val backStack =
         rememberSaveable(startInPreview, saver = appRouteStackSaver) {
@@ -307,7 +308,8 @@ fun TandemApp(
     var liveSchedules by remember { mutableStateOf(emptyList<LiveScheduleSummary>()) }
     val newTransaction: (String?) -> Unit = { requestedAccountId ->
         if (!state.readOnlyMode && state.selectedBudgetId.isNotBlank()) {
-            routeTransitionDirection = 1f
+            transactionSheetClosing = false
+            transactionSheetPopCount = 1
             val eligibleAccounts = liveAccounts.filterNot { it.offBudget }
             val defaultAccount =
                 if (state.selectedBudgetId.isNotBlank()) {
@@ -433,6 +435,15 @@ fun TandemApp(
             backPreviewRoute = null
             queuedBackPresses = 0
             showDiscardTransactionDialog = true
+        } else if (backStack.any { it.route.isTransactionForm() }) {
+            val formIndex = backStack.indexOfLast { it.route.isTransactionForm() }
+            if (backStack.lastIndex > formIndex) {
+                routeTransitionDirection = -1f
+                backStack.removeAt(backStack.lastIndex)
+            } else {
+                transactionSheetPopCount = 1
+                transactionSheetClosing = true
+            }
         } else {
             performBack()
         }
@@ -443,6 +454,10 @@ fun TandemApp(
                 if (next == AppRoute.NEW_TRANSACTION) {
                     newTransaction(null)
                 } else {
+                    if (next.isTransactionForm()) {
+                        transactionSheetClosing = false
+                        transactionSheetPopCount = 1
+                    }
                     if (next.isReportDetail() && backStack.lastOrNull()?.route != AppRoute.REPORTS) {
                         selectTab(AppRoute.REPORTS)
                     }
@@ -464,7 +479,10 @@ fun TandemApp(
             selectTab = selectTab,
             back = handleBack,
             backToList = {
-                if (backStack.size > 2) {
+                if (backStack.lastOrNull()?.route?.isTransactionForm() == true && backStack.size > 2) {
+                    transactionSheetPopCount = 2
+                    transactionSheetClosing = true
+                } else if (backStack.size > 2) {
                     routeTransitionDirection = -1f
                     backStack.removeAt(backStack.lastIndex)
                     backStack.removeAt(backStack.lastIndex)
@@ -475,6 +493,11 @@ fun TandemApp(
         )
     val routeEntry = backStack.last()
     val route = routeEntry.route
+    val transactionSheetIndex = backStack.indexOfLast { it.route.isTransactionForm() }
+    val transactionSheetActive = transactionSheetIndex >= 0
+    val transactionSheetBaseEntry = backStack.getOrNull(transactionSheetIndex - 1)
+    val backgroundRouteEntry =
+        if (transactionSheetActive && transactionSheetBaseEntry != null) transactionSheetBaseEntry else routeEntry
     val merchantMatcherNeeded = mobileSession.transactionRecords.isNotEmpty() || mobileSession.accountRecords.isNotEmpty()
     LaunchedEffect(mobileSession, merchantMatcherNeeded) {
         if (merchantIconMatcher == null && merchantIconMatcherLoadError == null && merchantMatcherNeeded) {
@@ -956,7 +979,7 @@ fun TandemApp(
             }
         }
         TandemBackHandler(
-            enabled = backStack.size > 1,
+            enabled = backStack.size > 1 && !transactionSheetActive,
             onBack = handleBack,
             onBackProgress = updateBackGesture,
         )
@@ -1163,7 +1186,12 @@ fun TandemApp(
                     ?: backTargetTab
                     ?: backStack.dropLast(1).lastOrNull { it.route.isTab() }?.route
             val stationaryTabShell = tabShellRoute != null
-            val shellHeaderRoute = if (backTargetTab != null) backTargetTab else route
+            val shellHeaderRoute =
+                when {
+                    backTargetTab != null -> backTargetTab
+                    transactionSheetActive -> transactionSheetBaseEntry?.route ?: route
+                    else -> route
+                }
             if (tabShellRoute != null) renderHeader(shellHeaderRoute)
             Box(
                 modifier =
@@ -1171,9 +1199,9 @@ fun TandemApp(
                         .weight(1f)
                         .fillMaxWidth()
                         .clipToBounds()
-                        .tandemEdgeBackGesture(backStack.size > 1, handleBack, updateBackGesture),
+                        .tandemEdgeBackGesture(backStack.size > 1 && !transactionSheetActive, handleBack, updateBackGesture),
             ) {
-                if (backGestureProgress > 0f && backPreviewRoute != null && backPreviewRoute != routeEntry) {
+                if (!transactionSheetActive && backGestureProgress > 0f && backPreviewRoute != null && backPreviewRoute != routeEntry) {
                     val direction = backGestureDirection
                     renderRoute(
                         backPreviewRoute!!,
@@ -1189,7 +1217,7 @@ fun TandemApp(
                     )
                 }
                 AnimatedContent(
-                    targetState = routeEntry,
+                    targetState = backgroundRouteEntry,
                     modifier = Modifier.fillMaxSize().clipToBounds(),
                     transitionSpec = {
                         when {
@@ -1223,7 +1251,7 @@ fun TandemApp(
                     label = "tandem-screen-transition",
                 ) { visibleEntry ->
                     renderRoute(
-                        visibleEntry,
+                        if (transactionSheetActive) backgroundRouteEntry else visibleEntry,
                         Modifier.fillMaxSize().graphicsLayer {
                             if (visibleEntry == backGestureOutgoingEntry && backGestureProgress > 0f) {
                                 translationX = backGestureProgress * size.width * backGestureDirection
@@ -1235,19 +1263,58 @@ fun TandemApp(
                 }
             }
             AnimatedVisibility(
-                visible = tabShellRoute != null && route.showsBottomNavigation() && !imeVisible,
-                enter =
-                    slideInVertically(tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS)) { it } +
-                        fadeIn(tween(TandemMotion.CROSSFADE_MILLIS)),
-                exit =
-                    slideOutVertically(tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS)) { it } +
-                        fadeOut(tween(TandemMotion.CROSSFADE_MILLIS)),
+                visible = tabShellRoute != null && backgroundRouteEntry.route.showsBottomNavigation() && !imeVisible,
+                enter = tandemBottomBarEnter(reduceMotion),
+                exit = tandemBottomBarExit(reduceMotion),
             ) {
                 if (tabShellRoute != null) {
                     BottomNavigation(
                         tabShellRoute,
                         navigation.selectTab,
                     )
+                }
+            }
+            if (transactionSheetActive) {
+                TandemTaskSheet(
+                    visible = !transactionSheetClosing,
+                    onDismissRequest = handleBack,
+                    onDismissed = {
+                        routeTransitionDirection = 0f
+                        repeat(transactionSheetPopCount.coerceAtMost(backStack.size - 1)) {
+                            if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                        }
+                        transactionSheetClosing = false
+                        transactionSheetPopCount = 1
+                    },
+                ) {
+                    AnimatedContent(
+                        targetState = routeEntry,
+                        modifier = Modifier.fillMaxSize().clipToBounds(),
+                        transitionSpec = {
+                            when {
+                                reduceMotion || skipNextRouteTransition ->
+                                    EnterTransition.None togetherWith ExitTransition.None
+                                routeTransitionDirection > 0f ->
+                                    slideInHorizontally(
+                                        tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
+                                    ) { it } togetherWith
+                                        slideOutHorizontally(
+                                            tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
+                                        ) { -it } using null
+                                routeTransitionDirection < 0f ->
+                                    slideInHorizontally(
+                                        tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
+                                    ) { -it } togetherWith
+                                        slideOutHorizontally(
+                                            tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
+                                        ) { it } using null
+                                else -> EnterTransition.None togetherWith ExitTransition.None
+                            }
+                        },
+                        label = "tandem-task-sheet-content",
+                    ) { sheetEntry ->
+                        renderRoute(sheetEntry, Modifier.fillMaxSize(), true, true)
+                    }
                 }
             }
         }
@@ -1273,7 +1340,8 @@ fun TandemApp(
                 onConfirm = {
                     restoreTransactionFormBaseline(state, formRoute)
                     showDiscardTransactionDialog = false
-                    performBack()
+                    transactionSheetPopCount = 1
+                    transactionSheetClosing = true
                 },
             )
         }
@@ -1286,6 +1354,8 @@ internal fun AppRoute.isTab(): Boolean =
         this == AppRoute.ACTIVITY ||
         this == AppRoute.REPORTS ||
         this == AppRoute.SETTINGS
+
+internal fun AppRoute.isTransactionForm(): Boolean = this == AppRoute.NEW_TRANSACTION || this == AppRoute.EDIT_TRANSACTION
 
 internal fun AppRoute.showsBottomNavigation(): Boolean =
     when (this) {
