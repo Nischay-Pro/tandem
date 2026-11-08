@@ -1387,7 +1387,12 @@ function registerBudgetMaintenanceRoutes(
         transactions.map((transaction) => transaction.importedId),
       );
       if (uniqueImportedIds.size !== transactions.length)
-        return invalidBudgetRequest(reply);
+        return reply.code(400).send({
+          error: {
+            code: "duplicate_imported_id",
+            message: "Statement rows must have unique references",
+          },
+        });
       try {
         const result = await runMaintenanceOperation(
           journal,

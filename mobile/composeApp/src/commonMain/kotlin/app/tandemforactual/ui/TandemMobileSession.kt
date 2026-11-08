@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.PairedDevice
+import app.tandemforactual.api.client.StatementImportItem
+import app.tandemforactual.api.client.StatementImportSummary
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.data.database.BudgetRecordEntity
@@ -830,6 +832,47 @@ internal class TandemMobileSession(
         performBudgetAction(budgetId, encryptionPassword, "Couldn’t copy last month’s assignments. Try again.") {
             apiClient.copyBudgetMonth(budgetId, month, encryptionPassword)
         }
+
+    suspend fun importStatementTransactions(
+        budgetId: String,
+        accountId: String,
+        transactions: List<StatementImportItem>,
+        encryptionPassword: String?,
+    ): StatementImportSummary? {
+        budgetActionMessage = null
+        if (refuseWriteInReadOnlyMode()) {
+            budgetActionMessage = transactionWriteMessage
+            return null
+        }
+        if (budgetId.isBlank() || !apiClient.isAuthenticated) {
+            budgetActionMessage = "Pair this device and open a budget before importing a statement."
+            return null
+        }
+        if (isPerformingBudgetAction) return null
+        isPerformingBudgetAction = true
+        try {
+            val result =
+                apiClient.withExclusiveSession {
+                    apiClient.importBudgetAccountTransactions(budgetId, accountId, transactions, encryptionPassword)
+                }
+            if (synchronize(budgetId, encryptionPassword) == null) {
+                budgetActionMessage = syncError ?: "Actual imported the statement, but this device couldn’t refresh the budget."
+            } else {
+                budgetActionMessage = formatStatementImportSummary(result)
+            }
+            return result
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: TandemApiException) {
+            budgetActionMessage = error.message ?: "Couldn’t import this statement. Try again."
+            return null
+        } catch (_: Exception) {
+            budgetActionMessage = "Couldn’t import this statement. Try again."
+            return null
+        } finally {
+            isPerformingBudgetAction = false
+        }
+    }
 
     suspend fun applyBudgetTemplate(
         budgetId: String,

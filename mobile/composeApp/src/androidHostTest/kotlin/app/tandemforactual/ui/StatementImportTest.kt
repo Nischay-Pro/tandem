@@ -1,0 +1,180 @@
+package app.tandemforactual.ui
+
+import app.tandemforactual.api.client.StatementImportSummary
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertThrows
+import org.junit.Test
+
+class StatementImportTest {
+    @Test
+    fun parsesCsvWithQuotedPayeesIdsAndDebitCreditColumns() {
+        val parsed =
+            parseStatementImport(
+                "bank.csv",
+                "Date,Payee,Debit,Credit,FitId,Memo\r\n" +
+                    "11/01/2026,\"Market, Main St.\",12.34,,row-1,Groceries\r\n" +
+                    "11/02/2026,Employer,,\"2,500.00\",row-2,Paycheck\r\n",
+            )
+
+        assertEquals(2, parsed.transactions.size)
+        assertEquals(0, parsed.skippedRows)
+        assertEquals("2026-11-01", parsed.transactions[0].date)
+        assertEquals(-1_234L, parsed.transactions[0].amountMinor)
+        assertEquals("Market, Main St.", parsed.transactions[0].payeeName)
+        assertEquals("row-1", parsed.transactions[0].importedId)
+        assertEquals("2026-11-02", parsed.transactions[1].date)
+        assertEquals(250_000L, parsed.transactions[1].amountMinor)
+    }
+
+    @Test
+    fun handlesInternationalDatesAndEuropeanDecimalFormatting() {
+        val parsed =
+            parseStatementImport(
+                "bank.csv",
+                "Date;Description;Amount\n" +
+                    "31/10/2026;Pet clinic;−1.234,56\n",
+                dateOrder = StatementDateOrder.DAY_MONTH_YEAR,
+            )
+
+        assertEquals("2026-10-31", parsed.transactions.single().date)
+        assertEquals(-123_456L, parsed.transactions.single().amountMinor)
+    }
+
+    @Test
+    fun readsDottedMonthNameAndYearFirstDatesAndReportsTheExactBadDate() {
+        val parsed =
+            parseStatementImport(
+                "dates.csv",
+                "Date,Payee,Amount\n" +
+                    "31.10.2026,Market,1.00\n" +
+                    "03 Nov 2026,Transit,2.00\n" +
+                    "\"Nov 3, 2026\",Cafe,3.00\n" +
+                    "2026/11/04,Pharmacy,4.00\n",
+                dateOrder = StatementDateOrder.DAY_MONTH_YEAR,
+            )
+
+        assertEquals(listOf("2026-10-31", "2026-11-03", "2026-11-03", "2026-11-04"), parsed.transactions.map { it.date })
+
+        val error =
+            assertThrows(StatementImportParseException::class.java) {
+                parseStatementImport("bad-date.csv", "Date,Payee,Amount\nnot-a-date,Market,1.00\n")
+            }
+        assertEquals("Couldn’t read the date “not-a-date”.", error.message)
+    }
+
+    @Test
+    fun repeatedReferenceValuesFallBackToDistinctStableImportIds() {
+        val statement =
+            "Date,Payee,Amount,Reference\n" +
+                "11/01/2026,Market,12.00,SO-1\n" +
+                "11/01/2026,Market,12.00,SO-1\n"
+        val first = parseStatementImport("references.csv", statement).transactions.map { it.importedId }
+        val retry = parseStatementImport("references.csv", statement).transactions.map { it.importedId }
+
+        assertEquals(2, first.distinct().size)
+        assertNotEquals("SO-1", first[0])
+        assertEquals(first, retry)
+    }
+
+    @Test
+    fun parsesDebitSuffixesAndSkipsAmbiguousThreeDigitDecimals() {
+        val parsed =
+            parseStatementImport(
+                "amounts.csv",
+                "Date,Payee,Amount\n" +
+                    "11/01/2026,Market,\"1,234.56-\"\n" +
+                    "11/02/2026,Pet Clinic,12.34 DR\n" +
+                    "11/03/2026,Refund,12.34 CR\n" +
+                    "11/04/2026,Unclear,12.345\n",
+            )
+
+        assertEquals(listOf(-123_456L, -1_234L, 1_234L), parsed.transactions.map { it.amountMinor })
+        assertEquals(1, parsed.skippedRows)
+        assertEquals("This amount isn’t clear. Check its decimal places.", parsed.firstSkippedReason)
+    }
+
+    @Test
+    fun decodesWindows1252AndFormatsImportCountsNaturally() {
+        assertEquals("Café", decodeStatementBytes(byteArrayOf(67, 97, 102, 0xE9.toByte())))
+        assertEquals("Café", decodeStatementBytes("Café".encodeToByteArray()))
+        assertEquals("Imported 1 transaction. 1 row needs review in Actual.", formatStatementImportSummary(StatementImportSummary(1, 0, 1)))
+        assertEquals("Imported 2 transactions.", formatStatementImportSummary(StatementImportSummary(2, 0, 0)))
+    }
+
+    @Test
+    fun parsesQifAndOfxTransactions() {
+        val qif =
+            parseStatementImport(
+                "account.qif",
+                "!Type:Bank\nD11/03/2026\nT-42.18\nPCorner Market\nMGroceries\n^\n",
+            )
+        assertEquals("2026-11-03", qif.transactions.single().date)
+        assertEquals(-4_218L, qif.transactions.single().amountMinor)
+        assertEquals("Corner Market", qif.transactions.single().payeeName)
+
+        val ofx =
+            parseStatementImport(
+                "account.ofx",
+                """<OFX><BANKTRANLIST><STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20261104<TRNAMT>-18.50<FITID>ofx-1<NAME>Pet Clinic<MEMO>Medication</STMTTRN></BANKTRANLIST></OFX>""",
+            )
+        assertEquals("2026-11-04", ofx.transactions.single().date)
+        assertEquals(-1_850L, ofx.transactions.single().amountMinor)
+        assertEquals("ofx-1", ofx.transactions.single().importedId)
+        assertEquals("Medication", ofx.transactions.single().notes)
+    }
+
+    @Test
+    fun generatedIdsStayStableAcrossOverlappingStatementsAndIgnoreRowOrder() {
+        val first =
+            parseStatementImport(
+                "first.csv",
+                "Date,Amount,Payee\n" +
+                    "11/01/2026,-12.00,Target\n" +
+                    "11/02/2026,-5.00,Market\n" +
+                    "11/02/2026,-5.00,Market\n",
+            )
+        val overlapping =
+            parseStatementImport(
+                "overlap.csv",
+                "Date,Amount,Payee\n" +
+                    "11/03/2026,-8.00,Coffee Shop\n" +
+                    "11/02/2026,-5.00,Market\n" +
+                    "11/01/2026,-12.00,Target\n" +
+                    "11/02/2026,-5.00,Market\n",
+            )
+
+        val firstIds = first.transactions.associate { it.payeeName to it.importedId }
+        val overlappingIds = overlapping.transactions.associate { it.payeeName to it.importedId }
+        assertEquals(firstIds["Target"], overlappingIds["Target"])
+        assertEquals(firstIds["Market"], overlappingIds["Market"])
+        assertEquals(
+            3,
+            first.transactions
+                .map { it.importedId }
+                .distinct()
+                .size,
+        )
+        assertEquals(
+            4,
+            overlapping.transactions
+                .map { it.importedId }
+                .distinct()
+                .size,
+        )
+        assertEquals(
+            first.transactions.filter { it.payeeName == "Market" }.map { it.importedId },
+            overlapping.transactions.filter { it.payeeName == "Market" }.map { it.importedId },
+        )
+    }
+
+    @Test
+    fun rejectsUnknownFormatsAndAmbiguousCsvStructure() {
+        assertThrows(StatementImportParseException::class.java) {
+            parseStatementImport("statement.txt", "not a statement")
+        }
+        assertThrows(StatementImportParseException::class.java) {
+            parseStatementImport("statement.csv", "Merchant,Amount\nMarket,12.00")
+        }
+    }
+}

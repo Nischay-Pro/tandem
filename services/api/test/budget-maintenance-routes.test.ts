@@ -669,6 +669,12 @@ describe("budget maintenance routes", () => {
       payload: { transactions: [transactions[0], transactions[0]] },
     });
     expect(duplicateIds.statusCode).toBe(400);
+    expect(duplicateIds.json()).toEqual({
+      error: {
+        code: "duplicate_imported_id",
+        message: "Statement rows must have unique references",
+      },
+    });
     await fake.app.close();
   });
 

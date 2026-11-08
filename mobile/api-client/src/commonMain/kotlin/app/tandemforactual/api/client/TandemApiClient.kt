@@ -4,6 +4,7 @@ import app.tandemforactual.api.generated.Api
 import app.tandemforactual.api.generated.Auth
 import app.tandemforactual.api.generated.api.AuthenticationApi
 import app.tandemforactual.api.generated.api.BudgetsApi
+import app.tandemforactual.api.generated.api.TransactionsApi
 import app.tandemforactual.api.generated.models.ApiV1HealthReady200Response
 import arrow.core.Either
 import com.kroegerama.openapi.kmp.gen.companion.AuthItem
@@ -42,6 +43,20 @@ data class BudgetCatalogItem(
     val isEncrypted: Boolean,
 )
 
+data class StatementImportItem(
+    val date: String,
+    val amountMinor: Long,
+    val payeeName: String,
+    val notes: String?,
+    val importedId: String,
+)
+
+data class StatementImportSummary(
+    val added: Int,
+    val updated: Int,
+    val errorCount: Int,
+)
+
 class TandemApiException(
     val errorCode: String,
     val httpStatus: Int? = null,
@@ -54,6 +69,9 @@ class TandemApiException(
             errorCode == "invalid_device_credential" -> "This device needs to be paired again."
             errorCode == "bank_sync_failed" -> "Actual couldn’t complete bank sync. Check its provider setup and try again."
             errorCode == "bank_sync_busy" -> "A bank sync is already running. Try again shortly."
+            errorCode == "duplicate_imported_id" ->
+                "This statement has repeated reference values. " +
+                    "Choose a unique reference column and try again."
             errorCode == "actual_operation_failed" -> "Actual couldn’t complete this change. Check the budget and try again."
             errorCode == "operation_uncertain" -> "Tandem couldn’t confirm this change. Check Actual before submitting it again."
             errorCode == "operation_rejected" -> "This change was rejected. Correct it before submitting again."
@@ -206,6 +224,76 @@ class TandemApiClient(
                         idempotencyKey = idempotencyKey,
                         budgetId = budgetId,
                     ),
+                )
+            }
+        }
+    }
+
+    suspend fun importBudgetAccountTransactions(
+        budgetId: String,
+        accountId: String,
+        transactions: List<StatementImportItem>,
+        encryptionPassword: String?,
+    ): StatementImportSummary {
+        require(transactions.isNotEmpty() && transactions.size <= 1_000)
+        val requestBody =
+            buildJsonObject {
+                put(
+                    "transactions",
+                    JsonArray(
+                        transactions.map { transaction ->
+                            buildJsonObject {
+                                put("date", transaction.date)
+                                put("amountMinor", transaction.amountMinor)
+                                put("payeeName", transaction.payeeName)
+                                transaction.notes?.let { put("notes", it) }
+                                put("importedId", transaction.importedId)
+                            }
+                        },
+                    ),
+                )
+            }.toMap()
+        val signature =
+            maintenanceSignature(
+                "statement-import",
+                budgetId,
+                accountId,
+                JsonArray(
+                    transactions.map { transaction ->
+                        buildJsonObject {
+                            put("date", transaction.date)
+                            put("amountMinor", transaction.amountMinor)
+                            put("payeeName", transaction.payeeName)
+                            transaction.notes?.let { put("notes", it) }
+                            put("importedId", transaction.importedId)
+                        }
+                    },
+                ).toString(),
+            )
+        return withMaintenanceOperation(signature) { idempotencyKey ->
+            withGeneratedApi {
+                val payload =
+                    unwrap(
+                        TransactionsApi.importBudgetAccountTransactions(
+                            xBudgetEncryptionPassword = encryptionPassword,
+                            idempotencyKey = idempotencyKey,
+                            budgetId = budgetId,
+                            accountId = accountId,
+                            body = requestBody,
+                        ),
+                    )
+                val status = (payload["status"] as? JsonPrimitive)?.contentOrNull
+                if (status != "ok") throw TandemApiProtocolException("Statement import response has an invalid status")
+                StatementImportSummary(
+                    added =
+                        (payload["added"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
+                            ?: throw TandemApiProtocolException("Statement import response has an invalid added count"),
+                    updated =
+                        (payload["updated"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
+                            ?: throw TandemApiProtocolException("Statement import response has an invalid updated count"),
+                    errorCount =
+                        (payload["errorCount"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
+                            ?: throw TandemApiProtocolException("Statement import response has an invalid error count"),
                 )
             }
         }

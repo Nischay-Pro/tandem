@@ -844,6 +844,13 @@ class TandemApiClientTest {
     }
 
     @Test
+    fun duplicateStatementReferencesHaveAnActionableMessage() {
+        val error = TandemApiException("duplicate_imported_id", 400)
+
+        assertEquals("This statement has repeated reference values. Choose a unique reference column and try again.", error.message)
+    }
+
+    @Test
     fun revocationMapsApiErrorsAndUnexpectedHttpStatuses() =
         runBlocking {
             var status = HttpStatusCode.Unauthorized
