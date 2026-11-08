@@ -90,6 +90,7 @@ internal fun ActivitySearchScreen(
     var confirmBulkDelete by remember(state.selectedBudgetId) { mutableStateOf(false) }
     var isDeletingSelection by remember(state.selectedBudgetId) { mutableStateOf(false) }
     val filters = state.activitySearchFilters
+    val hasActiveSearch = search.isNotBlank() || filters.isNotEmpty()
     val cachedSearch = state.activitySearchCache?.takeIf { it.budgetId == state.selectedBudgetId }
     val cachedEvaluation =
         state.activitySearchResultCache?.takeIf { cached ->
@@ -404,7 +405,7 @@ internal fun ActivitySearchScreen(
                 }
             if (shownSuggestions.isNotEmpty()) {
                 Text(
-                    if (search.isBlank()) "Filter by" else "Suggestions",
+                    if (search.isBlank()) "Quick filters" else "Suggestions",
                     color = tandemPalette.muted,
                     fontSize = TandemTypography.caption,
                     fontWeight = FontWeight.SemiBold,
@@ -448,7 +449,12 @@ internal fun ActivitySearchScreen(
                         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Results", color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (hasActiveSearch) "Results" else "All transactions",
+                            color = tandemPalette.text,
+                            fontSize = TandemTypography.cardTitle,
+                            fontWeight = FontWeight.SemiBold,
+                        )
                         Text(
                             formatInteger(resultIndices.size),
                             color = tandemPalette.muted,
@@ -472,7 +478,12 @@ internal fun ActivitySearchScreen(
                         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Results", color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (hasActiveSearch) "Results" else "All transactions",
+                            color = tandemPalette.text,
+                            fontSize = TandemTypography.cardTitle,
+                            fontWeight = FontWeight.SemiBold,
+                        )
                         Text(
                             formatInteger(resultIndices.size),
                             color = tandemPalette.muted,

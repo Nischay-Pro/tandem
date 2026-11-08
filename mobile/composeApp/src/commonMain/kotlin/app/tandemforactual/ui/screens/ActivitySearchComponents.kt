@@ -93,7 +93,7 @@ internal fun ActivitySearchInput(
                     ) {
                         if (value.isEmpty()) {
                             Text(
-                                "Payee, category or amount",
+                                "Payee, account, category or amount",
                                 color = palette.muted,
                                 fontSize = TandemTypography.body,
                                 lineHeight = TandemTypography.bodyLineHeight,
