@@ -91,6 +91,12 @@ class LiveBudgetModelsTest {
         val categories =
             listOf(
                 record(type = "category", id = "rent", name = "Rent"),
+                record(
+                    type = "category",
+                    id = "home-maintenance",
+                    name = "Home Maintenance",
+                    json = """{"id":"home-maintenance","group":"essentials"}""",
+                ),
                 record(type = "category", id = "hidden", name = "Hidden"),
                 record(type = "category", id = "deleted", name = "Deleted"),
             )
@@ -106,7 +112,10 @@ class LiveBudgetModelsTest {
         assertEquals(1, summary?.groups?.size)
         assertEquals("Essentials", summary?.groups?.single()?.name)
         assertEquals(
-            listOf(LiveCategorySummary("rent", "Rent", 2_500, -2_500, 0, carryover = true)),
+            listOf(
+                LiveCategorySummary("rent", "Rent", 2_500, -2_500, 0, carryover = true),
+                LiveCategorySummary("home-maintenance", "Home Maintenance", 0, 0, 0),
+            ),
             summary?.groups?.single()?.categories,
         )
         assertNull(liveBudgetMonthSummary(null, categories, groups))

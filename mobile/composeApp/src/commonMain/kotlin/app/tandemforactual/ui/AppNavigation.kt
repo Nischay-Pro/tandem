@@ -1,7 +1,6 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui
-
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
@@ -31,7 +30,6 @@ import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -157,6 +155,7 @@ internal fun AppHeader(
     actualConnected: Boolean,
     liveAccounts: List<LiveAccountSummary>,
     liveBudgetMonth: LiveBudgetMonthSummary?,
+    activitySelectionTotalMinor: Long?,
 ) {
     val palette = tandemPalette
     val headerTitle =
@@ -168,8 +167,8 @@ internal fun AppHeader(
             AppRoute.CATEGORY_DETAIL ->
                 liveBudgetMonth
                     ?.groups
-                    ?.firstOrNull { it.id == state.selectedCategoryGroupId }
-                    ?.categories
+                    ?.asSequence()
+                    ?.flatMap { it.categories.asSequence() }
                     ?.firstOrNull { it.id == state.selectedCategoryId }
                     ?.name ?: route.title
             AppRoute.ACCOUNT_DETAIL ->
@@ -179,6 +178,7 @@ internal fun AppHeader(
                     previewAccountById(state.selectedAccountId).name
                 }
             AppRoute.TRANSACTION_DETAIL -> state.transactionPayee.ifBlank { route.title }
+            AppRoute.ACTIVITY -> activitySelectionTotalMinor?.let(state::formatCurrency) ?: route.title
             else -> route.title
         }
     Row(

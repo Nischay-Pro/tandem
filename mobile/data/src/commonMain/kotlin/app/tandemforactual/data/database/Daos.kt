@@ -298,6 +298,31 @@ interface BudgetRecordDao {
 
     @Query(
         """
+    SELECT * FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = 'transaction'
+      AND localDeleted = 0
+      AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))
+      AND (
+        :hasCursor = 0 OR
+        (:cursorDate IS NOT NULL AND
+          (recordDate IS NULL OR recordDate < :cursorDate OR
+            (recordDate = :cursorDate AND recordId > :cursorId))) OR
+        (recordDate IS NULL AND :cursorDate IS NULL AND recordId > :cursorId)
+      )
+    ORDER BY recordDate DESC, recordId ASC
+    LIMIT :limit
+    """,
+    )
+    suspend fun findVisibleTransactionPage(
+        budgetId: String,
+        cursorDate: String?,
+        cursorId: String,
+        hasCursor: Boolean,
+        limit: Int,
+    ): List<BudgetRecordEntity>
+
+    @Query(
+        """
     SELECT COUNT(*) FROM budget_records
     WHERE budgetId = :budgetId AND recordType = :recordType
       AND localDeleted = 0

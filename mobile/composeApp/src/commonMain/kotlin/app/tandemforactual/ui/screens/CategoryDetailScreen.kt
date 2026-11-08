@@ -1,7 +1,6 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,6 +25,7 @@ import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,6 +75,7 @@ import com.composables.icons.lucide.Minus
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Receipt
+import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.X
@@ -95,8 +96,8 @@ internal fun CategoryDetailScreen(
         if (isLiveBudget) {
             liveBudgetMonth
                 ?.groups
-                ?.firstOrNull { it.id == state.selectedCategoryGroupId }
-                ?.categories
+                ?.asSequence()
+                ?.flatMap { it.categories.asSequence() }
                 ?.firstOrNull { it.id == state.selectedCategoryId }
         } else {
             previewCategoryGroups
@@ -127,6 +128,10 @@ internal fun CategoryDetailScreen(
             mutableStateOf("")
         }
     var editName by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf("") }
+    var editCategoryGroupId by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) {
+        mutableStateOf(state.selectedCategoryGroupId)
+    }
+    var categoryGroupMenuExpanded by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf(false) }
     var iconSearch by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf("") }
     var selectedIconChoice by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf("Automatic") }
     var deleteDestinationId by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf<String?>(null) }
@@ -159,8 +164,32 @@ internal fun CategoryDetailScreen(
                     }.map { group.name to it }
             }
         }
-    val selectedGroup = liveBudgetMonth?.groups?.firstOrNull { it.id == state.selectedCategoryGroupId }
+    val selectedGroup =
+        liveBudgetMonth?.groups?.firstOrNull { group ->
+            group.categories.any { it.id == state.selectedCategoryId }
+        }
     val categoryIndex = selectedGroup?.categories?.indexOfFirst { it.id == state.selectedCategoryId } ?: -1
+
+    fun openCategoryEditor() {
+        val selectedCategory = category ?: return
+        editName = selectedCategory.name
+        editCategoryGroupId = selectedGroup?.id ?: state.selectedCategoryGroupId
+        selectedIconChoice =
+            when (state.categoryIconChoice(selectedCategory.id)) {
+                "Food" -> "Groceries"
+                "Transport" -> "Car"
+                else -> state.categoryIconChoice(selectedCategory.id) ?: "Automatic"
+            }
+        iconSearch = ""
+        mobileSession.clearBudgetActionMessage()
+        showEditDialog = true
+    }
+    LaunchedEffect(state.selectedCategoryId, state.categoryEditRequested, category?.id) {
+        if (state.categoryEditRequested && category != null) {
+            state.categoryEditRequested = false
+            openCategoryEditor()
+        }
+    }
     PageColumn {
         if (!isLiveBudget) SampleBanner()
         if (category == null) {
@@ -175,18 +204,7 @@ internal fun CategoryDetailScreen(
                         "Edit category",
                         enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
                         tint = tandemPalette.accent,
-                    ) {
-                        editName = category.name
-                        selectedIconChoice =
-                            when (state.categoryIconChoice(category.id)) {
-                                "Food" -> "Groceries"
-                                "Transport" -> "Car"
-                                else -> state.categoryIconChoice(category.id) ?: "Automatic"
-                            }
-                        iconSearch = ""
-                        mobileSession.clearBudgetActionMessage()
-                        showEditDialog = true
-                    }
+                    ) { openCategoryEditor() }
                 }
             }
             AmountHero(
@@ -593,6 +611,30 @@ internal fun CategoryDetailScreen(
                         verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                     ) {
                         TextFieldCard("Name", editName, { editName = it }, TextFieldOptions(placeholder = category.name))
+                        val destinationGroups =
+                            liveBudgetMonth?.groups.orEmpty().filter { candidateGroup ->
+                                candidateGroup.isIncome == currentIncomeType
+                            }
+                        TransactionPickerRow(
+                            value = destinationGroups.firstOrNull { it.id == editCategoryGroupId }?.name.orEmpty(),
+                            placeholder = "Category group",
+                            icon = Lucide.Tags,
+                        ) { categoryGroupMenuExpanded = true }
+                        DropdownMenu(
+                            expanded = categoryGroupMenuExpanded,
+                            onDismissRequest = { categoryGroupMenuExpanded = false },
+                        ) {
+                            destinationGroups.forEach { candidateGroup ->
+                                DropdownMenuItem(
+                                    onClick = {
+                                        editCategoryGroupId = candidateGroup.id
+                                        categoryGroupMenuExpanded = false
+                                    },
+                                ) {
+                                    Text(candidateGroup.name, color = tandemPalette.text, fontSize = TandemTypography.compactBody)
+                                }
+                            }
+                        }
                         LabelText("Choose an icon")
                         TextFieldCard(
                             "Find an icon",
@@ -671,15 +713,30 @@ internal fun CategoryDetailScreen(
                             loading = mobileSession.isPerformingBudgetAction,
                         ) {
                             scope.launch {
-                                val renamed =
-                                    editName.trim() == category.name ||
+                                var saved = true
+                                val currentGroupId = selectedGroup?.id ?: state.selectedCategoryGroupId
+                                if (editCategoryGroupId != currentGroupId) {
+                                    saved =
+                                        mobileSession.manageBudgetCategory(
+                                            state.selectedBudgetId,
+                                            category.id,
+                                            "move",
+                                            null,
+                                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                                            editCategoryGroupId,
+                                        )
+                                    if (saved) state.selectedCategoryGroupId = editCategoryGroupId
+                                }
+                                if (saved && editName.trim() != category.name) {
+                                    saved =
                                         mobileSession.renameBudgetCategory(
                                             state.selectedBudgetId,
                                             category.id,
                                             editName,
                                             state.encryptedPassword.takeIf { it.isNotBlank() },
                                         )
-                                if (renamed) {
+                                }
+                                if (saved) {
                                     state.setCategoryIconChoice(category.id, selectedIconChoice)
                                     showEditDialog = false
                                 }

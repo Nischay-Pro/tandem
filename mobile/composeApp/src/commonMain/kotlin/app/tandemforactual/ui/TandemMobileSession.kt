@@ -30,6 +30,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -231,6 +232,28 @@ internal class TandemMobileSession(
     var transactionRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
         private set
 
+    var activityTransactionRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
+        private set
+
+    var activityTransactionPageBudgetId by mutableStateOf("")
+        private set
+
+    var isLoadingActivityTransactions by mutableStateOf(false)
+        private set
+
+    var hasMoreActivityTransactions by mutableStateOf(true)
+        private set
+
+    var activityTransactionPageError by mutableStateOf<String?>(null)
+        private set
+
+    var activityTransactionPageGeneration by mutableStateOf(0)
+        private set
+
+    private var activityCursorDate: String? = null
+    private var activityCursorId = ""
+    private val activityTransactionPageMutex = Mutex()
+
     var activitySearchRecords by mutableStateOf<List<SearchableBudgetTransaction>>(emptyList())
         private set
 
@@ -422,6 +445,7 @@ internal class TandemMobileSession(
                 localRepository.countVisibleRecords(budgetId, "transaction").coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
             syncComplete = true
             syncPresentation = syncPresentation.succeeded()
+            if (activityTransactionPageBudgetId == budgetId) refreshActivityTransactionPages(budgetId)
             return summary
         } catch (error: CancellationException) {
             throw error
@@ -716,9 +740,10 @@ internal class TandemMobileSession(
         action: String,
         targetId: String?,
         encryptionPassword: String?,
+        targetGroupId: String? = null,
     ): Boolean =
         performBudgetAction(budgetId, encryptionPassword, "Couldn’t update this category. Try again.") {
-            apiClient.manageBudgetCategory(budgetId, categoryId, action, targetId, encryptionPassword)
+            apiClient.manageBudgetCategory(budgetId, categoryId, action, targetId, encryptionPassword, targetGroupId)
         }
 
     suspend fun createBudgetPayee(
@@ -1501,6 +1526,75 @@ internal class TandemMobileSession(
         pendingWrites = localRepository.readPendingWrites(budgetId)
     }
 
+    suspend fun loadMoreActivityTransactions(
+        budgetId: String,
+        reset: Boolean = false,
+    ) {
+        val localRepository = repository ?: return
+        if (budgetId.isBlank()) return
+        activityTransactionPageMutex.lock()
+        try {
+            if (reset || activityTransactionPageBudgetId != budgetId) {
+                activityTransactionPageBudgetId = budgetId
+                activityTransactionRecords = emptyList()
+                activityCursorDate = null
+                activityCursorId = ""
+                hasMoreActivityTransactions = true
+                activityTransactionPageError = null
+                activityTransactionPageGeneration += 1
+            }
+            if (!hasMoreActivityTransactions) return
+            isLoadingActivityTransactions = true
+            activityTransactionPageError = null
+            try {
+                val page =
+                    localRepository.findTransactionPage(
+                        budgetId = budgetId,
+                        cursorDate = activityCursorDate,
+                        cursorId = activityCursorId,
+                        limit = ACTIVITY_TRANSACTION_PAGE_SIZE,
+                    )
+                if (activityTransactionPageBudgetId != budgetId) return
+                val knownIds = activityTransactionRecords.asSequence().map(BudgetRecordEntity::recordId).toHashSet()
+                activityTransactionRecords = activityTransactionRecords + page.filterNot { it.recordId in knownIds }
+                page.lastOrNull()?.let { last ->
+                    activityCursorDate = last.recordDate
+                    activityCursorId = last.recordId
+                }
+                hasMoreActivityTransactions = page.size == ACTIVITY_TRANSACTION_PAGE_SIZE
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                activityTransactionPageError = "Couldn’t load older transactions. Try again."
+            } finally {
+                isLoadingActivityTransactions = false
+            }
+        } finally {
+            activityTransactionPageMutex.unlock()
+        }
+    }
+
+    private suspend fun refreshActivityTransactionPages(budgetId: String) {
+        if (activityTransactionPageBudgetId != budgetId) return
+        val previousRecordCount = activityTransactionRecords.size
+        loadMoreActivityTransactions(budgetId, reset = true)
+        while (
+            activityTransactionRecords.size < previousRecordCount &&
+            hasMoreActivityTransactions &&
+            activityTransactionPageError == null
+        ) {
+            loadMoreActivityTransactions(budgetId)
+        }
+    }
+
+    suspend fun ensureActivityTransactionsLoaded(budgetId: String) {
+        if (activityTransactionPageBudgetId != budgetId) {
+            loadMoreActivityTransactions(budgetId, reset = true)
+        } else if (activityTransactionRecords.isEmpty() && hasMoreActivityTransactions && activityTransactionPageError == null) {
+            loadMoreActivityTransactions(budgetId)
+        }
+    }
+
     fun observeAccountActivityRecords(
         budgetId: String,
         accountId: String,
@@ -1620,6 +1714,8 @@ internal class TandemMobileSession(
         clearStoredCredential()
     }
 }
+
+private const val ACTIVITY_TRANSACTION_PAGE_SIZE = 50
 
 private suspend fun LocalBudgetRepository.hasCachedSnapshot(budgetId: String): Boolean {
     val checkpoint = readSyncCheckpoint(budgetId) ?: return false

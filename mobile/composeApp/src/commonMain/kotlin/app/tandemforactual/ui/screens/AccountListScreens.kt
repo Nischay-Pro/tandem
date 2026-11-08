@@ -1,7 +1,6 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -98,6 +97,8 @@ internal fun accountTypeIcon(
         listOf("loan", "mortgage", "debt").any { it in name } -> Lucide.HandCoins
         listOf("investment", "brokerage", "401k", "403b", "ira", "retirement", "stocks").any { it in name } ->
             Lucide.ChartNoAxesCombined
+        "checking" in type || "chequing" in type -> Lucide.Landmark
+        "savings" in type || "saving" in type -> Lucide.PiggyBank
         listOf("credit", "card").any { it in type } -> Lucide.CreditCard
         listOf("loan", "debt").any { it in type } -> Lucide.HandCoins
         listOf("tracking", "investment").any { it in type } -> Lucide.ChartNoAxesCombined

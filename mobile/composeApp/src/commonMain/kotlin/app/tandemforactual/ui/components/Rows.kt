@@ -59,6 +59,14 @@ internal data class ListRowOptions(
     val trailingColor: Color? = null,
     val dense: Boolean = false,
     val animateChanges: Boolean = false,
+    val trailingAction: ListRowAction? = null,
+)
+
+internal data class ListRowAction(
+    val icon: ImageVector,
+    val contentDescription: String,
+    val enabled: Boolean = true,
+    val onClick: () -> Unit,
 )
 
 @Composable
@@ -92,8 +100,8 @@ internal fun ListRow(
     trailing: String? = null,
     leading: RowLeading = RowLeading.Automatic,
     options: ListRowOptions = ListRowOptions(),
-    onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
+    onClick: (() -> Unit)? = null,
 ) {
     val palette = tandemPalette
     val merchantResource = (leading as? RowLeading.Merchant)?.resource
@@ -241,6 +249,19 @@ internal fun ListRow(
                 contentDescription = null,
                 modifier = Modifier.size(20.dp).clearAndSetSemantics {},
                 tint = palette.muted,
+            )
+        }
+        options.trailingAction?.let { action ->
+            TandemIconButton(
+                icon = action.icon,
+                contentDescription = action.contentDescription,
+                modifier = Modifier.padding(start = TandemSpacing.extraSmall),
+                sizeDp = 40,
+                iconSizeDp = 18,
+                enabled = action.enabled,
+                tint = palette.accent,
+                containerColor = palette.raised,
+                onClick = action.onClick,
             )
         }
     }

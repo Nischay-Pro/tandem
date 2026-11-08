@@ -1681,6 +1681,60 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
+    fun transactionPagesContinueAfterTheDateAndIdCursor() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                repository.applySnapshot(
+                    BUDGET,
+                    GENERATION,
+                    "c1",
+                    listOf(
+                        transaction(recordId = "txn-a", date = "2026-10-03"),
+                        transaction(recordId = "txn-b", date = "2026-10-03"),
+                        transaction(recordId = "txn-c", date = "2026-10-02"),
+                        transaction(recordId = "txn-d", date = "2026-10-02"),
+                        transaction(recordId = "txn-e", date = "2026-10-01"),
+                        transaction(recordId = "txn-f", date = null),
+                        transaction(recordId = "txn-g", date = null),
+                    ),
+                )
+
+                assertEquals(7, repository.findTransactionPage(BUDGET).size)
+                val first = repository.findTransactionPage(BUDGET, limit = 2)
+                val second =
+                    repository.findTransactionPage(
+                        BUDGET,
+                        cursorDate = first.last().recordDate,
+                        cursorId = first.last().recordId,
+                        limit = 2,
+                    )
+                val third =
+                    repository.findTransactionPage(
+                        BUDGET,
+                        cursorDate = second.last().recordDate,
+                        cursorId = second.last().recordId,
+                        limit = 2,
+                    )
+                val fourth =
+                    repository.findTransactionPage(
+                        BUDGET,
+                        cursorDate = third.last().recordDate,
+                        cursorId = third.last().recordId,
+                        limit = 2,
+                    )
+
+                assertEquals(listOf("txn-a", "txn-b"), first.map { it.recordId })
+                assertEquals(listOf("txn-c", "txn-d"), second.map { it.recordId })
+                assertEquals(listOf("txn-e", "txn-f"), third.map { it.recordId })
+                assertEquals(listOf("txn-g"), fourth.map { it.recordId })
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun localRecordsSupportLiveObservationAndIndexedFilters() =
         runBlocking {
             val database = newDatabase()
@@ -1805,7 +1859,7 @@ class LocalBudgetRepositoryTest {
         revision: String = "revision-1",
         bodyJson: String = "{\"id\":\"$recordId\",\"amount\":1000}",
         generation: String = GENERATION,
-        date: String = "2026-10-01",
+        date: String? = "2026-10-01",
         accountId: String? = "checking",
         categoryId: String? = "food",
         payeeId: String? = "market",

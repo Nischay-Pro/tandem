@@ -71,6 +71,7 @@ internal fun TransactionRow(
 internal fun TransactionSelectionActions(
     selectedCount: Int,
     allSelected: Boolean,
+    isWorking: Boolean = false,
     onToggleAll: () -> Unit,
     onDelete: () -> Unit,
     onCancel: () -> Unit,
@@ -92,6 +93,8 @@ internal fun TransactionSelectionActions(
                     TandemActionButtonTone.NEUTRAL,
                     Modifier.weight(1f),
                     icon = if (allSelected) Lucide.CircleDot else Lucide.Check,
+                    loading = isWorking,
+                    enabled = !isWorking,
                     onClick = onToggleAll,
                 )
                 TandemActionButton(

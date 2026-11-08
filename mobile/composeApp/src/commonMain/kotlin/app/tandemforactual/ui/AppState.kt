@@ -67,6 +67,7 @@ internal class AppState {
     var selectedAccountId by mutableStateOf("")
     var selectedCategoryGroupId by mutableStateOf("")
     var selectedCategoryId by mutableStateOf("")
+    var categoryEditRequested by mutableStateOf(false)
     var selectedTransactionRecordId by mutableStateOf("")
     var selectedTransactionAccountId by mutableStateOf("")
     var selectedTransactionPayeeId by mutableStateOf("")

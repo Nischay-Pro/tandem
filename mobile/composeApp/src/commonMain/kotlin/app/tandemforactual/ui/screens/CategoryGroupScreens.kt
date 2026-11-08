@@ -1,7 +1,6 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui
-
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -34,6 +33,7 @@ import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.ListRow
+import app.tandemforactual.ui.components.ListRowAction
 import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.PeriodStepper
 import app.tandemforactual.ui.components.RowLeading
@@ -260,6 +260,12 @@ internal fun CategoryGroupScreen(
                 SectionCard("Categories", "${group.categories.size} categories") {}
             }
             items(group.categories, key = { "category-group:${group.id}:${it.id}" }) { category ->
+                val openCategory: (Boolean) -> Unit = { editImmediately ->
+                    state.selectedCategoryGroupId = group.id
+                    state.selectedCategoryId = category.id
+                    state.categoryEditRequested = editImmediately
+                    navigation.open(AppRoute.CATEGORY_DETAIL)
+                }
                 SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
                     ListRow(
                         category.name,
@@ -272,12 +278,24 @@ internal fun CategoryGroupScreen(
                         },
                         if (isTrackingBudget) null else state.formatCurrency(category.assignedMinor),
                         leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
-                        options = ListRowOptions(trailingColor = if (category.balanceMinor >= 0) palette.positive else palette.warning),
-                    ) {
-                        state.selectedCategoryGroupId = group.id
-                        state.selectedCategoryId = category.id
-                        navigation.open(AppRoute.CATEGORY_DETAIL)
-                    }
+                        options =
+                            ListRowOptions(
+                                trailingColor = if (category.balanceMinor >= 0) palette.positive else palette.warning,
+                                trailingAction =
+                                    if (isLiveBudget) {
+                                        ListRowAction(
+                                            icon = Lucide.Pencil,
+                                            contentDescription = "Edit ${category.name}",
+                                            enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                                            onClick = { openCategory(true) },
+                                        )
+                                    } else {
+                                        null
+                                    },
+                            ),
+                        onLongClick = if (isLiveBudget && !state.readOnlyMode) ({ openCategory(true) }) else null,
+                        onClick = { openCategory(false) },
+                    )
                 }
             }
             if (isLiveBudget) {

@@ -447,8 +447,11 @@ class TandemApiClient(
         action: String,
         targetId: String?,
         encryptionPassword: String?,
+        targetGroupId: String? = null,
     ) {
-        withMaintenanceOperation(maintenanceSignature("category-$action", budgetId, categoryId, targetId)) { idempotencyKey ->
+        withMaintenanceOperation(
+            maintenanceSignature("category-$action", budgetId, categoryId, targetId, targetGroupId),
+        ) { idempotencyKey ->
             withGeneratedApi {
                 requireOk(
                     BudgetsApi.manageBudgetCategory(
@@ -460,6 +463,7 @@ class TandemApiClient(
                             buildJsonObject {
                                 put("action", action)
                                 if (action == "move") put("targetId", targetId?.let(::JsonPrimitive) ?: JsonNull)
+                                if (action == "move" && targetGroupId != null) put("targetGroupId", JsonPrimitive(targetGroupId))
                             }.toMap(),
                     ),
                 )

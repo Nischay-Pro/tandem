@@ -1,7 +1,6 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui
-
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,6 +60,8 @@ internal fun ScreenContent(
     merchantIconCatalog: MerchantIconCatalog?,
     merchantIconCatalogLoadError: String?,
     liveTransactions: List<TransactionItem>,
+    liveActivityTransactions: List<TransactionItem>,
+    onActivitySelectionTotalChanged: (Long?) -> Unit,
     activitySortCache: ActivityTransactionSortCache,
     liveAccounts: List<LiveAccountSummary>,
     liveSchedules: List<LiveScheduleSummary>,
@@ -135,8 +136,9 @@ internal fun ScreenContent(
                 state,
                 mobileSession,
                 navigation,
-                liveTransactions,
+                liveActivityTransactions,
                 activitySortCache,
+                onActivitySelectionTotalChanged,
                 mobileSession.isSyncing,
                 onSyncNow,
             )

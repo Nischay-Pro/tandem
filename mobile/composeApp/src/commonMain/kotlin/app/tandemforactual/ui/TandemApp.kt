@@ -1,7 +1,6 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui
-
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -91,6 +90,7 @@ fun TandemApp(
     val systemReduceMotion = key(accessibilitySettingsRevision) { SystemReduceMotionEnabled() }
     val state = rememberSaveable(saver = AppState.Saver) { AppState() }
     val saveableStateHolder = rememberSaveableStateHolder()
+    var activitySelectionTotalMinor by remember(state.selectedBudgetId) { mutableStateOf<Long?>(null) }
     val routeScrollStates = remember { mutableMapOf<String, ScrollState>() }
     val routeLazyListStates = remember { mutableMapOf<String, LazyListState>() }
     val reportsDataCache = remember { ReportsDataCache() }
@@ -622,7 +622,9 @@ fun TandemApp(
             }
     }
     var liveTransactions by remember { mutableStateOf(emptyList<TransactionItem>()) }
+    var liveActivityTransactions by remember { mutableStateOf(emptyList<TransactionItem>()) }
     val transactionRecords = mobileSession.transactionRecords
+    val activityTransactionRecords = mobileSession.activityTransactionRecords
     val accountRecords = mobileSession.accountRecords
     val payeeRecords = mobileSession.payeeRecords
     val categoryRecords = mobileSession.categoryRecords
@@ -639,6 +641,26 @@ fun TandemApp(
             withContext(Dispatchers.Default) {
                 buildLiveTransactionItems(
                     transactionRecords,
+                    accountRecords,
+                    payeeRecords,
+                    categoryRecords,
+                    displaySettings,
+                    merchantIconMatcher,
+                )
+            }
+    }
+    LaunchedEffect(
+        activityTransactionRecords,
+        accountRecords,
+        payeeRecords,
+        categoryRecords,
+        displaySettings,
+        merchantIconMatcher,
+    ) {
+        liveActivityTransactions =
+            withContext(Dispatchers.Default) {
+                buildLiveTransactionItems(
+                    activityTransactionRecords,
                     accountRecords,
                     payeeRecords,
                     categoryRecords,
@@ -929,6 +951,7 @@ fun TandemApp(
                     actualConnected = mobileSession.isServerReachable,
                     liveAccounts = liveAccounts,
                     liveBudgetMonth = liveBudgetMonth,
+                    activitySelectionTotalMinor = activitySelectionTotalMinor,
                 )
             }
         }
@@ -1002,6 +1025,8 @@ fun TandemApp(
                                 merchantIconCatalog = merchantIconCatalog,
                                 merchantIconCatalogLoadError = merchantIconCatalogLoadError,
                                 liveTransactions = liveTransactions,
+                                liveActivityTransactions = liveActivityTransactions,
+                                onActivitySelectionTotalChanged = { activitySelectionTotalMinor = it },
                                 activitySortCache = activitySortCache,
                                 liveAccounts = liveAccounts,
                                 liveSchedules = liveSchedules,

@@ -339,6 +339,25 @@ class LocalBudgetRepository(
         return database.budgetRecordDao().findRecentVisible(budgetId, recordType, limit)
     }
 
+    suspend fun findTransactionPage(
+        budgetId: String,
+        cursorDate: String? = null,
+        cursorId: String = "",
+        limit: Int = 50,
+    ): List<BudgetRecordEntity> {
+        requireIdentifier(budgetId, "budgetId")
+        require(limit in 1..200) { "limit must be between 1 and 200" }
+        if (cursorDate != null) require(cursorDate.length <= 32) { "cursorDate is too long" }
+        if (cursorId.isNotEmpty()) requireIdentifier(cursorId, "cursorId")
+        return database.budgetRecordDao().findVisibleTransactionPage(
+            budgetId = budgetId,
+            cursorDate = cursorDate,
+            cursorId = cursorId,
+            hasCursor = cursorId.isNotEmpty(),
+            limit = limit,
+        )
+    }
+
     suspend fun countVisibleRecords(
         budgetId: String,
         recordType: String,
