@@ -16,8 +16,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -46,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.selected
 import app.tandemforactual.api.client.BudgetCatalogItem
@@ -1106,6 +1109,7 @@ fun TandemApp(
                 routeContent()
             }
         }
+        val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
         Column(
             modifier =
                 Modifier
@@ -1190,7 +1194,7 @@ fun TandemApp(
                     )
                 }
             }
-            if (tabShellRoute != null) {
+            if (tabShellRoute != null && !imeVisible) {
                 BottomNavigation(
                     tabShellRoute,
                     navigation.selectTab,

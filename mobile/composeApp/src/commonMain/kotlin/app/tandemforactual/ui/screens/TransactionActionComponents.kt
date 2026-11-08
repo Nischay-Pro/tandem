@@ -45,17 +45,20 @@ internal fun TransactionRow(
     transaction: TransactionItem,
     selectionMode: Boolean = false,
     selected: Boolean = false,
+    showDateHeader: Boolean = true,
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
     Column {
-        Text(
-            transaction.dateLabel,
-            modifier = Modifier.padding(start = TandemSpacing.large, top = TandemSpacing.medium),
-            color = palette.muted,
-            fontSize = TandemTypography.micro,
-        )
+        if (showDateHeader) {
+            Text(
+                transaction.dateLabel,
+                modifier = Modifier.padding(start = TandemSpacing.large, top = TandemSpacing.medium),
+                color = palette.muted,
+                fontSize = TandemTypography.micro,
+            )
+        }
         ListRow(
             transaction.payee,
             transaction.category,

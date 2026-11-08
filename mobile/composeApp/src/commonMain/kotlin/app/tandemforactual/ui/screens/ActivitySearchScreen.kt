@@ -21,7 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -395,7 +395,12 @@ internal fun ActivitySearchScreen(
                     }
                 }
             }
-            val shownSuggestions = if (search.isBlank()) quickFilters else suggestions
+            val shownSuggestions =
+                if (search.isBlank()) {
+                    quickFilters
+                } else {
+                    suggestions.filterNot { it.label.equals(search.trim(), ignoreCase = true) }
+                }
             if (shownSuggestions.isNotEmpty()) {
                 Text(
                     if (search.isBlank()) "Filter by" else "Suggestions",
@@ -485,14 +490,19 @@ internal fun ActivitySearchScreen(
                     contentPadding = PaddingValues(bottom = if (selectionMode) 88.dp else 0.dp),
                     verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                 ) {
-                    items(
+                    itemsIndexed(
                         sortedResultIndices,
-                        key = { index ->
+                        key = { _, index ->
                             val record = searchableRecords.getOrNull(index)
                             "search:${record?.recordId ?: index}"
                         },
-                    ) { index ->
+                    ) { position, index ->
                         searchableRecords.getOrNull(index)?.let { record ->
+                            val previousDate =
+                                sortedResultIndices
+                                    .getOrNull(position - 1)
+                                    ?.let(searchableRecords::getOrNull)
+                                    ?.dateIso
                             val transaction =
                                 remember(record, state.budgetDisplaySettings, merchantIconMatcher) {
                                     record.toTransactionItem(state.budgetDisplaySettings, merchantIconMatcher)
@@ -502,6 +512,7 @@ internal fun ActivitySearchScreen(
                                 transaction,
                                 selectionMode = selectionMode,
                                 selected = transactionId != null && transactionId in selectedTransactionIds,
+                                showDateHeader = previousDate != record.dateIso,
                                 onLongClick =
                                     if (isLiveBudget && !state.readOnlyMode && transactionId != null) {
                                         {
