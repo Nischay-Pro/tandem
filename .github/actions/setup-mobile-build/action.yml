@@ -39,11 +39,22 @@ runs:
       shell: bash
       run: pnpm install --frozen-lockfile
 
-    - name: Set up Java
-      uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
-      with:
-        distribution: temurin
-        java-version: "25"
+    - name: Select the runner's Java 25 installation
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ "$RUNNER_OS" == "macOS" ]]; then
+          TANDEM_JAVA_HOME="${JAVA_HOME_25_arm64:-}"
+        else
+          TANDEM_JAVA_HOME="${JAVA_HOME_25_X64:-}"
+        fi
+        if [[ -z "$TANDEM_JAVA_HOME" || ! -x "$TANDEM_JAVA_HOME/bin/java" ]]; then
+          echo "The current runner image does not provide Java 25 for $RUNNER_OS/$RUNNER_ARCH." >&2
+          exit 1
+        fi
+        echo "JAVA_HOME=$TANDEM_JAVA_HOME" >> "$GITHUB_ENV"
+        echo "$TANDEM_JAVA_HOME/bin" >> "$GITHUB_PATH"
+        "$TANDEM_JAVA_HOME/bin/java" -version
 
     - name: Set up Gradle caching
       uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
