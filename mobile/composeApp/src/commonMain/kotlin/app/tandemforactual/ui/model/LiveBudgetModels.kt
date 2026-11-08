@@ -111,7 +111,14 @@ internal fun liveAccountGroupLabel(account: LiveAccountSummary): String {
         ?.trim()
         ?.takeIf { it.isNotEmpty() }
         ?.let { return it }
-    return if (account.offBudget) "Off budget" else "On budget"
+    val accountType = "${account.type.orEmpty()} ${account.name}".lowercase()
+    return when {
+        listOf("credit", "card", "visa", "mastercard", "amex", "discover").any { it in accountType } -> "Credit"
+        listOf("loan", "mortgage", "debt").any { it in accountType } -> "Loan"
+        account.offBudget || listOf("tracking", "investment", "brokerage", "401k", "403b", "ira").any { it in accountType } ->
+            "Tracking"
+        else -> "Cash"
+    }
 }
 
 internal fun liveBudgetMonthSummary(

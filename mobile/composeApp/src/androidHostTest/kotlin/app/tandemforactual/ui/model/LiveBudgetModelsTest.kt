@@ -38,7 +38,7 @@ class LiveBudgetModelsTest {
     }
 
     @Test
-    fun usesActualAccountGroupsAndBudgetStateInsteadOfGuessingFromNames() {
+    fun usesActualAccountGroupsTypesAndClosedState() {
         val accounts =
             liveAccountSummaries(
                 listOf(
@@ -52,13 +52,19 @@ class LiveBudgetModelsTest {
                         type = "account",
                         id = "visa",
                         name = "Visa Signature",
-                        json = """{"id":"visa","balance_current":-2000}""",
+                        json = """{"id":"visa","type":"credit","balance_current":-2000}""",
                     ),
                     record(
                         type = "account",
                         id = "loan",
                         name = "Auto loan",
-                        json = """{"id":"loan","balance_current":-80000,"offbudget":true}""",
+                        json = """{"id":"loan","type":"mortgage","balance_current":-80000,"offbudget":true}""",
+                    ),
+                    record(
+                        type = "account",
+                        id = "brokerage",
+                        name = "Brokerage investments",
+                        json = """{"id":"brokerage","type":"investment","balance_current":30000,"offbudget":true}""",
                     ),
                     record(
                         type = "account",
@@ -73,10 +79,11 @@ class LiveBudgetModelsTest {
         assertEquals("Everyday", accounts.first().accountGroupName)
         assertEquals("daily", accounts.first().accountGroupId)
         assertEquals("Everyday", liveAccountGroupLabel(accounts[0]))
-        assertEquals("On budget", liveAccountGroupLabel(accounts[1]))
-        assertEquals("Off budget", liveAccountGroupLabel(accounts[2]))
-        assertEquals("Closed", liveAccountGroupLabel(accounts[3]))
-        assertEquals(true, accounts[3].closed)
+        assertEquals("Credit", liveAccountGroupLabel(accounts[1]))
+        assertEquals("Loan", liveAccountGroupLabel(accounts[2]))
+        assertEquals("Tracking", liveAccountGroupLabel(accounts[3]))
+        assertEquals("Closed", liveAccountGroupLabel(accounts[4]))
+        assertEquals(true, accounts[4].closed)
     }
 
     @Test
