@@ -1,6 +1,7 @@
 package app.tandemforactual.data.database
 
 import android.content.Context
+import androidx.sqlite.driver.AndroidSQLiteDriver
 import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.LocalRecordProjection
 import app.tandemforactual.data.store.LocalWriteAction
@@ -29,14 +30,14 @@ class AndroidDatabasePersistenceTest {
             val context: Context = RuntimeEnvironment.getApplication()
             context.deleteDatabase(DATABASE_NAME)
             try {
-                val firstDatabase = openTandemDatabase(tandemDatabaseBuilder(context))
+                val firstDatabase = openAndroidDatabase(context)
                 try {
                     LocalBudgetRepository(firstDatabase) { 100L }.enqueueWrite(createRequest())
                 } finally {
                     firstDatabase.close()
                 }
 
-                val reopenedDatabase = openTandemDatabase(tandemDatabaseBuilder(context))
+                val reopenedDatabase = openAndroidDatabase(context)
                 try {
                     val repository = LocalBudgetRepository(reopenedDatabase) { 200L }
                     assertEquals("queued", repository.readPendingWrites(BUDGET_ID).single().status)
@@ -55,8 +56,8 @@ class AndroidDatabasePersistenceTest {
         runBlocking {
             val context: Context = RuntimeEnvironment.getApplication()
             context.deleteDatabase(DATABASE_NAME)
-            val appDatabase = openTandemDatabase(tandemDatabaseBuilder(context))
-            val workerDatabase = openTandemDatabase(tandemDatabaseBuilder(context))
+            val appDatabase = openAndroidDatabase(context)
+            val workerDatabase = openAndroidDatabase(context)
             val initialQueryObserved = CompletableDeferred<Unit>()
             try {
                 val visibleRecords =
@@ -114,6 +115,9 @@ class AndroidDatabasePersistenceTest {
             createdAtEpochMs = 100L,
             optimisticProjection = LocalRecordProjection("2026-11-03", "checking", "groceries", "market", 1200L, null),
         )
+
+    private fun openAndroidDatabase(context: Context): TandemDatabase =
+        tandemDatabaseBuilder(context).setDriver(AndroidSQLiteDriver()).build()
 
     private companion object {
         const val DATABASE_NAME = "tandem.db"

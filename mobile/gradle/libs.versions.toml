@@ -47,6 +47,7 @@ ktorClientEncoding = { module = "io.ktor:ktor-client-encoding", version.ref = "k
 room3Runtime = { module = "androidx.room3:room3-runtime", version.ref = "room3" }
 room3Compiler = { module = "androidx.room3:room3-compiler", version.ref = "room3" }
 sqliteBundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sqlite" }
+sqliteFramework = { module = "androidx.sqlite:sqlite-framework", version.ref = "sqlite" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 coroutinesCore = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 serializationJson = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }

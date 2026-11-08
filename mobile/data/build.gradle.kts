@@ -41,6 +41,7 @@ kotlin {
       dependencies {
         implementation(kotlin("test"))
         implementation(libs.robolectric)
+        implementation(libs.sqliteFramework)
       }
     }
     getByName("androidDeviceTest") {
