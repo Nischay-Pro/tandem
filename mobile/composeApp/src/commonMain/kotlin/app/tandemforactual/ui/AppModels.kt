@@ -493,7 +493,7 @@ internal fun formatLiveDate(value: String?): String {
     val month = parts?.getOrNull(1)?.toIntOrNull()
     val day = parts?.getOrNull(2)?.take(2)?.toIntOrNull()
     return if (year != null && month != null && day != null) {
-        formatShortDate(SampleDate(year, month, day))
+        formatDate(SampleDate(year, month, day))
     } else {
         value ?: "Undated"
     }
