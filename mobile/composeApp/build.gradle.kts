@@ -8,10 +8,13 @@ plugins {
 
 val repositoryRoot = rootProject.projectDir.parentFile
 val generatedTheSvgResources = layout.buildDirectory.dir("generated/thesvg-icon-pack/composeResources")
+val usePreGeneratedIconPack =
+  providers.environmentVariable("TANDEM_PREGENERATED_ICON_PACK").map { it == "true" }.orElse(false)
 val generateTheSvgIconPack =
   tasks.register<Exec>("generateTheSvgIconPack") {
     group = "build setup"
     description = "Creates offline Compose merchant resources from pinned catalogs and documented brand sources."
+    enabled = !usePreGeneratedIconPack.get()
     workingDir = repositoryRoot
     commandLine(
       "node",
