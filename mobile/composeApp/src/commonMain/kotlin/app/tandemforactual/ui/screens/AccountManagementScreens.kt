@@ -2,15 +2,18 @@
 
 package app.tandemforactual.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -21,12 +24,15 @@ import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -58,6 +64,7 @@ import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronUp
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @Composable
@@ -76,8 +83,11 @@ internal fun AccountReconcileDialog(
     onStatementBalanceChange: (String) -> Unit,
     onSelectedChange: (String, Boolean) -> Unit,
     onDismiss: () -> Unit,
-    onConfirm: () -> Unit,
+    onConfirm: (onSuccess: () -> Unit) -> Unit,
 ) {
+    val currencySettings = state.budgetDisplaySettings
+    val currencySymbol = currencySettings?.currencySymbol?.takeIf { it.isNotBlank() }
+    val currencySymbolIsAfter = currencySettings?.currencySymbolPosition == "after"
     val statementMinor = state.parseAmountMinorUnits(statementBalance)
     val projectedClearedBalance =
         clearedBalanceMinor?.let { reconciliationClearedBalanceMinor(it, transactions, selectedIds) }
@@ -88,107 +98,136 @@ internal fun AccountReconcileDialog(
             null
         }
     val balanceMatches = differenceMinor == 0L
+    val visibleState = remember { MutableTransitionState(false).apply { targetState = true } }
+    val currentOnDismiss by rememberUpdatedState(onDismiss)
+    val requestDismiss = { if (!busy) visibleState.targetState = false }
+    LaunchedEffect(visibleState) {
+        snapshotFlow { visibleState.isIdle && !visibleState.currentState && !visibleState.targetState }
+            .first { it }
+        currentOnDismiss()
+    }
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = requestDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = 16.dp)) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 720.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(TandemSpacing.large),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-            ) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+        AnimatedVisibility(
+            visibleState = visibleState,
+            enter = slideInVertically(tandemMotionSpec(tandemReduceMotion, TandemMotion.ROUTE_MILLIS)) { it },
+            exit = slideOutVertically(tandemMotionSpec(tandemReduceMotion, TandemMotion.ROUTE_MILLIS)) { it },
+        ) {
+            SurfaceCard(Modifier.fillMaxSize()) {
+                Column(
+                    Modifier.fillMaxSize(),
                 ) {
-                    Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
-                    Text(
-                        "Reconcile",
-                        modifier = Modifier.weight(1f),
-                        color = tandemPalette.text,
-                        fontSize = TandemTypography.sectionTitle,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    TandemIconButton(Lucide.X, "Close", sizeDp = 40, iconSizeDp = 18, enabled = !busy, onClick = onDismiss)
-                }
-                BodyText(accountName)
-                TextFieldCard(
-                    "Statement balance · ${state.formatCurrency(0)}",
-                    statementBalance,
-                    onStatementBalanceChange,
-                    TextFieldOptions(
-                        placeholder = "Enter your statement balance",
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    ),
-                )
-                SurfaceCard {
-                    Column {
-                        ListRow("Cleared balance", trailing = projectedClearedBalance?.let(state::formatCurrency) ?: "Unavailable")
-                        DividerLine()
-                        ListRow(
-                            "Difference",
-                            trailing = differenceMinor?.let(state::formatCurrency) ?: "Enter a balance",
-                            leading = RowLeading.Icon(Lucide.Check),
-                            options =
-                                ListRowOptions(
-                                    trailingColor = if (balanceMatches) tandemPalette.positive else tandemPalette.warning,
-                                ),
-                        )
-                    }
-                }
-                if (statementMinor != null) {
-                    InlineMessage(
-                        if (balanceMatches) {
-                            "Cleared transactions match this statement balance."
-                        } else {
-                            "Adjust the selected transactions until the difference is 0."
-                        },
-                        if (balanceMatches) InlineMessageKind.SUCCESS else InlineMessageKind.INFO,
-                    )
-                }
-                SectionCard("Transactions", "Select the items on this statement") {
-                    transactions.forEachIndexed { index, transaction ->
-                        val id = transaction.recordId ?: return@forEachIndexed
-                        CheckBoxRow(
-                            transaction.payee,
-                            "${transaction.dateLabel} · ${state.formatCurrency(transaction.amountMinorUnits)}",
-                            checked = id in selectedIds,
-                            enabled = !busy,
-                            onChange = { onSelectedChange(id, it) },
-                        )
-                        if (index < transactions.lastIndex) DividerLine()
-                    }
-                    if (hasMoreTransactions) {
-                        if (transactions.isNotEmpty()) DividerLine()
-                        TandemActionButton(
-                            if (loadingMoreTransactions) "Loading…" else "Load older transactions",
-                            TandemActionButtonTone.NEUTRAL,
+                    Column(
+                        Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(TandemSpacing.large),
+                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                    ) {
+                        Row(
                             Modifier.fillMaxWidth(),
-                            enabled = !busy && !loadingMoreTransactions,
-                            loading = loadingMoreTransactions,
-                            onClick = onLoadMoreTransactions,
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                        ) {
+                            Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
+                            Text(
+                                "Reconcile",
+                                modifier = Modifier.weight(1f),
+                                color = tandemPalette.text,
+                                fontSize = TandemTypography.sectionTitle,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            TandemIconButton(Lucide.X, "Close", sizeDp = 40, iconSizeDp = 18, enabled = !busy, onClick = requestDismiss)
+                        }
+                        BodyText(accountName)
+                        TextFieldCard(
+                            "Statement balance",
+                            statementBalance,
+                            onStatementBalanceChange,
+                            TextFieldOptions(
+                                placeholder = state.formatCurrency(0),
+                                currencySymbol = currencySymbol,
+                                currencySymbolAfter = currencySymbolIsAfter,
+                                currencySymbolSpace = currencySettings?.currencySpaceBetweenAmountAndSymbol == true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            ),
+                        )
+                        if (statementMinor == null) {
+                            InlineMessage("Enter your statement balance", InlineMessageKind.INFO)
+                        }
+                        SurfaceCard {
+                            Column {
+                                ListRow("Cleared balance", trailing = projectedClearedBalance?.let(state::formatCurrency) ?: "Unavailable")
+                                DividerLine()
+                                ListRow(
+                                    "Difference",
+                                    trailing = differenceMinor?.let(state::formatCurrency) ?: "—",
+                                    leading = RowLeading.Icon(Lucide.Check),
+                                    options =
+                                        ListRowOptions(
+                                            trailingColor = if (balanceMatches) tandemPalette.positive else tandemPalette.warning,
+                                        ),
+                                )
+                            }
+                        }
+                        if (statementMinor != null) {
+                            InlineMessage(
+                                if (balanceMatches) {
+                                    "Cleared transactions match this statement balance."
+                                } else {
+                                    "Adjust the selected transactions until the difference is 0."
+                                },
+                                if (balanceMatches) InlineMessageKind.SUCCESS else InlineMessageKind.INFO,
+                            )
+                        }
+                        SectionCard("Transactions", "Select the items on this statement") {
+                            transactions.forEachIndexed { index, transaction ->
+                                val id = transaction.recordId ?: return@forEachIndexed
+                                CheckBoxRow(
+                                    transaction.payee,
+                                    "${transaction.dateLabel} · ${state.formatCurrency(transaction.amountMinorUnits)}",
+                                    checked = id in selectedIds,
+                                    enabled = !busy,
+                                    onChange = { onSelectedChange(id, it) },
+                                )
+                                if (index < transactions.lastIndex) DividerLine()
+                            }
+                            if (hasMoreTransactions) {
+                                if (transactions.isNotEmpty()) DividerLine()
+                                TandemActionButton(
+                                    if (loadingMoreTransactions) "Loading…" else "Load older transactions",
+                                    TandemActionButtonTone.NEUTRAL,
+                                    Modifier.fillMaxWidth(),
+                                    enabled = !busy && !loadingMoreTransactions,
+                                    loading = loadingMoreTransactions,
+                                    onClick = onLoadMoreTransactions,
+                                )
+                            }
+                        }
+                    }
+                    message?.let { InlineMessage(it, InlineMessageKind.INFO, Modifier.padding(horizontal = TandemSpacing.large)) }
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
+                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                    ) {
+                        TandemActionButton(
+                            "Cancel",
+                            TandemActionButtonTone.NEUTRAL,
+                            Modifier.weight(1f),
+                            enabled = !busy,
+                            onClick = requestDismiss,
+                        )
+                        TandemActionButton(
+                            if (busy) "Working…" else "Mark reconciled",
+                            TandemActionButtonTone.PRIMARY,
+                            Modifier.weight(1f),
+                            icon = Lucide.Check,
+                            enabled = canFinishReconciliation(statementMinor, differenceMinor, busy),
+                            loading = busy,
+                            onClick = { onConfirm(requestDismiss) },
                         )
                     }
-                }
-                message?.let { InlineMessage(it, InlineMessageKind.INFO) }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    TandemActionButton("Cancel", TandemActionButtonTone.NEUTRAL, Modifier.weight(1f), enabled = !busy, onClick = onDismiss)
-                    TandemActionButton(
-                        if (busy) "Working…" else "Mark reconciled",
-                        TandemActionButtonTone.PRIMARY,
-                        Modifier.weight(1f),
-                        icon = Lucide.Check,
-                        enabled = canFinishReconciliation(statementMinor, differenceMinor, busy),
-                        loading = busy,
-                        onClick = onConfirm,
-                    )
                 }
             }
         }

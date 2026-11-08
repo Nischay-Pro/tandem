@@ -244,7 +244,7 @@ internal fun AccountDetailScreen(
         }
     }
     if (showReconcileDialog && liveAccount != null) {
-        val didReconcile = {
+        val didReconcile: (() -> Unit) -> Unit = { closeAfterSuccess ->
             scope.launch {
                 if (
                     mobileSession.markTransactionsReconciled(
@@ -254,7 +254,7 @@ internal fun AccountDetailScreen(
                         selectedReconciliationIds,
                     )
                 ) {
-                    showReconcileDialog = false
+                    closeAfterSuccess()
                 }
             }
         }
@@ -278,7 +278,7 @@ internal fun AccountDetailScreen(
                 selectedReconciliationIds = if (selected) selectedReconciliationIds + id else selectedReconciliationIds - id
             },
             onDismiss = { if (!mobileSession.isSavingTransaction) showReconcileDialog = false },
-            onConfirm = { didReconcile() },
+            onConfirm = didReconcile,
         )
     }
     if (showStatementImportDialog && liveAccount != null) {

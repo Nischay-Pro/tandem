@@ -44,13 +44,16 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -109,6 +112,9 @@ internal fun FieldFrame(
 
 internal data class TextFieldOptions(
     val placeholder: String = "",
+    val currencySymbol: String? = null,
+    val currencySymbolAfter: Boolean = false,
+    val currencySymbolSpace: Boolean = false,
     val singleLine: Boolean = true,
     val isSecret: Boolean = false,
     val secretKeyboardType: KeyboardType = KeyboardType.Password,
@@ -117,6 +123,50 @@ internal data class TextFieldOptions(
     val large: Boolean = false,
     val onFocusedChange: ((Boolean) -> Unit)? = null,
 )
+
+internal fun currencySymbolTransformation(
+    symbol: String,
+    afterAmount: Boolean,
+    addSpace: Boolean,
+): VisualTransformation {
+    val separator = if (addSpace) "\u202F" else ""
+    return VisualTransformation { value ->
+        val original = value.text
+        if (original.isEmpty()) {
+            TransformedText(value, OffsetMapping.Identity)
+        } else {
+            val negative = original.startsWith('-')
+            val insertionLength = symbol.length + separator.length
+            val transformed =
+                when {
+                    afterAmount -> "$original$separator$symbol"
+                    negative -> "-${symbol}${separator}${original.drop(1)}"
+                    else -> "$symbol$separator$original"
+                }
+            val offsetMapping =
+                object : OffsetMapping {
+                    override fun originalToTransformed(offset: Int): Int =
+                        when {
+                            afterAmount -> offset.coerceIn(0, original.length)
+                            negative && offset > 0 -> (offset + insertionLength).coerceAtMost(transformed.length)
+                            negative -> 0
+                            else -> (offset + insertionLength).coerceAtMost(transformed.length)
+                        }
+
+                    override fun transformedToOriginal(offset: Int): Int =
+                        when {
+                            afterAmount -> offset.coerceIn(0, original.length)
+                            negative && offset == 0 -> 0
+                            negative && offset <= 1 + insertionLength -> 1
+                            negative && offset > 1 + insertionLength -> (offset - insertionLength).coerceIn(0, original.length)
+                            offset <= insertionLength -> 0
+                            else -> (offset - insertionLength).coerceIn(0, original.length)
+                        }
+                }
+            TransformedText(AnnotatedString(transformed), offsetMapping)
+        }
+    }
+}
 
 @Composable
 internal fun TextFieldCard(
@@ -141,7 +191,17 @@ internal fun TextFieldCard(
                 } else {
                     KeyboardOptions.Default
                 },
-            visualTransformation = if (options.isSecret) PasswordVisualTransformation() else VisualTransformation.None,
+            visualTransformation =
+                when {
+                    options.isSecret -> PasswordVisualTransformation()
+                    !options.currencySymbol.isNullOrBlank() ->
+                        currencySymbolTransformation(
+                            options.currencySymbol,
+                            options.currencySymbolAfter,
+                            options.currencySymbolSpace,
+                        )
+                    else -> VisualTransformation.None
+                },
             textStyle =
                 TextStyle(
                     color = palette.text,
