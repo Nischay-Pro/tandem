@@ -12,56 +12,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  mobile:
-    name: Android, iOS, and generated client gate
-    runs-on: macos-26
-    timeout-minutes: 90
+  mobile_static:
+    name: Mobile text and design-token checks
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .node-version
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        with:
-          version: 12.16.1
-          run_install: false
-
-      - name: Install JavaScript build tools
-        run: pnpm install --frozen-lockfile
-
-      - name: Set up Java
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
-        with:
-          distribution: temurin
-          java-version: "27"
-
-      - name: Set up Gradle caching
-        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
-        with:
-          cache-provider: enhanced
-
-      - name: Cache Kotlin/Native toolchain
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-        with:
-          path: ~/.konan
-          key: konan-${{ runner.os }}-${{ hashFiles('mobile/gradle/libs.versions.toml', 'mobile/gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: |
-            konan-${{ runner.os }}-
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
-        with:
-          cmdline-tools-version: 16111833
-          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
-          accept-android-sdk-licenses: true
-          log-accepted-android-sdk-licenses: false
 
       - name: Check mobile UI apostrophes
         run: python3 scripts/check-mobile-ui-apostrophes.py
@@ -69,71 +28,164 @@ jobs:
       - name: Check mobile design tokens
         run: python3 scripts/check-mobile-design-tokens.py
 
-      - name: Build iOS app host with Xcode
-        working-directory: mobile
-        run: |
-          xcodebuild \
-            -project iosApp/TandemForActual.xcodeproj \
-            -scheme TandemForActual \
-            -destination 'generic/platform=iOS Simulator' \
-            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
-            CODE_SIGNING_ALLOWED=NO \
-            build
+  api_android_jvm:
+    name: API client · Android and JVM
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Compile and test generated API client targets
+      - name: Set up mobile build tools
+        uses: ./.github/actions/setup-mobile-build
+        with:
+          gradle_cache_encryption_key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          setup_android: "true"
+
+      - name: Compile and test API client Android and JVM targets
         working-directory: mobile
         run: >-
-          ./gradlew --no-daemon
+          ./gradlew
           :api-client:compileAndroidMain
           :api-client:compileCommonMainKotlinMetadata
-          :api-client:compileKotlinIosArm64
-          :api-client:compileKotlinIosSimulatorArm64
           :api-client:jvmTest
           :api-client:koverVerify
           :api-client:ktlintCheck
 
-      - name: Compile and test Android, JVM, and iOS data targets
+  data_android_jvm:
+    name: Data · Android and JVM
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up mobile build tools
+        uses: ./.github/actions/setup-mobile-build
+        with:
+          gradle_cache_encryption_key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          setup_android: "true"
+
+      - name: Compile and test data Android and JVM targets
         working-directory: mobile
         run: >-
-          ./gradlew --no-daemon
+          ./gradlew
           :data:compileAndroidMain
           :data:compileAndroidDeviceTest
           :data:compileCommonMainKotlinMetadata
           :data:compileKotlinJvm
-          :data:compileKotlinIosArm64
-          :data:compileKotlinIosSimulatorArm64
           :data:jvmTest
           :data:testAndroidHostTest
-          :data:iosSimulatorArm64Test
           :data:koverVerify
           :data:ktlintCheck
 
-      - name: Compile Compose app for Android and iOS
+  compose_android:
+    name: Compose · Android host
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up mobile build tools
+        uses: ./.github/actions/setup-mobile-build
+        with:
+          gradle_cache_encryption_key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          setup_node: "true"
+          setup_android: "true"
+
+      - name: Compile and test Compose Android host targets
         working-directory: mobile
         run: >-
-          ./gradlew --no-daemon
+          ./gradlew
           :composeApp:compileAndroidMain
-          :composeApp:compileKotlinIosArm64
+          :composeApp:testAndroidHostTest
+          :composeApp:ktlintCheck
 
-      - name: Compile Compose app for iOS simulator
-        working-directory: mobile
-        run: ./gradlew --no-daemon :composeApp:compileKotlinIosSimulatorArm64
+  android_app_unit_tests:
+    name: Android app · unit tests
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Run Compose app tests and KtLint
-        working-directory: mobile
-        run: ./gradlew --no-daemon :composeApp:allTests :composeApp:ktlintCheck
+      - name: Set up mobile build tools
+        uses: ./.github/actions/setup-mobile-build
+        with:
+          gradle_cache_encryption_key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          setup_node: "true"
+          setup_android: "true"
 
       - name: Run Android app unit tests
         working-directory: mobile
-        run: ./gradlew --no-daemon :androidApp:testDebugUnitTest
+        run: ./gradlew :androidApp:testDebugUnitTest
+
+  android_app_release_lint:
+    name: Android app · release lint
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up mobile build tools
+        uses: ./.github/actions/setup-mobile-build
+        with:
+          gradle_cache_encryption_key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          setup_node: "true"
+          setup_android: "true"
 
       - name: Run Android release lint
         working-directory: mobile
-        run: ./gradlew --no-daemon :androidApp:lintRelease
+        run: ./gradlew :androidApp:lintRelease
+
+  android_app_release:
+    name: Android app · release assembly
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up mobile build tools
+        uses: ./.github/actions/setup-mobile-build
+        with:
+          gradle_cache_encryption_key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          setup_node: "true"
+          setup_android: "true"
 
       - name: Assemble Android release
         working-directory: mobile
-        run: ./gradlew --no-daemon :androidApp:assembleRelease
+        run: ./gradlew :androidApp:assembleRelease
+
+  android_persistence:
+    name: Data · Android emulator persistence
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up mobile build tools
+        uses: ./.github/actions/setup-mobile-build
+        with:
+          gradle_cache_encryption_key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          setup_android: "true"
 
       - name: Run Android database persistence test on emulator
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
@@ -142,7 +194,153 @@ jobs:
           target: google_apis
           arch: x86_64
           working-directory: mobile
-          script: ./gradlew --no-daemon :data:connectedAndroidDeviceTest
+          script: ./gradlew :data:connectedAndroidDeviceTest
+
+  ios_host:
+    name: iOS app · Xcode host build
+    needs:
+      - compose_ios
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up mobile build tools
+        uses: ./.github/actions/setup-mobile-build
+        with:
+          gradle_cache_encryption_key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          setup_node: "true"
+          cache_kotlin_native: "true"
+
+      - name: Warm cached Compose framework
+        working-directory: mobile
+        run: ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64
+
+      - name: Build iOS app host with Xcode
+        working-directory: mobile
+        run: |
+          python3 - <<'PY'
+          import subprocess
+          import sys
+
+          command = [
+              "xcodebuild",
+              "-project", "iosApp/TandemForActual.xcodeproj",
+              "-scheme", "TandemForActual",
+              "-destination", "generic/platform=iOS Simulator",
+              "ARCHS=arm64",
+              "ONLY_ACTIVE_ARCH=YES",
+              "CODE_SIGNING_ALLOWED=NO",
+              "build",
+          ]
+
+          try:
+              subprocess.run(command, check=True, timeout=120)
+          except subprocess.TimeoutExpired:
+              sys.exit("Xcode host build exceeded the 120-second limit")
+          PY
+
+  api_ios:
+    name: API client · iOS architectures
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up mobile build tools
+        uses: ./.github/actions/setup-mobile-build
+        with:
+          gradle_cache_encryption_key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          cache_kotlin_native: "true"
+
+      - name: Compile API client iOS architectures
+        working-directory: mobile
+        run: >-
+          ./gradlew
+          :api-client:compileCommonMainKotlinMetadata
+          :api-client:compileKotlinIosArm64
+          :api-client:compileKotlinIosSimulatorArm64
+
+  data_ios:
+    name: Data · iOS architectures and simulator tests
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up mobile build tools
+        uses: ./.github/actions/setup-mobile-build
+        with:
+          gradle_cache_encryption_key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          cache_kotlin_native: "true"
+
+      - name: Compile and test data iOS targets
+        working-directory: mobile
+        run: >-
+          ./gradlew
+          :data:compileCommonMainKotlinMetadata
+          :data:compileKotlinIosArm64
+          :data:compileKotlinIosSimulatorArm64
+          :data:iosSimulatorArm64Test
+
+  compose_ios:
+    name: Compose · iOS architectures and simulator tests
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up mobile build tools
+        uses: ./.github/actions/setup-mobile-build
+        with:
+          gradle_cache_encryption_key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          setup_node: "true"
+          cache_kotlin_native: "true"
+
+      - name: Compile and test Compose iOS targets
+        working-directory: mobile
+        run: >-
+          ./gradlew
+          :composeApp:compileKotlinIosArm64
+          :composeApp:compileKotlinIosSimulatorArm64
+          :composeApp:linkDebugFrameworkIosSimulatorArm64
+          :composeApp:iosSimulatorArm64Test
+
+  mobile:
+    name: Android, iOS, and generated client gate
+    needs:
+      - mobile_static
+      - api_android_jvm
+      - data_android_jvm
+      - compose_android
+      - android_app_unit_tests
+      - android_app_release_lint
+      - android_app_release
+      - android_persistence
+      - ios_host
+      - api_ios
+      - data_ios
+      - compose_ios
+    if: always()
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Require all mobile checks to pass
+        if: ${{ needs.mobile_static.result != 'success' || needs.api_android_jvm.result != 'success' || needs.data_android_jvm.result != 'success' || needs.compose_android.result != 'success' || needs.android_app_unit_tests.result != 'success' || needs.android_app_release_lint.result != 'success' || needs.android_app_release.result != 'success' || needs.android_persistence.result != 'success' || needs.ios_host.result != 'success' || needs.api_ios.result != 'success' || needs.data_ios.result != 'success' || needs.compose_ios.result != 'success' }}
+        run: |
+          echo '${{ toJSON(needs) }}'
+          exit 1
 
   quality:
     name: API quality gate

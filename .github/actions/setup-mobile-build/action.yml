@@ -1,0 +1,70 @@
+name: Set up mobile build tools
+description: Configure the shared tools and caches used by mobile CI jobs.
+inputs:
+  setup_node:
+    description: Install Node.js, pnpm, and the locked JavaScript build tools.
+    required: false
+    default: "false"
+  setup_android:
+    description: Install the Android SDK packages used by this job.
+    required: false
+    default: "false"
+  cache_kotlin_native:
+    description: Cache the Kotlin/Native compiler and toolchain.
+    required: false
+    default: "false"
+  gradle_cache_encryption_key:
+    description: Encrypt Gradle configuration-cache data saved by the Gradle cache action.
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js
+      if: ${{ inputs.setup_node == 'true' }}
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version-file: .node-version
+
+    - name: Set up pnpm
+      if: ${{ inputs.setup_node == 'true' }}
+      uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      with:
+        version: 12.16.1
+        run_install: false
+        cache: true
+
+    - name: Install JavaScript build tools
+      if: ${{ inputs.setup_node == 'true' }}
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - name: Set up Java
+      uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+      with:
+        distribution: temurin
+        java-version: "27"
+
+    - name: Set up Gradle caching
+      uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
+      with:
+        cache-provider: enhanced
+        cache-encryption-key: ${{ inputs.gradle_cache_encryption_key }}
+
+    - name: Cache Kotlin/Native toolchain
+      if: ${{ inputs.cache_kotlin_native == 'true' }}
+      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+      with:
+        path: ~/.konan
+        key: konan-${{ runner.os }}-${{ hashFiles('mobile/gradle/libs.versions.toml', 'mobile/gradle/wrapper/gradle-wrapper.properties') }}
+        restore-keys: |
+          konan-${{ runner.os }}-
+
+    - name: Set up Android SDK
+      if: ${{ inputs.setup_android == 'true' }}
+      uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+      with:
+        cmdline-tools-version: 16111833
+        packages: "platform-tools platforms;android-37.0 build-tools;37.0.0"
+        accept-android-sdk-licenses: true
+        log-accepted-android-sdk-licenses: false
