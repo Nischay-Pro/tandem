@@ -2,14 +2,11 @@
 
 package app.tandemforactual.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.semantics.selected
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.SectionCard
-import com.composables.icons.lucide.Check
 
 @Composable
 internal fun BudgetPreferencesScreen(

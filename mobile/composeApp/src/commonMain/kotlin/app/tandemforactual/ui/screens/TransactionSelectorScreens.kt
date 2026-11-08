@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
@@ -26,10 +28,7 @@ import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.PeriodStepper
 import app.tandemforactual.ui.components.SelectableTile
 import app.tandemforactual.ui.components.SurfaceCard
-import com.composables.icons.lucide.Search
 import kotlinx.coroutines.flow.first
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 
 @Composable
 internal fun SelectorScreen(

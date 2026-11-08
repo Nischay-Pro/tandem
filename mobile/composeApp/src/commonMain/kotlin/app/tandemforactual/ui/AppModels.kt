@@ -5,7 +5,6 @@ package app.tandemforactual.ui
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.material.Icon
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.saveable.listSaver
@@ -55,8 +54,6 @@ import com.composables.icons.lucide.Pill
 import com.composables.icons.lucide.Plane
 import com.composables.icons.lucide.PlugZap
 import com.composables.icons.lucide.Receipt
-import com.composables.icons.lucide.Search
-import com.composables.icons.lucide.Server
 import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.Shirt
 import com.composables.icons.lucide.ShoppingBag

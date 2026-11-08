@@ -19,7 +19,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
@@ -43,14 +42,12 @@ import com.composables.icons.lucide.LayoutDashboard
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PaintbrushVertical
 import com.composables.icons.lucide.Palette
-import com.composables.icons.lucide.Server
 import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.SunMoon
 import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.Wallpaper
-import kotlinx.coroutines.flow.first
 
 @Composable
 internal fun SettingsScreen(

@@ -2,7 +2,6 @@
 
 package app.tandemforactual.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,7 +27,6 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Server
 import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.Wifi
-import kotlinx.coroutines.flow.first
 
 @Composable
 internal fun ServerDeviceScreen(

@@ -33,7 +33,6 @@ import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.model.longValue
-import com.composables.icons.lucide.Check
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 
