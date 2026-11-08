@@ -496,6 +496,11 @@ internal data class SelectorItem(
     val label: String,
 )
 
+internal data class SelectorGroup(
+    val title: String,
+    val items: List<SelectorItem>,
+)
+
 internal fun formatLiveDate(value: String?): String {
     val parts = value?.split('-')
     val year = parts?.getOrNull(0)?.toIntOrNull()

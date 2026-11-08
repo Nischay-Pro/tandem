@@ -3,6 +3,7 @@
 package app.tandemforactual.ui
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -26,37 +28,77 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.PeriodStepper
+import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SelectableTile
 import app.tandemforactual.ui.components.SurfaceCard
 import kotlinx.coroutines.flow.first
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 internal fun SelectorScreen(
     values: List<SelectorItem>,
     selected: String,
     live: Boolean = false,
     topContent: (@Composable () -> Unit)? = null,
     noMatches: (@Composable (String) -> Unit)? = null,
+    groups: List<SelectorGroup> = emptyList(),
+    searchLabel: String = "Search items",
+    searchPlaceholder: String = "Find an item",
     onSelect: (SelectorItem) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
-    PageColumn {
-        TextFieldCard("Search", query, { query = it }, TextFieldOptions(placeholder = "Start typing"))
-        topContent?.invoke()
-        val filtered = values.filter { it.label.contains(query, ignoreCase = true) }
-        if (filtered.isEmpty()) {
-            if (noMatches != null) {
-                noMatches(query)
-            } else {
-                SurfaceCard { EmptyState("No matches", modifier = Modifier.padding(TandemSpacing.large)) }
+    val filtered = values.filter { it.label.contains(query, ignoreCase = true) }
+    val filteredIds = filtered.mapTo(mutableSetOf(), SelectorItem::id)
+    val groupedItems =
+        groups.mapNotNull { group ->
+            val items = group.items.filter { it.id in filteredIds }
+            if (items.isEmpty()) null else group to items
+        }
+    val groupedIds = groupedItems.flatMapTo(mutableSetOf()) { (_, items) -> items.map(SelectorItem::id) }
+    val ungroupedItems = filtered.filterNot { it.id in groupedIds }
+    PageLazyColumn {
+        if (values.size > 8) {
+            item {
+                TextFieldCard(searchLabel, query, { query = it }, TextFieldOptions(placeholder = searchPlaceholder))
             }
         }
-        filtered.forEach { item ->
-            ChoiceRow(
-                item.label,
-                selected = selected == if (live) item.id else item.label,
-                onClick = { onSelect(item) },
-            )
+        topContent?.let { content -> item { content() } }
+        if (filtered.isEmpty()) {
+            item {
+                if (noMatches != null) {
+                    noMatches(query)
+                } else {
+                    SurfaceCard { EmptyState("No matches", modifier = Modifier.padding(TandemSpacing.large)) }
+                }
+            }
+        } else {
+            items(ungroupedItems, key = { "choice-${it.id}" }) { item ->
+                ChoiceRow(
+                    item.label,
+                    selected = selected.isNotBlank() && selected == if (live) item.id else item.label,
+                    onClick = { onSelect(item) },
+                )
+            }
+            groupedItems.forEach { (group, groupItems) ->
+                stickyHeader(key = "selector-group-${group.title}") {
+                    SurfaceCard(Modifier.fillMaxWidth()) {
+                        Text(
+                            group.title,
+                            modifier = Modifier.padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
+                            color = tandemPalette.text,
+                            fontSize = TandemTypography.label,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+                items(groupItems, key = { "${group.title}-${it.id}" }) { item ->
+                    ChoiceRow(
+                        item.label,
+                        selected = selected.isNotBlank() && selected == if (live) item.id else item.label,
+                        onClick = { onSelect(item) },
+                    )
+                }
+            }
         }
     }
 }
@@ -95,6 +137,10 @@ internal fun DatePickerScreen(
                 }
             },
         )
+        SecondaryButton("Today", Modifier.fillMaxWidth()) {
+            state.transactionDate = platformTodayIsoDate()
+            navigation.back()
+        }
         Row(Modifier.fillMaxWidth()) {
             (0..6).forEach { column ->
                 val representativeDay = 1 + ((column - firstDayOffset + 7) % 7)

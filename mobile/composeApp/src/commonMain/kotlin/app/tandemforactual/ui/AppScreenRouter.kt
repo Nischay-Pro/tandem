@@ -213,6 +213,8 @@ internal fun ScreenContent(
                 values,
                 if (state.selectedBudgetId.isBlank()) state.transactionAccount else state.newTransactionAccountId,
                 live = state.selectedBudgetId.isNotBlank(),
+                searchLabel = "Search accounts",
+                searchPlaceholder = "Find an account",
             ) { item ->
                 state.transactionAccount = item.label
                 state.newTransactionAccountId = if (state.selectedBudgetId.isBlank()) "" else item.id
@@ -233,10 +235,24 @@ internal fun ScreenContent(
                                 record.recordName()?.let { SelectorItem(record.recordId, it) }
                             }.distinctBy { it.id }
                 }
+            val payeeGroups =
+                if (!isLiveBudget) {
+                    emptyList()
+                } else {
+                    buildList {
+                        val transfers = values.filter { it.id.isNotBlank() && it.label.startsWith("Transfer:", ignoreCase = true) }
+                        val payees = values.filter { it.id.isNotBlank() && !it.label.startsWith("Transfer:", ignoreCase = true) }
+                        if (transfers.isNotEmpty()) add(SelectorGroup("Transfers", transfers))
+                        if (payees.isNotEmpty()) add(SelectorGroup("Payees", payees))
+                    }
+                }
             SelectorScreen(
                 values,
                 if (isLiveBudget) state.newTransactionPayeeId else state.transactionPayee,
                 live = isLiveBudget,
+                groups = payeeGroups,
+                searchLabel = "Search payees",
+                searchPlaceholder = "Find a payee",
                 topContent =
                     if (isLiveBudget) {
                         {
@@ -298,16 +314,63 @@ internal fun ScreenContent(
         AppRoute.CHOOSE_CATEGORY -> {
             val scope = rememberCoroutineScope()
             val isLiveBudget = state.selectedBudgetId.isNotBlank()
+            val visibleMonthGroups =
+                liveBudgetMonth
+                    ?.groups
+                    ?.filter { it.isIncome == (state.transactionType == "Income") }
+                    .orEmpty()
+            val allLiveCategoryItems =
+                if (!isLiveBudget) {
+                    emptyList()
+                } else {
+                    mobileSession.categoryRecords
+                        .mapNotNull { record ->
+                            val body = record.recordBody()
+                            if (body?.booleanValue("hidden") == true || body?.booleanValue("deleted") == true) {
+                                null
+                            } else {
+                                record.recordName()?.let { SelectorItem(record.recordId, it) }
+                            }
+                        }.distinctBy(SelectorItem::id)
+                }
+            val allCategoryItemsById = allLiveCategoryItems.associateBy(SelectorItem::id)
+            val visibleCategoryIds = visibleMonthGroups.flatMap { it.categories }.mapTo(mutableSetOf()) { it.id }
+            val visibleCategoryItems =
+                if (liveBudgetMonth == null) allLiveCategoryItems else allLiveCategoryItems.filter { it.id in visibleCategoryIds }
             val values =
                 if (!isLiveBudget) {
                     listOf("Groceries", "Utilities", "Dining", "Rent", "Transport", "Personal")
                         .map { SelectorItem(it, it) }
                 } else {
-                    listOf(SelectorItem("", "Uncategorized")) +
-                        mobileSession.categoryRecords
-                            .mapNotNull { record ->
-                                record.recordName()?.let { SelectorItem(record.recordId, it) }
-                            }.distinctBy { it.id }
+                    listOf(SelectorItem("", "Uncategorized")) + visibleCategoryItems
+                }
+            val recentCategoryItems =
+                if (!isLiveBudget) {
+                    emptyList()
+                } else {
+                    liveTransactions
+                        .mapNotNull { transaction -> transaction.categoryId?.let(allCategoryItemsById::get) }
+                        .distinctBy(SelectorItem::id)
+                        .take(5)
+                }
+            val categorySelectorGroups =
+                if (!isLiveBudget) {
+                    emptyList()
+                } else {
+                    buildList {
+                        if (recentCategoryItems.isNotEmpty()) add(SelectorGroup("Recent", recentCategoryItems))
+                        visibleMonthGroups.forEach { group ->
+                            val groupItems =
+                                group.categories
+                                    .mapNotNull { category ->
+                                        allCategoryItemsById[category.id] ?: SelectorItem(category.id, category.name)
+                                    }.sortedBy { it.label.lowercase() }
+                            if (groupItems.isNotEmpty()) add(SelectorGroup(group.name, groupItems))
+                        }
+                        val groupedIds = flatMap { it.items }.mapTo(mutableSetOf()) { it.id }
+                        val ungrouped = visibleCategoryItems.filterNot { it.id in groupedIds }.sortedBy { it.label.lowercase() }
+                        if (ungrouped.isNotEmpty()) add(SelectorGroup("Other", ungrouped))
+                    }
                 }
             val categoryGroups =
                 if (!isLiveBudget) {
@@ -333,6 +396,9 @@ internal fun ScreenContent(
                 values,
                 if (state.selectedBudgetId.isBlank()) state.transactionCategory else state.newTransactionCategoryId,
                 live = isLiveBudget,
+                groups = categorySelectorGroups,
+                searchLabel = "Search categories",
+                searchPlaceholder = "Find a category",
                 noMatches =
                     if (isLiveBudget) {
                         { query ->
