@@ -171,10 +171,18 @@ internal fun TransactionFormScreen(
                     modifier = Modifier.imePadding().padding(bottom = if (keypadVisible) AMOUNT_KEYPAD_HEIGHT + 68.dp else 76.dp),
                 ) {
                     TransactionAmountField(
-                        amount = state.transactionAmount.ifBlank { state.formatAmount(0) },
+                        amount =
+                            state.formatAmount(
+                                when {
+                                    amountMinorUnits == 0L -> 0L
+                                    state.transactionType == "Income" -> amountMinorUnits
+                                    else -> -amountMinorUnits
+                                },
+                            ),
                         amountMinorUnits = amountMinorUnits,
                         transactionType = state.transactionType,
                         focusRequester = amountFocusRequester,
+                        neutralDisplay = true,
                         onShowKeypad = { keypadVisible = true },
                     )
                     AnimatedReveal(visible = amountEntryMessage != null) {

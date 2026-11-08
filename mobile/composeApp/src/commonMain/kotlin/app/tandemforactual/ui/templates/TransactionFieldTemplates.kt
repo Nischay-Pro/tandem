@@ -180,19 +180,22 @@ internal fun TransactionAmountField(
     amountMinorUnits: Long,
     transactionType: String,
     focusRequester: FocusRequester,
+    neutralDisplay: Boolean = false,
     onShowKeypad: () -> Unit,
     amountColorOverride: Color? = null,
 ) {
     val palette = tandemPalette
     val entered = amountMinorUnits != 0L
     val amountColor =
-        amountColorOverride ?: when {
-            !entered -> palette.text
-            transactionType == "Income" -> palette.positive
-            else -> palette.negative
+        amountColorOverride ?: if (neutralDisplay) {
+            palette.text
+        } else if (transactionType == "Income") {
+            palette.positive
+        } else {
+            palette.negative
         }
-    val outline = if (entered) amountColor else palette.border
-    val fill = if (entered) amountColor.copy(alpha = 0.08f) else palette.surface
+    val outline = if (entered && !neutralDisplay) amountColor else palette.border
+    val fill = if (entered && !neutralDisplay) amountColor.copy(alpha = 0.08f) else palette.surface
     val display = amount.ifBlank { "0.00" }
     Row(
         modifier =
@@ -213,7 +216,7 @@ internal fun TransactionAmountField(
             singleLine = true,
             textStyle =
                 TextStyle(
-                    color = if (entered) amountColor else palette.muted,
+                    color = if (entered || neutralDisplay) amountColor else palette.muted,
                     fontSize = TandemTypography.amountField,
                     lineHeight = TandemTypography.amountFieldLineHeight,
                     fontWeight = FontWeight.Bold,
@@ -393,7 +396,7 @@ internal fun TransactionAmountKeypad(
                     }
                 }
                 AmountPadKey("=", Modifier.weight(1f), AmountPadKeyStyle.EQUALS, "Calculate", onEquals)
-                AmountPadKey("Done", Modifier.weight(1f), AmountPadKeyStyle.DONE, onClick = onDone)
+                AmountPadKey("Hide", Modifier.weight(1f), AmountPadKeyStyle.DONE, "Hide number pad", onDone)
             }
         }
     }

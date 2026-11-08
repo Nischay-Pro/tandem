@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
+import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronLeft
 import com.composables.icons.lucide.Cloud
 import com.composables.icons.lucide.CloudAlert
@@ -160,20 +161,21 @@ internal fun AppHeader(
     val palette = tandemPalette
     val headerTitle =
         when (route) {
-            AppRoute.NEW_TRANSACTION -> ""
+            AppRoute.NEW_TRANSACTION -> "Add transaction"
             AppRoute.BUDGET -> budgetDisplayNameForHeader(state.selectedBudget)
             AppRoute.CATEGORY_GROUP ->
-                liveBudgetMonth?.groups?.firstOrNull { it.id == state.selectedCategoryGroupId }?.name ?: route.title
+                liveBudgetMonth?.groups?.firstOrNull { it.id == state.selectedCategoryGroupId }?.name
+                    ?: if (state.selectedBudgetId.isBlank()) route.title else "Category group"
             AppRoute.CATEGORY_DETAIL ->
                 liveBudgetMonth
                     ?.groups
                     ?.asSequence()
                     ?.flatMap { it.categories.asSequence() }
                     ?.firstOrNull { it.id == state.selectedCategoryId }
-                    ?.name ?: route.title
+                    ?.name ?: if (state.selectedBudgetId.isBlank()) route.title else "Category"
             AppRoute.ACCOUNT_DETAIL ->
                 if (state.selectedBudgetId.isNotBlank()) {
-                    liveAccounts.firstOrNull { it.id == state.selectedAccountId }?.name ?: route.title
+                    liveAccounts.firstOrNull { it.id == state.selectedAccountId }?.name ?: "Account"
                 } else {
                     previewAccountById(state.selectedAccountId).name
                 }
@@ -190,8 +192,8 @@ internal fun AppHeader(
     ) {
         if (showBack) {
             TandemIconButton(
-                icon = if (route == AppRoute.NEW_TRANSACTION) Lucide.X else Lucide.ChevronLeft,
-                contentDescription = "Back",
+                icon = if (route == AppRoute.NEW_TRANSACTION || route == AppRoute.EDIT_TRANSACTION) Lucide.X else Lucide.ChevronLeft,
+                contentDescription = if (route == AppRoute.NEW_TRANSACTION || route == AppRoute.EDIT_TRANSACTION) "Close" else "Back",
                 onClick = onBack,
                 iconSizeDp = 24,
             )
@@ -207,14 +209,24 @@ internal fun AppHeader(
                 ),
         ) {
             if (headerTitle.isNotBlank()) {
-                Text(
-                    text = headerTitle,
-                    color = palette.text,
-                    fontSize = TandemTypography.periodTitle,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = headerTitle,
+                        color = palette.text,
+                        fontSize = TandemTypography.periodTitle,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (route == AppRoute.BUDGET) {
+                        Icon(
+                            Lucide.ChevronDown,
+                            contentDescription = null,
+                            modifier = Modifier.padding(start = TandemSpacing.xxSmall).size(16.dp),
+                            tint = palette.muted,
+                        )
+                    }
+                }
                 if (route == AppRoute.BUDGET) {
                     Text(
                         if (state.selectedBudgetId.isNotBlank()) {
