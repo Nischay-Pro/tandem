@@ -193,17 +193,7 @@ internal fun BudgetScreen(
             }
         }
         item(key = "budget-overview-title") {
-            Heading(
-                "Budget overview",
-                if (isTrackingBudget) {
-                    "Review activity for the selected month."
-                } else if (isLiveBudget) {
-                    "Review the synced plan and recent activity for the selected month."
-                } else {
-                    "Review category balances and spending for the selected month."
-                },
-                compactSubtitle = true,
-            )
+            Heading("Budget overview")
         }
         item(key = "budget-month-picker") {
             MonthSelectorCard(state.selectedMonth) { navigation.open(AppRoute.MONTH_PICKER) }
