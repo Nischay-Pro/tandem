@@ -1,14 +1,12 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.items
@@ -25,7 +23,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -35,11 +32,9 @@ import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.ListRowOptions
-import app.tandemforactual.ui.components.PeriodStepper
 import app.tandemforactual.ui.components.ReorderDragHandle
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SecondaryButton
-import app.tandemforactual.ui.components.SelectableTile
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
@@ -58,63 +53,6 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Plus
 import kotlinx.coroutines.launch
-
-@Composable
-internal fun MonthPickerScreen(
-    state: AppState,
-    navigation: AppNavigation,
-) {
-    PageColumn {
-        Heading("Choose a month")
-        var selectedYear by remember {
-            mutableStateOf(state.selectedMonthId.substringBefore('-').toIntOrNull() ?: 2026)
-        }
-        PeriodStepper(
-            title = selectedYear.toString(),
-            previousLabel = "Previous year",
-            nextLabel = "Next year",
-            onPrevious = { selectedYear -= 1 },
-            onNext = { selectedYear += 1 },
-        )
-        val months = (1..12).map { month -> month to formatShortMonth(selectedYear, month) }
-        months.chunked(3).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                row.forEach { (monthNumber, monthLabel) ->
-                    val full = formatMonth(selectedYear, monthNumber)
-                    val chosen = state.selectedMonth == full
-                    SelectableTile(
-                        selected = chosen,
-                        contentDescription = full,
-                        onSelect = {
-                            state.selectedMonth = full
-                            state.selectedMonthId = "$selectedYear-${monthNumber.toString().padStart(2, '0')}"
-                            navigation.back()
-                        },
-                        modifier = Modifier.weight(1f).heightIn(min = 72.dp),
-                        selectedBackground = tandemPalette.accentSurface,
-                        unselectedBackground = tandemPalette.surface,
-                        selectedBorder = tandemPalette.accent,
-                        unselectedBorder = tandemPalette.border,
-                    ) {
-                        Text(
-                            monthLabel,
-                            color = if (chosen) tandemPalette.accent else tandemPalette.text,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = TandemTypography.body,
-                        )
-                    }
-                }
-            }
-        }
-        PreviewNote(
-            if (state.selectedBudgetId.isNotBlank()) {
-                "Only months cached from Actual show plan details."
-            } else {
-                "Months are sample planning periods."
-            },
-        )
-    }
-}
 
 @Composable
 internal fun CategoryGroupScreen(

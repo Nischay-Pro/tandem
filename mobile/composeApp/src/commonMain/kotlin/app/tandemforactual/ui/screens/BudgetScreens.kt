@@ -50,7 +50,9 @@ import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.ListRowOptions
+import app.tandemforactual.ui.components.PeriodStepper
 import app.tandemforactual.ui.components.RowLeading
+import app.tandemforactual.ui.components.SelectableTile
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
@@ -83,6 +85,7 @@ internal fun BudgetScreen(
     val palette = tandemPalette
     val scope = rememberCoroutineScope()
     var showCopyLastMonthDialog by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
+    var showMonthPicker by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
     var showBudgetTemplatesDialog by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
     var showNextMonthHoldDialog by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
     var budgetTemplateNameDraft by rememberSaveable(state.selectedBudgetId) { mutableStateOf("") }
@@ -198,7 +201,7 @@ internal fun BudgetScreen(
             Heading("Budget overview")
         }
         item(key = "budget-month-picker") {
-            MonthSelectorCard(state.selectedMonth) { navigation.open(AppRoute.MONTH_PICKER) }
+            MonthSelectorCard(state.selectedMonth) { showMonthPicker = true }
         }
         if (isLiveBudget && !isTrackingBudget && liveBudgetMonth != null) {
             item(key = "budget-copy-last-month") {
@@ -948,6 +951,69 @@ internal fun BudgetScreen(
                                         state.encryptedPassword.takeIf { it.isNotBlank() },
                                     )
                                 if (held) closeHoldDialog()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (showMonthPicker) {
+        MonthPickerDialog(
+            state = state,
+            onDismiss = { showMonthPicker = false },
+        )
+    }
+}
+
+@Composable
+private fun MonthPickerDialog(
+    state: AppState,
+    onDismiss: () -> Unit,
+) {
+    var selectedYear by remember(state.selectedBudgetId, state.selectedMonthId) {
+        mutableStateOf(state.selectedMonthId.substringBefore('-').toIntOrNull() ?: 2026)
+    }
+    val months = (1..12).map { month -> month to formatShortMonth(selectedYear, month) }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = TandemSpacing.large)) {
+            Column(
+                Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+            ) {
+                Text("Choose month", color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
+                PeriodStepper(
+                    title = selectedYear.toString(),
+                    previousLabel = "Previous year",
+                    nextLabel = "Next year",
+                    onPrevious = { selectedYear -= 1 },
+                    onNext = { selectedYear += 1 },
+                )
+                months.chunked(3).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        row.forEach { (monthNumber, monthLabel) ->
+                            val full = formatMonth(selectedYear, monthNumber)
+                            val chosen = state.selectedMonth == full
+                            SelectableTile(
+                                selected = chosen,
+                                contentDescription = full,
+                                onSelect = {
+                                    state.selectedMonth = full
+                                    state.selectedMonthId = "$selectedYear-${monthNumber.toString().padStart(2, '0')}"
+                                    onDismiss()
+                                },
+                                modifier = Modifier.weight(1f).heightIn(min = 56.dp),
+                                selectedBackground = tandemPalette.accentSurface,
+                                unselectedBackground = tandemPalette.surface,
+                                selectedBorder = tandemPalette.accent,
+                                unselectedBorder = tandemPalette.border,
+                            ) {
+                                Text(
+                                    monthLabel,
+                                    color = if (chosen) tandemPalette.accent else tandemPalette.text,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = TandemTypography.body,
+                                )
                             }
                         }
                     }

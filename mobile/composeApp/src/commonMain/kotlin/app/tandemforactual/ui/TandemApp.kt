@@ -1298,7 +1298,6 @@ internal fun AppRoute.showsBottomNavigation(): Boolean =
         AppRoute.BUDGET_CHOOSER,
         AppRoute.UNLOCK_BUDGET,
         AppRoute.FIRST_SYNC,
-        AppRoute.MONTH_PICKER,
         AppRoute.NEW_TRANSACTION,
         AppRoute.EDIT_TRANSACTION,
         AppRoute.CHOOSE_PAYEE,

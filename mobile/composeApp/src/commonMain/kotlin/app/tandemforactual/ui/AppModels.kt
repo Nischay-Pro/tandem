@@ -107,7 +107,6 @@ internal enum class AppRoute(
     UNLOCK_BUDGET("Unlock budget"),
     FIRST_SYNC("Preparing budget"),
     BUDGET("Budget"),
-    MONTH_PICKER("Choose month"),
     CATEGORY_GROUP("Essentials"),
     CATEGORY_DETAIL("Rent"),
     SCHEDULES("Upcoming bills"),
