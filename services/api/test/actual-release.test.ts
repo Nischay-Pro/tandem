@@ -14,9 +14,16 @@ describe("Actual compatibility release pin", () => {
       new URL("../../../docker-compose.dev.yml", import.meta.url),
       "utf8",
     );
-    const mobileUiSource = await readFile(
+    const mobileModelSource = await readFile(
       new URL(
-        "../../../mobile/composeApp/src/commonMain/kotlin/app/tandemforactual/ui/TandemApp.kt",
+        "../../../mobile/composeApp/src/commonMain/kotlin/app/tandemforactual/ui/AppModels.kt",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    const mobileAboutSource = await readFile(
+      new URL(
+        "../../../mobile/composeApp/src/commonMain/kotlin/app/tandemforactual/ui/screens/DataAndAboutScreens.kt",
         import.meta.url,
       ),
       "utf8",
@@ -24,8 +31,8 @@ describe("Actual compatibility release pin", () => {
     const supportedVersion = actualSessionSource.match(
       /SUPPORTED_ACTUAL_SERVER_VERSION = "([^"]+)"/,
     )?.[1];
-    const mobileSupportedVersion = mobileUiSource.match(
-      /private const val SUPPORTED_ACTUAL_SERVER_VERSION = "([^"]+)"/,
+    const mobileSupportedVersion = mobileModelSource.match(
+      /(?:private|internal) const val SUPPORTED_ACTUAL_SERVER_VERSION = "([^"]+)"/,
     )?.[1];
 
     expect(supportedVersion).toBe(
@@ -38,7 +45,7 @@ describe("Actual compatibility release pin", () => {
       /image: ghcr\.io\/actualbudget\/actual:[^\s@]+@sha256:[a-f0-9]{64}/,
     );
     expect(mobileSupportedVersion).toBe(supportedVersion);
-    expect(mobileUiSource).toMatch(
+    expect(mobileAboutSource).toMatch(
       /ListRow\(\s*"Supported Actual server",\s*"Required by this Tandem release",\s*SUPPORTED_ACTUAL_SERVER_VERSION/s,
     );
   });
