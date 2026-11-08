@@ -42,19 +42,14 @@ import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
-import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
-import app.tandemforactual.ui.components.TandemIconButton
-import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
-import com.composables.icons.lucide.CircleDot
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
-import com.composables.icons.lucide.Trash2
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -168,7 +163,6 @@ internal fun ActivityScreen(
             item(key = "activity-sort") {
                 ActivitySortControl(state.activitySortOrder) { state.activitySortOrder = it }
             }
-            val recentDescription = if (isLiveBudget) state.activitySortOrder.label else "${transactions.size} sample entries"
             if (isLiveBudget && mobileSession.activityTransactionPageBudgetId != state.selectedBudgetId && transactions.isEmpty()) {
                 item(key = "activity-loading") {
                     Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
@@ -177,16 +171,13 @@ internal fun ActivityScreen(
                 }
             } else if (transactions.isEmpty()) {
                 item(key = "activity-empty") {
-                    SectionCard("Recent transactions", recentDescription) {
-                        EmptyState(
-                            if (isLiveBudget) "No transactions yet" else "No sample transactions",
-                            if (isLiveBudget) "Sync the budget to refresh." else null,
-                            modifier = Modifier.padding(TandemSpacing.large),
-                        )
-                    }
+                    EmptyState(
+                        if (isLiveBudget) "No transactions yet" else "No sample transactions",
+                        if (isLiveBudget) "Sync the budget to refresh." else null,
+                        modifier = Modifier.padding(TandemSpacing.large),
+                    )
                 }
             } else {
-                item(key = "activity-recent-title") { SectionCard("Recent transactions", recentDescription) {} }
                 itemsIndexed(
                     sortedTransactions,
                     key = { index, transaction ->
@@ -253,65 +244,47 @@ internal fun ActivityScreen(
             enter = slideInVertically { it } + fadeIn(),
             exit = slideOutVertically { it } + fadeOut(),
         ) {
-            SurfaceCard(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
-            ) {
-                Row(
-                    Modifier.fillMaxWidth().padding(TandemSpacing.small),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                ) {
-                    val selectableIds = sortedTransactions.mapNotNull(TransactionItem::recordId).toSet()
-                    val allSelected =
-                        selectableIds.isNotEmpty() &&
-                            !mobileSession.hasMoreActivityTransactions &&
-                            selectedTransactionIds.containsAll(selectableIds)
-                    TandemActionButton(
-                        if (allSelected) "Deselect all" else "Select all",
-                        TandemActionButtonTone.NEUTRAL,
-                        modifier = Modifier.weight(1f),
-                        icon = if (allSelected) Lucide.CircleDot else Lucide.Check,
-                        enabled = !isSelectingAll,
-                        loading = isSelectingAll,
-                    ) {
-                        if (!isSelectingAll) {
-                            if (allSelected) {
-                                selectedTransactionIds = emptySet()
-                                selectionMode = false
-                            } else {
-                                scope.launch {
-                                    isSelectingAll = true
-                                    try {
-                                        while (mobileSession.hasMoreActivityTransactions &&
-                                            mobileSession.activityTransactionPageError == null
-                                        ) {
-                                            mobileSession.loadMoreActivityTransactions(state.selectedBudgetId)
-                                        }
-                                        if (mobileSession.activityTransactionPageError == null) {
-                                            selectedTransactionIds =
-                                                mobileSession.activityTransactionRecords
-                                                    .filterNot(BudgetRecordEntity::isParent)
-                                                    .mapTo(mutableSetOf(), BudgetRecordEntity::recordId)
-                                        }
-                                    } finally {
-                                        isSelectingAll = false
+            val selectableIds = sortedTransactions.mapNotNull(TransactionItem::recordId).toSet()
+            val allSelected =
+                selectableIds.isNotEmpty() &&
+                    !mobileSession.hasMoreActivityTransactions &&
+                    selectedTransactionIds.containsAll(selectableIds)
+            TransactionSelectionFloatingBar(
+                allSelected = allSelected,
+                canDelete = selectedTransactionIds.isNotEmpty() && !isDeletingSelection,
+                isWorking = isSelectingAll,
+                onToggleAll = {
+                    if (!isSelectingAll) {
+                        if (allSelected) {
+                            selectedTransactionIds = emptySet()
+                            selectionMode = false
+                        } else {
+                            scope.launch {
+                                isSelectingAll = true
+                                try {
+                                    while (mobileSession.hasMoreActivityTransactions &&
+                                        mobileSession.activityTransactionPageError == null
+                                    ) {
+                                        mobileSession.loadMoreActivityTransactions(state.selectedBudgetId)
                                     }
+                                    if (mobileSession.activityTransactionPageError == null) {
+                                        selectedTransactionIds =
+                                            mobileSession.activityTransactionRecords
+                                                .filterNot(BudgetRecordEntity::isParent)
+                                                .mapTo(mutableSetOf(), BudgetRecordEntity::recordId)
+                                    }
+                                } finally {
+                                    isSelectingAll = false
                                 }
                             }
                         }
                     }
-                    TandemIconButton(
-                        Lucide.Trash2,
-                        "Delete selected transactions",
-                        enabled = selectedTransactionIds.isNotEmpty() && !isDeletingSelection,
-                        tint = tandemPalette.negative,
-                        containerColor = tandemPalette.raised,
-                        onClick = { confirmBulkDelete = true },
-                    )
-                }
-            }
+                },
+                onDelete = { confirmBulkDelete = true },
+                modifier =
+                    Modifier
+                        .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+            )
         }
     }
     mobileSession.transactionWriteMessage?.takeIf { selectionMode }?.let { InlineMessage(it, InlineMessageKind.ERROR) }

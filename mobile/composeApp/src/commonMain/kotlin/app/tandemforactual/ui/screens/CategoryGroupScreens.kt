@@ -3,13 +3,13 @@
 package app.tandemforactual.ui
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.Icon
@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -33,12 +34,11 @@ import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.ListRow
-import app.tandemforactual.ui.components.ListRowAction
 import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.PeriodStepper
+import app.tandemforactual.ui.components.ReorderDragHandle
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SecondaryButton
-import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SelectableTile
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
@@ -52,6 +52,7 @@ import app.tandemforactual.ui.model.stringValue
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronUp
+import com.composables.icons.lucide.Eye
 import com.composables.icons.lucide.EyeOff
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
@@ -128,8 +129,8 @@ internal fun CategoryGroupScreen(
     val isTrackingBudget = isLiveBudget && state.budgetDisplaySettings?.budgetType == "tracking"
     val groups = if (isLiveBudget) liveBudgetMonth?.groups.orEmpty() else previewCategoryGroups
     val group = groups.firstOrNull { it.id == state.selectedCategoryGroupId } ?: groups.firstOrNull()
-    val groupIndex = groups.indexOfFirst { it.id == group?.id }
     var showHidden by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
+    var selectedCategoryOrderId by rememberSaveable(state.selectedBudgetId, group?.id) { mutableStateOf<String?>(null) }
     var showGroupDialog by rememberSaveable(state.selectedBudgetId, group?.id) { mutableStateOf(false) }
     var showCreateGroupDialog by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
     var groupNameDraft by rememberSaveable(state.selectedBudgetId, group?.id) { mutableStateOf(group?.name.orEmpty()) }
@@ -147,27 +148,30 @@ internal fun CategoryGroupScreen(
                     (body.stringValue("group") ?: body.stringValue("group_id")) == group?.id
             }
         }
-    PageLazyColumn {
-        if (!isLiveBudget) {
-            item(key = "category-group-sample-banner") { SampleBanner() }
-        }
-        if (group == null) {
-            item(key = "category-group-empty-message") {
-                EmptyState(
-                    "No category group",
-                    "No category group is available for this month.",
-                    modifier = Modifier.padding(horizontal = TandemSpacing.large),
-                )
+    Box(Modifier.fillMaxSize()) {
+        PageLazyColumn {
+            if (!isLiveBudget) {
+                item(key = "category-group-sample-banner") { SampleBanner() }
             }
-        } else {
-            item(key = "category-group-title:${group.id}") {
-                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    Heading(group.name, state.selectedMonth)
-                    if (isLiveBudget) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                        ) {
+            if (group == null) {
+                item(key = "category-group-empty-message") {
+                    EmptyState(
+                        "No category group",
+                        "No category group is available for this month.",
+                        modifier = Modifier.padding(horizontal = TandemSpacing.large),
+                    )
+                }
+            } else {
+                item(key = "category-group-title:${group.id}") {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                    ) {
+                        Box(Modifier.weight(1f)) {
+                            Heading(group.name, state.selectedMonth)
+                        }
+                        if (isLiveBudget) {
                             TandemIconButton(
                                 Lucide.Pencil,
                                 "Edit category group",
@@ -177,179 +181,236 @@ internal fun CategoryGroupScreen(
                                 mobileSession.clearBudgetActionMessage()
                                 showGroupDialog = true
                             }
-                            TandemIconButton(
-                                Lucide.Plus,
-                                "Add category group",
-                                enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
-                            ) {
-                                newGroupName = ""
-                                newGroupIsIncome = group.isIncome
-                                mobileSession.clearBudgetActionMessage()
-                                showCreateGroupDialog = true
+                        }
+                    }
+                }
+                item(key = "category-group-summary:${group.id}") {
+                    AmountHero(
+                        if (isTrackingBudget) "Activity this month" else "Assigned this month",
+                        state.formatCurrency(if (isTrackingBudget) group.activityMinor else group.assignedMinor),
+                        if (isTrackingBudget) {
+                            null
+                        } else {
+                            "${state.formatCurrency(group.balanceMinor)} available"
+                        },
+                    )
+                }
+                items(group.categories, key = { "category-group:${group.id}:${it.id}" }) { category ->
+                    val isReordering = selectedCategoryOrderId == category.id
+                    val categoryIndex = group.categories.indexOfFirst { it.id == category.id }
+                    val canMoveUp = categoryIndex > 0
+                    val canMoveDown = categoryIndex >= 0 && categoryIndex < group.categories.lastIndex
+                    val moveCategory: (Int) -> Unit = { direction ->
+                        val targetId =
+                            if (direction < 0) {
+                                group.categories.getOrNull(categoryIndex - 1)?.id
+                            } else {
+                                group.categories.getOrNull(categoryIndex + 2)?.id
                             }
-                            TandemIconButton(
-                                Lucide.EyeOff,
-                                "Hide category group",
-                                enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
-                            ) {
-                                scope.launch {
-                                    mobileSession.manageBudgetCategoryGroup(
-                                        state.selectedBudgetId,
-                                        group.id,
-                                        "hide",
-                                        null,
-                                        null,
-                                        state.encryptedPassword.takeIf { it.isNotBlank() },
-                                    )
-                                }
+                        scope.launch {
+                            mobileSession.manageBudgetCategory(
+                                state.selectedBudgetId,
+                                category.id,
+                                "move",
+                                targetId,
+                                state.encryptedPassword.takeIf { it.isNotBlank() },
+                            )
+                        }
+                    }
+                    SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            ListRow(
+                                category.name,
+                                if (isReordering) {
+                                    null
+                                } else if (isTrackingBudget) {
+                                    "Activity ${state.formatCurrency(category.activityMinor)}"
+                                } else {
+                                    "Spent ${state.formatCurrency(
+                                        kotlin.math.abs(category.activityMinor),
+                                    )} · ${state.formatCurrency(category.balanceMinor)} available"
+                                },
+                                if (isReordering || isTrackingBudget) null else state.formatCurrency(category.assignedMinor),
+                                leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
+                                options =
+                                    ListRowOptions(
+                                        trailingColor = if (category.balanceMinor >= 0) palette.positive else palette.warning,
+                                        showChevron = !isReordering,
+                                    ),
+                                onLongClick =
+                                    if (isLiveBudget && !state.readOnlyMode && !mobileSession.isPerformingBudgetAction && !isReordering) {
+                                        { selectedCategoryOrderId = category.id }
+                                    } else {
+                                        null
+                                    },
+                                onClick =
+                                    {
+                                        if (isReordering) {
+                                            selectedCategoryOrderId = null
+                                        } else {
+                                            state.selectedCategoryGroupId = group.id
+                                            state.selectedCategoryId = category.id
+                                            state.categoryEditRequested = false
+                                            navigation.open(AppRoute.CATEGORY_DETAIL)
+                                        }
+                                    },
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (isReordering && isLiveBudget) {
+                                BudgetItemReorderActions(
+                                    itemName = category.name,
+                                    isHidden = false,
+                                    canMoveUp = canMoveUp,
+                                    canMoveDown = canMoveDown,
+                                    enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                                    onToggleHidden = {
+                                        scope.launch {
+                                            if (mobileSession.manageBudgetCategory(
+                                                    state.selectedBudgetId,
+                                                    category.id,
+                                                    "hide",
+                                                    null,
+                                                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                                                )
+                                            ) {
+                                                selectedCategoryOrderId = null
+                                            }
+                                        }
+                                    },
+                                    onMoveUp = { moveCategory(-1) },
+                                    onMoveDown = { moveCategory(1) },
+                                )
                             }
-                            Spacer(Modifier.weight(1f))
-                            TandemIconButton(
-                                Lucide.ChevronUp,
-                                "Move category group up",
-                                enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction && groupIndex > 0,
-                            ) {
+                        }
+                    }
+                }
+                if (isLiveBudget && (hiddenCategoryRecords.isNotEmpty() || hiddenGroupRecords.isNotEmpty())) {
+                    item(key = "category-group-hidden-toggle:${group.id}") {
+                        SecondaryButton(if (showHidden) "Hide hidden items" else "Show hidden items") {
+                            showHidden = !showHidden
+                        }
+                    }
+                    if (showHidden) {
+                        items(hiddenCategoryRecords, key = { "hidden-category:${it.recordId}" }) { hidden ->
+                            val isReordering = selectedCategoryOrderId == hidden.recordId
+                            val hiddenIndex = hiddenCategoryRecords.indexOfFirst { it.recordId == hidden.recordId }
+                            val moveHiddenCategory: (Int) -> Unit = { direction ->
+                                val targetId =
+                                    if (direction < 0) {
+                                        hiddenCategoryRecords.getOrNull(hiddenIndex - 1)?.recordId
+                                    } else {
+                                        hiddenCategoryRecords.getOrNull(hiddenIndex + 2)?.recordId
+                                    }
                                 scope.launch {
-                                    mobileSession.manageBudgetCategoryGroup(
+                                    mobileSession.manageBudgetCategory(
                                         state.selectedBudgetId,
-                                        group.id,
+                                        hidden.recordId,
                                         "move",
-                                        null,
-                                        groups.getOrNull(groupIndex - 1)?.id,
-                                        state.encryptedPassword.takeIf { it.isNotBlank() },
-                                    )
-                                }
-                            }
-                            TandemIconButton(
-                                Lucide.ChevronDown,
-                                "Move category group down",
-                                enabled =
-                                    !state.readOnlyMode &&
-                                        !mobileSession.isPerformingBudgetAction &&
-                                        groupIndex >= 0 &&
-                                        groupIndex < groups.lastIndex,
-                            ) {
-                                val targetId = groups.getOrNull(groupIndex + 2)?.id
-                                scope.launch {
-                                    mobileSession.manageBudgetCategoryGroup(
-                                        state.selectedBudgetId,
-                                        group.id,
-                                        "move",
-                                        null,
                                         targetId,
                                         state.encryptedPassword.takeIf { it.isNotBlank() },
                                     )
                                 }
                             }
-                        }
-                    }
-                }
-            }
-            item(key = "category-group-summary:${group.id}") {
-                AmountHero(
-                    if (isTrackingBudget) "Activity this month" else "Assigned this month",
-                    state.formatCurrency(if (isTrackingBudget) group.activityMinor else group.assignedMinor),
-                    if (isTrackingBudget) {
-                        "Across ${group.categories.size} categories"
-                    } else {
-                        "${state.formatCurrency(group.balanceMinor)} available across ${group.categories.size} categories"
-                    },
-                )
-            }
-            item(key = "category-group-list-title:${group.id}") {
-                SectionCard("Categories", "${group.categories.size} categories") {}
-            }
-            items(group.categories, key = { "category-group:${group.id}:${it.id}" }) { category ->
-                val openCategory: (Boolean) -> Unit = { editImmediately ->
-                    state.selectedCategoryGroupId = group.id
-                    state.selectedCategoryId = category.id
-                    state.categoryEditRequested = editImmediately
-                    navigation.open(AppRoute.CATEGORY_DETAIL)
-                }
-                SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
-                    ListRow(
-                        category.name,
-                        if (isTrackingBudget) {
-                            "Activity ${state.formatCurrency(category.activityMinor)}"
-                        } else {
-                            "Spent ${state.formatCurrency(
-                                kotlin.math.abs(category.activityMinor),
-                            )} · ${state.formatCurrency(category.balanceMinor)} available"
-                        },
-                        if (isTrackingBudget) null else state.formatCurrency(category.assignedMinor),
-                        leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
-                        options =
-                            ListRowOptions(
-                                trailingColor = if (category.balanceMinor >= 0) palette.positive else palette.warning,
-                                trailingAction =
-                                    if (isLiveBudget) {
-                                        ListRowAction(
-                                            icon = Lucide.Pencil,
-                                            contentDescription = "Edit ${category.name}",
+                            SurfaceCard {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    ListRow(
+                                        hidden.recordName() ?: "Hidden category",
+                                        if (isReordering) null else "Hidden",
+                                        leading = RowLeading.Icon(Lucide.EyeOff),
+                                        options = ListRowOptions(showChevron = !isReordering),
+                                        onLongClick =
+                                            if (!state.readOnlyMode && !mobileSession.isPerformingBudgetAction && !isReordering) {
+                                                { selectedCategoryOrderId = hidden.recordId }
+                                            } else {
+                                                null
+                                            },
+                                        onClick =
+                                            {
+                                                if (isReordering) {
+                                                    selectedCategoryOrderId = null
+                                                } else {
+                                                    scope.launch {
+                                                        mobileSession.manageBudgetCategory(
+                                                            state.selectedBudgetId,
+                                                            hidden.recordId,
+                                                            "show",
+                                                            null,
+                                                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                                                        )
+                                                    }
+                                                }
+                                            },
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    if (isReordering) {
+                                        BudgetItemReorderActions(
+                                            itemName = hidden.recordName() ?: "Hidden category",
+                                            isHidden = true,
+                                            canMoveUp = hiddenIndex > 0,
+                                            canMoveDown = hiddenIndex >= 0 && hiddenIndex < hiddenCategoryRecords.lastIndex,
                                             enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
-                                            onClick = { openCategory(true) },
+                                            onToggleHidden = {
+                                                scope.launch {
+                                                    if (mobileSession.manageBudgetCategory(
+                                                            state.selectedBudgetId,
+                                                            hidden.recordId,
+                                                            "show",
+                                                            null,
+                                                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                                                        )
+                                                    ) {
+                                                        selectedCategoryOrderId = null
+                                                    }
+                                                }
+                                            },
+                                            onMoveUp = { moveHiddenCategory(-1) },
+                                            onMoveDown = { moveHiddenCategory(1) },
                                         )
-                                    } else {
-                                        null
+                                    }
+                                }
+                            }
+                        }
+                        items(hiddenGroupRecords, key = { "hidden-group:${it.recordId}" }) { hidden ->
+                            SurfaceCard {
+                                ListRow(
+                                    hidden.recordName() ?: "Hidden category group",
+                                    "Category group · hidden",
+                                    leading = RowLeading.Icon(Lucide.EyeOff),
+                                    trailing = "Show",
+                                    onClick = {
+                                        scope.launch {
+                                            mobileSession.manageBudgetCategoryGroup(
+                                                state.selectedBudgetId,
+                                                hidden.recordId,
+                                                "show",
+                                                null,
+                                                null,
+                                                state.encryptedPassword.takeIf { it.isNotBlank() },
+                                            )
+                                        }
                                     },
-                            ),
-                        onLongClick = if (isLiveBudget && !state.readOnlyMode) ({ openCategory(true) }) else null,
-                        onClick = { openCategory(false) },
-                    )
-                }
-            }
-            if (isLiveBudget) {
-                item(key = "category-group-hidden-toggle:${group.id}") {
-                    SecondaryButton(if (showHidden) "Hide hidden items" else "Show hidden items") {
-                        showHidden = !showHidden
-                    }
-                }
-                if (showHidden) {
-                    items(hiddenCategoryRecords, key = { "hidden-category:${it.recordId}" }) { hidden ->
-                        SurfaceCard {
-                            ListRow(
-                                hidden.recordName() ?: "Hidden category",
-                                "Hidden",
-                                leading = RowLeading.Icon(Lucide.EyeOff),
-                                trailing = "Show",
-                                onClick = {
-                                    scope.launch {
-                                        mobileSession.manageBudgetCategory(
-                                            state.selectedBudgetId,
-                                            hidden.recordId,
-                                            "show",
-                                            null,
-                                            state.encryptedPassword.takeIf { it.isNotBlank() },
-                                        )
-                                    }
-                                },
-                            )
-                        }
-                    }
-                    items(hiddenGroupRecords, key = { "hidden-group:${it.recordId}" }) { hidden ->
-                        SurfaceCard {
-                            ListRow(
-                                hidden.recordName() ?: "Hidden category group",
-                                "Category group · hidden",
-                                leading = RowLeading.Icon(Lucide.EyeOff),
-                                trailing = "Show",
-                                onClick = {
-                                    scope.launch {
-                                        mobileSession.manageBudgetCategoryGroup(
-                                            state.selectedBudgetId,
-                                            hidden.recordId,
-                                            "show",
-                                            null,
-                                            null,
-                                            state.encryptedPassword.takeIf { it.isNotBlank() },
-                                        )
-                                    }
-                                },
-                            )
+                                )
+                            }
                         }
                     }
                 }
             }
+        }
+        if (isLiveBudget) {
+            FloatingAction(
+                compact = true,
+                enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                label = "Add category group",
+                contentDescription = "Add category group",
+                icon = Lucide.Plus,
+                onClick = {
+                    newGroupName = ""
+                    newGroupIsIncome = group?.isIncome ?: false
+                    mobileSession.clearBudgetActionMessage()
+                    showCreateGroupDialog = true
+                },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 20.dp),
+            )
         }
     }
     if (showGroupDialog && isLiveBudget && group != null) {
@@ -400,6 +461,53 @@ internal fun CategoryGroupScreen(
                     }
                 }
             },
+        )
+    }
+}
+
+@Composable
+internal fun BudgetItemReorderActions(
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    enabled: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    itemName: String = "item",
+    isHidden: Boolean = false,
+    onToggleHidden: (() -> Unit)? = null,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+        onToggleHidden?.let { toggleHidden ->
+            TandemIconButton(
+                if (isHidden) Lucide.Eye else Lucide.EyeOff,
+                if (isHidden) "Show $itemName" else "Hide $itemName",
+                sizeDp = 34,
+                iconSizeDp = 18,
+                enabled = enabled,
+                tint = if (isHidden) tandemPalette.positive else tandemPalette.muted,
+                onClick = toggleHidden,
+            )
+        }
+        TandemIconButton(
+            Lucide.ChevronUp,
+            "Move $itemName up",
+            sizeDp = 34,
+            iconSizeDp = 18,
+            enabled = enabled && canMoveUp,
+            onClick = onMoveUp,
+        )
+        TandemIconButton(
+            Lucide.ChevronDown,
+            "Move $itemName down",
+            sizeDp = 34,
+            iconSizeDp = 18,
+            enabled = enabled && canMoveDown,
+            onClick = onMoveDown,
+        )
+        ReorderDragHandle(
+            enabled = enabled && (canMoveUp || canMoveDown),
+            onMoveUp = onMoveUp,
+            onMoveDown = onMoveDown,
         )
     }
 }

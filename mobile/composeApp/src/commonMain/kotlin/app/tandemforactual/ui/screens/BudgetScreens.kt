@@ -1,12 +1,12 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui
-
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,12 +17,13 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -32,10 +33,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -60,6 +62,7 @@ import app.tandemforactual.ui.model.LiveScheduleSummary
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.ChartNoAxesCombined
 import com.composables.icons.lucide.Check
+import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Trash2
@@ -84,6 +87,7 @@ internal fun BudgetScreen(
     var showNextMonthHoldDialog by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
     var budgetTemplateNameDraft by rememberSaveable(state.selectedBudgetId) { mutableStateOf("") }
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    var selectedGroupOrderId by rememberSaveable(state.selectedBudgetId) { mutableStateOf<String?>(null) }
     val isTrackingBudget = isLiveBudget && state.budgetDisplaySettings?.budgetType == "tracking"
     val compact = state.homeLayout == "Compact"
     val essentialsFirst = state.homeLayout == "Essentials"
@@ -109,9 +113,14 @@ internal fun BudgetScreen(
     val rejectedCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "rejected" } else 0
     val readyToAssignMinor = if (isLiveBudget) liveBudgetMonth?.toBudgetMinor ?: 0 else 124_000L
     val heldForNextMonthMinor = liveBudgetMonth?.heldForNextMonthMinor?.coerceAtLeast(0) ?: 0L
-    var nextMonthHoldAmountDraft by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) {
-        mutableStateOf(state.formatAmount(readyToAssignMinor.coerceAtLeast(0)))
+    var nextMonthHoldAmountMinor by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) {
+        mutableStateOf(readyToAssignMinor.coerceAtLeast(0))
     }
+    var holdKeypadVisible by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
+    var holdCalculatorAccumulator by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf<Long?>(null) }
+    var holdCalculatorOperator by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf<String?>(null) }
+    var holdEnterNewOperand by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
+    var holdAmountMessage by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf<String?>(null) }
     val readyToAssignColor =
         when {
             readyToAssignMinor < 0 -> palette.negative
@@ -125,8 +134,8 @@ internal fun BudgetScreen(
             "summary:${state.selectedMonthId}"
         }
     val displayGroups =
-        remember(essentialsFirst, groups) {
-            if (essentialsFirst) {
+        remember(essentialsFirst, groups, isLiveBudget) {
+            if (essentialsFirst && !isLiveBudget) {
                 groups
                     .withIndex()
                     .sortedWith(
@@ -285,7 +294,12 @@ internal fun BudgetScreen(
                                             trailing = state.formatCurrency(heldForNextMonthMinor),
                                             leading = RowLeading.Icon(Lucide.CalendarDays),
                                             onClick = {
-                                                nextMonthHoldAmountDraft = state.formatAmount(readyToAssignMinor.coerceAtLeast(0))
+                                                nextMonthHoldAmountMinor = readyToAssignMinor.coerceAtLeast(0)
+                                                holdCalculatorAccumulator = null
+                                                holdCalculatorOperator = null
+                                                holdEnterNewOperand = false
+                                                holdAmountMessage = null
+                                                holdKeypadVisible = true
                                                 mobileSession.clearBudgetActionMessage()
                                                 showNextMonthHoldDialog = true
                                             },
@@ -347,8 +361,10 @@ internal fun BudgetScreen(
                         "sample:${group.id.removePrefix("sample-")}"
                     }
                 val groupExpanded = !state.isBudgetSectionCollapsed(groupSectionKey)
+                val isReordering = selectedGroupOrderId == group.id
+                val groupIndex = groups.indexOfFirst { it.id == group.id }
                 val displayCategories =
-                    if (essentialsFirst) {
+                    if (essentialsFirst && !isLiveBudget) {
                         group.categories
                             .withIndex()
                             .sortedWith(
@@ -361,61 +377,132 @@ internal fun BudgetScreen(
                         group.categories
                     }
                 item(key = "$groupSectionKey:section") {
-                    Column {
-                        CollapsibleSectionCard(
-                            group.name,
-                            if (isTrackingBudget) {
-                                "${group.categories.size} categories"
-                            } else {
-                                "${state.formatCurrency(group.assignedMinor)} assigned · ${group.categories.size} categories"
-                            },
-                            state.formatCurrency(group.balanceMinor),
-                            expanded = groupExpanded,
-                            onToggleExpanded = { state.toggleBudgetSection(groupSectionKey) },
-                            onClick = {
-                                if (isLiveBudget) {
-                                    state.selectedCategoryGroupId = group.id
-                                    navigation.open(AppRoute.CATEGORY_GROUP)
-                                } else {
-                                    openPreviewCategoryGroup(state, navigation, group.id)
+                    SurfaceCard {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(
+                                    Modifier
+                                        .weight(1f)
+                                        .combinedClickable(
+                                            role = Role.Button,
+                                            onClickLabel = "Open ${group.name}",
+                                            onLongClickLabel = "Reorder ${group.name}",
+                                            onClick = {
+                                                if (selectedGroupOrderId == group.id) {
+                                                    selectedGroupOrderId = null
+                                                } else if (selectedGroupOrderId != null) {
+                                                    selectedGroupOrderId = null
+                                                } else if (isLiveBudget) {
+                                                    state.selectedCategoryGroupId = group.id
+                                                    navigation.open(AppRoute.CATEGORY_GROUP)
+                                                } else {
+                                                    openPreviewCategoryGroup(state, navigation, group.id)
+                                                }
+                                            },
+                                            onLongClick = {
+                                                if (isLiveBudget && !state.readOnlyMode && !mobileSession.isPerformingBudgetAction) {
+                                                    selectedGroupOrderId = if (isReordering) null else group.id
+                                                }
+                                            },
+                                        ).padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+                                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+                                ) {
+                                    Text(
+                                        group.name,
+                                        color = palette.text,
+                                        fontSize = TandemTypography.body,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                    )
+                                    Text(
+                                        when {
+                                            isReordering -> "${group.categories.size} categories"
+                                            isTrackingBudget -> "${group.categories.size} categories"
+                                            else -> "${state.formatCurrency(
+                                                group.assignedMinor,
+                                            )} assigned · ${group.categories.size} categories"
+                                        },
+                                        color = palette.muted,
+                                        fontSize = TandemTypography.caption,
+                                        maxLines = 1,
+                                    )
                                 }
-                            },
-                        ) {}
-                        AnimatedVisibility(
-                            visible = groupExpanded,
-                            enter = expandVertically() + fadeIn(),
-                            exit = shrinkVertically() + fadeOut(),
-                        ) {
-                            Column(
-                                Modifier.padding(top = sectionSpacing),
-                                verticalArrangement = Arrangement.spacedBy(sectionSpacing),
-                            ) {
-                                displayCategories.forEach { category ->
-                                    SurfaceCard {
-                                        ListRow(
-                                            category.name,
-                                            "Spent ${state.formatCurrency(
-                                                kotlin.math.abs(category.activityMinor),
-                                            )} · ${state.formatCurrency(category.balanceMinor)} available",
-                                            state.formatCurrency(category.assignedMinor),
-                                            leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
-                                            options =
-                                                ListRowOptions(
-                                                    trailingColor = if (category.balanceMinor >= 0) palette.positive else palette.warning,
-                                                    dense = compact,
-                                                ),
-                                        ) {
-                                            if (isLiveBudget) {
-                                                state.selectedCategoryGroupId = group.id
-                                                state.selectedCategoryId = category.id
-                                                navigation.open(AppRoute.CATEGORY_DETAIL)
-                                            } else {
-                                                openPreviewCategory(state, navigation, group.id, category.id)
+                                if (isReordering && isLiveBudget) {
+                                    BudgetItemReorderActions(
+                                        canMoveUp = groupIndex > 0,
+                                        canMoveDown = groupIndex >= 0 && groupIndex < groups.lastIndex,
+                                        enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                                        itemName = group.name,
+                                        onMoveUp = {
+                                            scope.launch {
+                                                mobileSession.manageBudgetCategoryGroup(
+                                                    state.selectedBudgetId,
+                                                    group.id,
+                                                    "move",
+                                                    null,
+                                                    groups.getOrNull(groupIndex - 1)?.id,
+                                                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                                                )
                                             }
-                                        }
-                                    }
+                                        },
+                                        onMoveDown = {
+                                            val targetId = groups.getOrNull(groupIndex + 2)?.id
+                                            scope.launch {
+                                                mobileSession.manageBudgetCategoryGroup(
+                                                    state.selectedBudgetId,
+                                                    group.id,
+                                                    "move",
+                                                    null,
+                                                    targetId,
+                                                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                                                )
+                                            }
+                                        },
+                                    )
+                                } else {
+                                    Text(
+                                        state.formatCurrency(group.balanceMinor),
+                                        color = palette.accent,
+                                        fontSize = TandemTypography.compactBody,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                    )
+                                    TandemIconButton(
+                                        if (groupExpanded) Lucide.ChevronDown else Lucide.ChevronRight,
+                                        if (groupExpanded) "Collapse ${group.name}" else "Expand ${group.name}",
+                                        onClick = { state.toggleBudgetSection(groupSectionKey) },
+                                    )
                                 }
                             }
+                            DividerLine()
+                        }
+                    }
+                }
+                if (groupExpanded) {
+                    items(displayCategories, key = { "budget-category:${group.id}:${it.id}" }) { category ->
+                        SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
+                            ListRow(
+                                category.name,
+                                "Spent ${state.formatCurrency(
+                                    kotlin.math.abs(category.activityMinor),
+                                )} · ${state.formatCurrency(category.balanceMinor)} available",
+                                state.formatCurrency(category.assignedMinor),
+                                leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
+                                options =
+                                    ListRowOptions(
+                                        trailingColor = if (category.balanceMinor >= 0) palette.positive else palette.warning,
+                                        dense = compact,
+                                    ),
+                                onClick = {
+                                    if (isLiveBudget) {
+                                        state.selectedCategoryGroupId = group.id
+                                        state.selectedCategoryId = category.id
+                                        navigation.open(AppRoute.CATEGORY_DETAIL)
+                                    } else {
+                                        openPreviewCategory(state, navigation, group.id, category.id)
+                                    }
+                                },
+                            )
                         }
                     }
                 }
@@ -679,9 +766,81 @@ internal fun BudgetScreen(
         }
     }
     if (showNextMonthHoldDialog && isLiveBudget && !isTrackingBudget) {
-        val parsedHoldAmount = state.parseAmountMinorUnits(nextMonthHoldAmountDraft)
+        val parsedHoldAmount = nextMonthHoldAmountMinor
+        val amountFocusRequester = remember { FocusRequester() }
+        val softwareKeyboard = LocalSoftwareKeyboardController.current
+        LaunchedEffect(holdKeypadVisible) {
+            if (holdKeypadVisible) {
+                softwareKeyboard?.hide()
+                amountFocusRequester.requestFocus()
+            }
+        }
+
+        fun setHoldAmount(value: Long) {
+            nextMonthHoldAmountMinor =
+                (if (value == Long.MIN_VALUE) Long.MAX_VALUE else kotlin.math.abs(value))
+                    .coerceAtMost(MAX_TRANSACTION_AMOUNT_MINOR_UNITS)
+        }
+
+        fun enterHoldDigit(digit: Int) {
+            val current = if (holdEnterNewOperand) 0L else nextMonthHoldAmountMinor
+            val exceededLimit = amountDigitExceedsLimit(current, digit)
+            setHoldAmount(appendAmountDigit(current, digit))
+            holdAmountMessage =
+                if (exceededLimit) {
+                    "Largest amount is ${state.formatCurrency(MAX_TRANSACTION_AMOUNT_MINOR_UNITS)}."
+                } else {
+                    null
+                }
+            holdEnterNewOperand = false
+        }
+
+        fun chooseHoldOperator(operator: String) {
+            val accumulator = holdCalculatorAccumulator
+            val pending = holdCalculatorOperator
+            if (accumulator != null && pending != null && !holdEnterNewOperand) {
+                val result = calculateAmountMinorUnits(accumulator, nextMonthHoldAmountMinor, pending)
+                if (result == null) {
+                    holdAmountMessage =
+                        if (pending == "÷" && nextMonthHoldAmountMinor == 0L) "Can’t divide by zero." else "Amount is too large."
+                    return
+                }
+                setHoldAmount(result)
+                holdCalculatorAccumulator = kotlin.math.abs(result)
+            } else if (accumulator == null) {
+                holdCalculatorAccumulator = nextMonthHoldAmountMinor
+            }
+            holdAmountMessage = null
+            holdCalculatorOperator = operator
+            holdEnterNewOperand = true
+        }
+
+        fun calculateHoldAmount() {
+            val accumulator = holdCalculatorAccumulator
+            val operator = holdCalculatorOperator
+            if (accumulator != null && operator != null) {
+                val result =
+                    if (holdEnterNewOperand) accumulator else calculateAmountMinorUnits(accumulator, nextMonthHoldAmountMinor, operator)
+                if (result == null) {
+                    holdAmountMessage =
+                        if (operator == "÷" && nextMonthHoldAmountMinor == 0L) "Can’t divide by zero." else "Amount is too large."
+                    return
+                }
+                setHoldAmount(result)
+            }
+            holdAmountMessage = null
+            holdCalculatorAccumulator = null
+            holdCalculatorOperator = null
+            holdEnterNewOperand = true
+        }
+
+        fun closeHoldDialog() {
+            holdKeypadVisible = false
+            softwareKeyboard?.hide()
+            showNextMonthHoldDialog = false
+        }
         Dialog(
-            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showNextMonthHoldDialog = false },
+            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) closeHoldDialog() },
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
             SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
@@ -704,21 +863,46 @@ internal fun BudgetScreen(
                             sizeDp = 40,
                             iconSizeDp = 18,
                             enabled = !mobileSession.isPerformingBudgetAction,
-                        ) { showNextMonthHoldDialog = false }
+                        ) { closeHoldDialog() }
                     }
-                    ListRow("Ready to assign", trailing = state.formatCurrency(readyToAssignMinor))
-                    ListRow("Held", trailing = state.formatCurrency(heldForNextMonthMinor))
-                    TextFieldCard(
-                        "Amount to hold",
-                        nextMonthHoldAmountDraft,
-                        { nextMonthHoldAmountDraft = it },
-                        TextFieldOptions(
-                            placeholder = state.formatAmount(0),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            textAlign = TextAlign.Center,
-                            large = true,
-                        ),
+                    ListRow(
+                        "Ready to assign",
+                        trailing = state.formatCurrency(readyToAssignMinor),
+                        leading = RowLeading.Icon(Lucide.WalletCards),
                     )
+                    ListRow(
+                        "Held",
+                        trailing = state.formatCurrency(heldForNextMonthMinor),
+                        leading = RowLeading.Icon(Lucide.CalendarDays),
+                    )
+                    TransactionAmountField(
+                        amount = state.formatAmount(nextMonthHoldAmountMinor),
+                        amountMinorUnits = nextMonthHoldAmountMinor,
+                        transactionType = "Neutral",
+                        focusRequester = amountFocusRequester,
+                        onShowKeypad = { holdKeypadVisible = true },
+                        amountColorOverride = palette.accent,
+                    )
+                    AnimatedReveal(visible = holdAmountMessage != null) {
+                        InlineMessage(holdAmountMessage.orEmpty(), InlineMessageKind.ERROR)
+                    }
+                    if (holdKeypadVisible) {
+                        TransactionAmountKeypad(
+                            onDigit = ::enterHoldDigit,
+                            onDelete = {
+                                val current = if (holdEnterNewOperand) 0L else nextMonthHoldAmountMinor
+                                setHoldAmount(removeAmountDigit(current))
+                                holdAmountMessage = null
+                                holdEnterNewOperand = false
+                            },
+                            onOperator = ::chooseHoldOperator,
+                            onEquals = ::calculateHoldAmount,
+                            onDone = {
+                                holdKeypadVisible = false
+                                softwareKeyboard?.hide()
+                            },
+                        )
+                    }
                     mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                         TandemActionButton(
@@ -738,10 +922,10 @@ internal fun BudgetScreen(
                                             state.selectedMonthId,
                                             state.encryptedPassword.takeIf { it.isNotBlank() },
                                         )
-                                    if (reset) showNextMonthHoldDialog = false
+                                    if (reset) closeHoldDialog()
                                 }
                             } else {
-                                showNextMonthHoldDialog = false
+                                closeHoldDialog()
                             }
                         }
                         TandemActionButton(
@@ -752,7 +936,6 @@ internal fun BudgetScreen(
                             enabled =
                                 !state.readOnlyMode &&
                                     !mobileSession.isPerformingBudgetAction &&
-                                    parsedHoldAmount != null &&
                                     parsedHoldAmount > 0 &&
                                     parsedHoldAmount <= readyToAssignMinor,
                             loading = mobileSession.isPerformingBudgetAction,
@@ -762,10 +945,10 @@ internal fun BudgetScreen(
                                     mobileSession.holdBudgetForNextMonth(
                                         state.selectedBudgetId,
                                         state.selectedMonthId,
-                                        parsedHoldAmount ?: 0L,
+                                        parsedHoldAmount,
                                         state.encryptedPassword.takeIf { it.isNotBlank() },
                                     )
-                                if (held) showNextMonthHoldDialog = false
+                                if (held) closeHoldDialog()
                             }
                         }
                     }

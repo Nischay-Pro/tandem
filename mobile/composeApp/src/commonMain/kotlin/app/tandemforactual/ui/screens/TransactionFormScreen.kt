@@ -1,7 +1,6 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui
-
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -268,6 +267,8 @@ internal fun TransactionFormScreen(
                     enabled =
                         !mobileSession.isSavingTransaction &&
                             state.newTransactionAccountId.isNotBlank() &&
+                            state.transactionPayee.isNotBlank() &&
+                            state.transactionCategory.isNotBlank() &&
                             amountMinorUnits > 0,
                     onClick = onCreateTransaction,
                     modifier =

@@ -181,11 +181,12 @@ internal fun TransactionAmountField(
     transactionType: String,
     focusRequester: FocusRequester,
     onShowKeypad: () -> Unit,
+    amountColorOverride: Color? = null,
 ) {
     val palette = tandemPalette
     val entered = amountMinorUnits != 0L
     val amountColor =
-        when {
+        amountColorOverride ?: when {
             !entered -> palette.text
             transactionType == "Income" -> palette.positive
             else -> palette.negative

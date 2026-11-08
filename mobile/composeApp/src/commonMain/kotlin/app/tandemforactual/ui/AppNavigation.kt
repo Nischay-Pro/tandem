@@ -178,7 +178,10 @@ internal fun AppHeader(
                     previewAccountById(state.selectedAccountId).name
                 }
             AppRoute.TRANSACTION_DETAIL -> state.transactionPayee.ifBlank { route.title }
-            AppRoute.ACTIVITY -> activitySelectionTotalMinor?.let(state::formatCurrency) ?: route.title
+            AppRoute.ACTIVITY,
+            AppRoute.ACTIVITY_SEARCH,
+            AppRoute.ACTIVITY_FILTER,
+            -> activitySelectionTotalMinor?.let(state::formatCurrency) ?: route.title
             else -> route.title
         }
     Row(

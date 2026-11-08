@@ -179,8 +179,24 @@ internal fun ScreenContent(
                     },
             )
         }
-        AppRoute.ACTIVITY_SEARCH -> ActivitySearchScreen(state, mobileSession, navigation, merchantIconMatcher)
-        AppRoute.ACTIVITY_FILTER -> ActivitySearchScreen(state, mobileSession, navigation, merchantIconMatcher)
+        AppRoute.ACTIVITY_SEARCH ->
+            ActivitySearchScreen(
+                state,
+                mobileSession,
+                navigation,
+                merchantIconMatcher,
+                onActivitySelectionTotalChanged,
+                autoFocusSearch = true,
+            )
+        AppRoute.ACTIVITY_FILTER ->
+            ActivitySearchScreen(
+                state,
+                mobileSession,
+                navigation,
+                merchantIconMatcher,
+                onActivitySelectionTotalChanged,
+                autoFocusSearch = false,
+            )
         AppRoute.TRANSACTION_DETAIL -> TransactionDetailScreen(state, mobileSession, navigation, merchantIconMatcher)
         AppRoute.NEW_TRANSACTION, AppRoute.EDIT_TRANSACTION ->
             TransactionFormScreen(route, state, navigation, mobileSession, onSaveTransaction, onDeleteTransaction, onCreateTransaction)

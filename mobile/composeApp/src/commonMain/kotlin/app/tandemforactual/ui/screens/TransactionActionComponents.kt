@@ -2,18 +2,24 @@
 
 package app.tandemforactual.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
@@ -27,12 +33,12 @@ import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.components.TandemIconButton
+import app.tandemforactual.ui.components.TandemLoadingIndicator
 import com.composables.icons.lucide.Check
-import com.composables.icons.lucide.CircleDot
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Receipt
+import com.composables.icons.lucide.Square
 import com.composables.icons.lucide.Trash2
-import com.composables.icons.lucide.X
 
 @Composable
 internal fun TransactionRow(
@@ -56,7 +62,7 @@ internal fun TransactionRow(
             formatSignedCurrency(transaction.amountMinorUnits, transaction.displaySettings),
             leading =
                 if (selectionMode) {
-                    RowLeading.Icon(if (selected) Lucide.Check else Lucide.CircleDot)
+                    RowLeading.Icon(if (selected) Lucide.Check else Lucide.Square)
                 } else {
                     RowLeading.Merchant(transaction.merchantIcon, fallback = transaction.categoryIcon ?: Lucide.Receipt)
                 },
@@ -68,50 +74,58 @@ internal fun TransactionRow(
 }
 
 @Composable
-internal fun TransactionSelectionActions(
-    selectedCount: Int,
+internal fun TransactionSelectionFloatingBar(
     allSelected: Boolean,
+    canDelete: Boolean,
     isWorking: Boolean = false,
     onToggleAll: () -> Unit,
     onDelete: () -> Unit,
-    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    SurfaceCard {
-        Column(
-            Modifier.fillMaxWidth().padding(TandemSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+    SurfaceCard(modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().padding(TandemSpacing.small),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
         ) {
-            Text(
-                "$selectedCount selected",
-                color = tandemPalette.text,
-                fontSize = TandemTypography.action,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                TandemActionButton(
-                    if (allSelected) "Deselect all" else "Select all",
-                    TandemActionButtonTone.NEUTRAL,
-                    Modifier.weight(1f),
-                    icon = if (allSelected) Lucide.CircleDot else Lucide.Check,
-                    loading = isWorking,
-                    enabled = !isWorking,
-                    onClick = onToggleAll,
-                )
-                TandemActionButton(
-                    "Delete",
-                    TandemActionButtonTone.DESTRUCTIVE,
-                    Modifier.weight(1f),
-                    icon = Lucide.Trash2,
-                    enabled = selectedCount > 0,
-                    onClick = onDelete,
-                )
-                TandemIconButton(
-                    Lucide.X,
-                    "Cancel selection",
-                    containerColor = tandemPalette.raised,
-                    onClick = onCancel,
+            val label = if (allSelected) "Deselect all" else "Select all"
+            Row(
+                Modifier
+                    .weight(1f)
+                    .heightIn(min = 50.dp)
+                    .clip(RoundedCornerShape(TandemShapes.medium))
+                    .background(tandemPalette.accentSurface)
+                    .clickable(enabled = !isWorking, role = Role.Button, onClickLabel = label, onClick = onToggleAll)
+                    .padding(horizontal = TandemSpacing.medium),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                if (isWorking) {
+                    TandemLoadingIndicator(Modifier.size(18.dp), tandemPalette.accent, 2.dp)
+                } else {
+                    Icon(
+                        if (allSelected) Lucide.Check else Lucide.Square,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = tandemPalette.accent,
+                    )
+                }
+                Text(
+                    label,
+                    modifier = Modifier.padding(start = TandemSpacing.small),
+                    color = tandemPalette.accent,
+                    fontSize = TandemTypography.label,
+                    fontWeight = FontWeight.SemiBold,
                 )
             }
+            TandemIconButton(
+                Lucide.Trash2,
+                "Delete selected transactions",
+                enabled = canDelete && !isWorking,
+                tint = tandemPalette.negative,
+                containerColor = tandemPalette.negative.copy(alpha = 0.12f),
+                onClick = onDelete,
+            )
         }
     }
 }

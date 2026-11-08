@@ -1,7 +1,6 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui
-
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.animateColorAsState
@@ -409,7 +408,7 @@ internal fun InfoBubble(text: String) {
 internal fun AmountHero(
     label: String,
     amount: String,
-    supporting: String,
+    supporting: String?,
     action: (() -> Unit)? = null,
 ) {
     val palette = tandemPalette
@@ -427,7 +426,7 @@ internal fun AmountHero(
                 lineHeight = TandemTypography.amountLineHeight,
                 fontWeight = FontWeight.Bold,
             )
-            Text(supporting, color = palette.muted, fontSize = TandemTypography.label)
+            supporting?.let { Text(it, color = palette.muted, fontSize = TandemTypography.label) }
         }
     }
 }

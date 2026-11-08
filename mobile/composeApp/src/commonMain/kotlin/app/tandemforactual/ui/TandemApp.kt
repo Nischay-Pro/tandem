@@ -298,7 +298,7 @@ fun TandemApp(
     var liveAccounts by remember { mutableStateOf(emptyList<LiveAccountSummary>()) }
     var liveSchedules by remember { mutableStateOf(emptyList<LiveScheduleSummary>()) }
     val newTransaction: (String?) -> Unit = { requestedAccountId ->
-        if (!state.readOnlyMode) {
+        if (!state.readOnlyMode && state.selectedBudgetId.isNotBlank()) {
             routeTransitionDirection = 1f
             val eligibleAccounts = liveAccounts.filterNot { it.offBudget }
             val defaultAccount =
@@ -1046,7 +1046,7 @@ fun TandemApp(
                                 notificationPermissionEnabled = notificationPermissionEnabled,
                                 onToggleNotificationPermission = onToggleNotificationPermission,
                             )
-                            if (visibleRoute == AppRoute.BUDGET) {
+                            if (visibleRoute == AppRoute.BUDGET && state.selectedBudgetId.isNotBlank()) {
                                 val transactionActionCompact by
                                     remember(routeScrollState, routeLazyListState) {
                                         derivedStateOf {
@@ -1059,11 +1059,7 @@ fun TandemApp(
                                     compact = transactionActionCompact,
                                     enabled = !state.readOnlyMode,
                                     onClick = {
-                                        if (state.selectedBudgetId.isNotBlank()) {
-                                            navigation.newTransaction(null)
-                                        } else {
-                                            navigation.open(AppRoute.NEW_TRANSACTION)
-                                        }
+                                        navigation.newTransaction(null)
                                     },
                                     modifier =
                                         Modifier

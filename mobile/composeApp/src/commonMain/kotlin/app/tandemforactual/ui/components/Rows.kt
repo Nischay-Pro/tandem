@@ -60,6 +60,7 @@ internal data class ListRowOptions(
     val dense: Boolean = false,
     val animateChanges: Boolean = false,
     val trailingAction: ListRowAction? = null,
+    val showChevron: Boolean = true,
 )
 
 internal data class ListRowAction(
@@ -100,6 +101,7 @@ internal fun ListRow(
     trailing: String? = null,
     leading: RowLeading = RowLeading.Automatic,
     options: ListRowOptions = ListRowOptions(),
+    modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
 ) {
@@ -115,7 +117,7 @@ internal fun ListRow(
         }
     Row(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .defaultMinSize(minHeight = if (options.dense) 56.dp else 64.dp)
                 .then(
@@ -243,7 +245,7 @@ internal fun ListRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-        } else if (onClick != null) {
+        } else if (onClick != null && options.showChevron) {
             Icon(
                 Lucide.ChevronRight,
                 contentDescription = null,

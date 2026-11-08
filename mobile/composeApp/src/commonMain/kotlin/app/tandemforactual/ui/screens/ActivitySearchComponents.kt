@@ -18,10 +18,15 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.TextStyle
@@ -42,13 +47,24 @@ import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.X
 import com.composables.icons.lucide.Zap
+import kotlinx.coroutines.delay
 
 @Composable
 internal fun ActivitySearchInput(
     value: String,
     onValueChange: (String) -> Unit,
+    autoFocus: Boolean = false,
 ) {
     val palette = tandemPalette
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    LaunchedEffect(autoFocus) {
+        if (autoFocus) {
+            delay(120)
+            focusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
     SurfaceCard {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 54.dp).padding(horizontal = TandemSpacing.medium),
@@ -59,7 +75,7 @@ internal fun ActivitySearchInput(
             BasicTextField(
                 value = value,
                 onValueChange = onValueChange,
-                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp).focusRequester(focusRequester),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
                 textStyle =

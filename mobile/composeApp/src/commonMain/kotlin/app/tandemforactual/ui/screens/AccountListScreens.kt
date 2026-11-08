@@ -70,6 +70,7 @@ internal data class AccountListItemUi(
     val offBudget: Boolean,
     val closed: Boolean = false,
     val accountType: String? = null,
+    val balanceMinor: Long? = null,
 )
 
 internal data class AccountListGroupUi(
@@ -103,6 +104,20 @@ internal fun accountTypeIcon(
         listOf("loan", "debt").any { it in type } -> Lucide.HandCoins
         listOf("tracking", "investment").any { it in type } -> Lucide.ChartNoAxesCombined
         else -> Lucide.WalletCards
+    }
+}
+
+internal fun accountGroupOrder(groupName: String): Int {
+    val name = groupName.trim().lowercase()
+    return when {
+        "cash" in name -> 0
+        "credit" in name -> 1
+        "loan" in name -> 2
+        "tracking" in name -> 3
+        name == "closed" -> 8
+        name == "on budget" -> 6
+        name == "off budget" -> 7
+        else -> 4
     }
 }
 
@@ -142,15 +157,14 @@ internal fun AccountsScreen(
     val model =
         remember(isLiveBudget, liveAccounts, state.budgetDisplaySettings) {
             if (isLiveBudget) {
-                val groupOrder = listOf("On budget", "Off budget", "Closed")
                 val groupedAccounts =
                     liveAccounts
                         .groupBy(::liveAccountGroupLabel)
                         .entries
                         .sortedWith(
                             compareBy(
-                                { groupOrder.indexOf(it.key).let { index -> if (index < 0) groupOrder.size else index } },
-                                { it.key },
+                                { accountGroupOrder(it.key) },
+                                { it.key.lowercase() },
                             ),
                         ).map { (groupName, accounts) ->
                             AccountListGroupUi(
@@ -169,7 +183,8 @@ internal fun AccountsScreen(
                                         account.balanceMinor?.let(state::formatCurrency) ?: "Unavailable",
                                         account.offBudget,
                                         account.closed,
-                                        account.accountGroupName,
+                                        account.type ?: account.accountGroupName,
+                                        account.balanceMinor,
                                     )
                                 },
                             )
@@ -193,6 +208,7 @@ internal fun AccountsScreen(
                                     state.formatCurrency(account.balanceMinor),
                                     account.offBudget,
                                     accountType = account.group,
+                                    balanceMinor = account.balanceMinor,
                                 )
                             },
                         )
@@ -255,7 +271,12 @@ internal fun AccountsScreen(
                                             ListRowOptions(
                                                 dense = true,
                                                 trailingColor =
-                                                    if (account.offBudget || account.closed) tandemPalette.muted else tandemPalette.text,
+                                                    when {
+                                                        account.closed || account.balanceMinor == null || account.balanceMinor == 0L ->
+                                                            tandemPalette.muted
+                                                        account.balanceMinor > 0 -> tandemPalette.positive
+                                                        else -> tandemPalette.negative
+                                                    },
                                             ),
                                         onClick = {
                                             state.selectedAccountId = account.id

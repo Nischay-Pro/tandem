@@ -1,11 +1,16 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui
-
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +30,7 @@ import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -65,6 +71,8 @@ internal fun ActivitySearchScreen(
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
     merchantIconMatcher: MerchantIconMatcherPack?,
+    onActivitySelectionTotalChanged: (Long?) -> Unit,
+    autoFocusSearch: Boolean,
 ) {
     val scope = rememberCoroutineScope()
     var search by rememberSaveable { mutableStateOf(state.activitySearchQuery) }
@@ -270,6 +278,21 @@ internal fun ActivitySearchScreen(
         remember(sortedResultIndices, searchableRecords) {
             sortedResultIndices.mapNotNull { searchableRecords.getOrNull(it)?.recordId }.toSet()
         }
+    val selectedTotalMinor =
+        remember(searchableRecords, selectedTransactionIds) {
+            searchableRecords
+                .asSequence()
+                .filter { it.recordId in selectedTransactionIds }
+                .sumOf(ActivitySearchRecord::amountMinorUnits)
+        }
+    LaunchedEffect(isLiveBudget, selectionMode, selectedTransactionIds, selectedTotalMinor) {
+        onActivitySelectionTotalChanged(
+            selectedTotalMinor.takeIf { isLiveBudget && selectionMode && selectedTransactionIds.isNotEmpty() },
+        )
+    }
+    DisposableEffect(state.selectedBudgetId) {
+        onDispose { onActivitySelectionTotalChanged(null) }
+    }
     LaunchedEffect(search, filters) {
         selectionMode = false
         selectedTransactionIds = emptySet()
@@ -285,239 +308,245 @@ internal fun ActivitySearchScreen(
                 }
             }
     }
-    Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = TandemSpacing.screen, vertical = TandemSpacing.medium),
-        verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-    ) {
-        ActivitySearchInput(
-            value = search,
-            onValueChange = {
-                search = it
-                state.activitySearchQuery = it
-            },
-        )
-        if (savedSearches.isNotEmpty()) {
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-            ) {
-                savedSearches.forEach { savedSearch ->
-                    SurfaceCard(onClick = {
-                        search = savedSearch.query
-                        state.activitySearchQuery = savedSearch.query
-                        state.activitySearchFilters = savedSearch.filters
-                    }) {
-                        Row(
-                            Modifier.widthIn(min = 132.dp, max = 220.dp).padding(start = TandemSpacing.medium),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                        ) {
-                            Column(Modifier.weight(1f).padding(vertical = TandemSpacing.small)) {
-                                Text(
-                                    savedSearch.name,
-                                    color = tandemPalette.text,
-                                    fontSize = TandemTypography.caption,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    "${savedSearch.filters.size} filters",
-                                    color = tandemPalette.muted,
-                                    fontSize = TandemTypography.caption,
-                                    maxLines = 1,
-                                )
-                            }
-                            TandemIconButton(
-                                Lucide.X,
-                                "Remove ${savedSearch.name}",
-                                sizeDp = 36,
-                                iconSizeDp = 16,
-                            ) {
-                                state.savedActivitySearchesJson =
-                                    encodeSavedActivitySearches(
-                                        decodeSavedActivitySearches(state.savedActivitySearchesJson) - savedSearch,
-                                    )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        if (search.isNotBlank() || filters.isNotEmpty()) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(
-                    onClick = {
-                        savedSearchNameDraft =
-                            search.trim().ifBlank {
-                                filters.joinToString(" · ") { it.label }.take(80)
-                            }
-                        showSaveSearchDialog = true
-                    },
-                ) {
-                    Icon(Lucide.Plus, contentDescription = null, modifier = Modifier.size(18.dp), tint = tandemPalette.accent)
-                    Spacer(Modifier.width(TandemSpacing.extraSmall))
-                    Text("Save search", color = tandemPalette.accent, fontSize = TandemTypography.caption)
-                }
-            }
-        }
-        if (filters.isNotEmpty()) {
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-            ) {
-                filters.forEach { filter ->
-                    ActivitySearchFilterChip(filter) { state.activitySearchFilters = filters - filter }
-                }
-            }
-        }
-        val shownSuggestions = if (search.isBlank()) quickFilters else suggestions
-        if (shownSuggestions.isNotEmpty()) {
-            Text(
-                if (search.isBlank()) "Filter by" else "Suggestions",
-                color = tandemPalette.muted,
-                fontSize = TandemTypography.caption,
-                fontWeight = FontWeight.SemiBold,
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(horizontal = TandemSpacing.screen, vertical = TandemSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+        ) {
+            ActivitySearchInput(
+                value = search,
+                onValueChange = {
+                    search = it
+                    state.activitySearchQuery = it
+                },
+                autoFocus = autoFocusSearch,
             )
-            if (search.isBlank()) {
+            if (savedSearches.isNotEmpty()) {
                 Row(
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                 ) {
-                    shownSuggestions.take(8).forEach { suggestion ->
-                        val isActive = isActivitySearchFilterActive(state.activitySearchFilters, suggestion)
-                        ActivitySearchQuickFilter(suggestion, isActive) {
-                            state.activitySearchFilters =
-                                toggleActivitySearchFilter(state.activitySearchFilters, suggestion)
-                        }
-                    }
-                }
-            } else {
-                Column(
-                    Modifier.fillMaxWidth().heightIn(max = 176.dp).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
-                ) {
-                    shownSuggestions.take(8).forEach { suggestion ->
-                        ActivitySearchSuggestion(suggestion) {
-                            state.activitySearchFilters =
-                                toggleActivitySearchFilter(state.activitySearchFilters, suggestion)
-                            search = ""
-                            state.activitySearchQuery = ""
+                    savedSearches.forEach { savedSearch ->
+                        SurfaceCard(onClick = {
+                            search = savedSearch.query
+                            state.activitySearchQuery = savedSearch.query
+                            state.activitySearchFilters = savedSearch.filters
+                        }) {
+                            Row(
+                                Modifier.widthIn(min = 132.dp, max = 220.dp).padding(start = TandemSpacing.medium),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                            ) {
+                                Column(Modifier.weight(1f).padding(vertical = TandemSpacing.small)) {
+                                    Text(
+                                        savedSearch.name,
+                                        color = tandemPalette.text,
+                                        fontSize = TandemTypography.caption,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        "${savedSearch.filters.size} filters",
+                                        color = tandemPalette.muted,
+                                        fontSize = TandemTypography.caption,
+                                        maxLines = 1,
+                                    )
+                                }
+                                TandemIconButton(
+                                    Lucide.X,
+                                    "Remove ${savedSearch.name}",
+                                    sizeDp = 36,
+                                    iconSizeDp = 16,
+                                ) {
+                                    state.savedActivitySearchesJson =
+                                        encodeSavedActivitySearches(
+                                            decodeSavedActivitySearches(state.savedActivitySearchesJson) - savedSearch,
+                                        )
+                                }
+                            }
                         }
                     }
                 }
             }
-        }
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+            if (search.isNotBlank() || filters.isNotEmpty()) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(
+                        onClick = {
+                            savedSearchNameDraft =
+                                search.trim().ifBlank {
+                                    filters.joinToString(" · ") { it.label }.take(80)
+                                }
+                            showSaveSearchDialog = true
+                        },
+                    ) {
+                        Icon(Lucide.Plus, contentDescription = null, modifier = Modifier.size(18.dp), tint = tandemPalette.accent)
+                        Spacer(Modifier.width(TandemSpacing.extraSmall))
+                        Text("Save search", color = tandemPalette.accent, fontSize = TandemTypography.caption)
+                    }
+                }
+            }
+            if (filters.isNotEmpty()) {
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                ) {
+                    filters.forEach { filter ->
+                        ActivitySearchFilterChip(filter) { state.activitySearchFilters = filters - filter }
+                    }
+                }
+            }
+            val shownSuggestions = if (search.isBlank()) quickFilters else suggestions
+            if (shownSuggestions.isNotEmpty()) {
+                Text(
+                    if (search.isBlank()) "Filter by" else "Suggestions",
+                    color = tandemPalette.muted,
+                    fontSize = TandemTypography.caption,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                if (search.isBlank()) {
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                    ) {
+                        shownSuggestions.take(8).forEach { suggestion ->
+                            val isActive = isActivitySearchFilterActive(state.activitySearchFilters, suggestion)
+                            ActivitySearchQuickFilter(suggestion, isActive) {
+                                state.activitySearchFilters =
+                                    toggleActivitySearchFilter(state.activitySearchFilters, suggestion)
+                            }
+                        }
+                    }
+                } else {
+                    Column(
+                        Modifier.fillMaxWidth().heightIn(max = 176.dp).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+                    ) {
+                        shownSuggestions.take(8).forEach { suggestion ->
+                            ActivitySearchSuggestion(suggestion) {
+                                state.activitySearchFilters =
+                                    toggleActivitySearchFilter(state.activitySearchFilters, suggestion)
+                                search = ""
+                                state.activitySearchQuery = ""
+                            }
+                        }
+                    }
+                }
+            }
             Row(
-                Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Results", color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
-                Text(formatInteger(resultIndices.size), color = tandemPalette.muted, fontSize = TandemTypography.caption)
+                Row(
+                    Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Results", color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
+                    Text(formatInteger(resultIndices.size), color = tandemPalette.muted, fontSize = TandemTypography.caption)
+                }
+                ActivitySortControl(state.activitySortOrder) { state.activitySortOrder = it }
             }
-            ActivitySortControl(state.activitySortOrder) { state.activitySortOrder = it }
-        }
-        if (selectionMode) {
-            TransactionSelectionActions(
-                selectedCount = selectedTransactionIds.size,
-                allSelected = visibleTransactionIds.isNotEmpty() && selectedTransactionIds.containsAll(visibleTransactionIds),
-                onToggleAll = {
-                    selectedTransactionIds =
-                        if (visibleTransactionIds.isNotEmpty() && selectedTransactionIds.containsAll(visibleTransactionIds)) {
-                            emptySet()
-                        } else {
-                            visibleTransactionIds
-                        }
-                },
-                onDelete = { confirmBulkDelete = true },
-                onCancel = {
-                    selectionMode = false
-                    selectedTransactionIds = emptySet()
-                },
-            )
-            mobileSession.transactionWriteMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
-        }
-        if (
-            isLiveBudget &&
-            (
-                mobileSession.activitySearchRecordsBudgetId != state.selectedBudgetId ||
-                    loadedSearchBudgetId != state.selectedBudgetId ||
-                    isBuildingSearchRecords
-            )
-        ) {
-            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = tandemPalette.accent)
+            if (selectionMode) {
+                mobileSession.transactionWriteMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
             }
-        } else if (isEvaluatingSearch && resultIndices.isEmpty()) {
-            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = tandemPalette.accent)
-            }
-        } else if (resultIndices.isEmpty()) {
-            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                EmptyState(
-                    if (filters.isEmpty() &&
-                        search.isBlank()
-                    ) {
-                        "No transactions yet"
-                    } else {
-                        "No matching transactions"
-                    },
-                    modifier = Modifier.padding(TandemSpacing.large),
+            if (
+                isLiveBudget &&
+                (
+                    mobileSession.activitySearchRecordsBudgetId != state.selectedBudgetId ||
+                        loadedSearchBudgetId != state.selectedBudgetId ||
+                        isBuildingSearchRecords
                 )
-            }
-        } else {
-            LazyColumn(
-                state = resultsListState,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
             ) {
-                items(
-                    sortedResultIndices,
-                    key = { index ->
-                        val record = searchableRecords.getOrNull(index)
-                        "search:${record?.recordId ?: index}"
-                    },
-                ) { index ->
-                    searchableRecords.getOrNull(index)?.let { record ->
-                        val transaction =
-                            remember(record, state.budgetDisplaySettings, merchantIconMatcher) {
-                                record.toTransactionItem(state.budgetDisplaySettings, merchantIconMatcher)
-                            }
-                        val transactionId = transaction.recordId
-                        TransactionRow(
-                            transaction,
-                            selectionMode = selectionMode,
-                            selected = transactionId != null && transactionId in selectedTransactionIds,
-                            onLongClick =
-                                if (isLiveBudget && !state.readOnlyMode && transactionId != null) {
-                                    {
-                                        selectionMode = true
-                                        selectedTransactionIds = selectedTransactionIds + transactionId
-                                    }
-                                } else {
-                                    null
-                                },
+                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = tandemPalette.accent)
+                }
+            } else if (isEvaluatingSearch && resultIndices.isEmpty()) {
+                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = tandemPalette.accent)
+                }
+            } else if (resultIndices.isEmpty()) {
+                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    EmptyState(
+                        if (filters.isEmpty() &&
+                            search.isBlank()
                         ) {
-                            if (selectionMode && transactionId != null) {
-                                selectedTransactionIds =
-                                    if (transactionId in selectedTransactionIds) {
-                                        selectedTransactionIds - transactionId
+                            "No transactions yet"
+                        } else {
+                            "No matching transactions"
+                        },
+                        modifier = Modifier.padding(TandemSpacing.large),
+                    )
+                }
+            } else {
+                LazyColumn(
+                    state = resultsListState,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentPadding = PaddingValues(bottom = if (selectionMode) 88.dp else 0.dp),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                ) {
+                    items(
+                        sortedResultIndices,
+                        key = { index ->
+                            val record = searchableRecords.getOrNull(index)
+                            "search:${record?.recordId ?: index}"
+                        },
+                    ) { index ->
+                        searchableRecords.getOrNull(index)?.let { record ->
+                            val transaction =
+                                remember(record, state.budgetDisplaySettings, merchantIconMatcher) {
+                                    record.toTransactionItem(state.budgetDisplaySettings, merchantIconMatcher)
+                                }
+                            val transactionId = transaction.recordId
+                            TransactionRow(
+                                transaction,
+                                selectionMode = selectionMode,
+                                selected = transactionId != null && transactionId in selectedTransactionIds,
+                                onLongClick =
+                                    if (isLiveBudget && !state.readOnlyMode && transactionId != null) {
+                                        {
+                                            selectionMode = true
+                                            selectedTransactionIds = selectedTransactionIds + transactionId
+                                        }
                                     } else {
-                                        selectedTransactionIds + transactionId
-                                    }
-                                if (selectedTransactionIds.isEmpty()) selectionMode = false
-                            } else {
-                                openTransaction(state, navigation, transaction, isLive = isLiveBudget)
+                                        null
+                                    },
+                            ) {
+                                if (selectionMode && transactionId != null) {
+                                    selectedTransactionIds =
+                                        if (transactionId in selectedTransactionIds) {
+                                            selectedTransactionIds - transactionId
+                                        } else {
+                                            selectedTransactionIds + transactionId
+                                        }
+                                    if (selectedTransactionIds.isEmpty()) selectionMode = false
+                                } else {
+                                    openTransaction(state, navigation, transaction, isLive = isLiveBudget)
+                                }
                             }
                         }
                     }
                 }
             }
+        }
+        AnimatedVisibility(
+            visible = isLiveBudget && selectionMode,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
+        ) {
+            val allSelected = visibleTransactionIds.isNotEmpty() && selectedTransactionIds.containsAll(visibleTransactionIds)
+            TransactionSelectionFloatingBar(
+                allSelected = allSelected,
+                canDelete = selectedTransactionIds.isNotEmpty() && !isDeletingSelection,
+                isWorking = isDeletingSelection,
+                onToggleAll = {
+                    selectedTransactionIds = if (allSelected) emptySet() else visibleTransactionIds
+                    if (allSelected) selectionMode = false
+                },
+                onDelete = { confirmBulkDelete = true },
+                modifier = Modifier.padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+            )
         }
     }
     if (showSaveSearchDialog) {

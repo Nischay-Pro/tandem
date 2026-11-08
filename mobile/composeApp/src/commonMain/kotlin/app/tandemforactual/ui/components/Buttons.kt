@@ -7,6 +7,9 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -23,12 +26,18 @@ import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -45,6 +54,7 @@ import app.tandemforactual.ui.tandemPalette
 import app.tandemforactual.ui.tandemReduceMotion
 import com.composables.icons.lucide.ChevronLeft
 import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.GripVertical
 import com.composables.icons.lucide.Lucide
 
 @Composable
@@ -163,6 +173,60 @@ internal fun TandemIconButton(
     ) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(iconSizeDp.dp), tint = tint ?: palette.text)
     }
+}
+
+@Composable
+internal fun ReorderDragHandle(
+    enabled: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+) {
+    val density = LocalDensity.current
+    val stepPixels = with(density) { 52.dp.toPx() }
+    val latestMoveUp by rememberUpdatedState(onMoveUp)
+    val latestMoveDown by rememberUpdatedState(onMoveDown)
+    var dragDistance by remember { mutableFloatStateOf(0f) }
+    var movedDuringDrag by remember { mutableStateOf(false) }
+    val dragState =
+        rememberDraggableState { delta ->
+            if (!movedDuringDrag) {
+                dragDistance += delta
+                when {
+                    dragDistance >= stepPixels -> {
+                        movedDuringDrag = true
+                        latestMoveDown()
+                    }
+                    dragDistance <= -stepPixels -> {
+                        movedDuringDrag = true
+                        latestMoveUp()
+                    }
+                }
+            }
+        }
+    TandemIconButton(
+        Lucide.GripVertical,
+        "Drag to reorder",
+        sizeDp = 36,
+        iconSizeDp = 19,
+        enabled = enabled,
+        modifier =
+            Modifier.draggable(
+                orientation = Orientation.Vertical,
+                state = dragState,
+                enabled = enabled,
+                onDragStarted = {
+                    dragDistance = 0f
+                    movedDuringDrag = false
+                },
+                onDragStopped = {
+                    dragDistance = 0f
+                    movedDuringDrag = false
+                },
+            ),
+        containerColor = tandemPalette.accentSurface,
+        tint = tandemPalette.accent,
+        onClick = {},
+    )
 }
 
 @Composable
