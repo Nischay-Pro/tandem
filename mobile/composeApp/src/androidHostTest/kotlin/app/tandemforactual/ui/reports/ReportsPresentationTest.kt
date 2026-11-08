@@ -63,6 +63,23 @@ class ReportsPresentationTest {
     }
 
     @Test
+    fun categoryChartGroupsSmallSlicesAsOtherWithoutDroppingSpending() {
+        val categories =
+            buildList {
+                add(CategorySpendingPoint("rent", "Rent", 4_500))
+                add(CategorySpendingPoint("food", "Groceries", 4_500))
+                repeat(8) { index -> add(CategorySpendingPoint("small-$index", "Small $index", 100)) }
+            }
+
+        val chartPoints = categoryChartPoints(categories)
+
+        assertEquals(listOf("Rent", "Groceries", "Other"), chartPoints.map(CategorySpendingPoint::category))
+        assertEquals(9_800L, chartPoints.sumOf(CategorySpendingPoint::spendingMinor))
+        assertEquals(800L, chartPoints.last().spendingMinor)
+        assertEquals(OTHER_CATEGORY_CHART_ID, chartPoints.last().categoryId)
+    }
+
+    @Test
     fun categoryPercentageShowsShareToOneDecimalAndHandlesWholePercentages() {
         val original = Locale.getDefault()
         try {

@@ -82,11 +82,13 @@ import app.tandemforactual.ui.reports.BudgetedSpentPoint
 import app.tandemforactual.ui.reports.CategorySpendingPoint
 import app.tandemforactual.ui.reports.MonthlyMoneyPoint
 import app.tandemforactual.ui.reports.NetWorthPoint
+import app.tandemforactual.ui.reports.OTHER_CATEGORY_CHART_ID
 import app.tandemforactual.ui.reports.ReportKind
 import app.tandemforactual.ui.reports.ReportPeriodMode
 import app.tandemforactual.ui.reports.ReportRangePreset
 import app.tandemforactual.ui.reports.ReportWindow
 import app.tandemforactual.ui.reports.budgetedSpentSummary
+import app.tandemforactual.ui.reports.categoryChartPoints
 import app.tandemforactual.ui.reports.categoryPercentage
 import app.tandemforactual.ui.reports.categorySpendingPoints
 import app.tandemforactual.ui.reports.categorySpendingSummary
@@ -503,6 +505,12 @@ private fun ReportPeriodSelector(
                     ReportRangePreset.LAST_6_MONTHS,
                     ReportRangePreset.LAST_12_MONTHS,
                     -> {
+                        Text(
+                            "End month",
+                            color = tandemPalette.muted,
+                            fontSize = TandemTypography.caption,
+                            fontWeight = FontWeight.SemiBold,
+                        )
                         PeriodStepper(
                             title = reportMonthLabel(monthId),
                             previousLabel = "Previous end month",
@@ -704,12 +712,22 @@ private fun ReportCard(
                     onNetWorthSelectionChange = { selectedNetWorthIndex = it },
                 )
                 if (kind == ReportKind.SPENDING_BY_CATEGORY) {
-                    data.categories.take(5).forEach { point ->
+                    val otherCategoryId = OTHER_CATEGORY_CHART_ID
+                    val listedCategories =
+                        data.categories.take(5) +
+                            categoryChartPoints(data.categories).filter { it.categoryId == otherCategoryId }
+                    listedCategories.forEach { point ->
                         ListRow(
                             point.category,
                             trailing = formatReportCurrency(point.spendingMinor, data.displaySettings),
                             leading = RowLeading.Icon(financeIcon(point.category)),
-                            onClick = { onOpenCategoryActivity(point.categoryId, point.category, window) },
+                            onClick = {
+                                if (point.categoryId == otherCategoryId) {
+                                    onSeeAll()
+                                } else {
+                                    onOpenCategoryActivity(point.categoryId, point.category, window)
+                                }
+                            },
                         )
                     }
                 }
@@ -1111,11 +1129,12 @@ private fun ReportCanvas(
 ) {
     val palette = tandemPalette
     val monthly = monthlyPoints(kind, data)
-    var selection by remember(kind, monthly, data.categories, data.netWorth, calloutViewportStartPx) {
+    val chartCategories = remember(data.categories) { categoryChartPoints(data.categories) }
+    var selection by remember(kind, monthly, chartCategories, data.netWorth, calloutViewportStartPx) {
         mutableStateOf<ReportChartSelection?>(null)
     }
     val selectionCallback by rememberUpdatedState(onNetWorthSelectionChange)
-    val selectedCategory = selection?.takeIf { kind == ReportKind.SPENDING_BY_CATEGORY }?.let { data.categories.getOrNull(it.index) }
+    val selectedCategory = selection?.takeIf { kind == ReportKind.SPENDING_BY_CATEGORY }?.let { chartCategories.getOrNull(it.index) }
     val selectedValue =
         selection?.let { selected ->
             when (kind) {
@@ -1127,7 +1146,7 @@ private fun ReportCanvas(
                 else -> null
             }
         }
-    val categoryTotal = data.categories.sumOf { it.spendingMinor.coerceAtLeast(0L) }
+    val categoryTotal = chartCategories.sumOf { it.spendingMinor.coerceAtLeast(0L) }
     val callout =
         selectedCategory?.let { point ->
             "${categoryPercentage(
@@ -1183,12 +1202,12 @@ private fun ReportCanvas(
                 .semantics {
                     contentDescription =
                         if (callout == null) description else "$description Selected: $callout"
-                }.pointerInput(kind, monthly, data.categories, data.netWorth) {
+                }.pointerInput(kind, monthly, chartCategories, data.netWorth) {
                     detectTapGestures { offset ->
                         val nextSelection =
                             reportSelectionAt(
                                 kind,
-                                data.categories,
+                                chartCategories,
                                 monthly,
                                 data.netWorth,
                                 offset,
@@ -1213,7 +1232,7 @@ private fun ReportCanvas(
             }
             when (kind) {
                 ReportKind.SPENDING_BY_CATEGORY -> {
-                    val values = data.categories.map(CategorySpendingPoint::spendingMinor)
+                    val values = chartCategories.map(CategorySpendingPoint::spendingMinor)
                     val total = values.sum()
                     val diameter = minOf(size.width, size.height) - inset * 2
                     val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)

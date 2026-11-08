@@ -304,7 +304,7 @@ internal fun AccountsScreen(
             item(key = "account-bottom-actions") {
                 Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     TandemActionButton(
-                        "Add Account",
+                        "Add account",
                         TandemActionButtonTone.PRIMARY,
                         Modifier.fillMaxWidth(),
                         icon = Lucide.Plus,

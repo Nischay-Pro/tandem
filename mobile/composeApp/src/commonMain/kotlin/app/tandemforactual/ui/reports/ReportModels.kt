@@ -59,6 +59,31 @@ internal data class CategorySpendingPoint(
     val spendingMinor: Long,
 )
 
+internal const val OTHER_CATEGORY_CHART_ID = "__tandem_report_other__"
+
+internal fun categoryChartPoints(categories: List<CategorySpendingPoint>): List<CategorySpendingPoint> {
+    if (categories.size <= 1) return categories
+    val total = categories.sumOf { it.spendingMinor.coerceAtLeast(0L) }
+    if (total <= 0L) return categories.take(8)
+
+    val visible =
+        categories
+            .filter { it.spendingMinor.toDouble() / total.toDouble() >= 0.04 }
+            .take(7)
+            .ifEmpty { categories.take(7) }
+    val visibleIds = visible.mapTo(mutableSetOf(), CategorySpendingPoint::categoryId)
+    val otherAmount =
+        categories
+            .asSequence()
+            .filterNot { it.categoryId in visibleIds }
+            .sumOf { it.spendingMinor.coerceAtLeast(0L) }
+    return if (otherAmount > 0L) {
+        visible + CategorySpendingPoint(OTHER_CATEGORY_CHART_ID, "Other", otherAmount)
+    } else {
+        visible
+    }
+}
+
 internal data class MonthlyMoneyPoint(
     val monthId: String,
     val month: String,
