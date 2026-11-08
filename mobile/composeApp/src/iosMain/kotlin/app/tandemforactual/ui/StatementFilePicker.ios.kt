@@ -9,6 +9,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.get
 import kotlinx.cinterop.reinterpret
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -67,7 +68,7 @@ private class StatementDocumentPickerDelegate(
         val path = url.path ?: return
         val filename = url.lastPathComponent ?: "statement.csv"
         scope.launch {
-            val file = withContext(Dispatchers.IO) { readStatementFile(path, filename) }
+            val file = withContext(Dispatchers.Default) { readStatementFile(path, filename) }
             withContext(Dispatchers.Main) { onPicked(file) }
         }
     }

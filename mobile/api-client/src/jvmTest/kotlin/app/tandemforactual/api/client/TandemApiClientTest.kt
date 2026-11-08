@@ -851,6 +851,104 @@ class TandemApiClientTest {
     }
 
     @Test
+    fun importingStatementTransactionsValidatesRequestsAndResponses() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            var responseBody = """{"status":"ok","added":1,"updated":2,"errorCount":0}"""
+            val engine =
+                MockEngine { request ->
+                    requests += request
+                    respond(responseBody, headers = jsonHeaders())
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                client.restoreSession("https://tandem.example", "device-token")
+                val transaction = StatementImportItem("2026-11-08", -1170, "Coffee Shop", "Lunch", "csv:row-1")
+                val matchingTransaction = transaction.copy()
+                assertEquals(transaction, matchingTransaction)
+                assertEquals(transaction.hashCode(), matchingTransaction.hashCode())
+                assertEquals("2026-11-08", transaction.component1())
+                assertEquals(-1170L, transaction.component2())
+                assertEquals("Coffee Shop", transaction.component3())
+                assertEquals("Lunch", transaction.component4())
+                assertEquals("csv:row-1", transaction.component5())
+                val summary = StatementImportSummary(1, 2, 0)
+                assertEquals(summary, summary.copy())
+                assertEquals(summary.hashCode(), summary.copy().hashCode())
+                assertEquals(1, summary.component1())
+                assertEquals(2, summary.component2())
+                assertEquals(0, summary.component3())
+
+                assertFailsWith<IllegalArgumentException> {
+                    client.importBudgetAccountTransactions("budget-1", "account-1", emptyList(), null)
+                }
+                assertFailsWith<IllegalArgumentException> {
+                    client.importBudgetAccountTransactions("budget-1", "account-1", List(1001) { transaction }, null)
+                }
+
+                assertEquals(
+                    StatementImportSummary(1, 2, 0),
+                    client.importBudgetAccountTransactions("budget-1", "account-1", listOf(transaction), "budget-password"),
+                )
+                val request = requests.single()
+                assertEquals("POST", request.method.value)
+                assertEquals("/api/v1/budgets/budget-1/accounts/account-1/transactions/import", request.url.encodedPath)
+                assertEquals("budget-password", request.headers["x-budget-encryption-password"])
+                val requestBody = (request.body as TextContent).text
+                assertTrue(requestBody.contains("\"amountMinor\":-1170"))
+                assertTrue(requestBody.contains("\"payeeName\":\"Coffee Shop\""))
+                assertTrue(requestBody.contains("\"notes\":\"Lunch\""))
+                assertTrue(requestBody.contains("\"importedId\":\"csv:row-1\""))
+
+                responseBody = """{"status":"failed"}"""
+                assertFailsWith<TandemApiProtocolException> {
+                    client.importBudgetAccountTransactions(
+                        "budget-1",
+                        "account-1",
+                        listOf(transaction.copy(importedId = "csv:bad-status")),
+                        null,
+                    )
+                }
+                responseBody = """{"status":"ok","added":"bad","updated":0,"errorCount":0}"""
+                assertFailsWith<TandemApiProtocolException> {
+                    client.importBudgetAccountTransactions(
+                        "budget-1",
+                        "account-1",
+                        listOf(transaction.copy(importedId = "csv:bad-added")),
+                        null,
+                    )
+                }
+                responseBody = """{"status":"ok","added":0,"updated":"bad","errorCount":0}"""
+                assertFailsWith<TandemApiProtocolException> {
+                    client.importBudgetAccountTransactions(
+                        "budget-1",
+                        "account-1",
+                        listOf(transaction.copy(importedId = "csv:bad-updated")),
+                        null,
+                    )
+                }
+                responseBody = """{"status":"ok","added":0,"updated":0,"errorCount":"bad"}"""
+                assertFailsWith<TandemApiProtocolException> {
+                    client.importBudgetAccountTransactions(
+                        "budget-1",
+                        "account-1",
+                        listOf(transaction.copy(importedId = "csv:bad-errors")),
+                        null,
+                    )
+                }
+                Unit
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
     fun revocationMapsApiErrorsAndUnexpectedHttpStatuses() =
         runBlocking {
             var status = HttpStatusCode.Unauthorized
