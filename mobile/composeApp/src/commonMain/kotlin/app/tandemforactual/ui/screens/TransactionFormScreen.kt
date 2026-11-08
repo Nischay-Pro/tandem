@@ -35,7 +35,6 @@ import app.tandemforactual.ui.components.BodyText
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
-import app.tandemforactual.ui.components.PrimaryButton
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
 import com.composables.icons.lucide.CalendarDays
@@ -436,6 +435,5 @@ internal fun TransactionFormScreen(
                 "This sample form isn’t connected. Changes won’t be saved or synced."
             },
         )
-        PrimaryButton("Review save status") { navigation.open(AppRoute.SAVE_RESULT) }
     }
 }

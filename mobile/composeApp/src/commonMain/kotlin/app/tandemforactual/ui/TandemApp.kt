@@ -973,6 +973,15 @@ fun TandemApp(
             )
         val renderHeader: @Composable (AppRoute) -> Unit = { headerRoute ->
             if (headerRoute != AppRoute.WELCOME && headerRoute != AppRoute.STARTUP) {
+                val conflictRecordId =
+                    if (headerRoute == AppRoute.CONFLICT_REVIEW) {
+                        mobileSession.pendingWrites
+                            .firstOrNull { it.operationId == state.selectedConflictOperationId }
+                            ?.recordId
+                    } else {
+                        null
+                    }
+                val conflictTitle = liveTransactions.firstOrNull { it.recordId == conflictRecordId }?.payee
                 AppHeader(
                     route = headerRoute,
                     state = state,
@@ -985,6 +994,7 @@ fun TandemApp(
                     liveAccounts = liveAccounts,
                     liveBudgetMonth = liveBudgetMonth,
                     activitySelectionTotalMinor = activitySelectionTotalMinor,
+                    conflictTitle = conflictTitle,
                 )
             }
         }
@@ -1296,7 +1306,6 @@ internal fun AppRoute.showsBottomNavigation(): Boolean =
         AppRoute.CHOOSE_CATEGORY,
         AppRoute.CHOOSE_TRANSACTION_TYPE,
         AppRoute.CHOOSE_DATE,
-        AppRoute.SAVE_RESULT,
         -> false
         else -> true
     }

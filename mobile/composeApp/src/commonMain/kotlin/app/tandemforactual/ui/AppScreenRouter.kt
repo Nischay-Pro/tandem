@@ -491,7 +491,6 @@ internal fun ScreenContent(
                 navigation.back()
             }
         AppRoute.CHOOSE_DATE -> DatePickerScreen(state, navigation)
-        AppRoute.SAVE_RESULT -> SaveResultScreen(state, navigation)
         AppRoute.SYNC_CENTER -> SyncCenterScreen(state, mobileSession, navigation, liveTransactions)
         AppRoute.CONFLICT_INBOX -> ConflictInboxScreen(state, mobileSession, navigation, liveTransactions)
         AppRoute.CONFLICT_REVIEW -> ConflictReviewScreen(state, mobileSession, onResolveConflict, liveTransactions)

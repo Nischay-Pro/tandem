@@ -161,6 +161,7 @@ internal fun AppHeader(
     liveAccounts: List<LiveAccountSummary>,
     liveBudgetMonth: LiveBudgetMonthSummary?,
     activitySelectionTotalMinor: Long?,
+    conflictTitle: String?,
 ) {
     val palette = tandemPalette
     val headerTitle =
@@ -187,6 +188,7 @@ internal fun AppHeader(
             AppRoute.ACTIVITY,
             AppRoute.ACTIVITY_SEARCH,
             -> activitySelectionTotalMinor?.let(state::formatCurrency) ?: route.title
+            AppRoute.CONFLICT_REVIEW -> conflictTitle?.takeIf(String::isNotBlank) ?: route.title
             else -> route.title
         }
     Row(
