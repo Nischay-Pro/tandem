@@ -112,6 +112,8 @@ internal fun BudgetScreen(
     val conflictCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "conflict" } else 0
     val rejectedCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "rejected" } else 0
     val readyToAssignMinor = if (isLiveBudget) liveBudgetMonth?.toBudgetMinor ?: 0 else 124_000L
+    val assignmentPresentation = presentBudgetAssignment(readyToAssignMinor)
+    val displayedAssignmentMinor = if (isLiveBudget) assignmentPresentation.amountMinor else readyToAssignMinor
     val heldForNextMonthMinor = liveBudgetMonth?.heldForNextMonthMinor?.coerceAtLeast(0) ?: 0L
     var nextMonthHoldAmountMinor by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) {
         mutableStateOf(readyToAssignMinor.coerceAtLeast(0))
@@ -122,10 +124,10 @@ internal fun BudgetScreen(
     var holdEnterNewOperand by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
     var holdAmountMessage by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf<String?>(null) }
     val readyToAssignColor =
-        when {
-            readyToAssignMinor < 0 -> palette.negative
-            readyToAssignMinor > 0 -> palette.positive
-            else -> palette.muted
+        when (assignmentPresentation.kind) {
+            BudgetAssignmentKind.OVERBUDGETED -> palette.negative
+            BudgetAssignmentKind.TO_BUDGET -> palette.positive
+            BudgetAssignmentKind.ALL_ASSIGNED -> palette.muted
         }
     val summaryKey =
         if (isLiveBudget) {
@@ -257,8 +259,12 @@ internal fun BudgetScreen(
                     Column {
                         CollapsibleSectionCard(
                             "${state.selectedMonth} summary",
-                            if (isLiveBudget) "${groups.sumOf { it.categories.size }} categories" else "Ready to assign",
-                            state.formatCurrency(readyToAssignMinor),
+                            if (isLiveBudget) {
+                                "${groups.sumOf { it.categories.size }} categories · ${assignmentPresentation.label}"
+                            } else {
+                                "Ready to assign"
+                            },
+                            state.formatCurrency(displayedAssignmentMinor),
                             actionColor = readyToAssignColor,
                             expanded = summaryExpanded,
                             onToggleExpanded = { state.toggleBudgetSection(summaryKey) },
@@ -271,9 +277,9 @@ internal fun BudgetScreen(
                             SurfaceCard(Modifier.padding(top = sectionSpacing)) {
                                 Column {
                                     ListRow(
-                                        if (isLiveBudget) "Ready to assign" else "Available this month",
+                                        if (isLiveBudget) assignmentPresentation.label else "Available this month",
                                         if (isLiveBudget) state.selectedMonth else "On track",
-                                        state.formatCurrency(readyToAssignMinor),
+                                        state.formatCurrency(displayedAssignmentMinor),
                                         leading = RowLeading.Icon(Lucide.WalletCards),
                                         options = ListRowOptions(trailingColor = readyToAssignColor),
                                     )
@@ -856,8 +862,8 @@ internal fun BudgetScreen(
                         ) { closeHoldDialog() }
                     }
                     ListRow(
-                        "Ready to assign",
-                        trailing = state.formatCurrency(readyToAssignMinor),
+                        if (readyToAssignMinor < 0) "Overbudgeted" else assignmentPresentation.label,
+                        trailing = state.formatCurrency(assignmentPresentation.amountMinor),
                         leading = RowLeading.Icon(Lucide.WalletCards),
                     )
                     ListRow(
@@ -865,6 +871,9 @@ internal fun BudgetScreen(
                         trailing = state.formatCurrency(heldForNextMonthMinor),
                         leading = RowLeading.Icon(Lucide.CalendarDays),
                     )
+                    if (readyToAssignMinor < 0) {
+                        InfoBubble("This month is overbudgeted. Move money back before holding it for next month.")
+                    }
                     TransactionAmountField(
                         amount = state.formatAmount(nextMonthHoldAmountMinor),
                         amountMinorUnits = nextMonthHoldAmountMinor,
