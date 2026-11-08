@@ -191,28 +191,16 @@ internal fun ScreenContent(
             )
         AppRoute.TRANSACTION_DETAIL -> TransactionDetailScreen(state, mobileSession, navigation, merchantIconMatcher)
         AppRoute.NEW_TRANSACTION, AppRoute.EDIT_TRANSACTION ->
-            TransactionFormScreen(route, state, navigation, mobileSession, onSaveTransaction, onDeleteTransaction, onCreateTransaction)
-        AppRoute.CHOOSE_ACCOUNT -> {
-            val values =
-                if (state.selectedBudgetId.isBlank()) {
-                    listOf("Checking", "Savings", "Credit card", "Cash").map { SelectorItem(it, it) }
-                } else {
-                    liveAccounts
-                        .filterNot { it.offBudget }
-                        .map { SelectorItem(it.id, it.name) }
-                }
-            SelectorScreen(
-                values,
-                if (state.selectedBudgetId.isBlank()) state.transactionAccount else state.newTransactionAccountId,
-                live = state.selectedBudgetId.isNotBlank(),
-                searchLabel = "Search accounts",
-                searchPlaceholder = "Find an account",
-            ) { item ->
-                state.transactionAccount = item.label
-                state.newTransactionAccountId = if (state.selectedBudgetId.isBlank()) "" else item.id
-                navigation.back()
-            }
-        }
+            TransactionFormScreen(
+                route,
+                state,
+                navigation,
+                mobileSession,
+                liveAccounts,
+                onSaveTransaction,
+                onDeleteTransaction,
+                onCreateTransaction,
+            )
         AppRoute.CHOOSE_PAYEE -> {
             val scope = rememberCoroutineScope()
             val isLiveBudget = state.selectedBudgetId.isNotBlank()
@@ -482,16 +470,6 @@ internal fun ScreenContent(
                 navigation.back()
             }
         }
-        AppRoute.CHOOSE_TRANSACTION_TYPE ->
-            SelectorScreen(
-                listOf(SelectorItem("Spending", "Spending"), SelectorItem("Income", "Income")),
-                state.transactionType,
-                live = state.selectedBudgetId.isNotBlank(),
-            ) { item ->
-                state.transactionType = item.label
-                navigation.back()
-            }
-        AppRoute.CHOOSE_DATE -> DatePickerScreen(state, navigation)
         AppRoute.SYNC_CENTER -> SyncCenterScreen(state, mobileSession, navigation, liveTransactions)
         AppRoute.CONFLICT_INBOX -> ConflictInboxScreen(state, mobileSession, navigation, liveTransactions)
         AppRoute.CONFLICT_REVIEW -> ConflictReviewScreen(state, mobileSession, onResolveConflict, liveTransactions)

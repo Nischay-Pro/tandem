@@ -13,10 +13,10 @@ class BottomNavigationVisibilityTest {
     }
 
     @Test
-    fun transactionEditorsAndContextPickersHideBottomNavigation() {
+    fun transactionEditorsAndSearchPickersHideBottomNavigation() {
         assertFalse(AppRoute.NEW_TRANSACTION.showsBottomNavigation())
         assertFalse(AppRoute.EDIT_TRANSACTION.showsBottomNavigation())
+        assertFalse(AppRoute.CHOOSE_PAYEE.showsBottomNavigation())
         assertFalse(AppRoute.CHOOSE_CATEGORY.showsBottomNavigation())
-        assertFalse(AppRoute.CHOOSE_DATE.showsBottomNavigation())
     }
 }

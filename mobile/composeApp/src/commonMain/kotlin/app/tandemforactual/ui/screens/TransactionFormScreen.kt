@@ -37,6 +37,7 @@ import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
+import app.tandemforactual.ui.model.LiveAccountSummary
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Receipt
@@ -50,6 +51,7 @@ internal fun TransactionFormScreen(
     state: AppState,
     navigation: AppNavigation,
     mobileSession: TandemMobileSession,
+    liveAccounts: List<LiveAccountSummary>,
     onSaveTransaction: ((Boolean) -> Unit) -> Unit,
     onDeleteTransaction: ((Boolean) -> Unit) -> Unit,
     onCreateTransaction: () -> Unit,
@@ -62,6 +64,9 @@ internal fun TransactionFormScreen(
         return
     }
     val isNew = route == AppRoute.NEW_TRANSACTION
+    val softwareKeyboard = LocalSoftwareKeyboardController.current
+    var showAccountPicker by rememberSaveable { mutableStateOf(false) }
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
     if (state.selectedBudgetId.isNotBlank()) {
         if (isNew) {
             var keypadVisible by rememberSaveable { mutableStateOf(true) }
@@ -71,7 +76,6 @@ internal fun TransactionFormScreen(
             var amountEntryMessage by rememberSaveable { mutableStateOf<String?>(null) }
             val amountFocusRequester = remember { FocusRequester() }
             val focusManager = LocalFocusManager.current
-            val softwareKeyboard = LocalSoftwareKeyboardController.current
             val routeScrollState = LocalRouteScrollState.current
             val compactSave by remember(routeScrollState) {
                 derivedStateOf { (routeScrollState?.value ?: 0) > 72 }
@@ -188,11 +192,14 @@ internal fun TransactionFormScreen(
                         InlineMessage(amountEntryMessage.orEmpty(), InlineMessageKind.ERROR)
                     }
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        TransactionTypeChip(state.transactionType) {
-                            keypadVisible = false
-                            softwareKeyboard?.hide()
-                            navigation.open(AppRoute.CHOOSE_TRANSACTION_TYPE)
-                        }
+                        TransactionTypePicker(
+                            state.transactionType,
+                            onBeforeOpen = {
+                                keypadVisible = false
+                                softwareKeyboard?.hide()
+                            },
+                            onSelect = { state.transactionType = it },
+                        )
                     }
                     SectionCard(title = "") {
                         TransactionPickerRow(
@@ -222,7 +229,7 @@ internal fun TransactionFormScreen(
                         ) {
                             keypadVisible = false
                             softwareKeyboard?.hide()
-                            navigation.open(AppRoute.CHOOSE_ACCOUNT)
+                            showAccountPicker = true
                         }
                         DividerLine()
                         TransactionPickerRow(
@@ -232,7 +239,7 @@ internal fun TransactionFormScreen(
                         ) {
                             keypadVisible = false
                             softwareKeyboard?.hide()
-                            navigation.open(AppRoute.CHOOSE_DATE)
+                            showDatePicker = true
                         }
                     }
                     TextFieldCard(
@@ -288,6 +295,30 @@ internal fun TransactionFormScreen(
                             ),
                 )
             }
+            if (showAccountPicker) {
+                TransactionAccountPickerDialog(
+                    liveAccounts,
+                    state.newTransactionAccountId,
+                    state.transactionAccount,
+                    live = true,
+                    onSelect = { account ->
+                        state.transactionAccount = account.label
+                        state.newTransactionAccountId = account.id
+                        showAccountPicker = false
+                    },
+                    onDismiss = { showAccountPicker = false },
+                )
+            }
+            if (showDatePicker) {
+                TransactionDatePickerDialog(
+                    selectedDate = state.transactionDate,
+                    onSelect = {
+                        state.transactionDate = it
+                        showDatePicker = false
+                    },
+                    onDismiss = { showDatePicker = false },
+                )
+            }
             return
         }
         var originalAmountMinor by remember(state.selectedTransactionRecordId) { mutableStateOf(state.selectedTransactionAmountMinor) }
@@ -330,7 +361,8 @@ internal fun TransactionFormScreen(
                 )
                 SectionCard(title = "") {
                     TransactionPickerRow(state.transactionAccount, "Choose account", Lucide.WalletCards) {
-                        navigation.open(AppRoute.CHOOSE_ACCOUNT)
+                        softwareKeyboard?.hide()
+                        showAccountPicker = true
                     }
                     DividerLine()
                     TransactionPickerRow(state.transactionPayee, "Choose payee", Lucide.Receipt) {
@@ -342,7 +374,8 @@ internal fun TransactionFormScreen(
                     }
                     DividerLine()
                     TransactionPickerRow(displayTransactionDate(state.transactionDate), "Choose date", Lucide.CalendarDays) {
-                        navigation.open(AppRoute.CHOOSE_DATE)
+                        softwareKeyboard?.hide()
+                        showDatePicker = true
                     }
                 }
                 mobileSession.transactionWriteMessage?.let { message ->
@@ -377,6 +410,30 @@ internal fun TransactionFormScreen(
                     onClick = { confirmDelete = true },
                 )
             }
+        }
+        if (showAccountPicker) {
+            TransactionAccountPickerDialog(
+                liveAccounts,
+                state.newTransactionAccountId,
+                state.transactionAccount,
+                live = true,
+                onSelect = { account ->
+                    state.transactionAccount = account.label
+                    state.newTransactionAccountId = account.id
+                    showAccountPicker = false
+                },
+                onDismiss = { showAccountPicker = false },
+            )
+        }
+        if (showDatePicker) {
+            TransactionDatePickerDialog(
+                selectedDate = state.transactionDate,
+                onSelect = {
+                    state.transactionDate = it
+                    showDatePicker = false
+                },
+                onDismiss = { showDatePicker = false },
+            )
         }
         if (confirmDelete) {
             AlertDialog(
@@ -415,13 +472,15 @@ internal fun TransactionFormScreen(
             { state.transactionAmount = it },
             TextFieldOptions(placeholder = "For example, ${state.formatAmount(1_250)}"),
         )
-        ReadOnlyField("Type", state.transactionType, leadingVector = Lucide.Receipt) {
-            navigation.open(AppRoute.CHOOSE_TRANSACTION_TYPE)
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            TransactionTypePicker(state.transactionType, onSelect = { state.transactionType = it })
         }
-        ReadOnlyField("Account", state.transactionAccount, "A") { navigation.open(AppRoute.CHOOSE_ACCOUNT) }
+        ReadOnlyField("Account", state.transactionAccount, "A") {
+            showAccountPicker = true
+        }
         ReadOnlyField("Payee", state.transactionPayee, "P") { navigation.open(AppRoute.CHOOSE_PAYEE) }
         ReadOnlyField("Category", state.transactionCategory, "C") { navigation.open(AppRoute.CHOOSE_CATEGORY) }
-        ReadOnlyField("Date", state.transactionDate, "▣") { navigation.open(AppRoute.CHOOSE_DATE) }
+        ReadOnlyField("Date", state.transactionDate, "▣") { showDatePicker = true }
         TextFieldCard(
             "Notes",
             state.transactionNotes,
@@ -434,6 +493,30 @@ internal fun TransactionFormScreen(
             } else {
                 "This sample form isn’t connected. Changes won’t be saved or synced."
             },
+        )
+    }
+    if (showAccountPicker) {
+        TransactionAccountPickerDialog(
+            liveAccounts,
+            selectedId = "",
+            selectedName = state.transactionAccount,
+            live = false,
+            onSelect = { account ->
+                state.transactionAccount = account.label
+                state.newTransactionAccountId = ""
+                showAccountPicker = false
+            },
+            onDismiss = { showAccountPicker = false },
+        )
+    }
+    if (showDatePicker) {
+        TransactionDatePickerDialog(
+            selectedDate = state.transactionDate,
+            onSelect = {
+                state.transactionDate = it
+                showDatePicker = false
+            },
+            onDismiss = { showDatePicker = false },
         )
     }
 }

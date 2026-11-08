@@ -1301,11 +1301,8 @@ internal fun AppRoute.showsBottomNavigation(): Boolean =
         AppRoute.MONTH_PICKER,
         AppRoute.NEW_TRANSACTION,
         AppRoute.EDIT_TRANSACTION,
-        AppRoute.CHOOSE_ACCOUNT,
         AppRoute.CHOOSE_PAYEE,
         AppRoute.CHOOSE_CATEGORY,
-        AppRoute.CHOOSE_TRANSACTION_TYPE,
-        AppRoute.CHOOSE_DATE,
         -> false
         else -> true
     }

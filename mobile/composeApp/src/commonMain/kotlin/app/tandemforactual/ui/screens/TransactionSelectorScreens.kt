@@ -5,6 +5,8 @@ package app.tandemforactual.ui
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,14 +14,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.DropdownMenu
+import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
@@ -27,6 +34,8 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.PeriodStepper
 import app.tandemforactual.ui.components.SecondaryButton
@@ -105,91 +114,175 @@ internal fun SelectorScreen(
 }
 
 @Composable
-internal fun DatePickerScreen(
-    state: AppState,
-    navigation: AppNavigation,
+internal fun TransactionTypePicker(
+    type: String,
+    onBeforeOpen: () -> Unit = {},
+    onSelect: (String) -> Unit,
 ) {
-    val selectedDateParts = parseIsoDate(state.transactionDate) ?: parseIsoDate(platformTodayIsoDate()) ?: Triple(2026, 5, 1)
-    var visibleYear by remember { mutableStateOf(selectedDateParts.first) }
-    var visibleMonth by remember { mutableStateOf(selectedDateParts.second) }
-    val firstWeekday = platformFirstWeekday()
-    val firstDayOffset = (platformWeekday(visibleYear, visibleMonth, 1) - firstWeekday + 7) % 7
-    val daysInVisibleMonth = daysInMonth(visibleYear, visibleMonth)
-    val dayCells = List<Int?>(firstDayOffset) { null } + (1..daysInVisibleMonth).map { it }
-    PageColumn {
-        PeriodStepper(
-            title = formatMonth(visibleYear, visibleMonth),
-            previousLabel = "Previous month",
-            nextLabel = "Next month",
-            onPrevious = {
-                if (visibleMonth == 1) {
-                    visibleMonth = 12
-                    visibleYear -= 1
-                } else {
-                    visibleMonth -= 1
-                }
-            },
-            onNext = {
-                if (visibleMonth == 12) {
-                    visibleMonth = 1
-                    visibleYear += 1
-                } else {
-                    visibleMonth += 1
-                }
-            },
-        )
-        SecondaryButton("Today", Modifier.fillMaxWidth()) {
-            state.transactionDate = platformTodayIsoDate()
-            navigation.back()
+    var expanded by remember { mutableStateOf(false) }
+    Box(contentAlignment = Alignment.Center) {
+        TransactionTypeChip(type) {
+            onBeforeOpen()
+            expanded = true
         }
-        Row(Modifier.fillMaxWidth()) {
-            (0..6).forEach { column ->
-                val representativeDay = 1 + ((column - firstDayOffset + 7) % 7)
-                Text(
-                    formatWeekday(visibleYear, visibleMonth, representativeDay),
-                    modifier = Modifier.weight(1f),
-                    color = tandemPalette.muted,
-                    textAlign = TextAlign.Center,
-                    fontSize = TandemTypography.caption,
-                )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            listOf("Spending", "Income").forEach { choice ->
+                DropdownMenuItem(
+                    onClick = {
+                        expanded = false
+                        onSelect(choice)
+                    },
+                ) {
+                    Text(
+                        choice,
+                        color = if (choice == "Income") tandemPalette.positive else tandemPalette.negative,
+                        fontSize = TandemTypography.compactBody,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
         }
-        dayCells.chunked(7).forEach { week ->
-            Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-                week.forEach { day ->
-                    if (day == null) {
-                        Spacer(Modifier.weight(1f).height(44.dp))
-                    } else {
-                        val isoDate = transactionIsoDate(visibleYear, visibleMonth, day)
-                        val selected = state.transactionDate == isoDate
-                        val cellTextColor by
-                            animateColorAsState(
-                                targetValue = if (selected) tandemPalette.accent else tandemPalette.text,
-                                animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
-                                label = "date-selection-text",
-                            )
-                        SelectableTile(
-                            selected = selected,
-                            contentDescription = displayTransactionDate(isoDate),
-                            onSelect = {
-                                state.transactionDate = isoDate
-                                navigation.back()
-                            },
-                            modifier = Modifier.weight(1f).heightIn(min = 44.dp),
-                            shape = CircleShape,
-                            selectedBackground = tandemPalette.accentSurface,
-                            unselectedBackground = Color.Transparent,
-                        ) {
-                            Text(
-                                day.toString(),
-                                color = cellTextColor,
-                                fontSize = TandemTypography.label,
-                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+    }
+}
+
+@Composable
+internal fun TransactionAccountPickerDialog(
+    accounts: List<app.tandemforactual.ui.model.LiveAccountSummary>,
+    selectedId: String,
+    selectedName: String,
+    live: Boolean,
+    onSelect: (SelectorItem) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    val values =
+        if (live) {
+            accounts.filterNot { it.offBudget }.map { SelectorItem(it.id, it.name) }
+        } else {
+            listOf("Checking", "Savings", "Credit card", "Cash").map { SelectorItem(it, it) }
+        }
+    val filtered = values.filter { it.label.contains(query, ignoreCase = true) }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        SurfaceCard(Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large)) {
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 640.dp).padding(TandemSpacing.large),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+            ) {
+                Text("Choose account", color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
+                if (values.size > 6) {
+                    TextFieldCard("Search accounts", query, { query = it }, TextFieldOptions(placeholder = "Find an account"))
+                }
+                if (filtered.isEmpty()) {
+                    EmptyState("No accounts found", modifier = Modifier.padding(TandemSpacing.large))
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+                        items(filtered, key = { "account-choice-${it.id}" }) { item ->
+                            ChoiceRow(
+                                item.label,
+                                selected = if (live) selectedId == item.id else selectedName == item.label,
+                                onClick = { onSelect(item) },
                             )
                         }
                     }
                 }
-                repeat(7 - week.size) { Spacer(Modifier.weight(1f).height(44.dp)) }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun TransactionDatePickerDialog(
+    selectedDate: String,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val selectedDateParts = parseIsoDate(selectedDate) ?: parseIsoDate(platformTodayIsoDate()) ?: Triple(2026, 5, 1)
+    var visibleYear by remember(selectedDate) { mutableStateOf(selectedDateParts.first) }
+    var visibleMonth by remember(selectedDate) { mutableStateOf(selectedDateParts.second) }
+    val firstWeekday = platformFirstWeekday()
+    val firstDayOffset = (platformWeekday(visibleYear, visibleMonth, 1) - firstWeekday + 7) % 7
+    val daysInVisibleMonth = daysInMonth(visibleYear, visibleMonth)
+    val dayCells = List<Int?>(firstDayOffset) { null } + (1..daysInVisibleMonth).map { it }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        SurfaceCard(Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large)) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 440.dp)
+                    .heightIn(max = 640.dp)
+                    .padding(TandemSpacing.large),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+            ) {
+                Text("Choose date", color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
+                PeriodStepper(
+                    title = formatMonth(visibleYear, visibleMonth),
+                    previousLabel = "Previous month",
+                    nextLabel = "Next month",
+                    onPrevious = {
+                        if (visibleMonth == 1) {
+                            visibleMonth = 12
+                            visibleYear -= 1
+                        } else {
+                            visibleMonth -= 1
+                        }
+                    },
+                    onNext = {
+                        if (visibleMonth == 12) {
+                            visibleMonth = 1
+                            visibleYear += 1
+                        } else {
+                            visibleMonth += 1
+                        }
+                    },
+                )
+                SecondaryButton("Today", Modifier.fillMaxWidth()) { onSelect(platformTodayIsoDate()) }
+                Row(Modifier.fillMaxWidth()) {
+                    (0..6).forEach { column ->
+                        val representativeDay = 1 + ((column - firstDayOffset + 7) % 7)
+                        Text(
+                            formatWeekday(visibleYear, visibleMonth, representativeDay),
+                            modifier = Modifier.weight(1f),
+                            color = tandemPalette.muted,
+                            textAlign = TextAlign.Center,
+                            fontSize = TandemTypography.caption,
+                        )
+                    }
+                }
+                dayCells.chunked(7).forEach { week ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+                        week.forEach { day ->
+                            if (day == null) {
+                                Spacer(Modifier.weight(1f).height(44.dp))
+                            } else {
+                                val isoDate = transactionIsoDate(visibleYear, visibleMonth, day)
+                                val selected = selectedDate == isoDate
+                                val cellTextColor by
+                                    animateColorAsState(
+                                        targetValue = if (selected) tandemPalette.accent else tandemPalette.text,
+                                        animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+                                        label = "date-selection-text",
+                                    )
+                                SelectableTile(
+                                    selected = selected,
+                                    contentDescription = displayTransactionDate(isoDate),
+                                    onSelect = { onSelect(isoDate) },
+                                    modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                                    shape = CircleShape,
+                                    selectedBackground = tandemPalette.accentSurface,
+                                    unselectedBackground = Color.Transparent,
+                                ) {
+                                    Text(
+                                        day.toString(),
+                                        color = cellTextColor,
+                                        fontSize = TandemTypography.label,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                    )
+                                }
+                            }
+                        }
+                        repeat(7 - week.size) { Spacer(Modifier.weight(1f).height(44.dp)) }
+                    }
+                }
             }
         }
     }
