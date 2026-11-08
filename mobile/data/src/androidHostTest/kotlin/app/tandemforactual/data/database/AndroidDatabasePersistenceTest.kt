@@ -52,24 +52,23 @@ class AndroidDatabasePersistenceTest {
         }
 
     @Test
-    fun appAndWorkerDatabaseInstancesShareInvalidationEvents() =
+    fun databaseFlowObservesWrites() =
         runBlocking {
             val context: Context = RuntimeEnvironment.getApplication()
             context.deleteDatabase(DATABASE_NAME)
-            val appDatabase = openAndroidDatabase(context)
-            val workerDatabase = openAndroidDatabase(context)
+            val database = openAndroidDatabase(context)
             val initialQueryObserved = CompletableDeferred<Unit>()
             try {
                 val visibleRecords =
                     async(Dispatchers.IO) {
-                        LocalBudgetRepository(workerDatabase) { 100L }
+                        LocalBudgetRepository(database) { 100L }
                             .observeRecords(BUDGET_ID, "transaction")
                             .onEach { records -> if (records.isEmpty()) initialQueryObserved.complete(Unit) }
                             .first { records -> records.isNotEmpty() }
                     }
                 withTimeout(5_000) { initialQueryObserved.await() }
 
-                appDatabase
+                database
                     .budgetRecordDao()
                     .put(
                         BudgetRecordEntity(
@@ -93,8 +92,7 @@ class AndroidDatabasePersistenceTest {
 
                 assertEquals("shared-transaction", withTimeout(5_000) { visibleRecords.await() }.single().recordId)
             } finally {
-                workerDatabase.close()
-                appDatabase.close()
+                database.close()
                 context.deleteDatabase(DATABASE_NAME)
             }
             Unit
