@@ -12,13 +12,33 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { Resvg } from "@resvg/resvg-js";
 
 const require = createRequire(import.meta.url);
 const repositoryDirectory = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "..",
 );
+const requiredPackages = [
+  "@thesvg/icons/target",
+  "@rei/cedar-icons/package.json",
+  "@resvg/resvg-js",
+];
+const missingPackages = requiredPackages.filter((specifier) => {
+  try {
+    require.resolve(specifier);
+    return false;
+  } catch {
+    return true;
+  }
+});
+if (missingPackages.length > 0) {
+  throw new Error(
+    "The bundled merchant icon resources need the pinned Node packages. " +
+      "From the repository root, run `mise install` and `pnpm install --frozen-lockfile`, " +
+      "then retry the Gradle task.",
+  );
+}
+const { Resvg } = await import("@resvg/resvg-js");
 const outputArgument = process.argv.indexOf("--output");
 const outputDirectory = resolve(
   outputArgument === -1

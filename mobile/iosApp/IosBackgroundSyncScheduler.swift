@@ -100,7 +100,6 @@ final class IosBackgroundSyncScheduler {
                 IosBudgetNotifications.shared.conflicts(Int32(conflictCount.intValue))
                 IosBudgetNotifications.shared.rejected(Int32(rejectedCount.intValue))
                 completion.finish(success: taskSucceeded.boolValue)
-                return KotlinUnit()
             }
             handleSlot.install(handle)
         }

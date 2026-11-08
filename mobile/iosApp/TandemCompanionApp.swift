@@ -37,19 +37,15 @@ private struct ComposeRootView: UIViewControllerRepresentable {
                     unmeteredOnly: unmeteredOnly.boolValue,
                     budgetId: budgetId
                 )
-                return KotlinUnit()
             },
             onSystemAppearanceChanged: { isDark, followsSystem in
                 context.coordinator.updateAppearance(isDark: isDark, followsSystem: followsSystem)
-                return KotlinUnit()
             },
             onRequestNotificationPermission: {
                 IosBudgetNotifications.shared.requestPermission()
-                return KotlinUnit()
             },
             onOpenNotificationSettings: {
                 IosBudgetNotifications.shared.openSettings()
-                return KotlinUnit()
             }
         )
     }

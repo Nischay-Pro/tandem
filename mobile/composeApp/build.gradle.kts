@@ -19,22 +19,6 @@ val generateTheSvgIconPack =
       "--output",
       generatedTheSvgResources.get().asFile.absolutePath,
     )
-    doFirst {
-      val requiredPackages =
-        listOf(
-          repositoryRoot.resolve("node_modules/.pnpm/@thesvg+icons@4.0.4/node_modules/@thesvg/icons/package.json"),
-          repositoryRoot.resolve("node_modules/.pnpm/@rei+cedar-icons@2.6.1/node_modules/@rei/cedar-icons/package.json"),
-          repositoryRoot.resolve("node_modules/.pnpm/@resvg+resvg-js@2.6.2/node_modules/@resvg/resvg-js/package.json"),
-        )
-      val missingPackages = requiredPackages.filterNot { it.isFile }
-      if (missingPackages.isNotEmpty()) {
-        throw GradleException(
-          "The bundled merchant icon resources need the pinned Node packages. " +
-            "From the repository root, run `mise install` and `pnpm install --frozen-lockfile`, " +
-            "then retry the Gradle task.",
-        )
-      }
-    }
     inputs.files(
       repositoryRoot.resolve("scripts/generate-thesvg-icon-pack.mjs"),
       repositoryRoot.resolve("mobile/branding/tandem-mark.svg"),
