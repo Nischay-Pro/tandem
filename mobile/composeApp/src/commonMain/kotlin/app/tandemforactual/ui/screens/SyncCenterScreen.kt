@@ -61,7 +61,7 @@ internal fun SyncCenterScreen(
                         Modifier.fillMaxWidth().padding(TandemSpacing.large),
                         verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                     ) {
-                        LabelText(state.selectedBudget)
+                        LabelText(budgetDisplayNameForHeader(state.selectedBudget))
                         BodyText(
                             "${mobileSession.cachedTransactionCount} transactions · ${mobileSession.accountRecords.size} accounts cached",
                         )

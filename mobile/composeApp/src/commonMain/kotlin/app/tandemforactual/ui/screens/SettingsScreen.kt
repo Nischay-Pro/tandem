@@ -64,7 +64,7 @@ internal fun SettingsScreen(
         }
         SectionCard("Appearance") {
             ListRow(
-                "Appearance",
+                "Visual settings",
                 "Theme, accent, and background",
                 state.theme.label,
                 leading = RowLeading.Icon(Lucide.Palette),

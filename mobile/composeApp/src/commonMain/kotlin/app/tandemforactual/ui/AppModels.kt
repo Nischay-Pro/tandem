@@ -83,6 +83,17 @@ import org.jetbrains.compose.resources.DrawableResource
 
 internal const val SUPPORTED_ACTUAL_SERVER_VERSION = "26.11.0"
 
+internal fun budgetDisplayNameForHeader(name: String): String {
+    val segments = name.split(" · ")
+    return segments.firstOrNull { segment ->
+        val codeStart = segment.lastIndexOf('(')
+        segment.endsWith(')') &&
+            codeStart >= 0 &&
+            segment.substring(codeStart + 1, segment.lastIndex).length == 3 &&
+            segment.substring(codeStart + 1, segment.lastIndex).all { it in 'A'..'Z' }
+    } ?: segments.firstOrNull().orEmpty()
+}
+
 internal enum class AppRoute(
     val title: String,
 ) {

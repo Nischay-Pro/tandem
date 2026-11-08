@@ -161,7 +161,7 @@ internal fun AppHeader(
     val headerTitle =
         when (route) {
             AppRoute.NEW_TRANSACTION -> ""
-            AppRoute.BUDGET -> state.selectedBudget
+            AppRoute.BUDGET -> budgetDisplayNameForHeader(state.selectedBudget)
             AppRoute.CATEGORY_GROUP ->
                 liveBudgetMonth?.groups?.firstOrNull { it.id == state.selectedCategoryGroupId }?.name ?: route.title
             AppRoute.CATEGORY_DETAIL ->

@@ -65,7 +65,7 @@ internal fun SyncPreferencesScreen(
             !hasSelectedBudget -> "Pair this device and choose an Actual budget to sync"
             mobileSession.syncError != null -> mobileSession.syncError.orEmpty()
             mobileSession.isSyncing -> "Reading changes from Actual"
-            syncState?.lastSyncedAtEpochMs != null -> "Last successful sync for ${state.selectedBudget}"
+            syncState?.lastSyncedAtEpochMs != null -> "Last successful sync"
             else -> "Open a budget and sync to save it on this device"
         }
     PageColumn {
@@ -98,7 +98,7 @@ internal fun SyncPreferencesScreen(
                 InfoBubble("Background sync isn’t available on this device.")
             }
         }
-        SectionCard("Current budget", if (hasSelectedBudget) state.selectedBudget else "Choose an Actual budget", animateDetail = true) {
+        SectionCard("Current budget", if (hasSelectedBudget) null else "Choose an Actual budget", animateDetail = true) {
             ListRow(
                 "Sync now",
                 "Read changes and check pending edits",
