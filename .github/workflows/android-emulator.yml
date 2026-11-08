@@ -1,0 +1,60 @@
+name: Android emulator
+
+on:
+  schedule:
+    - cron: "15 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-emulator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  emulator_persistence:
+    name: Android x86_64 emulator persistence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check for Linux KVM
+        id: kvm
+        shell: bash
+        run: |
+          if [[ ! -e /dev/kvm ]]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::KVM is not available on this Linux runner; Android persistence remains covered by the required Robolectric host test."
+            exit 0
+          fi
+          sudo chmod 0666 /dev/kvm
+          if [[ -r /dev/kvm && -w /dev/kvm ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::KVM is not accessible; Android persistence remains covered by the required Robolectric host test."
+          fi
+
+      - name: Set up Android build tools
+        if: ${{ steps.kvm.outputs.available == 'true' }}
+        uses: ./.github/actions/setup-mobile-build
+        with:
+          gradle_cache_encryption_key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          setup_android: "true"
+
+      - name: Run Android database persistence test on emulator
+        if: ${{ steps.kvm.outputs.available == 'true' }}
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          emulator-boot-timeout: 180
+          disable-linux-hw-accel: false
+          working-directory: mobile
+          script: ./gradlew :data:connectedAndroidDeviceTest

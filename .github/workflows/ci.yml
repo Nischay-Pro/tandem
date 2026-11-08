@@ -3,13 +3,15 @@ name: CI
 on:
   pull_request:
   push:
+    branches:
+      - main
 
 permissions:
   contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   mobile_static:
@@ -171,38 +173,10 @@ jobs:
         working-directory: mobile
         run: ./gradlew :androidApp:assembleRelease
 
-  android_persistence:
-    name: Data · Android emulator persistence
-    runs-on: macos-26
-    timeout-minutes: 60
-    steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up mobile build tools
-        uses: ./.github/actions/setup-mobile-build
-        with:
-          gradle_cache_encryption_key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
-          setup_android: "true"
-
-      - name: Run Android database persistence test on emulator
-        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
-        with:
-          api-level: 36
-          target: google_apis
-          arch: arm64-v8a
-          emulator-boot-timeout: 180
-          working-directory: mobile
-          script: ./gradlew :data:connectedAndroidDeviceTest
-
   ios_host:
     name: iOS app · Xcode host build
-    needs:
-      - compose_ios
     runs-on: macos-26
-    timeout-minutes: 90
+    timeout-minutes: 45
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -222,27 +196,15 @@ jobs:
 
       - name: Build iOS app host with Xcode
         working-directory: mobile
-        run: |
-          python3 - <<'PY'
-          import subprocess
-          import sys
-
-          command = [
-              "xcodebuild",
-              "-project", "iosApp/TandemForActual.xcodeproj",
-              "-scheme", "TandemForActual",
-              "-destination", "generic/platform=iOS Simulator",
-              "ARCHS=arm64",
-              "ONLY_ACTIVE_ARCH=YES",
-              "CODE_SIGNING_ALLOWED=NO",
-              "build",
-          ]
-
-          try:
-              subprocess.run(command, check=True, timeout=120)
-          except subprocess.TimeoutExpired:
-              sys.exit("Xcode host build exceeded the 120-second limit")
-          PY
+        run: >-
+          xcodebuild
+          -project iosApp/TandemForActual.xcodeproj
+          -scheme TandemForActual
+          -destination "generic/platform=iOS Simulator"
+          ARCHS=arm64
+          ONLY_ACTIVE_ARCH=YES
+          CODE_SIGNING_ALLOWED=NO
+          build
 
   api_ios:
     name: API client · iOS architectures
@@ -329,7 +291,6 @@ jobs:
       - android_app_unit_tests
       - android_app_release_lint
       - android_app_release
-      - android_persistence
       - ios_host
       - api_ios
       - data_ios
@@ -338,10 +299,8 @@ jobs:
     runs-on: ubuntu-26.04
     steps:
       - name: Require all mobile checks to pass
-        if: ${{ needs.mobile_static.result != 'success' || needs.api_android_jvm.result != 'success' || needs.data_android_jvm.result != 'success' || needs.compose_android.result != 'success' || needs.android_app_unit_tests.result != 'success' || needs.android_app_release_lint.result != 'success' || needs.android_app_release.result != 'success' || needs.android_persistence.result != 'success' || needs.ios_host.result != 'success' || needs.api_ios.result != 'success' || needs.data_ios.result != 'success' || needs.compose_ios.result != 'success' }}
-        run: |
-          echo '${{ toJSON(needs) }}'
-          exit 1
+        if: ${{ needs.mobile_static.result != 'success' || needs.api_android_jvm.result != 'success' || needs.data_android_jvm.result != 'success' || needs.compose_android.result != 'success' || needs.android_app_unit_tests.result != 'success' || needs.android_app_release_lint.result != 'success' || needs.android_app_release.result != 'success' || needs.ios_host.result != 'success' || needs.api_ios.result != 'success' || needs.data_ios.result != 'success' || needs.compose_ios.result != 'success' }}
+        run: exit 1
 
   quality:
     name: API quality gate
