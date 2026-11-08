@@ -40,6 +40,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -836,9 +837,19 @@ private fun TimeSeriesReportChart(
         val slotWidth = viewportWidth / 6
         val chartWidth = maxOf(viewportWidth, slotWidth * monthIds.size.coerceAtLeast(1))
         val scrollState = rememberScrollState()
+        val selectionCallback by rememberUpdatedState(onNetWorthSelectionChange)
         LaunchedEffect(monthIds, chartWidth) {
             withFrameNanos { }
             scrollState.scrollTo(scrollState.maxValue)
+        }
+        LaunchedEffect(scrollState) {
+            var previousScroll = scrollState.value
+            snapshotFlow { scrollState.value }.collect { currentScroll ->
+                if (currentScroll != previousScroll) {
+                    previousScroll = currentScroll
+                    selectionCallback(null)
+                }
+            }
         }
         Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
             Row(
@@ -1101,7 +1112,9 @@ private fun ReportCanvas(
 ) {
     val palette = tandemPalette
     val monthly = monthlyPoints(kind, data)
-    var selection by remember(kind, monthly, data.categories, data.netWorth) { mutableStateOf<ReportChartSelection?>(null) }
+    var selection by remember(kind, monthly, data.categories, data.netWorth, calloutViewportStartPx) {
+        mutableStateOf<ReportChartSelection?>(null)
+    }
     val selectionCallback by rememberUpdatedState(onNetWorthSelectionChange)
     val selectedCategory = selection?.takeIf { kind == ReportKind.SPENDING_BY_CATEGORY }?.let { data.categories.getOrNull(it.index) }
     val selectedValue =
