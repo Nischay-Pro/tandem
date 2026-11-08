@@ -293,6 +293,7 @@ internal fun BottomNavigation(
     visible: Boolean = true,
 ) {
     val palette = tandemPalette
+    val showLabels = LocalDensity.current.fontScale < 1.5f
     val items =
         listOf(
             AppRoute.BUDGET to "Budget",
@@ -334,6 +335,7 @@ internal fun BottomNavigation(
                 modifier =
                     Modifier
                         .weight(1f)
+                        .defaultMinSize(minHeight = 44.dp)
                         .clip(RoundedCornerShape(TandemShapes.medium))
                         .selectable(
                             selected = active,
@@ -348,15 +350,17 @@ internal fun BottomNavigation(
                         }.then(if (visible) Modifier else Modifier.clearAndSetSemantics {})
                         .padding(vertical = TandemSpacing.extraSmall),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
+                verticalArrangement = Arrangement.spacedBy(if (showLabels) TandemSpacing.xxSmall else 0.dp),
             ) {
                 NavigationGlyph(route, tabColor, iconScale)
-                Text(
-                    label,
-                    color = tabColor,
-                    fontSize = TandemTypography.micro,
-                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                )
+                if (showLabels) {
+                    Text(
+                        label,
+                        color = tabColor,
+                        fontSize = TandemTypography.micro,
+                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                }
             }
         }
     }

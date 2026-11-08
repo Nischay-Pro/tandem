@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
@@ -105,6 +106,7 @@ internal fun ListRow(
     onClick: (() -> Unit)? = null,
 ) {
     val palette = tandemPalette
+    val stackTrailing = LocalDensity.current.fontScale >= 1.5f
     val merchantResource = (leading as? RowLeading.Merchant)?.resource
     val resolvedPainter = merchantResource?.let { painterResource(it) }
     val resolvedVector =
@@ -218,8 +220,27 @@ internal fun ListRow(
                     )
                 }
             }
+            if (stackTrailing && trailing != null) {
+                if (options.animateChanges) {
+                    AnimatedStatusText(
+                        trailing,
+                        options.trailingColor ?: palette.muted,
+                        fontSize = TandemTypography.compactBody,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                    )
+                } else {
+                    Text(
+                        trailing,
+                        color = options.trailingColor ?: palette.muted,
+                        fontSize = TandemTypography.compactBody,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                    )
+                }
+            }
         }
-        if (trailing != null) {
+        if (trailing != null && !stackTrailing) {
             val effectiveColor = options.trailingColor ?: palette.muted
             if (options.animateChanges) {
                 AnimatedStatusText(
