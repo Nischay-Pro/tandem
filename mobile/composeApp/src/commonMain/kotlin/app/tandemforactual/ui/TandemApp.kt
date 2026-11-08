@@ -2,6 +2,7 @@
 
 package app.tandemforactual.ui
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
@@ -9,7 +10,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -1221,12 +1224,21 @@ fun TandemApp(
                     )
                 }
             }
-            if (tabShellRoute != null && !imeVisible) {
-                BottomNavigation(
-                    tabShellRoute,
-                    navigation.selectTab,
-                    visible = route.isTab() || backTargetTab != null,
-                )
+            AnimatedVisibility(
+                visible = tabShellRoute != null && route.showsBottomNavigation() && !imeVisible,
+                enter =
+                    slideInVertically(tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS)) { it } +
+                        fadeIn(tween(TandemMotion.CROSSFADE_MILLIS)),
+                exit =
+                    slideOutVertically(tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS)) { it } +
+                        fadeOut(tween(TandemMotion.CROSSFADE_MILLIS)),
+            ) {
+                if (tabShellRoute != null) {
+                    BottomNavigation(
+                        tabShellRoute,
+                        navigation.selectTab,
+                    )
+                }
             }
         }
         if (showDiscardTransactionDialog) {
@@ -1264,6 +1276,30 @@ internal fun AppRoute.isTab(): Boolean =
         this == AppRoute.ACTIVITY ||
         this == AppRoute.REPORTS ||
         this == AppRoute.SETTINGS
+
+internal fun AppRoute.showsBottomNavigation(): Boolean =
+    when (this) {
+        AppRoute.STARTUP,
+        AppRoute.WELCOME,
+        AppRoute.SERVER_ADDRESS,
+        AppRoute.PAIRING_OPTIONS,
+        AppRoute.PAIRING_CODE,
+        AppRoute.PAIRING_RESULT,
+        AppRoute.BUDGET_CHOOSER,
+        AppRoute.UNLOCK_BUDGET,
+        AppRoute.FIRST_SYNC,
+        AppRoute.MONTH_PICKER,
+        AppRoute.NEW_TRANSACTION,
+        AppRoute.EDIT_TRANSACTION,
+        AppRoute.CHOOSE_ACCOUNT,
+        AppRoute.CHOOSE_PAYEE,
+        AppRoute.CHOOSE_CATEGORY,
+        AppRoute.CHOOSE_TRANSACTION_TYPE,
+        AppRoute.CHOOSE_DATE,
+        AppRoute.SAVE_RESULT,
+        -> false
+        else -> true
+    }
 
 internal fun AppRoute.isReportDetail(): Boolean =
     this == AppRoute.REPORT_SPENDING_BY_CATEGORY ||

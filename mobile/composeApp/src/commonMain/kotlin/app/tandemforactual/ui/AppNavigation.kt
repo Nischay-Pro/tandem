@@ -29,6 +29,7 @@ import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,6 +50,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.model.LiveAccountSummary
@@ -293,7 +295,8 @@ internal fun BottomNavigation(
     visible: Boolean = true,
 ) {
     val palette = tandemPalette
-    val showLabels = LocalDensity.current.fontScale < 1.5f
+    val density = LocalDensity.current
+    val labelDensity = Density(density.density, density.fontScale.coerceAtMost(1.3f))
     val items =
         listOf(
             AppRoute.BUDGET to "Budget",
@@ -350,15 +353,18 @@ internal fun BottomNavigation(
                         }.then(if (visible) Modifier else Modifier.clearAndSetSemantics {})
                         .padding(vertical = TandemSpacing.extraSmall),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(if (showLabels) TandemSpacing.xxSmall else 0.dp),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
             ) {
                 NavigationGlyph(route, tabColor, iconScale)
-                if (showLabels) {
+                CompositionLocalProvider(LocalDensity provides labelDensity) {
                     Text(
                         label,
                         color = tabColor,
                         fontSize = TandemTypography.micro,
                         fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip,
                     )
                 }
             }

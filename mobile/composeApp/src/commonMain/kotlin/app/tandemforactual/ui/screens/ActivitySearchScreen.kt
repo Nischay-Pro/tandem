@@ -41,6 +41,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
@@ -437,20 +438,51 @@ internal fun ActivitySearchScreen(
                     }
                 }
             }
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            if (LocalDensity.current.fontScale >= 1.3f) {
+                Column(
+                    Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Results", color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            formatInteger(resultIndices.size),
+                            color = tandemPalette.muted,
+                            fontSize = TandemTypography.caption,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                        ActivitySortControl(state.activitySortOrder) { state.activitySortOrder = it }
+                    }
+                }
+            } else {
                 Row(
-                    Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Results", color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
-                    Text(formatInteger(resultIndices.size), color = tandemPalette.muted, fontSize = TandemTypography.caption)
+                    Row(
+                        Modifier.weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Results", color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            formatInteger(resultIndices.size),
+                            color = tandemPalette.muted,
+                            fontSize = TandemTypography.caption,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
+                    ActivitySortControl(state.activitySortOrder) { state.activitySortOrder = it }
                 }
-                ActivitySortControl(state.activitySortOrder) { state.activitySortOrder = it }
             }
             if (selectionMode) {
                 mobileSession.transactionWriteMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
