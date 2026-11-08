@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -164,7 +165,7 @@ internal fun CompactActionButton(
     val palette = tandemPalette
     Box(
         modifier
-            .height(40.dp)
+            .heightIn(min = 44.dp)
             .clip(RoundedCornerShape(TandemShapes.control))
             .border(1.dp, palette.border, RoundedCornerShape(TandemShapes.control))
             .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)
@@ -176,8 +177,7 @@ internal fun CompactActionButton(
             color = palette.text,
             fontSize = TandemTypography.label,
             fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            maxLines = 2,
         )
     }
 }

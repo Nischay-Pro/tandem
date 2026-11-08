@@ -600,7 +600,7 @@ private fun ReportSegmentedSelector(
                 selected = selected,
                 contentDescription = label,
                 onSelect = { onSelect(index) },
-                modifier = Modifier.weight(1f).height(40.dp),
+                modifier = Modifier.weight(1f).heightIn(min = 44.dp),
                 shape = RoundedCornerShape(TandemShapes.pill),
                 selectedBackground = tandemPalette.accentSurface,
                 unselectedBackground = tandemPalette.raised,
@@ -610,8 +610,7 @@ private fun ReportSegmentedSelector(
                     color = if (selected) tandemPalette.accent else tandemPalette.muted,
                     fontSize = TandemTypography.caption,
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 2,
                 )
             }
         }
@@ -629,7 +628,7 @@ private fun ReportChoiceTile(
         selected = selected,
         contentDescription = label,
         onSelect = onClick,
-        modifier = modifier.height(44.dp),
+        modifier = modifier.heightIn(min = 44.dp),
         selectedBackground = tandemPalette.accentSurface,
         unselectedBackground = tandemPalette.raised,
         selectedBorder = tandemPalette.accent,
@@ -639,7 +638,7 @@ private fun ReportChoiceTile(
             color = tandemPalette.text,
             fontSize = TandemTypography.compactBody,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            maxLines = 1,
+            maxLines = 2,
         )
     }
 }

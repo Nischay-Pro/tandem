@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -43,7 +42,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.TandemMotion
 import app.tandemforactual.ui.TandemShapes
@@ -118,7 +116,7 @@ internal fun TandemActionButton(
     Row(
         modifier =
             modifier
-                .height(50.dp)
+                .heightIn(min = 50.dp)
                 .clip(shape)
                 .background(containerColor)
                 .border(1.dp, outlineColor, shape)
@@ -138,8 +136,7 @@ internal fun TandemActionButton(
             color = contentColor,
             fontSize = TandemTypography.label,
             fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            maxLines = 2,
         )
     }
 }
@@ -355,8 +352,7 @@ private fun TandemButton(
                     textColor,
                     fontSize = TandemTypography.action,
                     fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 2,
                 )
             }
         } else {
@@ -365,8 +361,7 @@ private fun TandemButton(
                 color = textColor,
                 fontSize = TandemTypography.action,
                 fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                maxLines = 2,
             )
         }
     }

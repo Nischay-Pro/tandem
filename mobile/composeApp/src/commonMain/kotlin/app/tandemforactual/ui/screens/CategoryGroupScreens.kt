@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.items
@@ -90,7 +90,7 @@ internal fun MonthPickerScreen(
                             state.selectedMonthId = "$selectedYear-${monthNumber.toString().padStart(2, '0')}"
                             navigation.back()
                         },
-                        modifier = Modifier.weight(1f).height(72.dp),
+                        modifier = Modifier.weight(1f).heightIn(min = 72.dp),
                         selectedBackground = tandemPalette.accentSurface,
                         unselectedBackground = tandemPalette.surface,
                         selectedBorder = tandemPalette.accent,

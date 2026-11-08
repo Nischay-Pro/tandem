@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -74,6 +75,7 @@ internal fun FloatingAction(
     modifier: Modifier = Modifier,
 ) {
     val palette = tandemPalette
+    val isCompact = compact || LocalDensity.current.fontScale >= 1.5f
     val actionColor = if (enabled) palette.accentContent else palette.muted
     Row(
         modifier =
@@ -81,20 +83,20 @@ internal fun FloatingAction(
                 .animateContentSize(tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS))
                 .height(56.dp)
                 .defaultMinSize(minWidth = 56.dp)
-                .clip(if (compact) CircleShape else RoundedCornerShape(TandemShapes.large))
+                .clip(if (isCompact) CircleShape else RoundedCornerShape(TandemShapes.large))
                 .background(if (enabled) palette.accent else palette.raised)
                 .semantics(mergeDescendants = true) { this.contentDescription = contentDescription }
                 .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
-                .padding(horizontal = if (compact) TandemSpacing.large else TandemSpacing.extraLarge),
+                .padding(horizontal = if (isCompact) TandemSpacing.large else TandemSpacing.extraLarge),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(if (compact) 0.dp else TandemSpacing.small),
+        horizontalArrangement = Arrangement.spacedBy(if (isCompact) 0.dp else TandemSpacing.small),
     ) {
         if (loading) {
             CircularProgressIndicator(Modifier.size(22.dp), color = actionColor, strokeWidth = 2.dp)
         } else {
             Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp), tint = actionColor)
         }
-        AnimatedVisibility(visible = !compact, enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(visible = !isCompact, enter = fadeIn(), exit = fadeOut()) {
             Text(
                 label,
                 color = actionColor,

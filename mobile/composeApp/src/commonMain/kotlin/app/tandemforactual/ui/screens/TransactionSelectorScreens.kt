@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
@@ -174,7 +175,7 @@ internal fun DatePickerScreen(
                                 state.transactionDate = isoDate
                                 navigation.back()
                             },
-                            modifier = Modifier.weight(1f).height(44.dp),
+                            modifier = Modifier.weight(1f).heightIn(min = 44.dp),
                             shape = CircleShape,
                             selectedBackground = tandemPalette.accentSurface,
                             unselectedBackground = Color.Transparent,

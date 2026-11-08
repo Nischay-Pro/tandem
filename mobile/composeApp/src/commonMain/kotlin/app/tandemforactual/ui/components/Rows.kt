@@ -38,7 +38,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.TandemMotion
 import app.tandemforactual.ui.TandemShapes
@@ -191,8 +190,7 @@ internal fun ListRow(
                     palette.text,
                     fontSize = TandemTypography.body,
                     fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 2,
                 )
             } else {
                 Text(
@@ -200,8 +198,7 @@ internal fun ListRow(
                     color = palette.text,
                     fontSize = TandemTypography.body,
                     fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 2,
                 )
             }
             if (subtitle != null) {
@@ -210,16 +207,14 @@ internal fun ListRow(
                         subtitle,
                         palette.muted,
                         fontSize = TandemTypography.caption,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        maxLines = 3,
                     )
                 } else {
                     Text(
                         subtitle,
                         color = palette.muted,
                         fontSize = TandemTypography.caption,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        maxLines = 3,
                     )
                 }
             }
@@ -232,8 +227,7 @@ internal fun ListRow(
                     effectiveColor,
                     fontSize = TandemTypography.compactBody,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 2,
                 )
             } else {
                 Text(
@@ -241,8 +235,7 @@ internal fun ListRow(
                     color = effectiveColor,
                     fontSize = TandemTypography.compactBody,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 2,
                 )
             }
         } else if (onClick != null && options.showChevron) {
@@ -326,8 +319,7 @@ private fun SectionCardLayout(
                             color = palette.text,
                             fontSize = TandemTypography.body,
                             fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            maxLines = 2,
                         )
                         if (detail != null) {
                             if (animateDetail) {
@@ -335,16 +327,14 @@ private fun SectionCardLayout(
                                     detail,
                                     palette.muted,
                                     fontSize = TandemTypography.caption,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
+                                    maxLines = 3,
                                 )
                             } else {
                                 Text(
                                     detail,
                                     color = palette.muted,
                                     fontSize = TandemTypography.caption,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
+                                    maxLines = 3,
                                 )
                             }
                         }
@@ -355,8 +345,7 @@ private fun SectionCardLayout(
                             color = actionColor ?: palette.accent,
                             fontSize = TandemTypography.label,
                             fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            maxLines = 2,
                         )
                     }
                     if (collapse != null) {

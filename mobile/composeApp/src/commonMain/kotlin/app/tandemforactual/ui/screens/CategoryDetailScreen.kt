@@ -654,7 +654,7 @@ internal fun CategoryDetailScreen(
                                         selected = selectedIconChoice == choice,
                                         contentDescription = if (choice == "Automatic") "Automatic icon" else choice,
                                         onSelect = { selectedIconChoice = choice },
-                                        modifier = Modifier.weight(1f).height(66.dp),
+                                        modifier = Modifier.weight(1f).heightIn(min = 66.dp),
                                         shape = RoundedCornerShape(TandemShapes.control),
                                         selectedBackground = tandemPalette.accentSurface,
                                         unselectedBackground = tandemPalette.surface,
@@ -675,8 +675,7 @@ internal fun CategoryDetailScreen(
                                                 if (choice == "Automatic") "Auto" else choice,
                                                 color = tandemPalette.text,
                                                 fontSize = TandemTypography.micro,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
+                                                maxLines = 2,
                                             )
                                         }
                                     }
