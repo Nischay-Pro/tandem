@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.mapSaver
 import androidx.compose.runtime.setValue
 import app.tandemforactual.data.store.BudgetDisplaySettings
+import app.tandemforactual.ui.reports.ReportKind
 import app.tandemforactual.ui.reports.ReportPeriodMode
 import app.tandemforactual.ui.reports.ReportRangePreset
 
@@ -52,6 +53,7 @@ internal class AppState {
     var selectedMonth by mutableStateOf(currentMonthLabel())
     var selectedMonthId by mutableStateOf(currentMonthId())
     var reportsMonthId by mutableStateOf(currentMonthId())
+    var selectedReportKindName by mutableStateOf(ReportKind.SPENDING_BY_CATEGORY.name)
     var reportsBudgetId by mutableStateOf("")
     var reportsPeriodMode by mutableStateOf(ReportPeriodMode.MONTH.name)
     var reportsRangeMonths by mutableStateOf(6)
@@ -133,6 +135,7 @@ internal class AppState {
             "selectedBudgetEncrypted" to selectedBudgetEncrypted.toString(),
             "cachedBudgetCatalogJson" to cachedBudgetCatalogJson,
             "reportsMonthId" to reportsMonthId,
+            "selectedReportKindName" to selectedReportKindName,
             "reportsBudgetId" to reportsBudgetId,
             "reportsPeriodMode" to reportsPeriodMode,
             "reportsRangeMonths" to reportsRangeMonths.toString(),
@@ -163,6 +166,7 @@ internal class AppState {
         selectedBudgetEncrypted = saved["selectedBudgetEncrypted"]?.toBooleanStrictOrNull() ?: selectedBudgetEncrypted
         cachedBudgetCatalogJson = saved["cachedBudgetCatalogJson"] ?: cachedBudgetCatalogJson
         reportsMonthId = saved["reportsMonthId"] ?: reportsMonthId
+        selectedReportKindName = saved["selectedReportKindName"] ?: selectedReportKindName
         reportsBudgetId = saved["reportsBudgetId"] ?: reportsBudgetId
         reportsPeriodMode = saved["reportsPeriodMode"] ?: reportsPeriodMode
         reportsRangeMonths = saved["reportsRangeMonths"]?.toIntOrNull()?.coerceIn(3, 12) ?: reportsRangeMonths
@@ -203,6 +207,7 @@ internal class AppState {
                         "selectedMonth" to state.selectedMonth,
                         "selectedMonthId" to state.selectedMonthId,
                         "reportsMonthId" to state.reportsMonthId,
+                        "selectedReportKindName" to state.selectedReportKindName,
                         "reportsBudgetId" to state.reportsBudgetId,
                         "reportsPeriodMode" to state.reportsPeriodMode,
                         "reportsRangeMonths" to state.reportsRangeMonths,
@@ -268,6 +273,7 @@ internal class AppState {
                         selectedMonth = saved["selectedMonth"] as? String ?: selectedMonth
                         selectedMonthId = saved["selectedMonthId"] as? String ?: selectedMonthId
                         reportsMonthId = saved["reportsMonthId"] as? String ?: reportsMonthId
+                        selectedReportKindName = saved["selectedReportKindName"] as? String ?: selectedReportKindName
                         reportsBudgetId = saved["reportsBudgetId"] as? String ?: reportsBudgetId
                         reportsPeriodMode = saved["reportsPeriodMode"] as? String ?: reportsPeriodMode
                         reportsRangeMonths = (saved["reportsRangeMonths"] as? Int)?.coerceIn(3, 12) ?: reportsRangeMonths

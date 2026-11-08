@@ -62,7 +62,6 @@ import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
 import app.tandemforactual.ui.model.booleanValue
 import app.tandemforactual.ui.model.recordBody
-import app.tandemforactual.ui.reports.ReportKind
 import app.tandemforactual.ui.reports.ReportWindow
 import app.tandemforactual.ui.reports.reportMonthLabel
 import com.composables.icons.lucide.Check
@@ -958,22 +957,3 @@ internal fun openReportCategoryActivity(
         )
     navigation.open(AppRoute.ACTIVITY_SEARCH)
 }
-
-internal fun reportRoute(kind: ReportKind): AppRoute =
-    when (kind) {
-        ReportKind.SPENDING_BY_CATEGORY -> AppRoute.REPORT_SPENDING_BY_CATEGORY
-        ReportKind.SPENDING_OVER_TIME -> AppRoute.REPORT_SPENDING_OVER_TIME
-        ReportKind.INCOME_AND_SPENDING -> AppRoute.REPORT_INCOME_AND_SPENDING
-        ReportKind.BUDGETED_AND_SPENT -> AppRoute.REPORT_BUDGETED_AND_SPENT
-        ReportKind.NET_WORTH -> AppRoute.REPORT_NET_WORTH
-    }
-
-internal fun reportKind(route: AppRoute): ReportKind =
-    when (route) {
-        AppRoute.REPORT_SPENDING_BY_CATEGORY -> ReportKind.SPENDING_BY_CATEGORY
-        AppRoute.REPORT_SPENDING_OVER_TIME -> ReportKind.SPENDING_OVER_TIME
-        AppRoute.REPORT_INCOME_AND_SPENDING -> ReportKind.INCOME_AND_SPENDING
-        AppRoute.REPORT_BUDGETED_AND_SPENT -> ReportKind.BUDGETED_AND_SPENT
-        AppRoute.REPORT_NET_WORTH -> ReportKind.NET_WORTH
-        else -> error("Route is not a report detail: $route")
-    }

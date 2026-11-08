@@ -1310,9 +1310,4 @@ internal fun AppRoute.showsBottomNavigation(): Boolean =
         else -> true
     }
 
-internal fun AppRoute.isReportDetail(): Boolean =
-    this == AppRoute.REPORT_SPENDING_BY_CATEGORY ||
-        this == AppRoute.REPORT_SPENDING_OVER_TIME ||
-        this == AppRoute.REPORT_INCOME_AND_SPENDING ||
-        this == AppRoute.REPORT_BUDGETED_AND_SPENT ||
-        this == AppRoute.REPORT_NET_WORTH
+internal fun AppRoute.isReportDetail(): Boolean = this == AppRoute.REPORT_DETAIL

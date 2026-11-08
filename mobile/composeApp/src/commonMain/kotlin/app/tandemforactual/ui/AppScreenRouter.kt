@@ -35,6 +35,7 @@ import app.tandemforactual.ui.model.LiveScheduleSummary
 import app.tandemforactual.ui.model.booleanValue
 import app.tandemforactual.ui.model.recordBody
 import app.tandemforactual.ui.model.recordName
+import app.tandemforactual.ui.reports.ReportKind
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Tags
@@ -148,20 +149,20 @@ internal fun ScreenContent(
                 mobileSession,
                 liveAccounts,
                 reportsDataCache,
-                onOpenReport = { kind -> navigation.open(reportRoute(kind)) },
+                onOpenReport = { kind ->
+                    state.selectedReportKindName = kind.name
+                    navigation.open(AppRoute.REPORT_DETAIL)
+                },
                 onOpenCategoryActivity = { categoryId, categoryName, window ->
                     openReportCategoryActivity(state, navigation, categoryId, categoryName, window)
                 },
                 onOpenActivity = { navigation.selectTab(AppRoute.ACTIVITY) },
                 onAddTransaction = { navigation.newTransaction(null) },
             )
-        AppRoute.REPORT_SPENDING_BY_CATEGORY,
-        AppRoute.REPORT_SPENDING_OVER_TIME,
-        AppRoute.REPORT_INCOME_AND_SPENDING,
-        AppRoute.REPORT_BUDGETED_AND_SPENT,
-        AppRoute.REPORT_NET_WORTH,
-        -> {
-            val kind = reportKind(route)
+        AppRoute.REPORT_DETAIL -> {
+            val kind =
+                ReportKind.entries.firstOrNull { it.name == state.selectedReportKindName }
+                    ?: ReportKind.SPENDING_BY_CATEGORY
             ReportDetailScreen(
                 kind,
                 state,

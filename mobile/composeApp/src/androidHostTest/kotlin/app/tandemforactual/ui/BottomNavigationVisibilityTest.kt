@@ -9,7 +9,7 @@ class BottomNavigationVisibilityTest {
     fun browsingRoutesKeepBottomNavigation() {
         assertTrue(AppRoute.ACTIVITY_SEARCH.showsBottomNavigation())
         assertTrue(AppRoute.ACCOUNT_DETAIL.showsBottomNavigation())
-        assertTrue(AppRoute.REPORT_NET_WORTH.showsBottomNavigation())
+        assertTrue(AppRoute.REPORT_DETAIL.showsBottomNavigation())
     }
 
     @Test
