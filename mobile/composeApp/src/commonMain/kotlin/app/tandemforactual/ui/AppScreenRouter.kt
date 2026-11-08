@@ -188,15 +188,6 @@ internal fun ScreenContent(
                 onActivitySelectionTotalChanged,
                 autoFocusSearch = true,
             )
-        AppRoute.ACTIVITY_FILTER ->
-            ActivitySearchScreen(
-                state,
-                mobileSession,
-                navigation,
-                merchantIconMatcher,
-                onActivitySelectionTotalChanged,
-                autoFocusSearch = false,
-            )
         AppRoute.TRANSACTION_DETAIL -> TransactionDetailScreen(state, mobileSession, navigation, merchantIconMatcher)
         AppRoute.NEW_TRANSACTION, AppRoute.EDIT_TRANSACTION ->
             TransactionFormScreen(route, state, navigation, mobileSession, onSaveTransaction, onDeleteTransaction, onCreateTransaction)
@@ -516,11 +507,7 @@ internal fun ScreenContent(
             )
         AppRoute.REJECTED_WRITE -> RejectedWriteScreen(state, mobileSession, navigation, onDiscardWrite, liveTransactions)
         AppRoute.SETTINGS -> SettingsScreen(state, navigation)
-        AppRoute.APPEARANCE -> AppearanceScreen(state, navigation)
-        AppRoute.THEME_MODE -> ThemeModeScreen(state)
-        AppRoute.ACCENT_COLOR -> AccentColorScreen(state)
-        AppRoute.BACKGROUND_MOTION -> BackgroundScreen(state)
-        AppRoute.HOME_LAYOUT -> HomeLayoutScreen(state)
+        AppRoute.APPEARANCE -> AppearanceScreen(state)
         AppRoute.BUDGET_PREFERENCES -> BudgetPreferencesScreen(state, mobileSession)
         AppRoute.SYNC_PREFERENCES ->
             SyncPreferencesScreen(

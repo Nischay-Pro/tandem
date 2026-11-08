@@ -4,15 +4,17 @@ package app.tandemforactual.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -21,33 +23,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.AnimatedReveal
 import app.tandemforactual.ui.components.DividerLine
-import app.tandemforactual.ui.components.LabelText
 import app.tandemforactual.ui.components.ListRow
-import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
-import app.tandemforactual.ui.components.SelectableTile
-import app.tandemforactual.ui.components.SurfaceCard
 import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Database
 import com.composables.icons.lucide.Info
-import com.composables.icons.lucide.LayoutDashboard
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.PaintbrushVertical
 import com.composables.icons.lucide.Palette
 import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.Smartphone
-import com.composables.icons.lucide.SunMoon
 import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.WalletCards
-import com.composables.icons.lucide.Wallpaper
 
 @Composable
 internal fun SettingsScreen(
@@ -64,19 +59,9 @@ internal fun SettingsScreen(
         }
         SectionCard("Appearance") {
             ListRow(
-                "Visual settings",
-                "Theme, accent, and background",
-                state.theme.label,
+                "Appearance",
                 leading = RowLeading.Icon(Lucide.Palette),
                 onClick = { navigation.open(AppRoute.APPEARANCE) },
-            )
-            DividerLine()
-            ListRow(
-                "Home screen layout",
-                "Choose how much detail to show",
-                state.homeLayout,
-                leading = RowLeading.Icon(Lucide.LayoutDashboard),
-                onClick = { navigation.open(AppRoute.HOME_LAYOUT) },
             )
             DividerLine()
             ListRow(
@@ -142,180 +127,130 @@ internal fun SettingsScreen(
 }
 
 @Composable
-internal fun AppearanceScreen(
-    state: AppState,
-    navigation: AppNavigation,
-) {
+internal fun AppearanceScreen(state: AppState) {
     PageColumn {
-        Heading("Visual settings")
-        SectionCard("Theme", "${state.theme.label} appearance", "") {
-            ListRow(
-                "Theme mode",
-                "System, light, dark, or pure black",
-                state.theme.label,
-                leading = RowLeading.Icon(Lucide.SunMoon),
-                onClick = { navigation.open(AppRoute.THEME_MODE) },
-            )
-        }
-        SectionCard("Color", "${state.accent.label} accent", "") {
-            ListRow(
-                "Accent color",
-                "Applies to every screen",
-                state.accent.label,
-                leading = RowLeading.Icon(Lucide.PaintbrushVertical),
-                onClick = { navigation.open(AppRoute.ACCENT_COLOR) },
-            )
-        }
-        SectionCard("Background") {
-            ListRow(
-                "Background and motion",
-                "Subtle treatments and reduced motion",
-                leading = RowLeading.Icon(Lucide.Wallpaper),
-                onClick = { navigation.open(AppRoute.BACKGROUND_MOTION) },
-            )
-        }
-    }
-}
-
-@Composable
-internal fun ThemeModeScreen(state: AppState) {
-    PageColumn {
-        Heading("Color mode", "Choose the colors used across the app.")
-        ThemeMode.entries.forEach { mode ->
-            ChoiceRow(
-                mode.label,
-                when (mode) {
-                    ThemeMode.SYSTEM -> "Follow this device’s light or dark setting"
-                    ThemeMode.LIGHT -> "Light appearance"
-                    ThemeMode.DARK -> "The default low-glare Tandem palette"
-                    ThemeMode.PURE_BLACK -> "Black background"
-                },
-                selected = state.theme == mode,
-                onClick = { state.theme = mode },
-            )
-        }
-    }
-}
-
-@Composable
-internal fun AccentColorScreen(state: AppState) {
-    PageColumn {
-        AccentChoice.entries.forEach { accent ->
-            val palette = tandemPalette
-            val selected = state.accent == accent
-            SelectableTile(
-                selected = selected,
-                contentDescription = "${accent.label} accent",
-                onSelect = { state.accent = accent },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(TandemShapes.large),
-                selectedBackground = palette.surface,
-                unselectedBackground = palette.surface,
-                selectedBorder = palette.border,
-                unselectedBorder = palette.border,
-            ) {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                ) {
-                    Box(Modifier.size(22.dp).clip(CircleShape).background(accent.color))
-                    Text(
-                        accent.label,
-                        modifier = Modifier.weight(1f),
-                        color = palette.text,
-                        fontSize = TandemTypography.body,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    if (selected) {
-                        Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.accent)
-                    }
-                }
+        Heading("Appearance")
+        SectionCard("Theme") {
+            ThemeMode.entries.forEachIndexed { index, mode ->
+                if (index > 0) DividerLine()
+                AppearanceChoiceRow(
+                    mode.label,
+                    selected = state.theme == mode,
+                    onClick = { state.theme = mode },
+                )
             }
         }
-    }
-}
-
-@Composable
-internal fun BackgroundScreen(state: AppState) {
-    PageColumn {
-        listOf(
-            "Soft gradient" to "A subtle vertical blend behind the cards",
-            "Solid surface" to "A single steady canvas color",
-            "Low-motion glow" to "A static accent glow behind the content",
-        ).forEach { (style, description) ->
-            ChoiceRow(style, description, selected = state.backgroundStyle == style, onClick = { state.backgroundStyle = style })
+        SectionCard("Accent color") {
+            AccentChoice.entries.forEachIndexed { index, accent ->
+                if (index > 0) DividerLine()
+                AccentChoiceRow(accent, selected = state.accent == accent) { state.accent = accent }
+            }
         }
-        SectionCard("Motion") {
+        SectionCard("Background and motion") {
+            listOf("Soft gradient", "Solid surface", "Low-motion glow").forEachIndexed { index, style ->
+                if (index > 0) DividerLine()
+                AppearanceChoiceRow(
+                    style,
+                    selected = state.backgroundStyle == style,
+                    onClick = { state.backgroundStyle = style },
+                )
+            }
+            DividerLine()
             ToggleRow(
                 "Reduce motion",
-                "Fewer animations",
-                state.reduceMotion,
+                checked = state.reduceMotion,
             ) { state.reduceMotionOverride = it }
             if (state.reduceMotionOverride != null) {
-                SettingRow(
+                DividerLine()
+                ListRow(
                     "Use device setting",
-                    if (state.systemReduceMotionEnabled) {
-                        "The device currently requests reduced motion"
-                    } else {
-                        "The device default allows motion"
-                    },
+                    if (state.systemReduceMotionEnabled) "Reduced motion is on" else "Reduced motion is off",
                     onClick = { state.reduceMotionOverride = null },
                 )
             }
         }
+        SectionCard("Budget layout") {
+            listOf("Comfortable", "Compact", "Essentials").forEachIndexed { index, layout ->
+                if (index > 0) DividerLine()
+                AppearanceChoiceRow(
+                    layout,
+                    selected = state.homeLayout == layout,
+                    onClick = { state.homeLayout = layout },
+                )
+            }
+        }
     }
 }
 
 @Composable
-internal fun HomeLayoutScreen(state: AppState) {
-    PageColumn {
-        Heading("Budget layout", "Set the amount of detail shown on the budget page.")
-        listOf(
-            "Comfortable" to "More detail and context",
-            "Compact" to "More categories visible at once",
-            "Essentials" to "Keep upcoming bills near the top",
-        ).forEach { (label, description) ->
-            ChoiceRow(label, description, selected = state.homeLayout == label, onClick = { state.homeLayout = label })
+private fun AppearanceChoiceRow(
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 64.dp)
+            .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) {
+                contentDescription = title
+                this.selected = selected
+            }.padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+    ) {
+        Text(
+            title,
+            modifier = Modifier.weight(1f),
+            color = palette.text,
+            fontSize = TandemTypography.body,
+            fontWeight = FontWeight.Medium,
+        )
+        Box(
+            Modifier
+                .size(22.dp)
+                .border(2.dp, if (selected) palette.accent else palette.muted, CircleShape)
+                .padding(4.dp),
+        ) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape)
+                    .background(if (selected) palette.accent else palette.surface),
+            )
         }
-        SurfaceCard {
-            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                LabelText("Layout preview")
-                Text(
-                    when (state.homeLayout) {
-                        "Compact" -> "Compact rows and tighter spacing"
-                        "Essentials" -> "Upcoming bills and essentials appear first"
-                        else -> "More space between categories"
-                    },
-                    color = tandemPalette.muted,
-                    fontSize = TandemTypography.label,
-                )
-                if (state.homeLayout == "Essentials") {
-                    ListRow(
-                        "Upcoming bills",
-                        "Due soon",
-                        state.formatCurrency(12_000),
-                        leading = RowLeading.Icon(financeIcon("Upcoming bills")),
-                        options = ListRowOptions(dense = false),
-                    )
-                    DividerLine()
-                }
-                ListRow(
-                    "Essentials",
-                    "3 categories",
-                    state.formatCurrency(232_000),
-                    leading = RowLeading.Icon(financeIcon("Essentials")),
-                    options = ListRowOptions(dense = state.homeLayout == "Compact"),
-                )
-                DividerLine()
-                ListRow(
-                    "Groceries",
-                    "Available this month",
-                    state.formatCurrency(50_000),
-                    leading = RowLeading.Icon(financeIcon("Groceries")),
-                    options = ListRowOptions(dense = state.homeLayout == "Compact"),
-                )
-            }
-        }
+    }
+}
+
+@Composable
+private fun AccentChoiceRow(
+    accent: AccentChoice,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 64.dp)
+            .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) {
+                contentDescription = "${accent.label} accent"
+                this.selected = selected
+            }.padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+    ) {
+        Box(Modifier.size(22.dp).clip(CircleShape).background(accent.color))
+        Text(
+            accent.label,
+            modifier = Modifier.weight(1f),
+            color = palette.text,
+            fontSize = TandemTypography.body,
+            fontWeight = FontWeight.Medium,
+        )
+        if (selected) Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.accent)
     }
 }
