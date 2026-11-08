@@ -1,0 +1,200 @@
+@file:Suppress("ktlint:standard:function-naming")
+
+package app.tandemforactual.ui
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.Icon
+import androidx.compose.material.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import app.tandemforactual.ui.components.ListRow
+import app.tandemforactual.ui.components.ListRowOptions
+import app.tandemforactual.ui.components.RowLeading
+import app.tandemforactual.ui.components.SurfaceCard
+import app.tandemforactual.ui.components.TandemActionButton
+import app.tandemforactual.ui.components.TandemActionButtonTone
+import app.tandemforactual.ui.components.TandemIconButton
+import com.composables.icons.lucide.Check
+import com.composables.icons.lucide.CircleDot
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Receipt
+import com.composables.icons.lucide.Trash2
+import com.composables.icons.lucide.X
+
+@Composable
+internal fun TransactionRow(
+    transaction: TransactionItem,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    Column {
+        Text(
+            transaction.dateLabel,
+            modifier = Modifier.padding(start = TandemSpacing.large, top = TandemSpacing.medium),
+            color = palette.muted,
+            fontSize = TandemTypography.micro,
+        )
+        ListRow(
+            transaction.payee,
+            transaction.category,
+            formatSignedCurrency(transaction.amountMinorUnits, transaction.displaySettings),
+            leading =
+                if (selectionMode) {
+                    RowLeading.Icon(if (selected) Lucide.Check else Lucide.CircleDot)
+                } else {
+                    RowLeading.Merchant(transaction.merchantIcon, fallback = transaction.categoryIcon ?: Lucide.Receipt)
+                },
+            options = ListRowOptions(trailingColor = if (transaction.amountMinorUnits > 0) palette.positive else palette.text),
+            onClick = onClick,
+            onLongClick = onLongClick,
+        )
+    }
+}
+
+@Composable
+internal fun TransactionSelectionActions(
+    selectedCount: Int,
+    allSelected: Boolean,
+    onToggleAll: () -> Unit,
+    onDelete: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    SurfaceCard {
+        Column(
+            Modifier.fillMaxWidth().padding(TandemSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+        ) {
+            Text(
+                "$selectedCount selected",
+                color = tandemPalette.text,
+                fontSize = TandemTypography.action,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                TandemActionButton(
+                    if (allSelected) "Deselect all" else "Select all",
+                    TandemActionButtonTone.NEUTRAL,
+                    Modifier.weight(1f),
+                    icon = if (allSelected) Lucide.CircleDot else Lucide.Check,
+                    onClick = onToggleAll,
+                )
+                TandemActionButton(
+                    "Delete",
+                    TandemActionButtonTone.DESTRUCTIVE,
+                    Modifier.weight(1f),
+                    icon = Lucide.Trash2,
+                    enabled = selectedCount > 0,
+                    onClick = onDelete,
+                )
+                TandemIconButton(
+                    Lucide.X,
+                    "Cancel selection",
+                    containerColor = tandemPalette.raised,
+                    onClick = onCancel,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun TransactionBulkDeleteDialog(
+    selectedCount: Int,
+    isDeleting: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    Dialog(
+        onDismissRequest = { if (!isDeleting) onDismiss() },
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = 16.dp)) {
+            Column(
+                Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    Icon(Lucide.Trash2, contentDescription = null, modifier = Modifier.size(22.dp), tint = tandemPalette.negative)
+                    Text(
+                        if (selectedCount == 1) "Delete this transaction?" else "Delete $selectedCount transactions?",
+                        modifier = Modifier.weight(1f),
+                        color = tandemPalette.text,
+                        fontSize = TandemTypography.cardTitle,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    TandemActionButton(
+                        "Cancel",
+                        TandemActionButtonTone.NEUTRAL,
+                        Modifier.weight(1f),
+                        enabled = !isDeleting,
+                        onClick = onDismiss,
+                    )
+                    TandemActionButton(
+                        if (isDeleting) "Deleting…" else "Delete",
+                        TandemActionButtonTone.DESTRUCTIVE,
+                        Modifier.weight(1f),
+                        icon = Lucide.Trash2,
+                        enabled = !isDeleting,
+                        loading = isDeleting,
+                        onClick = onConfirm,
+                    )
+                }
+            }
+        }
+    }
+}
+
+internal fun openTransaction(
+    state: AppState,
+    navigation: AppNavigation,
+    transaction: TransactionItem,
+    isLive: Boolean,
+) {
+    state.transactionPayee = transaction.payee
+    state.transactionCategory = transaction.category
+    state.transactionAccount = transaction.account
+    state.transactionDate = transaction.dateIso.ifBlank { transaction.dateLabel }
+    state.newTransactionAccountId = transaction.accountId.orEmpty()
+    state.newTransactionPayeeId = transaction.payeeId.orEmpty()
+    state.newTransactionCategoryId = transaction.categoryId.orEmpty()
+    state.selectedTransactionAccountId = transaction.accountId.orEmpty()
+    state.selectedTransactionPayeeId = transaction.payeeId.orEmpty()
+    state.selectedTransactionCategoryId = transaction.categoryId.orEmpty()
+    state.selectedTransactionDate = state.transactionDate
+    state.transactionNotes = transaction.notes
+    state.transactionAmount = formatAmount(kotlin.math.abs(transaction.amountMinorUnits), state.budgetDisplaySettings)
+    state.selectedTransactionAmountMinor = transaction.amountMinorUnits
+    state.selectedTransactionNotes = transaction.notes
+    state.selectedTransactionRecordId = transaction.recordId.orEmpty()
+    state.selectedTransactionIsLive = isLive
+    navigation.open(AppRoute.TRANSACTION_DETAIL)
+}
+
+internal suspend fun deleteTransactionSelection(
+    mobileSession: TandemMobileSession,
+    budgetId: String,
+    transactionIds: Set<String>,
+): Boolean {
+    for (transactionId in transactionIds) {
+        if (!mobileSession.deleteTransaction(budgetId, transactionId)) return false
+    }
+    return true
+}
