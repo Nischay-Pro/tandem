@@ -1642,7 +1642,8 @@ internal class TandemMobileSession(
         budgetId: String,
         accountId: String,
         limit: Int = 100,
-    ): Flow<List<BudgetRecordEntity>>? = repository?.observeRecentTransactionsForAccount(budgetId, accountId, limit)
+        offset: Int = 0,
+    ): Flow<List<BudgetRecordEntity>>? = repository?.observeRecentTransactionsForAccount(budgetId, accountId, limit, offset)
 
     fun observeClearedAccountBalance(
         budgetId: String,

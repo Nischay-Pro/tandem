@@ -269,11 +269,13 @@ class LocalBudgetRepository(
         budgetId: String,
         accountId: String,
         limit: Int,
+        offset: Int = 0,
     ): Flow<List<BudgetRecordEntity>> {
         requireIdentifier(budgetId, "budgetId")
         requireIdentifier(accountId, "accountId")
         require(limit in 1..500) { "limit must be between 1 and 500" }
-        return database.budgetRecordDao().observeRecentTransactionsForAccount(budgetId, accountId, limit).stabilized()
+        require(offset >= 0) { "offset must be non-negative" }
+        return database.budgetRecordDao().observeRecentTransactionsForAccount(budgetId, accountId, limit, offset).stabilized()
     }
 
     fun observeVisibleRecordCount(

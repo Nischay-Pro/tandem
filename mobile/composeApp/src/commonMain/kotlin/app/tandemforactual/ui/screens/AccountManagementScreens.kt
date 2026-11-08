@@ -66,7 +66,9 @@ internal fun AccountReconcileDialog(
     accountName: String,
     clearedBalanceMinor: Long?,
     transactions: List<TransactionItem>,
-    activityTruncated: Boolean,
+    hasMoreTransactions: Boolean,
+    loadingMoreTransactions: Boolean,
+    onLoadMoreTransactions: () -> Unit,
     selectedIds: Set<String>,
     statementBalance: String,
     busy: Boolean,
@@ -106,7 +108,7 @@ internal fun AccountReconcileDialog(
                 ) {
                     Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
                     Text(
-                        "Reconcile $accountName",
+                        "Reconcile",
                         modifier = Modifier.weight(1f),
                         color = tandemPalette.text,
                         fontSize = TandemTypography.sectionTitle,
@@ -116,12 +118,13 @@ internal fun AccountReconcileDialog(
                     )
                     TandemIconButton(Lucide.X, "Close", sizeDp = 40, iconSizeDp = 18, enabled = !busy, onClick = onDismiss)
                 }
+                BodyText(accountName)
                 TextFieldCard(
-                    "Statement balance",
+                    "Statement balance · ${state.formatCurrency(0)}",
                     statementBalance,
                     onStatementBalanceChange,
                     TextFieldOptions(
-                        placeholder = state.formatAmount(clearedBalanceMinor ?: 0L),
+                        placeholder = "Enter your statement balance",
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     ),
                 )
@@ -140,16 +143,15 @@ internal fun AccountReconcileDialog(
                         )
                     }
                 }
-                InlineMessage(
-                    if (balanceMatches) {
-                        "Cleared transactions match this statement balance."
-                    } else {
-                        "Adjust the selected transactions until the difference is 0."
-                    },
-                    if (balanceMatches) InlineMessageKind.SUCCESS else InlineMessageKind.INFO,
-                )
-                if (activityTruncated) {
-                    InlineMessage("Only the latest 500 account transactions are loaded.", InlineMessageKind.INFO)
+                if (statementMinor != null) {
+                    InlineMessage(
+                        if (balanceMatches) {
+                            "Cleared transactions match this statement balance."
+                        } else {
+                            "Adjust the selected transactions until the difference is 0."
+                        },
+                        if (balanceMatches) InlineMessageKind.SUCCESS else InlineMessageKind.INFO,
+                    )
                 }
                 SectionCard("Transactions", "Select the items on this statement") {
                     transactions.forEachIndexed { index, transaction ->
@@ -163,6 +165,17 @@ internal fun AccountReconcileDialog(
                         )
                         if (index < transactions.lastIndex) DividerLine()
                     }
+                    if (hasMoreTransactions) {
+                        if (transactions.isNotEmpty()) DividerLine()
+                        TandemActionButton(
+                            if (loadingMoreTransactions) "Loading…" else "Load older transactions",
+                            TandemActionButtonTone.NEUTRAL,
+                            Modifier.fillMaxWidth(),
+                            enabled = !busy && !loadingMoreTransactions,
+                            loading = loadingMoreTransactions,
+                            onClick = onLoadMoreTransactions,
+                        )
+                    }
                 }
                 message?.let { InlineMessage(it, InlineMessageKind.INFO) }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
@@ -172,7 +185,7 @@ internal fun AccountReconcileDialog(
                         TandemActionButtonTone.PRIMARY,
                         Modifier.weight(1f),
                         icon = Lucide.Check,
-                        enabled = !busy && balanceMatches && selectedIds.isNotEmpty(),
+                        enabled = canFinishReconciliation(statementMinor, differenceMinor, busy),
                         loading = busy,
                         onClick = onConfirm,
                     )

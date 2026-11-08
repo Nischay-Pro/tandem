@@ -26,6 +26,14 @@ class AccountReconciliationTest {
         assertEquals(10_000L, reconciliationClearedBalanceMinor(8_800, transactions, emptySet()))
     }
 
+    @Test
+    fun finishRequiresAnEnteredBalanceAndAnExactMatch() {
+        assertEquals(false, canFinishReconciliation(null, null, busy = false))
+        assertEquals(false, canFinishReconciliation(10_000, 1, busy = false))
+        assertEquals(false, canFinishReconciliation(10_000, 0, busy = true))
+        assertEquals(true, canFinishReconciliation(10_000, 0, busy = false))
+    }
+
     private fun transaction(
         id: String,
         amountMinor: Long,

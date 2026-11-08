@@ -78,12 +78,50 @@ class LiveBudgetModelsTest {
 
         assertEquals("Everyday", accounts.first().accountGroupName)
         assertEquals("daily", accounts.first().accountGroupId)
-        assertEquals("Everyday", liveAccountGroupLabel(accounts[0]))
-        assertEquals("Credit", liveAccountGroupLabel(accounts[1]))
-        assertEquals("Loan", liveAccountGroupLabel(accounts[2]))
-        assertEquals("Tracking", liveAccountGroupLabel(accounts[3]))
+        assertEquals("On budget · Other", liveAccountGroupLabel(accounts[0]))
+        assertEquals("On budget · Credit", liveAccountGroupLabel(accounts[1]))
+        assertEquals("Off budget · Mortgage", liveAccountGroupLabel(accounts[2]))
+        assertEquals("Off budget · Investment", liveAccountGroupLabel(accounts[3]))
         assertEquals("Closed", liveAccountGroupLabel(accounts[4]))
         assertEquals(true, accounts[4].closed)
+    }
+
+    @Test
+    fun groupsAccountsByActualTypeAndBudgetScopeWithoutReadingNames() {
+        val accounts =
+            liveAccountSummaries(
+                listOf(
+                    record(
+                        type = "account",
+                        id = "elmira",
+                        name = "Elmira Savings",
+                        json = """{"id":"elmira","type":"checking","offbudget":false}""",
+                    ),
+                    record(
+                        type = "account",
+                        id = "credit-union",
+                        name = "Credit Union Checking",
+                        json = """{"id":"credit-union","type":"checking","offbudget":false}""",
+                    ),
+                    record(
+                        type = "account",
+                        id = "discard",
+                        name = "Discard Fund",
+                        json = """{"id":"discard","type":"savings","offbudget":false}""",
+                    ),
+                    record(
+                        type = "account",
+                        id = "debt-free",
+                        name = "Debt-free Savings",
+                        json = """{"id":"debt-free","type":"savings","offbudget":true}""",
+                    ),
+                ),
+            )
+
+        assertEquals("On budget · Checking", liveAccountGroupLabel(accounts[0]))
+        assertEquals(liveAccountGroupLabel(accounts[0]), liveAccountGroupLabel(accounts[1]))
+        assertEquals("On budget · Savings", liveAccountGroupLabel(accounts[2]))
+        assertEquals("Off budget · Savings", liveAccountGroupLabel(accounts[3]))
     }
 
     @Test

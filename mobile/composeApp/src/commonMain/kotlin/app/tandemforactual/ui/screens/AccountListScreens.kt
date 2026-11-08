@@ -109,15 +109,24 @@ internal fun accountTypeIcon(
 
 internal fun accountGroupOrder(groupName: String): Int {
     val name = groupName.trim().lowercase()
+    val type = name.substringAfter("·", "").trim()
+    val typeOrder =
+        when (type) {
+            "checking" -> 0
+            "savings" -> 1
+            "credit" -> 2
+            "loan" -> 3
+            "mortgage" -> 4
+            "debt" -> 5
+            "investment" -> 6
+            "other" -> 7
+            else -> 8
+        }
     return when {
-        "cash" in name -> 0
-        "credit" in name -> 1
-        "loan" in name -> 2
-        "tracking" in name -> 3
-        name == "closed" -> 8
-        name == "on budget" -> 6
-        name == "off budget" -> 7
-        else -> 4
+        name == "closed" -> 2_000
+        name.startsWith("on budget") -> typeOrder
+        name.startsWith("off budget") -> 1_000 + typeOrder
+        else -> 3_000
     }
 }
 

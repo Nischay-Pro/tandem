@@ -1754,7 +1754,7 @@ class LocalBudgetRepositoryTest {
                         ),
                         transaction(
                             recordId = "txn-b",
-                            accountId = "savings",
+                            accountId = "checking",
                             categoryId = "rent",
                             payeeId = "landlord",
                             date = "2026-10-01",
@@ -1775,12 +1775,15 @@ class LocalBudgetRepositoryTest {
                 val observed = repository.observeRecords(BUDGET, "transaction").first()
                 val observedRecent = repository.observeRecentRecords(BUDGET, "transaction", limit = 1).first()
                 val observedAccountRecent = repository.observeRecentTransactionsForAccount(BUDGET, "checking", limit = 1).first()
+                val observedAccountOlder =
+                    repository.observeRecentTransactionsForAccount(BUDGET, "checking", limit = 1, offset = 1).first()
                 val observedCount = repository.observeVisibleRecordCount(BUDGET, "transaction").first()
                 val recent = repository.findRecentRecords(BUDGET, "transaction", limit = 1)
                 assertEquals(listOf("txn-a"), filtered.map { it.recordId })
                 assertEquals(listOf("txn-a", "txn-b"), observed.map { it.recordId })
                 assertEquals(listOf("txn-a"), observedRecent.map { it.recordId })
                 assertEquals(listOf("txn-a"), observedAccountRecent.map { it.recordId })
+                assertEquals(listOf("txn-b"), observedAccountOlder.map { it.recordId })
                 assertEquals(2L, observedCount)
                 assertEquals(listOf("txn-a"), recent.map { it.recordId })
                 assertFails<IllegalArgumentException> { repository.findRecentRecords(BUDGET, "transaction", limit = 0) }

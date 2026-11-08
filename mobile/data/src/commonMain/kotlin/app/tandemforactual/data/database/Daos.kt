@@ -235,12 +235,14 @@ interface BudgetRecordDao {
       AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))
     ORDER BY recordDate DESC, recordId ASC
     LIMIT :limit
+    OFFSET :offset
     """,
     )
     fun observeRecentTransactionsForAccount(
         budgetId: String,
         accountId: String,
         limit: Int,
+        offset: Int,
     ): Flow<List<BudgetRecordEntity>>
 
     @Query(

@@ -9,3 +9,9 @@ internal fun reconciliationClearedBalanceMinor(
     val selectedTotal = editableTransactions.filter { it.recordId in selectedTransactionIds }.sumOf(TransactionItem::amountMinorUnits)
     return clearedBalanceMinor - editableClearedTotal + selectedTotal
 }
+
+internal fun canFinishReconciliation(
+    statementBalanceMinor: Long?,
+    differenceMinor: Long?,
+    busy: Boolean,
+): Boolean = !busy && statementBalanceMinor != null && differenceMinor == 0L

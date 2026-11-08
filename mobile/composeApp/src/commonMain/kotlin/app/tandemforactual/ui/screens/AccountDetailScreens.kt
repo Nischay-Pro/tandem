@@ -54,6 +54,8 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private const val ACCOUNT_RECONCILIATION_PAGE_SIZE = 500
+
 @Composable
 internal fun AccountDetailScreen(
     state: AppState,
@@ -68,6 +70,9 @@ internal fun AccountDetailScreen(
     val previewAccount = if (isLiveBudget) null else previewAccountById(state.selectedAccountId)
     val accountName = liveAccount?.name ?: previewAccount?.name
     var accountActivity by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(emptyList<TransactionItem>()) }
+    var accountActivityOffset by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(0) }
+    var accountActivityHasMore by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(false) }
+    var loadingOlderAccountActivity by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(false) }
     var clearedAccountBalanceMinor by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf<Long?>(null) }
     var showReconcileDialog by rememberSaveable(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(false) }
     var selectedReconciliationIds by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(emptySet<String>()) }
@@ -106,6 +111,7 @@ internal fun AccountDetailScreen(
     LaunchedEffect(
         state.selectedBudgetId,
         liveAccount?.id,
+        accountActivityOffset,
         mobileSession.accountRecords,
         mobileSession.payeeRecords,
         mobileSession.categoryRecords,
@@ -114,10 +120,15 @@ internal fun AccountDetailScreen(
     ) {
         val accountId = liveAccount?.id ?: return@LaunchedEffect
         val accountActivityFlow =
-            mobileSession.observeAccountActivityRecords(state.selectedBudgetId, accountId, limit = 500)
+            mobileSession.observeAccountActivityRecords(
+                state.selectedBudgetId,
+                accountId,
+                limit = ACCOUNT_RECONCILIATION_PAGE_SIZE,
+                offset = accountActivityOffset,
+            )
                 ?: return@LaunchedEffect
         accountActivityFlow.collect { records ->
-            accountActivity =
+            val page =
                 withContext(Dispatchers.Default) {
                     buildLiveTransactionItems(
                         records,
@@ -128,6 +139,14 @@ internal fun AccountDetailScreen(
                         merchantIconMatcher,
                     ).filterNot(TransactionItem::isSplitParent)
                 }
+            accountActivity =
+                if (accountActivityOffset == 0) {
+                    page
+                } else {
+                    (accountActivity + page).distinctBy(TransactionItem::recordId)
+                }
+            accountActivityHasMore = records.size == ACCOUNT_RECONCILIATION_PAGE_SIZE
+            loadingOlderAccountActivity = false
         }
     }
     LaunchedEffect(state.selectedBudgetId, liveAccount?.id) {
@@ -173,8 +192,8 @@ internal fun AccountDetailScreen(
                             reconciliationCandidates.isNotEmpty() &&
                             !state.readOnlyMode,
                 ) {
-                    selectedReconciliationIds = reconciliationCandidates.filter { it.cleared == true }.mapNotNull { it.recordId }.toSet()
-                    statementBalanceText = clearedAccountBalanceMinor?.let(state::formatAmount).orEmpty()
+                    selectedReconciliationIds = emptySet()
+                    statementBalanceText = ""
                     mobileSession.clearTransactionWriteMessage()
                     showReconcileDialog = true
                 }
@@ -244,7 +263,12 @@ internal fun AccountDetailScreen(
             accountName = liveAccount.name,
             clearedBalanceMinor = clearedAccountBalanceMinor,
             transactions = reconciliationCandidates,
-            activityTruncated = accountActivity.size >= 500,
+            hasMoreTransactions = accountActivityHasMore,
+            loadingMoreTransactions = loadingOlderAccountActivity,
+            onLoadMoreTransactions = {
+                loadingOlderAccountActivity = true
+                accountActivityOffset += ACCOUNT_RECONCILIATION_PAGE_SIZE
+            },
             selectedIds = selectedReconciliationIds,
             statementBalance = statementBalanceText,
             busy = mobileSession.isSavingTransaction,
