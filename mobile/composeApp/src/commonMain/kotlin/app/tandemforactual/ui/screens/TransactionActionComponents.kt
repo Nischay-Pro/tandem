@@ -199,6 +199,9 @@ internal fun openTransaction(
     state.selectedTransactionPayeeId = transaction.payeeId.orEmpty()
     state.selectedTransactionCategoryId = transaction.categoryId.orEmpty()
     state.selectedTransactionDate = state.transactionDate
+    state.selectedTransactionAccountName = transaction.account
+    state.selectedTransactionPayeeName = transaction.payee
+    state.selectedTransactionCategoryName = transaction.category
     state.transactionNotes = transaction.notes
     state.transactionAmount = formatAmount(kotlin.math.abs(transaction.amountMinorUnits), state.budgetDisplaySettings)
     state.selectedTransactionAmountMinor = transaction.amountMinorUnits

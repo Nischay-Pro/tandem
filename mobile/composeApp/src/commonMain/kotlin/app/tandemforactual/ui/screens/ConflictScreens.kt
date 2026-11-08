@@ -15,7 +15,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.Badge
 import app.tandemforactual.ui.components.BodyText
+import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.ListRow
@@ -228,12 +233,16 @@ internal fun UncertainWriteScreen(
                     (state.selectedConflictOperationId.isBlank() && it.operationId == mobileSession.checkedWriteOperationId)
             }
         val operation = checkedOperation ?: pendingOperation
+        val transaction = operation?.let { write -> liveTransactions.firstOrNull { it.recordId == write.recordId } }
+        val operationPayee = transaction?.payee ?: "this transaction"
+        val operationAmount = operation?.optimisticAmountMinor ?: transaction?.amountMinorUnits
+        val operationAmountText = operationAmount?.let(state::formatSignedCurrency) ?: "Unavailable"
+        var confirmDiscard by rememberSaveable(operation?.operationId) { mutableStateOf(false) }
         PageColumn {
             if (operation == null) {
                 Heading("Nothing to check")
                 InfoBubble("This edit no longer needs confirmation.")
             } else {
-                val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
                 val isChecked = mobileSession.checkedWriteOperationId == operation.operationId
                 val isNotFound = isChecked && operation.status == "uncertain" && operation.lastErrorCode == "http-404"
                 val checkError =
@@ -311,7 +320,7 @@ internal fun UncertainWriteScreen(
                                 "Discard",
                                 modifier = Modifier.weight(1f),
                                 enabled = !state.readOnlyMode && !mobileSession.isSyncing,
-                            ) { onDiscard(operation.operationId) }
+                            ) { confirmDiscard = true }
                         }
                     }
                     operation.status == "uncertain" -> {
@@ -343,6 +352,21 @@ internal fun UncertainWriteScreen(
                     else -> PrimaryButton("Done") { navigation.back() }
                 }
             }
+        }
+        if (confirmDiscard && operation != null) {
+            DestructiveConfirmationDialog(
+                title = "Discard this edit?",
+                message =
+                    "Remove the pending edit for $operationPayee ($operationAmountText)? Actual may already have saved it; removing it here won’t undo a change already stored there.",
+                confirmLabel = "Discard edit",
+                dismissLabel = "Keep edit",
+                enabled = !state.readOnlyMode && !mobileSession.isSyncing,
+                onDismissRequest = { if (!mobileSession.isSyncing) confirmDiscard = false },
+                onConfirm = {
+                    confirmDiscard = false
+                    onDiscard(operation.operationId)
+                },
+            )
         }
         return
     }
@@ -381,13 +405,17 @@ internal fun RejectedWriteScreen(
             mobileSession.pendingWrites.firstOrNull {
                 it.operationId == state.selectedConflictOperationId && it.status == "rejected"
             } ?: mobileSession.pendingWrites.firstOrNull { it.status == "rejected" }
+        val transaction = operation?.let { write -> liveTransactions.firstOrNull { it.recordId == write.recordId } }
+        val operationPayee = transaction?.payee ?: "this transaction"
+        val operationAmount = operation?.optimisticAmountMinor ?: transaction?.amountMinorUnits
+        val operationAmountText = operationAmount?.let(state::formatSignedCurrency) ?: "Unavailable"
+        var confirmDismiss by rememberSaveable(operation?.operationId) { mutableStateOf(false) }
         PageColumn {
             Badge("Not applied", tandemPalette.negative)
             Heading("Change not applied")
             if (operation == null) {
                 BodyText("No unapplied edits need review.")
             } else {
-                val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
                 SectionCard(transaction?.payee ?: "Transaction", transaction?.dateLabel ?: "Not applied") {
                     ListRow(
                         "Your edit",
@@ -395,8 +423,23 @@ internal fun RejectedWriteScreen(
                         operation.optimisticAmountMinor?.let { state.formatSignedCurrency(it) } ?: "Unavailable",
                     )
                 }
-                PrimaryButton("Dismiss", enabled = !state.readOnlyMode) { onDiscard(operation.operationId) }
+                PrimaryButton("Dismiss", enabled = !state.readOnlyMode) { confirmDismiss = true }
             }
+        }
+        if (confirmDismiss && operation != null) {
+            DestructiveConfirmationDialog(
+                title = "Remove this rejected edit?",
+                message =
+                    "Remove the rejected edit for $operationPayee ($operationAmountText) from this device? It wasn’t applied in Actual.",
+                confirmLabel = "Remove edit",
+                dismissLabel = "Keep edit",
+                enabled = !state.readOnlyMode,
+                onDismissRequest = { confirmDismiss = false },
+                onConfirm = {
+                    confirmDismiss = false
+                    onDiscard(operation.operationId)
+                },
+            )
         }
         return
     }

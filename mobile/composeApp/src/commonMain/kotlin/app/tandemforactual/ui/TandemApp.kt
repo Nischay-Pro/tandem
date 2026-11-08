@@ -55,6 +55,7 @@ import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.store.AppPreferencesStore
+import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
 import app.tandemforactual.ui.model.LiveScheduleSummary
@@ -139,6 +140,7 @@ fun TandemApp(
     var backButtonTransitionRunning by remember { mutableStateOf(false) }
     var queuedBackPresses by remember { mutableStateOf(0) }
     var skipNextRouteTransition by remember { mutableStateOf(false) }
+    var showDiscardTransactionDialog by rememberSaveable { mutableStateOf(false) }
     var nextRouteEntryId by rememberSaveable { mutableStateOf(2L) }
     val backStack =
         rememberSaveable(startInPreview, saver = appRouteStackSaver) {
@@ -313,11 +315,14 @@ fun TandemApp(
             state.transactionAmount = state.formatAmount(0)
             state.transactionAccount = defaultAccount?.name ?: "Checking"
             state.newTransactionAccountId = defaultAccount?.id.orEmpty()
+            state.newTransactionInitialAccountId = state.newTransactionAccountId
+            state.newTransactionInitialAccountName = state.transactionAccount
             state.transactionPayee = ""
             state.newTransactionPayeeId = ""
             state.transactionCategory = ""
             state.newTransactionCategoryId = ""
             state.transactionDate = platformTodayIsoDate()
+            state.newTransactionInitialDate = state.transactionDate
             state.transactionType = "Spending"
             state.transactionNotes = ""
             state.selectedTransactionRecordId = ""
@@ -395,7 +400,7 @@ fun TandemApp(
             }
         }
     }
-    val handleBack: () -> Unit = {
+    val performBack: () -> Unit = {
         if (backButtonTransitionRunning) {
             queuedBackPresses += 1
         } else {
@@ -411,6 +416,22 @@ fun TandemApp(
                 // Button back runs the same route pair and progress transform as predictive back.
                 startBackButtonTransition()
             }
+        }
+    }
+    val handleBack: () -> Unit = {
+        val currentRoute = backStack.lastOrNull()?.route
+        if (transactionFormHasUnsavedChanges(state, currentRoute)) {
+            backGestureCancelJob?.cancel()
+            backGestureCancelJob = null
+            backGestureCommitPending = false
+            backButtonTransitionRunning = false
+            backGestureProgress = 0f
+            backGestureOutgoingEntry = null
+            backPreviewRoute = null
+            queuedBackPresses = 0
+            showDiscardTransactionDialog = true
+        } else {
+            performBack()
         }
     }
     val navigation =
@@ -794,6 +815,9 @@ fun TandemApp(
                     state.selectedTransactionPayeeId = state.newTransactionPayeeId
                     state.selectedTransactionCategoryId = state.newTransactionCategoryId
                     state.selectedTransactionDate = state.transactionDate
+                    state.selectedTransactionAccountName = state.transactionAccount
+                    state.selectedTransactionPayeeName = state.transactionPayee
+                    state.selectedTransactionCategoryName = state.transactionCategory
                 }
                 onComplete(saved)
             }
@@ -832,7 +856,10 @@ fun TandemApp(
                         encryptionPassword = state.encryptedPassword.takeIf { it.isNotBlank() },
                         displaySettings = state.budgetDisplaySettings,
                     )
-                if (created) navigation.back()
+                if (created) {
+                    restoreTransactionFormBaseline(state, AppRoute.NEW_TRANSACTION)
+                    navigation.back()
+                }
             }
         }
     }
@@ -1201,6 +1228,32 @@ fun TandemApp(
                     visible = route.isTab() || backTargetTab != null,
                 )
             }
+        }
+        if (showDiscardTransactionDialog) {
+            val formRoute = backStack.lastOrNull()?.route
+            val isNewTransaction = formRoute == AppRoute.NEW_TRANSACTION
+            val payee = state.transactionPayee.trim().takeIf { it.isNotBlank() }
+            val amount =
+                state.parseAmountMinorUnits(state.transactionAmount)?.let { state.formatCurrency(kotlin.math.abs(it)) }
+                    ?: "the current amount"
+            val transactionSummary = payee?.let { "$amount at $it" } ?: amount
+            DestructiveConfirmationDialog(
+                title = if (isNewTransaction) "Discard this transaction?" else "Discard changes?",
+                message =
+                    if (isNewTransaction) {
+                        "Discard $transactionSummary? The transaction and its notes will be lost."
+                    } else {
+                        "Discard your changes to ${payee ?: "this transaction"} ($amount)? The current transaction will stay as it is."
+                    },
+                confirmLabel = "Discard",
+                dismissLabel = "Keep editing",
+                onDismissRequest = { showDiscardTransactionDialog = false },
+                onConfirm = {
+                    restoreTransactionFormBaseline(state, formRoute)
+                    showDiscardTransactionDialog = false
+                    performBack()
+                },
+            )
         }
     }
 }

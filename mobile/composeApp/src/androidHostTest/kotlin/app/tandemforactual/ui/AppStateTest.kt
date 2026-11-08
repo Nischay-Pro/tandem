@@ -57,6 +57,72 @@ class AppStateTest {
     }
 
     @Test
+    fun newTransactionIsDirtyOnlyAfterUserChangesAFieldAndCanBeRestored() {
+        val state =
+            AppState().apply {
+                transactionAmount = formatAmount(0)
+                transactionAccount = "Checking"
+                newTransactionAccountId = "checking-id"
+                newTransactionInitialAccountName = transactionAccount
+                newTransactionInitialAccountId = newTransactionAccountId
+                transactionDate = "2026-11-08"
+                newTransactionInitialDate = transactionDate
+                transactionPayee = ""
+                transactionCategory = ""
+                transactionType = "Spending"
+                transactionNotes = ""
+            }
+
+        assertFalse(transactionFormHasUnsavedChanges(state, AppRoute.NEW_TRANSACTION))
+        state.transactionPayee = "Corner Market"
+        state.newTransactionPayeeId = "payee-id"
+        state.transactionAmount = state.formatAmount(4_218)
+        assertTrue(transactionFormHasUnsavedChanges(state, AppRoute.NEW_TRANSACTION))
+
+        restoreTransactionFormBaseline(state, AppRoute.NEW_TRANSACTION)
+
+        assertFalse(transactionFormHasUnsavedChanges(state, AppRoute.NEW_TRANSACTION))
+        assertEquals("", state.transactionPayee)
+        assertEquals(0L, state.parseAmountMinorUnits(state.transactionAmount))
+    }
+
+    @Test
+    fun editTransactionDetectsChangesToEditableValuesAndRestoresItsBaseline() {
+        val state =
+            AppState().apply {
+                selectedTransactionAmountMinor = -4_218L
+                selectedTransactionNotes = "Lunch"
+                selectedTransactionAccountId = "checking-id"
+                selectedTransactionPayeeId = "payee-id"
+                selectedTransactionCategoryId = "food-id"
+                selectedTransactionDate = "2026-11-01"
+                selectedTransactionAccountName = "Checking"
+                selectedTransactionPayeeName = "Corner Market"
+                selectedTransactionCategoryName = "Groceries"
+                transactionAmount = formatAmount(4_218)
+                transactionNotes = "Lunch"
+                newTransactionAccountId = "checking-id"
+                newTransactionPayeeId = "payee-id"
+                newTransactionCategoryId = "food-id"
+                transactionDate = "2026-11-01"
+                transactionAccount = "Checking"
+                transactionPayee = "Corner Market"
+                transactionCategory = "Groceries"
+            }
+
+        assertFalse(transactionFormHasUnsavedChanges(state, AppRoute.EDIT_TRANSACTION))
+        state.transactionDate = "2026-11-02"
+        state.transactionNotes = "Dinner"
+        assertTrue(transactionFormHasUnsavedChanges(state, AppRoute.EDIT_TRANSACTION))
+
+        restoreTransactionFormBaseline(state, AppRoute.EDIT_TRANSACTION)
+
+        assertFalse(transactionFormHasUnsavedChanges(state, AppRoute.EDIT_TRANSACTION))
+        assertEquals("2026-11-01", state.transactionDate)
+        assertEquals("Lunch", state.transactionNotes)
+    }
+
+    @Test
     fun startupOpensCachedBudgetWithoutWaitingForDeviceCredentialRestore() {
         assertEquals(
             AppStartupDestination.CACHED_BUDGET,

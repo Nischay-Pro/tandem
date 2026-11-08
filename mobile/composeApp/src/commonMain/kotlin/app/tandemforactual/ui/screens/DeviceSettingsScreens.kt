@@ -10,9 +10,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.ListRowOptions
@@ -38,6 +43,7 @@ internal fun ServerDeviceScreen(
     onForgetDeviceLocally: () -> Unit,
 ) {
     val device = mobileSession.pairedDevice
+    var confirmation by rememberSaveable { mutableStateOf("") }
     PageColumn {
         Heading("Connection details", "Review the server address and device pairing.")
         SectionCard(
@@ -114,15 +120,43 @@ internal fun ServerDeviceScreen(
             SecondaryButton(
                 "Forget on this phone only",
                 enabled = !mobileSession.isRevokingDevice,
-                onClick = onForgetDeviceLocally,
+                onClick = { confirmation = "local" },
             )
         } else {
             SecondaryButton(
                 if (mobileSession.isRevokingDevice) "Removing this device" else "Remove this device",
                 enabled = !mobileSession.isRevokingDevice,
-                onClick = onForgetDevice,
+                onClick = { confirmation = "server" },
             )
         }
+    }
+    when (confirmation) {
+        "server" ->
+            DestructiveConfirmationDialog(
+                title = "Remove this device?",
+                message =
+                    "This revokes this phone’s access on the server and clears its saved pairing. You’ll need to pair again to connect.",
+                confirmLabel = "Remove device",
+                dismissLabel = "Cancel",
+                enabled = !mobileSession.isRevokingDevice,
+                onDismissRequest = { if (!mobileSession.isRevokingDevice) confirmation = "" },
+                onConfirm = {
+                    confirmation = ""
+                    onForgetDevice()
+                },
+            )
+        "local" ->
+            DestructiveConfirmationDialog(
+                title = "Forget this device here?",
+                message = "This clears the pairing saved on this phone. The server will still allow this device until it is removed there.",
+                confirmLabel = "Forget here",
+                dismissLabel = "Cancel",
+                onDismissRequest = { confirmation = "" },
+                onConfirm = {
+                    confirmation = ""
+                    onForgetDeviceLocally()
+                },
+            )
     }
 }
 

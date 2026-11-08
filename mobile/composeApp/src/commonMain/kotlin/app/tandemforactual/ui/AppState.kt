@@ -73,6 +73,9 @@ internal class AppState {
     var selectedTransactionPayeeId by mutableStateOf("")
     var selectedTransactionCategoryId by mutableStateOf("")
     var selectedTransactionDate by mutableStateOf("")
+    var selectedTransactionAccountName by mutableStateOf("")
+    var selectedTransactionPayeeName by mutableStateOf("")
+    var selectedTransactionCategoryName by mutableStateOf("")
     var selectedConflictOperationId by mutableStateOf("")
     var serverUrl by mutableStateOf("https://budget.example.com")
     var pairingCode by mutableStateOf("")
@@ -80,11 +83,14 @@ internal class AppState {
     var transactionAmount by mutableStateOf(formatAmount(4_218))
     var transactionAccount by mutableStateOf("Checking")
     var newTransactionAccountId by mutableStateOf("")
+    var newTransactionInitialAccountId by mutableStateOf("")
+    var newTransactionInitialAccountName by mutableStateOf("Checking")
     var transactionPayee by mutableStateOf("Corner Market")
     var newTransactionPayeeId by mutableStateOf("")
     var transactionCategory by mutableStateOf("Groceries")
     var newTransactionCategoryId by mutableStateOf("")
     var transactionDate by mutableStateOf(formatDate(SampleDate(2026, 5, 14)))
+    var newTransactionInitialDate by mutableStateOf("")
     var transactionType by mutableStateOf("Spending")
     var transactionNotes by mutableStateOf("")
     var selectedTransactionAmountMinor by mutableStateOf<Long?>(null)
@@ -211,16 +217,23 @@ internal class AppState {
                         "selectedTransactionPayeeId" to state.selectedTransactionPayeeId,
                         "selectedTransactionCategoryId" to state.selectedTransactionCategoryId,
                         "selectedTransactionDate" to state.selectedTransactionDate,
+                        "selectedTransactionAccountName" to state.selectedTransactionAccountName,
+                        "selectedTransactionPayeeName" to state.selectedTransactionPayeeName,
+                        "selectedTransactionCategoryName" to state.selectedTransactionCategoryName,
+                        "selectedTransactionNotes" to state.selectedTransactionNotes,
                         "selectedConflictOperationId" to state.selectedConflictOperationId,
                         "serverUrl" to state.serverUrl,
                         "transactionAmount" to state.transactionAmount,
                         "transactionAccount" to state.transactionAccount,
                         "newTransactionAccountId" to state.newTransactionAccountId,
+                        "newTransactionInitialAccountId" to state.newTransactionInitialAccountId,
+                        "newTransactionInitialAccountName" to state.newTransactionInitialAccountName,
                         "transactionPayee" to state.transactionPayee,
                         "newTransactionPayeeId" to state.newTransactionPayeeId,
                         "transactionCategory" to state.transactionCategory,
                         "newTransactionCategoryId" to state.newTransactionCategoryId,
                         "transactionDate" to state.transactionDate,
+                        "newTransactionInitialDate" to state.newTransactionInitialDate,
                         "transactionType" to state.transactionType,
                         "transactionNotes" to state.transactionNotes,
                         "selectedTransactionAmountMinor" to state.selectedTransactionAmountMinor,
@@ -269,16 +282,27 @@ internal class AppState {
                         selectedTransactionPayeeId = saved["selectedTransactionPayeeId"] as? String ?: selectedTransactionPayeeId
                         selectedTransactionCategoryId = saved["selectedTransactionCategoryId"] as? String ?: selectedTransactionCategoryId
                         selectedTransactionDate = saved["selectedTransactionDate"] as? String ?: selectedTransactionDate
+                        selectedTransactionAccountName =
+                            saved["selectedTransactionAccountName"] as? String ?: selectedTransactionAccountName
+                        selectedTransactionPayeeName = saved["selectedTransactionPayeeName"] as? String ?: selectedTransactionPayeeName
+                        selectedTransactionCategoryName =
+                            saved["selectedTransactionCategoryName"] as? String ?: selectedTransactionCategoryName
+                        selectedTransactionNotes = saved["selectedTransactionNotes"] as? String ?: selectedTransactionNotes
                         selectedConflictOperationId = saved["selectedConflictOperationId"] as? String ?: selectedConflictOperationId
                         serverUrl = saved["serverUrl"] as? String ?: serverUrl
                         transactionAmount = saved["transactionAmount"] as? String ?: transactionAmount
                         transactionAccount = saved["transactionAccount"] as? String ?: transactionAccount
                         newTransactionAccountId = saved["newTransactionAccountId"] as? String ?: newTransactionAccountId
+                        newTransactionInitialAccountId =
+                            saved["newTransactionInitialAccountId"] as? String ?: newTransactionInitialAccountId
+                        newTransactionInitialAccountName =
+                            saved["newTransactionInitialAccountName"] as? String ?: newTransactionInitialAccountName
                         transactionPayee = saved["transactionPayee"] as? String ?: transactionPayee
                         newTransactionPayeeId = saved["newTransactionPayeeId"] as? String ?: newTransactionPayeeId
                         transactionCategory = saved["transactionCategory"] as? String ?: transactionCategory
                         newTransactionCategoryId = saved["newTransactionCategoryId"] as? String ?: newTransactionCategoryId
                         transactionDate = saved["transactionDate"] as? String ?: transactionDate
+                        newTransactionInitialDate = saved["newTransactionInitialDate"] as? String ?: newTransactionInitialDate
                         transactionType = saved["transactionType"] as? String ?: transactionType
                         transactionNotes = saved["transactionNotes"] as? String ?: transactionNotes
                         selectedTransactionAmountMinor = saved["selectedTransactionAmountMinor"] as? Long
@@ -310,5 +334,70 @@ internal class AppState {
                     }
                 },
             )
+    }
+}
+
+internal fun transactionFormHasUnsavedChanges(
+    state: AppState,
+    route: AppRoute?,
+): Boolean {
+    val amount = state.parseAmountMinorUnits(state.transactionAmount)
+    return when (route) {
+        AppRoute.NEW_TRANSACTION ->
+            amount == null ||
+                amount != 0L ||
+                state.newTransactionAccountId != state.newTransactionInitialAccountId ||
+                state.transactionAccount != state.newTransactionInitialAccountName ||
+                state.transactionPayee.isNotBlank() ||
+                state.newTransactionPayeeId.isNotBlank() ||
+                state.transactionCategory.isNotBlank() ||
+                state.newTransactionCategoryId.isNotBlank() ||
+                state.transactionDate != state.newTransactionInitialDate ||
+                state.transactionType != "Spending" ||
+                state.transactionNotes.isNotBlank()
+        AppRoute.EDIT_TRANSACTION ->
+            amount == null ||
+                state.selectedTransactionAmountMinor?.let { amount != kotlin.math.abs(it) } != false ||
+                state.transactionNotes != state.selectedTransactionNotes ||
+                state.newTransactionAccountId != state.selectedTransactionAccountId ||
+                state.newTransactionPayeeId != state.selectedTransactionPayeeId ||
+                state.newTransactionCategoryId != state.selectedTransactionCategoryId ||
+                state.transactionDate != state.selectedTransactionDate ||
+                state.transactionAccount != state.selectedTransactionAccountName ||
+                state.transactionPayee != state.selectedTransactionPayeeName ||
+                state.transactionCategory != state.selectedTransactionCategoryName
+        else -> false
+    }
+}
+
+internal fun restoreTransactionFormBaseline(
+    state: AppState,
+    route: AppRoute?,
+) {
+    when (route) {
+        AppRoute.NEW_TRANSACTION -> {
+            state.transactionAmount = state.formatAmount(0)
+            state.transactionAccount = state.newTransactionInitialAccountName
+            state.newTransactionAccountId = state.newTransactionInitialAccountId
+            state.transactionPayee = ""
+            state.newTransactionPayeeId = ""
+            state.transactionCategory = ""
+            state.newTransactionCategoryId = ""
+            state.transactionDate = state.newTransactionInitialDate
+            state.transactionType = "Spending"
+            state.transactionNotes = ""
+        }
+        AppRoute.EDIT_TRANSACTION -> {
+            state.selectedTransactionAmountMinor?.let { state.transactionAmount = state.formatAmount(kotlin.math.abs(it)) }
+            state.transactionAccount = state.selectedTransactionAccountName
+            state.newTransactionAccountId = state.selectedTransactionAccountId
+            state.transactionPayee = state.selectedTransactionPayeeName
+            state.newTransactionPayeeId = state.selectedTransactionPayeeId
+            state.transactionCategory = state.selectedTransactionCategoryName
+            state.newTransactionCategoryId = state.selectedTransactionCategoryId
+            state.transactionDate = state.selectedTransactionDate
+            state.transactionNotes = state.selectedTransactionNotes
+        }
+        else -> Unit
     }
 }
