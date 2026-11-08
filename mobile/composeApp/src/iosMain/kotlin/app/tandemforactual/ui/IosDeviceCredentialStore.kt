@@ -51,7 +51,7 @@ internal class IosDeviceCredentialStore : DeviceCredentialStore {
                     val string = NSString.create(data, NSUTF8StringEncoding) ?: error("Stored device credential is invalid")
                     string.UTF8String()?.toKString() ?: error("Stored device credential is invalid")
                 }
-                else -> error("Could not read device credential from Keychain")
+                else -> error("Could not read device credential from Keychain (OSStatus $status)")
             }
         }
 
@@ -61,19 +61,19 @@ internal class IosDeviceCredentialStore : DeviceCredentialStore {
                 ?: error("Could not encode device credential for Keychain")
         val addStatus = withKeychainQuery(data = data) { query -> SecItemAdd(query, null) }
         if (addStatus == errSecSuccess) return
-        if (addStatus != errSecDuplicateItem) error("Could not save device credential to Keychain")
+        if (addStatus != errSecDuplicateItem) error("Could not save device credential to Keychain (OSStatus $addStatus)")
 
         val updateStatus =
             withKeychainQuery { query ->
                 withKeychainQuery(includeIdentity = false, data = data) { updates -> SecItemUpdate(query, updates) }
             }
-        check(updateStatus == errSecSuccess) { "Could not update device credential in Keychain" }
+        check(updateStatus == errSecSuccess) { "Could not update device credential in Keychain (OSStatus $updateStatus)" }
     }
 
     override fun clear() {
         val status = withKeychainQuery { query -> SecItemDelete(query) }
         check(status == errSecSuccess || status == errSecItemNotFound) {
-            "Could not remove device credential from Keychain"
+            "Could not remove device credential from Keychain (OSStatus $status)"
         }
     }
 
