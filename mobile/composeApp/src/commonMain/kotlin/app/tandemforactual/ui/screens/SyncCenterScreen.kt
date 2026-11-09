@@ -26,7 +26,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.AnimatedReveal
 import app.tandemforactual.ui.components.AnimatedStatusText
-import app.tandemforactual.ui.components.Badge
 import app.tandemforactual.ui.components.BodyText
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
@@ -34,7 +33,6 @@ import app.tandemforactual.ui.components.LabelText
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.RowLeading
-import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.model.recordName
@@ -182,11 +180,11 @@ internal fun SyncCenterScreen(
         return
     }
     PageColumn {
-        Heading("Connection status", "Review device data, pending edits, and server activity.")
+        SampleBanner()
+        Heading("Sync", "Review pending edits and server activity.")
         SurfaceCard {
             Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small), verticalAlignment = Alignment.CenterVertically) {
-                    Badge("Sample data")
                     Text(
                         "No server connection",
                         color = tandemPalette.text,
@@ -194,11 +192,10 @@ internal fun SyncCenterScreen(
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
-                Text("Last sync · sample only", color = tandemPalette.muted, fontSize = TandemTypography.label)
-                PreviewNote("No data has been uploaded or downloaded.")
+                Text("Last sync", color = tandemPalette.muted, fontSize = TandemTypography.label)
             }
         }
-        SectionCard("Attention needed", "Sample recovery states") {
+        SectionCard("Attention needed") {
             ListRow(
                 "Needs review",
                 "Corner Market · two versions",
@@ -215,11 +212,10 @@ internal fun SyncCenterScreen(
                 options = ListRowOptions(trailingColor = tandemPalette.warning),
             ) { navigation.open(AppRoute.UNCERTAIN_WRITE) }
         }
-        SectionCard("Recent sync activity", "Sample events", "") {
+        SectionCard("Recent sync activity") {
             ListRow("Budget snapshot", "Ready for initial download", "Pending")
             DividerLine()
-            ListRow("Local edits", "None in sample data", "0")
+            ListRow("Local edits", trailing = "None")
         }
-        SecondaryButton("Review") { navigation.open(AppRoute.CONFLICT_INBOX) }
     }
 }

@@ -86,11 +86,10 @@ internal fun LocalDataScreen(
         SectionCard("On this device", syncStatus, animateDetail = true) {
             ListRow(
                 "Transactions",
-                "Cached transactions",
-                formatInteger(mobileSession.cachedTransactionCount),
+                trailing = formatInteger(mobileSession.cachedTransactionCount),
             )
             DividerLine()
-            ListRow("Accounts", "Cached accounts", formatInteger(mobileSession.accountRecords.size))
+            ListRow("Accounts", trailing = formatInteger(mobileSession.accountRecords.size))
             DividerLine()
             ListRow(
                 "Pending Changes",
@@ -113,18 +112,16 @@ internal fun LocalDataScreen(
         }
         SectionCard("Storage actions") {
             ListRow(
-                "Refresh local budget",
-                "Sync this budget",
+                "Sync budget",
+                "Update this device from Actual",
                 when {
                     mobileSession.isSyncing -> "Syncing"
-                    hasSelectedBudget -> "Refresh"
+                    hasSelectedBudget -> null
                     else -> "Unavailable"
                 },
                 options = ListRowOptions(animateChanges = true),
                 onClick = onSyncNow.takeIf { hasSelectedBudget && !mobileSession.isSyncing },
             )
-            DividerLine()
-            ListRow("Clear local data", trailing = "Unavailable")
         }
         AnimatedPreviewNote(mobileSession.syncError)
         if (mobileSession.pendingWrites.isNotEmpty()) InfoBubble("Pending edits stay on this device.")

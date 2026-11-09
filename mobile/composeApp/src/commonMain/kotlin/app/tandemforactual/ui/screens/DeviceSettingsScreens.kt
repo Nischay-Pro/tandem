@@ -24,6 +24,7 @@ import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
+import app.tandemforactual.ui.components.SurfaceCard
 import com.composables.icons.lucide.FingerprintPattern
 import com.composables.icons.lucide.FolderKey
 import com.composables.icons.lucide.KeyRound
@@ -222,7 +223,7 @@ internal fun NotificationsScreen(
     onToggleNotificationPermission: ((Boolean) -> Unit)?,
 ) {
     PageColumn {
-        SectionCard("") {
+        SurfaceCard {
             if (notificationPermissionEnabled != null && onToggleNotificationPermission != null) {
                 ToggleRow(
                     "Notifications",

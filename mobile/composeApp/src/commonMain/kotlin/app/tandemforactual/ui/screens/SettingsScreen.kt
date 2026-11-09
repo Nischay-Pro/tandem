@@ -31,6 +31,7 @@ import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
+import app.tandemforactual.ui.components.SurfaceCard
 import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Database
@@ -55,7 +56,7 @@ internal fun SettingsScreen(
                 SecondaryButton("Try again") { state.settingsStorageRetry += 1 }
             }
         }
-        SectionCard("Appearance") {
+        SurfaceCard {
             ListRow(
                 "Appearance",
                 leading = RowLeading.Icon(Lucide.Palette),
