@@ -18,10 +18,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,7 +33,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.TandemMotion
 import app.tandemforactual.ui.TandemShapes
 import app.tandemforactual.ui.TandemSpacing
@@ -37,6 +45,10 @@ import app.tandemforactual.ui.TandemTypography
 import app.tandemforactual.ui.tandemMotionSpec
 import app.tandemforactual.ui.tandemPalette
 import app.tandemforactual.ui.tandemReduceMotion
+import com.composables.icons.lucide.Check
+import com.composables.icons.lucide.CircleAlert
+import com.composables.icons.lucide.Info
+import com.composables.icons.lucide.Lucide
 
 @Composable
 internal fun BodyText(text: String) {
@@ -49,6 +61,9 @@ internal enum class InlineMessageKind {
     INFO,
     SUCCESS,
 }
+
+internal fun inlineMessageLiveRegion(kind: InlineMessageKind): LiveRegionMode =
+    if (kind == InlineMessageKind.ERROR) LiveRegionMode.Assertive else LiveRegionMode.Polite
 
 @Composable
 internal fun InlineMessage(
@@ -64,13 +79,36 @@ internal fun InlineMessage(
             InlineMessageKind.INFO -> palette.muted
             InlineMessageKind.SUCCESS -> palette.positive
         }
-    Text(
-        text,
-        modifier = modifier,
-        color = color,
-        fontSize = TandemTypography.compactBody,
-        lineHeight = TandemTypography.bodyLineHeight,
-    )
+    val icon =
+        when (kind) {
+            InlineMessageKind.ERROR,
+            InlineMessageKind.WARNING,
+            -> Lucide.CircleAlert
+            InlineMessageKind.INFO -> Lucide.Info
+            InlineMessageKind.SUCCESS -> Lucide.Check
+        }
+    val shape = RoundedCornerShape(TandemShapes.medium)
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(color.copy(alpha = 0.08f))
+                .border(1.dp, color.copy(alpha = 0.24f), shape)
+                .semantics { liveRegion = inlineMessageLiveRegion(kind) }
+                .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = color)
+        Text(
+            text,
+            modifier = Modifier.weight(1f),
+            color = palette.text,
+            fontSize = TandemTypography.compactBody,
+            lineHeight = TandemTypography.bodyLineHeight,
+        )
+    }
 }
 
 @Composable
