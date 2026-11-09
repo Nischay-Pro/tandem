@@ -269,7 +269,7 @@ internal fun BudgetScreen(
                         InlineMessage(
                             message,
                             if (groupReorderStatus.warning) InlineMessageKind.WARNING else InlineMessageKind.ERROR,
-                            actionLabel = "Retry".takeIf { groupReorderStatus.pendingCount > 0 },
+                            actionLabel = "Try again".takeIf { groupReorderStatus.pendingCount > 0 },
                             onAction =
                                 {
                                     mobileSession.retryQueuedBudgetReorders(

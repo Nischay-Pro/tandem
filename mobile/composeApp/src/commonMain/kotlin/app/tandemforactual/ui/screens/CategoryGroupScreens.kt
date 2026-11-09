@@ -212,7 +212,7 @@ internal fun CategoryGroupScreen(
                             message,
                             if (categoryMoveStatus.warning) InlineMessageKind.WARNING else InlineMessageKind.ERROR,
                             Modifier.padding(horizontal = TandemSpacing.large),
-                            actionLabel = "Retry".takeIf { categoryMoveStatus.pendingCount > 0 },
+                            actionLabel = "Try again".takeIf { categoryMoveStatus.pendingCount > 0 },
                             onAction =
                                 {
                                     mobileSession.retryQueuedBudgetReorders(
@@ -395,7 +395,7 @@ internal fun CategoryGroupScreen(
                                     message,
                                     if (hiddenCategoryMoveStatus.warning) InlineMessageKind.WARNING else InlineMessageKind.ERROR,
                                     Modifier.padding(horizontal = TandemSpacing.large),
-                                    actionLabel = "Retry".takeIf { hiddenCategoryMoveStatus.pendingCount > 0 },
+                                    actionLabel = "Try again".takeIf { hiddenCategoryMoveStatus.pendingCount > 0 },
                                     onAction =
                                         {
                                             mobileSession.retryQueuedBudgetReorders(
