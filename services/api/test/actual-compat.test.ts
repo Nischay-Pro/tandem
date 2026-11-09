@@ -137,6 +137,48 @@ describe.skipIf(!compatibilityTestEnabled)(
       await mkdir(firstDataDir, { recursive: true });
       await bootstrapDisposableServer(serverURL, serverPassword);
 
+      const loginResponse = await fetch(new URL("/account/login", serverURL), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          loginMethod: "password",
+          password: serverPassword,
+        }),
+      });
+      if (!loginResponse.ok) {
+        throw new Error(
+          "Actual did not issue a disposable compatibility session token",
+        );
+      }
+      const login = (await loginResponse.json()) as {
+        token?: unknown;
+        data?: { token?: unknown };
+      };
+      const sessionToken = login.data?.token ?? login.token;
+      if (typeof sessionToken !== "string" || sessionToken.length === 0) {
+        throw new Error(
+          "Actual returned no disposable compatibility session token",
+        );
+      }
+
+      const tokenDataDir = path.join(
+        firstDataDir,
+        `session-token-${randomUUID()}`,
+      );
+      await mkdir(tokenDataDir, { recursive: true });
+      const tokenDevice = createActualSession({
+        serverURL,
+        dataDir: tokenDataDir,
+        sessionToken,
+      });
+      try {
+        await expect(
+          tokenDevice.execute(() => Actual.getBudgets()),
+        ).resolves.toEqual(expect.any(Array));
+      } finally {
+        await tokenDevice.close();
+      }
+
       const firstDevice = createActualSession({
         serverURL,
         dataDir: firstDataDir,

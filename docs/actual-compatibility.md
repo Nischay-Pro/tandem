@@ -111,6 +111,12 @@ toggle. This is test setup only; production adapter reads and writes use the
 public API methods and do not access Actual's SQLite files or internal
 database.
 
+The same run obtains a disposable Actual server session token from its login
+endpoint, initializes a separate `@actual-app/api` workspace with that token
+and no server password, and reads the budget catalog. This verifies the
+supported session-token path against the pinned Actual release; it does not
+exercise a third-party OpenID provider.
+
 ## Verified upstream evidence
 
 - Official package docs say Actual has no HTTP REST API and that the Node API
