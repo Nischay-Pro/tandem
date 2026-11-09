@@ -17,6 +17,7 @@ import app.tandemforactual.data.database.BudgetSyncStateEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.database.TandemDatabase
+import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.BudgetSyncCoordinator
 import app.tandemforactual.data.store.BudgetSyncProtocolException
@@ -26,17 +27,22 @@ import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.LocalRecordProjection
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
+import app.tandemforactual.ui.model.LiveCategoryGroupSummary
 import app.tandemforactual.ui.model.booleanValue
 import app.tandemforactual.ui.model.recordBody
 import app.tandemforactual.ui.reports.ReportsViewModels
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -102,6 +108,10 @@ internal class TandemMobileSession(
     private val credentialStore: DeviceCredentialStore? = null,
 ) {
     private val repository = database?.let { LocalBudgetRepository(it, nowEpochMillis) }
+    private val preferencesStore = database?.let(::AppPreferencesStore)
+    private val sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val budgetQueuePersistenceMutex = Mutex()
+    private var budgetQueueLoaded = false
     internal val reportViewModels = repository?.let(::ReportsViewModels)
     private val syncCoordinator =
         repository?.let {
@@ -206,7 +216,87 @@ internal class TandemMobileSession(
     var budgetActionWasAppliedButRefreshFailed by mutableStateOf(false)
         private set
 
-    private var budgetReorderQueue by mutableStateOf(BudgetReorderQueueState())
+    private var budgetReorderQueueState by mutableStateOf(BudgetReorderQueueState())
+    private var budgetReorderQueue: BudgetReorderQueueState
+        get() = budgetReorderQueueState
+        set(value) {
+            budgetReorderQueueState = value
+            persistBudgetReorderQueue()
+        }
+    private var budgetReorderRetrySignal by mutableStateOf(0)
+
+    private suspend fun restoreBudgetReorderQueue() {
+        if (budgetQueueLoaded) return
+        val saved =
+            runCatching {
+                preferencesStore?.read()?.get(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY)
+            }.getOrNull()
+        val pendingBeforeRestore = budgetReorderQueueState.moves
+        val restored = decodeBudgetReorderQueue(saved)
+        budgetReorderQueueState =
+            pendingBeforeRestore.fold(restored) { current, move ->
+                if (move in current.moves) current else current.enqueue(move)
+            }
+        budgetQueueLoaded = true
+    }
+
+    private fun persistBudgetReorderQueue() {
+        val store = preferencesStore ?: return
+        if (!budgetQueueLoaded) return
+        sessionScope.launch {
+            budgetQueuePersistenceMutex.withLock {
+                store.putValue(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY, encodeBudgetReorderQueue(budgetReorderQueueState))
+            }
+        }
+    }
+
+    fun categoryVisibilityOverridesFor(budgetId: String): Map<String, Boolean> = budgetReorderQueue.categoryVisibilityOverridesFor(budgetId)
+
+    fun categoryGroupNameOverridesFor(budgetId: String): Map<String, String> = budgetReorderQueue.categoryGroupNameOverridesFor(budgetId)
+
+    fun categoryNameOverridesFor(budgetId: String): Map<String, String> = budgetReorderQueue.categoryNameOverridesFor(budgetId)
+
+    fun categoryGroupIdOverridesFor(budgetId: String): Map<String, String> = budgetReorderQueue.categoryGroupIdOverridesFor(budgetId)
+
+    fun categoryGroupVisibilityOverridesFor(budgetId: String): Map<String, Boolean> =
+        budgetReorderQueue.categoryGroupVisibilityOverridesFor(budgetId)
+
+    fun deletedCategoryIdsFor(budgetId: String): Set<String> = budgetReorderQueue.deletedCategoryIdsFor(budgetId)
+
+    fun pendingCategoryGroupCreatesFor(budgetId: String): List<LiveCategoryGroupSummary> =
+        budgetReorderQueue.pendingCategoryGroupCreatesFor(budgetId)
+
+    fun pendingCategoryCreatesFor(budgetId: String) = budgetReorderQueue.pendingCategoryCreatesFor(budgetId)
+
+    fun resolveCategoryGroupId(
+        budgetId: String,
+        groupId: String,
+    ): String = budgetReorderQueue.resolveCategoryGroupId(budgetId, groupId)
+
+    fun retryQueuedBudgetReorders(
+        budgetId: String? = null,
+        encryptionPassword: String? = null,
+    ) {
+        if (!budgetId.isNullOrBlank() && !encryptionPassword.isNullOrBlank()) {
+            budgetReorderQueue =
+                budgetReorderQueue.copy(
+                    moves =
+                        budgetReorderQueue.moves.map { move ->
+                            if (move.budgetId == budgetId && move.requiresEncryptionPassword) {
+                                move.copy(encryptionPassword = encryptionPassword)
+                            } else {
+                                move
+                            }
+                        },
+                )
+        }
+        budgetReorderRetrySignal += 1
+    }
+
+    private fun hasPendingCategoryCreate(budgetId: String): Boolean =
+        budgetReorderQueue.moves.any {
+            it.budgetId == budgetId && it.kind == BudgetReorderKind.CREATE_CATEGORY
+        }
 
     fun budgetReorderMovesFor(
         budgetId: String,
@@ -217,6 +307,11 @@ internal class TandemMobileSession(
         budgetId: String,
         scopeId: String,
     ): BudgetReorderStatus = budgetReorderQueue.statusFor(budgetId, scopeId)
+
+    fun pendingBudgetMutationCount(budgetId: String): Int = budgetReorderQueue.moves.count { it.budgetId == budgetId }
+
+    fun budgetMutationsWaitingForConnection(budgetId: String): Boolean =
+        budgetReorderQueue.waitingForConnection && budgetReorderQueue.moves.any { it.budgetId == budgetId }
 
     fun enqueueBudgetReorder(
         budgetId: String,
@@ -233,6 +328,265 @@ internal class TandemMobileSession(
             )
     }
 
+    fun enqueueBudgetCategoryVisibilityChange(
+        budgetId: String,
+        categoryId: String,
+        groupId: String,
+        hidden: Boolean,
+        currentOrder: List<String>,
+        encryptionPassword: String?,
+    ) {
+        budgetActionMessage = null
+        val scopeId = groupId
+        budgetReorderQueue =
+            budgetReorderQueue.enqueue(
+                QueuedBudgetReorder(
+                    budgetId = budgetId,
+                    scopeId = scopeId,
+                    kind = if (hidden) BudgetReorderKind.HIDE_CATEGORY else BudgetReorderKind.SHOW_CATEGORY,
+                    itemId = categoryId,
+                    targetId = null,
+                    desiredOrder = currentOrder,
+                    encryptionPassword = encryptionPassword,
+                ),
+            )
+    }
+
+    fun enqueueBudgetCategoryGroupCreate(
+        budgetId: String,
+        name: String,
+        isIncome: Boolean,
+        currentOrder: List<String>,
+        encryptionPassword: String?,
+    ): String? {
+        val cleanName = name.trim()
+        if (cleanName.isBlank() || cleanName.length > 100) {
+            budgetActionMessage = "Enter a category group name up to 100 characters."
+            return null
+        }
+        if (budgetId.isBlank()) {
+            budgetActionMessage = "Open a budget before adding a category group."
+            return null
+        }
+        if (refuseWriteInReadOnlyMode()) {
+            budgetActionMessage = transactionWriteMessage
+            return null
+        }
+        val localGroupId = "local-${Uuid.random()}"
+        budgetActionMessage = null
+        budgetReorderQueue =
+            budgetReorderQueue.enqueue(
+                QueuedBudgetReorder(
+                    budgetId = budgetId,
+                    scopeId = BUDGET_GROUP_ORDER_SCOPE,
+                    kind = BudgetReorderKind.CREATE_CATEGORY_GROUP,
+                    itemId = localGroupId,
+                    targetId = null,
+                    desiredOrder = currentOrder + localGroupId,
+                    encryptionPassword = encryptionPassword,
+                    name = cleanName,
+                    isIncome = isIncome,
+                ),
+            )
+        return localGroupId
+    }
+
+    fun enqueueBudgetCategoryGroupRename(
+        budgetId: String,
+        groupId: String,
+        name: String,
+        currentOrder: List<String>,
+        encryptionPassword: String?,
+    ): Boolean {
+        val cleanName = name.trim()
+        if (cleanName.isBlank() || cleanName.length > 100) {
+            budgetActionMessage = "Enter a category group name up to 100 characters."
+            return false
+        }
+        if (budgetId.isBlank() || groupId.isBlank()) {
+            budgetActionMessage = "Open a budget before renaming this category group."
+            return false
+        }
+        if (refuseWriteInReadOnlyMode()) {
+            budgetActionMessage = transactionWriteMessage
+            return false
+        }
+        budgetActionMessage = null
+        budgetReorderQueue =
+            budgetReorderQueue.enqueue(
+                QueuedBudgetReorder(
+                    budgetId = budgetId,
+                    scopeId = BUDGET_GROUP_ORDER_SCOPE,
+                    kind = BudgetReorderKind.RENAME_CATEGORY_GROUP,
+                    itemId = groupId,
+                    targetId = null,
+                    desiredOrder = currentOrder,
+                    encryptionPassword = encryptionPassword,
+                    name = cleanName,
+                ),
+            )
+        return true
+    }
+
+    fun enqueueBudgetCategoryCreate(
+        budgetId: String,
+        groupId: String,
+        name: String,
+        currentOrder: List<String>,
+        encryptionPassword: String?,
+    ): String? {
+        val cleanName = name.trim()
+        if (cleanName.isBlank() || cleanName.length > 100) {
+            budgetActionMessage = "Enter a category name up to 100 characters."
+            return null
+        }
+        if (budgetId.isBlank() || groupId.isBlank()) {
+            budgetActionMessage = "Open a budget before adding a category."
+            return null
+        }
+        if (refuseWriteInReadOnlyMode()) {
+            budgetActionMessage = transactionWriteMessage
+            return null
+        }
+        val localCategoryId = "local-category-${Uuid.random()}"
+        val resolvedGroupId = budgetReorderQueue.resolveCategoryGroupId(budgetId, groupId)
+        budgetActionMessage = null
+        budgetReorderQueue =
+            budgetReorderQueue.enqueue(
+                QueuedBudgetReorder(
+                    budgetId = budgetId,
+                    scopeId = groupId,
+                    kind = BudgetReorderKind.CREATE_CATEGORY,
+                    itemId = localCategoryId,
+                    targetId = null,
+                    desiredOrder = currentOrder + localCategoryId,
+                    encryptionPassword = encryptionPassword,
+                    name = cleanName,
+                    parentGroupId = resolvedGroupId,
+                ),
+            )
+        return localCategoryId
+    }
+
+    fun enqueueBudgetCategoryRename(
+        budgetId: String,
+        categoryId: String,
+        name: String,
+        encryptionPassword: String?,
+    ): Boolean {
+        val cleanName = name.trim()
+        if (cleanName.isBlank() || cleanName.length > 100) {
+            budgetActionMessage = "Enter a category name up to 100 characters."
+            return false
+        }
+        if (budgetId.isBlank() || categoryId.isBlank()) {
+            budgetActionMessage = "Open a budget before renaming this category."
+            return false
+        }
+        if (refuseWriteInReadOnlyMode()) {
+            budgetActionMessage = transactionWriteMessage
+            return false
+        }
+        budgetActionMessage = null
+        budgetReorderQueue =
+            budgetReorderQueue.enqueue(
+                QueuedBudgetReorder(
+                    budgetId = budgetId,
+                    scopeId = "category-$categoryId",
+                    kind = BudgetReorderKind.RENAME_CATEGORY,
+                    itemId = budgetReorderQueue.resolveCategoryId(budgetId, categoryId),
+                    targetId = null,
+                    desiredOrder = emptyList(),
+                    encryptionPassword = encryptionPassword,
+                    name = cleanName,
+                ),
+            )
+        return true
+    }
+
+    fun enqueueBudgetCategoryMoveToGroup(
+        budgetId: String,
+        categoryId: String,
+        groupId: String,
+        encryptionPassword: String?,
+    ): Boolean {
+        if (budgetId.isBlank() || categoryId.isBlank() || groupId.isBlank()) {
+            budgetActionMessage = "Choose a category group."
+            return false
+        }
+        if (refuseWriteInReadOnlyMode()) {
+            budgetActionMessage = transactionWriteMessage
+            return false
+        }
+        budgetActionMessage = null
+        budgetReorderQueue =
+            budgetReorderQueue.enqueue(
+                QueuedBudgetReorder(
+                    budgetId = budgetId,
+                    scopeId = "category-$categoryId",
+                    kind = BudgetReorderKind.MOVE_CATEGORY_TO_GROUP,
+                    itemId = budgetReorderQueue.resolveCategoryId(budgetId, categoryId),
+                    targetId = null,
+                    desiredOrder = emptyList(),
+                    encryptionPassword = encryptionPassword,
+                    parentGroupId = budgetReorderQueue.resolveCategoryGroupId(budgetId, groupId),
+                ),
+            )
+        return true
+    }
+
+    fun enqueueBudgetCategoryDelete(
+        budgetId: String,
+        categoryId: String,
+        transferCategoryId: String?,
+        encryptionPassword: String?,
+    ): Boolean {
+        if (budgetId.isBlank() || categoryId.isBlank()) {
+            budgetActionMessage = "Open a budget before deleting this category."
+            return false
+        }
+        if (refuseWriteInReadOnlyMode()) {
+            budgetActionMessage = transactionWriteMessage
+            return false
+        }
+        budgetActionMessage = null
+        budgetReorderQueue =
+            budgetReorderQueue.enqueue(
+                QueuedBudgetReorder(
+                    budgetId = budgetId,
+                    scopeId = "category-$categoryId",
+                    kind = BudgetReorderKind.DELETE_CATEGORY,
+                    itemId = budgetReorderQueue.resolveCategoryId(budgetId, categoryId),
+                    targetId = transferCategoryId?.let { budgetReorderQueue.resolveCategoryId(budgetId, it) },
+                    desiredOrder = emptyList(),
+                    encryptionPassword = encryptionPassword,
+                ),
+            )
+        return true
+    }
+
+    fun enqueueBudgetCategoryGroupVisibilityChange(
+        budgetId: String,
+        groupId: String,
+        hidden: Boolean,
+        encryptionPassword: String?,
+    ) {
+        if (budgetId.isBlank() || groupId.isBlank() || refuseWriteInReadOnlyMode()) return
+        budgetActionMessage = null
+        budgetReorderQueue =
+            budgetReorderQueue.enqueue(
+                QueuedBudgetReorder(
+                    budgetId = budgetId,
+                    scopeId = BUDGET_GROUP_ORDER_SCOPE,
+                    kind = if (hidden) BudgetReorderKind.HIDE_CATEGORY_GROUP else BudgetReorderKind.SHOW_CATEGORY_GROUP,
+                    itemId = budgetReorderQueue.resolveCategoryGroupId(budgetId, groupId),
+                    targetId = null,
+                    desiredOrder = emptyList(),
+                    encryptionPassword = encryptionPassword,
+                ),
+            )
+    }
+
     fun clearBudgetReorderMessage(
         budgetId: String,
         scopeId: String,
@@ -240,39 +594,211 @@ internal class TandemMobileSession(
         budgetReorderQueue = budgetReorderQueue.clearMessage(budgetId, scopeId)
     }
 
+    private fun clearBudgetReorderMessageAfterDelay(
+        budgetId: String,
+        scopeId: String,
+        message: String,
+    ) {
+        sessionScope.launch {
+            delay(6_000)
+            val current = budgetReorderQueue.statusFor(budgetId, scopeId)
+            if (current.message == message && !budgetReorderQueue.waitingForConnection) {
+                budgetReorderQueue = budgetReorderQueue.clearMessage(budgetId, scopeId)
+            }
+        }
+    }
+
     /** Runs outside editor screens so leaving a route cannot cancel unsent reorder operations. */
     suspend fun processQueuedBudgetReorders() {
+        restoreBudgetReorderQueue()
+        var observedRetrySignal = budgetReorderRetrySignal
         while (true) {
             val request = snapshotFlow { budgetReorderQueue.moves.firstOrNull() }.first { it != null } ?: continue
+            if (request.requiresEncryptionPassword && request.encryptionPassword.isNullOrBlank()) {
+                observedRetrySignal = snapshotFlow { budgetReorderRetrySignal }.first { it != observedRetrySignal }
+                continue
+            }
+            if (budgetReorderQueue.waitingForConnection) {
+                observedRetrySignal = snapshotFlow { budgetReorderRetrySignal }.first { it != observedRetrySignal }
+                budgetReorderQueue = budgetReorderQueue.resumeAfterConnection()
+            } else {
+                observedRetrySignal = budgetReorderRetrySignal
+            }
             snapshotFlow { isPerformingBudgetAction }.first { !it }
             if (budgetReorderQueue.moves.firstOrNull() != request) continue
 
+            var createdCategoryGroupId: String? = null
+            var createdCategoryId: String? = null
+            budgetActionWasAppliedButRefreshFailed = false
             val moved =
-                when (request.kind) {
-                    BudgetReorderKind.CATEGORY ->
-                        manageBudgetCategory(
-                            request.budgetId,
-                            request.itemId,
-                            "move",
-                            request.targetId,
-                            request.encryptionPassword,
-                        )
-                    BudgetReorderKind.CATEGORY_GROUP ->
-                        manageBudgetCategoryGroup(
-                            request.budgetId,
-                            request.itemId,
-                            "move",
-                            null,
-                            request.targetId,
-                            request.encryptionPassword,
-                        )
+                if (request.refreshOnly ||
+                    request.kind in
+                    setOf(
+                        BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE,
+                        BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
+                        BudgetReorderKind.REFRESH_CATEGORY_CREATE,
+                        BudgetReorderKind.REFRESH_CATEGORY_RENAME,
+                    )
+                ) {
+                    synchronize(request.budgetId, request.encryptionPassword) != null
+                } else {
+                    when (request.kind) {
+                        BudgetReorderKind.CATEGORY ->
+                            manageBudgetCategory(
+                                request.budgetId,
+                                request.itemId,
+                                "move",
+                                request.targetId,
+                                request.encryptionPassword,
+                            )
+                        BudgetReorderKind.HIDE_CATEGORY ->
+                            manageBudgetCategory(
+                                request.budgetId,
+                                request.itemId,
+                                "hide",
+                                null,
+                                request.encryptionPassword,
+                            )
+                        BudgetReorderKind.SHOW_CATEGORY ->
+                            manageBudgetCategory(
+                                request.budgetId,
+                                request.itemId,
+                                "show",
+                                null,
+                                request.encryptionPassword,
+                            )
+                        BudgetReorderKind.CREATE_CATEGORY_GROUP -> {
+                            createdCategoryGroupId =
+                                createBudgetCategoryGroup(
+                                    request.budgetId,
+                                    request.name.orEmpty(),
+                                    request.isIncome,
+                                    request.encryptionPassword,
+                                )
+                            createdCategoryGroupId != null
+                        }
+                        BudgetReorderKind.RENAME_CATEGORY_GROUP ->
+                            manageBudgetCategoryGroup(
+                                request.budgetId,
+                                request.itemId,
+                                "rename",
+                                request.name,
+                                null,
+                                request.encryptionPassword,
+                            )
+                        BudgetReorderKind.CATEGORY_GROUP ->
+                            manageBudgetCategoryGroup(
+                                request.budgetId,
+                                request.itemId,
+                                "move",
+                                null,
+                                request.targetId,
+                                request.encryptionPassword,
+                            )
+                        BudgetReorderKind.CREATE_CATEGORY -> {
+                            createdCategoryId =
+                                createBudgetCategory(
+                                    request.budgetId,
+                                    request.name.orEmpty(),
+                                    request.parentGroupId.orEmpty(),
+                                    request.encryptionPassword,
+                                )
+                            createdCategoryId != null
+                        }
+                        BudgetReorderKind.RENAME_CATEGORY ->
+                            renameBudgetCategory(request.budgetId, request.itemId, request.name.orEmpty(), request.encryptionPassword)
+                        BudgetReorderKind.MOVE_CATEGORY_TO_GROUP ->
+                            manageBudgetCategory(
+                                request.budgetId,
+                                request.itemId,
+                                "move",
+                                null,
+                                request.encryptionPassword,
+                                request.parentGroupId,
+                            )
+                        BudgetReorderKind.DELETE_CATEGORY ->
+                            deleteBudgetCategory(request.budgetId, request.itemId, request.targetId, request.encryptionPassword)
+                        BudgetReorderKind.HIDE_CATEGORY_GROUP ->
+                            manageBudgetCategoryGroup(request.budgetId, request.itemId, "hide", null, null, request.encryptionPassword)
+                        BudgetReorderKind.SHOW_CATEGORY_GROUP ->
+                            manageBudgetCategoryGroup(request.budgetId, request.itemId, "show", null, null, request.encryptionPassword)
+                        BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE,
+                        BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
+                        BudgetReorderKind.REFRESH_CATEGORY_CREATE,
+                        BudgetReorderKind.REFRESH_CATEGORY_RENAME,
+                        -> false
+                    }
                 }
+            if (createdCategoryId != null) {
+                repository?.remapPendingCategoryReferences(request.budgetId, request.itemId, createdCategoryId)
+            }
             val refreshFailed = budgetActionWasAppliedButRefreshFailed
-            if (moved || refreshFailed) {
+            if (request.kind == BudgetReorderKind.CREATE_CATEGORY_GROUP && refreshFailed && createdCategoryGroupId != null) {
+                budgetReorderQueue =
+                    budgetReorderQueue.awaitCategoryGroupRefresh(
+                        request,
+                        createdCategoryGroupId,
+                        BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE,
+                        "Created in Actual. Waiting for the budget to refresh.",
+                    )
+            } else if (request.kind == BudgetReorderKind.RENAME_CATEGORY_GROUP && refreshFailed) {
+                budgetReorderQueue =
+                    budgetReorderQueue.awaitCategoryGroupRefresh(
+                        request,
+                        request.itemId,
+                        BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
+                        "Renamed in Actual. Waiting for the budget to refresh.",
+                    )
+            } else if (request.kind == BudgetReorderKind.RENAME_CATEGORY && refreshFailed) {
+                budgetReorderQueue = budgetReorderQueue.awaitRefresh(request, "Renamed in Actual. Waiting for the budget to refresh.")
+            } else if (request.kind == BudgetReorderKind.CREATE_CATEGORY_GROUP && moved && createdCategoryGroupId != null) {
+                budgetReorderQueue = budgetReorderQueue.completeCategoryGroupCreate(request, createdCategoryGroupId)
+            } else if (request.kind == BudgetReorderKind.CREATE_CATEGORY && refreshFailed && createdCategoryId != null) {
+                budgetReorderQueue =
+                    budgetReorderQueue.awaitCategoryCreateRefresh(
+                        request,
+                        createdCategoryId,
+                        "Created in Actual. Waiting for the budget to refresh.",
+                    )
+            } else if (request.kind == BudgetReorderKind.CREATE_CATEGORY && moved && createdCategoryId != null) {
+                budgetReorderQueue = budgetReorderQueue.completeCategoryCreate(request, createdCategoryId)
+            } else if (refreshFailed) {
+                budgetReorderQueue = budgetReorderQueue.awaitRefresh(request, "Saved in Actual. Waiting for the budget to refresh.")
+            } else if ((
+                    request.refreshOnly ||
+                        request.kind in
+                        setOf(
+                            BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE,
+                            BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
+                            BudgetReorderKind.REFRESH_CATEGORY_CREATE,
+                            BudgetReorderKind.REFRESH_CATEGORY_RENAME,
+                        )
+                ) &&
+                !moved
+            ) {
+                budgetReorderQueue =
+                    budgetReorderQueue.waitForConnection(
+                        request,
+                        "Waiting for a connection to refresh this category group.",
+                    )
+            } else if (moved) {
                 budgetReorderQueue = budgetReorderQueue.complete(request, refreshFailed, budgetActionMessage)
+            } else if (!isServerReachable || !apiClient.isAuthenticated) {
+                budgetReorderQueue =
+                    budgetReorderQueue.waitForConnection(
+                        request,
+                        "Waiting for a connection to Tandem. This change will retry automatically.",
+                    )
             } else {
-                val failure = budgetReorderFailureMessage(budgetActionMessage)
-                budgetReorderQueue = budgetReorderQueue.failAll(failure)
+                val failure = budgetMutationFailureMessage(request.kind, budgetActionMessage)
+                budgetReorderQueue = budgetReorderQueue.failHead(request, failure)
+                clearBudgetReorderMessageAfterDelay(request.budgetId, request.scopeId, failure)
+            }
+            if (moved &&
+                request.kind in setOf(BudgetReorderKind.CREATE_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_CREATE) &&
+                !hasPendingCategoryCreate(request.budgetId)
+            ) {
+                synchronize(request.budgetId, request.encryptionPassword)
             }
         }
     }
@@ -451,6 +977,7 @@ internal class TandemMobileSession(
             isServerReachable = true
             persistCurrentSession()
             loadBudgets()
+            retryQueuedBudgetReorders()
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
@@ -472,6 +999,7 @@ internal class TandemMobileSession(
             budgetCatalogLoaded = true
             budgetCatalogVersion += 1
             isServerReachable = true
+            retryQueuedBudgetReorders()
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
@@ -498,6 +1026,8 @@ internal class TandemMobileSession(
         sendQueuedWrites: Boolean = true,
         reconcileUncertainOperationId: String? = null,
     ): BudgetSyncSummary? {
+        restoreBudgetReorderQueue()
+        if (!encryptionPassword.isNullOrBlank()) retryQueuedBudgetReorders(budgetId, encryptionPassword)
         syncComplete = false
         syncedTransactionCount = 0
         lastSyncSummary = null
@@ -516,7 +1046,7 @@ internal class TandemMobileSession(
                     coordinator.synchronize(
                         budgetId,
                         encryptionPassword,
-                        sendQueuedWrites,
+                        sendQueuedWrites && !hasPendingCategoryCreate(budgetId),
                         reconcileUncertainOperationId,
                     )
                 }
@@ -527,6 +1057,8 @@ internal class TandemMobileSession(
                 localRepository.countVisibleRecords(budgetId, "transaction").coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
             syncComplete = true
             syncPresentation = syncPresentation.succeeded()
+            budgetReorderQueue = budgetReorderQueue.clearCompletedVisibilityOverrides(budgetId)
+            retryQueuedBudgetReorders(budgetId, encryptionPassword)
             if (activityTransactionPageBudgetId == budgetId) refreshActivityTransactionPages(budgetId)
             return summary
         } catch (error: CancellationException) {
@@ -777,7 +1309,7 @@ internal class TandemMobileSession(
             performBudgetAction(budgetId, encryptionPassword, "Couldn’t create this category. Try again.") {
                 categoryId = apiClient.createBudgetCategory(budgetId, categoryGroupId, cleanName, encryptionPassword)
             }
-        return categoryId.takeIf { created }
+        return categoryId.takeIf { created || budgetActionWasAppliedButRefreshFailed }
     }
 
     suspend fun createBudgetCategoryGroup(
@@ -796,7 +1328,7 @@ internal class TandemMobileSession(
             performBudgetAction(budgetId, encryptionPassword, "Couldn’t create this category group. Try again.") {
                 groupId = apiClient.createBudgetCategoryGroup(budgetId, cleanName, isIncome, encryptionPassword)
             }
-        return groupId.takeIf { created }
+        return groupId.takeIf { created || budgetActionWasAppliedButRefreshFailed }
     }
 
     suspend fun manageBudgetCategoryGroup(
@@ -1114,6 +1646,7 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
+            isServerReachable = error.httpStatus != null
             if (actionApplied) {
                 budgetActionWasAppliedButRefreshFailed = true
                 budgetActionMessage = "Actual was updated, but this device couldn’t refresh the budget."
@@ -1122,6 +1655,7 @@ internal class TandemMobileSession(
             }
             return false
         } catch (_: Exception) {
+            isServerReachable = false
             if (actionApplied) {
                 budgetActionWasAppliedButRefreshFailed = true
                 budgetActionMessage = "Actual was updated, but this device couldn’t refresh the budget."
@@ -1140,6 +1674,7 @@ internal class TandemMobileSession(
         amountText: String,
         notes: String,
         originalAmountMinor: Long,
+        transactionType: String,
         displaySettings: BudgetDisplaySettings? = null,
         accountId: String? = null,
         payeeId: String? = null,
@@ -1209,7 +1744,7 @@ internal class TandemMobileSession(
             transactionWriteMessage = "Choose a date on or after ${formatDate(SampleDate(1995, 1, 1))}."
             return false
         }
-        val signedAmount = if (originalAmountMinor < 0) -enteredAmount else enteredAmount
+        val signedAmount = if (transactionType == "Income") enteredAmount else -enteredAmount
         val patch =
             buildTransactionEditPatch(
                 base = base,
@@ -1375,8 +1910,8 @@ internal class TandemMobileSession(
         }
         val localRepository = repository
         val coordinator = syncCoordinator
-        if (localRepository == null || coordinator == null || !isAuthenticated) {
-            transactionWriteMessage = "Pair this device and open a budget before adding a transaction."
+        if (localRepository == null || coordinator == null) {
+            transactionWriteMessage = "Local budget storage is unavailable. Reopen the budget and try again."
             return false
         }
         val account = accountRecords.firstOrNull { it.recordId == accountId }
@@ -1393,7 +1928,14 @@ internal class TandemMobileSession(
             transactionWriteMessage = "Choose an existing payee or clear the payee field."
             return false
         }
-        if (categoryId != null && categoryRecords.none { it.recordId == categoryId }) {
+        val categoryIsPending =
+            categoryId != null &&
+                budgetReorderQueue.moves.any {
+                    it.budgetId == budgetId &&
+                        it.itemId == categoryId &&
+                        it.kind in setOf(BudgetReorderKind.CREATE_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_CREATE)
+                }
+        if (categoryId != null && categoryRecords.none { it.recordId == categoryId } && !categoryIsPending) {
             transactionWriteMessage = "Choose a category from this budget before saving."
             return false
         }
@@ -1456,11 +1998,12 @@ internal class TandemMobileSession(
                         ),
                 ),
             )
-            val summary = synchronize(budgetId, encryptionPassword)
+            val summary = if (categoryIsPending) null else synchronize(budgetId, encryptionPassword)
             val savedWrite = localRepository.findWrite(operationId)
             transactionWriteMessage =
                 when (savedWrite?.status) {
                     "committed" -> "Transaction added to Actual."
+                    "queued" -> "Saved on this device and waiting to sync."
                     "conflict" -> "This transaction is already in Actual. Sync and try again."
                     "uncertain", "sending" -> "Status unknown. Check before retrying."
                     "rejected" -> "Actual didn’t add this transaction. The previous value was kept."
@@ -1472,7 +2015,7 @@ internal class TandemMobileSession(
                         }
                 }
             loadLocalRecords(budgetId)
-            return savedWrite?.status == "committed"
+            return savedWrite?.status in setOf("committed", "queued")
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {

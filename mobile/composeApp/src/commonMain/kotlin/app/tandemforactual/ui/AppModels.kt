@@ -162,15 +162,18 @@ internal fun resolveMainCloudStatus(
     persistedSyncStatus: String?,
     pendingWriteStatuses: Collection<String>,
     hasSuccessfulSync: Boolean,
+    hasPendingBudgetChanges: Boolean = false,
+    budgetChangesWaitingForConnection: Boolean = false,
 ): MainCloudStatus {
-    if (!syncEnabled) return MainCloudStatus.OFF
     if (isSyncing || persistedSyncStatus == "SYNCING") return MainCloudStatus.SYNCING
+    if (budgetChangesWaitingForConnection) return MainCloudStatus.ERROR
+    if (!syncEnabled) return if (hasPendingBudgetChanges) MainCloudStatus.ERROR else MainCloudStatus.OFF
 
     val hasWriteNeedingReview = pendingWriteStatuses.any { it in setOf("conflict", "uncertain", "rejected") }
     if (hasSyncError || persistedSyncStatus in setOf("FAILED", "NEEDS_FULL_SYNC") || hasWriteNeedingReview) {
         return MainCloudStatus.ERROR
     }
-    if (pendingWriteStatuses.any { it in setOf("queued", "sending") }) return MainCloudStatus.SYNCING
+    if (pendingWriteStatuses.any { it in setOf("queued", "sending") } || hasPendingBudgetChanges) return MainCloudStatus.SYNCING
     return if (hasSuccessfulSync) MainCloudStatus.SYNCED else MainCloudStatus.ERROR
 }
 

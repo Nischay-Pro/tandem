@@ -20,7 +20,6 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,14 +50,11 @@ import app.tandemforactual.ui.model.recordBody
 import app.tandemforactual.ui.model.recordName
 import app.tandemforactual.ui.model.stringValue
 import com.composables.icons.lucide.Check
-import com.composables.icons.lucide.ChevronDown
-import com.composables.icons.lucide.ChevronUp
 import com.composables.icons.lucide.Eye
 import com.composables.icons.lucide.EyeOff
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Plus
-import kotlinx.coroutines.launch
 
 internal fun reorderItemToIndex(
     itemIds: List<String>,
@@ -91,12 +87,12 @@ internal fun CategoryGroupScreen(
     liveBudgetMonth: LiveBudgetMonthSummary?,
     mobileSession: TandemMobileSession,
 ) {
-    val scope = rememberCoroutineScope()
     val palette = tandemPalette
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     val isTrackingBudget = isLiveBudget && state.budgetDisplaySettings?.budgetType == "tracking"
     val groups = if (isLiveBudget) liveBudgetMonth?.groups.orEmpty() else previewCategoryGroups
-    val group = groups.firstOrNull { it.id == state.selectedCategoryGroupId } ?: groups.firstOrNull()
+    val selectedGroupId = mobileSession.resolveCategoryGroupId(state.selectedBudgetId, state.selectedCategoryGroupId)
+    val group = groups.firstOrNull { it.id == selectedGroupId } ?: groups.firstOrNull()
     var showHidden by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
     var selectedCategoryOrderId by rememberSaveable(state.selectedBudgetId, group?.id) { mutableStateOf<String?>(null) }
     var showGroupDialog by rememberSaveable(state.selectedBudgetId, group?.id) { mutableStateOf(false) }
@@ -106,25 +102,22 @@ internal fun CategoryGroupScreen(
     val categoryScopeId = group?.id.orEmpty()
     val queuedCategoryMoves = mobileSession.budgetReorderMovesFor(state.selectedBudgetId, categoryScopeId)
     val categoryMoveStatus = mobileSession.budgetReorderStatus(state.selectedBudgetId, categoryScopeId)
-    var categoryOrderIds by
-        remember(state.selectedBudgetId, group?.id, group?.categories, queuedCategoryMoves, categoryMoveStatus) {
-            val serverOrder = group?.categories.orEmpty().map { it.id }
-            val optimisticOrder = budgetOrderForScreen(serverOrder, categoryMoveStatus, queuedCategoryMoves)
-            mutableStateOf(optimisticOrder.takeIf { it != serverOrder })
-        }
+    val serverCategoryOrder = group?.categories.orEmpty().map { it.id }
+    val queuedCategoryOrder = budgetOrderForScreen(serverCategoryOrder, categoryMoveStatus, queuedCategoryMoves)
+    var draggedCategoryOrderIds by remember(state.selectedBudgetId, group?.id) { mutableStateOf<List<String>?>(null) }
     var draggedCategoryId by remember(state.selectedBudgetId, group?.id) { mutableStateOf<String?>(null) }
     var dragStartingOrder by remember(state.selectedBudgetId, group?.id) { mutableStateOf<List<String>>(emptyList()) }
     var draggedCategoryOffsetPx by remember(state.selectedBudgetId, group?.id) { mutableFloatStateOf(0f) }
     val categoryRowCenters = remember(group?.id) { mutableStateMapOf<String, Float>() }
+    val categoryOrderIds = draggedCategoryOrderIds ?: queuedCategoryOrder
     val orderedCategories =
         remember(group?.categories, categoryOrderIds) {
             val categories = group?.categories.orEmpty()
-            val ids = categoryOrderIds ?: categories.map { it.id }
             val categoriesById = categories.associateBy { it.id }
-            ids.mapNotNull(categoriesById::get) + categories.filterNot { it.id in ids }
+            categoryOrderIds.mapNotNull(categoriesById::get) + categories.filterNot { it.id in categoryOrderIds }
         }
 
-    fun currentCategoryOrder(): List<String> = categoryOrderIds ?: group?.categories.orEmpty().map { it.id }
+    fun currentCategoryOrder(): List<String> = draggedCategoryOrderIds ?: queuedCategoryOrder
 
     fun enqueueCategoryMove(
         itemId: String,
@@ -135,7 +128,6 @@ internal fun CategoryGroupScreen(
         if (oldOrder == nextOrder) return
         mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, categoryScopeId)
         mobileSession.clearBudgetActionMessage()
-        categoryOrderIds = nextOrder
         mobileSession.enqueueBudgetReorder(
             state.selectedBudgetId,
             categoryScopeId,
@@ -147,15 +139,21 @@ internal fun CategoryGroupScreen(
         )
     }
     val hiddenGroupRecords =
-        remember(mobileSession.categoryGroupRecords) {
-            mobileSession.categoryGroupRecords.filter { it.recordBody()?.booleanValue("hidden") == true }
+        remember(mobileSession.categoryGroupRecords, mobileSession.categoryGroupVisibilityOverridesFor(state.selectedBudgetId)) {
+            val visibilityOverrides = mobileSession.categoryGroupVisibilityOverridesFor(state.selectedBudgetId)
+            mobileSession.categoryGroupRecords.filter { record ->
+                visibilityOverrides[record.recordId] ?: (record.recordBody()?.booleanValue("hidden") == true)
+            }
         }
+    val categoryVisibilityOverrides = mobileSession.categoryVisibilityOverridesFor(state.selectedBudgetId)
+    val deletedCategoryIds = mobileSession.deletedCategoryIdsFor(state.selectedBudgetId)
     val hiddenCategoryRecords =
-        remember(mobileSession.categoryRecords, group?.id) {
+        remember(mobileSession.categoryRecords, group?.id, categoryVisibilityOverrides, deletedCategoryIds) {
             mobileSession.categoryRecords.filter { record ->
                 val body = record.recordBody()
-                body?.booleanValue("hidden") == true &&
-                    (body.stringValue("group") ?: body.stringValue("group_id")) == group?.id
+                record.recordId !in deletedCategoryIds &&
+                    (categoryVisibilityOverrides[record.recordId] ?: body?.booleanValue("hidden") ?: false) &&
+                    (body?.stringValue("group") ?: body?.stringValue("group_id")) == group?.id
             }
         }
     val hiddenCategoryScopeId = "${group?.id.orEmpty()}::hidden"
@@ -199,7 +197,7 @@ internal fun CategoryGroupScreen(
                             TandemIconButton(
                                 Lucide.Pencil,
                                 "Edit category group",
-                                enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                                enabled = !state.readOnlyMode,
                             ) {
                                 groupNameDraft = group.name
                                 mobileSession.clearBudgetActionMessage()
@@ -267,7 +265,6 @@ internal fun CategoryGroupScreen(
                                 onLongClick =
                                     if (isLiveBudget &&
                                         !state.readOnlyMode &&
-                                        (!mobileSession.isPerformingBudgetAction || categoryMoveStatus.pendingCount > 0) &&
                                         !isReordering
                                     ) {
                                         { selectedCategoryOrderId = category.id }
@@ -293,26 +290,20 @@ internal fun CategoryGroupScreen(
                                     isHidden = false,
                                     canMoveUp = canMoveUp,
                                     canMoveDown = canMoveDown,
-                                    enabled =
-                                        !state.readOnlyMode &&
-                                            (!mobileSession.isPerformingBudgetAction || categoryMoveStatus.pendingCount > 0),
-                                    toggleEnabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
-                                    dragEnabled =
-                                        !state.readOnlyMode &&
-                                            (!mobileSession.isPerformingBudgetAction || categoryMoveStatus.pendingCount > 0),
+                                    enabled = !state.readOnlyMode,
+                                    toggleEnabled = !state.readOnlyMode,
+                                    dragEnabled = !state.readOnlyMode,
                                     onToggleHidden = {
-                                        scope.launch {
-                                            if (mobileSession.manageBudgetCategory(
-                                                    state.selectedBudgetId,
-                                                    category.id,
-                                                    "hide",
-                                                    null,
-                                                    state.encryptedPassword.takeIf { it.isNotBlank() },
-                                                )
-                                            ) {
-                                                selectedCategoryOrderId = null
-                                            }
-                                        }
+                                        mobileSession.enqueueBudgetCategoryVisibilityChange(
+                                            budgetId = state.selectedBudgetId,
+                                            categoryId = category.id,
+                                            groupId = categoryScopeId,
+                                            hidden = true,
+                                            currentOrder = currentCategoryOrder(),
+                                            encryptionPassword = state.encryptedPassword.takeIf { it.isNotBlank() },
+                                        )
+                                        selectedCategoryOrderId = null
+                                        showHidden = true
                                     },
                                     onMoveUp = { moveCategory(-1) },
                                     onMoveDown = { moveCategory(1) },
@@ -320,7 +311,7 @@ internal fun CategoryGroupScreen(
                                         mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, categoryScopeId)
                                         mobileSession.clearBudgetActionMessage()
                                         dragStartingOrder = currentCategoryOrder()
-                                        categoryOrderIds = dragStartingOrder
+                                        draggedCategoryOrderIds = dragStartingOrder
                                         draggedCategoryId = category.id
                                         draggedCategoryOffsetPx = 0f
                                     },
@@ -338,7 +329,8 @@ internal fun CategoryGroupScreen(
                                                 val nextCenter = nextId?.let(centers::get)
                                                 if (nextCenter != null && draggedCenter > nextCenter) {
                                                     val gap = nextCenter - baseCenter
-                                                    categoryOrderIds = reorderItemToIndex(currentOrder, category.id, currentIndex + 1)
+                                                    draggedCategoryOrderIds =
+                                                        reorderItemToIndex(currentOrder, category.id, currentIndex + 1)
                                                     draggedCategoryOffsetPx -= gap
                                                     baseCenter = nextCenter
                                                     continue
@@ -347,7 +339,8 @@ internal fun CategoryGroupScreen(
                                                 val previousCenter = previousId?.let(centers::get)
                                                 if (previousCenter != null && draggedCenter < previousCenter) {
                                                     val gap = baseCenter - previousCenter
-                                                    categoryOrderIds = reorderItemToIndex(currentOrder, category.id, currentIndex - 1)
+                                                    draggedCategoryOrderIds =
+                                                        reorderItemToIndex(currentOrder, category.id, currentIndex - 1)
                                                     draggedCategoryOffsetPx += gap
                                                     baseCenter = previousCenter
                                                     continue
@@ -371,6 +364,7 @@ internal fun CategoryGroupScreen(
                                                 )
                                             }
                                             draggedCategoryId = null
+                                            draggedCategoryOrderIds = null
                                             draggedCategoryOffsetPx = 0f
                                             dragStartingOrder = emptyList()
                                         }
@@ -424,7 +418,6 @@ internal fun CategoryGroupScreen(
                                         options = ListRowOptions(showChevron = !isReordering),
                                         onLongClick =
                                             if (!state.readOnlyMode &&
-                                                (!mobileSession.isPerformingBudgetAction || hiddenCategoryMoveStatus.pendingCount > 0) &&
                                                 !isReordering
                                             ) {
                                                 { selectedCategoryOrderId = hidden.recordId }
@@ -436,15 +429,14 @@ internal fun CategoryGroupScreen(
                                                 if (isReordering) {
                                                     selectedCategoryOrderId = null
                                                 } else {
-                                                    scope.launch {
-                                                        mobileSession.manageBudgetCategory(
-                                                            state.selectedBudgetId,
-                                                            hidden.recordId,
-                                                            "show",
-                                                            null,
-                                                            state.encryptedPassword.takeIf { it.isNotBlank() },
-                                                        )
-                                                    }
+                                                    mobileSession.enqueueBudgetCategoryVisibilityChange(
+                                                        budgetId = state.selectedBudgetId,
+                                                        categoryId = hidden.recordId,
+                                                        groupId = group.id,
+                                                        hidden = false,
+                                                        currentOrder = currentCategoryOrder(),
+                                                        encryptionPassword = state.encryptedPassword.takeIf { it.isNotBlank() },
+                                                    )
                                                 }
                                             },
                                         modifier = Modifier.weight(1f),
@@ -455,23 +447,18 @@ internal fun CategoryGroupScreen(
                                             isHidden = true,
                                             canMoveUp = hiddenIndex > 0,
                                             canMoveDown = hiddenIndex >= 0 && hiddenIndex < hiddenCategoryRecords.lastIndex,
-                                            enabled =
-                                                !state.readOnlyMode &&
-                                                    (!mobileSession.isPerformingBudgetAction || hiddenCategoryMoveStatus.pendingCount > 0),
-                                            toggleEnabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                                            enabled = !state.readOnlyMode,
+                                            toggleEnabled = !state.readOnlyMode,
                                             onToggleHidden = {
-                                                scope.launch {
-                                                    if (mobileSession.manageBudgetCategory(
-                                                            state.selectedBudgetId,
-                                                            hidden.recordId,
-                                                            "show",
-                                                            null,
-                                                            state.encryptedPassword.takeIf { it.isNotBlank() },
-                                                        )
-                                                    ) {
-                                                        selectedCategoryOrderId = null
-                                                    }
-                                                }
+                                                mobileSession.enqueueBudgetCategoryVisibilityChange(
+                                                    budgetId = state.selectedBudgetId,
+                                                    categoryId = hidden.recordId,
+                                                    groupId = group.id,
+                                                    hidden = false,
+                                                    currentOrder = currentCategoryOrder(),
+                                                    encryptionPassword = state.encryptedPassword.takeIf { it.isNotBlank() },
+                                                )
+                                                selectedCategoryOrderId = null
                                             },
                                             onMoveUp = { moveHiddenCategory(-1) },
                                             onMoveDown = { moveHiddenCategory(1) },
@@ -488,16 +475,12 @@ internal fun CategoryGroupScreen(
                                     leading = RowLeading.Icon(Lucide.EyeOff),
                                     trailing = "Show",
                                     onClick = {
-                                        scope.launch {
-                                            mobileSession.manageBudgetCategoryGroup(
-                                                state.selectedBudgetId,
-                                                hidden.recordId,
-                                                "show",
-                                                null,
-                                                null,
-                                                state.encryptedPassword.takeIf { it.isNotBlank() },
-                                            )
-                                        }
+                                        mobileSession.enqueueBudgetCategoryGroupVisibilityChange(
+                                            state.selectedBudgetId,
+                                            hidden.recordId,
+                                            hidden = false,
+                                            encryptionPassword = state.encryptedPassword.takeIf { it.isNotBlank() },
+                                        )
                                     },
                                 )
                             }
@@ -509,7 +492,7 @@ internal fun CategoryGroupScreen(
         if (group != null && shouldShowBudgetCreateAction(isLiveBudget, selectedCategoryOrderId != null)) {
             FloatingAction(
                 compact = true,
-                enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                enabled = !state.readOnlyMode,
                 label = "Add category",
                 contentDescription = "Add category",
                 icon = Lucide.Plus,
@@ -528,23 +511,20 @@ internal fun CategoryGroupScreen(
             title = "Edit category group",
             name = groupNameDraft,
             onNameChange = { groupNameDraft = it },
-            busy = mobileSession.isPerformingBudgetAction,
+            busy = false,
             message = mobileSession.budgetActionMessage,
             placeholder = group.name,
             onDismiss = { showGroupDialog = false },
             onSave = {
-                scope.launch {
-                    if (mobileSession.manageBudgetCategoryGroup(
-                            state.selectedBudgetId,
-                            group.id,
-                            "rename",
-                            groupNameDraft,
-                            null,
-                            state.encryptedPassword.takeIf { it.isNotBlank() },
-                        )
-                    ) {
-                        showGroupDialog = false
-                    }
+                if (mobileSession.enqueueBudgetCategoryGroupRename(
+                        state.selectedBudgetId,
+                        group.id,
+                        groupNameDraft,
+                        groups.map { it.id },
+                        state.encryptedPassword.takeIf { it.isNotBlank() },
+                    )
+                ) {
+                    showGroupDialog = false
                 }
             },
         )
@@ -553,21 +533,20 @@ internal fun CategoryGroupScreen(
             title = "Add category",
             name = newCategoryName,
             onNameChange = { newCategoryName = it },
-            busy = mobileSession.isPerformingBudgetAction,
+            busy = false,
             message = mobileSession.budgetActionMessage,
             placeholder = "Groceries",
             onDismiss = { showCreateCategoryDialog = false },
             onSave = {
-                scope.launch {
-                    if (mobileSession.createBudgetCategory(
-                            state.selectedBudgetId,
-                            newCategoryName,
-                            group.id,
-                            state.encryptedPassword.takeIf { it.isNotBlank() },
-                        ) != null
-                    ) {
-                        showCreateCategoryDialog = false
-                    }
+                if (mobileSession.enqueueBudgetCategoryCreate(
+                        state.selectedBudgetId,
+                        group.id,
+                        newCategoryName,
+                        group.categories.map { it.id },
+                        state.encryptedPassword.takeIf { it.isNotBlank() },
+                    ) != null
+                ) {
+                    showCreateCategoryDialog = false
                 }
             },
         )
@@ -602,22 +581,6 @@ internal fun BudgetItemReorderActions(
                 onClick = toggleHidden,
             )
         }
-        TandemIconButton(
-            Lucide.ChevronUp,
-            "Move $itemName up",
-            sizeDp = 44,
-            iconSizeDp = 18,
-            enabled = enabled && canMoveUp,
-            onClick = onMoveUp,
-        )
-        TandemIconButton(
-            Lucide.ChevronDown,
-            "Move $itemName down",
-            sizeDp = 44,
-            iconSizeDp = 18,
-            enabled = enabled && canMoveDown,
-            onClick = onMoveDown,
-        )
         ReorderDragHandle(
             enabled = dragEnabled && (canMoveUp || canMoveDown),
             canMoveUp = canMoveUp,
@@ -642,6 +605,7 @@ internal fun CategoryGroupNameDialog(
     placeholder: String = "Essentials",
     isIncome: Boolean? = null,
     onIncomeChange: ((Boolean) -> Unit)? = null,
+    saveLabel: String = "Save",
     onDismiss: () -> Unit,
     onSave: () -> Unit,
 ) {
@@ -661,7 +625,7 @@ internal fun CategoryGroupNameDialog(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     TandemActionButton("Cancel", TandemActionButtonTone.NEUTRAL, Modifier.weight(1f), enabled = !busy, onClick = onDismiss)
                     TandemActionButton(
-                        "Save",
+                        saveLabel,
                         TandemActionButtonTone.PRIMARY,
                         Modifier.weight(1f),
                         icon = Lucide.Check,

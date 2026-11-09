@@ -303,7 +303,6 @@ internal fun ScreenContent(
             )
         }
         AppRoute.CHOOSE_CATEGORY -> {
-            val scope = rememberCoroutineScope()
             val isLiveBudget = state.selectedBudgetId.isNotBlank()
             val visibleMonthGroups =
                 liveBudgetMonth
@@ -314,15 +313,21 @@ internal fun ScreenContent(
                 if (!isLiveBudget) {
                     emptyList()
                 } else {
-                    mobileSession.categoryRecords
-                        .mapNotNull { record ->
-                            val body = record.recordBody()
-                            if (body?.booleanValue("hidden") == true || body?.booleanValue("deleted") == true) {
-                                null
-                            } else {
-                                record.recordName()?.let { SelectorItem(record.recordId, it) }
+                    val cachedCategories =
+                        mobileSession.categoryRecords
+                            .mapNotNull { record ->
+                                val body = record.recordBody()
+                                if (body?.booleanValue("hidden") == true || body?.booleanValue("deleted") == true) {
+                                    null
+                                } else {
+                                    record.recordName()?.let { SelectorItem(record.recordId, it) }
+                                }
                             }
-                        }.distinctBy(SelectorItem::id)
+                    val visibleCategories =
+                        visibleMonthGroups.flatMap { group ->
+                            group.categories.map { category -> SelectorItem(category.id, category.name) }
+                        }
+                    (cachedCategories + visibleCategories).distinctBy(SelectorItem::id)
                 }
             val allCategoryItemsById = allLiveCategoryItems.associateBy(SelectorItem::id)
             val visibleCategoryIds = visibleMonthGroups.flatMap { it.categories }.mapTo(mutableSetOf()) { it.id }
@@ -367,13 +372,18 @@ internal fun ScreenContent(
                 if (!isLiveBudget) {
                     emptyList()
                 } else {
-                    mobileSession.categoryGroupRecords.mapNotNull { record ->
-                        val body = record.recordBody() ?: return@mapNotNull null
-                        val isIncomeGroup = body.booleanValue("is_income") ?: false
-                        if (isIncomeGroup != (state.transactionType == "Income") || body.booleanValue("hidden") == true) {
-                            return@mapNotNull null
+                    val visibleGroups = visibleMonthGroups.map { SelectorItem(it.id, it.name) }
+                    if (visibleGroups.isNotEmpty()) {
+                        visibleGroups
+                    } else {
+                        mobileSession.categoryGroupRecords.mapNotNull { record ->
+                            val body = record.recordBody() ?: return@mapNotNull null
+                            val isIncomeGroup = body.booleanValue("is_income") ?: false
+                            if (isIncomeGroup != (state.transactionType == "Income") || body.booleanValue("hidden") == true) {
+                                return@mapNotNull null
+                            }
+                            record.recordName()?.let { SelectorItem(record.recordId, it) }
                         }
-                        record.recordName()?.let { SelectorItem(record.recordId, it) }
                     }
                 }
             var createGroupId by rememberSaveable(state.selectedBudgetId, state.transactionType) { mutableStateOf("") }
@@ -441,30 +451,31 @@ internal fun ScreenContent(
                                             }
                                             mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
                                             TandemActionButton(
-                                                if (mobileSession.isPerformingBudgetAction) "Creating…" else "Create \"$newName\"",
+                                                "Create \"$newName\"",
                                                 TandemActionButtonTone.PRIMARY,
                                                 modifier = Modifier.fillMaxWidth(),
                                                 enabled =
                                                     !state.readOnlyMode &&
-                                                        !mobileSession.isPerformingBudgetAction &&
                                                         createGroupId.isNotBlank() &&
                                                         newName.length <= 100,
-                                                loading = mobileSession.isPerformingBudgetAction,
                                             ) {
                                                 mobileSession.clearBudgetActionMessage()
-                                                scope.launch {
-                                                    val categoryId =
-                                                        mobileSession.createBudgetCategory(
-                                                            state.selectedBudgetId,
-                                                            newName,
-                                                            createGroupId,
-                                                            state.encryptedPassword.takeIf { it.isNotBlank() },
-                                                        )
-                                                    if (categoryId != null) {
-                                                        state.transactionCategory = newName
-                                                        state.newTransactionCategoryId = categoryId
-                                                        navigation.back()
-                                                    }
+                                                val categoryId =
+                                                    mobileSession.enqueueBudgetCategoryCreate(
+                                                        state.selectedBudgetId,
+                                                        createGroupId,
+                                                        newName,
+                                                        visibleMonthGroups
+                                                            .firstOrNull { it.id == createGroupId }
+                                                            ?.categories
+                                                            ?.map { it.id }
+                                                            .orEmpty(),
+                                                        state.encryptedPassword.takeIf { it.isNotBlank() },
+                                                    )
+                                                if (categoryId != null) {
+                                                    state.transactionCategory = newName
+                                                    state.newTransactionCategoryId = categoryId
+                                                    navigation.back()
                                                 }
                                             }
                                         }

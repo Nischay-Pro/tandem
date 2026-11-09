@@ -169,6 +169,7 @@ internal fun openTransaction(
     state.selectedTransactionCategoryName = transaction.category
     state.transactionNotes = transaction.notes
     state.transactionAmount = formatAmount(kotlin.math.abs(transaction.amountMinorUnits), state.budgetDisplaySettings)
+    state.transactionType = if (transaction.amountMinorUnits < 0) "Spending" else "Income"
     state.selectedTransactionAmountMinor = transaction.amountMinorUnits
     state.selectedTransactionNotes = transaction.notes
     state.selectedTransactionRecordId = transaction.recordId.orEmpty()

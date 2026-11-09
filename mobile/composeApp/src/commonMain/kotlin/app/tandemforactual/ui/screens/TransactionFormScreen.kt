@@ -3,6 +3,8 @@
 package app.tandemforactual.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -74,6 +76,7 @@ internal fun TransactionFormScreen(
             var calculatorOperator by rememberSaveable { mutableStateOf<String?>(null) }
             var enterNewOperand by rememberSaveable { mutableStateOf(false) }
             var amountEntryMessage by rememberSaveable { mutableStateOf<String?>(null) }
+            var notesFocused by remember { mutableStateOf(false) }
             val amountFocusRequester = remember { FocusRequester() }
             val focusManager = LocalFocusManager.current
             val routeScrollState = LocalRouteScrollState.current
@@ -81,7 +84,7 @@ internal fun TransactionFormScreen(
                 derivedStateOf { (routeScrollState?.value ?: 0) > 72 }
             }
             var amountMinorUnits by
-                remember(state.transactionAmount) {
+                rememberSaveable(state.selectedBudgetId, route) {
                     mutableStateOf(
                         state
                             .parseAmountMinorUnits(state.transactionAmount)
@@ -161,6 +164,12 @@ internal fun TransactionFormScreen(
                 enterNewOperand = true
             }
 
+            fun dismissKeypad() {
+                keypadVisible = false
+                focusManager.clearFocus()
+                softwareKeyboard?.hide()
+            }
+
             LaunchedEffect(keypadVisible) {
                 if (keypadVisible) {
                     softwareKeyboard?.hide()
@@ -171,21 +180,22 @@ internal fun TransactionFormScreen(
             Box(Modifier.fillMaxSize()) {
                 PageColumn(
                     verticalSpacing = 14.dp,
-                    modifier = Modifier.imePadding(),
+                    modifier =
+                        Modifier
+                            .imePadding()
+                            .clickable(
+                                enabled = keypadVisible || notesFocused,
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = ::dismissKeypad,
+                            ),
                 ) {
                     TransactionAmountField(
-                        amount =
-                            state.formatAmount(
-                                when {
-                                    amountMinorUnits == 0L -> 0L
-                                    state.transactionType == "Income" -> amountMinorUnits
-                                    else -> -amountMinorUnits
-                                },
-                            ),
+                        amount = state.formatAmount(amountMinorUnits),
                         amountMinorUnits = amountMinorUnits,
                         transactionType = state.transactionType,
                         focusRequester = amountFocusRequester,
-                        neutralDisplay = true,
+                        showCursor = keypadVisible,
                         onShowKeypad = { keypadVisible = true },
                     )
                     AnimatedReveal(visible = amountEntryMessage != null) {
@@ -194,10 +204,7 @@ internal fun TransactionFormScreen(
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         TransactionTypePicker(
                             state.transactionType,
-                            onBeforeOpen = {
-                                keypadVisible = false
-                                softwareKeyboard?.hide()
-                            },
+                            onBeforeOpen = ::dismissKeypad,
                             onSelect = { state.transactionType = it },
                         )
                     }
@@ -207,8 +214,7 @@ internal fun TransactionFormScreen(
                             "Choose payee",
                             Lucide.Receipt,
                         ) {
-                            keypadVisible = false
-                            softwareKeyboard?.hide()
+                            dismissKeypad()
                             navigation.open(AppRoute.CHOOSE_PAYEE)
                         }
                         DividerLine()
@@ -217,8 +223,7 @@ internal fun TransactionFormScreen(
                             "Choose category",
                             Lucide.Tags,
                         ) {
-                            keypadVisible = false
-                            softwareKeyboard?.hide()
+                            dismissKeypad()
                             navigation.open(AppRoute.CHOOSE_CATEGORY)
                         }
                         DividerLine()
@@ -227,8 +232,7 @@ internal fun TransactionFormScreen(
                             "Choose account",
                             Lucide.WalletCards,
                         ) {
-                            keypadVisible = false
-                            softwareKeyboard?.hide()
+                            dismissKeypad()
                             showAccountPicker = true
                         }
                         DividerLine()
@@ -237,8 +241,7 @@ internal fun TransactionFormScreen(
                             "Choose date",
                             Lucide.CalendarDays,
                         ) {
-                            keypadVisible = false
-                            softwareKeyboard?.hide()
+                            dismissKeypad()
                             showDatePicker = true
                         }
                     }
@@ -249,7 +252,7 @@ internal fun TransactionFormScreen(
                         TextFieldOptions(
                             placeholder = "Add a note",
                             singleLine = false,
-                            onFocusedChange = { focused -> if (focused) keypadVisible = false },
+                            onFocusedChange = { notesFocused = it },
                         ),
                     )
                     AnimatedReveal(visible = mobileSession.transactionWriteMessage != null) {
@@ -271,8 +274,7 @@ internal fun TransactionFormScreen(
                         onOperator = ::chooseOperator,
                         onEquals = ::calculate,
                         onDone = {
-                            keypadVisible = false
-                            focusManager.clearFocus()
+                            dismissKeypad()
                         },
                         modifier = Modifier.align(Alignment.BottomCenter),
                     )
@@ -288,7 +290,10 @@ internal fun TransactionFormScreen(
                         Modifier.fillMaxWidth().background(tandemPalette.surface).padding(horizontal = 18.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        SecondaryButton("Cancel", Modifier.width(112.dp), onClick = navigation.back)
+                        SecondaryButton("Cancel", Modifier.width(112.dp)) {
+                            dismissKeypad()
+                            navigation.back()
+                        }
                         Spacer(Modifier.weight(1f))
                         FloatingTransactionSave(
                             compact = compactSave,
@@ -298,7 +303,10 @@ internal fun TransactionFormScreen(
                                     state.transactionPayee.isNotBlank() &&
                                     state.transactionCategory.isNotBlank() &&
                                     amountMinorUnits > 0,
-                            onClick = onCreateTransaction,
+                            onClick = {
+                                dismissKeypad()
+                                onCreateTransaction()
+                            },
                         )
                     }
                 }
@@ -328,21 +336,100 @@ internal fun TransactionFormScreen(
             return
         }
         var originalAmountMinor by remember(state.selectedTransactionRecordId) { mutableStateOf(state.selectedTransactionAmountMinor) }
+        var originalTransactionType by
+            remember(state.selectedTransactionRecordId) {
+                mutableStateOf(if ((state.selectedTransactionAmountMinor ?: 0L) < 0) "Spending" else "Income")
+            }
         var originalNotes by remember(state.selectedTransactionRecordId) { mutableStateOf(state.selectedTransactionNotes) }
         var savedFeedback by remember(state.selectedTransactionRecordId) { mutableStateOf(false) }
         var confirmDelete by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf(false) }
+        var keypadVisible by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf(false) }
+        var notesFocused by remember { mutableStateOf(false) }
+        var calculatorAccumulator by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf<Long?>(null) }
+        var calculatorOperator by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf<String?>(null) }
+        var enterNewOperand by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf(false) }
+        var amountEntryMessage by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf<String?>(null) }
+        var amountMinorUnits by
+            rememberSaveable(state.selectedTransactionRecordId) {
+                mutableStateOf(
+                    state
+                        .parseAmountMinorUnits(state.transactionAmount)
+                        ?.let { kotlin.math.abs(it).coerceAtMost(MAX_TRANSACTION_AMOUNT_MINOR_UNITS) }
+                        ?: kotlin.math
+                            .abs(state.selectedTransactionAmountMinor ?: 0L)
+                            .coerceAtMost(MAX_TRANSACTION_AMOUNT_MINOR_UNITS),
+                )
+            }
+        val amountFocusRequester = remember(state.selectedTransactionRecordId) { FocusRequester() }
+        val focusManager = LocalFocusManager.current
+        val routeScrollState = LocalRouteScrollState.current
+        val compactSave by remember(routeScrollState) {
+            derivedStateOf { (routeScrollState?.value ?: 0) > 72 }
+        }
+
+        fun setEditAmount(minorUnits: Long) {
+            val magnitude =
+                (if (minorUnits == Long.MIN_VALUE) Long.MAX_VALUE else kotlin.math.abs(minorUnits))
+                    .coerceAtMost(MAX_TRANSACTION_AMOUNT_MINOR_UNITS)
+            amountMinorUnits = magnitude
+            state.transactionAmount = state.formatAmount(magnitude)
+        }
+
+        fun enterEditDigit(digit: Int) {
+            val current = if (enterNewOperand) 0L else amountMinorUnits
+            setEditAmount(appendAmountDigit(current, digit))
+            amountEntryMessage = null
+            enterNewOperand = false
+        }
+
+        fun chooseEditOperator(operator: String) {
+            val previous = calculatorAccumulator
+            val pending = calculatorOperator
+            if (previous != null && pending != null && !enterNewOperand) {
+                val result = calculateAmountMinorUnits(previous, amountMinorUnits, pending) ?: return
+                setEditAmount(result)
+                calculatorAccumulator = kotlin.math.abs(result)
+            } else if (previous == null) {
+                calculatorAccumulator = amountMinorUnits
+            }
+            calculatorOperator = operator
+            enterNewOperand = true
+        }
+
+        fun calculateEditAmount() {
+            val previous = calculatorAccumulator
+            val operator = calculatorOperator
+            if (previous != null && operator != null) {
+                val result =
+                    if (enterNewOperand) previous else calculateAmountMinorUnits(previous, amountMinorUnits, operator)
+                if (result != null) setEditAmount(result)
+            }
+            calculatorAccumulator = null
+            calculatorOperator = null
+            enterNewOperand = true
+        }
+
+        fun dismissEditKeypad() {
+            keypadVisible = false
+            focusManager.clearFocus()
+            softwareKeyboard?.hide()
+        }
+
         val parsedAmount = state.parseAmountMinorUnits(state.transactionAmount)
         val baselineAmount = originalAmountMinor?.let { kotlin.math.abs(it) }
         val hasChanges =
             parsedAmount != baselineAmount ||
+                state.transactionType != originalTransactionType ||
                 state.transactionNotes != originalNotes ||
                 state.newTransactionAccountId != state.selectedTransactionAccountId ||
                 state.newTransactionPayeeId != state.selectedTransactionPayeeId ||
                 state.newTransactionCategoryId != state.selectedTransactionCategoryId ||
                 state.transactionDate != state.selectedTransactionDate
-        val routeScrollState = LocalRouteScrollState.current
-        val compactSave by remember(routeScrollState) {
-            derivedStateOf { (routeScrollState?.value ?: 0) > 72 }
+        LaunchedEffect(keypadVisible) {
+            if (keypadVisible) {
+                softwareKeyboard?.hide()
+                amountFocusRequester.requestFocus()
+            }
         }
         LaunchedEffect(savedFeedback) {
             if (savedFeedback) {
@@ -351,63 +438,108 @@ internal fun TransactionFormScreen(
             }
         }
         Box(Modifier.fillMaxSize()) {
-            PageColumn {
-                TextFieldCard(
-                    "Amount",
-                    state.transactionAmount,
-                    { state.transactionAmount = it },
-                    TextFieldOptions(placeholder = state.formatAmount(4_218)),
+            PageColumn(
+                verticalSpacing = 14.dp,
+                modifier =
+                    Modifier
+                        .imePadding()
+                        .clickable(
+                            enabled = keypadVisible || notesFocused,
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = ::dismissEditKeypad,
+                        ),
+            ) {
+                TransactionAmountField(
+                    amount = state.formatAmount(amountMinorUnits),
+                    amountMinorUnits = amountMinorUnits,
+                    transactionType = state.transactionType,
+                    focusRequester = amountFocusRequester,
+                    showCursor = keypadVisible,
+                    onShowKeypad = { keypadVisible = true },
                 )
-                TextFieldCard(
-                    "Notes",
-                    state.transactionNotes,
-                    { state.transactionNotes = it },
-                    TextFieldOptions(placeholder = "Add a note", singleLine = false),
-                )
+                AnimatedReveal(visible = amountEntryMessage != null) {
+                    InlineMessage(amountEntryMessage.orEmpty(), InlineMessageKind.ERROR)
+                }
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    TransactionTypePicker(
+                        state.transactionType,
+                        onBeforeOpen = ::dismissEditKeypad,
+                        onSelect = { state.transactionType = it },
+                    )
+                }
                 SectionCard(title = "") {
-                    TransactionPickerRow(state.transactionAccount, "Choose account", Lucide.WalletCards) {
-                        softwareKeyboard?.hide()
-                        showAccountPicker = true
-                    }
-                    DividerLine()
                     TransactionPickerRow(state.transactionPayee, "Choose payee", Lucide.Receipt) {
+                        dismissEditKeypad()
                         navigation.open(AppRoute.CHOOSE_PAYEE)
                     }
                     DividerLine()
                     TransactionPickerRow(state.transactionCategory, "Choose category", Lucide.Tags) {
+                        dismissEditKeypad()
                         navigation.open(AppRoute.CHOOSE_CATEGORY)
                     }
                     DividerLine()
+                    TransactionPickerRow(state.transactionAccount, "Choose account", Lucide.WalletCards) {
+                        dismissEditKeypad()
+                        showAccountPicker = true
+                    }
+                    DividerLine()
                     TransactionPickerRow(displayTransactionDate(state.transactionDate), "Choose date", Lucide.CalendarDays) {
-                        softwareKeyboard?.hide()
+                        dismissEditKeypad()
                         showDatePicker = true
                     }
                 }
+                TextFieldCard(
+                    "Notes",
+                    state.transactionNotes,
+                    { state.transactionNotes = it },
+                    TextFieldOptions(
+                        placeholder = "Add a note",
+                        singleLine = false,
+                        onFocusedChange = { notesFocused = it },
+                    ),
+                )
                 mobileSession.transactionWriteMessage?.let { message ->
                     SurfaceCard {
                         Column(Modifier.padding(TandemSpacing.large)) { BodyText(message) }
                     }
                 }
-                Spacer(Modifier.height(76.dp))
+                Spacer(Modifier.height(if (keypadVisible) AMOUNT_KEYPAD_HEIGHT + 68.dp else 76.dp))
+            }
+            if (keypadVisible) {
+                TransactionAmountKeypad(
+                    onDigit = ::enterEditDigit,
+                    onDelete = {
+                        val current = if (enterNewOperand) 0L else amountMinorUnits
+                        setEditAmount(removeAmountDigit(current))
+                        amountEntryMessage = null
+                        enterNewOperand = false
+                    },
+                    onOperator = ::chooseEditOperator,
+                    onEquals = ::calculateEditAmount,
+                    onDone = ::dismissEditKeypad,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
             }
             Box(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .imePadding()
-                    .padding(bottom = 12.dp),
+                    .padding(bottom = if (keypadVisible) AMOUNT_KEYPAD_HEIGHT + 12.dp else 12.dp),
             ) {
                 Row(
                     Modifier.fillMaxWidth().background(tandemPalette.surface).padding(horizontal = 18.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    SecondaryButton("Cancel", Modifier.width(112.dp), onClick = navigation.back)
-                    Spacer(Modifier.weight(1f))
                     FloatingTransactionDeleteAction(
                         enabled = !mobileSession.isSavingTransaction,
-                        onClick = { confirmDelete = true },
+                        onClick = {
+                            dismissEditKeypad()
+                            confirmDelete = true
+                        },
                     )
-                    Spacer(Modifier.width(TandemSpacing.small))
+                    Spacer(Modifier.weight(1f))
                     AnimatedVisibility(
                         visible = hasChanges || savedFeedback,
                         enter = tandemFadeEnter(tandemReduceMotion),
@@ -415,12 +547,14 @@ internal fun TransactionFormScreen(
                     ) {
                         FloatingTransactionSave(
                             compact = compactSave || savedFeedback,
-                            enabled = hasChanges && !mobileSession.isSavingTransaction && parsedAmount != null,
+                            enabled = hasChanges && !mobileSession.isSavingTransaction && parsedAmount != null && parsedAmount > 0,
                             saved = savedFeedback,
                             onClick = {
+                                dismissEditKeypad()
                                 onSaveTransaction { saved ->
                                     if (saved) {
                                         originalAmountMinor = state.selectedTransactionAmountMinor
+                                        originalTransactionType = state.transactionType
                                         originalNotes = state.selectedTransactionNotes
                                         savedFeedback = true
                                     }

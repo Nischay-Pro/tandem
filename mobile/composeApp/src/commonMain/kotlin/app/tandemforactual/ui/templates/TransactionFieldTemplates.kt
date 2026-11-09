@@ -4,6 +4,12 @@ package app.tandemforactual.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,6 +35,10 @@ import androidx.compose.material.Icon
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,12 +47,14 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -239,6 +251,7 @@ internal fun TransactionAmountField(
     transactionType: String,
     focusRequester: FocusRequester,
     neutralDisplay: Boolean = false,
+    showCursor: Boolean = false,
     onShowKeypad: () -> Unit,
     amountColorOverride: Color? = null,
 ) {
@@ -255,6 +268,15 @@ internal fun TransactionAmountField(
     val outline = if (entered && !neutralDisplay) amountColor else palette.border
     val fill = if (entered && !neutralDisplay) amountColor.copy(alpha = 0.08f) else palette.surface
     val display = amount.ifBlank { "0.00" }
+    var focused by remember { mutableStateOf(false) }
+    var textLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val cursorAlpha by
+        rememberInfiniteTransition(label = "amount-cursor").animateFloat(
+            initialValue = 1f,
+            targetValue = 0f,
+            animationSpec = infiniteRepeatable(tween(520), repeatMode = RepeatMode.Reverse),
+            label = "amount-cursor-alpha",
+        )
     Row(
         modifier =
             Modifier
@@ -267,30 +289,52 @@ internal fun TransactionAmountField(
                 .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        BasicTextField(
-            value = TextFieldValue(display, selection = TextRange(display.length)),
-            onValueChange = {},
-            readOnly = true,
-            singleLine = true,
-            textStyle =
-                TextStyle(
-                    color = if (entered || neutralDisplay) amountColor else palette.muted,
-                    fontSize = TandemTypography.amountField,
-                    lineHeight = TandemTypography.amountFieldLineHeight,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                ),
-            cursorBrush = SolidColor(amountColor),
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focusRequester)
-                    .onFocusChanged { if (it.isFocused) onShowKeypad() }
-                    .semantics { contentDescription = "Amount, $display" },
-            decorationBox = { innerTextField ->
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { innerTextField() }
-            },
-        )
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            BasicTextField(
+                value = TextFieldValue(display, selection = TextRange(display.length)),
+                onValueChange = {},
+                readOnly = true,
+                singleLine = true,
+                textStyle =
+                    TextStyle(
+                        color = amountColor,
+                        fontSize = TandemTypography.amountField,
+                        lineHeight = TandemTypography.amountFieldLineHeight,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                    ),
+                cursorBrush = SolidColor(amountColor),
+                onTextLayout = { textLayout = it },
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester)
+                        .onFocusChanged {
+                            focused = it.isFocused
+                            if (it.isFocused) onShowKeypad()
+                        }.semantics { contentDescription = "Amount, $display" },
+                decorationBox = { innerTextField ->
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { innerTextField() }
+                },
+            )
+            val caret = textLayout?.getCursorRect(display.length)
+            if (showCursor && focused && caret != null) {
+                Canvas(Modifier.matchParentSize()) {
+                    val inset = 3.dp.toPx()
+                    drawLine(
+                        color = amountColor.copy(alpha = cursorAlpha),
+                        start =
+                            androidx.compose.ui.geometry
+                                .Offset(caret.left, caret.top + inset),
+                        end =
+                            androidx.compose.ui.geometry
+                                .Offset(caret.left, caret.bottom - inset),
+                        strokeWidth = 2.dp.toPx(),
+                        cap = StrokeCap.Round,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -300,19 +344,21 @@ internal fun TransactionTypeChip(
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
+    val typeTint = if (type == "Income") palette.positive else palette.negative
     Row(
         modifier =
             Modifier
                 .clip(CircleShape)
-                .background(palette.raised)
+                .background(typeTint.copy(alpha = 0.12f))
+                .border(1.dp, typeTint.copy(alpha = 0.35f), CircleShape)
                 .clickable(role = Role.Button, onClickLabel = "Choose transaction type", onClick = onClick)
                 .padding(horizontal = TandemSpacing.screen, vertical = TandemSpacing.medium),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
     ) {
-        Icon(Lucide.Receipt, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.text)
-        Text(type, color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
-        Icon(Lucide.ChevronDown, contentDescription = null, modifier = Modifier.size(19.dp), tint = palette.muted)
+        Icon(Lucide.Receipt, contentDescription = null, modifier = Modifier.size(20.dp), tint = typeTint)
+        Text(type, color = typeTint, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
+        Icon(Lucide.ChevronDown, contentDescription = null, modifier = Modifier.size(19.dp), tint = typeTint.copy(alpha = 0.82f))
     }
 }
 

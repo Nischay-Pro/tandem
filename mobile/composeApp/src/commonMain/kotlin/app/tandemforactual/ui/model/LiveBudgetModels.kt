@@ -29,6 +29,11 @@ internal data class LiveCategorySummary(
     val carryover: Boolean = false,
 )
 
+internal data class PendingCategorySummary(
+    val groupId: String,
+    val category: LiveCategorySummary,
+)
+
 internal data class LiveCategoryGroupSummary(
     val id: String,
     val name: String,
@@ -127,6 +132,14 @@ internal fun liveBudgetMonthSummary(
     monthRecord: BudgetRecordEntity?,
     categoryRecords: List<BudgetRecordEntity>,
     categoryGroupRecords: List<BudgetRecordEntity>,
+    categoryVisibilityOverrides: Map<String, Boolean> = emptyMap(),
+    categoryGroupNameOverrides: Map<String, String> = emptyMap(),
+    categoryNameOverrides: Map<String, String> = emptyMap(),
+    categoryGroupIdOverrides: Map<String, String> = emptyMap(),
+    categoryGroupVisibilityOverrides: Map<String, Boolean> = emptyMap(),
+    deletedCategoryIds: Set<String> = emptySet(),
+    pendingCategoryGroups: List<LiveCategoryGroupSummary> = emptyList(),
+    pendingCategories: List<PendingCategorySummary> = emptyList(),
 ): LiveBudgetMonthSummary? {
     monthRecord ?: return null
     val month = monthRecord.recordBody() ?: return null
@@ -136,21 +149,26 @@ internal fun liveBudgetMonthSummary(
         (month["categoryGroups"] as? JsonArray)
             ?.mapNotNull { element ->
                 val group = element as? JsonObject ?: return@mapNotNull null
-                if (group.booleanValue("hidden") == true) return@mapNotNull null
+                if (categoryGroupVisibilityOverrides[group.stringValue("id").orEmpty()] ?: group.booleanValue("hidden") == true) {
+                    return@mapNotNull null
+                }
                 val groupId = group.stringValue("id") ?: return@mapNotNull null
                 val categories =
                     (group["categories"] as? JsonArray)
                         ?.mapNotNull { categoryElement ->
                             val category = categoryElement as? JsonObject ?: return@mapNotNull null
-                            if (category.booleanValue("hidden") == true || category.booleanValue("deleted") == true) {
-                                return@mapNotNull null
-                            }
                             val categoryId = category.stringValue("id") ?: return@mapNotNull null
+                            if (categoryId in deletedCategoryIds) return@mapNotNull null
+                            if (categoryGroupIdOverrides[categoryId]?.let { it != groupId } == true) return@mapNotNull null
+                            val isHidden = categoryVisibilityOverrides[categoryId] ?: category.booleanValue("hidden") ?: false
+                            if (isHidden || category.booleanValue("deleted") == true) return@mapNotNull null
                             val assigned = category.longValue("budgeted") ?: category.longValue("assigned") ?: 0
                             val activity = category.longValue("activity") ?: category.longValue("spent") ?: 0
                             LiveCategorySummary(
                                 id = categoryId,
-                                name = categoryNames[categoryId] ?: category.stringValue("name") ?: categoryId,
+                                name =
+                                    categoryNameOverrides[categoryId] ?: categoryNames[categoryId] ?: category.stringValue("name")
+                                        ?: categoryId,
                                 assignedMinor = assigned,
                                 activityMinor = activity,
                                 balanceMinor = category.longValue("balance") ?: (assigned + activity),
@@ -159,7 +177,7 @@ internal fun liveBudgetMonthSummary(
                         }.orEmpty()
                 LiveCategoryGroupSummary(
                     id = groupId,
-                    name = groupNames[groupId] ?: group.stringValue("name") ?: groupId,
+                    name = categoryGroupNameOverrides[groupId] ?: groupNames[groupId] ?: group.stringValue("name") ?: groupId,
                     categories = categories,
                     isIncome =
                         group.booleanValue("is_income")
@@ -173,18 +191,29 @@ internal fun liveBudgetMonthSummary(
             }.orEmpty()
     val completeGroups = groups.toMutableList()
     categoryRecords.forEach { record ->
+        if (record.recordId in deletedCategoryIds) return@forEach
         val categoryBody = record.recordBody() ?: return@forEach
-        if (categoryBody.booleanValue("hidden") == true || categoryBody.booleanValue("deleted") == true) return@forEach
-        val groupId = categoryBody.stringValue("group") ?: categoryBody.stringValue("group_id") ?: return@forEach
+        val isHidden = categoryVisibilityOverrides[record.recordId] ?: categoryBody.booleanValue("hidden") ?: false
+        if (isHidden || categoryBody.booleanValue("deleted") == true) return@forEach
+        val groupId =
+            categoryGroupIdOverrides[record.recordId]
+                ?: categoryBody.stringValue("group")
+                ?: categoryBody.stringValue("group_id")
+                ?: return@forEach
         var groupIndex = completeGroups.indexOfFirst { it.id == groupId }
         if (groupIndex < 0) {
             val groupRecord = categoryGroupRecords.firstOrNull { it.recordId == groupId } ?: return@forEach
             val groupBody = groupRecord.recordBody()
-            if (groupBody?.booleanValue("hidden") == true || groupBody?.booleanValue("deleted") == true) return@forEach
+            if (categoryGroupVisibilityOverrides[groupId] == true ||
+                groupBody?.booleanValue("hidden") == true ||
+                groupBody?.booleanValue("deleted") == true
+            ) {
+                return@forEach
+            }
             completeGroups +=
                 LiveCategoryGroupSummary(
                     id = groupId,
-                    name = groupNames[groupId] ?: groupId,
+                    name = categoryGroupNameOverrides[groupId] ?: groupNames[groupId] ?: groupId,
                     categories = emptyList(),
                     isIncome = groupBody?.booleanValue("is_income") ?: groupBody?.booleanValue("isIncome") ?: false,
                 )
@@ -198,19 +227,61 @@ internal fun liveBudgetMonthSummary(
                     group.categories +
                         LiveCategorySummary(
                             id = record.recordId,
-                            name = categoryNames[record.recordId] ?: record.recordId,
+                            name = categoryNameOverrides[record.recordId] ?: categoryNames[record.recordId] ?: record.recordId,
                             assignedMinor = 0,
                             activityMinor = 0,
                             balanceMinor = 0,
                         ),
             )
     }
+    val groupsWithPendingCreates =
+        completeGroups + pendingCategoryGroups.filterNot { pending -> completeGroups.any { it.id == pending.id } }
+    val groupsWithPendingCategories = groupsWithPendingCreates.toMutableList()
+    categoryGroupIdOverrides.forEach { (categoryId, targetGroupId) ->
+        if (categoryId in deletedCategoryIds || categoryVisibilityOverrides[categoryId] == true) return@forEach
+        val categoryRecord = categoryRecords.firstOrNull { it.recordId == categoryId } ?: return@forEach
+        val name = categoryNameOverrides[categoryId] ?: categoryRecord.recordName() ?: categoryId
+        val targetIndex = groupsWithPendingCategories.indexOfFirst { it.id == targetGroupId }
+        if (targetIndex < 0) return@forEach
+        val movedCategory = groupsWithPendingCategories.flatMap { it.categories }.firstOrNull { it.id == categoryId }
+        val body = categoryRecord.recordBody()
+        val assigned = movedCategory?.assignedMinor ?: body?.longValue("budgeted") ?: body?.longValue("assigned") ?: 0
+        val activity = movedCategory?.activityMinor ?: body?.longValue("activity") ?: body?.longValue("spent") ?: 0
+        groupsWithPendingCategories.indices.forEach { index ->
+            val existing = groupsWithPendingCategories[index]
+            if (existing.categories.any { it.id == categoryId }) {
+                groupsWithPendingCategories[index] = existing.copy(categories = existing.categories.filterNot { it.id == categoryId })
+            }
+        }
+        val target = groupsWithPendingCategories[targetIndex]
+        groupsWithPendingCategories[targetIndex] =
+            target.copy(
+                categories =
+                    target.categories +
+                        LiveCategorySummary(
+                            id = categoryId,
+                            name = name,
+                            assignedMinor = assigned,
+                            activityMinor = activity,
+                            balanceMinor = movedCategory?.balanceMinor ?: assigned + activity,
+                            carryover = movedCategory?.carryover ?: body?.booleanValue("carryover") ?: false,
+                        ),
+            )
+    }
+    pendingCategories.forEach { pending ->
+        val groupIndex = groupsWithPendingCategories.indexOfFirst { it.id == pending.groupId }
+        if (groupIndex < 0) return@forEach
+        val group = groupsWithPendingCategories[groupIndex]
+        if (group.categories.none { it.id == pending.category.id }) {
+            groupsWithPendingCategories[groupIndex] = group.copy(categories = group.categories + pending.category)
+        }
+    }
     return LiveBudgetMonthSummary(
         toBudgetMinor = month.longValue("toBudget"),
         incomeAvailableMinor = month.longValue("incomeAvailable"),
         totalBudgetedMinor = month.longValue("totalBudgeted"),
         totalSpentMinor = month.longValue("totalSpent"),
-        groups = completeGroups,
+        groups = groupsWithPendingCategories,
         heldForNextMonthMinor = month.longValue("forNextMonth"),
     )
 }

@@ -571,17 +571,12 @@ fun TandemApp(
                     val budgetId = state.selectedBudgetId
                     val encryptionPassword = state.encryptedPassword.takeIf { it.isNotBlank() }
                     automaticSyncInFlight = true
+                    lastAutomaticSyncAtEpochMillis = now
+                    lastAutomaticSyncBudgetId = budgetId
                     coroutineScope.launch {
-                        var syncSucceeded = false
                         try {
-                            syncSucceeded =
-                                mobileSession.synchronize(
-                                    budgetId,
-                                    encryptionPassword,
-                                ) != null
+                            mobileSession.synchronize(budgetId, encryptionPassword)
                         } finally {
-                            lastAutomaticSyncAtEpochMillis = now.takeIf { syncSucceeded }
-                            lastAutomaticSyncBudgetId = budgetId.takeIf { syncSucceeded }
                             automaticSyncInFlight = false
                         }
                     }
@@ -591,16 +586,20 @@ fun TandemApp(
     LaunchedEffect(appResumeEvents) {
         appResumeEvents.collect {
             accessibilitySettingsRevision += 1
+            mobileSession.retryQueuedBudgetReorders()
             automaticSyncRequest.value()
         }
     }
     LaunchedEffect(networkRestoredEvents) {
-        networkRestoredEvents.collect { automaticSyncRequest.value() }
+        networkRestoredEvents.collect {
+            mobileSession.retryQueuedBudgetReorders()
+            if (lastAutomaticSyncBudgetId == state.selectedBudgetId) lastAutomaticSyncAtEpochMillis = null
+            automaticSyncRequest.value()
+        }
     }
     LaunchedEffect(mobileSession.isSyncing, pendingAutomaticSync) {
         if (!mobileSession.isSyncing && pendingAutomaticSync) {
             pendingAutomaticSync = false
-            if (!mobileSession.syncComplete) lastAutomaticSyncAtEpochMillis = null
             automaticSyncRequest.value()
         }
     }
@@ -736,19 +735,46 @@ fun TandemApp(
             }
     }
     var liveBudgetMonth by remember { mutableStateOf<LiveBudgetMonthSummary?>(null) }
+    val categoryVisibilityOverrides = mobileSession.categoryVisibilityOverridesFor(state.selectedBudgetId)
+    val categoryGroupNameOverrides = mobileSession.categoryGroupNameOverridesFor(state.selectedBudgetId)
+    val categoryNameOverrides = mobileSession.categoryNameOverridesFor(state.selectedBudgetId)
+    val categoryGroupIdOverrides = mobileSession.categoryGroupIdOverridesFor(state.selectedBudgetId)
+    val categoryGroupVisibilityOverrides = mobileSession.categoryGroupVisibilityOverridesFor(state.selectedBudgetId)
+    val deletedCategoryIds = mobileSession.deletedCategoryIdsFor(state.selectedBudgetId)
+    val pendingCategoryGroups = mobileSession.pendingCategoryGroupCreatesFor(state.selectedBudgetId)
+    val pendingCategories = mobileSession.pendingCategoryCreatesFor(state.selectedBudgetId)
     LaunchedEffect(
         mobileSession.selectedBudgetMonthRecord,
         mobileSession.categoryRecords,
         mobileSession.categoryGroupRecords,
+        categoryVisibilityOverrides,
+        categoryGroupNameOverrides,
+        categoryNameOverrides,
+        categoryGroupIdOverrides,
+        categoryGroupVisibilityOverrides,
+        deletedCategoryIds,
+        pendingCategoryGroups,
+        pendingCategories,
         state.selectedMonthId,
     ) {
         val monthRecord = mobileSession.selectedBudgetMonthRecord?.takeIf { it.recordId == state.selectedMonthId }
         val monthCategories = mobileSession.categoryRecords
         val monthCategoryGroups = mobileSession.categoryGroupRecords
-        liveBudgetMonth = null
         liveBudgetMonth =
             withContext(Dispatchers.Default) {
-                liveBudgetMonthSummary(monthRecord, monthCategories, monthCategoryGroups)
+                liveBudgetMonthSummary(
+                    monthRecord,
+                    monthCategories,
+                    monthCategoryGroups,
+                    categoryVisibilityOverrides,
+                    categoryGroupNameOverrides,
+                    categoryNameOverrides,
+                    categoryGroupIdOverrides,
+                    categoryGroupVisibilityOverrides,
+                    deletedCategoryIds,
+                    pendingCategoryGroups,
+                    pendingCategories,
+                )
             }
     }
 
@@ -833,12 +859,13 @@ fun TandemApp(
                         categoryId = state.newTransactionCategoryId.takeIf(String::isNotBlank),
                         date = state.transactionDate,
                         originalAmountMinor = originalAmount,
+                        transactionType = state.transactionType,
                         displaySettings = state.budgetDisplaySettings,
                         updateDetails = true,
                     )
                 if (saved) {
                     val amount = state.parseAmountMinorUnits(state.transactionAmount) ?: kotlin.math.abs(originalAmount)
-                    state.selectedTransactionAmountMinor = if (originalAmount < 0) -amount else amount
+                    state.selectedTransactionAmountMinor = if (state.transactionType == "Income") amount else -amount
                     state.selectedTransactionNotes = state.transactionNotes
                     state.selectedTransactionAccountId = state.newTransactionAccountId
                     state.selectedTransactionPayeeId = state.newTransactionPayeeId
@@ -996,6 +1023,8 @@ fun TandemApp(
                 persistedSyncStatus = mobileSession.localSyncState?.status,
                 pendingWriteStatuses = mobileSession.pendingWrites.map { it.status },
                 hasSuccessfulSync = mobileSession.localSyncState?.lastSyncedAtEpochMs != null,
+                hasPendingBudgetChanges = mobileSession.pendingBudgetMutationCount(state.selectedBudgetId) > 0,
+                budgetChangesWaitingForConnection = mobileSession.budgetMutationsWaitingForConnection(state.selectedBudgetId),
             )
         val renderHeader: @Composable (AppRoute) -> Unit = { headerRoute ->
             if (headerRoute != AppRoute.WELCOME && headerRoute != AppRoute.STARTUP) {

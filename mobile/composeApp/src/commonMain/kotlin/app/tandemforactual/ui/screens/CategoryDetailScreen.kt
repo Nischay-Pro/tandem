@@ -199,7 +199,7 @@ internal fun CategoryDetailScreen(
                     TandemIconButton(
                         Lucide.Pencil,
                         "Edit category",
-                        enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                        enabled = !state.readOnlyMode,
                         tint = tandemPalette.accent,
                     ) { openCategoryEditor() }
                 }
@@ -632,7 +632,7 @@ internal fun CategoryDetailScreen(
                             TandemActionButtonTone.DESTRUCTIVE,
                             modifier = Modifier.weight(1f),
                             icon = Lucide.Trash2,
-                            enabled = !mobileSession.isPerformingBudgetAction,
+                            enabled = !state.readOnlyMode,
                         ) {
                             showEditDialog = false
                             deleteDestinationId = null
@@ -643,43 +643,38 @@ internal fun CategoryDetailScreen(
                             "Cancel",
                             TandemActionButtonTone.NEUTRAL,
                             modifier = Modifier.weight(1f),
-                            enabled = !mobileSession.isPerformingBudgetAction,
+                            enabled = true,
                         ) { showEditDialog = false }
                         TandemActionButton(
-                            if (mobileSession.isPerformingBudgetAction) "Saving…" else "Save",
+                            "Save",
                             TandemActionButtonTone.PRIMARY,
                             modifier = Modifier.weight(1f),
-                            enabled = !mobileSession.isPerformingBudgetAction && editName.isNotBlank(),
-                            loading = mobileSession.isPerformingBudgetAction,
+                            enabled = !state.readOnlyMode && editName.isNotBlank(),
                         ) {
-                            scope.launch {
-                                var saved = true
-                                val currentGroupId = selectedGroup?.id ?: state.selectedCategoryGroupId
-                                if (editCategoryGroupId != currentGroupId) {
-                                    saved =
-                                        mobileSession.manageBudgetCategory(
-                                            state.selectedBudgetId,
-                                            category.id,
-                                            "move",
-                                            null,
-                                            state.encryptedPassword.takeIf { it.isNotBlank() },
-                                            editCategoryGroupId,
-                                        )
-                                    if (saved) state.selectedCategoryGroupId = editCategoryGroupId
-                                }
-                                if (saved && editName.trim() != category.name) {
-                                    saved =
-                                        mobileSession.renameBudgetCategory(
-                                            state.selectedBudgetId,
-                                            category.id,
-                                            editName,
-                                            state.encryptedPassword.takeIf { it.isNotBlank() },
-                                        )
-                                }
-                                if (saved) {
-                                    state.setCategoryIconChoice(category.id, selectedIconChoice)
-                                    showEditDialog = false
-                                }
+                            var saved = true
+                            val currentGroupId = selectedGroup?.id ?: state.selectedCategoryGroupId
+                            if (editCategoryGroupId != currentGroupId) {
+                                saved =
+                                    mobileSession.enqueueBudgetCategoryMoveToGroup(
+                                        state.selectedBudgetId,
+                                        category.id,
+                                        editCategoryGroupId,
+                                        state.encryptedPassword.takeIf { it.isNotBlank() },
+                                    )
+                                if (saved) state.selectedCategoryGroupId = editCategoryGroupId
+                            }
+                            if (saved && editName.trim() != category.name) {
+                                saved =
+                                    mobileSession.enqueueBudgetCategoryRename(
+                                        state.selectedBudgetId,
+                                        category.id,
+                                        editName,
+                                        state.encryptedPassword.takeIf { it.isNotBlank() },
+                                    )
+                            }
+                            if (saved) {
+                                state.setCategoryIconChoice(category.id, selectedIconChoice)
+                                showEditDialog = false
                             }
                         }
                     }
@@ -806,7 +801,7 @@ internal fun CategoryDetailScreen(
                             "Continue",
                             TandemActionButtonTone.PRIMARY,
                             modifier = Modifier.weight(1f),
-                            enabled = !mobileSession.isPerformingBudgetAction,
+                            enabled = !state.readOnlyMode,
                         ) {
                             confirmCategoryDelete = true
                         }
@@ -822,25 +817,23 @@ internal fun CategoryDetailScreen(
                 "Transactions will be moved to ${deleteDestinationId?.let { id ->
                     deleteDestinations.firstOrNull { it.id == id }?.name
                 } ?: "Unassigned"}.",
-            confirmLabel = if (mobileSession.isPerformingBudgetAction) "Deleting…" else "Delete",
+            confirmLabel = "Delete",
             dismissLabel = "Keep category",
-            enabled = !mobileSession.isPerformingBudgetAction,
-            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) confirmCategoryDelete = false },
+            enabled = !state.readOnlyMode,
+            onDismissRequest = { confirmCategoryDelete = false },
             onConfirm = {
-                scope.launch {
-                    val deleted =
-                        mobileSession.deleteBudgetCategory(
-                            state.selectedBudgetId,
-                            category.id,
-                            deleteDestinationId,
-                            state.encryptedPassword.takeIf { it.isNotBlank() },
-                        )
-                    confirmCategoryDelete = false
-                    if (deleted) {
-                        state.setCategoryIconChoice(category.id, "Automatic")
-                        showDeleteDialog = false
-                        navigation.back()
-                    }
+                val deleted =
+                    mobileSession.enqueueBudgetCategoryDelete(
+                        state.selectedBudgetId,
+                        category.id,
+                        deleteDestinationId,
+                        state.encryptedPassword.takeIf { it.isNotBlank() },
+                    )
+                confirmCategoryDelete = false
+                if (deleted) {
+                    state.setCategoryIconChoice(category.id, "Automatic")
+                    showDeleteDialog = false
+                    navigation.back()
                 }
             },
         )

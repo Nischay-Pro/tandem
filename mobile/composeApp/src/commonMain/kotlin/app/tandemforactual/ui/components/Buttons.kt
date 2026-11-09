@@ -233,7 +233,6 @@ internal fun ReorderDragHandle(
                 )
             }
         }
-    val tapLabel = if (canMoveDown) "Move down" else "Move up"
     val reorderSemantics =
         Modifier.semantics(mergeDescendants = true) {
             contentDescription = "Reorder item"
@@ -243,14 +242,8 @@ internal fun ReorderDragHandle(
         Modifier
             .size(44.dp)
             .clip(RoundedCornerShape(TandemShapes.medium))
-            .background(tandemPalette.accentSurface)
             .then(reorderSemantics)
-            .clickable(
-                enabled = enabled && (canMoveUp || canMoveDown),
-                role = Role.Button,
-                onClickLabel = tapLabel,
-                onClick = { if (canMoveDown) onMoveDown() else onMoveUp() },
-            ).draggable(
+            .draggable(
                 orientation = Orientation.Vertical,
                 state = dragState,
                 enabled = enabled && (canMoveUp || canMoveDown),
@@ -267,7 +260,7 @@ internal fun ReorderDragHandle(
         modifier = handleModifier,
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Lucide.GripVertical, contentDescription = null, modifier = Modifier.size(21.dp), tint = tandemPalette.accent)
+        Icon(Lucide.GripVertical, contentDescription = null, modifier = Modifier.size(21.dp), tint = tandemPalette.muted)
     }
 }
 

@@ -368,6 +368,7 @@ internal fun transactionFormHasUnsavedChanges(
         AppRoute.EDIT_TRANSACTION ->
             amount == null ||
                 state.selectedTransactionAmountMinor?.let { amount != kotlin.math.abs(it) } != false ||
+                state.transactionType != (if ((state.selectedTransactionAmountMinor ?: 0L) < 0) "Spending" else "Income") ||
                 state.transactionNotes != state.selectedTransactionNotes ||
                 state.newTransactionAccountId != state.selectedTransactionAccountId ||
                 state.newTransactionPayeeId != state.selectedTransactionPayeeId ||
@@ -399,6 +400,7 @@ internal fun restoreTransactionFormBaseline(
         }
         AppRoute.EDIT_TRANSACTION -> {
             state.selectedTransactionAmountMinor?.let { state.transactionAmount = state.formatAmount(kotlin.math.abs(it)) }
+            state.transactionType = if ((state.selectedTransactionAmountMinor ?: 0L) < 0) "Spending" else "Income"
             state.transactionAccount = state.selectedTransactionAccountName
             state.newTransactionAccountId = state.selectedTransactionAccountId
             state.transactionPayee = state.selectedTransactionPayeeName

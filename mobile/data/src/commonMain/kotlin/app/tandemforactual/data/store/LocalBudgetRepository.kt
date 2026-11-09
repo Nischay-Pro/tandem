@@ -405,6 +405,48 @@ class LocalBudgetRepository(
 
     suspend fun readPendingWrites(budgetId: String): List<OutboxOperationEntity> = database.outboxDao().findPending(budgetId)
 
+    /** Replaces a temporary category id in unsent transaction edits after the category is created remotely. */
+    suspend fun remapPendingCategoryReferences(
+        budgetId: String,
+        temporaryCategoryId: String,
+        actualCategoryId: String,
+    ): Int {
+        requireIdentifier(budgetId, "budgetId")
+        requireIdentifier(temporaryCategoryId, "temporaryCategoryId")
+        requireIdentifier(actualCategoryId, "actualCategoryId")
+        return database.withWriteTransaction {
+            val outbox = database.outboxDao()
+            val records = database.budgetRecordDao()
+            var updatedCount = 0
+            outbox
+                .findPending(budgetId)
+                .filter { it.recordType == "transaction" && it.status == LocalWriteStatus.QUEUED.name.lowercase() }
+                .forEach { operation ->
+                    val patch = rewriteCategoryReference(operation.patchJson, temporaryCategoryId, actualCategoryId) ?: return@forEach
+                    val optimistic = operation.optimisticJson?.let { rewriteCategoryReference(it, temporaryCategoryId, actualCategoryId) }
+                    outbox.put(
+                        operation.copy(
+                            patchJson = patch,
+                            optimisticJson = optimistic,
+                            optimisticCategoryId =
+                                if (operation.optimisticCategoryId == temporaryCategoryId) {
+                                    actualCategoryId
+                                } else {
+                                    operation.optimisticCategoryId
+                                },
+                            updatedAtEpochMs = now(),
+                        ),
+                    )
+                    val localRecord = records.find(budgetId, "transaction", operation.recordId)
+                    if (localRecord?.localJson != null && optimistic != null) {
+                        records.put(localRecord.copy(localJson = optimistic, categoryId = actualCategoryId))
+                    }
+                    updatedCount += 1
+                }
+            updatedCount
+        }
+    }
+
     suspend fun findWrite(operationId: String): OutboxOperationEntity? {
         requireIdentifier(operationId, "operationId")
         return database.outboxDao().find(operationId)
@@ -1374,6 +1416,19 @@ class LocalBudgetRepository(
             isParent = parseTransactionSearchMetadata(bodyJson)?.isParent ?: false,
         )
     }
+
+    private fun rewriteCategoryReference(
+        bodyJson: String,
+        temporaryCategoryId: String,
+        actualCategoryId: String,
+    ): String? =
+        runCatching {
+            val body = Json.parseToJsonElement(bodyJson).jsonObject
+            if (body["category"]?.let { (it as? JsonPrimitive)?.contentOrNull } != temporaryCategoryId) {
+                return@runCatching null
+            }
+            JsonObject(body + ("category" to JsonPrimitive(actualCategoryId))).toString()
+        }.getOrNull()
 
     private fun RemoteBudgetRecord.toEntity(
         current: BudgetRecordEntity?,
