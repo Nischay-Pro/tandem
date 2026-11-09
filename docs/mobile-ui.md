@@ -48,6 +48,7 @@ follows the selected light, dark, or system mode alongside the Compose screens.
 | Alerts for rejected edits                 | Rejected edit alerts                                                                     | Not applied alerts                            |
 | OS notification permission control        | Allow notifications; Turn on in notification settings; Turn off in notification settings | System permissions, Enable, Disable           |
 | Budget layout that puts essentials first  | Essentials                                                                               | Essentials first                              |
+| Product description                       | A local-first app for Actual Budget                                                      | Mobile companion                              |
 | Pending local edit collection             | Pending Changes (screen title); pending edits in prose                                   | Pending changes in the screen title           |
 
 Keep action labels consistent when the surrounding screen already makes the

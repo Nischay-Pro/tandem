@@ -49,7 +49,6 @@ internal fun SettingsScreen(
     navigation: AppNavigation,
 ) {
     PageColumn {
-        Heading("Preferences", "Adjust appearance, sync, privacy, and app behavior.")
         AnimatedReveal(visible = state.settingsStorageError != null) {
             Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 PreviewNote(state.settingsStorageError.orEmpty())
@@ -83,29 +82,26 @@ internal fun SettingsScreen(
                 onClick = { navigation.open(AppRoute.BUDGET_RULES) },
             )
         }
-        SectionCard("Connection", "Sync and paired device") {
+        SectionCard("Connection") {
             ListRow(
                 "Sync preferences",
-                "Refresh and network behavior",
                 leading = RowLeading.Icon(Lucide.CloudSync),
                 onClick = { navigation.open(AppRoute.SYNC_PREFERENCES) },
             )
             DividerLine()
             ListRow(
                 "Server and paired device",
-                "Connection details and access",
                 leading = RowLeading.Icon(Lucide.Smartphone),
                 onClick = { navigation.open(AppRoute.SERVER_DEVICE) },
             )
             DividerLine()
             ListRow(
                 "Notifications",
-                "Sync reminders and review alerts",
                 leading = RowLeading.Icon(Lucide.Bell),
                 onClick = { navigation.open(AppRoute.NOTIFICATIONS) },
             )
         }
-        SectionCard("Privacy", "Device data and security") {
+        SectionCard("Privacy") {
             ListRow(
                 "Security and privacy",
                 "Read-only access and device protection",
@@ -120,7 +116,7 @@ internal fun SettingsScreen(
                 onClick = { navigation.open(AppRoute.LOCAL_DATA) },
             )
         }
-        SectionCard("Support", "Help and project details") {
+        SectionCard("Support") {
             ListRow(
                 "About, help, and licenses",
                 "Version and open-source licenses",

@@ -164,7 +164,6 @@ internal fun SecurityScreen(
     val canEnableReadOnly = hasActiveConnection && !hasPendingWrites
     val canChangeReadOnly = state.readOnlyMode || canEnableReadOnly
     PageColumn {
-        Heading("Device protection")
         SectionCard("App access") {
             ListRow("Biometric unlock", "Coming later", leading = RowLeading.Icon(Lucide.FingerprintPattern))
             DividerLine()

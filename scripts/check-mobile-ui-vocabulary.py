@@ -24,6 +24,7 @@ RULES = (
     ('use the shorter unavailable alert label', re.compile(r"Not applied alerts")),
     ('use sentence case for account creation', re.compile(r"\bAdd Account\b")),
     ('use turn on/off wording for notification permissions', re.compile(r"\b(?:Enable|Disable) in notification settings\b|\bEnable\b")),
+    ('describe Tandem as a local-first app', re.compile(r"mobile companion|independent, local-first", re.IGNORECASE)),
 )
 PREFERRED_TERMS = (
     "Saved on this device",
@@ -36,6 +37,7 @@ PREFERRED_TERMS = (
     "Allow notifications",
     "Turn on in notification settings",
     "Turn off in notification settings",
+    "A local-first app for Actual Budget",
     "Essentials",
 )
 

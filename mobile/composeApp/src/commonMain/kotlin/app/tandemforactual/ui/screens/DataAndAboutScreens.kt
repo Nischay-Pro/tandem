@@ -250,7 +250,7 @@ internal fun AboutScreen(
     navigation: AppNavigation,
 ) {
     PageColumn {
-        Heading("About Tandem", "An independent, local-first mobile companion for Actual Budget.")
+        Heading("About Tandem", "A local-first app for Actual Budget.")
         SurfaceCard {
             Column(
                 Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.extraLarge, vertical = TandemSpacing.extraLarge),
