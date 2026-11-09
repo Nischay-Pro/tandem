@@ -3,13 +3,16 @@ package app.tandemforactual.ui
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
+import kotlinx.cinterop.interpretObjCPointer
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
+import kotlinx.cinterop.rawValue
 import kotlinx.cinterop.reinterpret
 import kotlinx.cinterop.toKString
 import kotlinx.cinterop.value
 import platform.CoreFoundation.CFDictionaryRef
 import platform.CoreFoundation.CFRelease
+import platform.CoreFoundation.CFStringRef
 import platform.CoreFoundation.CFTypeRefVar
 import platform.Foundation.CFBridgingRelease
 import platform.Foundation.CFBridgingRetain
@@ -31,51 +34,101 @@ import platform.Security.errSecDuplicateItem
 import platform.Security.errSecInteractionNotAllowed
 import platform.Security.errSecItemNotFound
 import platform.Security.errSecSuccess
+import platform.Security.kSecAttrAccessible
+import platform.Security.kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+import platform.Security.kSecAttrAccount
+import platform.Security.kSecAttrService
+import platform.Security.kSecClass
+import platform.Security.kSecClassGenericPassword
+import platform.Security.kSecMatchLimit
+import platform.Security.kSecMatchLimitOne
+import platform.Security.kSecReturnData
+import platform.Security.kSecValueData
 
-internal class IosCredentialUnavailableBeforeFirstUnlockException : Exception()
+internal class IosCredentialUnavailableBeforeFirstUnlockException(
+    status: Int,
+) : Exception("Device credential is unavailable before the first unlock (OSStatus $status)")
 
-@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
-internal class IosDeviceCredentialStore : DeviceCredentialStore {
-    override fun read(): String? =
-        memScoped {
-            val result = alloc<CFTypeRefVar>()
-            val status =
-                withKeychainQuery(includeReadResult = true) { query ->
-                    SecItemCopyMatching(query, result.ptr)
-                }
-            when (status) {
-                errSecItemNotFound -> null
-                errSecInteractionNotAllowed -> throw IosCredentialUnavailableBeforeFirstUnlockException()
-                errSecSuccess -> {
-                    val data = CFBridgingRelease(result.value) as? NSData ?: error("Stored device credential is invalid")
-                    val string = NSString.create(data, NSUTF8StringEncoding) ?: error("Stored device credential is invalid")
-                    string.UTF8String()?.toKString() ?: error("Stored device credential is invalid")
-                }
-                else -> error("Could not read device credential from Keychain (OSStatus $status)")
-            }
+internal data class IosKeychainReadResult(
+    val status: Int,
+    val credential: String? = null,
+)
+
+/** Small boundary around Security.framework so the store behavior can be tested without Keychain entitlements. */
+internal interface IosKeychainClient {
+    fun read(): IosKeychainReadResult
+
+    fun add(value: String): Int
+
+    fun update(value: String): Int
+
+    fun delete(): Int
+}
+
+internal class IosDeviceCredentialStore(
+    private val keychain: IosKeychainClient = SecurityIosKeychainClient(),
+) : DeviceCredentialStore {
+    override fun read(): String? {
+        val result = keychain.read()
+        return when (result.status) {
+            errSecItemNotFound -> null
+            errSecInteractionNotAllowed -> throw IosCredentialUnavailableBeforeFirstUnlockException(result.status)
+            errSecSuccess -> result.credential ?: error("Stored device credential is invalid (OSStatus ${result.status})")
+            else -> error("Could not read device credential from Keychain (OSStatus ${result.status})")
         }
+    }
 
     override fun write(value: String) {
-        val data =
-            NSString.create(value).dataUsingEncoding(NSUTF8StringEncoding)
-                ?: error("Could not encode device credential for Keychain")
-        val addStatus = withKeychainQuery(data = data) { query -> SecItemAdd(query, null) }
+        val addStatus = keychain.add(value)
         if (addStatus == errSecSuccess) return
         if (addStatus != errSecDuplicateItem) error("Could not save device credential to Keychain (OSStatus $addStatus)")
 
-        val updateStatus =
-            withKeychainQuery { query ->
-                withKeychainQuery(includeIdentity = false, data = data) { updates -> SecItemUpdate(query, updates) }
-            }
+        val updateStatus = keychain.update(value)
         check(updateStatus == errSecSuccess) { "Could not update device credential in Keychain (OSStatus $updateStatus)" }
     }
 
     override fun clear() {
-        val status = withKeychainQuery { query -> SecItemDelete(query) }
+        val status = keychain.delete()
         check(status == errSecSuccess || status == errSecItemNotFound) {
             "Could not remove device credential from Keychain (OSStatus $status)"
         }
     }
+}
+
+@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
+private class SecurityIosKeychainClient : IosKeychainClient {
+    override fun read(): IosKeychainReadResult =
+        memScoped {
+            val result = alloc<CFTypeRefVar>()
+            val status = withKeychainQuery(includeReadResult = true) { query -> SecItemCopyMatching(query, result.ptr) }
+            if (status != errSecSuccess) return@memScoped IosKeychainReadResult(status)
+
+            val data =
+                CFBridgingRelease(result.value) as? NSData
+                    ?: return@memScoped IosKeychainReadResult(status)
+            val string =
+                NSString.create(data, NSUTF8StringEncoding)
+                    ?: return@memScoped IosKeychainReadResult(status)
+            IosKeychainReadResult(status, string.UTF8String()?.toKString())
+        }
+
+    override fun add(value: String): Int {
+        val data = value.toKeychainData()
+        return withKeychainQuery(data = data) { query -> SecItemAdd(query, null) }
+    }
+
+    override fun update(value: String): Int {
+        val data = value.toKeychainData()
+        return withKeychainQuery { query ->
+            withKeychainQuery(includeIdentity = false, data = data) { updates -> SecItemUpdate(query, updates) }
+        }
+    }
+
+    override fun delete(): Int = withKeychainQuery { query -> SecItemDelete(query) }
+
+    private fun String.toKeychainData(): NSData =
+        NSString.create(this).dataUsingEncoding(NSUTF8StringEncoding)
+            ?: error("Could not encode device credential for Keychain")
 
     private inline fun <T> withKeychainQuery(
         includeIdentity: Boolean = true,
@@ -85,20 +138,19 @@ internal class IosDeviceCredentialStore : DeviceCredentialStore {
     ): T {
         val query = NSMutableDictionary()
         if (includeIdentity) {
-            query.setObject(NSString.create("genp"), forKey = NSString.create("class"))
-            query.setObject(NSString.create(KEYCHAIN_SERVICE), forKey = NSString.create("svce"))
-            query.setObject(NSString.create(KEYCHAIN_ACCOUNT), forKey = NSString.create("acct"))
+            query.setObject(kSecClassGenericPassword.asNSString(), forKey = kSecClass.asNSString())
+            query.setObject(NSString.create(KEYCHAIN_SERVICE), forKey = kSecAttrService.asNSString())
+            query.setObject(NSString.create(KEYCHAIN_ACCOUNT), forKey = kSecAttrAccount.asNSString())
         }
         if (includeReadResult) {
-            query.setObject(NSNumber.numberWithBool(true), forKey = NSString.create("r_Data"))
-            query.setObject(NSString.create("m_LimitOne"), forKey = NSString.create("m_Limit"))
+            query.setObject(NSNumber.numberWithBool(true), forKey = kSecReturnData.asNSString())
+            query.setObject(kSecMatchLimitOne.asNSString(), forKey = kSecMatchLimit.asNSString())
         }
         if (data != null) {
-            query.setObject(data, forKey = NSString.create("v_Data"))
-            query.setObject(NSString.create(KEYCHAIN_ACCESSIBILITY), forKey = NSString.create("pdmn"))
+            query.setObject(data, forKey = kSecValueData.asNSString())
+            query.setObject(kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly.asNSString(), forKey = kSecAttrAccessible.asNSString())
         }
 
-        // These values match Apple's Security string constants and bridge through Foundation.
         val retainedQuery = CFBridgingRetain(query) ?: error("Could not create Keychain query")
         val cfQuery: CFDictionaryRef = retainedQuery.reinterpret()
         return try {
@@ -111,6 +163,9 @@ internal class IosDeviceCredentialStore : DeviceCredentialStore {
     private companion object {
         const val KEYCHAIN_SERVICE = "app.tandemforactual.device-session"
         const val KEYCHAIN_ACCOUNT = "paired-device"
-        const val KEYCHAIN_ACCESSIBILITY = "cku"
     }
 }
+
+@OptIn(ExperimentalForeignApi::class)
+private fun CFStringRef?.asNSString(): NSString =
+    interpretObjCPointer(this?.rawValue ?: error("Required Security string constant is unavailable"))
