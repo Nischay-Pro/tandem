@@ -216,6 +216,8 @@ internal class TandemMobileSession(
     var budgetActionWasAppliedButRefreshFailed by mutableStateOf(false)
         private set
 
+    private var budgetActionShouldRetry by mutableStateOf(false)
+
     private var budgetReorderQueueState by mutableStateOf(BudgetReorderQueueState())
     private var budgetReorderQueue: BudgetReorderQueueState
         get() = budgetReorderQueueState
@@ -798,12 +800,12 @@ internal class TandemMobileSession(
                     )
             } else if (moved) {
                 budgetReorderQueue = budgetReorderQueue.complete(request, refreshFailed, budgetActionMessage)
-            } else if (!isServerReachable || !apiClient.isAuthenticated) {
+            } else if (budgetActionShouldRetry || !isServerReachable || !apiClient.isAuthenticated) {
                 budgetActionMessage = null
                 budgetReorderQueue =
                     budgetReorderQueue.waitForConnection(
                         request,
-                        "Waiting for a connection to Tandem. This change will retry automatically.",
+                        "Saved on this device. Waiting for Tandem to recover.",
                     )
             } else {
                 val failure = budgetMutationFailureMessage(request.kind, budgetActionMessage)
@@ -1637,6 +1639,7 @@ internal class TandemMobileSession(
     ): Boolean {
         budgetActionMessage = null
         budgetActionWasAppliedButRefreshFailed = false
+        budgetActionShouldRetry = false
         if (refuseWriteInReadOnlyMode()) {
             budgetActionMessage = transactionWriteMessage
             return false
@@ -1663,6 +1666,7 @@ internal class TandemMobileSession(
             throw error
         } catch (error: TandemApiException) {
             isServerReachable = error.httpStatus != null
+            budgetActionShouldRetry = isRetryableBudgetMutationStatus(error.httpStatus)
             if (actionApplied) {
                 budgetActionWasAppliedButRefreshFailed = true
                 budgetActionMessage = "Actual was updated, but this device couldn’t refresh the budget."

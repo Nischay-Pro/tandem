@@ -2,8 +2,24 @@ package app.tandemforactual.ui
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class CategoryReorderingTest {
+    @Test
+    fun transientServerResponsesKeepQueuedBudgetChangesForRetry() {
+        assertTrue(isRetryableBudgetMutationStatus(408))
+        assertTrue(isRetryableBudgetMutationStatus(425))
+        assertTrue(isRetryableBudgetMutationStatus(429))
+        assertTrue(isRetryableBudgetMutationStatus(502))
+        assertTrue(isRetryableBudgetMutationStatus(503))
+        assertTrue(isRetryableBudgetMutationStatus(504))
+        assertFalse(isRetryableBudgetMutationStatus(400))
+        assertFalse(isRetryableBudgetMutationStatus(401))
+        assertFalse(isRetryableBudgetMutationStatus(404))
+        assertFalse(isRetryableBudgetMutationStatus(null))
+    }
+
     @Test
     fun reorderFailureExplainsThatTheOriginalOrderWasRestored() {
         assertEquals(
