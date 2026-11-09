@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -132,7 +133,10 @@ internal fun LiveUpcomingBillsCard(
                 listOfNotNull(formatLiveDate(schedule.nextDate), schedule.accountName).joinToString(" · "),
                 schedule.amountLabel(state),
                 leading = RowLeading.Icon(Lucide.CalendarDays),
-            ) { navigation.open(AppRoute.SCHEDULES) }
+            ) {
+                state.pendingScheduleToOpenId = schedule.id
+                navigation.open(AppRoute.SCHEDULES)
+            }
         }
     }
 }
@@ -149,6 +153,15 @@ internal fun UpcomingSchedulesScreen(
     var showScheduleEditor by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
     var showDeleteScheduleConfirmation by rememberSaveable(state.selectedBudgetId, selectedScheduleId) { mutableStateOf(false) }
     var dialogMode by rememberSaveable(state.selectedBudgetId, selectedScheduleId) { mutableStateOf("menu") }
+    LaunchedEffect(state.pendingScheduleToOpenId, schedules) {
+        val requestedId = state.pendingScheduleToOpenId ?: return@LaunchedEffect
+        if (schedules.any { it.id == requestedId }) {
+            selectedScheduleId = requestedId
+            showScheduleEditor = true
+            dialogMode = "menu"
+            state.pendingScheduleToOpenId = null
+        }
+    }
     var nameDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
         mutableStateOf(schedules.firstOrNull { it.id == selectedScheduleId }?.name.orEmpty())
     }

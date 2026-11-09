@@ -70,6 +70,7 @@ internal class AppState {
     var selectedAccountId by mutableStateOf("")
     var selectedCategoryGroupId by mutableStateOf("")
     var selectedCategoryId by mutableStateOf("")
+    var pendingScheduleToOpenId by mutableStateOf<String?>(null)
     var categoryEditRequested by mutableStateOf(false)
     var selectedTransactionRecordId by mutableStateOf("")
     var selectedTransactionAccountId by mutableStateOf("")
@@ -218,6 +219,7 @@ internal class AppState {
                         "selectedAccountId" to state.selectedAccountId,
                         "selectedCategoryGroupId" to state.selectedCategoryGroupId,
                         "selectedCategoryId" to state.selectedCategoryId,
+                        "pendingScheduleToOpenId" to state.pendingScheduleToOpenId,
                         "selectedTransactionRecordId" to state.selectedTransactionRecordId,
                         "selectedTransactionAccountId" to state.selectedTransactionAccountId,
                         "selectedTransactionPayeeId" to state.selectedTransactionPayeeId,
@@ -284,6 +286,7 @@ internal class AppState {
                         selectedAccountId = saved["selectedAccountId"] as? String ?: selectedAccountId
                         selectedCategoryGroupId = saved["selectedCategoryGroupId"] as? String ?: selectedCategoryGroupId
                         selectedCategoryId = saved["selectedCategoryId"] as? String ?: selectedCategoryId
+                        pendingScheduleToOpenId = saved["pendingScheduleToOpenId"] as? String
                         selectedTransactionRecordId = saved["selectedTransactionRecordId"] as? String ?: selectedTransactionRecordId
                         selectedTransactionAccountId = saved["selectedTransactionAccountId"] as? String ?: selectedTransactionAccountId
                         selectedTransactionPayeeId = saved["selectedTransactionPayeeId"] as? String ?: selectedTransactionPayeeId
