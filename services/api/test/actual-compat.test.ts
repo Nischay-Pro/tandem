@@ -179,7 +179,7 @@ describe.skipIf(!compatibilityTestEnabled)(
         await tokenDevice.close();
       }
 
-      const firstDevice = createActualSession({
+      let firstDevice = createActualSession({
         serverURL,
         dataDir: firstDataDir,
         password: serverPassword,
@@ -300,6 +300,64 @@ describe.skipIf(!compatibilityTestEnabled)(
         if (!transaction) {
           throw new Error("Actual did not return the synthetic transaction");
         }
+
+        await firstDevice.close();
+        const tokenWriteDevice = createActualSession({
+          serverURL,
+          dataDir: tokenDataDir,
+          sessionToken,
+        });
+        let tokenRoundTripId: string | undefined;
+        try {
+          tokenRoundTripId = await tokenWriteDevice.runBudget(
+            budget.groupId,
+            async () => {
+              await Actual.addTransactions(initialData.accountId, [
+                {
+                  date: transactionDate,
+                  amount: -175,
+                  notes: "ABC session-token round trip",
+                  imported_id: `ABC session-token ${randomUUID()}`,
+                },
+              ]);
+              const tokenTransactions = await Actual.getTransactions(
+                initialData.accountId,
+                transactionDate,
+                transactionDate,
+              );
+              return tokenTransactions.find(
+                ({ notes }) => notes === "ABC session-token round trip",
+              )?.id;
+            },
+            { synchronizeAfterWrite: true },
+          );
+          expect(tokenRoundTripId).toBeTruthy();
+          const tokenWriteReadBack = await tokenWriteDevice.runBudget(
+            budget.groupId,
+            () => transactionStore.read(tokenRoundTripId!),
+          );
+          expect(tokenWriteReadBack).toMatchObject({
+            amount: -175,
+            notes: "ABC session-token round trip",
+          });
+          await tokenWriteDevice.runBudget(
+            budget.groupId,
+            () => Actual.deleteTransaction(tokenRoundTripId!),
+            { synchronizeAfterWrite: true },
+          );
+          await expect(
+            tokenWriteDevice.runBudget(budget.groupId, () =>
+              transactionStore.read(tokenRoundTripId!),
+            ),
+          ).resolves.toBeUndefined();
+        } finally {
+          await tokenWriteDevice.close();
+        }
+        firstDevice = createActualSession({
+          serverURL,
+          dataDir: firstDataDir,
+          password: serverPassword,
+        });
 
         scheduleId = await firstDevice.runBudget(
           budget.groupId,

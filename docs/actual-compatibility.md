@@ -106,7 +106,7 @@ them through `ActualBudgetSnapshotReader` and the supported API, closes the
 session, and reads them again after reopening a fresh session from the same
 local workspace. The measured snapshot contained 15,116 records and serialized
 to 8,644,137 JSON bytes. In this disposable local Docker run, the first read
-took 430 ms and the reopened-session read took 442 ms; both returned the same
+took 436 ms and the reopened-session read took 453 ms; both returned the same
 transaction revision digest. These figures cover server-side API reads and
 JSON serialization in this local environment, not transfer to or parsing on a
 phone. The test verifies session restart against the persisted local workspace,
@@ -138,8 +138,12 @@ database.
 The same run obtains a disposable Actual server session token from its login
 endpoint, initializes a separate `@actual-app/api` workspace with that token
 and no server password, and reads the budget catalog. This verifies the
-supported session-token path against the pinned Actual release; it does not
-exercise a third-party OpenID provider.
+supported session-token path against the pinned Actual release. The suite also
+opens an existing synthetic budget using only that token, creates and reads a
+transaction, synchronizes it, and deletes it. The token is issued by the test
+server's password login; this verifies token-only API read/write behavior, not
+the full OpenID-only server configuration or an OpenID-issued token's budget
+read/write path.
 
 ## Verified upstream evidence
 
