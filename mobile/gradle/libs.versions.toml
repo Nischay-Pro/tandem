@@ -1,6 +1,6 @@
 [versions]
 kotlin = "2.4.21"
-androidGradlePlugin = "9.5.0"
+androidGradlePlugin = "9.5.1"
 composeMultiplatform = "1.12.2"
 jetpackCompose = "1.12.1"
 openapiKmpGen = "1.6.0"
