@@ -37,6 +37,7 @@ import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
+import app.tandemforactual.ui.model.recordName
 import com.composables.icons.lucide.Cloud
 import com.composables.icons.lucide.CloudAlert
 import com.composables.icons.lucide.CloudSync
@@ -51,6 +52,8 @@ internal fun SyncCenterScreen(
 ) {
     if (state.selectedBudgetId.isNotBlank()) {
         val attention = mobileSession.pendingWrites.filter { it.status in setOf("queued", "conflict", "uncertain", "rejected") }
+        val budgetMutations = mobileSession.pendingBudgetMutationsFor(state.selectedBudgetId)
+        val pendingCount = attention.size + budgetMutations.size
         PageLazyColumn {
             item(key = "sync-center-title") {
                 Heading("Sync")
@@ -92,9 +95,9 @@ internal fun SyncCenterScreen(
                 }
             }
             item(key = "pending-changes-title") {
-                SectionCard("Pending Changes", "${attention.size} edits", animateDetail = true) {}
+                SectionCard("Pending Changes", "$pendingCount edits", animateDetail = true) {}
             }
-            if (attention.isEmpty()) {
+            if (pendingCount == 0) {
                 item(key = "pending-changes-empty") {
                     AnimatedAttentionContent(showingAttention = false) { _ ->
                         EmptyState(
@@ -138,6 +141,33 @@ internal fun SyncCenterScreen(
                                     },
                                 )
                             },
+                        )
+                    }
+                }
+                items(budgetMutations, key = { "budget-mutation:${it.kind}:${it.scopeId}:${it.itemId}:${it.name}" }) { mutation ->
+                    val categoryName = mobileSession.categoryRecords.firstOrNull { it.recordId == mutation.itemId }?.recordName()
+                    val groupName = mobileSession.categoryGroupRecords.firstOrNull { it.recordId == mutation.itemId }?.recordName()
+                    val itemName = mutation.name ?: categoryName ?: groupName ?: "budget item"
+                    val title =
+                        when (mutation.kind) {
+                            BudgetReorderKind.CREATE_CATEGORY_GROUP -> "Add group · $itemName"
+                            BudgetReorderKind.RENAME_CATEGORY_GROUP -> "Rename group · $itemName"
+                            BudgetReorderKind.CREATE_CATEGORY -> "Add category · $itemName"
+                            BudgetReorderKind.RENAME_CATEGORY -> "Rename category · $itemName"
+                            BudgetReorderKind.HIDE_CATEGORY, BudgetReorderKind.HIDE_CATEGORY_GROUP -> "Hide · $itemName"
+                            BudgetReorderKind.SHOW_CATEGORY, BudgetReorderKind.SHOW_CATEGORY_GROUP -> "Show · $itemName"
+                            BudgetReorderKind.MOVE_CATEGORY_TO_GROUP -> "Move · $itemName"
+                            BudgetReorderKind.DELETE_CATEGORY -> "Delete · $itemName"
+                            BudgetReorderKind.CATEGORY, BudgetReorderKind.CATEGORY_GROUP -> "Reorder · $itemName"
+                            else -> itemName
+                        }
+                    SurfaceCard {
+                        ListRow(
+                            title,
+                            if (mobileSession.budgetMutationWaitingForConnection(mutation)) "Waiting for connection" else "Waiting to sync",
+                            "Pending",
+                            leading = RowLeading.Icon(Lucide.CloudSync),
+                            options = ListRowOptions(trailingColor = tandemPalette.syncing),
                         )
                     }
                 }

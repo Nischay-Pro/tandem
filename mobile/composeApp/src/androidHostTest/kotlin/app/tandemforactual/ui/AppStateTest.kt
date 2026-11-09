@@ -318,6 +318,15 @@ class AppStateTest {
     }
 
     @Test
+    fun returningToBudgetFromAnotherTabOrDetailDoesNotStartAnExtraSync() {
+        assertTrue(shouldTriggerAutomaticSyncForRouteEntry(AppRoute.STARTUP, AppRoute.BUDGET))
+        assertTrue(shouldTriggerAutomaticSyncForRouteEntry(AppRoute.BUDGET_CHOOSER, AppRoute.BUDGET))
+        assertFalse(shouldTriggerAutomaticSyncForRouteEntry(AppRoute.CATEGORY_GROUP, AppRoute.BUDGET))
+        assertFalse(shouldTriggerAutomaticSyncForRouteEntry(AppRoute.ACCOUNTS, AppRoute.BUDGET))
+        assertFalse(shouldTriggerAutomaticSyncForRouteEntry(AppRoute.FIRST_SYNC, AppRoute.BUDGET))
+    }
+
+    @Test
     fun unsupportedLegacySecurityPreferencesAreNotRestoredOrSaved() {
         val restored =
             AppState().apply {

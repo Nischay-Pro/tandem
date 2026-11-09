@@ -252,7 +252,10 @@ internal fun TransactionFormScreen(
                         TextFieldOptions(
                             placeholder = "Add a note",
                             singleLine = false,
-                            onFocusedChange = { notesFocused = it },
+                            onFocusedChange = { focused ->
+                                notesFocused = focused
+                                if (focused) keypadVisible = false
+                            },
                         ),
                     )
                     AnimatedReveal(visible = mobileSession.transactionWriteMessage != null) {
@@ -496,7 +499,10 @@ internal fun TransactionFormScreen(
                     TextFieldOptions(
                         placeholder = "Add a note",
                         singleLine = false,
-                        onFocusedChange = { notesFocused = it },
+                        onFocusedChange = { focused ->
+                            notesFocused = focused
+                            if (focused) keypadVisible = false
+                        },
                     ),
                 )
                 mobileSession.transactionWriteMessage?.let { message ->

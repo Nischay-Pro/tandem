@@ -649,8 +649,7 @@ fun TandemApp(
         state.encryptedPassword,
     ) {
         if (
-            route == AppRoute.BUDGET &&
-            previousRoute != AppRoute.FIRST_SYNC &&
+            shouldTriggerAutomaticSyncForRouteEntry(previousRoute, route) &&
             state.syncOnOpen &&
             mobileSession.isAuthenticated &&
             state.selectedBudgetId.isNotBlank() &&

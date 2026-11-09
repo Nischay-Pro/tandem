@@ -268,7 +268,6 @@ internal fun TransactionAmountField(
     val outline = if (entered && !neutralDisplay) amountColor else palette.border
     val fill = if (entered && !neutralDisplay) amountColor.copy(alpha = 0.08f) else palette.surface
     val display = amount.ifBlank { "0.00" }
-    var focused by remember { mutableStateOf(false) }
     var textLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val cursorAlpha by
         rememberInfiniteTransition(label = "amount-cursor").animateFloat(
@@ -309,16 +308,13 @@ internal fun TransactionAmountField(
                     Modifier
                         .fillMaxWidth()
                         .focusRequester(focusRequester)
-                        .onFocusChanged {
-                            focused = it.isFocused
-                            if (it.isFocused) onShowKeypad()
-                        }.semantics { contentDescription = "Amount, $display" },
+                        .semantics { contentDescription = "Amount, $display" },
                 decorationBox = { innerTextField ->
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { innerTextField() }
                 },
             )
             val caret = textLayout?.getCursorRect(display.length)
-            if (showCursor && focused && caret != null) {
+            if (showCursor && caret != null) {
                 Canvas(Modifier.matchParentSize()) {
                     val inset = 3.dp.toPx()
                     drawLine(
@@ -500,7 +496,7 @@ internal fun TransactionAmountKeypad(
                     }
                 }
                 AmountPadKey("=", Modifier.weight(1f), AmountPadKeyStyle.EQUALS, "Calculate", onEquals)
-                AmountPadKey("Hide", Modifier.weight(1f), AmountPadKeyStyle.DONE, "Hide number pad", onDone)
+                AmountPadKey("Done", Modifier.weight(1f), AmountPadKeyStyle.DONE, "Finish entering amount", onDone)
             }
         }
     }

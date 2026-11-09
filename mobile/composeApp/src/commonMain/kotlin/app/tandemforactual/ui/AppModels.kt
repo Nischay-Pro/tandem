@@ -581,6 +581,19 @@ internal fun shouldTriggerAutomaticSync(
     return nowEpochMillis < lastSyncAt || nowEpochMillis - lastSyncAt >= AUTOMATIC_SYNC_COOLDOWN_MS
 }
 
+internal fun shouldTriggerAutomaticSyncForRouteEntry(
+    previousRoute: AppRoute,
+    currentRoute: AppRoute,
+): Boolean =
+    currentRoute == AppRoute.BUDGET &&
+        previousRoute in
+        setOf(
+            AppRoute.BUDGET,
+            AppRoute.BUDGET_CHOOSER,
+            AppRoute.STARTUP,
+            AppRoute.WELCOME,
+        )
+
 internal enum class AppStartupDestination {
     WAIT,
     CACHED_BUDGET,

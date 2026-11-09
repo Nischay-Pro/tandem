@@ -310,8 +310,13 @@ internal class TandemMobileSession(
 
     fun pendingBudgetMutationCount(budgetId: String): Int = budgetReorderQueue.moves.count { it.budgetId == budgetId }
 
+    fun pendingBudgetMutationsFor(budgetId: String): List<QueuedBudgetReorder> = budgetReorderQueue.moves.filter { it.budgetId == budgetId }
+
+    fun budgetMutationWaitingForConnection(move: QueuedBudgetReorder): Boolean =
+        budgetReorderQueue.waitingForConnection && budgetReorderQueue.moves.firstOrNull() == move
+
     fun budgetMutationsWaitingForConnection(budgetId: String): Boolean =
-        budgetReorderQueue.waitingForConnection && budgetReorderQueue.moves.any { it.budgetId == budgetId }
+        budgetReorderQueue.waitingForConnection && budgetReorderQueue.moves.firstOrNull()?.budgetId == budgetId
 
     fun enqueueBudgetReorder(
         budgetId: String,

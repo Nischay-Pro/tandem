@@ -185,4 +185,25 @@ class CategoryReorderingTest {
         )
         assertEquals(1, queue.statusFor("budget", BUDGET_GROUP_ORDER_SCOPE).pendingCount)
     }
+
+    @Test
+    fun offlineVisibilityEditsStayOptimisticAndSurviveRestartWithoutSavingPasswords() {
+        val hide =
+            QueuedBudgetReorder(
+                budgetId = "budget",
+                scopeId = "utilities",
+                kind = BudgetReorderKind.HIDE_CATEGORY,
+                itemId = "mobile",
+                targetId = null,
+                desiredOrder = listOf("phone", "internet"),
+                encryptionPassword = "not-persisted",
+            )
+        val queued = BudgetReorderQueueState().enqueue(hide)
+        val restored = decodeBudgetReorderQueue(encodeBudgetReorderQueue(queued))
+
+        assertEquals(true, queued.categoryVisibilityOverridesFor("budget")["mobile"])
+        assertEquals(listOf(hide.copy(encryptionPassword = null, requiresEncryptionPassword = true)), restored.moves)
+        assertEquals(true, restored.categoryVisibilityOverridesFor("budget")["mobile"])
+        assertEquals(1, restored.statusFor("budget", "utilities").pendingCount)
+    }
 }

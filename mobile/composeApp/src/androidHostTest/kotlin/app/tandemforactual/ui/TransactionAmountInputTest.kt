@@ -19,6 +19,15 @@ class TransactionAmountInputTest {
     }
 
     @Test
+    fun deletingToZeroThenTypingStartsFromZeroAgain() {
+        val cleared = removeAmountDigit(1L)
+
+        assertEquals(0L, cleared)
+        assertEquals(1L, appendAmountDigit(cleared, 1))
+        assertEquals(112L, appendAmountDigit(appendAmountDigit(appendAmountDigit(cleared, 1), 1), 2))
+    }
+
+    @Test
     fun keypadCalculatorUsesMinorUnitsAndRejectsDivisionByZero() {
         assertEquals(1_125L, calculateAmountMinorUnits(1_000L, 125L, "+"))
         assertEquals(875L, calculateAmountMinorUnits(1_000L, 125L, "−"))

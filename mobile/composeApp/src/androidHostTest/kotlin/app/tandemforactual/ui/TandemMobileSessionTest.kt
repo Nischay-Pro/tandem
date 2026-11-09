@@ -79,7 +79,7 @@ class TandemMobileSessionTest {
                 )
             val overLimit = formatAmount(MAX_TRANSACTION_AMOUNT_MINOR_UNITS + 1)
 
-            session.updateTransaction("budget-1", "transaction-1", overLimit, "note", -100, null)
+            session.updateTransaction("budget-1", "transaction-1", overLimit, "note", -100, "Spending")
             assertTrue(session.transactionWriteMessage.orEmpty().startsWith("Largest amount is"))
 
             assertFalse(
@@ -109,7 +109,7 @@ class TandemMobileSessionTest {
             session.setReadOnlyMode(true)
             val readOnlyMessage = "Read-only mode is on. Turn it off before changing this data."
 
-            session.updateTransaction("budget-1", "transaction-1", "1.00", "note", -100, null)
+            session.updateTransaction("budget-1", "transaction-1", "1.00", "note", -100, "Spending")
             assertEquals(readOnlyMessage, session.transactionWriteMessage)
 
             assertFalse(

@@ -249,6 +249,18 @@ internal fun BudgetScreen(
             item(key = "budget-overview-title") {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.weight(1f)) { Heading("Budget overview") }
+                    if (isLiveBudget) {
+                        TandemIconButton(
+                            Lucide.Plus,
+                            "Add category group",
+                            enabled = !state.readOnlyMode,
+                        ) {
+                            categoryGroupNameDraft = ""
+                            newCategoryGroupIsIncome = false
+                            mobileSession.clearBudgetActionMessage()
+                            showCreateCategoryGroupDialog = true
+                        }
+                    }
                 }
             }
             item(key = "budget-month-picker") {
@@ -644,23 +656,6 @@ internal fun BudgetScreen(
                 }
             }
             item(key = "budget-bottom-spacer") { Spacer(Modifier.height(72.dp)) }
-        }
-        if (isLiveBudget && selectedGroupOrderId == null) {
-            TandemIconButton(
-                Lucide.Plus,
-                "Add category group",
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 22.dp, bottom = 24.dp),
-                sizeDp = 58,
-                iconSizeDp = 26,
-                enabled = !state.readOnlyMode,
-                tint = palette.accentContent,
-                containerColor = palette.accent,
-            ) {
-                categoryGroupNameDraft = ""
-                newCategoryGroupIsIncome = false
-                mobileSession.clearBudgetActionMessage()
-                showCreateCategoryGroupDialog = true
-            }
         }
     }
     TandemTaskSheet(
