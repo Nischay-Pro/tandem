@@ -42,6 +42,7 @@ internal fun TransactionRow(
     selectionMode: Boolean = false,
     selected: Boolean = false,
     showDateHeader: Boolean = true,
+    showAccount: Boolean = false,
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
@@ -55,9 +56,14 @@ internal fun TransactionRow(
                 fontSize = TandemTypography.micro,
             )
         }
+        val secondaryLabel =
+            listOfNotNull(
+                transaction.category.takeIf(String::isNotBlank),
+                transaction.account.takeIf { showAccount && it.isNotBlank() },
+            ).joinToString(" · ")
         ListRow(
             transaction.payee,
-            transaction.category,
+            secondaryLabel,
             formatSignedCurrency(transaction.amountMinorUnits, transaction.displaySettings),
             leading =
                 if (selectionMode) {

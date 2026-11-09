@@ -10,6 +10,13 @@ import kotlin.test.assertTrue
 
 class ActivitySearchTest {
     @Test
+    fun activityDateHeaderAppearsOnlyAtAdjacentDateBoundaries() {
+        assertTrue(shouldShowActivityDateHeader("Nov 5, 2026", null))
+        assertFalse(shouldShowActivityDateHeader("Nov 5, 2026", "Nov 5, 2026"))
+        assertTrue(shouldShowActivityDateHeader("Nov 6, 2026", "Nov 5, 2026"))
+    }
+
+    @Test
     fun savedSearchesRoundTripWithBudgetScopeAndFilters() {
         val saved =
             SavedActivitySearch(

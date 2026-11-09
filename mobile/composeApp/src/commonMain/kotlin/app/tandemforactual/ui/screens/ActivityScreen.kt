@@ -107,6 +107,15 @@ internal fun ActivityScreen(
     val transactionSource = if (isLiveBudget) liveTransactions else previewTransactions
     val transactions = if (isLiveBudget) transactionSource.filterNot(TransactionItem::isSplitParent) else transactionSource
     val selectedSortOrder = state.activitySortOrder
+    val showAccountName =
+        remember(transactions) {
+            transactions
+                .asSequence()
+                .map(TransactionItem::account)
+                .distinct()
+                .take(2)
+                .count() > 1
+        }
     val cachedSorted = sortCache.get(state.selectedBudgetId, transactionSource, selectedSortOrder)
     var sortedTransactions by
         remember(state.selectedBudgetId, transactionSource, selectedSortOrder) {
@@ -180,13 +189,19 @@ internal fun ActivityScreen(
                         val prefix = if (isLiveBudget) "activity" else "sample"
                         "$prefix:${transaction.recordId ?: "$index:${transaction.dateLabel}:${transaction.payee}:${transaction.amountMinorUnits}"}"
                     },
-                ) { _, transaction ->
+                ) { index, transaction ->
                     SurfaceCard(modifier = if (isLiveBudget) tandemListItemModifier(tandemReduceMotion) else Modifier) {
                         val transactionId = transaction.recordId
                         TransactionRow(
                             transaction,
                             selectionMode = selectionMode,
                             selected = transactionId != null && transactionId in selectedTransactionIds,
+                            showDateHeader =
+                                shouldShowActivityDateHeader(
+                                    transaction.dateLabel,
+                                    sortedTransactions.getOrNull(index - 1)?.dateLabel,
+                                ),
+                            showAccount = showAccountName,
                             onLongClick =
                                 if (isLiveBudget && !state.readOnlyMode && transactionId != null) {
                                     {
@@ -304,6 +319,11 @@ internal fun ActivityScreen(
         )
     }
 }
+
+internal fun shouldShowActivityDateHeader(
+    currentDateLabel: String,
+    previousDateLabel: String?,
+): Boolean = previousDateLabel != currentDateLabel
 
 @Composable
 internal fun ActivitySortControl(
