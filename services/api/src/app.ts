@@ -12,6 +12,7 @@ import {
   DeviceAuthInputError,
 } from "./auth/device-auth.js";
 import { PairingRateLimiter } from "./auth/pairing-rate-limiter.js";
+import type { ActualLoginMethods } from "./auth/actual-login-methods.js";
 import { logSecurityAuditEvent } from "./security-audit.js";
 import type { TransactionApiPort } from "./actual/transaction-api.js";
 import {
@@ -74,6 +75,7 @@ const readySchema: FastifySchema = {
 export interface ApiAppOptions {
   readinessTimeoutMs?: number;
   actualReadiness?: () => { ready: boolean; message?: string };
+  readActualLoginMethods?: () => Promise<ActualLoginMethods>;
   onClose?: () => Promise<void>;
   deviceAuth?: DeviceAuthorization;
   transactionApi?: TransactionApiPort;
@@ -152,6 +154,72 @@ export async function buildApiApp(
   );
 
   app.get("/api/v1/openapi.json", async () => app.swagger());
+
+  app.get(
+    "/api/v1/auth/methods",
+    {
+      schema: {
+        tags: ["Authentication"],
+        operationId: "getActualLoginMethods",
+        summary: "Check the configured Actual server sign-in method",
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              bootstrapped: { type: "boolean" },
+              loginMethod: {
+                type: ["string", "null"],
+                enum: ["password", "openid", "unsupported", null],
+              },
+              availableLoginMethods: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    method: { type: "string", enum: ["password", "openid"] },
+                    displayName: { type: "string", maxLength: 80 },
+                    active: { type: "boolean" },
+                  },
+                  required: ["method", "displayName", "active"],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ["bootstrapped", "loginMethod", "availableLoginMethods"],
+            additionalProperties: false,
+          },
+          503: {
+            type: "object",
+            properties: {
+              error: {
+                type: "object",
+                properties: {
+                  code: { type: "string", const: "actual_unavailable" },
+                  message: { type: "string" },
+                },
+                required: ["code", "message"],
+                additionalProperties: false,
+              },
+            },
+            required: ["error"],
+            additionalProperties: false,
+          },
+        },
+      },
+    },
+    async (_request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.readActualLoginMethods) {
+        return reply.code(503).send(actualLoginMethodsUnavailable());
+      }
+
+      try {
+        return await options.readActualLoginMethods();
+      } catch {
+        return reply.code(503).send(actualLoginMethodsUnavailable());
+      }
+    },
+  );
 
   if (options.deviceAuth) {
     registerDeviceAuthorizationRoutes(
@@ -4548,6 +4616,16 @@ function actualNotConfigured(reply: import("fastify").FastifyReply) {
       message: "Actual Budget integration is not configured",
     },
   });
+}
+
+function actualLoginMethodsUnavailable() {
+  return {
+    error: {
+      code: "actual_unavailable",
+      message:
+        "Could not check the Actual sign-in method. Check the server connection.",
+    },
+  };
 }
 
 function actualRequestFailed(reply: import("fastify").FastifyReply) {

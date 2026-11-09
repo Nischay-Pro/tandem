@@ -19,6 +19,9 @@ export interface ApiRuntime {
   budgetReadApi?: BudgetReadApiPort;
   start?(): Promise<void>;
   actualReadiness?(): { ready: boolean; message?: string };
+  readActualLoginMethods?(): Promise<
+    import("./auth/actual-login-methods.js").ActualLoginMethods
+  >;
   close?(): Promise<void>;
 }
 
@@ -47,6 +50,9 @@ export async function startApiServer(
       ...(runtime.actualReadiness === undefined
         ? {}
         : { actualReadiness: runtime.actualReadiness }),
+      ...(runtime.readActualLoginMethods === undefined
+        ? {}
+        : { readActualLoginMethods: runtime.readActualLoginMethods }),
       ...(runtime.transactionApi === undefined
         ? {}
         : { transactionApi: runtime.transactionApi }),

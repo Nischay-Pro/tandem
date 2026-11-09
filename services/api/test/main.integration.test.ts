@@ -254,6 +254,22 @@ describe("API bootstrap integration", () => {
     actualApi.init.mockClear();
     actualApi.getServerVersion.mockClear();
     actualApi.shutdown.mockClear();
+    const fetchRequest = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: "ok",
+          data: {
+            bootstrapped: true,
+            loginMethod: "openid",
+            availableLoginMethods: [
+              { method: "openid", displayName: "Household SSO", active: 1 },
+            ],
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchRequest);
 
     const database = {
       ping: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
@@ -279,28 +295,50 @@ describe("API bootstrap integration", () => {
       vi.fn(),
     );
 
-    expect(actualApi.init).toHaveBeenCalledWith({
-      serverURL: "http://127.0.0.1:5006",
-      password: "synthetic-server-password",
-      dataDir: "/tmp/tandem-runtime-test",
-    });
-    expect(actualApi.getServerVersion).toHaveBeenCalledOnce();
-    const response = await app.inject({
-      method: "GET",
-      url: "/api/v1/openapi.json",
-    });
-    const readiness = await app.inject({
-      method: "GET",
-      url: "/api/v1/health/ready",
-    });
-    expect(readiness.statusCode).toBe(200);
-    expect(
-      response.json().paths[
-        "/api/v1/budgets/{budgetId}/transactions/{transactionId}"
-      ].get,
-    ).toBeDefined();
-
-    await app.close();
+    try {
+      expect(actualApi.init).toHaveBeenCalledWith({
+        serverURL: "http://127.0.0.1:5006",
+        password: "synthetic-server-password",
+        dataDir: "/tmp/tandem-runtime-test",
+      });
+      expect(actualApi.getServerVersion).toHaveBeenCalledOnce();
+      const response = await app.inject({
+        method: "GET",
+        url: "/api/v1/openapi.json",
+      });
+      const readiness = await app.inject({
+        method: "GET",
+        url: "/api/v1/health/ready",
+      });
+      const loginMethods = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/methods",
+      });
+      expect(readiness.statusCode).toBe(200);
+      expect(loginMethods.statusCode).toBe(200);
+      expect(loginMethods.json()).toEqual({
+        bootstrapped: true,
+        loginMethod: "openid",
+        availableLoginMethods: [
+          { method: "openid", displayName: "Household SSO", active: true },
+        ],
+      });
+      expect(fetchRequest).toHaveBeenCalledWith(
+        new URL("http://127.0.0.1:5006/account/needs-bootstrap"),
+        expect.objectContaining({ cache: "no-store" }),
+      );
+      expect(
+        response.json().paths[
+          "/api/v1/budgets/{budgetId}/transactions/{transactionId}"
+        ].get,
+      ).toBeDefined();
+    } finally {
+      try {
+        await app.close();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    }
     expect(actualApi.shutdown).toHaveBeenCalledOnce();
     expect(database.close).toHaveBeenCalledOnce();
   });

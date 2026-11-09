@@ -11,6 +11,7 @@ import type {
   DeviceAuthorization,
   DeviceRecord,
 } from "../src/auth/device-auth.js";
+import { ActualLoginMethodsReader } from "../src/auth/actual-login-methods.js";
 import { createActualSession } from "../src/actual/actual-session.js";
 import { ActualBudgetSnapshotReader } from "../src/actual/budget-snapshot-reader.js";
 import { createBudgetMaintenanceApi } from "../src/actual/budget-maintenance-api.js";
@@ -136,6 +137,17 @@ describe.skipIf(!compatibilityTestEnabled)(
 
       await mkdir(firstDataDir, { recursive: true });
       await bootstrapDisposableServer(serverURL, serverPassword);
+
+      const loginMethods = await new ActualLoginMethodsReader(serverURL).read();
+      expect(loginMethods).toMatchObject({
+        bootstrapped: true,
+        loginMethod: "password",
+      });
+      expect(loginMethods.availableLoginMethods).toContainEqual({
+        method: "password",
+        displayName: expect.any(String),
+        active: true,
+      });
 
       const loginResponse = await fetch(new URL("/account/login", serverURL), {
         method: "POST",

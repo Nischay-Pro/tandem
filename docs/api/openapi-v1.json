@@ -83,6 +83,80 @@
     "/api/v1/openapi.json": {
       "get": { "responses": { "200": { "description": "Default Response" } } }
     },
+    "/api/v1/auth/methods": {
+      "get": {
+        "operationId": "getActualLoginMethods",
+        "summary": "Check the configured Actual server sign-in method",
+        "tags": ["Authentication"],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bootstrapped": { "type": "boolean" },
+                    "loginMethod": {
+                      "type": ["null", "string"],
+                      "enum": ["password", "openid", "unsupported", null]
+                    },
+                    "availableLoginMethods": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "method": {
+                            "type": "string",
+                            "enum": ["password", "openid"]
+                          },
+                          "displayName": { "type": "string", "maxLength": 80 },
+                          "active": { "type": "boolean" }
+                        },
+                        "required": ["method", "displayName", "active"],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "bootstrapped",
+                    "loginMethod",
+                    "availableLoginMethods"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": ["actual_unavailable"]
+                        },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/pair": {
       "post": {
         "operationId": "pairDevice",

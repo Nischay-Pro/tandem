@@ -34,6 +34,86 @@ function createDeviceAuth(overrides: Record<string, unknown> = {}) {
 }
 
 describe("health routes and OpenAPI", () => {
+  it("returns Actual sign-in methods without caching them", async () => {
+    const readActualLoginMethods = vi.fn(async () => ({
+      bootstrapped: true,
+      loginMethod: "password" as const,
+      availableLoginMethods: [
+        { method: "password" as const, displayName: "Password", active: true },
+      ],
+    }));
+    const app = await buildApiApp(
+      {
+        ping: vi.fn<() => Promise<void>>(),
+        close: vi.fn<() => Promise<void>>(),
+      },
+      { readActualLoginMethods },
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/auth/methods",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.json()).toEqual({
+      bootstrapped: true,
+      loginMethod: "password",
+      availableLoginMethods: [
+        { method: "password", displayName: "Password", active: true },
+      ],
+    });
+    await app.close();
+  });
+
+  it("returns one safe response when Actual sign-in discovery is unavailable", async () => {
+    const app = await buildApiApp(
+      {
+        ping: vi.fn<() => Promise<void>>(),
+        close: vi.fn<() => Promise<void>>(),
+      },
+      {
+        readActualLoginMethods: vi.fn(async () => {
+          throw new Error("private Actual host details");
+        }),
+      },
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/auth/methods",
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.json()).toEqual({
+      error: {
+        code: "actual_unavailable",
+        message:
+          "Could not check the Actual sign-in method. Check the server connection.",
+      },
+    });
+    expect(response.body).not.toContain("private Actual host details");
+    await app.close();
+  });
+
+  it("reports discovery unavailable when the Actual integration is not configured", async () => {
+    const app = await buildApiApp({
+      ping: vi.fn<() => Promise<void>>(),
+      close: vi.fn<() => Promise<void>>(),
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/auth/methods",
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    await app.close();
+  });
+
   it("reports process liveness without querying PostgreSQL", async () => {
     const ping = vi.fn<() => Promise<void>>();
     const app = await buildApiApp({

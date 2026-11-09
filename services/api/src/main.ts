@@ -13,6 +13,7 @@ import { ActualBudgetSnapshotReader } from "./actual/budget-snapshot-reader.js";
 import { ActualBudgetCatalogReader } from "./actual/budget-catalog-reader.js";
 import { BudgetReadApi } from "./budget-projection/budget-read-api.js";
 import { OperatorMessageError } from "./operator-message-error.js";
+import { ActualLoginMethodsReader } from "./auth/actual-login-methods.js";
 
 export async function runApi(
   environment: Environment,
@@ -44,6 +45,7 @@ function createActualRuntime(
     return {};
   }
   const session = new ActualSession(actualApi, actualConfig);
+  const loginMethods = new ActualLoginMethodsReader(actualConfig.serverURL);
   const transactions = createActualTransactionStore();
   const budgetCatalogReader = new ActualBudgetCatalogReader(session);
   const budgetReadApi = new BudgetReadApi(
@@ -74,6 +76,7 @@ function createActualRuntime(
         ? {}
         : { message: session.readinessMessage }),
     }),
+    readActualLoginMethods: () => loginMethods.read(),
     start: () => session.start(),
     close: () => session.close(),
   };
