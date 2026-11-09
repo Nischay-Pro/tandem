@@ -312,12 +312,12 @@ internal fun UncertainWriteScreen(
                     operation.status == "uncertain" && isNotFound -> {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                             PrimaryButton(
-                                "Retry edit",
+                                "Try again",
                                 enabled = !state.readOnlyMode && !mobileSession.isSyncing,
                                 modifier = Modifier.weight(1f),
                             ) { onRetry(operation.operationId) }
                             SecondaryButton(
-                                "Discard",
+                                "Remove edit",
                                 modifier = Modifier.weight(1f),
                                 enabled = !state.readOnlyMode && !mobileSession.isSyncing,
                             ) { confirmDiscard = true }
@@ -355,10 +355,10 @@ internal fun UncertainWriteScreen(
         }
         if (confirmDiscard && operation != null) {
             DestructiveConfirmationDialog(
-                title = "Discard this edit?",
+                title = "Remove this edit?",
                 message =
                     "Remove the pending edit for $operationPayee ($operationAmountText)? Actual may already have saved it; removing it here won’t undo a change already stored there.",
-                confirmLabel = "Discard edit",
+                confirmLabel = "Remove edit",
                 dismissLabel = "Keep edit",
                 enabled = !state.readOnlyMode && !mobileSession.isSyncing,
                 onDismissRequest = { if (!mobileSession.isSyncing) confirmDiscard = false },
@@ -423,12 +423,12 @@ internal fun RejectedWriteScreen(
                         operation.optimisticAmountMinor?.let { state.formatSignedCurrency(it) } ?: "Unavailable",
                     )
                 }
-                PrimaryButton("Dismiss", enabled = !state.readOnlyMode) { confirmDismiss = true }
+                PrimaryButton("Remove edit", enabled = !state.readOnlyMode) { confirmDismiss = true }
             }
         }
         if (confirmDismiss && operation != null) {
             DestructiveConfirmationDialog(
-                title = "Remove this rejected edit?",
+                title = "Remove this edit?",
                 message =
                     "Remove the rejected edit for $operationPayee ($operationAmountText) from this device? It wasn’t applied in Actual.",
                 confirmLabel = "Remove edit",

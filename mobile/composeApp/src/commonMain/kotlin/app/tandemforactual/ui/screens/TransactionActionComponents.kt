@@ -143,7 +143,7 @@ internal fun TransactionBulkDeleteDialog(
     onConfirm: () -> Unit,
 ) {
     DestructiveConfirmationDialog(
-        title = if (selectedCount == 1) "Delete this transaction?" else "Delete $selectedCount transactions?",
+        title = if (selectedCount == 1) "Delete transaction?" else "Delete $selectedCount transactions?",
         message = "Deleted transactions leave this device first and sync when the server is available.",
         confirmLabel = if (isDeleting) "Deleting…" else "Delete",
         dismissLabel = "Cancel",

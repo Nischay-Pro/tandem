@@ -50,7 +50,7 @@ internal fun ServerDeviceScreen(
             "Server",
             when {
                 device == null -> "No device pairing"
-                mobileSession.isCredentialStored -> "Paired on this phone"
+                mobileSession.isCredentialStored -> "Paired on this device"
                 else -> "Paired for this app session"
             },
         ) {
@@ -81,7 +81,7 @@ internal fun ServerDeviceScreen(
             "This device",
             when {
                 device == null -> "No device is paired"
-                mobileSession.isCredentialStored -> "Pairing is saved on this phone"
+                mobileSession.isCredentialStored -> "Pairing is saved on this device"
                 else -> "Pairing is active until the app closes"
             },
         ) {
@@ -99,7 +99,7 @@ internal fun ServerDeviceScreen(
             DividerLine()
             ListRow(
                 "Saved pairing",
-                if (mobileSession.isCredentialStored) "Protected on this phone" else "Available until the app closes",
+                if (mobileSession.isCredentialStored) "Protected on this device" else "Available until the app closes",
                 when {
                     mobileSession.isCredentialStored -> "Saved"
                     device != null -> "Active"
@@ -111,14 +111,14 @@ internal fun ServerDeviceScreen(
         InfoBubble("Pairing codes and budget passwords are never saved.")
         mobileSession.deviceRevocationError?.let { message ->
             AttentionBanner("Couldn’t remove this device", message, "Retry", onForgetDevice)
-            InfoBubble("The server still trusts this phone until its owner removes it there.")
+            InfoBubble("The server still trusts this device until its owner removes it there.")
         }
         AnimatedPreviewNote(mobileSession.credentialStorageError)
         if (device == null) {
             SecondaryButton("Pair this device") { navigation.open(AppRoute.SERVER_ADDRESS) }
         } else if (mobileSession.deviceRevocationError != null) {
             SecondaryButton(
-                "Forget on this phone only",
+                "Forget on this device only",
                 enabled = !mobileSession.isRevokingDevice,
                 onClick = { confirmation = "local" },
             )
@@ -135,7 +135,7 @@ internal fun ServerDeviceScreen(
             DestructiveConfirmationDialog(
                 title = "Remove this device?",
                 message =
-                    "This revokes this phone’s access on the server and clears its saved pairing. You’ll need to pair again to connect.",
+                    "This revokes this device’s access on the server and clears its saved pairing. You’ll need to pair again to connect.",
                 confirmLabel = "Remove device",
                 dismissLabel = "Cancel",
                 enabled = !mobileSession.isRevokingDevice,
@@ -148,7 +148,8 @@ internal fun ServerDeviceScreen(
         "local" ->
             DestructiveConfirmationDialog(
                 title = "Forget this device here?",
-                message = "This clears the pairing saved on this phone. The server will still allow this device until it is removed there.",
+                message =
+                    "This clears the pairing saved on this device. The server will still allow this device until it is removed there.",
                 confirmLabel = "Forget here",
                 dismissLabel = "Cancel",
                 onDismissRequest = { confirmation = "" },
@@ -197,7 +198,7 @@ internal fun SecurityScreen(
         SectionCard("Access") {
             ListRow(
                 "Saved pairing",
-                if (mobileSession.isCredentialStored) "Protected on this phone" else "Available until the app closes",
+                if (mobileSession.isCredentialStored) "Protected on this device" else "Available until the app closes",
                 when {
                     mobileSession.isCredentialStored -> "Saved"
                     mobileSession.isAuthenticated -> "Active"

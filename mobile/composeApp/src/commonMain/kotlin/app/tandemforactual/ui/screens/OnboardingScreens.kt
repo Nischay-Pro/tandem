@@ -271,7 +271,7 @@ internal fun PairingCodeScreen(
             mobileSession.credentialStorageError?.let { error ->
                 InlineMessage(error, InlineMessageKind.ERROR)
                 SecondaryButton(
-                    if (mobileSession.isRestoringStoredSession) "Checking storage" else "Retry saved pairing",
+                    if (mobileSession.isRestoringStoredSession) "Checking storage" else "Try again",
                     enabled = !mobileSession.isRestoringStoredSession,
                     onClick = onRetryStoredSession,
                 )
@@ -315,20 +315,20 @@ internal fun BudgetChooserScreen(
                 "Choose a budget"
             },
             if (usingCachedCatalog) {
-                "Open a budget already saved on this phone. You can sync again when the server is available."
+                "Open a budget already saved on this device. You can sync again when the server is available."
             } else if (hasCachedOnlyBudgets) {
-                "Choose a server budget or open one of the saved copies on this phone."
+                "Choose a server budget or open one of the saved copies on this device."
             } else {
                 "Choose a budget this device can open."
             },
         )
         when {
             usingCachedCatalog || (mobileSession.budgets.isEmpty() && cachedCatalog.isNotEmpty()) -> {
-                BodyText("The server budget list is unavailable. Saved copies stay on this phone.")
+                BodyText("The server budget list is unavailable. Saved copies stay on this device.")
                 selectableBudgets.forEach { budget ->
                     ChoiceRow(
                         budget.name,
-                        if (budget.isEncrypted) "Encrypted budget · saved on this phone" else "Saved on this phone",
+                        if (budget.isEncrypted) "Encrypted budget · saved on this device" else "Saved on this device",
                         selected = state.selectedBudgetId == budget.budgetId,
                     ) { onSelectBudget(budget) }
                 }
@@ -338,8 +338,8 @@ internal fun BudgetChooserScreen(
                     val isOnServer = mobileSession.budgets.any { it.budgetId == budget.budgetId }
                     val detail =
                         when {
-                            !isOnServer && budget.isEncrypted -> "Encrypted budget · saved on this phone"
-                            !isOnServer -> "Saved on this phone"
+                            !isOnServer && budget.isEncrypted -> "Encrypted budget · saved on this device"
+                            !isOnServer -> "Saved on this device"
                             budget.isEncrypted -> "Encrypted Actual budget"
                             else -> "Available on this server"
                         }
@@ -353,7 +353,7 @@ internal fun BudgetChooserScreen(
                 mobileSession.budgetError?.let { error ->
                     InlineMessage(error, InlineMessageKind.ERROR)
                 } ?: EmptyState("No budgets available", "This paired device has no budget access.")
-                SecondaryButton("Retry loading budgets", onClick = onRefreshBudgets)
+                SecondaryButton("Try again", onClick = onRefreshBudgets)
             }
             mobileSession.budgets.isEmpty() -> {
                 SurfaceCard {
@@ -461,9 +461,9 @@ internal fun FirstSyncScreen(
         )
         AnimatedReveal(visible = mobileSession.syncError != null && !mobileSession.isSyncing) {
             Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                SecondaryButton("Retry sync", onClick = onRetrySync)
+                SecondaryButton("Try again", onClick = onRetrySync)
                 if (mobileSession.cachedSnapshotBudgetId == state.selectedBudgetId && mobileSession.hasCachedSnapshot) {
-                    BodyText("The last saved copy is still available on this phone.")
+                    BodyText("The last saved copy is still available on this device.")
                     SecondaryButton("Open saved copy") {
                         selectLatestCachedMonth(state, mobileSession.budgetMonthIds, mobileSession.transactionRecords)
                         navigation.selectTab(AppRoute.BUDGET)
