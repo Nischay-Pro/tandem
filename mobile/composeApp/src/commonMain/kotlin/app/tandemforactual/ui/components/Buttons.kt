@@ -175,6 +175,7 @@ internal fun TandemIconButton(
 
 @Composable
 internal fun ReorderDragHandle(
+    itemName: String = "item",
     enabled: Boolean,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
@@ -218,7 +219,7 @@ internal fun ReorderDragHandle(
         buildList {
             if (enabled && canMoveUp) {
                 add(
-                    CustomAccessibilityAction("Move up") {
+                    CustomAccessibilityAction("Move $itemName up") {
                         latestMoveUp()
                         true
                     },
@@ -226,7 +227,7 @@ internal fun ReorderDragHandle(
             }
             if (enabled && canMoveDown) {
                 add(
-                    CustomAccessibilityAction("Move down") {
+                    CustomAccessibilityAction("Move $itemName down") {
                         latestMoveDown()
                         true
                     },
@@ -235,7 +236,7 @@ internal fun ReorderDragHandle(
         }
     val reorderSemantics =
         Modifier.semantics(mergeDescendants = true) {
-            contentDescription = "Reorder item"
+            contentDescription = "Drag to reorder $itemName"
             customActions = actionList
         }
     val handleModifier =
