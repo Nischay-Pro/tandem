@@ -271,7 +271,7 @@ internal class TandemMobileSession(
             if (moved || refreshFailed) {
                 budgetReorderQueue = budgetReorderQueue.complete(request, refreshFailed, budgetActionMessage)
             } else {
-                val failure = budgetActionMessage ?: "Couldn’t reorder this item. The order was restored."
+                val failure = budgetReorderFailureMessage(budgetActionMessage)
                 budgetReorderQueue = budgetReorderQueue.failAll(failure)
             }
         }

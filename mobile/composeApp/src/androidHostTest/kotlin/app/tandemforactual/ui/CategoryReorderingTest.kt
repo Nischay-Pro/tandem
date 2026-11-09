@@ -5,6 +5,18 @@ import kotlin.test.assertEquals
 
 class CategoryReorderingTest {
     @Test
+    fun reorderFailureExplainsThatTheOriginalOrderWasRestored() {
+        assertEquals(
+            "Couldn’t reach the Tandem server. Check the address and connection. The original order was restored.",
+            budgetReorderFailureMessage("Couldn’t reach the Tandem server. Check the address and connection."),
+        )
+        assertEquals(
+            "Couldn’t reorder this item. The original order was restored.",
+            budgetReorderFailureMessage(null),
+        )
+    }
+
+    @Test
     fun movesAnItemDirectlyToTheTopAndTargetsTheFollowingItem() {
         val order = listOf("rent", "mortgage", "maintenance", "utilities")
 

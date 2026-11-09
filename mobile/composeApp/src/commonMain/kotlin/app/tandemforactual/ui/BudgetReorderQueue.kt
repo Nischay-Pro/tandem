@@ -109,6 +109,15 @@ internal data class BudgetReorderQueueState(
     }
 }
 
+internal fun budgetReorderFailureMessage(message: String?): String {
+    val detail = message?.trim()?.trimEnd('.', '!', '?')?.takeIf(String::isNotEmpty)
+    return if (detail == null) {
+        "Couldn’t reorder this item. The original order was restored."
+    } else {
+        "$detail. The original order was restored."
+    }
+}
+
 internal fun optimisticBudgetOrder(
     itemIds: List<String>,
     queuedMoves: List<QueuedBudgetReorder>,
