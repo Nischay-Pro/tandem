@@ -23,6 +23,87 @@ import kotlin.test.fail
 
 class LocalBudgetRepositoryTest {
     @Test
+    fun remapPendingCategoryReferencesRewritesMatchingQueuedTransactionsOnly() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 200L }
+                repository.applySnapshot(
+                    BUDGET,
+                    GENERATION,
+                    "c1",
+                    listOf(
+                        transaction(recordId = "txn-remap", categoryId = "temporary-category"),
+                        transaction(recordId = "txn-keep", categoryId = "other-category"),
+                    ),
+                )
+                repository.enqueueWrite(
+                    updateRequest(
+                        operationId = "op-remap",
+                        idempotencyKey = "key-remap",
+                        recordId = "txn-remap",
+                        patch = """{"category":"temporary-category"}""",
+                        optimistic = """{"id":"txn-remap","amount":1200,"category":"temporary-category"}""",
+                        projection =
+                            LocalRecordProjection(
+                                recordDate = "2026-10-01",
+                                accountId = "checking",
+                                categoryId = "temporary-category",
+                                payeeId = "market",
+                                amountMinor = 1200L,
+                                budgetMonth = null,
+                            ),
+                    ),
+                )
+                repository.enqueueWrite(
+                    updateRequest(
+                        operationId = "op-keep",
+                        idempotencyKey = "key-keep",
+                        recordId = "txn-keep",
+                        patch = """{"category":"other-category"}""",
+                        optimistic = """{"id":"txn-keep","amount":1200,"category":"other-category"}""",
+                        projection =
+                            LocalRecordProjection(
+                                recordDate = "2026-10-01",
+                                accountId = "checking",
+                                categoryId = "other-category",
+                                payeeId = "market",
+                                amountMinor = 1200L,
+                                budgetMonth = null,
+                            ),
+                    ),
+                )
+
+                assertEquals(
+                    1,
+                    repository.remapPendingCategoryReferences(
+                        BUDGET,
+                        "temporary-category",
+                        "actual-category",
+                    ),
+                )
+                val remapped = repository.findWrite("op-remap")
+                assertNotNull(remapped)
+                assertEquals("""{"category":"actual-category"}""", remapped.patchJson)
+                assertEquals(
+                    """{"id":"txn-remap","amount":1200,"category":"actual-category"}""",
+                    remapped.optimisticJson,
+                )
+                assertEquals("actual-category", remapped.optimisticCategoryId)
+                assertEquals(
+                    "actual-category",
+                    repository.findRecord(BUDGET, "transaction", "txn-remap")?.categoryId,
+                )
+                val unchanged = repository.findWrite("op-keep")
+                assertNotNull(unchanged)
+                assertEquals("""{"category":"other-category"}""", unchanged.patchJson)
+                assertEquals("other-category", unchanged.optimisticCategoryId)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun clearedAccountBalanceAggregatesOnlyVisibleClearedTransactions() =
         runBlocking {
             val database = newDatabase()

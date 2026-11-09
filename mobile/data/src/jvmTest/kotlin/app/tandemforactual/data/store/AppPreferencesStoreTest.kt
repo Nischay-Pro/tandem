@@ -11,6 +11,32 @@ import kotlin.test.assertEquals
 
 class AppPreferencesStoreTest {
     @Test
+    fun internalPreferencesSurviveSavingVisiblePreferences() =
+        runBlocking {
+            val database =
+                openTandemDatabase(
+                    Room
+                        .inMemoryDatabaseBuilder<TandemDatabase>()
+                        .setQueryCoroutineContext(Dispatchers.IO),
+                )
+            try {
+                val store = AppPreferencesStore(database)
+                store.putValue(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY, "queued-reorder")
+                store.save(mapOf("theme" to "LIGHT"))
+
+                assertEquals(
+                    mapOf(
+                        AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY to "queued-reorder",
+                        "theme" to "LIGHT",
+                    ),
+                    store.read(),
+                )
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun preferencesSurviveDatabaseReopenAndReplacePreviousValues() =
         runBlocking {
             val path = File.createTempFile("tandem-preferences", ".db").absolutePath
