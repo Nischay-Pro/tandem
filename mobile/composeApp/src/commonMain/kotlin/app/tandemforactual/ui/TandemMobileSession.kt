@@ -789,6 +789,7 @@ internal class TandemMobileSession(
             } else if (moved) {
                 budgetReorderQueue = budgetReorderQueue.complete(request, refreshFailed, budgetActionMessage)
             } else if (!isServerReachable || !apiClient.isAuthenticated) {
+                budgetActionMessage = null
                 budgetReorderQueue =
                     budgetReorderQueue.waitForConnection(
                         request,
