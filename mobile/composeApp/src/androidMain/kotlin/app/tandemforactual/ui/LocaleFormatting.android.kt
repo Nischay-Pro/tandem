@@ -174,6 +174,12 @@ internal actual fun platformWeekdayName(
     day: Int,
 ): String = SimpleDateFormat("EEEEE", Locale.getDefault()).format(calendarDate(year, month, day))
 
+internal actual fun platformFullWeekdayName(
+    year: Int,
+    month: Int,
+    day: Int,
+): String = SimpleDateFormat("EEEE", Locale.getDefault()).format(calendarDate(year, month, day))
+
 private fun calendarDate(
     year: Int,
     month: Int,

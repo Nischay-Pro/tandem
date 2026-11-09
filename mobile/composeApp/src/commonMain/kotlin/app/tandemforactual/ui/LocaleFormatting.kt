@@ -64,6 +64,12 @@ internal expect fun platformWeekdayName(
     day: Int,
 ): String
 
+internal expect fun platformFullWeekdayName(
+    year: Int,
+    month: Int,
+    day: Int,
+): String
+
 internal fun formatCurrency(
     minorUnits: Long,
     displaySettings: BudgetDisplaySettings? = null,
@@ -122,5 +128,5 @@ internal fun formatFirstWeekday(): String {
     val firstWeekday = platformFirstWeekday()
     val mayFirstWeekday = platformWeekday(2026, 5, 1)
     val representativeDay = 1 + ((firstWeekday - mayFirstWeekday + 7) % 7)
-    return formatWeekday(2026, 5, representativeDay)
+    return platformFullWeekdayName(2026, 5, representativeDay)
 }

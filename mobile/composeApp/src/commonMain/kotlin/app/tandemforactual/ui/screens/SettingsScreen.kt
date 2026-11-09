@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -33,7 +32,6 @@ import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
 import com.composables.icons.lucide.Bell
-import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Database
 import com.composables.icons.lucide.Info
@@ -214,19 +212,25 @@ private fun AppearanceChoiceRow(
             fontSize = TandemTypography.body,
             fontWeight = FontWeight.Medium,
         )
+        AppearanceSelectionIndicator(selected)
+    }
+}
+
+@Composable
+private fun AppearanceSelectionIndicator(selected: Boolean) {
+    val palette = tandemPalette
+    Box(
+        Modifier
+            .size(22.dp)
+            .border(2.dp, if (selected) palette.accent else palette.muted, CircleShape)
+            .padding(4.dp),
+    ) {
         Box(
             Modifier
-                .size(22.dp)
-                .border(2.dp, if (selected) palette.accent else palette.muted, CircleShape)
-                .padding(4.dp),
-        ) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .clip(CircleShape)
-                    .background(if (selected) palette.accent else palette.surface),
-            )
-        }
+                .fillMaxSize()
+                .clip(CircleShape)
+                .background(if (selected) palette.accent else palette.surface),
+        )
     }
 }
 
@@ -257,6 +261,6 @@ private fun AccentChoiceRow(
             fontSize = TandemTypography.body,
             fontWeight = FontWeight.Medium,
         )
-        if (selected) Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.accent)
+        AppearanceSelectionIndicator(selected)
     }
 }

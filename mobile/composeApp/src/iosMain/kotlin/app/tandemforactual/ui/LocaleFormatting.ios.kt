@@ -240,6 +240,20 @@ internal actual fun platformWeekdayName(
     }) { it.stringFromDate(calendarDate(year, month, day)) }
 }
 
+internal actual fun platformFullWeekdayName(
+    year: Int,
+    month: Int,
+    day: Int,
+): String {
+    val locale = NSLocale.currentLocale
+    return withDateFormatter("weekday-full:$locale", {
+        NSDateFormatter().apply {
+            this.locale = locale
+            dateFormat = "EEEE"
+        }
+    }) { it.stringFromDate(calendarDate(year, month, day)) }
+}
+
 private object IosFormatterCache {
     private val lock = NSRecursiveLock()
     private val numbers = linkedMapOf<String, NSNumberFormatter>()

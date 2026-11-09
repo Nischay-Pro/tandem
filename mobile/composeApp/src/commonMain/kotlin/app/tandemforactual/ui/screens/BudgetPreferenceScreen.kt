@@ -31,12 +31,10 @@ internal fun BudgetPreferencesScreen(
         SectionCard("Planning") {
             ListRow(
                 "Available category amounts",
-                "Shown from the synced plan",
-                "Available",
-                options = ListRowOptions(trailingColor = tandemPalette.positive),
+                "From the Actual budget",
             )
             DividerLine()
-            ListRow("Carry balances forward", "Controlled by Actual and shown read-only", "Actual")
+            ListRow("Carry balances forward", "Change this in Actual", "Read-only")
         }
         PreviewNote("Tandem displays planning rules set in Actual. To change them, update the rules on the Actual website.")
     }

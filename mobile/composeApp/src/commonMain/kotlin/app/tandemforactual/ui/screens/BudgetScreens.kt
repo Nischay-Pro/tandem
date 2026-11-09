@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.AnimatedReveal
 import app.tandemforactual.ui.components.Badge
 import app.tandemforactual.ui.components.CollapsibleSectionCard
+import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
@@ -673,65 +674,27 @@ internal fun BudgetScreen(
             )
         }
     }
-    TandemTaskSheet(
-        visible = showCopyLastMonthDialog,
-        onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showCopyLastMonthDialog = false },
-        onDismissed = {},
-    ) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(
-                Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    Icon(Lucide.CalendarDays, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
-                    Text(
-                        "Copy last month?",
-                        modifier = Modifier.weight(1f),
-                        color = tandemPalette.text,
-                        fontSize = TandemTypography.sectionTitle,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    TandemIconButton(
-                        Lucide.X,
-                        "Close",
-                        sizeDp = 40,
-                        iconSizeDp = 18,
-                        enabled = !mobileSession.isPerformingBudgetAction,
-                    ) { showCopyLastMonthDialog = false }
+    if (showCopyLastMonthDialog) {
+        DestructiveConfirmationDialog(
+            title = "Replace assignments?",
+            message = "Copy last month’s amounts to ${state.selectedMonth}? This replaces the current assignments.",
+            confirmLabel = if (mobileSession.isPerformingBudgetAction) "Copying…" else "Copy assignments",
+            dismissLabel = "Cancel",
+            enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+            content = { mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) } },
+            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showCopyLastMonthDialog = false },
+            onConfirm = {
+                scope.launch {
+                    val copied =
+                        mobileSession.copyBudgetMonth(
+                            state.selectedBudgetId,
+                            state.selectedMonthId,
+                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                        )
+                    if (copied) showCopyLastMonthDialog = false
                 }
-                Text(
-                    "Replace ${state.selectedMonth} category assignments with the previous month’s amounts.",
-                    color = tandemPalette.muted,
-                    fontSize = TandemTypography.body,
-                )
-                mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
-                TandemActionButton(
-                    if (mobileSession.isPerformingBudgetAction) "Copying…" else "Copy assignments",
-                    TandemActionButtonTone.PRIMARY,
-                    modifier = Modifier.fillMaxWidth(),
-                    icon = Lucide.Check,
-                    enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
-                    loading = mobileSession.isPerformingBudgetAction,
-                ) {
-                    scope.launch {
-                        val copied =
-                            mobileSession.copyBudgetMonth(
-                                state.selectedBudgetId,
-                                state.selectedMonthId,
-                                state.encryptedPassword.takeIf { it.isNotBlank() },
-                            )
-                        if (copied) showCopyLastMonthDialog = false
-                    }
-                }
-                TandemActionButton(
-                    "Cancel",
-                    TandemActionButtonTone.NEUTRAL,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !mobileSession.isPerformingBudgetAction,
-                ) { showCopyLastMonthDialog = false }
-            }
-        }
+            },
+        )
     }
     val canSaveCurrentTemplate = currentTemplateAssignments.isNotEmpty() && currentTemplateAssignments.size <= 500
     TandemTaskSheet(
