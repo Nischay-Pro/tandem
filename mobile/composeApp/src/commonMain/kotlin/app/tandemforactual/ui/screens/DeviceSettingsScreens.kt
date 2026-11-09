@@ -174,12 +174,7 @@ internal fun SecurityScreen(
     PageColumn {
         Heading("Device protection")
         SectionCard("App access") {
-            ListRow(
-                "Biometric unlock",
-                "Not available yet",
-                "Unavailable",
-                leading = RowLeading.Icon(Lucide.FingerprintPattern),
-            )
+            ListRow("Biometric unlock", "Coming later", leading = RowLeading.Icon(Lucide.FingerprintPattern))
             DividerLine()
             CheckBoxRow(
                 title = "Read-only mode",
@@ -209,12 +204,11 @@ internal fun SecurityScreen(
             DividerLine()
             ListRow(
                 "Budget password",
-                if (state.selectedBudgetEncrypted) "Used to unlock this budget" else "Encrypted budgets only",
+                if (state.selectedBudgetEncrypted) "Used to unlock this budget" else null,
                 if (state.selectedBudgetEncrypted) "Not stored" else "Unavailable",
                 leading = RowLeading.Icon(Lucide.LockKeyhole),
             )
         }
-        PreviewNote("Budget passwords aren’t stored.")
         AnimatedPreviewNote(mobileSession.credentialStorageError)
     }
 }
@@ -281,7 +275,7 @@ internal fun NotificationsScreen(
             }
             DividerLine()
             ToggleRow(
-                "Not applied alerts",
+                "Edits not applied",
                 "When an edit isn’t applied",
                 state.rejectedEditAlerts,
             ) {

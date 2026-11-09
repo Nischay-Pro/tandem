@@ -18,8 +18,20 @@ RULES = (
     ("say ‘this device’ for local-device status", re.compile(r"\bthis phone\b", re.IGNORECASE)),
     ("use ‘Try again’ for retry actions", re.compile(r"\bRetry\b")),
     ('use "Delete transaction?" for a single transaction', re.compile(r"\bDelete this transaction\?")),
+    ('use "Needs review" as the conflict state label', re.compile(r"\bNeeds your review\b|\bReview changes\b")),
+    ('never show a transaction record ID as its name', re.compile(r"Transaction \$\{[^}]*recordId[^}]*\}")),
+    ('use the mobile-data setting name', re.compile(r"Use unrestricted networks")),
+    ('use the shorter unavailable alert label', re.compile(r"Not applied alerts")),
 )
-PREFERRED_TERMS = ("Saved on this device", "Try again", "Remove edit", "Delete transaction?")
+PREFERRED_TERMS = (
+    "Saved on this device",
+    "Try again",
+    "Remove edit",
+    "Delete transaction?",
+    "Needs review",
+    "Sync on mobile data",
+    "Edits not applied",
+)
 
 
 def main() -> int:

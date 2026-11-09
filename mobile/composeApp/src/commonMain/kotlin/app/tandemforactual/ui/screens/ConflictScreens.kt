@@ -57,7 +57,7 @@ internal fun ConflictInboxScreen(
                     val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
                     ConflictInboxItemUi(
                         operation.operationId,
-                        transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
+                        transaction?.payee ?: "Deleted transaction",
                         "${transaction?.dateLabel ?: "Actual changed"} · ${transaction?.category ?: "Transaction"}",
                     )
                 }
@@ -74,7 +74,7 @@ internal fun ConflictInboxScreen(
         if (!isLiveBudget) item(key = "conflicts-sample-banner") { SampleBanner() }
         item(key = "conflicts-title") {
             Heading(
-                "Changes to review",
+                "Needs review",
                 if (isLiveBudget) "Choose whether to keep your edit or the latest Actual version." else "Choose which version to keep.",
             )
         }
@@ -88,7 +88,7 @@ internal fun ConflictInboxScreen(
             }
         } else {
             item(key = "conflicts-section-title") {
-                SectionCard("Needs your review", "${conflicts.size} edits") {}
+                SectionCard("Needs review", "${conflicts.size} edits") {}
             }
             items(conflicts, key = { "conflict:${it.id}" }) { conflict ->
                 SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
@@ -253,7 +253,7 @@ internal fun UncertainWriteScreen(
                     when {
                         checkError != null -> "Couldn’t check status"
                         operation.status == "committed" -> "Saved to Actual"
-                        operation.status == "conflict" -> "Needs your review"
+                        operation.status == "conflict" -> "Needs review"
                         operation.status == "rejected" -> "Change not applied"
                         operation.status == "discarded" -> "Change discarded"
                         operation.status == "queued" -> "Waiting to sync"
@@ -340,7 +340,7 @@ internal fun UncertainWriteScreen(
                             if (!mobileSession.isSyncing) onCheckStatus(operation.operationId)
                         }
                     operation.status == "conflict" ->
-                        PrimaryButton("Review changes") {
+                        PrimaryButton("Review") {
                             state.selectedConflictOperationId = operation.operationId
                             navigation.open(AppRoute.CONFLICT_REVIEW)
                         }

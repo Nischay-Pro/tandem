@@ -236,7 +236,7 @@ internal fun BudgetScreen(
                         AttentionBanner(
                             "$conflictCount change${if (conflictCount == 1) "" else "s"} need${if (conflictCount == 1) "s" else ""} review",
                             "Choose which version of the edit to keep.",
-                            "Review changes",
+                            "Review",
                         ) { navigation.open(AppRoute.CONFLICT_INBOX) }
                     }
                 }
@@ -245,7 +245,7 @@ internal fun BudgetScreen(
                         AttentionBanner(
                             "$rejectedCount edit${if (rejectedCount == 1) "" else "s"} not applied",
                             "Review the edit.",
-                            "Review edits",
+                            "Review",
                         ) {
                             state.selectedConflictOperationId =
                                 mobileSession.pendingWrites

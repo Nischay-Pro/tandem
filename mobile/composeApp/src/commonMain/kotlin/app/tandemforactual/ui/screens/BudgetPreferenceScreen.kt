@@ -87,10 +87,10 @@ internal fun SyncPreferencesScreen(
                 if (!state.selectedBudgetEncrypted) {
                     DividerLine()
                     ToggleRow(
-                        "Use unrestricted networks",
-                        "Pauses on metered connections",
-                        state.syncOnWifi,
-                    ) { state.syncOnWifi = it }
+                        "Sync on mobile data",
+                        if (state.syncOnWifi) "Off pauses sync on metered connections" else "On allows sync on mobile data",
+                        !state.syncOnWifi,
+                    ) { state.syncOnWifi = !it }
                 }
             } else {
                 InfoBubble("Background sync isn’t available on this device.")

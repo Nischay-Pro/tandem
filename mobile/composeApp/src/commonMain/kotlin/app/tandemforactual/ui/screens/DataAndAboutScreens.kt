@@ -99,7 +99,7 @@ internal fun LocalDataScreen(
             )
             DividerLine()
             ListRow(
-                "Needs your review",
+                "Needs review",
                 "Choose a version",
                 formatInteger(conflictCount),
                 leading = RowLeading.Icon(Lucide.CloudAlert),

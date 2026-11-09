@@ -184,7 +184,7 @@ internal fun writeStatusLabel(status: String): String =
         "queued" -> "Waiting to sync"
         "sending" -> "Syncing"
         "uncertain" -> "Status unknown"
-        "conflict" -> "Needs your review"
+        "conflict" -> "Needs review"
         "rejected" -> "Not applied"
         "committed" -> "Saved"
         "discarded" -> "Discarded"

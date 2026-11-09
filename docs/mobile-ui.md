@@ -37,12 +37,15 @@ follows the selected light, dark, or system mode alongside the Compose screens.
 
 ## Wording
 
-| Idea                          | Use                  | Avoid                                         |
-| ----------------------------- | -------------------- | --------------------------------------------- |
-| A local copy                  | Saved on this device | Saved on this phone                           |
-| Repeating an action           | Try again            | Retry sync, Retry edit, Retry loading budgets |
-| Removing a pending local edit | Remove edit          | Discard or Dismiss                            |
-| Deleting one transaction      | Delete transaction?  | Delete this transaction?                      |
+| Idea                                      | Use                  | Avoid                                         |
+| ----------------------------------------- | -------------------- | --------------------------------------------- |
+| A local copy                              | Saved on this device | Saved on this phone                           |
+| Repeating an action                       | Try again            | Retry sync, Retry edit, Retry loading budgets |
+| Removing a pending local edit             | Remove edit          | Discard or Dismiss                            |
+| Deleting one transaction                  | Delete transaction?  | Delete this transaction?                      |
+| A conflict that needs a choice            | Needs review         | Needs your review, Review changes             |
+| Allowing background sync on cellular data | Sync on mobile data  | Use unrestricted networks                     |
+| Alerts for rejected edits                 | Edits not applied    | Not applied alerts                            |
 
 Keep action labels consistent when the surrounding screen already makes the
 object clear. Use a short next step in error messages, such as “Try again.”

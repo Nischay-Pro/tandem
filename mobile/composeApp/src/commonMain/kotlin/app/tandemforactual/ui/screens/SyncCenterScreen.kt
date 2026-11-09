@@ -111,7 +111,7 @@ internal fun SyncCenterScreen(
                     val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
                     SurfaceCard {
                         ListRow(
-                            transaction?.payee ?: "Transaction ${operation.recordId.take(8)}",
+                            transaction?.payee ?: "Deleted transaction",
                             "${writeStatusLabel(operation.status)} · ${transaction?.category ?: "Transaction edit"}",
                             "Review",
                             leading =
@@ -200,7 +200,7 @@ internal fun SyncCenterScreen(
         }
         SectionCard("Attention needed", "Sample recovery states") {
             ListRow(
-                "Needs your review",
+                "Needs review",
                 "Corner Market · two versions",
                 "1",
                 options = ListRowOptions(trailingColor = tandemPalette.warning),
@@ -220,6 +220,6 @@ internal fun SyncCenterScreen(
             DividerLine()
             ListRow("Local edits", "None in sample data", "0")
         }
-        SecondaryButton("Review changes") { navigation.open(AppRoute.CONFLICT_INBOX) }
+        SecondaryButton("Review") { navigation.open(AppRoute.CONFLICT_INBOX) }
     }
 }
