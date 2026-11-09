@@ -47,14 +47,7 @@ internal fun ServerDeviceScreen(
     var confirmation by rememberSaveable { mutableStateOf("") }
     PageColumn {
         Heading("Connection details", "Review the server address and device pairing.")
-        SectionCard(
-            "Server",
-            when {
-                device == null -> "No device pairing"
-                mobileSession.isCredentialStored -> "Paired on this device"
-                else -> "Paired for this app session"
-            },
-        ) {
+        SectionCard("Server") {
             ListRow(
                 "Server URL",
                 state.serverUrl,
@@ -82,8 +75,7 @@ internal fun ServerDeviceScreen(
             "This device",
             when {
                 device == null -> "No device is paired"
-                mobileSession.isCredentialStored -> "Pairing is saved on this device"
-                else -> "Pairing is active until the app closes"
+                else -> null
             },
         ) {
             ListRow(
@@ -191,22 +183,11 @@ internal fun SecurityScreen(
                 onChange = { state.readOnlyMode = it },
             )
         }
-        SectionCard("Access") {
-            ListRow(
-                "Saved pairing",
-                if (mobileSession.isCredentialStored) "Protected on this device" else "Available until the app closes",
-                when {
-                    mobileSession.isCredentialStored -> "Saved"
-                    mobileSession.isAuthenticated -> "Active"
-                    else -> "Not paired"
-                },
-                leading = RowLeading.Icon(Lucide.KeyRound),
-            )
-            DividerLine()
+        SurfaceCard {
             ListRow(
                 "Budget password",
-                if (state.selectedBudgetEncrypted) "Used to unlock this budget" else null,
-                if (state.selectedBudgetEncrypted) "Not stored" else "Unavailable",
+                if (state.selectedBudgetEncrypted) "For this session" else null,
+                if (state.selectedBudgetEncrypted) "Available" else "Unavailable",
                 leading = RowLeading.Icon(Lucide.LockKeyhole),
             )
         }

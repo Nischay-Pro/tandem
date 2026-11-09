@@ -620,7 +620,6 @@ internal fun TransactionFormScreen(
     }
     PageColumn {
         SampleBanner()
-        Heading("Transaction details", "Record a change to the budget.")
         TextFieldCard(
             "Amount",
             state.transactionAmount,

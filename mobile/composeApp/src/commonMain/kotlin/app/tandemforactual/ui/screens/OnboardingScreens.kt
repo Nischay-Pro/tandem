@@ -243,7 +243,6 @@ internal fun PairingCodeScreen(
                         )
                     }
                 }
-                InfoBubble("Pairing codes and budget passwords are never saved.")
             }
             mobileSession.budgetError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
             PrimaryButton("Choose a budget", enabled = mobileSession.pairedDevice != null) {
@@ -407,7 +406,6 @@ internal fun FirstSyncScreen(
 ) {
     val palette = tandemPalette
     PageColumn {
-        Heading("First sync")
         SurfaceCard {
             Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.large)) {
                 listOf("Connecting", "Downloading budget", "Saving on this device").forEachIndexed { index, title ->

@@ -15,7 +15,6 @@ internal fun BudgetPreferencesScreen(
 ) {
     val currencyCode = state.budgetDisplaySettings?.currencyCode ?: platformCurrencyCode()
     PageColumn {
-        Heading("Amount and planning")
         SectionCard(
             "Number format",
             if (state.budgetDisplaySettings != null) "Uses Actual budget settings" else "Device locale fallback",

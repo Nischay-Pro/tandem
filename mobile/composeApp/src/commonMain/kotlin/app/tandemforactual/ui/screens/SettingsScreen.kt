@@ -108,14 +108,14 @@ internal fun SettingsScreen(
         SectionCard("Privacy", "Device data and security") {
             ListRow(
                 "Security and privacy",
-                "Access and local data",
+                "Read-only access and device protection",
                 leading = RowLeading.Icon(Lucide.ShieldCheck),
                 onClick = { navigation.open(AppRoute.SECURITY_PRIVACY) },
             )
             DividerLine()
             ListRow(
                 "Local data and storage",
-                "Cached budget and pending edits",
+                "Cached records and pending edits",
                 leading = RowLeading.Icon(Lucide.Database),
                 onClick = { navigation.open(AppRoute.LOCAL_DATA) },
             )
@@ -134,7 +134,6 @@ internal fun SettingsScreen(
 @Composable
 internal fun AppearanceScreen(state: AppState) {
     PageColumn {
-        Heading("Appearance")
         SectionCard("Theme") {
             ThemeMode.entries.forEachIndexed { index, mode ->
                 if (index > 0) DividerLine()
