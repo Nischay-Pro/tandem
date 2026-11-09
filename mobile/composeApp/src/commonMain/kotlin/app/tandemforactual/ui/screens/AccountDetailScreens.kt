@@ -104,7 +104,7 @@ internal fun AccountDetailScreen(
                     parseStatementImport(file.name, contents, statementDateOrder)
                 }
         } catch (error: StatementImportParseException) {
-            statementParseError = error.message ?: "This statement could not be read."
+            statementParseError = error.message ?: "Couldn’t read this statement. Choose a CSV, QIF, or OFX file."
         }
     }
     LaunchedEffect(
@@ -388,8 +388,14 @@ internal fun StatementImportDialog(
                     ListRow("Transactions", trailing = result.transactions.size.toString(), leading = RowLeading.Icon(Lucide.Receipt))
                     if (result.skippedRows > 0) {
                         val skippedCount = statementCount(result.skippedRows, "row")
+                        val skippedMessage =
+                            if (result.skippedRows == 1) {
+                                "Couldn’t read $skippedCount. It will be skipped."
+                            } else {
+                                "Couldn’t read $skippedCount. They will be skipped."
+                            }
                         val reason = result.firstSkippedReason?.let { " First issue: $it" }.orEmpty()
-                        InlineMessage("$skippedCount could not be read and will be skipped.$reason", InlineMessageKind.INFO)
+                        InlineMessage("$skippedMessage$reason", InlineMessageKind.INFO)
                     }
                     Text("Preview", color = tandemPalette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
                     result.transactions.take(5).forEach { transaction ->

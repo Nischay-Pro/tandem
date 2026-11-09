@@ -1,6 +1,7 @@
 package app.tandemforactual.ui
 
 import app.tandemforactual.api.client.TandemApiClient
+import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.data.database.BudgetRecordEntity
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -14,6 +15,27 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class TandemMobileSessionTest {
+    @Test
+    fun mapsServerStatusesToAppMessagesWithoutShowingServerText() {
+        assertEquals(
+            "Tandem is temporarily unavailable. Try again shortly.",
+            TandemApiException("database trace: private detail", httpStatus = 503).userFacingMessage("fallback"),
+        )
+        assertEquals(
+            "Check the information and try again.",
+            TandemApiException("raw validation detail", httpStatus = 422).userFacingMessage("fallback"),
+        )
+        assertEquals(
+            "fallback",
+            TandemApiException("raw transport detail").userFacingMessage("fallback"),
+        )
+        assertEquals(
+            "This statement has repeated reference values. Choose a unique reference column.",
+            TandemApiException("duplicate_imported_id", httpStatus = 400, safeMessageOverride = "untrusted server text")
+                .userFacingMessage("fallback"),
+        )
+    }
+
     @Test
     fun activityRefreshKeepsOnePageAndCapsLargeLists() {
         assertEquals(50, activityTransactionRefreshLimit(0))

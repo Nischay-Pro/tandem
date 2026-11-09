@@ -105,7 +105,8 @@ private fun parseCsv(
             .filterValues { it > 1 }
             .keys
     val transactions =
-        rows.drop(1).mapNotNull { row ->
+        rows.drop(1).mapIndexedNotNull { index, row ->
+            val rowNumber = index + 2
             try {
                 val date = parseStatementDate(row.cell(dateColumn), dateOrder)
                 val debit = parseOptionalMoney(row.cell(debitColumn))
@@ -131,8 +132,8 @@ private fun parseCsv(
                     }
                 if (amount == 0L) {
                     skipped++
-                    if (firstSkippedReason == null) firstSkippedReason = "Zero-value transactions are skipped."
-                    return@mapNotNull null
+                    if (firstSkippedReason == null) firstSkippedReason = "Row $rowNumber: Zero-value transactions are skipped."
+                    return@mapIndexedNotNull null
                 }
                 val payee = row.cell(payeeColumn).ifBlank { "Imported transaction" }.take(200)
                 val sourceId =
@@ -151,7 +152,7 @@ private fun parseCsv(
                 )
             } catch (error: IllegalArgumentException) {
                 skipped++
-                if (firstSkippedReason == null) firstSkippedReason = error.message
+                if (firstSkippedReason == null) firstSkippedReason = "Row $rowNumber: ${error.message ?: "Couldn’t read this transaction."}"
                 null
             }
         }
@@ -180,14 +181,15 @@ private fun parseQif(
     val generatedIds = mutableMapOf<String, Int>()
     val usedIds = mutableSetOf<String>()
     val transactions =
-        records.mapNotNull { fields ->
+        records.mapIndexedNotNull { index, fields ->
+            val rowNumber = index + 1
             try {
                 val date = parseStatementDate(fields['D'].orEmpty(), dateOrder)
                 val amount = parseMoney(fields['T'].orEmpty())
                 if (amount == 0L) {
                     skipped++
-                    if (firstSkippedReason == null) firstSkippedReason = "Zero-value transactions are skipped."
-                    return@mapNotNull null
+                    if (firstSkippedReason == null) firstSkippedReason = "Row $rowNumber: Zero-value transactions are skipped."
+                    return@mapIndexedNotNull null
                 }
                 val payee = fields['P'].orEmpty().ifBlank { "Imported transaction" }.take(200)
                 StatementImportDraft(
@@ -199,7 +201,7 @@ private fun parseQif(
                 )
             } catch (error: IllegalArgumentException) {
                 skipped++
-                if (firstSkippedReason == null) firstSkippedReason = error.message
+                if (firstSkippedReason == null) firstSkippedReason = "Row $rowNumber: ${error.message ?: "Couldn’t read this transaction."}"
                 null
             }
         }
@@ -224,14 +226,15 @@ private fun parseOfx(content: String): StatementParseResult {
             .filterValues { it > 1 }
             .keys
     val transactions =
-        records.mapNotNull { record ->
+        records.mapIndexedNotNull { index, record ->
+            val rowNumber = index + 1
             try {
                 val date = parseStatementDate(ofxField(record, "DTPOSTED"), StatementDateOrder.MONTH_DAY_YEAR)
                 val amount = parseMoney(ofxField(record, "TRNAMT"))
                 if (amount == 0L) {
                     skipped++
-                    if (firstSkippedReason == null) firstSkippedReason = "Zero-value transactions are skipped."
-                    return@mapNotNull null
+                    if (firstSkippedReason == null) firstSkippedReason = "Row $rowNumber: Zero-value transactions are skipped."
+                    return@mapIndexedNotNull null
                 }
                 val payee = ofxField(record, "NAME").ifBlank { ofxField(record, "MEMO") }.ifBlank { "Imported transaction" }.take(200)
                 val sourceId = ofxField(record, "FITID").take(200).takeUnless { it.isBlank() || it in duplicateSourceIds }.orEmpty()
@@ -244,7 +247,7 @@ private fun parseOfx(content: String): StatementParseResult {
                 )
             } catch (error: IllegalArgumentException) {
                 skipped++
-                if (firstSkippedReason == null) firstSkippedReason = error.message
+                if (firstSkippedReason == null) firstSkippedReason = "Row $rowNumber: ${error.message ?: "Couldn’t read this transaction."}"
                 null
             }
         }
@@ -325,9 +328,10 @@ private fun parseOptionalMoney(value: String): Long? = value.takeIf(String::isNo
 
 private fun parseMoney(value: String): Long {
     val trimmed = value.trim()
-    if (trimmed.isBlank()) throw StatementImportParseException("An amount is missing.")
-    val parenthesized = trimmed.startsWith('(') && trimmed.endsWith(')')
-    var unsigned = trimmed.removeSurrounding("(", ")").trim()
+    if (trimmed.isBlank()) throw StatementImportParseException("An amount is missing. Enter an amount for this row.")
+    val currencyFree = stripCurrencyMarkers(trimmed)
+    val parenthesized = currencyFree.startsWith('(') && currencyFree.endsWith(')')
+    var unsigned = currencyFree.removeSurrounding("(", ")").trim()
     val trailingMarker =
         Regex("(?i)\\s*(DR|CR)\\.?$")
             .find(unsigned)
@@ -342,11 +346,12 @@ private fun parseMoney(value: String): Long {
     val leadingPlus = unsigned.startsWith('+')
     if (leadingPlus) unsigned = unsigned.drop(1).trim()
     if ((trailingMarker == "CR" || leadingPlus) && (parenthesized || trailingMinus || leadingMinus)) {
-        throw StatementImportParseException("This amount has conflicting sign markers.")
+        throw StatementImportParseException("This amount has conflicting signs. Use a single sign.")
     }
     val negative = parenthesized || trailingMinus || leadingMinus || trailingMarker == "DR"
+    if (unsigned.any { !it.isDigit() && it != '.' && it != ',' && !it.isWhitespace() }) throw invalidAmount(trimmed)
     val numeric = unsigned.filter { it.isDigit() || it == '.' || it == ',' }
-    if (numeric.isBlank()) throw StatementImportParseException("An amount is invalid.")
+    if (numeric.isBlank()) throw invalidAmount(value)
     val lastSeparator = maxOf(numeric.lastIndexOf('.'), numeric.lastIndexOf(','))
     val separators = numeric.count { it == '.' || it == ',' }
     val fractionLength = if (lastSeparator >= 0) numeric.length - lastSeparator - 1 else 0
@@ -354,27 +359,33 @@ private fun parseMoney(value: String): Long {
         when {
             lastSeparator < 0 -> null
             numeric.contains('.') && numeric.contains(',') -> {
-                if (fractionLength !in 1..2) throw StatementImportParseException("This amount isn’t clear. Check its decimal places.")
+                if (fractionLength !in 1..2) throw invalidAmount(trimmed, "Check its decimal places.")
                 numeric[lastSeparator]
             }
             separators > 1 -> {
-                if (!isGroupedInteger(numeric)) throw StatementImportParseException("This amount isn’t clear. Check its separators.")
+                if (!isGroupedInteger(numeric)) throw invalidAmount(trimmed, "Check its separators.")
                 null
             }
             fractionLength in 1..2 -> numeric[lastSeparator]
-            fractionLength == 3 -> throw StatementImportParseException("This amount isn’t clear. Check its decimal places.")
-            else -> throw StatementImportParseException("This amount isn’t clear. Check its decimal places.")
+            fractionLength == 3 -> throw invalidAmount(trimmed, "Check its decimal places.")
+            else -> throw invalidAmount(trimmed, "Check its decimal places.")
         }
     val split = decimalSeparator?.let(numeric::lastIndexOf) ?: -1
     val wholeText = if (split >= 0) numeric.substring(0, split) else numeric
     val wholeDigits = wholeText.filter(Char::isDigit)
     val fractionDigits = if (split >= 0) numeric.substring(split + 1).filter(Char::isDigit) else ""
     val normalizedFraction = fractionDigits.padEnd(2, '0')
-    val whole = wholeDigits.toLongOrNull() ?: throw StatementImportParseException("An amount is out of range.")
-    if (whole > (Long.MAX_VALUE - 99) / 100) throw StatementImportParseException("An amount is out of range.")
+    val whole = wholeDigits.toLongOrNull() ?: throw StatementImportParseException("This amount is too large. Use a smaller amount.")
+    if (whole > (Long.MAX_VALUE - 99) / 100) throw StatementImportParseException("This amount is too large. Use a smaller amount.")
     val cents = (whole * 100L) + (normalizedFraction.toLongOrNull() ?: 0L)
     return if (negative) -cents else cents
 }
+
+private fun stripCurrencyMarkers(value: String): String =
+    value
+        .replace(Regex("(?i)\\b(?:USD|CAD|EUR|GBP|INR|AUD|NZD|JPY|CHF|SGD|HKD)\\b"), "")
+        .filterNot { it in setOf('$', '€', '£', '₹', '¥', '₩') }
+        .trim()
 
 private fun isGroupedInteger(value: String): Boolean {
     val separator = value.firstOrNull { it == '.' || it == ',' } ?: return true
@@ -471,7 +482,13 @@ private fun parseMonthNamedDate(value: String): String? {
     return formatIsoDate(year, month, day)
 }
 
-private fun invalidDate(value: String) = StatementImportParseException("Couldn’t read the date “$value”.")
+private fun invalidDate(value: String) =
+    StatementImportParseException("Couldn’t read the date “${value.take(48)}”. Check the selected date format.")
+
+private fun invalidAmount(
+    value: String,
+    guidance: String = "Use a number such as 12.34.",
+) = StatementImportParseException("Couldn’t read the amount “${value.take(48)}”. $guidance")
 
 private fun validateDate(
     isoDate: String,
@@ -502,7 +519,7 @@ private fun validateIsoDate(value: String) {
             in 1..12 -> 31
             else -> 0
         }
-    if (year !in 1..9999 || day !in 1..days) throw StatementImportParseException("A transaction date is invalid.")
+    if (year !in 1..9999 || day !in 1..days) throw StatementImportParseException("Couldn’t read this date. Check the selected date format.")
 }
 
 private fun uniqueImportId(

@@ -39,6 +39,14 @@ class StatementImportTest {
 
         assertEquals("2026-10-31", parsed.transactions.single().date)
         assertEquals(-123_456L, parsed.transactions.single().amountMinor)
+
+        val withCurrencyCode =
+            parseStatementImport(
+                "bank.csv",
+                "Date,Description,Amount\n" +
+                    "10/31/2026,Household purchase,\"CAD -1,234.56\"\n",
+            )
+        assertEquals(-123_456L, withCurrencyCode.transactions.single().amountMinor)
     }
 
     @Test
@@ -60,7 +68,7 @@ class StatementImportTest {
             assertThrows(StatementImportParseException::class.java) {
                 parseStatementImport("bad-date.csv", "Date,Payee,Amount\nnot-a-date,Market,1.00\n")
             }
-        assertEquals("Couldn’t read the date “not-a-date”.", error.message)
+        assertEquals("Row 2: Couldn’t read the date “not-a-date”. Check the selected date format.", error.message)
     }
 
     @Test
@@ -91,7 +99,21 @@ class StatementImportTest {
 
         assertEquals(listOf(-123_456L, -1_234L, 1_234L), parsed.transactions.map { it.amountMinor })
         assertEquals(1, parsed.skippedRows)
-        assertEquals("This amount isn’t clear. Check its decimal places.", parsed.firstSkippedReason)
+        assertEquals("Row 5: Couldn’t read the amount “12.345”. Check its decimal places.", parsed.firstSkippedReason)
+    }
+
+    @Test
+    fun reportsTheFirstBadStatementRowAndHowToCorrectItsAmount() {
+        val parsed =
+            parseStatementImport(
+                "amounts.csv",
+                "Date,Payee,Amount\n" +
+                    "11/01/2026,Market,\"1,2x\"\n" +
+                    "11/02/2026,Cafe,12.34\n",
+            )
+
+        assertEquals(1, parsed.skippedRows)
+        assertEquals("Row 2: Couldn’t read the amount “1,2x”. Use a number such as 12.34.", parsed.firstSkippedReason)
     }
 
     @Test

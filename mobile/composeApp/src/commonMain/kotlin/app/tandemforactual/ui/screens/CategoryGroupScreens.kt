@@ -212,6 +212,14 @@ internal fun CategoryGroupScreen(
                             message,
                             if (categoryMoveStatus.warning) InlineMessageKind.WARNING else InlineMessageKind.ERROR,
                             Modifier.padding(horizontal = TandemSpacing.large),
+                            actionLabel = "Retry".takeIf { categoryMoveStatus.pendingCount > 0 },
+                            onAction =
+                                {
+                                    mobileSession.retryQueuedBudgetReorders(
+                                        state.selectedBudgetId,
+                                        state.encryptedPassword.takeIf(String::isNotBlank),
+                                    )
+                                }.takeIf { categoryMoveStatus.pendingCount > 0 },
                         )
                     }
                 }
@@ -387,6 +395,14 @@ internal fun CategoryGroupScreen(
                                     message,
                                     if (hiddenCategoryMoveStatus.warning) InlineMessageKind.WARNING else InlineMessageKind.ERROR,
                                     Modifier.padding(horizontal = TandemSpacing.large),
+                                    actionLabel = "Retry".takeIf { hiddenCategoryMoveStatus.pendingCount > 0 },
+                                    onAction =
+                                        {
+                                            mobileSession.retryQueuedBudgetReorders(
+                                                state.selectedBudgetId,
+                                                state.encryptedPassword.takeIf(String::isNotBlank),
+                                            )
+                                        }.takeIf { hiddenCategoryMoveStatus.pendingCount > 0 },
                                 )
                             }
                         }

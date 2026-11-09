@@ -31,8 +31,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -62,6 +65,7 @@ import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronLeft
 import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Trash2
@@ -215,6 +219,14 @@ internal fun UpcomingSchedulesScreen(
     }
     var datePickerTarget by rememberSaveable(state.selectedBudgetId, selectedScheduleId) { mutableStateOf<String?>(null) }
     var editError by rememberSaveable(state.selectedBudgetId, selectedScheduleId) { mutableStateOf<String?>(null) }
+    var editErrorField by rememberSaveable(state.selectedBudgetId, selectedScheduleId) { mutableStateOf<String?>(null) }
+
+    fun clearEditError(field: String? = null) {
+        if (field == null || editErrorField == field) {
+            editError = null
+            editErrorField = null
+        }
+    }
     val scope = rememberCoroutineScope()
     val payeeOptions =
         remember(payeeRecords, selectedSchedule?.payeeId) {
@@ -341,13 +353,22 @@ internal fun UpcomingSchedulesScreen(
                             )
                         }
                         dialogMode == "edit" -> {
-                            TextFieldCard("Name", nameDraft, { nameDraft = it })
+                            editError?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                            TextFieldCard("Name", nameDraft, {
+                                nameDraft = it
+                                clearEditError("name")
+                            })
+                            ScheduleFieldError(editError.takeIf { editErrorField == "name" })
                             TextFieldCard(
                                 "Amount",
                                 amountDraft,
-                                { amountDraft = it },
+                                {
+                                    amountDraft = it
+                                    clearEditError("amount")
+                                },
                                 TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)),
                             )
+                            ScheduleFieldError(editError.takeIf { editErrorField == "amount" })
                             ScheduleChoiceField(
                                 "Amount rule",
                                 when (amountRuleDraft) {
@@ -356,25 +377,40 @@ internal fun UpcomingSchedulesScreen(
                                     else -> "Exact amount"
                                 },
                                 listOf("is" to "Exact amount", "isapprox" to "About this amount", "isbetween" to "Between two amounts"),
-                            ) { amountRuleDraft = it }
+                            ) {
+                                amountRuleDraft = it
+                                clearEditError("maximum")
+                            }
                             if (amountRuleDraft == "isbetween") {
                                 TextFieldCard(
                                     "Maximum amount",
                                     amountMaxDraft,
-                                    { amountMaxDraft = it },
+                                    {
+                                        amountMaxDraft = it
+                                        clearEditError("maximum")
+                                    },
                                     TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)),
                                 )
+                                ScheduleFieldError(editError.takeIf { editErrorField == "maximum" })
                             }
                             ScheduleChoiceField(
                                 "Account",
                                 accountOptions.firstOrNull { it.first == accountIdDraft }?.second ?: "Choose account",
                                 accountOptions,
-                            ) { accountIdDraft = it }
+                            ) {
+                                accountIdDraft = it
+                                clearEditError("account")
+                            }
+                            ScheduleFieldError(editError.takeIf { editErrorField == "account" })
                             ScheduleChoiceField(
                                 "Payee",
                                 payeeOptions.firstOrNull { it.first == payeeIdDraft }?.second ?: "Choose payee",
                                 payeeOptions,
-                            ) { payeeIdDraft = it }
+                            ) {
+                                payeeIdDraft = it
+                                clearEditError("payee")
+                            }
+                            ScheduleFieldError(editError.takeIf { editErrorField == "payee" })
                             ScheduleChoiceField(
                                 if (frequencyDraft == "once") "Repeats" else "Repeats every",
                                 when (frequencyDraft) {
@@ -391,17 +427,26 @@ internal fun UpcomingSchedulesScreen(
                                     "monthly" to "Monthly",
                                     "yearly" to "Yearly",
                                 ),
-                            ) { frequencyDraft = it }
+                            ) {
+                                frequencyDraft = it
+                                if (editErrorField in setOf("interval", "occurrences", "startDate", "endDate")) {
+                                    clearEditError()
+                                }
+                            }
                             if (frequencyDraft != "once") {
                                 TextFieldCard(
                                     "Interval",
                                     intervalDraft,
-                                    { intervalDraft = it.filter(Char::isDigit).take(3) },
+                                    {
+                                        intervalDraft = it.filter(Char::isDigit).take(3)
+                                        clearEditError("interval")
+                                    },
                                     TextFieldOptions(
                                         placeholder = "1",
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     ),
                                 )
+                                ScheduleFieldError(editError.takeIf { editErrorField == "interval" })
                             }
                             FieldFrame(
                                 if (frequencyDraft == "once") "Date" else "Start date",
@@ -421,8 +466,11 @@ internal fun UpcomingSchedulesScreen(
                                     tint = tandemPalette.muted,
                                 )
                             }
+                            ScheduleFieldError(editError.takeIf { editErrorField == "startDate" })
                             if (frequencyDraft != "once") {
-                                ToggleRow("Skip weekends", checked = skipWeekendDraft) { skipWeekendDraft = it }
+                                ToggleRow("Skip weekends", checked = skipWeekendDraft) {
+                                    skipWeekendDraft = it
+                                }
                                 ScheduleChoiceField(
                                     "Ends",
                                     when (endModeDraft) {
@@ -435,14 +483,21 @@ internal fun UpcomingSchedulesScreen(
                                         "after_n_occurrences" to "After a number of repeats",
                                         "on_date" to "On a date",
                                     ),
-                                ) { endModeDraft = it }
+                                ) {
+                                    endModeDraft = it
+                                    if (editErrorField in setOf("occurrences", "endDate")) clearEditError()
+                                }
                                 if (endModeDraft == "after_n_occurrences") {
                                     TextFieldCard(
                                         "Number of repeats",
                                         endOccurrencesDraft,
-                                        { endOccurrencesDraft = it.filter(Char::isDigit).take(6) },
+                                        {
+                                            endOccurrencesDraft = it.filter(Char::isDigit).take(6)
+                                            clearEditError("occurrences")
+                                        },
                                         TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)),
                                     )
+                                    ScheduleFieldError(editError.takeIf { editErrorField == "occurrences" })
                                 }
                                 if (endModeDraft == "on_date") {
                                     FieldFrame(
@@ -463,10 +518,8 @@ internal fun UpcomingSchedulesScreen(
                                             tint = tandemPalette.muted,
                                         )
                                     }
+                                    ScheduleFieldError(editError.takeIf { editErrorField == "endDate" })
                                 }
-                            }
-                            editError?.let {
-                                InlineMessage(it, InlineMessageKind.ERROR)
                             }
                             mobileSession.budgetActionMessage?.let {
                                 InlineMessage(it, mobileSession.budgetActionMessageKind)
@@ -480,10 +533,7 @@ internal fun UpcomingSchedulesScreen(
                                 TandemActionButtonTone.PRIMARY,
                                 modifier = Modifier.fillMaxWidth(),
                                 enabled =
-                                    !mobileSession.isPerformingBudgetAction &&
-                                        nameDraft.isNotBlank() &&
-                                        accountIdDraft.isNotBlank() &&
-                                        payeeIdDraft.isNotBlank(),
+                                    !mobileSession.isPerformingBudgetAction,
                                 loading = mobileSession.isPerformingBudgetAction,
                             ) {
                                 val amountMinor = state.parseAmountMinorUnits(amountDraft)
@@ -504,19 +554,24 @@ internal fun UpcomingSchedulesScreen(
                                         endModeDraft == "after_n_occurrences" &&
                                         (occurrences == null || occurrences !in 1..100_000)
                                 val endBeforeStart = endModeDraft == "on_date" && endDateDraft < dateDraft
-                                editError =
+                                val validationError =
                                     when {
-                                        amountMinor == null -> "Enter a valid amount."
+                                        nameDraft.isBlank() -> "name" to "Enter a schedule name."
+                                        accountIdDraft.isBlank() -> "account" to "Choose an account."
+                                        payeeIdDraft.isBlank() -> "payee" to "Choose a payee."
+                                        amountMinor == null -> "amount" to "Enter a valid amount."
                                         amountRuleDraft == "isbetween" && amountMaxMinor == null ->
-                                            "Enter a valid maximum amount."
-                                        amountRangeIsInvalid -> "The minimum must not exceed the maximum."
-                                        intervalIsInvalid -> "Repeat interval must be between 1 and 999."
-                                        repeatCountIsInvalid -> "Enter a valid number of repeats."
-                                        !dateIsValid -> "Choose a valid start date."
-                                        !endDateIsValid -> "Choose a valid end date."
-                                        endBeforeStart -> "The end date must be on or after the start date."
+                                            "maximum" to "Enter a valid maximum amount."
+                                        amountRangeIsInvalid -> "maximum" to "The maximum must be at least the minimum."
+                                        intervalIsInvalid -> "interval" to "Repeat interval must be between 1 and 999."
+                                        repeatCountIsInvalid -> "occurrences" to "Enter a valid number of repeats."
+                                        !dateIsValid -> "startDate" to "Choose a valid start date."
+                                        !endDateIsValid -> "endDate" to "Choose a valid end date."
+                                        endBeforeStart -> "endDate" to "The end date must be on or after the start date."
                                         else -> null
                                     }
+                                editErrorField = validationError?.first
+                                editError = validationError?.second
                                 if (editError == null) {
                                     val editedDate =
                                         if (frequencyDraft == "once") {
@@ -697,10 +752,26 @@ internal fun UpcomingSchedulesScreen(
         initialDate = if (datePickerTarget == "end") endDateDraft else dateDraft,
         onDismiss = { datePickerTarget = null },
         onSelect = { value ->
+            val field = if (datePickerTarget == "end") "endDate" else "startDate"
             if (datePickerTarget == "end") endDateDraft = value else dateDraft = value
             datePickerTarget = null
+            clearEditError(field)
         },
     )
+}
+
+@Composable
+private fun ScheduleFieldError(message: String?) {
+    if (message != null) {
+        Row(
+            Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Assertive },
+            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Lucide.CircleAlert, contentDescription = null, modifier = Modifier.size(16.dp), tint = tandemPalette.negative)
+            Text(message, color = tandemPalette.negative, fontSize = TandemTypography.compactBody)
+        }
+    }
 }
 
 @Composable

@@ -15,11 +15,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -34,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -70,6 +73,8 @@ internal fun InlineMessage(
     text: String,
     kind: InlineMessageKind = InlineMessageKind.WARNING,
     modifier: Modifier = Modifier,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
 ) {
     val palette = tandemPalette
     val color =
@@ -103,11 +108,25 @@ internal fun InlineMessage(
         Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = color)
         Text(
             text,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f, fill = actionLabel == null || onAction == null),
             color = palette.text,
             fontSize = TandemTypography.compactBody,
             lineHeight = TandemTypography.bodyLineHeight,
         )
+        if (actionLabel != null && onAction != null) {
+            Text(
+                actionLabel,
+                modifier =
+                    Modifier
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(TandemShapes.small))
+                        .clickable(role = Role.Button, onClick = onAction)
+                        .padding(horizontal = TandemSpacing.small, vertical = TandemSpacing.small),
+                color = palette.accent,
+                fontSize = TandemTypography.compactBody,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
     }
 }
 

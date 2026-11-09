@@ -1130,7 +1130,7 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
-            pairingError = error.message ?: "Couldn’t pair this device. Check the server and pairing code."
+            pairingError = error.userFacingMessage("Couldn’t pair this device. Check the server and pairing code.")
             pairedDevice = null
         } catch (error: Exception) {
             pairingError = "Couldn’t pair this device. Check the server address and connection."
@@ -1153,7 +1153,7 @@ internal class TandemMobileSession(
             throw error
         } catch (error: TandemApiException) {
             isServerReachable = error.httpStatus != null
-            budgetError = error.message ?: "Couldn’t load budgets from this server."
+            budgetError = error.userFacingMessage("Couldn’t load budgets from this server.")
             if (error.errorCode == "invalid_device_credential") {
                 apiClient.forgetSession()
                 pairedDevice = null
@@ -1243,7 +1243,11 @@ internal class TandemMobileSession(
         budgetId: String,
         encryptionPassword: String?,
     ): Boolean =
-        performBudgetAction(budgetId, encryptionPassword, "Actual bank sync failed. Check its provider setup and try again.") {
+        performBudgetAction(
+            budgetId,
+            encryptionPassword,
+            "Couldn’t sync transactions from Actual. Check the bank connection and try again.",
+        ) {
             apiClient.runBudgetBankSync(budgetId, encryptionPassword)
         }
 
@@ -1549,7 +1553,7 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
-            setBudgetActionMessage(error.message ?: "Couldn’t add this payee. Try again.", ownerRoute = messageOwner)
+            setBudgetActionMessage(error.userFacingMessage("Couldn’t add this payee. Try again."), ownerRoute = messageOwner)
             return null
         } catch (_: Exception) {
             setBudgetActionMessage("Couldn’t add this payee. Try again.", ownerRoute = messageOwner)
@@ -1635,7 +1639,7 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
-            setBudgetActionMessage(error.message ?: "Couldn’t import this statement. Try again.", ownerRoute = messageOwner)
+            setBudgetActionMessage(error.userFacingMessage("Couldn’t import this statement. Try again."), ownerRoute = messageOwner)
             return null
         } catch (_: Exception) {
             setBudgetActionMessage("Couldn’t import this statement. Try again.", ownerRoute = messageOwner)
@@ -1823,7 +1827,7 @@ internal class TandemMobileSession(
                 // Network failures are handled by the persistent queue. Do not surface the
                 // transport exception as if the category edit itself was rejected.
                 if (!budgetActionShouldRetry && error.httpStatus != null) {
-                    setBudgetActionMessage(error.message ?: failureMessage, ownerRoute = messageOwner)
+                    setBudgetActionMessage(error.userFacingMessage(failureMessage), ownerRoute = messageOwner)
                 }
             }
             return false
@@ -2005,7 +2009,7 @@ internal class TandemMobileSession(
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                transactionWriteMessage = "Couldn’t remove this transaction. Review Pending Changes."
+                transactionWriteMessage = "Couldn’t remove this transaction. Review pending changes."
                 loadLocalRecords(budgetId)
                 return false
             } finally {
@@ -2049,7 +2053,7 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            transactionWriteMessage = "Couldn’t delete this transaction. Review Pending Changes."
+            transactionWriteMessage = "Couldn’t delete this transaction. Review pending changes."
             loadLocalRecords(budgetId)
             return false
         } finally {
@@ -2609,6 +2613,37 @@ internal class TandemMobileSession(
         clearStoredCredential()
     }
 }
+
+internal fun TandemApiException.userFacingMessage(fallback: String): String = budgetApiErrorMessage(errorCode, httpStatus, fallback)
+
+internal fun budgetApiErrorMessage(
+    errorCode: String,
+    httpStatus: Int?,
+    fallback: String,
+): String =
+    when (errorCode) {
+        "not-paired" -> "Pair this device before opening a budget."
+        "invalid_pairing_code" -> "This pairing code is invalid or expired. Request a new code."
+        "invalid_device_credential" -> "Pair this device again to continue."
+        "bank_sync_failed" -> "Actual couldn’t complete bank sync. Check its provider setup and try again."
+        "bank_sync_busy" -> "A bank sync is already running. Try again shortly."
+        "duplicate_imported_id" -> "This statement has repeated reference values. Choose a unique reference column."
+        "actual_operation_failed" -> "Actual couldn’t complete this change. Check the budget and try again."
+        "operation_uncertain" -> "Tandem couldn’t confirm this change. Check Actual before submitting it again."
+        "operation_rejected" -> "This change was rejected. Correct it before submitting again."
+        "invalid_request" -> "Check the information and try again."
+        else ->
+            when (httpStatus) {
+                400, 422 -> "Check the information and try again."
+                401 -> "Pair this device again to continue."
+                403 -> "This device can’t change this budget."
+                404 -> "This item is no longer available. Refresh the budget."
+                408, 425, 429 -> "Tandem is temporarily unavailable. Try again shortly."
+                409 -> "The budget changed on the server. Refresh it and try again."
+                in 500..599 -> "Tandem is temporarily unavailable. Try again shortly."
+                else -> fallback
+            }
+    }
 
 private const val ACTIVITY_TRANSACTION_PAGE_SIZE = 50
 private const val ACTIVITY_TRANSACTION_REFRESH_LIMIT = 200
