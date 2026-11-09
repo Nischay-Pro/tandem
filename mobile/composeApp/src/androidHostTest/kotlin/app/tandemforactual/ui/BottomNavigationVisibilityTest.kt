@@ -7,6 +7,17 @@ import kotlin.test.assertTrue
 
 class BottomNavigationVisibilityTest {
     @Test
+    fun budgetContentStateIsScopedToTheSelectedBudget() {
+        val budgetEntry = AppRouteEntry(AppRoute.BUDGET, 1)
+        val anotherRouteEntry = AppRouteEntry(AppRoute.ACTIVITY, 2)
+
+        assertEquals("tab-BUDGET-budget-budget-one", routeContentStateKey(budgetEntry, "budget-one"))
+        assertEquals("tab-BUDGET-budget-budget-two", routeContentStateKey(budgetEntry, "budget-two"))
+        assertEquals("tab-BUDGET", routeContentStateKey(budgetEntry, ""))
+        assertEquals(anotherRouteEntry.stateKey, routeContentStateKey(anotherRouteEntry, "budget-one"))
+    }
+
+    @Test
     fun fullScreenRoutesStayBelowForty() {
         assertTrue(AppRoute.entries.size < 40)
     }

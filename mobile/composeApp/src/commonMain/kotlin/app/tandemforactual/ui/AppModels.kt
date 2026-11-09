@@ -800,6 +800,16 @@ internal data class AppRouteEntry(
         get() = if (route.isTab()) "tab-${route.name}" else "route-${route.name}-$id"
 }
 
+internal fun routeContentStateKey(
+    entry: AppRouteEntry,
+    selectedBudgetId: String,
+): String =
+    if (entry.route == AppRoute.BUDGET && selectedBudgetId.isNotBlank()) {
+        "${entry.stateKey}-budget-$selectedBudgetId"
+    } else {
+        entry.stateKey
+    }
+
 internal fun encodeAppTabBackStacks(stacks: Map<AppRoute, List<AppRouteEntry>>): String =
     stacks.entries
         .filter { (tab, _) -> tab.isTab() }

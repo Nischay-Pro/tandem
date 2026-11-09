@@ -1063,32 +1063,33 @@ fun TandemApp(
             Boolean,
         ) -> Unit = { visibleEntry, pageModifier, saveRouteState, includeChrome ->
             val visibleRoute = visibleEntry.route
+            val contentStateKey = routeContentStateKey(visibleEntry, state.selectedBudgetId)
             val routeScrollState =
-                remember(visibleEntry.stateKey) {
-                    routeScrollStates.getOrPut(visibleEntry.stateKey) {
-                        ScrollState(state.scrollPositions[visibleEntry.stateKey] ?: 0)
+                remember(contentStateKey) {
+                    routeScrollStates.getOrPut(contentStateKey) {
+                        ScrollState(state.scrollPositions[contentStateKey] ?: 0)
                     }
                 }
             val routeLazyListState =
-                remember(visibleEntry.stateKey) {
-                    routeLazyListStates.getOrPut(visibleEntry.stateKey) {
-                        val (index, offset) = state.lazyScrollPositions[visibleEntry.stateKey] ?: (0 to 0)
+                remember(contentStateKey) {
+                    routeLazyListStates.getOrPut(contentStateKey) {
+                        val (index, offset) = state.lazyScrollPositions[contentStateKey] ?: (0 to 0)
                         LazyListState(index, offset)
                     }
                 }
-            LaunchedEffect(visibleEntry.stateKey, routeScrollState) {
-                snapshotFlow { routeScrollState.value }.collect { state.scrollPositions[visibleEntry.stateKey] = it }
+            LaunchedEffect(contentStateKey, routeScrollState) {
+                snapshotFlow { routeScrollState.value }.collect { state.scrollPositions[contentStateKey] = it }
             }
-            LaunchedEffect(visibleEntry.stateKey, routeLazyListState) {
+            LaunchedEffect(contentStateKey, routeLazyListState) {
                 snapshotFlow {
                     routeLazyListState.firstVisibleItemIndex to routeLazyListState.firstVisibleItemScrollOffset
-                }.collect { state.lazyScrollPositions[visibleEntry.stateKey] = it }
+                }.collect { state.lazyScrollPositions[contentStateKey] = it }
             }
             if (saveRouteState) {
-                DisposableEffect(visibleEntry.stateKey, routeScrollState, routeLazyListState) {
+                DisposableEffect(contentStateKey, routeScrollState, routeLazyListState) {
                     onDispose {
-                        state.scrollPositions[visibleEntry.stateKey] = routeScrollState.value
-                        state.lazyScrollPositions[visibleEntry.stateKey] =
+                        state.scrollPositions[contentStateKey] = routeScrollState.value
+                        state.lazyScrollPositions[contentStateKey] =
                             routeLazyListState.firstVisibleItemIndex to routeLazyListState.firstVisibleItemScrollOffset
                         val tabStackContainsRoute =
                             decodeAppTabBackStacks(savedTabBackStacks)
@@ -1099,11 +1100,11 @@ fun TandemApp(
                             backStack.none { it.stateKey == visibleEntry.stateKey } &&
                             !tabStackContainsRoute
                         ) {
-                            state.scrollPositions.remove(visibleEntry.stateKey)
-                            state.lazyScrollPositions.remove(visibleEntry.stateKey)
-                            routeLazyListStates.remove(visibleEntry.stateKey)
+                            state.scrollPositions.remove(contentStateKey)
+                            state.lazyScrollPositions.remove(contentStateKey)
+                            routeLazyListStates.remove(contentStateKey)
                         }
-                        routeScrollStates.remove(visibleEntry.stateKey)
+                        routeScrollStates.remove(contentStateKey)
                     }
                 }
             }
@@ -1214,7 +1215,7 @@ fun TandemApp(
                 }
             }
             if (saveRouteState) {
-                saveableStateHolder.SaveableStateProvider(visibleEntry.stateKey) { routeContent() }
+                saveableStateHolder.SaveableStateProvider(contentStateKey) { routeContent() }
             } else {
                 routeContent()
             }
