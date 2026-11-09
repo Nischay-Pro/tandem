@@ -158,24 +158,16 @@ internal fun SecurityScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
 ) {
-    val hasActiveConnection =
-        state.selectedBudgetId.isNotBlank() && mobileSession.isAuthenticated && mobileSession.isServerReachable
     val hasPendingWrites = mobileSession.pendingWrites.isNotEmpty()
-    val canEnableReadOnly = hasActiveConnection && !hasPendingWrites
-    val canChangeReadOnly = state.readOnlyMode || canEnableReadOnly
+    val canChangeReadOnly = state.readOnlyMode || !hasPendingWrites
     PageColumn {
         SectionCard("App access") {
             ListRow("Biometric unlock", "Coming later", leading = RowLeading.Icon(Lucide.FingerprintPattern))
             DividerLine()
-            CheckBoxRow(
-                title = "Read-only mode",
+            ToggleRow(
+                title = "Lock editing",
                 subtitle =
-                    when {
-                        canChangeReadOnly -> "Block transaction edits and notes"
-                        !mobileSession.isAuthenticated -> "Pair this device first"
-                        !mobileSession.isServerReachable -> "Connect to the server first"
-                        else -> "Sync pending edits first"
-                    },
+                    if (hasPendingWrites && !state.readOnlyMode) "Sync pending edits first" else "Blocks budget changes on this device",
                 checked = state.readOnlyMode,
                 enabled = canChangeReadOnly,
                 onChange = { state.readOnlyMode = it },
