@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -52,6 +53,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.unit.dp
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.data.database.TandemDatabase
@@ -1310,16 +1312,22 @@ fun TandemApp(
                     )
                 }
             }
-            AnimatedVisibility(
-                visible = tabShellRoute != null && backgroundRouteEntry.route.showsBottomNavigation() && !imeVisible,
-                enter = tandemBottomBarEnter(reduceMotion),
-                exit = tandemBottomBarExit(reduceMotion),
-            ) {
-                if (tabShellRoute != null) {
-                    BottomNavigation(
-                        tabShellRoute,
-                        navigation.selectTab,
-                    )
+            if (tabShellRoute != null && !imeVisible) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(72.dp),
+                    contentAlignment = Alignment.BottomCenter,
+                ) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = backgroundRouteEntry.route.showsBottomNavigation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        enter = tandemBottomBarEnter(reduceMotion),
+                        exit = tandemBottomBarExit(reduceMotion),
+                    ) {
+                        BottomNavigation(
+                            tabShellRoute,
+                            navigation.selectTab,
+                        )
+                    }
                 }
             }
             if (transactionSheetActive) {

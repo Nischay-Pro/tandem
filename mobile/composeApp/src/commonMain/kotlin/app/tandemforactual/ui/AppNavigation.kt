@@ -176,6 +176,14 @@ internal fun AppHeader(
     conflictTitle: String?,
 ) {
     val palette = tandemPalette
+    val headerFontScale = LocalDensity.current.fontScale
+    val budgetHeaderSlotHeight = maxOf(88.dp, 88.dp * headerFontScale)
+    val headerMinHeight =
+        if (route == AppRoute.BUDGET || route == AppRoute.BUDGET_CHOOSER) {
+            budgetHeaderSlotHeight
+        } else {
+            64.dp
+        }
     val headerCategoryGroups =
         liveBudgetMonth?.groups
             ?: if (state.selectedBudgetId.isBlank()) previewCategoryGroups else emptyList()
@@ -226,7 +234,11 @@ internal fun AppHeader(
             else -> route.title
         }
     Row(
-        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = headerMinHeight)
+                .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showBack && !route.isTransactionForm()) {
