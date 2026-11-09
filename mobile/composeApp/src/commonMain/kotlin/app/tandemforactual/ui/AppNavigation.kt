@@ -161,7 +161,6 @@ internal fun AppHeader(
     conflictTitle: String?,
 ) {
     val palette = tandemPalette
-    val fontScale = LocalDensity.current.fontScale
     val headerTitle =
         when (route) {
             AppRoute.NEW_TRANSACTION -> "Add transaction"
@@ -223,7 +222,7 @@ internal fun AppHeader(
                         color = palette.text,
                         fontSize = TandemTypography.periodTitle,
                         fontWeight = FontWeight.SemiBold,
-                        maxLines = if (route == AppRoute.BUDGET) budgetHeaderTitleMaxLines(fontScale) else 1,
+                        maxLines = if (route == AppRoute.BUDGET) budgetHeaderTitleMaxLines() else 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     if (route == AppRoute.BUDGET) {
@@ -237,11 +236,7 @@ internal fun AppHeader(
                 }
                 if (route == AppRoute.BUDGET) {
                     Text(
-                        if (state.selectedBudgetId.isNotBlank()) {
-                            "${state.selectedMonth} · ${mainCloudStatusLabel(syncStatus)}"
-                        } else {
-                            "${state.selectedMonth} · Sample budget"
-                        },
+                        if (state.selectedBudgetId.isNotBlank()) state.selectedMonth else "${state.selectedMonth} · Sample budget",
                         color = palette.muted,
                         fontSize = TandemTypography.caption,
                     )

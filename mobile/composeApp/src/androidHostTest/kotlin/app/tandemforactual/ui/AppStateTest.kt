@@ -16,11 +16,8 @@ class AppStateTest {
     }
 
     @Test
-    fun budgetHeaderAllowsMoreLinesAtLargeSystemTextSizes() {
-        assertEquals(2, budgetHeaderTitleMaxLines(1.0f))
-        assertEquals(2, budgetHeaderTitleMaxLines(1.49f))
-        assertEquals(4, budgetHeaderTitleMaxLines(1.5f))
-        assertEquals(4, budgetHeaderTitleMaxLines(2.0f))
+    fun budgetHeaderStaysCappedAtTwoLinesAtEveryTextSize() {
+        assertEquals(2, budgetHeaderTitleMaxLines())
     }
 
     @Test
