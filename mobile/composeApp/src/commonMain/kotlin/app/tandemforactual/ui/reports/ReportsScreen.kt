@@ -100,6 +100,7 @@ import app.tandemforactual.ui.reports.netWorthPoints
 import app.tandemforactual.ui.reports.netWorthSummary
 import app.tandemforactual.ui.reports.reportMonthAxisLabel
 import app.tandemforactual.ui.reports.reportMonthLabel
+import app.tandemforactual.ui.reports.roundedReportAxisValues
 import app.tandemforactual.ui.reports.shiftReportMonthId
 import app.tandemforactual.ui.reports.spendingOverTimeSummary
 import com.composables.icons.lucide.ChartColumn
@@ -899,6 +900,7 @@ private fun TimeSeriesReportChart(
                         netWorthScope = "All accounts",
                         modifier = Modifier.width(chartWidth).height(height),
                         showMonthlyGuides = true,
+                        axisValues = axisValues,
                         onNetWorthSelectionChange = onNetWorthSelectionChange,
                         calloutViewportStartPx = scrollState.value.toFloat(),
                         calloutViewportWidthPx =
@@ -935,15 +937,14 @@ private fun reportChartAxisValues(
         val values = data.netWorth.map(NetWorthPoint::allAccountsMinor)
         if (values.isEmpty()) return listOf(0L, 0L, 0L, 0L, 0L)
         val (minimum, maximum) = netWorthValueRange(values)
-        val spread = (maximum - minimum).coerceAtLeast(1.0)
-        return (0..4).map { tick -> (maximum - spread * tick / 4.0).toLong() }
+        return roundedReportAxisValues(minimum, maximum)
     }
     val values =
         monthlyPoints(kind, data).map { point ->
             if (kind == ReportKind.SPENDING_OVER_TIME) point.spendingMinor else maxOf(point.incomeMinor, point.spendingMinor)
         }
     val maximum = values.maxOrNull()?.coerceAtLeast(1L) ?: 1L
-    return (0..4).map { tick -> maximum * (4 - tick) / 4 }
+    return roundedReportAxisValues(0.0, maximum.toDouble())
 }
 
 private fun netWorthValueRange(values: List<Long>): Pair<Double, Double> {
@@ -1123,6 +1124,7 @@ private fun ReportCanvas(
     netWorthScope: String,
     modifier: Modifier,
     showMonthlyGuides: Boolean = false,
+    axisValues: List<Long>? = null,
     onNetWorthSelectionChange: (Int?) -> Unit = {},
     calloutViewportStartPx: Float = 0f,
     calloutViewportWidthPx: Float? = null,
@@ -1171,6 +1173,7 @@ private fun ReportCanvas(
                 it,
                 monthly,
                 data.netWorth,
+                axisValues,
                 chartSize.width.toFloat(),
                 chartSize.height.toFloat(),
                 with(density) { 8.dp.toPx() },
@@ -1202,7 +1205,7 @@ private fun ReportCanvas(
                 .semantics {
                     contentDescription =
                         if (callout == null) description else "$description Selected: $callout"
-                }.pointerInput(kind, monthly, chartCategories, data.netWorth) {
+                }.pointerInput(kind, monthly, chartCategories, data.netWorth, axisValues) {
                     detectTapGestures { offset ->
                         val nextSelection =
                             reportSelectionAt(
@@ -1210,6 +1213,7 @@ private fun ReportCanvas(
                                 chartCategories,
                                 monthly,
                                 data.netWorth,
+                                axisValues,
                                 offset,
                                 size.width.toFloat(),
                                 size.height.toFloat(),
@@ -1225,8 +1229,9 @@ private fun ReportCanvas(
             val chartBottom = size.height - inset
             val chartHeight = (chartBottom - chartTop).coerceAtLeast(1f)
             if (showMonthlyGuides) {
-                (0..4).forEach { tick ->
-                    val y = chartTop + chartHeight * tick / 4f
+                val guideCount = axisValues?.size?.coerceAtLeast(2) ?: 5
+                (0 until guideCount).forEach { tick ->
+                    val y = chartTop + chartHeight * tick / (guideCount - 1).toFloat()
                     drawLine(palette.border, Offset(inset, y), Offset(size.width - inset, y), 1.dp.toPx())
                 }
             }
@@ -1271,7 +1276,9 @@ private fun ReportCanvas(
                 }
                 ReportKind.SPENDING_OVER_TIME -> {
                     val values = monthly.map(MonthlyMoneyPoint::spendingMinor)
-                    val maxValue = maxOf(values.maxOrNull() ?: 0L, values.averageLong()).coerceAtLeast(1L).toDouble()
+                    val maxValue =
+                        axisValues?.firstOrNull()?.coerceAtLeast(1L)?.toDouble()
+                            ?: maxOf(values.maxOrNull() ?: 0L, values.averageLong()).coerceAtLeast(1L).toDouble()
                     val barSlot = size.width / values.size.coerceAtLeast(1)
                     val barWidth = barSlot * 0.5f
                     values.forEachIndexed { index, value ->
@@ -1295,10 +1302,12 @@ private fun ReportCanvas(
                 }
                 ReportKind.INCOME_AND_SPENDING -> {
                     val maxValue =
-                        monthly
-                            .maxOfOrNull { maxOf(it.incomeMinor, it.spendingMinor) }
-                            ?.coerceAtLeast(1L)
-                            ?.toDouble() ?: 1.0
+                        axisValues?.firstOrNull()?.coerceAtLeast(1L)?.toDouble() ?: (
+                            monthly
+                                .maxOfOrNull { maxOf(it.incomeMinor, it.spendingMinor) }
+                                ?.coerceAtLeast(1L)
+                                ?.toDouble() ?: 1.0
+                        )
                     val slot = size.width / monthly.size.coerceAtLeast(1)
                     val barWidth = slot * 0.28f
                     monthly.forEachIndexed { index, value ->
@@ -1348,7 +1357,9 @@ private fun ReportCanvas(
                 ReportKind.NET_WORTH -> {
                     val values = data.netWorth.map(NetWorthPoint::allAccountsMinor)
                     if (values.isNotEmpty()) {
-                        val (minValue, maxValue) = netWorthValueRange(values)
+                        val (observedMin, observedMax) = netWorthValueRange(values)
+                        val minValue = axisValues?.lastOrNull()?.toDouble() ?: observedMin
+                        val maxValue = axisValues?.firstOrNull()?.toDouble() ?: observedMax
                         val spread = (maxValue - minValue).coerceAtLeast(1.0)
                         val points =
                             values.mapIndexed { index, value ->
@@ -1408,6 +1419,7 @@ private fun reportSelectionAt(
     categories: List<CategorySpendingPoint>,
     monthly: List<MonthlyMoneyPoint>,
     netWorth: List<NetWorthPoint>,
+    axisValues: List<Long>?,
     tap: Offset,
     width: Float,
     height: Float,
@@ -1443,7 +1455,9 @@ private fun reportSelectionAt(
     if (kind == ReportKind.NET_WORTH) {
         val values = netWorth.map(NetWorthPoint::allAccountsMinor)
         if (values.isEmpty()) return null
-        val (minimum, maximum) = netWorthValueRange(values)
+        val (observedMin, observedMax) = netWorthValueRange(values)
+        val minimum = axisValues?.lastOrNull()?.toDouble() ?: observedMin
+        val maximum = axisValues?.firstOrNull()?.toDouble() ?: observedMax
         val spread = (maximum - minimum).coerceAtLeast(1.0)
         val points =
             values.mapIndexed { index, value ->
@@ -1465,14 +1479,16 @@ private fun reportSelectionAt(
     if (kind != ReportKind.SPENDING_OVER_TIME && kind != ReportKind.INCOME_AND_SPENDING) return null
     if (monthly.isEmpty()) return null
     val selectedMax =
-        monthly
+        axisValues?.firstOrNull()?.coerceAtLeast(1L)?.toDouble() ?: monthly
             .maxOfOrNull { point ->
                 if (kind == ReportKind.SPENDING_OVER_TIME) point.spendingMinor else maxOf(point.incomeMinor, point.spendingMinor)
             }?.coerceAtLeast(1L)
             ?.toDouble() ?: 1.0
     if (kind == ReportKind.SPENDING_OVER_TIME) {
         val values = monthly.map(MonthlyMoneyPoint::spendingMinor)
-        val maxValue = maxOf(values.maxOrNull() ?: 0L, values.averageLong()).coerceAtLeast(1L).toDouble()
+        val maxValue =
+            axisValues?.firstOrNull()?.coerceAtLeast(1L)?.toDouble()
+                ?: maxOf(values.maxOrNull() ?: 0L, values.averageLong()).coerceAtLeast(1L).toDouble()
         val slot = width / monthly.size.coerceAtLeast(1)
         val barWidth = slot * 0.5f
         val index = (tap.x / slot).toInt().coerceIn(0, monthly.lastIndex)
@@ -1508,6 +1524,7 @@ private fun reportSelectionAnchor(
     selection: ReportChartSelection,
     monthly: List<MonthlyMoneyPoint>,
     netWorth: List<NetWorthPoint>,
+    axisValues: List<Long>?,
     width: Float,
     height: Float,
     inset: Float,
@@ -1518,14 +1535,18 @@ private fun reportSelectionAnchor(
         ReportKind.SPENDING_OVER_TIME -> {
             val values = monthly.map(MonthlyMoneyPoint::spendingMinor)
             val value = values.getOrNull(selection.index)?.coerceAtLeast(0L) ?: return null
-            val maxValue = maxOf(values.maxOrNull() ?: 0L, values.averageLong()).coerceAtLeast(1L).toDouble()
+            val maxValue =
+                axisValues?.firstOrNull()?.coerceAtLeast(1L)?.toDouble()
+                    ?: maxOf(values.maxOrNull() ?: 0L, values.averageLong()).coerceAtLeast(1L).toDouble()
             val slot = width / values.size.coerceAtLeast(1)
             val barHeight = chartHeight * (value.toDouble() / maxValue).toFloat()
             return Offset(selection.index * slot + slot / 2f, chartBottom - barHeight)
         }
         ReportKind.INCOME_AND_SPENDING -> {
             val point = monthly.getOrNull(selection.index) ?: return null
-            val maxValue = monthly.maxOfOrNull { maxOf(it.incomeMinor, it.spendingMinor) }?.coerceAtLeast(1L)?.toDouble() ?: 1.0
+            val maxValue =
+                axisValues?.firstOrNull()?.coerceAtLeast(1L)?.toDouble()
+                    ?: (monthly.maxOfOrNull { maxOf(it.incomeMinor, it.spendingMinor) }?.coerceAtLeast(1L)?.toDouble() ?: 1.0)
             val slot = width / monthly.size.coerceAtLeast(1)
             val barWidth = slot * 0.28f
             val barLeft =
@@ -1538,7 +1559,9 @@ private fun reportSelectionAnchor(
         ReportKind.NET_WORTH -> {
             val values = netWorth.map(NetWorthPoint::allAccountsMinor)
             val value = values.getOrNull(selection.index)?.toDouble() ?: return null
-            val (minimum, maximum) = netWorthValueRange(values)
+            val (observedMin, observedMax) = netWorthValueRange(values)
+            val minimum = axisValues?.lastOrNull()?.toDouble() ?: observedMin
+            val maximum = axisValues?.firstOrNull()?.toDouble() ?: observedMax
             val spread = (maximum - minimum).coerceAtLeast(1.0)
             val x = if (values.size == 1) width / 2f else inset + (width - inset * 2f) * selection.index / (values.size - 1)
             val y = chartBottom - chartHeight * ((value - minimum) / spread).toFloat()

@@ -234,6 +234,23 @@ class ReportsPresentationTest {
     }
 
     @Test
+    fun reportChartAxisUsesRoundedTicksForNegativePositiveAndMixedRanges() {
+        val allNegative = roundedReportAxisValues(-38_766_000.0, -10_000_000.0)
+        val allPositive = roundedReportAxisValues(0.0, 3_710_000.0)
+        val mixed = roundedReportAxisValues(-38_766_000.0, 2_871_000.0)
+
+        assertTrue(allNegative.size in 4..6)
+        assertTrue(allNegative.all { it % 10_000_000L == 0L })
+        assertTrue(allNegative.last() < 0L)
+        assertTrue(allPositive.size in 4..6)
+        assertTrue(allPositive.all { it % 1_000_000L == 0L })
+        assertEquals(0L, allPositive.last())
+        assertTrue(mixed.size in 4..6)
+        assertTrue(mixed.all { it % 10_000_000L == 0L })
+        assertTrue(0L in mixed)
+    }
+
+    @Test
     fun netWorthIsEmptyWhenNoCurrentBalancesAreAvailable() {
         assertTrue(netWorthPoints(emptyList(), emptyList(), listOf("2025-01"), "2025-01-31").isEmpty())
         assertTrue(
