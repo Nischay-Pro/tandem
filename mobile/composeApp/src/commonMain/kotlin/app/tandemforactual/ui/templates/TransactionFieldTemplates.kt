@@ -9,7 +9,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,9 +41,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -55,14 +54,12 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -249,7 +246,6 @@ internal fun TransactionAmountField(
     amount: String,
     amountMinorUnits: Long,
     transactionType: String,
-    focusRequester: FocusRequester,
     neutralDisplay: Boolean = false,
     showCursor: Boolean = false,
     onShowKeypad: () -> Unit,
@@ -288,49 +284,34 @@ internal fun TransactionAmountField(
                 .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            BasicTextField(
-                value = TextFieldValue(display, selection = TextRange(display.length)),
-                onValueChange = {},
-                readOnly = true,
-                singleLine = true,
-                textStyle =
-                    TextStyle(
-                        color = amountColor,
-                        fontSize = TandemTypography.amountField,
-                        lineHeight = TandemTypography.amountFieldLineHeight,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center,
-                    ),
-                cursorBrush = SolidColor(amountColor),
-                onTextLayout = { textLayout = it },
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .focusRequester(focusRequester)
-                        .semantics { contentDescription = "Amount, $display" },
-                decorationBox = { innerTextField ->
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { innerTextField() }
-                },
-            )
-            val caret = textLayout?.getCursorRect(display.length)
-            if (showCursor && caret != null) {
-                Canvas(Modifier.matchParentSize()) {
-                    val inset = 3.dp.toPx()
-                    drawLine(
-                        color = amountColor.copy(alpha = cursorAlpha),
-                        start =
-                            androidx.compose.ui.geometry
-                                .Offset(caret.left, caret.top + inset),
-                        end =
-                            androidx.compose.ui.geometry
-                                .Offset(caret.left, caret.bottom - inset),
-                        strokeWidth = 2.dp.toPx(),
-                        cap = StrokeCap.Round,
-                    )
-                }
-            }
-        }
+        Text(
+            display,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .semantics { contentDescription = "Amount, $display" }
+                    .drawWithContent {
+                        drawContent()
+                        val caret = textLayout?.getCursorRect(display.length)
+                        if (showCursor && caret != null) {
+                            val inset = 3.dp.toPx()
+                            drawLine(
+                                color = amountColor.copy(alpha = cursorAlpha),
+                                start = Offset(caret.left, caret.top + inset),
+                                end = Offset(caret.left, caret.bottom - inset),
+                                strokeWidth = 2.dp.toPx(),
+                                cap = StrokeCap.Round,
+                            )
+                        }
+                    },
+            color = amountColor,
+            fontSize = TandemTypography.amountField,
+            lineHeight = TandemTypography.amountFieldLineHeight,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            onTextLayout = { textLayout = it },
+        )
     }
 }
 
@@ -534,20 +515,17 @@ internal fun FloatingTransactionSave(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(if (compact) 0.dp else TandemSpacing.small),
     ) {
-        Box(
-            Modifier
-                .size(23.dp)
-                .clip(CircleShape)
-                .background(if (saved) Color.Transparent else palette.accentContent),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Lucide.Check,
-                contentDescription = null,
-                modifier = Modifier.size(if (saved) 23.dp else 15.dp),
-                tint = if (saved) palette.background else palette.accent,
-            )
-        }
+        Icon(
+            Lucide.Check,
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
+            tint =
+                when {
+                    saved -> palette.background
+                    enabled -> palette.accentContent
+                    else -> palette.muted
+                },
+        )
         AnimatedVisibility(visible = !compact, enter = tandemFadeEnter(tandemReduceMotion), exit = tandemFadeExit(tandemReduceMotion)) {
             Text(
                 if (saved) "Saved" else "Save",

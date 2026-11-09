@@ -22,6 +22,7 @@ import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -31,7 +32,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -95,6 +95,16 @@ internal fun BudgetScreen(
     var holdSheetMounted by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
     var budgetTemplateNameDraft by rememberSaveable(state.selectedBudgetId) { mutableStateOf("") }
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    val routeScrollState = LocalRouteScrollState.current
+    val routeListState = LocalRouteLazyListState.current
+    val transactionActionCompact by remember(routeScrollState, routeListState) {
+        derivedStateOf {
+            (routeScrollState?.value ?: 0) > 72 ||
+                (routeListState?.firstVisibleItemIndex ?: 0) > 0 ||
+                (routeListState?.firstVisibleItemScrollOffset ?: 0) > 72
+        }
+    }
+    val categoryGroupActionEndPadding = if (transactionActionCompact) 92.dp else 216.dp
     var selectedGroupOrderId by rememberSaveable(state.selectedBudgetId) { mutableStateOf<String?>(null) }
     LaunchedEffect(selectedGroupOrderId) {
         onGroupReorderModeChange(selectedGroupOrderId != null)
@@ -247,21 +257,7 @@ internal fun BudgetScreen(
                 }
             }
             item(key = "budget-overview-title") {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.weight(1f)) { Heading("Budget overview") }
-                    if (isLiveBudget) {
-                        TandemIconButton(
-                            Lucide.Plus,
-                            "Add category group",
-                            enabled = !state.readOnlyMode,
-                        ) {
-                            categoryGroupNameDraft = ""
-                            newCategoryGroupIsIncome = false
-                            mobileSession.clearBudgetActionMessage()
-                            showCreateCategoryGroupDialog = true
-                        }
-                    }
-                }
+                Heading("Budget overview")
             }
             item(key = "budget-month-picker") {
                 MonthSelectorCard(state.selectedMonth) { showMonthPicker = true }
@@ -657,6 +653,25 @@ internal fun BudgetScreen(
             }
             item(key = "budget-bottom-spacer") { Spacer(Modifier.height(72.dp)) }
         }
+        if (shouldShowBudgetCreateAction(isLiveBudget, selectedGroupOrderId != null)) {
+            FloatingAction(
+                compact = true,
+                enabled = !state.readOnlyMode,
+                label = "Add category group",
+                contentDescription = "Add category group",
+                icon = Lucide.Plus,
+                onClick = {
+                    categoryGroupNameDraft = ""
+                    newCategoryGroupIsIncome = false
+                    mobileSession.clearBudgetActionMessage()
+                    showCreateCategoryGroupDialog = true
+                },
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = categoryGroupActionEndPadding, bottom = TandemSpacing.large),
+            )
+        }
     }
     TandemTaskSheet(
         visible = showCopyLastMonthDialog,
@@ -834,12 +849,10 @@ internal fun BudgetScreen(
     }
     if (holdSheetMounted && isLiveBudget && !isTrackingBudget) {
         val parsedHoldAmount = nextMonthHoldAmountMinor
-        val amountFocusRequester = remember { FocusRequester() }
         val softwareKeyboard = LocalSoftwareKeyboardController.current
         LaunchedEffect(holdKeypadVisible) {
             if (holdKeypadVisible) {
                 softwareKeyboard?.hide()
-                amountFocusRequester.requestFocus()
             }
         }
 
@@ -950,7 +963,7 @@ internal fun BudgetScreen(
                         amount = state.formatAmount(nextMonthHoldAmountMinor),
                         amountMinorUnits = nextMonthHoldAmountMinor,
                         transactionType = "Neutral",
-                        focusRequester = amountFocusRequester,
+                        showCursor = holdKeypadVisible,
                         onShowKeypad = { holdKeypadVisible = true },
                         amountColorOverride = palette.accent,
                     )

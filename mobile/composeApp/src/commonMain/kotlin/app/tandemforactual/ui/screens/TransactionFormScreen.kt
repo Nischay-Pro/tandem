@@ -25,8 +25,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
@@ -77,7 +75,6 @@ internal fun TransactionFormScreen(
             var enterNewOperand by rememberSaveable { mutableStateOf(false) }
             var amountEntryMessage by rememberSaveable { mutableStateOf<String?>(null) }
             var notesFocused by remember { mutableStateOf(false) }
-            val amountFocusRequester = remember { FocusRequester() }
             val focusManager = LocalFocusManager.current
             val routeScrollState = LocalRouteScrollState.current
             val compactSave by remember(routeScrollState) {
@@ -173,7 +170,6 @@ internal fun TransactionFormScreen(
             LaunchedEffect(keypadVisible) {
                 if (keypadVisible) {
                     softwareKeyboard?.hide()
-                    amountFocusRequester.requestFocus()
                 }
             }
 
@@ -194,7 +190,6 @@ internal fun TransactionFormScreen(
                         amount = state.formatAmount(amountMinorUnits),
                         amountMinorUnits = amountMinorUnits,
                         transactionType = state.transactionType,
-                        focusRequester = amountFocusRequester,
                         showCursor = keypadVisible,
                         onShowKeypad = { keypadVisible = true },
                     )
@@ -287,7 +282,7 @@ internal fun TransactionFormScreen(
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .imePadding()
-                        .padding(bottom = if (keypadVisible) AMOUNT_KEYPAD_HEIGHT + 12.dp else 12.dp),
+                        .padding(bottom = if (keypadVisible) AMOUNT_KEYPAD_HEIGHT else 12.dp),
                 ) {
                     Row(
                         Modifier.fillMaxWidth().background(tandemPalette.surface).padding(horizontal = 18.dp, vertical = 8.dp),
@@ -363,7 +358,6 @@ internal fun TransactionFormScreen(
                             .coerceAtMost(MAX_TRANSACTION_AMOUNT_MINOR_UNITS),
                 )
             }
-        val amountFocusRequester = remember(state.selectedTransactionRecordId) { FocusRequester() }
         val focusManager = LocalFocusManager.current
         val routeScrollState = LocalRouteScrollState.current
         val compactSave by remember(routeScrollState) {
@@ -431,7 +425,6 @@ internal fun TransactionFormScreen(
         LaunchedEffect(keypadVisible) {
             if (keypadVisible) {
                 softwareKeyboard?.hide()
-                amountFocusRequester.requestFocus()
             }
         }
         LaunchedEffect(savedFeedback) {
@@ -457,7 +450,6 @@ internal fun TransactionFormScreen(
                     amount = state.formatAmount(amountMinorUnits),
                     amountMinorUnits = amountMinorUnits,
                     transactionType = state.transactionType,
-                    focusRequester = amountFocusRequester,
                     showCursor = keypadVisible,
                     onShowKeypad = { keypadVisible = true },
                 )
@@ -532,7 +524,7 @@ internal fun TransactionFormScreen(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .imePadding()
-                    .padding(bottom = if (keypadVisible) AMOUNT_KEYPAD_HEIGHT + 12.dp else 12.dp),
+                    .padding(bottom = if (keypadVisible) AMOUNT_KEYPAD_HEIGHT else 12.dp),
             ) {
                 Row(
                     Modifier.fillMaxWidth().background(tandemPalette.surface).padding(horizontal = 18.dp, vertical = 8.dp),

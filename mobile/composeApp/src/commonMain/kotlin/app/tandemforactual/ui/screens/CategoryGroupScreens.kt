@@ -191,7 +191,7 @@ internal fun CategoryGroupScreen(
                         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                     ) {
                         Box(Modifier.weight(1f)) {
-                            Heading(group.name, "${state.selectedMonth} · ${categoryCountLabel(group.categories.size)}")
+                            Heading(group.name, state.selectedMonth)
                         }
                         if (isLiveBudget) {
                             TandemIconButton(
