@@ -23,7 +23,6 @@ import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.ui.components.BodyText
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
-import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SurfaceCard
@@ -289,7 +288,7 @@ internal fun ScreenContent(
                                 } else {
                                     EmptyState("No matches", modifier = Modifier.padding(TandemSpacing.large))
                                 }
-                                mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                                mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
                             }
                         }
                     } else {
@@ -449,7 +448,9 @@ internal fun ScreenContent(
                                                     }
                                                 }
                                             }
-                                            mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                                            mobileSession.budgetActionMessage?.let {
+                                                InlineMessage(it, mobileSession.budgetActionMessageKind)
+                                            }
                                             TandemActionButton(
                                                 "Create \"$newName\"",
                                                 TandemActionButtonTone.PRIMARY,

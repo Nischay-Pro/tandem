@@ -513,6 +513,7 @@ internal fun CategoryGroupScreen(
             onNameChange = { groupNameDraft = it },
             busy = false,
             message = mobileSession.budgetActionMessage,
+            messageKind = mobileSession.budgetActionMessageKind,
             placeholder = group.name,
             onDismiss = { showGroupDialog = false },
             onSave = {
@@ -535,6 +536,7 @@ internal fun CategoryGroupScreen(
             onNameChange = { newCategoryName = it },
             busy = false,
             message = mobileSession.budgetActionMessage,
+            messageKind = mobileSession.budgetActionMessageKind,
             placeholder = "Groceries",
             onDismiss = { showCreateCategoryDialog = false },
             onSave = {
@@ -603,6 +605,7 @@ internal fun CategoryGroupNameDialog(
     onNameChange: (String) -> Unit,
     busy: Boolean,
     message: String?,
+    messageKind: InlineMessageKind = InlineMessageKind.ERROR,
     placeholder: String = "Essentials",
     isIncome: Boolean? = null,
     onIncomeChange: ((Boolean) -> Unit)? = null,
@@ -622,7 +625,7 @@ internal fun CategoryGroupNameDialog(
                 if (isIncome != null && onIncomeChange != null) {
                     ToggleRow("Income group", "For income categories", isIncome, !busy, onIncomeChange)
                 }
-                message?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                message?.let { InlineMessage(it, messageKind) }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     TandemActionButton("Cancel", TandemActionButtonTone.NEUTRAL, Modifier.weight(1f), enabled = !busy, onClick = onDismiss)
                     TandemActionButton(

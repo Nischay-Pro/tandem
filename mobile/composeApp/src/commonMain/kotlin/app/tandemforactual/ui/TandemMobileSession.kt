@@ -27,6 +27,7 @@ import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.LocalRecordProjection
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
+import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.model.LiveCategoryGroupSummary
 import app.tandemforactual.ui.model.booleanValue
 import app.tandemforactual.ui.model.recordBody
@@ -74,6 +75,11 @@ internal data class TransactionEditDetails(
     val payeeId: String?,
     val categoryId: String?,
     val date: String,
+)
+
+internal data class BudgetActionFeedback(
+    val text: String,
+    val kind: InlineMessageKind,
 )
 
 internal fun buildTransactionEditPatch(
@@ -210,8 +216,16 @@ internal class TandemMobileSession(
     var isPerformingBudgetAction by mutableStateOf(false)
         private set
 
-    var budgetActionMessage by mutableStateOf<String?>(null)
-        private set
+    private var budgetActionFeedback by mutableStateOf<BudgetActionFeedback?>(null)
+
+    var budgetActionMessage: String?
+        get() = budgetActionFeedback?.text
+        private set(value) {
+            budgetActionFeedback = value?.let { BudgetActionFeedback(it, InlineMessageKind.ERROR) }
+        }
+
+    val budgetActionMessageKind: InlineMessageKind
+        get() = budgetActionFeedback?.kind ?: InlineMessageKind.ERROR
 
     var budgetActionWasAppliedButRefreshFailed by mutableStateOf(false)
         private set
@@ -828,7 +842,14 @@ internal class TandemMobileSession(
     }
 
     fun clearBudgetActionMessage() {
-        budgetActionMessage = null
+        budgetActionFeedback = null
+    }
+
+    private fun setBudgetActionMessage(
+        text: String,
+        kind: InlineMessageKind = InlineMessageKind.ERROR,
+    ) {
+        budgetActionFeedback = BudgetActionFeedback(text, kind)
     }
 
     fun clearTransactionWriteMessage() {
@@ -1486,9 +1507,12 @@ internal class TandemMobileSession(
                     apiClient.importBudgetAccountTransactions(budgetId, accountId, transactions, encryptionPassword)
                 }
             if (synchronize(budgetId, encryptionPassword) == null) {
-                budgetActionMessage = syncError ?: "Actual imported the statement, but this device couldn’t refresh the budget."
+                setBudgetActionMessage(
+                    syncError ?: "Actual imported the statement, but this device couldn’t refresh the budget.",
+                    InlineMessageKind.WARNING,
+                )
             } else {
-                budgetActionMessage = formatStatementImportSummary(result)
+                setBudgetActionMessage(formatStatementImportSummary(result), InlineMessageKind.SUCCESS)
             }
             return result
         } catch (error: CancellationException) {
@@ -1669,7 +1693,10 @@ internal class TandemMobileSession(
             budgetActionShouldRetry = isRetryableBudgetMutationStatus(error.httpStatus)
             if (actionApplied) {
                 budgetActionWasAppliedButRefreshFailed = true
-                budgetActionMessage = "Actual was updated, but this device couldn’t refresh the budget."
+                setBudgetActionMessage(
+                    "Actual was updated, but this device couldn’t refresh the budget.",
+                    InlineMessageKind.WARNING,
+                )
             } else {
                 budgetActionMessage = error.message ?: failureMessage
             }
@@ -1678,7 +1705,10 @@ internal class TandemMobileSession(
             isServerReachable = false
             if (actionApplied) {
                 budgetActionWasAppliedButRefreshFailed = true
-                budgetActionMessage = "Actual was updated, but this device couldn’t refresh the budget."
+                setBudgetActionMessage(
+                    "Actual was updated, but this device couldn’t refresh the budget.",
+                    InlineMessageKind.WARNING,
+                )
             } else {
                 budgetActionMessage = failureMessage
             }

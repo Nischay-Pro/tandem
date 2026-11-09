@@ -614,6 +614,9 @@ fun TandemApp(
             mobileSession.loadBudgets()
         }
     }
+    LaunchedEffect(route) {
+        mobileSession.clearBudgetActionMessage()
+    }
     LaunchedEffect(route, state.selectedBudgetId, availableBudgets) {
         if (route == AppRoute.BUDGET_CHOOSER && state.selectedBudgetId.isBlank()) {
             availableBudgets.firstOrNull()?.let { budget ->

@@ -33,7 +33,6 @@ import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
-import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.ListRowAction
 import app.tandemforactual.ui.components.ListRowOptions
@@ -259,7 +258,7 @@ internal fun ManagePayeesScreen(
                     fontWeight = FontWeight.Bold,
                 )
                 TextFieldCard("Name", newPayeeName, { newPayeeName = it })
-                mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
                 Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                     TandemActionButton(
                         "Cancel",
@@ -364,7 +363,7 @@ internal fun ManagePayeesScreen(
                                 categoryOptions,
                             ) { defaultCategoryDraft = it }
                             mobileSession.budgetActionMessage?.let {
-                                InlineMessage(it, InlineMessageKind.ERROR)
+                                InlineMessage(it, mobileSession.budgetActionMessageKind)
                             }
                             TandemActionButton(
                                 if (mobileSession.isPerformingBudgetAction) "Saving…" else "Save",
@@ -401,7 +400,7 @@ internal fun ManagePayeesScreen(
                         }
                         "rename" -> {
                             TextFieldCard("Name", nameDraft, { nameDraft = it })
-                            mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                            mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
                             TandemActionButton(
                                 if (mobileSession.isPerformingBudgetAction) "Saving…" else "Save",
                                 TandemActionButtonTone.PRIMARY,
@@ -432,7 +431,7 @@ internal fun ManagePayeesScreen(
                         }
                         "merge" -> {
                             Text("Choose the payee to keep.", color = tandemPalette.muted, fontSize = TandemTypography.body)
-                            mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                            mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
                             payees.filterNot { it.first == selectedPayee.first }.forEach { target ->
                                 SurfaceCard {
                                     ListRow(
@@ -458,7 +457,7 @@ internal fun ManagePayeesScreen(
                             Text("Confirm deletion in the alert.", color = tandemPalette.muted, fontSize = TandemTypography.body)
                         }
                         else -> {
-                            mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                            mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
                             SurfaceCard {
                                 ListRow(
                                     "Default category",
@@ -514,6 +513,7 @@ internal fun ManagePayeesScreen(
             message =
                 mobileSession.budgetActionMessage
                     ?: "Move transactions from ${selectedPayee.second} to ${mergeTarget?.second ?: "the selected payee"}?",
+            messageKind = mobileSession.budgetActionMessageKind.takeIf { mobileSession.budgetActionMessage != null },
             confirmLabel = if (mobileSession.isPerformingBudgetAction) "Merging…" else "Merge",
             dismissLabel = "Choose another",
             enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction && mergeTarget != null,
@@ -540,6 +540,7 @@ internal fun ManagePayeesScreen(
         DestructiveConfirmationDialog(
             title = "Delete ${selectedPayee.second}?",
             message = mobileSession.budgetActionMessage ?: "Remove this payee from the budget?",
+            messageKind = mobileSession.budgetActionMessageKind.takeIf { mobileSession.budgetActionMessage != null },
             confirmLabel = if (mobileSession.isPerformingBudgetAction) "Deleting…" else "Delete",
             dismissLabel = "Keep payee",
             enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,

@@ -221,7 +221,7 @@ internal fun AccountDetailScreen(
                 )
             }
             if (!showStatementImportDialog) {
-                mobileSession.budgetActionMessage?.let { InlineMessage(it, statementImportMessageKind(it)) }
+                mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
             }
             if (shownAccountActivity.isEmpty()) {
                 SurfaceCard {
@@ -289,6 +289,7 @@ internal fun AccountDetailScreen(
             parseResult = statementParseResult,
             parseError = statementParseError,
             actionMessage = mobileSession.budgetActionMessage,
+            actionMessageKind = mobileSession.budgetActionMessageKind,
             dateOrder = statementDateOrder,
             busy = mobileSession.isPerformingBudgetAction,
             onDateOrderChange = { statementDateOrderName = it.name },
@@ -333,6 +334,7 @@ internal fun StatementImportDialog(
     parseResult: StatementParseResult?,
     parseError: String?,
     actionMessage: String?,
+    actionMessageKind: InlineMessageKind = InlineMessageKind.ERROR,
     dateOrder: StatementDateOrder,
     busy: Boolean,
     onDateOrderChange: (StatementDateOrder) -> Unit,
@@ -368,7 +370,7 @@ internal fun StatementImportDialog(
                 }
                 parseError?.let { InlineMessage(it, InlineMessageKind.ERROR) }
                 actionMessage?.let {
-                    InlineMessage(it, statementImportMessageKind(it))
+                    InlineMessage(it, actionMessageKind)
                 }
                 parseResult?.let { result ->
                     Text("Date format", color = tandemPalette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
@@ -413,10 +415,3 @@ internal fun StatementImportDialog(
         }
     }
 }
-
-private fun statementImportMessageKind(message: String): InlineMessageKind =
-    when {
-        message.contains("need review") -> InlineMessageKind.WARNING
-        message.startsWith("Imported ") || message.startsWith("Updated ") || message == "No new transactions." -> InlineMessageKind.SUCCESS
-        else -> InlineMessageKind.ERROR
-    }

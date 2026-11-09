@@ -681,7 +681,7 @@ internal fun BudgetScreen(
             confirmLabel = if (mobileSession.isPerformingBudgetAction) "Copying…" else "Copy assignments",
             dismissLabel = "Cancel",
             enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
-            content = { mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) } },
+            content = { mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) } },
             onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showCopyLastMonthDialog = false },
             onConfirm = {
                 scope.launch {
@@ -756,7 +756,7 @@ internal fun BudgetScreen(
                 if (currentTemplateAssignments.size > 500) {
                     InlineMessage("This plan has more than 500 categories and cannot be saved as a template.", InlineMessageKind.INFO)
                 }
-                mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
                 if (currentBudgetTemplates.isEmpty()) {
                     Text("Saved templates will appear here.", color = tandemPalette.muted, fontSize = TandemTypography.body)
                 } else {
@@ -950,7 +950,7 @@ internal fun BudgetScreen(
                             },
                         )
                     }
-                    mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                    mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                         TandemActionButton(
                             if (heldForNextMonthMinor > 0) "Reset hold" else "Close",
@@ -1011,6 +1011,7 @@ internal fun BudgetScreen(
             onNameChange = { categoryGroupNameDraft = it },
             busy = false,
             message = mobileSession.budgetActionMessage,
+            messageKind = mobileSession.budgetActionMessageKind,
             placeholder = "Travel & Leisure",
             isIncome = newCategoryGroupIsIncome,
             onIncomeChange = { newCategoryGroupIsIncome = it },

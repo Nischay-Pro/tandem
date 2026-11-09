@@ -470,7 +470,7 @@ internal fun UpcomingSchedulesScreen(
                                 InlineMessage(it, InlineMessageKind.ERROR)
                             }
                             mobileSession.budgetActionMessage?.let {
-                                InlineMessage(it, InlineMessageKind.ERROR)
+                                InlineMessage(it, mobileSession.budgetActionMessageKind)
                             }
                             TandemActionButton(
                                 if (mobileSession.isPerformingBudgetAction) {
@@ -589,7 +589,7 @@ internal fun UpcomingSchedulesScreen(
                             ) { dialogMode = "menu" }
                         }
                         else -> {
-                            mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                            mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
                             TandemActionButton(
                                 "Post now",
                                 TandemActionButtonTone.PRIMARY,
@@ -662,6 +662,7 @@ internal fun UpcomingSchedulesScreen(
         DestructiveConfirmationDialog(
             title = "Delete schedule?",
             message = mobileSession.budgetActionMessage ?: "Remove ${selectedSchedule.name} from upcoming bills?",
+            messageKind = mobileSession.budgetActionMessageKind.takeIf { mobileSession.budgetActionMessage != null },
             confirmLabel = if (mobileSession.isPerformingBudgetAction) "Deleting…" else "Delete",
             dismissLabel = "Keep schedule",
             enabled = !mobileSession.isPerformingBudgetAction,
