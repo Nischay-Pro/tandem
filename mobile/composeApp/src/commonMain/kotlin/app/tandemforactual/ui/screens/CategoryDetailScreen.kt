@@ -65,10 +65,7 @@ import app.tandemforactual.ui.model.recordBody
 import app.tandemforactual.ui.reports.ReportWindow
 import app.tandemforactual.ui.reports.reportMonthLabel
 import com.composables.icons.lucide.Check
-import com.composables.icons.lucide.ChevronDown
-import com.composables.icons.lucide.ChevronUp
 import com.composables.icons.lucide.CircleDot
-import com.composables.icons.lucide.EyeOff
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Minus
 import com.composables.icons.lucide.Pencil
@@ -311,65 +308,6 @@ internal fun CategoryDetailScreen(
                 if (!isTrackingBudget) {
                     DividerLine()
                     ListRow("Available", "Assigned plus activity", state.formatCurrency(category.balanceMinor))
-                }
-            }
-            if (isLiveBudget && selectedGroup != null && categoryIndex >= 0) {
-                SectionCard("Category options") {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                        TandemIconButton(
-                            Lucide.ChevronUp,
-                            "Move category up",
-                            enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction && categoryIndex > 0,
-                        ) {
-                            scope.launch {
-                                mobileSession.manageBudgetCategory(
-                                    state.selectedBudgetId,
-                                    state.selectedCategoryId,
-                                    "move",
-                                    selectedGroup.categories.getOrNull(categoryIndex - 1)?.id,
-                                    state.encryptedPassword.takeIf { it.isNotBlank() },
-                                )
-                            }
-                        }
-                        TandemIconButton(
-                            Lucide.ChevronDown,
-                            "Move category down",
-                            enabled =
-                                !state.readOnlyMode &&
-                                    !mobileSession.isPerformingBudgetAction &&
-                                    categoryIndex < selectedGroup.categories.lastIndex,
-                        ) {
-                            scope.launch {
-                                mobileSession.manageBudgetCategory(
-                                    state.selectedBudgetId,
-                                    state.selectedCategoryId,
-                                    "move",
-                                    selectedGroup.categories.getOrNull(categoryIndex + 2)?.id,
-                                    state.encryptedPassword.takeIf { it.isNotBlank() },
-                                )
-                            }
-                        }
-                        Spacer(Modifier.weight(1f))
-                        TandemIconButton(
-                            Lucide.EyeOff,
-                            "Hide category",
-                            enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
-                            tint = tandemPalette.negative,
-                        ) {
-                            scope.launch {
-                                if (mobileSession.manageBudgetCategory(
-                                        state.selectedBudgetId,
-                                        state.selectedCategoryId,
-                                        "hide",
-                                        null,
-                                        state.encryptedPassword.takeIf { it.isNotBlank() },
-                                    )
-                                ) {
-                                    navigation.back()
-                                }
-                            }
-                        }
-                    }
                 }
             }
             if (isLiveBudget) {

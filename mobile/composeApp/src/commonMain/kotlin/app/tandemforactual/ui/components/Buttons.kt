@@ -180,27 +180,38 @@ internal fun ReorderDragHandle(
     canMoveDown: Boolean,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
+    onDragStarted: (() -> Unit)? = null,
+    onDragBy: ((Float) -> Unit)? = null,
+    onDragStopped: (() -> Unit)? = null,
 ) {
     val density = LocalDensity.current
     val stepPixels = with(density) { 52.dp.toPx() }
     val latestMoveUp by rememberUpdatedState(onMoveUp)
     val latestMoveDown by rememberUpdatedState(onMoveDown)
+    val latestOnDragStarted by rememberUpdatedState(onDragStarted)
+    val latestOnDragBy by rememberUpdatedState(onDragBy)
+    val latestOnDragStopped by rememberUpdatedState(onDragStopped)
     val latestCanMoveUp by rememberUpdatedState(canMoveUp)
     val latestCanMoveDown by rememberUpdatedState(canMoveDown)
     var dragDistance by remember { mutableFloatStateOf(0f) }
     val dragState =
         rememberDraggableState { delta ->
-            dragDistance += delta
-            if (dragDistance >= stepPixels && latestCanMoveDown) {
-                latestMoveDown()
-                dragDistance -= stepPixels
-            }
-            if (dragDistance <= -stepPixels && latestCanMoveUp) {
-                latestMoveUp()
-                dragDistance += stepPixels
-            }
-            if (!latestCanMoveDown && dragDistance > 0f || !latestCanMoveUp && dragDistance < 0f) {
-                dragDistance = 0f
+            val dragHandler = latestOnDragBy
+            if (dragHandler != null) {
+                dragHandler(delta)
+            } else {
+                dragDistance += delta
+                if (dragDistance >= stepPixels && latestCanMoveDown) {
+                    latestMoveDown()
+                    dragDistance -= stepPixels
+                }
+                if (dragDistance <= -stepPixels && latestCanMoveUp) {
+                    latestMoveUp()
+                    dragDistance += stepPixels
+                }
+                if (!latestCanMoveDown && dragDistance > 0f || !latestCanMoveUp && dragDistance < 0f) {
+                    dragDistance = 0f
+                }
             }
         }
     val actionList =
@@ -243,8 +254,14 @@ internal fun ReorderDragHandle(
                 orientation = Orientation.Vertical,
                 state = dragState,
                 enabled = enabled && (canMoveUp || canMoveDown),
-                onDragStarted = { dragDistance = 0f },
-                onDragStopped = { dragDistance = 0f },
+                onDragStarted = {
+                    dragDistance = 0f
+                    latestOnDragStarted?.invoke()
+                },
+                onDragStopped = {
+                    dragDistance = 0f
+                    latestOnDragStopped?.invoke()
+                },
             )
     androidx.compose.foundation.layout.Box(
         modifier = handleModifier,

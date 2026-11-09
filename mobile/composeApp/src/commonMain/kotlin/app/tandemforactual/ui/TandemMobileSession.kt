@@ -201,6 +201,9 @@ internal class TandemMobileSession(
     var budgetActionMessage by mutableStateOf<String?>(null)
         private set
 
+    var budgetActionWasAppliedButRefreshFailed by mutableStateOf(false)
+        private set
+
     private var readOnlyMode = false
 
     fun setReadOnlyMode(enabled: Boolean) {
@@ -1012,6 +1015,7 @@ internal class TandemMobileSession(
         action: suspend () -> Unit,
     ): Boolean {
         budgetActionMessage = null
+        budgetActionWasAppliedButRefreshFailed = false
         if (refuseWriteInReadOnlyMode()) {
             budgetActionMessage = transactionWriteMessage
             return false
@@ -1022,9 +1026,14 @@ internal class TandemMobileSession(
         }
         if (isPerformingBudgetAction) return false
         isPerformingBudgetAction = true
+        var actionApplied = false
         try {
-            apiClient.withExclusiveSession { action() }
+            apiClient.withExclusiveSession {
+                action()
+                actionApplied = true
+            }
             if (synchronize(budgetId, encryptionPassword) == null) {
+                budgetActionWasAppliedButRefreshFailed = true
                 budgetActionMessage = syncError ?: "Actual was updated, but this device couldn’t refresh the budget."
                 return false
             }
@@ -1032,10 +1041,20 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
-            budgetActionMessage = error.message ?: failureMessage
+            if (actionApplied) {
+                budgetActionWasAppliedButRefreshFailed = true
+                budgetActionMessage = "Actual was updated, but this device couldn’t refresh the budget."
+            } else {
+                budgetActionMessage = error.message ?: failureMessage
+            }
             return false
         } catch (_: Exception) {
-            budgetActionMessage = failureMessage
+            if (actionApplied) {
+                budgetActionWasAppliedButRefreshFailed = true
+                budgetActionMessage = "Actual was updated, but this device couldn’t refresh the budget."
+            } else {
+                budgetActionMessage = failureMessage
+            }
             return false
         } finally {
             isPerformingBudgetAction = false
