@@ -661,6 +661,7 @@ internal fun BudgetScreen(
                 label = "Add category group",
                 contentDescription = "Add category group",
                 icon = Lucide.Plus,
+                outlined = true,
                 onClick = {
                     categoryGroupNameDraft = ""
                     newCategoryGroupIsIncome = false

@@ -77,7 +77,6 @@ internal fun SettingsScreen(
             DividerLine()
             ListRow(
                 "Budget rules",
-                "Rules from Actual",
                 leading = RowLeading.Icon(Lucide.Tags),
                 onClick = { navigation.open(AppRoute.BUDGET_RULES) },
             )

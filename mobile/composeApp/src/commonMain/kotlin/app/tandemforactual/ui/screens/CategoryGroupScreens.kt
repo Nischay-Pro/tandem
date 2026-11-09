@@ -496,6 +496,7 @@ internal fun CategoryGroupScreen(
                 label = "Add category",
                 contentDescription = "Add category",
                 icon = Lucide.Plus,
+                outlined = true,
                 onClick = {
                     newCategoryName = ""
                     mobileSession.clearBudgetActionMessage()

@@ -7,6 +7,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -70,20 +71,34 @@ internal fun FloatingAction(
     contentDescription: String,
     icon: ImageVector,
     loading: Boolean = false,
+    outlined: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val palette = tandemPalette
     val isCompact = compact || LocalDensity.current.fontScale >= 1.5f
-    val actionColor = if (enabled) palette.accentContent else palette.muted
+    val shape = if (isCompact) CircleShape else RoundedCornerShape(TandemShapes.large)
+    val actionColor =
+        when {
+            !enabled -> palette.muted
+            outlined -> palette.accent
+            else -> palette.accentContent
+        }
+    val backgroundColor =
+        when {
+            !enabled -> palette.raised
+            outlined -> palette.surface
+            else -> palette.accent
+        }
     Row(
         modifier =
             modifier
                 .animateContentSize(tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS))
                 .height(56.dp)
                 .defaultMinSize(minWidth = 56.dp)
-                .clip(if (isCompact) CircleShape else RoundedCornerShape(TandemShapes.large))
-                .background(if (enabled) palette.accent else palette.raised)
+                .clip(shape)
+                .background(backgroundColor)
+                .then(if (outlined) Modifier.border(1.dp, palette.border, shape) else Modifier)
                 .semantics(mergeDescendants = true) { this.contentDescription = contentDescription }
                 .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
                 .padding(horizontal = if (isCompact) TandemSpacing.large else TandemSpacing.extraLarge),
