@@ -9,6 +9,16 @@ import kotlin.test.assertTrue
 
 class LocaleFormattingTest {
     @Test
+    fun transactionDatesUseThePhoneLocaleMediumDateFormat() {
+        withPhoneLocale(Locale.US) {
+            assertEquals("May 14, 2026", platformFormatDate(2026, 5, 14, includeYear = true))
+        }
+        withPhoneLocale(Locale.UK) {
+            assertEquals("14 May 2026", platformFormatDate(2026, 5, 14, includeYear = true))
+        }
+    }
+
+    @Test
     fun selectedBudgetCurrencyAndPrecisionOverrideThePhoneLocale() {
         withPhoneLocale(Locale.JAPAN) {
             val cad = displaySettings(currencyCode = "CAD", numberFormat = "comma-dot")
