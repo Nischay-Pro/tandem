@@ -191,7 +191,7 @@ internal fun CategoryGroupScreen(
                         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                     ) {
                         Box(Modifier.weight(1f)) {
-                            Heading(group.name, state.selectedMonth)
+                            Text(state.selectedMonth, color = tandemPalette.muted, fontSize = TandemTypography.label)
                         }
                         if (isLiveBudget) {
                             TandemIconButton(

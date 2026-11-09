@@ -42,6 +42,12 @@ private fun decodeLazyScrollPositions(serialized: String?): Map<String, Pair<Int
         }?.toMap()
         ?: emptyMap()
 
+internal fun normalizeHomeLayoutName(layout: String): String =
+    when (layout) {
+        "Essentials first", "Bills first" -> "Essentials"
+        else -> layout
+    }
+
 internal class AppState {
     var theme by mutableStateOf(ThemeMode.DARK)
     var accent by mutableStateOf(AccentChoice.ACTUAL_PURPLE)
@@ -158,7 +164,7 @@ internal class AppState {
         theme = ThemeMode.entries.firstOrNull { it.name == saved["theme"] } ?: theme
         accent = AccentChoice.entries.firstOrNull { it.name == saved["accent"] } ?: accent
         backgroundStyle = saved["backgroundStyle"] ?: backgroundStyle
-        homeLayout = (saved["homeLayout"] ?: homeLayout).let { if (it == "Essentials first") "Essentials" else it }
+        homeLayout = normalizeHomeLayoutName(saved["homeLayout"] ?: homeLayout)
         collapsedBudgetSections = saved["collapsedBudgetSections"] ?: collapsedBudgetSections
         pinnedCategoryIds = saved["pinnedCategoryIds"] ?: pinnedCategoryIds
         categoryIconOverrides = saved["categoryIconOverrides"] ?: categoryIconOverrides
@@ -322,10 +328,7 @@ internal class AppState {
                         selectedTransactionIsLive = saved["selectedTransactionIsLive"] as? Boolean ?: selectedTransactionIsLive
                         conflictChoice = saved["conflictChoice"] as? String ?: conflictChoice
                         backgroundStyle = saved["backgroundStyle"] as? String ?: backgroundStyle
-                        homeLayout =
-                            (saved["homeLayout"] as? String ?: homeLayout).let {
-                                if (it == "Essentials first") "Essentials" else it
-                            }
+                        homeLayout = normalizeHomeLayoutName(saved["homeLayout"] as? String ?: homeLayout)
                         collapsedBudgetSections = saved["collapsedBudgetSections"] as? String ?: collapsedBudgetSections
                         pinnedCategoryIds = saved["pinnedCategoryIds"] as? String ?: pinnedCategoryIds
                         categoryIconOverrides = saved["categoryIconOverrides"] as? String ?: categoryIconOverrides

@@ -118,7 +118,7 @@ internal enum class AppRoute(
     CATEGORY_GROUP("Essentials"),
     CATEGORY_DETAIL("Rent"),
     SCHEDULES("Upcoming bills"),
-    BUDGET_RULES("Rules"),
+    BUDGET_RULES("Budget rules"),
     ACCOUNTS("Accounts"),
     ACCOUNT_DETAIL("Checking"),
     ACCOUNT_OPTIONS("Account options"),

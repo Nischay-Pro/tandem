@@ -46,7 +46,6 @@ internal fun ServerDeviceScreen(
     val device = mobileSession.pairedDevice
     var confirmation by rememberSaveable { mutableStateOf("") }
     PageColumn {
-        Heading("Connection details", "Review the server address and device pairing.")
         SectionCard("Server") {
             ListRow(
                 "Server URL",
@@ -101,7 +100,7 @@ internal fun ServerDeviceScreen(
                 leading = RowLeading.Icon(Lucide.KeyRound),
             )
         }
-        InfoBubble("Pairing codes and budget passwords are never saved.")
+        InfoBubble("One-time pairing codes and budget passwords aren’t saved.")
         mobileSession.deviceRevocationError?.let { message ->
             AttentionBanner("Couldn’t remove this device", message, "Try again", onForgetDevice)
             InfoBubble("The server still trusts this device until its owner removes it there.")
@@ -186,8 +185,7 @@ internal fun SecurityScreen(
         SurfaceCard {
             ListRow(
                 "Budget password",
-                if (state.selectedBudgetEncrypted) "For this session" else null,
-                if (state.selectedBudgetEncrypted) "Available" else "Unavailable",
+                trailing = if (state.selectedBudgetEncrypted) "Available this session" else "Unavailable",
                 leading = RowLeading.Icon(Lucide.LockKeyhole),
             )
         }
@@ -207,11 +205,11 @@ internal fun NotificationsScreen(
         SurfaceCard {
             if (notificationPermissionEnabled != null && onToggleNotificationPermission != null) {
                 ToggleRow(
-                    "Notifications",
+                    "Allow notifications",
                     if (notificationPermissionEnabled) {
-                        "On · Disable in notification settings"
+                        "On · Turn off in notification settings"
                     } else {
-                        "Off · Enable in notification settings"
+                        "Off · Turn on in notification settings"
                     },
                     notificationPermissionEnabled,
                     onChange = onToggleNotificationPermission,
@@ -230,7 +228,7 @@ internal fun NotificationsScreen(
                         fontWeight = FontWeight.Medium,
                     )
                     if (onRequestNotificationPermission != null) {
-                        CompactActionButton("Enable", Modifier.weight(1f), onRequestNotificationPermission)
+                        CompactActionButton("Turn on", Modifier.weight(1f), onRequestNotificationPermission)
                     }
                     if (onOpenNotificationSettings != null) {
                         CompactActionButton("Settings", Modifier.weight(1f), onOpenNotificationSettings)
@@ -257,8 +255,8 @@ internal fun NotificationsScreen(
             }
             DividerLine()
             ToggleRow(
-                "Edits not applied",
-                "When an edit isn’t applied",
+                "Rejected edit alerts",
+                "When Actual rejects an edit",
                 state.rejectedEditAlerts,
             ) {
                 state.rejectedEditAlerts = it

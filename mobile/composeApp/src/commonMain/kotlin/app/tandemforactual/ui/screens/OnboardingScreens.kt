@@ -249,7 +249,6 @@ internal fun PairingCodeScreen(
                 navigation.reset(AppRoute.BUDGET_CHOOSER)
             }
         } else {
-            Heading("Pair this device")
             TextFieldCard(
                 "Pairing code",
                 state.pairingCode,
@@ -385,7 +384,6 @@ internal fun UnlockBudgetScreen(
     navigation: AppNavigation,
 ) {
     PageColumn {
-        Heading("Unlock budget")
         TextFieldCard(
             "Budget password",
             state.encryptedPassword,

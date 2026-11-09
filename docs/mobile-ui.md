@@ -37,15 +37,18 @@ follows the selected light, dark, or system mode alongside the Compose screens.
 
 ## Wording
 
-| Idea                                      | Use                  | Avoid                                         |
-| ----------------------------------------- | -------------------- | --------------------------------------------- |
-| A local copy                              | Saved on this device | Saved on this phone                           |
-| Repeating an action                       | Try again            | Retry sync, Retry edit, Retry loading budgets |
-| Removing a pending local edit             | Remove edit          | Discard or Dismiss                            |
-| Deleting one transaction                  | Delete transaction?  | Delete this transaction?                      |
-| A conflict that needs a choice            | Needs review         | Needs your review, Review changes             |
-| Allowing background sync on cellular data | Sync on mobile data  | Use unrestricted networks                     |
-| Alerts for rejected edits                 | Edits not applied    | Not applied alerts                            |
+| Idea                                      | Use                                                                                      | Avoid                                         |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------- |
+| A local copy                              | Saved on this device                                                                     | Saved on this phone                           |
+| Repeating an action                       | Try again                                                                                | Retry sync, Retry edit, Retry loading budgets |
+| Removing a pending local edit             | Remove edit                                                                              | Discard or Dismiss                            |
+| Deleting one transaction                  | Delete transaction?                                                                      | Delete this transaction?                      |
+| A conflict that needs a choice            | Needs review                                                                             | Needs your review, Review changes             |
+| Allowing background sync on cellular data | Sync on mobile data                                                                      | Use unrestricted networks                     |
+| Alerts for rejected edits                 | Rejected edit alerts                                                                     | Not applied alerts                            |
+| OS notification permission control        | Allow notifications; Turn on in notification settings; Turn off in notification settings | System permissions, Enable, Disable           |
+| Budget layout that puts essentials first  | Essentials                                                                               | Essentials first                              |
+| Pending local edit collection             | Pending Changes (screen title); pending edits in prose                                   | Pending changes in the screen title           |
 
 Keep action labels consistent when the surrounding screen already makes the
 object clear. Use a short next step in error messages, such as “Try again.”

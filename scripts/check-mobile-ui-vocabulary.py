@@ -22,6 +22,8 @@ RULES = (
     ('never show a transaction record ID as its name', re.compile(r"Transaction \$\{[^}]*recordId[^}]*\}")),
     ('use the mobile-data setting name', re.compile(r"Use unrestricted networks")),
     ('use the shorter unavailable alert label', re.compile(r"Not applied alerts")),
+    ('use sentence case for account creation', re.compile(r"\bAdd Account\b")),
+    ('use turn on/off wording for notification permissions', re.compile(r"\b(?:Enable|Disable) in notification settings\b|\bEnable\b")),
 )
 PREFERRED_TERMS = (
     "Saved on this device",
@@ -30,7 +32,11 @@ PREFERRED_TERMS = (
     "Delete transaction?",
     "Needs review",
     "Sync on mobile data",
-    "Edits not applied",
+    "Rejected edit alerts",
+    "Allow notifications",
+    "Turn on in notification settings",
+    "Turn off in notification settings",
+    "Essentials",
 )
 
 

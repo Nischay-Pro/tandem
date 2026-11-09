@@ -584,7 +584,6 @@ internal fun BudgetRulesScreen(
         }
     val activeRules = remember(rules) { rules.filterNot { it.recordBody()?.booleanValue("tombstone") == true } }
     PageLazyColumn {
-        item(key = "budget-rules-title") { Heading("Budget rules") }
         if (activeRules.isEmpty()) {
             item(key = "budget-rules-empty") {
                 SurfaceCard {

@@ -161,20 +161,38 @@ internal fun AppHeader(
     conflictTitle: String?,
 ) {
     val palette = tandemPalette
+    val headerCategoryGroups =
+        liveBudgetMonth?.groups
+            ?: if (state.selectedBudgetId.isBlank()) previewCategoryGroups else emptyList()
+    val headerGroup =
+        headerCategoryGroups.firstOrNull { it.id == state.selectedCategoryGroupId }
+            ?: headerCategoryGroups.firstOrNull()
+    val headerGroupName = headerGroup?.name
+    val headerCategoryName =
+        headerCategoryGroups
+            .asSequence()
+            .flatMap { it.categories.asSequence() }
+            .firstOrNull { it.id == state.selectedCategoryId }
+            ?.name
+    val previewCategoryName =
+        headerCategoryGroups
+            .firstOrNull()
+            ?.categories
+            ?.firstOrNull()
+            ?.name ?: route.title
     val headerTitle =
         when (route) {
             AppRoute.NEW_TRANSACTION -> "Add transaction"
             AppRoute.BUDGET -> state.selectedBudget
             AppRoute.CATEGORY_GROUP ->
-                liveBudgetMonth?.groups?.firstOrNull { it.id == state.selectedCategoryGroupId }?.name
-                    ?: if (state.selectedBudgetId.isBlank()) route.title else "Category group"
+                headerGroupName ?: if (state.selectedBudgetId.isBlank()) route.title else "Category group"
             AppRoute.CATEGORY_DETAIL ->
-                liveBudgetMonth
-                    ?.groups
-                    ?.asSequence()
-                    ?.flatMap { it.categories.asSequence() }
-                    ?.firstOrNull { it.id == state.selectedCategoryId }
-                    ?.name ?: if (state.selectedBudgetId.isBlank()) route.title else "Category"
+                headerCategoryName
+                    ?: if (state.selectedBudgetId.isBlank()) {
+                        previewCategoryName
+                    } else {
+                        "Category"
+                    }
             AppRoute.ACCOUNT_DETAIL ->
                 if (state.selectedBudgetId.isNotBlank()) {
                     liveAccounts.firstOrNull { it.id == state.selectedAccountId }?.name ?: "Account"

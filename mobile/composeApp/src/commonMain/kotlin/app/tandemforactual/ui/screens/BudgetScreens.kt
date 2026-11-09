@@ -641,7 +641,7 @@ internal fun BudgetScreen(
                                     if (liveTransactions.isNotEmpty()) {
                                         "${liveTransactions.size} recent Actual transactions cached"
                                     } else {
-                                        "Sample data · nothing has synced"
+                                        "Nothing has synced"
                                     },
                                     color = palette.muted,
                                     fontSize = TandemTypography.caption,

@@ -19,6 +19,10 @@ internal const val BUDGET_GROUP_ORDER_SCOPE = "category-groups"
 internal fun isRetryableBudgetMutationStatus(httpStatus: Int?): Boolean =
     httpStatus == 408 || httpStatus == 425 || httpStatus == 429 || (httpStatus != null && httpStatus in 500..599)
 
+internal fun shouldKeepBudgetMutationQueued(httpStatus: Int?): Boolean =
+    httpStatus == null ||
+        isRetryableBudgetMutationStatus(httpStatus)
+
 internal enum class BudgetReorderKind {
     CATEGORY,
     CATEGORY_GROUP,

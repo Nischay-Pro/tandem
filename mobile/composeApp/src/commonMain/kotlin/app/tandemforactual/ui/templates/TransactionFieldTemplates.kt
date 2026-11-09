@@ -268,7 +268,7 @@ internal fun TransactionAmountField(
     val cursorAlpha by
         rememberInfiniteTransition(label = "amount-cursor").animateFloat(
             initialValue = 1f,
-            targetValue = 0f,
+            targetValue = 0.45f,
             animationSpec = infiniteRepeatable(tween(520), repeatMode = RepeatMode.Reverse),
             label = "amount-cursor-alpha",
         )
@@ -296,7 +296,7 @@ internal fun TransactionAmountField(
                         if (showCursor && caret != null) {
                             val inset = 3.dp.toPx()
                             drawLine(
-                                color = amountColor.copy(alpha = cursorAlpha),
+                                color = palette.text.copy(alpha = cursorAlpha),
                                 start = Offset(caret.left, caret.top + inset),
                                 end = Offset(caret.left, caret.bottom - inset),
                                 strokeWidth = 2.dp.toPx(),

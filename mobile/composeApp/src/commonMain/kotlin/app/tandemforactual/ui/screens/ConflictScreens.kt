@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Text
@@ -26,7 +25,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import app.tandemforactual.ui.components.Badge
 import app.tandemforactual.ui.components.BodyText
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
@@ -73,8 +71,7 @@ internal fun ConflictInboxScreen(
     PageLazyColumn {
         if (!isLiveBudget) item(key = "conflicts-sample-banner") { SampleBanner() }
         item(key = "conflicts-title") {
-            Heading(
-                "Needs review",
+            BodyText(
                 if (isLiveBudget) "Choose whether to keep your edit or the latest Actual version." else "Choose which version to keep.",
             )
         }
@@ -87,9 +84,6 @@ internal fun ConflictInboxScreen(
                 }
             }
         } else {
-            item(key = "conflicts-section-title") {
-                SectionCard("Needs review", "${conflicts.size} edits") {}
-            }
             items(conflicts, key = { "conflict:${it.id}" }) { conflict ->
                 SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
                     ListRow(
@@ -411,16 +405,14 @@ internal fun RejectedWriteScreen(
         val operationAmountText = operationAmount?.let(state::formatSignedCurrency) ?: "Unavailable"
         var confirmDismiss by rememberSaveable(operation?.operationId) { mutableStateOf(false) }
         PageColumn {
-            Badge("Not applied", tandemPalette.negative)
             Heading("Change not applied")
             if (operation == null) {
                 BodyText("No unapplied edits need review.")
             } else {
-                SectionCard(transaction?.payee ?: "Transaction", transaction?.dateLabel ?: "Not applied") {
+                SectionCard(transaction?.payee ?: "Deleted transaction", transaction?.dateLabel ?: operationAmountText) {
                     ListRow(
                         "Your edit",
-                        "Not applied",
-                        operation.optimisticAmountMinor?.let { state.formatSignedCurrency(it) } ?: "Unavailable",
+                        trailing = operationAmountText,
                     )
                 }
                 PrimaryButton("Remove edit", enabled = !state.readOnlyMode) { confirmDismiss = true }
@@ -444,10 +436,9 @@ internal fun RejectedWriteScreen(
         return
     }
     PageColumn {
-        Badge("Not applied", tandemPalette.negative)
         Heading("Change not applied")
         SectionCard("Sample edit", "Corner Market · ${formatShortDate(SampleDate(2026, 5, 14))}") {
-            ListRow("Your edit", "Not applied", state.formatCurrency(1_200))
+            ListRow("Your edit", trailing = state.formatCurrency(1_200))
             DividerLine()
             ListRow(
                 "Reason",
@@ -456,9 +447,6 @@ internal fun RejectedWriteScreen(
                 options = ListRowOptions(trailingColor = tandemPalette.warning),
             )
         }
-        PreviewNote(
-            "The change wasn’t saved. You can dismiss this message.",
-        )
         PrimaryButton("Close details") { navigation.back() }
     }
 }

@@ -189,11 +189,11 @@ internal fun CategoryDetailScreen(
     PageColumn {
         if (!isLiveBudget) SampleBanner()
         if (category == null) {
-            Heading("Category details", state.selectedMonth)
+            LabelText(state.selectedMonth)
             BodyText("This category isn’t in the saved plan for this month.")
         } else {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                Column(Modifier.weight(1f)) { Heading(category.name, state.selectedMonth) }
+                Column(Modifier.weight(1f)) { LabelText(state.selectedMonth) }
                 if (isLiveBudget) {
                     TandemIconButton(
                         Lucide.Pencil,

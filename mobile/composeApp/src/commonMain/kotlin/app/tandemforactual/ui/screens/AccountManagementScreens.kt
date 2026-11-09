@@ -258,10 +258,9 @@ internal fun AccountOptionsScreen(
     PageColumn {
         if (!isLiveBudget) SampleBanner()
         if (accountName == null) {
-            Heading("Account options")
             EmptyState("Account unavailable", "This account isn’t saved on this device.")
         } else {
-            Heading(accountName, "Account options")
+            Heading(accountName)
             SectionCard("Account", "Read-only details") {
                 ListRow("Name", "Account name", accountName)
                 DividerLine()

@@ -81,7 +81,7 @@ internal fun LocalDataScreen(
         AmountHero(
             "Cached records",
             formatInteger(recordCount),
-            "${formatInteger(mobileSession.cachedTransactionCount)} transactions in the selected budget",
+            if (hasSelectedBudget) "Available offline" else null,
         )
         SectionCard("On this device", syncStatus, animateDetail = true) {
             ListRow(

@@ -34,6 +34,19 @@ class AppStateTest {
     }
 
     @Test
+    fun oldEssentialsLayoutLabelsMigrateToEssentials() {
+        mapOf(
+            "Essentials" to "Essentials",
+            "Essentials first" to "Essentials",
+            "Bills first" to "Essentials",
+        ).forEach { (oldLabel, expectedLabel) ->
+            val restored = AppState().apply { restorePersistentSettings(mapOf("homeLayout" to oldLabel)) }
+
+            assertEquals(expectedLabel, restored.homeLayout)
+        }
+    }
+
+    @Test
     fun mainCloudIndicatorDistinguishesOffSyncedSyncingAndAttentionStates() {
         fun status(
             syncEnabled: Boolean = true,

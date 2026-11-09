@@ -53,9 +53,6 @@ internal fun SyncCenterScreen(
         val budgetMutations = mobileSession.pendingBudgetMutationsFor(state.selectedBudgetId)
         val pendingCount = attention.size + budgetMutations.size
         PageLazyColumn {
-            item(key = "sync-center-title") {
-                Heading("Sync")
-            }
             item(key = "sync-center-budget-summary") {
                 SurfaceCard {
                     Column(
@@ -181,7 +178,6 @@ internal fun SyncCenterScreen(
     }
     PageColumn {
         SampleBanner()
-        Heading("Sync", "Review pending edits and server activity.")
         SurfaceCard {
             Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small), verticalAlignment = Alignment.CenterVertically) {

@@ -1694,7 +1694,7 @@ internal class TandemMobileSession(
             throw error
         } catch (error: TandemApiException) {
             isServerReachable = error.httpStatus != null
-            budgetActionShouldRetry = isRetryableBudgetMutationStatus(error.httpStatus)
+            budgetActionShouldRetry = shouldKeepBudgetMutationQueued(error.httpStatus)
             if (actionApplied) {
                 budgetActionWasAppliedButRefreshFailed = true
                 setBudgetActionMessage(
@@ -1702,11 +1702,14 @@ internal class TandemMobileSession(
                     InlineMessageKind.WARNING,
                 )
             } else {
-                budgetActionMessage = error.message ?: failureMessage
+                // Network failures are handled by the persistent queue. Do not surface the
+                // transport exception as if the category edit itself was rejected.
+                budgetActionMessage = if (error.httpStatus == null) null else error.message ?: failureMessage
             }
             return false
         } catch (_: Exception) {
             isServerReachable = false
+            budgetActionShouldRetry = true
             if (actionApplied) {
                 budgetActionWasAppliedButRefreshFailed = true
                 setBudgetActionMessage(
@@ -1714,7 +1717,7 @@ internal class TandemMobileSession(
                     InlineMessageKind.WARNING,
                 )
             } else {
-                budgetActionMessage = failureMessage
+                budgetActionMessage = null
             }
             return false
         } finally {

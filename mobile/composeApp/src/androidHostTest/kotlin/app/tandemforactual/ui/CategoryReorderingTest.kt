@@ -18,6 +18,9 @@ class CategoryReorderingTest {
         assertFalse(isRetryableBudgetMutationStatus(401))
         assertFalse(isRetryableBudgetMutationStatus(404))
         assertFalse(isRetryableBudgetMutationStatus(null))
+        assertTrue(shouldKeepBudgetMutationQueued(null))
+        assertTrue(shouldKeepBudgetMutationQueued(503))
+        assertFalse(shouldKeepBudgetMutationQueued(401))
     }
 
     @Test

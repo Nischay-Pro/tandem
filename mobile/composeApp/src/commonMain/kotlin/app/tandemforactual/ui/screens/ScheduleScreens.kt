@@ -232,7 +232,6 @@ internal fun UpcomingSchedulesScreen(
             accounts.filterNot(LiveAccountSummary::closed).sortedBy { it.name.lowercase() }.map { it.id to it.name }
         }
     PageLazyColumn {
-        item(key = "upcoming-schedules-heading") { Heading("Upcoming bills") }
         if (schedules.isEmpty()) {
             item(key = "upcoming-schedules-empty") {
                 SurfaceCard {
