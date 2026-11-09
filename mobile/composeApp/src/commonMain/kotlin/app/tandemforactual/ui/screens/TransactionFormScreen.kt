@@ -6,7 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,7 +35,6 @@ import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
-import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.model.LiveAccountSummary
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.Lucide
@@ -193,6 +191,9 @@ internal fun TransactionFormScreen(
                     AnimatedReveal(visible = amountEntryMessage != null) {
                         InlineMessage(amountEntryMessage.orEmpty(), InlineMessageKind.ERROR)
                     }
+                    AnimatedReveal(visible = mobileSession.transactionWriteMessage != null) {
+                        InlineMessage(mobileSession.transactionWriteMessage.orEmpty(), InlineMessageKind.ERROR)
+                    }
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         TransactionTypePicker(
                             state.transactionType,
@@ -250,11 +251,6 @@ internal fun TransactionFormScreen(
                             },
                         ),
                     )
-                    AnimatedReveal(visible = mobileSession.transactionWriteMessage != null) {
-                        SurfaceCard {
-                            Column(Modifier.padding(TandemSpacing.large)) { BodyText(mobileSession.transactionWriteMessage.orEmpty()) }
-                        }
-                    }
                     Spacer(Modifier.height(if (keypadVisible) AMOUNT_KEYPAD_HEIGHT + 68.dp else 76.dp))
                 }
                 if (keypadVisible) {
@@ -463,6 +459,9 @@ internal fun TransactionFormScreen(
                 AnimatedReveal(visible = amountEntryMessage != null) {
                     InlineMessage(amountEntryMessage.orEmpty(), InlineMessageKind.ERROR)
                 }
+                AnimatedReveal(visible = mobileSession.transactionWriteMessage != null) {
+                    InlineMessage(mobileSession.transactionWriteMessage.orEmpty(), InlineMessageKind.ERROR)
+                }
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     TransactionTypePicker(
                         state.transactionType,
@@ -504,11 +503,6 @@ internal fun TransactionFormScreen(
                         },
                     ),
                 )
-                mobileSession.transactionWriteMessage?.let { message ->
-                    SurfaceCard {
-                        Column(Modifier.padding(TandemSpacing.large)) { BodyText(message) }
-                    }
-                }
                 Spacer(Modifier.height(if (keypadVisible) AMOUNT_KEYPAD_HEIGHT + 68.dp else 76.dp))
             }
             if (keypadVisible) {
