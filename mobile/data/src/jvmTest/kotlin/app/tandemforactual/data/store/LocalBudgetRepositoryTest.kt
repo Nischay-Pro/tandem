@@ -84,12 +84,13 @@ class LocalBudgetRepositoryTest {
                 assertFalse(repository.beginBudgetMutation(mutation.operationId))
                 repository.markBudgetMutationUncertain(mutation.operationId, "network-error")
                 assertEquals("uncertain", repository.readPendingWrites(BUDGET).single().status)
-                assertTrue(repository.readBudgetMutationQueue().items.isEmpty())
+                assertEquals(listOf(mutation.operationId), repository.readBudgetMutationQueue().items.map { it.operationId })
 
                 repository.retryBudgetMutationAfterReview(mutation.operationId)
                 assertTrue(repository.beginBudgetMutation(mutation.operationId))
                 repository.markBudgetMutationConflict(mutation.operationId, "http-409")
                 assertEquals("conflict", repository.readPendingWrites(BUDGET).single().status)
+                assertEquals(listOf(mutation.operationId), repository.readBudgetMutationQueue().items.map { it.operationId })
 
                 repository.retryBudgetMutationAfterReview(mutation.operationId)
                 assertTrue(repository.beginBudgetMutation(mutation.operationId))

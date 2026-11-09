@@ -47,6 +47,44 @@ class TandemApiClientTest {
     }
 
     @Test
+    fun queuedCategoryRetriesReuseTheirPersistedIdempotencyKey() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            val engine =
+                MockEngine { request ->
+                    requests += request
+                    respond("""{"status":"ok"}""", headers = jsonHeaders())
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                client.restoreSession("https://tandem.example", "device-token")
+                val operationId = "00000000-0000-0000-0000-000000000001"
+                repeat(2) {
+                    client.manageBudgetCategory(
+                        budgetId = "budget-1",
+                        categoryId = "category-1",
+                        action = "hide",
+                        targetId = null,
+                        encryptionPassword = null,
+                        idempotencyKey = operationId,
+                    )
+                }
+
+                assertEquals(2, requests.size)
+                assertEquals(operationId, requests[0].headers["Idempotency-Key"])
+                assertEquals(operationId, requests[1].headers["Idempotency-Key"])
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
     fun forgettingSessionWaitsForAnActiveMultiRequestSync() =
         runBlocking {
             val client = TandemApiClient()

@@ -242,7 +242,15 @@ class LocalBudgetRepository(
         val rows = outbox.findByRecordType(BUDGET_MUTATION_RECORD_TYPE)
         val metadata = outbox.find(BUDGET_MUTATION_METADATA_OPERATION_ID)?.patchJson
         return LocalBudgetMutationQueueSnapshot(
-            items = rows.filter { it.status == LocalWriteStatus.QUEUED.name.lowercase() },
+            items =
+                rows.filter {
+                    it.status in
+                        setOf(
+                            LocalWriteStatus.QUEUED.name.lowercase(),
+                            LocalWriteStatus.UNCERTAIN.name.lowercase(),
+                            LocalWriteStatus.CONFLICT.name.lowercase(),
+                        )
+                },
             metadataJson = metadata,
         )
     }

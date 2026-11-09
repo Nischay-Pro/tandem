@@ -424,13 +424,17 @@ class TandemApiClient(
         categoryId: String,
         name: String,
         encryptionPassword: String?,
+        idempotencyKey: String? = null,
     ) {
-        withMaintenanceOperation(maintenanceSignature("category-rename", budgetId, categoryId, name)) { idempotencyKey ->
+        withMaintenanceOperation(
+            maintenanceSignature("category-rename", budgetId, categoryId, name),
+            idempotencyKey,
+        ) { operationKey ->
             withGeneratedApi {
                 requireOk(
                     BudgetsApi.renameBudgetCategory(
                         xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
+                        idempotencyKey = operationKey,
                         budgetId = budgetId,
                         categoryId = categoryId,
                         body = buildJsonObject { put("name", name) }.toMap(),
@@ -445,13 +449,17 @@ class TandemApiClient(
         categoryGroupId: String,
         name: String,
         encryptionPassword: String?,
+        idempotencyKey: String? = null,
     ): String =
-        withMaintenanceOperation(maintenanceSignature("category-create", budgetId, categoryGroupId, name)) { idempotencyKey ->
+        withMaintenanceOperation(
+            maintenanceSignature("category-create", budgetId, categoryGroupId, name),
+            idempotencyKey,
+        ) { operationKey ->
             withGeneratedApi {
                 BudgetsApi
                     .createBudgetCategory(
                         xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
+                        idempotencyKey = operationKey,
                         budgetId = budgetId,
                         body =
                             buildJsonObject {
@@ -477,13 +485,17 @@ class TandemApiClient(
         name: String,
         isIncome: Boolean,
         encryptionPassword: String?,
+        idempotencyKey: String? = null,
     ): String =
-        withMaintenanceOperation(maintenanceSignature("category-group-create", budgetId, name, isIncome.toString())) { idempotencyKey ->
+        withMaintenanceOperation(
+            maintenanceSignature("category-group-create", budgetId, name, isIncome.toString()),
+            idempotencyKey,
+        ) { operationKey ->
             withGeneratedApi {
                 BudgetsApi
                     .createBudgetCategoryGroup(
                         xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
+                        idempotencyKey = operationKey,
                         budgetId = budgetId,
                         body =
                             buildJsonObject {
@@ -508,13 +520,17 @@ class TandemApiClient(
         name: String?,
         targetId: String?,
         encryptionPassword: String?,
+        idempotencyKey: String? = null,
     ) {
-        withMaintenanceOperation(maintenanceSignature("category-group-$action", budgetId, groupId, name, targetId)) { idempotencyKey ->
+        withMaintenanceOperation(
+            maintenanceSignature("category-group-$action", budgetId, groupId, name, targetId),
+            idempotencyKey,
+        ) { operationKey ->
             withGeneratedApi {
                 requireOk(
                     BudgetsApi.manageBudgetCategoryGroup(
                         xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
+                        idempotencyKey = operationKey,
                         budgetId = budgetId,
                         groupId = groupId,
                         body =
@@ -536,15 +552,17 @@ class TandemApiClient(
         targetId: String?,
         encryptionPassword: String?,
         targetGroupId: String? = null,
+        idempotencyKey: String? = null,
     ) {
         withMaintenanceOperation(
             maintenanceSignature("category-$action", budgetId, categoryId, targetId, targetGroupId),
-        ) { idempotencyKey ->
+            idempotencyKey,
+        ) { operationKey ->
             withGeneratedApi {
                 requireOk(
                     BudgetsApi.manageBudgetCategory(
                         xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
+                        idempotencyKey = operationKey,
                         budgetId = budgetId,
                         categoryId = categoryId,
                         body =
@@ -802,13 +820,17 @@ class TandemApiClient(
         categoryId: String,
         transferCategoryId: String?,
         encryptionPassword: String?,
+        idempotencyKey: String? = null,
     ) {
-        withMaintenanceOperation(maintenanceSignature("category-delete", budgetId, categoryId, transferCategoryId)) { idempotencyKey ->
+        withMaintenanceOperation(
+            maintenanceSignature("category-delete", budgetId, categoryId, transferCategoryId),
+            idempotencyKey,
+        ) { operationKey ->
             withGeneratedApi {
                 requireOk(
                     BudgetsApi.deleteBudgetCategory(
                         xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
+                        idempotencyKey = operationKey,
                         budgetId = budgetId,
                         categoryId = categoryId,
                         body =
@@ -912,29 +934,33 @@ class TandemApiClient(
 
     private suspend fun <T> withMaintenanceOperation(
         signature: String,
+        idempotencyKeyOverride: String? = null,
         request: suspend (String) -> T,
     ): T {
         val idempotencyKey =
-            maintenanceKeyMutex.withLock {
-                pendingMaintenanceKeys.getOrPut(signature) { Uuid.random().toString() }
-            }
+            idempotencyKeyOverride
+                ?: maintenanceKeyMutex.withLock {
+                    pendingMaintenanceKeys.getOrPut(signature) { Uuid.random().toString() }
+                }
         return try {
             request(idempotencyKey).also {
-                maintenanceKeyMutex.withLock {
-                    if (pendingMaintenanceKeys[signature] == idempotencyKey) {
-                        pendingMaintenanceKeys.remove(signature)
+                if (idempotencyKeyOverride == null) {
+                    maintenanceKeyMutex.withLock {
+                        if (pendingMaintenanceKeys[signature] == idempotencyKey) {
+                            pendingMaintenanceKeys.remove(signature)
+                        }
                     }
                 }
             }
         } catch (error: TandemApiException) {
-            if (error.httpStatus == 400 || error.httpStatus == 429) {
+            if (idempotencyKeyOverride == null && (error.httpStatus == 400 || error.httpStatus == 429)) {
                 maintenanceKeyMutex.withLock {
                     if (pendingMaintenanceKeys[signature] == idempotencyKey) {
                         pendingMaintenanceKeys.remove(signature)
                     }
                 }
             }
-            if (error.errorCode == "operation_uncertain" || error.errorCode == "operation_rejected") {
+            if (idempotencyKeyOverride == null && (error.errorCode == "operation_uncertain" || error.errorCode == "operation_rejected")) {
                 // The server has definitively stopped processing this key. A later call is a
                 // deliberate user retry and must get a new key; uncertain results still tell
                 // the user to check Actual before submitting again.

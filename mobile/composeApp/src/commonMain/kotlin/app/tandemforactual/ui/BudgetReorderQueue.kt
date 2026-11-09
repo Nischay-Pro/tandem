@@ -542,6 +542,30 @@ internal data class BudgetReorderQueueState(
         )
     }
 
+    fun holdForReview(
+        move: QueuedBudgetReorder,
+        message: String,
+    ): BudgetReorderQueueState {
+        if (moves.firstOrNull() != move) return this
+        val key = budgetReorderStatusKey(move.budgetId, move.scopeId)
+        val current = statusFor(move.budgetId, move.scopeId)
+        return copy(
+            waitingForConnection = true,
+            statuses = statuses + (key to current.copy(message = message, warning = true)),
+        )
+    }
+
+    fun discardOperation(operationId: String): BudgetReorderQueueState {
+        val move = moves.firstOrNull { it.operationId == operationId } ?: return this
+        val discarded = failHead(move, "").copy(waitingForConnection = false)
+        return discarded.copy(
+            statuses =
+                discarded.statuses.mapValues { (_, status) ->
+                    if (status.message.isNullOrEmpty()) status.copy(message = null, warning = false) else status
+                },
+        )
+    }
+
     fun resumeAfterConnection(): BudgetReorderQueueState {
         val queuedKeys = moves.map { budgetReorderStatusKey(it.budgetId, it.scopeId) }.distinct()
         return copy(

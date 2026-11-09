@@ -260,6 +260,34 @@ class CategoryReorderingTest {
     }
 
     @Test
+    fun uncertainCategoryChangeKeepsItsLocalResultUntilDiscarded() {
+        val hide =
+            QueuedBudgetReorder(
+                budgetId = "budget",
+                scopeId = "utilities",
+                kind = BudgetReorderKind.HIDE_CATEGORY,
+                itemId = "mobile",
+                targetId = null,
+                desiredOrder = listOf("internet"),
+                encryptionPassword = null,
+            )
+        val message = "Status unknown. Check Actual before trying again."
+        val held = BudgetReorderQueueState().enqueue(hide).holdForReview(hide, message)
+
+        assertEquals(listOf(hide), held.moves)
+        assertEquals(true, held.waitingForConnection)
+        assertEquals(true, held.categoryVisibilityOverridesFor("budget")["mobile"])
+        assertEquals(message, held.statusFor("budget", "utilities").message)
+
+        val discarded = held.discardOperation(hide.operationId)
+
+        assertTrue(discarded.moves.isEmpty())
+        assertEquals(false, discarded.waitingForConnection)
+        assertEquals(null, discarded.categoryVisibilityOverridesFor("budget")["mobile"])
+        assertEquals(null, discarded.statusFor("budget", "utilities").message)
+    }
+
+    @Test
     fun appliedCategoryMoveKeepsItsOptimisticOrderWhileBudgetRefreshWaits() {
         val originalOrder = listOf("rent", "utilities", "internet")
         val move =

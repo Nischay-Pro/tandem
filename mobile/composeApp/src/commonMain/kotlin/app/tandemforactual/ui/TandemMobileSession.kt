@@ -305,7 +305,12 @@ internal class TandemMobileSession(
                 moves.fold(BudgetReorderQueueState()) { current, move -> current.enqueue(move) }.copy(
                     categoryGroupIdAliases = metadata.categoryGroupIdAliases,
                     categoryIdAliases = metadata.categoryIdAliases,
-                    waitingForConnection = metadata.waitingForConnection && moves.isNotEmpty(),
+                    waitingForConnection =
+                        moves.isNotEmpty() &&
+                            (
+                                metadata.waitingForConnection ||
+                                    restoredFromRoom.items.any { it.status in setOf("uncertain", "conflict") }
+                            ),
                 )
             } else {
                 val saved =
@@ -435,7 +440,11 @@ internal class TandemMobileSession(
                     .singleOrNull()
                     ?.copy(operationId = operation.operationId)
                     ?: return@launch
-            budgetReorderQueue = budgetReorderQueue.enqueue(request)
+            if (budgetReorderQueue.moves.none { it.operationId == operation.operationId }) {
+                budgetReorderQueue = budgetReorderQueue.enqueue(request)
+            } else {
+                budgetReorderQueue = budgetReorderQueue.resumeAfterConnection()
+            }
             persistCurrentBudgetReorderQueue()
             retryQueuedBudgetReorders()
         }
@@ -798,7 +807,12 @@ internal class TandemMobileSession(
                         else -> null
                     }
                 if (stateMessage != null) {
-                    budgetReorderQueue = budgetReorderQueue.failHead(request, stateMessage)
+                    budgetReorderQueue =
+                        if (stored?.status in setOf("uncertain", "conflict")) {
+                            budgetReorderQueue.holdForReview(request, stateMessage)
+                        } else {
+                            budgetReorderQueue.failHead(request, stateMessage)
+                        }
                     persistCurrentBudgetReorderQueue()
                 } else {
                     delay(100)
@@ -835,6 +849,7 @@ internal class TandemMobileSession(
                                     "move",
                                     request.targetId,
                                     request.encryptionPassword,
+                                    idempotencyKey = request.operationId,
                                 )
                             BudgetReorderKind.HIDE_CATEGORY ->
                                 manageBudgetCategory(
@@ -843,6 +858,7 @@ internal class TandemMobileSession(
                                     "hide",
                                     null,
                                     request.encryptionPassword,
+                                    idempotencyKey = request.operationId,
                                 )
                             BudgetReorderKind.SHOW_CATEGORY ->
                                 manageBudgetCategory(
@@ -851,6 +867,7 @@ internal class TandemMobileSession(
                                     "show",
                                     null,
                                     request.encryptionPassword,
+                                    idempotencyKey = request.operationId,
                                 )
                             BudgetReorderKind.CREATE_CATEGORY_GROUP -> {
                                 createdCategoryGroupId =
@@ -859,6 +876,7 @@ internal class TandemMobileSession(
                                         request.name.orEmpty(),
                                         request.isIncome,
                                         request.encryptionPassword,
+                                        request.operationId,
                                     )
                                 createdCategoryGroupId != null
                             }
@@ -870,6 +888,7 @@ internal class TandemMobileSession(
                                     request.name,
                                     null,
                                     request.encryptionPassword,
+                                    request.operationId,
                                 )
                             BudgetReorderKind.CATEGORY_GROUP ->
                                 manageBudgetCategoryGroup(
@@ -879,6 +898,7 @@ internal class TandemMobileSession(
                                     null,
                                     request.targetId,
                                     request.encryptionPassword,
+                                    request.operationId,
                                 )
                             BudgetReorderKind.CREATE_CATEGORY -> {
                                 createdCategoryId =
@@ -887,11 +907,18 @@ internal class TandemMobileSession(
                                         request.name.orEmpty(),
                                         request.parentGroupId.orEmpty(),
                                         request.encryptionPassword,
+                                        request.operationId,
                                     )
                                 createdCategoryId != null
                             }
                             BudgetReorderKind.RENAME_CATEGORY ->
-                                renameBudgetCategory(request.budgetId, request.itemId, request.name.orEmpty(), request.encryptionPassword)
+                                renameBudgetCategory(
+                                    request.budgetId,
+                                    request.itemId,
+                                    request.name.orEmpty(),
+                                    request.encryptionPassword,
+                                    request.operationId,
+                                )
                             BudgetReorderKind.MOVE_CATEGORY_TO_GROUP ->
                                 manageBudgetCategory(
                                     request.budgetId,
@@ -900,13 +927,36 @@ internal class TandemMobileSession(
                                     null,
                                     request.encryptionPassword,
                                     request.parentGroupId,
+                                    request.operationId,
                                 )
                             BudgetReorderKind.DELETE_CATEGORY ->
-                                deleteBudgetCategory(request.budgetId, request.itemId, request.targetId, request.encryptionPassword)
+                                deleteBudgetCategory(
+                                    request.budgetId,
+                                    request.itemId,
+                                    request.targetId,
+                                    request.encryptionPassword,
+                                    request.operationId,
+                                )
                             BudgetReorderKind.HIDE_CATEGORY_GROUP ->
-                                manageBudgetCategoryGroup(request.budgetId, request.itemId, "hide", null, null, request.encryptionPassword)
+                                manageBudgetCategoryGroup(
+                                    request.budgetId,
+                                    request.itemId,
+                                    "hide",
+                                    null,
+                                    null,
+                                    request.encryptionPassword,
+                                    request.operationId,
+                                )
                             BudgetReorderKind.SHOW_CATEGORY_GROUP ->
-                                manageBudgetCategoryGroup(request.budgetId, request.itemId, "show", null, null, request.encryptionPassword)
+                                manageBudgetCategoryGroup(
+                                    request.budgetId,
+                                    request.itemId,
+                                    "show",
+                                    null,
+                                    null,
+                                    request.encryptionPassword,
+                                    request.operationId,
+                                )
                             BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE,
                             BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
                             BudgetReorderKind.REFRESH_CATEGORY_CREATE,
@@ -921,21 +971,21 @@ internal class TandemMobileSession(
                 repository?.remapPendingCategoryReferences(request.budgetId, request.itemId, createdCategoryIdAfterAction)
             }
             val refreshFailed = budgetActionWasAppliedButRefreshFailed
+            val operationOutcomeUncertain =
+                lastBudgetActionErrorCode == "operation_uncertain" ||
+                    lastBudgetActionHttpStatus == 408 ||
+                    lastBudgetActionHttpStatus in 500..599
             if (refreshFailed || moved) {
                 repository?.completeBudgetMutation(request.operationId)
+            } else if (operationOutcomeUncertain) {
+                repository?.markBudgetMutationUncertain(
+                    request.operationId,
+                    lastBudgetActionErrorCode ?: "http-$lastBudgetActionHttpStatus",
+                )
             } else if (isRefreshOnlyRequest) {
                 repository?.returnBudgetMutationToQueue(request.operationId, "refresh-unavailable")
             } else if (lastBudgetActionHttpStatus == 409) {
                 repository?.markBudgetMutationConflict(request.operationId, lastBudgetActionErrorCode ?: "http-409")
-            } else if (
-                lastBudgetActionErrorCode != null &&
-                (
-                    lastBudgetActionHttpStatus == null ||
-                        lastBudgetActionHttpStatus == 408 ||
-                        lastBudgetActionHttpStatus in 500..599
-                )
-            ) {
-                repository?.markBudgetMutationUncertain(request.operationId, lastBudgetActionErrorCode ?: "network-error")
             } else if (budgetActionShouldRetry) {
                 repository?.returnBudgetMutationToQueue(request.operationId, lastBudgetActionErrorCode ?: "retry-later")
             } else {
@@ -975,19 +1025,19 @@ internal class TandemMobileSession(
                 // state and show its retryable refresh status in the queue;
                 // the sync transport error belongs on the cloud indicator.
                 budgetReorderQueue = budgetReorderQueue.awaitRefresh(request, "Saved in Actual. Waiting for the budget to refresh.")
+            } else if (operationOutcomeUncertain) {
+                if (lastBudgetActionHttpStatus == 409) {
+                    withoutBudgetActionFeedback { synchronize(request.budgetId, request.encryptionPassword) }
+                }
+                budgetReorderQueue =
+                    budgetReorderQueue.holdForReview(
+                        request,
+                        "Status unknown. Check Actual before trying again.",
+                    )
             } else if (lastBudgetActionHttpStatus == 409) {
                 withoutBudgetActionFeedback { synchronize(request.budgetId, request.encryptionPassword) }
                 val message = lastBudgetActionErrorMessage ?: "Needs review. The budget changed in Actual."
                 budgetReorderQueue = budgetReorderQueue.failHead(request, message)
-            } else if (
-                lastBudgetActionErrorCode != null &&
-                (
-                    lastBudgetActionHttpStatus == null ||
-                        lastBudgetActionHttpStatus == 408 ||
-                        lastBudgetActionHttpStatus in 500..599
-                )
-            ) {
-                budgetReorderQueue = budgetReorderQueue.failHead(request, "Status unknown. Check Actual before trying again.")
             } else if ((
                     request.refreshOnly ||
                         request.kind in
@@ -1515,6 +1565,7 @@ internal class TandemMobileSession(
         categoryId: String,
         name: String,
         encryptionPassword: String?,
+        idempotencyKey: String? = null,
     ): Boolean {
         val cleanName = name.trim()
         if (cleanName.isBlank()) {
@@ -1526,7 +1577,7 @@ internal class TandemMobileSession(
             return false
         }
         return performBudgetAction(budgetId, encryptionPassword, "Couldn’t rename this category. Try again.") {
-            apiClient.renameBudgetCategory(budgetId, categoryId, cleanName, encryptionPassword)
+            apiClient.renameBudgetCategory(budgetId, categoryId, cleanName, encryptionPassword, idempotencyKey)
         }
     }
 
@@ -1535,6 +1586,7 @@ internal class TandemMobileSession(
         name: String,
         categoryGroupId: String,
         encryptionPassword: String?,
+        idempotencyKey: String? = null,
     ): String? {
         val cleanName = name.trim()
         if (cleanName.isBlank()) {
@@ -1548,7 +1600,7 @@ internal class TandemMobileSession(
         var categoryId: String? = null
         val created =
             performBudgetAction(budgetId, encryptionPassword, "Couldn’t create this category. Try again.") {
-                categoryId = apiClient.createBudgetCategory(budgetId, categoryGroupId, cleanName, encryptionPassword)
+                categoryId = apiClient.createBudgetCategory(budgetId, categoryGroupId, cleanName, encryptionPassword, idempotencyKey)
             }
         return categoryId.takeIf { created || budgetActionWasAppliedButRefreshFailed }
     }
@@ -1558,6 +1610,7 @@ internal class TandemMobileSession(
         name: String,
         isIncome: Boolean,
         encryptionPassword: String?,
+        idempotencyKey: String? = null,
     ): String? {
         val cleanName = name.trim()
         if (cleanName.isBlank() || cleanName.length > 100) {
@@ -1567,7 +1620,7 @@ internal class TandemMobileSession(
         var groupId: String? = null
         val created =
             performBudgetAction(budgetId, encryptionPassword, "Couldn’t create this category group. Try again.") {
-                groupId = apiClient.createBudgetCategoryGroup(budgetId, cleanName, isIncome, encryptionPassword)
+                groupId = apiClient.createBudgetCategoryGroup(budgetId, cleanName, isIncome, encryptionPassword, idempotencyKey)
             }
         return groupId.takeIf { created || budgetActionWasAppliedButRefreshFailed }
     }
@@ -1579,13 +1632,14 @@ internal class TandemMobileSession(
         name: String?,
         targetId: String?,
         encryptionPassword: String?,
+        idempotencyKey: String? = null,
     ): Boolean {
         if (action == "rename" && name.isNullOrBlank()) {
             budgetActionMessage = "Enter a category group name."
             return false
         }
         return performBudgetAction(budgetId, encryptionPassword, "Couldn’t update this category group. Try again.") {
-            apiClient.manageBudgetCategoryGroup(budgetId, groupId, action, name?.trim(), targetId, encryptionPassword)
+            apiClient.manageBudgetCategoryGroup(budgetId, groupId, action, name?.trim(), targetId, encryptionPassword, idempotencyKey)
         }
     }
 
@@ -1596,9 +1650,10 @@ internal class TandemMobileSession(
         targetId: String?,
         encryptionPassword: String?,
         targetGroupId: String? = null,
+        idempotencyKey: String? = null,
     ): Boolean =
         performBudgetAction(budgetId, encryptionPassword, "Couldn’t update this category. Try again.") {
-            apiClient.manageBudgetCategory(budgetId, categoryId, action, targetId, encryptionPassword, targetGroupId)
+            apiClient.manageBudgetCategory(budgetId, categoryId, action, targetId, encryptionPassword, targetGroupId, idempotencyKey)
         }
 
     suspend fun createBudgetPayee(
@@ -1795,9 +1850,10 @@ internal class TandemMobileSession(
         categoryId: String,
         transferCategoryId: String?,
         encryptionPassword: String?,
+        idempotencyKey: String? = null,
     ): Boolean =
         performBudgetAction(budgetId, encryptionPassword, "Couldn’t delete this category. Try again.") {
-            apiClient.deleteBudgetCategory(budgetId, categoryId, transferCategoryId, encryptionPassword)
+            apiClient.deleteBudgetCategory(budgetId, categoryId, transferCategoryId, encryptionPassword, idempotencyKey)
         }
 
     suspend fun manageBudgetSchedule(
@@ -2390,7 +2446,13 @@ internal class TandemMobileSession(
         clearUncertainWriteCheck()
         if (refuseWriteInReadOnlyMode()) return
         val localRepository = repository ?: return
+        val operation = localRepository.findWrite(operationId)
+        if (operation?.recordType == "budget-mutation") restoreBudgetReorderQueue()
         localRepository.discardWrite(operationId)
+        if (operation?.recordType == "budget-mutation") {
+            budgetReorderQueue = budgetReorderQueue.discardOperation(operationId)
+            retryQueuedBudgetReorders()
+        }
         loadLocalRecords(budgetId)
         transactionWriteMessage = "Your edit was discarded. Actual wasn’t changed."
     }
