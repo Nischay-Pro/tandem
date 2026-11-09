@@ -54,7 +54,8 @@ internal fun SyncCenterScreen(
                 it.recordType == "transaction" && it.status in setOf("queued", "conflict", "uncertain", "rejected")
             }
         val budgetMutations = mobileSession.pendingBudgetMutationsFor(state.selectedBudgetId)
-        val pendingCount = attention.size + budgetMutations.size
+        val budgetMutationReviews = mobileSession.budgetMutationReviewsFor(state.selectedBudgetId)
+        val pendingCount = attention.size + budgetMutations.size + budgetMutationReviews.size
         PageLazyColumn {
             item(key = "sync-center-budget-summary") {
                 SurfaceCard {
@@ -169,6 +170,30 @@ internal fun SyncCenterScreen(
                         )
                     }
                 }
+                items(budgetMutationReviews, key = { "budget-mutation-review:${it.operationId}" }) { operation ->
+                    val mutation = decodeBudgetReorderQueue(operation.patchJson).moves.singleOrNull()
+                    val categoryName = mobileSession.categoryRecords.firstOrNull { it.recordId == operation.recordId }?.recordName()
+                    val groupName = mobileSession.categoryGroupRecords.firstOrNull { it.recordId == operation.recordId }?.recordName()
+                    val itemName = mutation?.name ?: categoryName ?: groupName ?: "budget item"
+                    val title = budgetMutationTitle(operation.action, itemName)
+                    SurfaceCard {
+                        ListRow(
+                            title,
+                            when (operation.status) {
+                                "uncertain" -> "Status unknown · Check Actual before trying again"
+                                "conflict" -> "Needs review · The budget changed in Actual"
+                                else -> "Change not applied · Review it before trying again"
+                            },
+                            "Review",
+                            leading = RowLeading.Icon(Lucide.CloudAlert),
+                            options = ListRowOptions(trailingColor = tandemPalette.warning),
+                            onClick = {
+                                state.selectedConflictOperationId = operation.operationId
+                                navigation.open(AppRoute.UNCERTAIN_WRITE)
+                            },
+                        )
+                    }
+                }
             }
             item(key = "sync-write-message") {
                 AnimatedReveal(visible = mobileSession.transactionWriteMessage != null) {
@@ -218,3 +243,20 @@ internal fun SyncCenterScreen(
         }
     }
 }
+
+internal fun budgetMutationTitle(
+    action: String,
+    itemName: String,
+): String =
+    when (action) {
+        "CREATE_CATEGORY_GROUP" -> "Add group · $itemName"
+        "RENAME_CATEGORY_GROUP", "REFRESH_CATEGORY_GROUP_RENAME" -> "Rename group · $itemName"
+        "CREATE_CATEGORY", "REFRESH_CATEGORY_CREATE" -> "Add category · $itemName"
+        "RENAME_CATEGORY", "REFRESH_CATEGORY_RENAME" -> "Rename category · $itemName"
+        "HIDE_CATEGORY", "HIDE_CATEGORY_GROUP" -> "Hide · $itemName"
+        "SHOW_CATEGORY", "SHOW_CATEGORY_GROUP" -> "Show · $itemName"
+        "MOVE_CATEGORY_TO_GROUP" -> "Move · $itemName"
+        "DELETE_CATEGORY" -> "Delete · $itemName"
+        "CATEGORY", "CATEGORY_GROUP" -> "Reorder · $itemName"
+        else -> itemName
+    }

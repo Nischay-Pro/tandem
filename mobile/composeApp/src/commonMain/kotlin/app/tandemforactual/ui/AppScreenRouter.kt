@@ -497,11 +497,12 @@ internal fun ScreenContent(
         AppRoute.CONFLICT_INBOX -> ConflictInboxScreen(state, mobileSession, navigation, liveTransactions)
         AppRoute.CONFLICT_REVIEW -> ConflictReviewScreen(state, mobileSession, onResolveConflict, liveTransactions)
         AppRoute.UNCERTAIN_WRITE -> {
-            val selectedWriteStatus =
+            val selectedWrite =
                 mobileSession.pendingWrites
                     .firstOrNull { it.operationId == state.selectedConflictOperationId }
-                    ?.status
-            if (selectedWriteStatus == "rejected") {
+            if (selectedWrite?.recordType == "budget-mutation") {
+                BudgetMutationReviewScreen(state, mobileSession, navigation, onDiscardWrite)
+            } else if (selectedWrite?.status == "rejected") {
                 RejectedWriteScreen(state, mobileSession, navigation, onDiscardWrite, liveTransactions)
             } else {
                 UncertainWriteScreen(

@@ -275,6 +275,9 @@ internal class TandemMobileSession(
         private set
 
     private var budgetActionShouldRetry by mutableStateOf(false)
+    private var lastBudgetActionHttpStatus: Int? = null
+    private var lastBudgetActionErrorCode: String? = null
+    private var lastBudgetActionErrorMessage: String? = null
 
     private var budgetReorderQueueState by mutableStateOf(BudgetReorderQueueState())
     private var budgetReorderQueue: BudgetReorderQueueState
@@ -414,6 +417,29 @@ internal class TandemMobileSession(
     fun pendingBudgetMutationCount(budgetId: String): Int = budgetReorderQueue.moves.count { it.budgetId == budgetId }
 
     fun pendingBudgetMutationsFor(budgetId: String): List<QueuedBudgetReorder> = budgetReorderQueue.moves.filter { it.budgetId == budgetId }
+
+    fun budgetMutationReviewsFor(budgetId: String): List<OutboxOperationEntity> =
+        pendingWrites.filter {
+            it.budgetId == budgetId &&
+                it.recordType == "budget-mutation" &&
+                it.status in setOf("uncertain", "conflict", "rejected")
+        }
+
+    fun retryBudgetMutation(operationId: String) {
+        sessionScope.launch {
+            val localRepository = repository ?: return@launch
+            val operation = runCatching { localRepository.retryBudgetMutationAfterReview(operationId) }.getOrNull() ?: return@launch
+            val request =
+                decodeBudgetReorderQueue(operation.patchJson)
+                    .moves
+                    .singleOrNull()
+                    ?.copy(operationId = operation.operationId)
+                    ?: return@launch
+            budgetReorderQueue = budgetReorderQueue.enqueue(request)
+            persistCurrentBudgetReorderQueue()
+            retryQueuedBudgetReorders()
+        }
+    }
 
     fun budgetMutationWaitingForConnection(move: QueuedBudgetReorder): Boolean =
         budgetReorderQueue.waitingForConnection && budgetReorderQueue.moves.firstOrNull() == move
@@ -756,20 +782,49 @@ internal class TandemMobileSession(
             snapshotFlow { isPerformingBudgetAction }.first { !it }
             if (budgetReorderQueue.moves.firstOrNull() != request) continue
 
+            var mutationStarted = repository?.beginBudgetMutation(request.operationId) == true
+            if (!mutationStarted) {
+                persistCurrentBudgetReorderQueue()
+                mutationStarted = repository?.beginBudgetMutation(request.operationId) == true
+            }
+            if (!mutationStarted) {
+                val stored = repository?.readPendingWrites(request.budgetId)?.firstOrNull { it.operationId == request.operationId }
+                val stateMessage =
+                    when (stored?.status) {
+                        "uncertain" -> "Status unknown. Check Actual before trying again."
+                        "conflict" -> "Needs review. The budget changed in Actual."
+                        "rejected" -> "This change was rejected. Review it in Actual."
+                        "discarded", "committed" -> "This change is no longer pending."
+                        else -> null
+                    }
+                if (stateMessage != null) {
+                    budgetReorderQueue = budgetReorderQueue.failHead(request, stateMessage)
+                    persistCurrentBudgetReorderQueue()
+                } else {
+                    delay(100)
+                }
+                continue
+            }
+
             var createdCategoryGroupId: String? = null
             var createdCategoryId: String? = null
             budgetActionWasAppliedButRefreshFailed = false
+            budgetActionShouldRetry = false
+            lastBudgetActionHttpStatus = null
+            lastBudgetActionErrorCode = null
+            lastBudgetActionErrorMessage = null
+            val isRefreshOnlyRequest =
+                request.refreshOnly ||
+                    request.kind in
+                    setOf(
+                        BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE,
+                        BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
+                        BudgetReorderKind.REFRESH_CATEGORY_CREATE,
+                        BudgetReorderKind.REFRESH_CATEGORY_RENAME,
+                    )
             val moved =
                 withoutBudgetActionFeedback {
-                    if (request.refreshOnly ||
-                        request.kind in
-                        setOf(
-                            BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE,
-                            BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
-                            BudgetReorderKind.REFRESH_CATEGORY_CREATE,
-                            BudgetReorderKind.REFRESH_CATEGORY_RENAME,
-                        )
-                    ) {
+                    if (isRefreshOnlyRequest) {
                         synchronize(request.budgetId, request.encryptionPassword) != null
                     } else {
                         when (request.kind) {
@@ -866,6 +921,26 @@ internal class TandemMobileSession(
                 repository?.remapPendingCategoryReferences(request.budgetId, request.itemId, createdCategoryIdAfterAction)
             }
             val refreshFailed = budgetActionWasAppliedButRefreshFailed
+            if (refreshFailed || moved) {
+                repository?.completeBudgetMutation(request.operationId)
+            } else if (isRefreshOnlyRequest) {
+                repository?.returnBudgetMutationToQueue(request.operationId, "refresh-unavailable")
+            } else if (lastBudgetActionHttpStatus == 409) {
+                repository?.markBudgetMutationConflict(request.operationId, lastBudgetActionErrorCode ?: "http-409")
+            } else if (
+                lastBudgetActionErrorCode != null &&
+                (
+                    lastBudgetActionHttpStatus == null ||
+                        lastBudgetActionHttpStatus == 408 ||
+                        lastBudgetActionHttpStatus in 500..599
+                )
+            ) {
+                repository?.markBudgetMutationUncertain(request.operationId, lastBudgetActionErrorCode ?: "network-error")
+            } else if (budgetActionShouldRetry) {
+                repository?.returnBudgetMutationToQueue(request.operationId, lastBudgetActionErrorCode ?: "retry-later")
+            } else {
+                repository?.markBudgetMutationRejected(request.operationId, lastBudgetActionErrorCode ?: "local-validation")
+            }
             if (request.kind == BudgetReorderKind.CREATE_CATEGORY_GROUP && refreshFailed && createdCategoryGroupIdAfterAction != null) {
                 budgetReorderQueue =
                     budgetReorderQueue.awaitCategoryGroupRefresh(
@@ -900,6 +975,19 @@ internal class TandemMobileSession(
                 // state and show its retryable refresh status in the queue;
                 // the sync transport error belongs on the cloud indicator.
                 budgetReorderQueue = budgetReorderQueue.awaitRefresh(request, "Saved in Actual. Waiting for the budget to refresh.")
+            } else if (lastBudgetActionHttpStatus == 409) {
+                withoutBudgetActionFeedback { synchronize(request.budgetId, request.encryptionPassword) }
+                val message = lastBudgetActionErrorMessage ?: "Needs review. The budget changed in Actual."
+                budgetReorderQueue = budgetReorderQueue.failHead(request, message)
+            } else if (
+                lastBudgetActionErrorCode != null &&
+                (
+                    lastBudgetActionHttpStatus == null ||
+                        lastBudgetActionHttpStatus == 408 ||
+                        lastBudgetActionHttpStatus in 500..599
+                )
+            ) {
+                budgetReorderQueue = budgetReorderQueue.failHead(request, "Status unknown. Check Actual before trying again.")
             } else if ((
                     request.refreshOnly ||
                         request.kind in
@@ -1786,6 +1874,9 @@ internal class TandemMobileSession(
         budgetActionMessage = null
         budgetActionWasAppliedButRefreshFailed = false
         budgetActionShouldRetry = false
+        lastBudgetActionHttpStatus = null
+        lastBudgetActionErrorCode = null
+        lastBudgetActionErrorMessage = null
         if (refuseWriteInReadOnlyMode()) {
             transactionWriteMessage?.let { setBudgetActionMessage(it, ownerRoute = messageOwner) }
             return false
@@ -1815,6 +1906,9 @@ internal class TandemMobileSession(
             throw error
         } catch (error: TandemApiException) {
             budgetActionShouldRetry = shouldKeepBudgetMutationQueued(error.httpStatus)
+            lastBudgetActionHttpStatus = error.httpStatus
+            lastBudgetActionErrorCode = error.errorCode
+            lastBudgetActionErrorMessage = error.userFacingMessage(failureMessage)
             isServerReachable = error.httpStatus != null && !budgetActionShouldRetry
             if (actionApplied) {
                 budgetActionWasAppliedButRefreshFailed = true
@@ -1834,6 +1928,8 @@ internal class TandemMobileSession(
         } catch (_: Exception) {
             isServerReachable = false
             budgetActionShouldRetry = true
+            lastBudgetActionErrorCode = "network-error"
+            lastBudgetActionErrorMessage = failureMessage
             if (actionApplied) {
                 budgetActionWasAppliedButRefreshFailed = true
                 setBudgetActionMessage(

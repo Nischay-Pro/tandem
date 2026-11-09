@@ -382,7 +382,7 @@ internal data class BudgetReorderQueueState(
         val key = budgetReorderStatusKey(move.budgetId, move.scopeId)
         val current = statusFor(move.budgetId, move.scopeId)
         return copy(
-            moves = moves.map { if (it == move) it.copy(refreshOnly = true) else it },
+            moves = moves.map { if (it == move) it.copy(operationId = Uuid.random().toString(), refreshOnly = true) else it },
             waitingForConnection = true,
             statuses = statuses + (key to current.copy(message = message, warning = true)),
         )
@@ -435,6 +435,7 @@ internal data class BudgetReorderQueueState(
                 kind = BudgetReorderKind.REFRESH_CATEGORY_CREATE,
                 itemId = serverCategoryId,
                 desiredOrder = move.desiredOrder.map { if (it == move.itemId) serverCategoryId else it },
+                operationId = Uuid.random().toString(),
             )
         val oldCategoryKey = categoryVisibilityKey(move.budgetId, move.itemId)
         val newCategoryKey = categoryVisibilityKey(move.budgetId, serverCategoryId)
@@ -463,6 +464,7 @@ internal data class BudgetReorderQueueState(
                 kind = refreshKind,
                 itemId = serverGroupId,
                 desiredOrder = move.desiredOrder.map { if (it == move.itemId) serverGroupId else it },
+                operationId = Uuid.random().toString(),
             )
         val updatedMoves =
             moves.map { queued ->

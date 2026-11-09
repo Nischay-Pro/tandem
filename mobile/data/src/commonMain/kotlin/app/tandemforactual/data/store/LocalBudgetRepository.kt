@@ -325,6 +325,100 @@ class LocalBudgetRepository(
         }
     }
 
+    suspend fun beginBudgetMutation(operationId: String): Boolean =
+        database.withWriteTransaction {
+            requireIdentifier(operationId, "operationId")
+            val outbox = database.outboxDao()
+            val operation = outbox.find(operationId) ?: return@withWriteTransaction false
+            if (operation.recordType != BUDGET_MUTATION_RECORD_TYPE || operation.status != "queued") {
+                return@withWriteTransaction false
+            }
+            outbox.markSending(operationId, now()) == 1
+        }
+
+    suspend fun completeBudgetMutation(operationId: String): OutboxOperationEntity =
+        updateBudgetMutationStatus(
+            operationId = operationId,
+            fromStatuses = setOf("sending"),
+            status = LocalWriteStatus.COMMITTED,
+        )
+
+    suspend fun markBudgetMutationUncertain(
+        operationId: String,
+        errorCode: String,
+    ): OutboxOperationEntity =
+        updateBudgetMutationStatus(
+            operationId = operationId,
+            fromStatuses = setOf("sending"),
+            status = LocalWriteStatus.UNCERTAIN,
+            errorCode = errorCode,
+        )
+
+    suspend fun markBudgetMutationConflict(
+        operationId: String,
+        errorCode: String,
+    ): OutboxOperationEntity =
+        updateBudgetMutationStatus(
+            operationId = operationId,
+            fromStatuses = setOf("sending"),
+            status = LocalWriteStatus.CONFLICT,
+            errorCode = errorCode,
+        )
+
+    suspend fun markBudgetMutationRejected(
+        operationId: String,
+        errorCode: String,
+    ): OutboxOperationEntity =
+        updateBudgetMutationStatus(
+            operationId = operationId,
+            fromStatuses = setOf("sending"),
+            status = LocalWriteStatus.REJECTED,
+            errorCode = errorCode,
+        )
+
+    suspend fun returnBudgetMutationToQueue(
+        operationId: String,
+        errorCode: String,
+    ): OutboxOperationEntity =
+        updateBudgetMutationStatus(
+            operationId = operationId,
+            fromStatuses = setOf("sending"),
+            status = LocalWriteStatus.QUEUED,
+            errorCode = errorCode,
+        )
+
+    suspend fun retryBudgetMutationAfterReview(operationId: String): OutboxOperationEntity =
+        updateBudgetMutationStatus(
+            operationId = operationId,
+            fromStatuses = setOf("uncertain", "conflict"),
+            status = LocalWriteStatus.QUEUED,
+        )
+
+    private suspend fun updateBudgetMutationStatus(
+        operationId: String,
+        fromStatuses: Set<String>,
+        status: LocalWriteStatus,
+        errorCode: String? = null,
+    ): OutboxOperationEntity =
+        database.withWriteTransaction {
+            requireIdentifier(operationId, "operationId")
+            errorCode?.let { requireIdentifier(it, "errorCode") }
+            val outbox = database.outboxDao()
+            val operation = outbox.find(operationId) ?: throw NoSuchElementException("Budget mutation not found")
+            if (operation.recordType != BUDGET_MUTATION_RECORD_TYPE || operation.status !in fromStatuses) {
+                throw InvalidLocalWriteException("This budget mutation cannot move to the requested state")
+            }
+            val updated =
+                operation.copy(
+                    status = status.name.lowercase(),
+                    serverOperationId = if (status == LocalWriteStatus.COMMITTED) operation.operationId else operation.serverOperationId,
+                    lastErrorCode = errorCode,
+                    updatedAtEpochMs = now(),
+                )
+            outbox.put(updated)
+            updated
+        }
+
     fun observeRecords(
         budgetId: String,
         recordType: String,

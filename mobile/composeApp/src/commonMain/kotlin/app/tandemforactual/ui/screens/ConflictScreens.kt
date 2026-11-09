@@ -387,6 +387,90 @@ internal fun UncertainWriteScreen(
 }
 
 @Composable
+internal fun BudgetMutationReviewScreen(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
+    onDiscard: (String) -> Unit,
+) {
+    val operation =
+        mobileSession.pendingWrites.firstOrNull {
+            it.operationId == state.selectedConflictOperationId && it.recordType == "budget-mutation"
+        }
+    val mutation = operation?.let { decodeBudgetReorderQueue(it.patchJson).moves.singleOrNull() }
+    val itemName = mutation?.name ?: "budget item"
+    val title = operation?.let { budgetMutationTitle(it.action, itemName) } ?: "Budget change"
+    var confirmDiscard by rememberSaveable(operation?.operationId) { mutableStateOf(false) }
+
+    PageColumn {
+        when (operation?.status) {
+            "conflict" -> Heading("Needs review")
+            "rejected" -> Heading("Change not applied")
+            "queued" -> Heading("Waiting to sync")
+            else -> Heading("Status unknown")
+        }
+        if (operation == null) {
+            InfoBubble("This budget change no longer needs review.")
+        } else {
+            SectionCard(title, operation.status.replaceFirstChar { it.uppercase() }) {
+                ListRow("Budget item", itemName)
+                DividerLine()
+                ListRow(
+                    "Change",
+                    operation.action
+                        .replace('_', ' ')
+                        .lowercase()
+                        .replaceFirstChar { it.uppercase() },
+                )
+            }
+            InfoBubble(
+                when (operation.status) {
+                    "conflict" -> "The budget changed in Actual while this edit was waiting. Review the latest budget before trying again."
+                    "rejected" -> "Actual did not apply this change. Remove it from Pending Changes or leave it for review."
+                    else -> "Tandem couldn’t confirm whether Actual saved this change. Check Actual before trying again."
+                },
+            )
+            when (operation.status) {
+                "uncertain", "conflict" -> {
+                    if (mutation?.requiresEncryptionPassword == true) {
+                        InfoBubble("Unlock this encrypted budget before trying again.")
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                        PrimaryButton(
+                            "Try again",
+                            enabled = !state.readOnlyMode && mutation?.requiresEncryptionPassword != true,
+                            modifier = Modifier.weight(1f),
+                        ) { mobileSession.retryBudgetMutation(operation.operationId) }
+                        SecondaryButton(
+                            "Discard change",
+                            modifier = Modifier.weight(1f),
+                            enabled = !state.readOnlyMode,
+                        ) { confirmDiscard = true }
+                    }
+                }
+                "rejected" -> PrimaryButton("Discard change", enabled = !state.readOnlyMode) { confirmDiscard = true }
+                else -> Spacer(Modifier.height(72.dp))
+            }
+        }
+    }
+
+    if (confirmDiscard && operation != null) {
+        DestructiveConfirmationDialog(
+            title = "Discard this change?",
+            message = "Remove this budget change from this device?",
+            confirmLabel = "Discard change",
+            dismissLabel = "Keep change",
+            enabled = !state.readOnlyMode,
+            onDismissRequest = { confirmDiscard = false },
+            onConfirm = {
+                confirmDiscard = false
+                onDiscard(operation.operationId)
+            },
+        )
+    }
+}
+
+@Composable
 internal fun RejectedWriteScreen(
     state: AppState,
     mobileSession: TandemMobileSession,

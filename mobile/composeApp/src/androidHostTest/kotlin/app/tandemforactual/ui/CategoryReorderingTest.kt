@@ -276,6 +276,7 @@ class CategoryReorderingTest {
 
         assertEquals(true, status.waitingForConnection)
         assertEquals(true, status.moves.single().refreshOnly)
+        assertTrue(status.moves.single().operationId != move.operationId)
         assertEquals(true, status.statusFor("budget", "housing").warning)
         assertEquals("Saved in Actual. Waiting for the budget to refresh.", status.statusFor("budget", "housing").message)
         assertEquals(

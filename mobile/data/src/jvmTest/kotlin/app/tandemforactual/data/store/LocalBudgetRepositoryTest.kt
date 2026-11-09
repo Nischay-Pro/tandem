@@ -64,6 +64,55 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
+    fun budgetMutationOutboxPreservesUncertainConflictAndCommittedStates() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 300L }
+                val mutation =
+                    LocalBudgetMutationOutboxItem(
+                        operationId = "budget-operation-1",
+                        budgetId = BUDGET,
+                        action = "RENAME_CATEGORY",
+                        recordId = "category-1",
+                        patchJson = "{\"operationId\":\"budget-operation-1\"}",
+                        createdAtEpochMs = 200L,
+                    )
+                repository.replaceBudgetMutationQueue(listOf(mutation), "{}")
+
+                assertTrue(repository.beginBudgetMutation(mutation.operationId))
+                assertFalse(repository.beginBudgetMutation(mutation.operationId))
+                repository.markBudgetMutationUncertain(mutation.operationId, "network-error")
+                assertEquals("uncertain", repository.readPendingWrites(BUDGET).single().status)
+                assertTrue(repository.readBudgetMutationQueue().items.isEmpty())
+
+                repository.retryBudgetMutationAfterReview(mutation.operationId)
+                assertTrue(repository.beginBudgetMutation(mutation.operationId))
+                repository.markBudgetMutationConflict(mutation.operationId, "http-409")
+                assertEquals("conflict", repository.readPendingWrites(BUDGET).single().status)
+
+                repository.retryBudgetMutationAfterReview(mutation.operationId)
+                assertTrue(repository.beginBudgetMutation(mutation.operationId))
+                repository.completeBudgetMutation(mutation.operationId)
+                val committed = database.outboxDao().find(mutation.operationId) ?: fail("Committed budget mutation was not saved")
+                assertEquals("committed", committed.status)
+                assertEquals(mutation.operationId, committed.serverOperationId)
+                assertTrue(repository.readBudgetMutationQueue().items.isEmpty())
+
+                val retryLater = mutation.copy(operationId = "budget-operation-later", action = "CATEGORY")
+                repository.replaceBudgetMutationQueue(listOf(retryLater), "{}")
+                assertTrue(repository.beginBudgetMutation(retryLater.operationId))
+                repository.returnBudgetMutationToQueue(retryLater.operationId, "retry-later")
+                assertEquals("queued", database.outboxDao().find(retryLater.operationId)?.status)
+                assertTrue(repository.beginBudgetMutation(retryLater.operationId))
+                repository.markBudgetMutationRejected(retryLater.operationId, "http-400")
+                assertEquals("rejected", repository.readPendingWrites(BUDGET).single().status)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun remapPendingCategoryReferencesRewritesMatchingQueuedTransactionsOnly() =
         runBlocking {
             val database = newDatabase()
