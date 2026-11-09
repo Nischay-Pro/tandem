@@ -1,6 +1,9 @@
 package app.tandemforactual.ui.model
 
 import app.tandemforactual.data.database.BudgetRecordEntity
+import app.tandemforactual.ui.BudgetReorderKind
+import app.tandemforactual.ui.BudgetReorderQueueState
+import app.tandemforactual.ui.QueuedBudgetReorder
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -164,6 +167,53 @@ class LiveBudgetModelsTest {
             summary?.groups?.single()?.categories,
         )
         assertNull(liveBudgetMonthSummary(null, categories, groups))
+    }
+
+    @Test
+    fun hidesQueuedCategoryCreateWhenItHasAlsoBeenQueuedForDeletion() {
+        val month =
+            record(
+                type = "budget-month",
+                id = "2026-11",
+                json = """{"month":"2026-11","categoryGroups":[{"id":"home","categories":[]}]}""",
+            )
+        val pendingCategoryId = "local-category-1"
+        val queue =
+            BudgetReorderQueueState()
+                .enqueue(
+                    QueuedBudgetReorder(
+                        budgetId = "budget",
+                        scopeId = "home",
+                        kind = BudgetReorderKind.CREATE_CATEGORY,
+                        itemId = pendingCategoryId,
+                        targetId = null,
+                        desiredOrder = listOf(pendingCategoryId),
+                        encryptionPassword = null,
+                        name = "Offline test",
+                        parentGroupId = "home",
+                    ),
+                ).enqueue(
+                    QueuedBudgetReorder(
+                        budgetId = "budget",
+                        scopeId = "category-$pendingCategoryId",
+                        kind = BudgetReorderKind.DELETE_CATEGORY,
+                        itemId = pendingCategoryId,
+                        targetId = null,
+                        desiredOrder = emptyList(),
+                        encryptionPassword = null,
+                    ),
+                )
+
+        val summary =
+            liveBudgetMonthSummary(
+                monthRecord = month,
+                categoryRecords = emptyList(),
+                categoryGroupRecords = listOf(record(type = "category-group", id = "home", name = "Home")),
+                deletedCategoryIds = queue.deletedCategoryIdsFor("budget"),
+                pendingCategories = queue.pendingCategoryCreatesFor("budget"),
+            )
+
+        assertEquals(emptyList(), summary?.groups?.single()?.categories)
     }
 
     @Test

@@ -269,6 +269,7 @@ internal fun liveBudgetMonthSummary(
             )
     }
     pendingCategories.forEach { pending ->
+        if (pending.category.id in deletedCategoryIds) return@forEach
         val groupIndex = groupsWithPendingCategories.indexOfFirst { it.id == pending.groupId }
         if (groupIndex < 0) return@forEach
         val group = groupsWithPendingCategories[groupIndex]
