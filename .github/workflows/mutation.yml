@@ -23,6 +23,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Prepare writable mutation workspace
+        run: |
+          mkdir -p .dev-tmp/stryker
+          sudo chown -R 1000:1000 .dev-tmp/stryker
+
       - name: Run the full mutation suite against disposable PostgreSQL
         run: >-
           docker compose -f docker-compose.dev.yml --profile test run --build
