@@ -1,6 +1,7 @@
 package app.tandemforactual.ui
 
 import app.tandemforactual.api.client.TandemApiClient
+import app.tandemforactual.data.database.BudgetRecordEntity
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -19,6 +20,28 @@ class TandemMobileSessionTest {
         assertEquals(50, activityTransactionRefreshLimit(50))
         assertEquals(125, activityTransactionRefreshLimit(125))
         assertEquals(200, activityTransactionRefreshLimit(5_000))
+    }
+
+    @Test
+    fun activityRefreshPreservesFiveThousandLoadedRowsAndUpdatesTheNewestPage() {
+        val previousRecords =
+            (1..5_000).map { index ->
+                activityTransaction("transaction-${index.toString().padStart(4, '0')}", "2026-11-09", index.toLong())
+            }
+        val newest = activityTransaction("new", "2026-11-10", 0)
+        val refreshedPage = listOf(newest) + previousRecords.take(199).map { it.copy(amountMinor = -1) }
+        val merged =
+            mergeRefreshedActivityTransactions(
+                previouslyLoaded = previousRecords,
+                refreshedPage = refreshedPage,
+            )
+
+        assertEquals(5_001, merged.size)
+        assertEquals("new", merged.first().recordId)
+        assertEquals("transaction-0001", merged[1].recordId)
+        assertEquals(-1L, merged[1].amountMinor)
+        assertEquals("transaction-5000", merged.last().recordId)
+        assertEquals(5_001, merged.map(BudgetRecordEntity::recordId).toSet().size)
     }
 
     @Test
@@ -261,4 +284,26 @@ class TandemMobileSessionTest {
             assertNull(session.deviceRevocationError)
             assertEquals(1, clearCalls)
         }
+
+    private fun activityTransaction(
+        id: String,
+        date: String,
+        amountMinor: Long,
+    ) = BudgetRecordEntity(
+        budgetId = "budget-1",
+        recordType = "transaction",
+        recordId = id,
+        remoteJson = "{}",
+        remoteRevision = "1",
+        localJson = null,
+        localDeleted = false,
+        remoteDeleted = false,
+        syncGeneration = "generation-1",
+        recordDate = date,
+        accountId = "account-1",
+        categoryId = null,
+        payeeId = null,
+        amountMinor = amountMinor,
+        budgetMonth = date.take(7),
+    )
 }

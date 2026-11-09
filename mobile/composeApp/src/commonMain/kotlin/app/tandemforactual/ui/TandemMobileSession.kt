@@ -2288,23 +2288,26 @@ internal class TandemMobileSession(
         try {
             if (activityTransactionPageBudgetId != budgetId) return
             val refreshLimit = activityTransactionRefreshLimit(activityTransactionRecords.size)
+            val previouslyLoaded = activityTransactionRecords.toList()
+            val previouslyHadMore = hasMoreActivityTransactions
             isLoadingActivityTransactions = true
             try {
                 val refreshed = localRepository.findTransactionPage(budgetId = budgetId, limit = refreshLimit)
                 if (activityTransactionPageBudgetId != budgetId) return
+                val merged = mergeRefreshedActivityTransactions(previouslyLoaded, refreshed)
                 Snapshot.withMutableSnapshot {
                     activityTransactionRecords.clear()
-                    activityTransactionRecords.addAll(refreshed)
+                    activityTransactionRecords.addAll(merged)
                     activityTransactionRecordsVersion += 1
                 }
-                refreshed.lastOrNull()?.let { last ->
+                merged.lastOrNull()?.let { last ->
                     activityCursorDate = last.recordDate
                     activityCursorId = last.recordId
                 } ?: run {
                     activityCursorDate = null
                     activityCursorId = ""
                 }
-                hasMoreActivityTransactions = refreshed.size == refreshLimit
+                hasMoreActivityTransactions = previouslyHadMore || refreshed.size == refreshLimit
                 activityTransactionPageError = null
             } catch (error: CancellationException) {
                 throw error
@@ -2455,6 +2458,16 @@ internal fun activityTransactionRefreshLimit(loadedRecordCount: Int): Int =
         loadedRecordCount.coerceAtLeast(ACTIVITY_TRANSACTION_PAGE_SIZE),
         ACTIVITY_TRANSACTION_REFRESH_LIMIT,
     )
+
+internal fun mergeRefreshedActivityTransactions(
+    previouslyLoaded: List<BudgetRecordEntity>,
+    refreshedPage: List<BudgetRecordEntity>,
+): List<BudgetRecordEntity> {
+    val refreshedIds = refreshedPage.mapTo(mutableSetOf(), BudgetRecordEntity::recordId)
+    return (refreshedPage + previouslyLoaded.filterNot { it.recordId in refreshedIds })
+        .distinctBy(BudgetRecordEntity::recordId)
+        .sortedWith(compareByDescending<BudgetRecordEntity> { it.recordDate ?: "" }.thenBy { it.recordId })
+}
 
 private suspend fun LocalBudgetRepository.hasCachedSnapshot(budgetId: String): Boolean {
     val checkpoint = readSyncCheckpoint(budgetId) ?: return false
