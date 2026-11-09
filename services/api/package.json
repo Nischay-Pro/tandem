@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
     "test:actual": "vitest run test/actual-compat.test.ts",
+    "verify:synthetic-household": "node scripts/verify-synthetic-household.mjs",
     "test:coverage": "vitest run --coverage",
     "test:mutation": "stryker run --incremental",
     "test:mutation:full": "stryker run --incremental --force"
