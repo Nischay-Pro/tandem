@@ -2,6 +2,7 @@ import * as Actual from "@actual-app/api";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import process from "node:process";
 
 const serverURL = process.env.ACTUAL_SERVER_URL?.trim();
 const password = process.env.ACTUAL_SERVER_PASSWORD?.trim();
@@ -62,19 +63,15 @@ try {
     if (!budget) continue;
 
     await Actual.loadBudget(budget.id);
-    const [accounts, categories, payees, months, schedules] = await Promise.all(
-      [
-        Actual.getAccounts(),
-        Actual.getCategories(),
-        Actual.getPayees(),
-        Actual.getBudgetMonths(),
-        Actual.getSchedules(),
-      ],
-    );
+    const [accounts, categories, months, schedules] = await Promise.all([
+      Actual.getAccounts(),
+      Actual.getCategories(),
+      Actual.getBudgetMonths(),
+      Actual.getSchedules(),
+    ]);
     const categoryById = new Map(
       categories.map((category) => [category.id, category]),
     );
-    const payeeById = new Map(payees.map((payee) => [payee.id, payee.name]));
     const transactions = [];
 
     for (const account of accounts) {
