@@ -110,7 +110,7 @@ internal fun ServerDeviceScreen(
         }
         InfoBubble("Pairing codes and budget passwords are never saved.")
         mobileSession.deviceRevocationError?.let { message ->
-            AttentionBanner("Couldn’t remove this device", message, "Retry", onForgetDevice)
+            AttentionBanner("Couldn’t remove this device", message, "Try again", onForgetDevice)
             InfoBubble("The server still trusts this device until its owner removes it there.")
         }
         AnimatedPreviewNote(mobileSession.credentialStorageError)

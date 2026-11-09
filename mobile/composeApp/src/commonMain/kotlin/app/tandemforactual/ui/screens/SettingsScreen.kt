@@ -52,7 +52,7 @@ internal fun SettingsScreen(
         AnimatedReveal(visible = state.settingsStorageError != null) {
             Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 PreviewNote(state.settingsStorageError.orEmpty())
-                SecondaryButton("Retry settings storage") { state.settingsStorageRetry += 1 }
+                SecondaryButton("Try again") { state.settingsStorageRetry += 1 }
             }
         }
         SectionCard("Appearance") {

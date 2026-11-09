@@ -231,7 +231,7 @@ internal fun ActivityScreen(
                 item(key = "activity-page-status") {
                     if (mobileSession.activityTransactionPageError != null) {
                         TandemActionButton(
-                            "Retry loading transactions",
+                            "Try again",
                             TandemActionButtonTone.NEUTRAL,
                             modifier = Modifier.fillMaxWidth(),
                             icon = Lucide.RefreshCw,
