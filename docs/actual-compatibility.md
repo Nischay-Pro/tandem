@@ -101,6 +101,20 @@ This covers one offline transaction-amount conflict; it does not establish
 concurrent network-write safety, behavior for every field or entity, or a
 publicly supported incremental change cursor.
 
+The direct snapshot spike seeds 15,000 transactions across 2019–2025, reads
+them through `ActualBudgetSnapshotReader` and the supported API, closes the
+session, and reads them again after reopening a fresh session from the same
+local workspace. The measured snapshot contained 15,116 records and serialized
+to 8,644,137 JSON bytes. In this disposable local Docker run, the first read
+took 430 ms and the reopened-session read took 442 ms; both returned the same
+transaction revision digest. These figures cover server-side API reads and
+JSON serialization in this local environment, not transfer to or parsing on a
+phone. The test verifies session restart against the persisted local workspace,
+not an operating-system process restart. A full snapshot is still about 8.6 MB,
+so this result does not justify replacing the incremental feed with full
+snapshots on every sync. Keep the existing projection/feed until a replacement
+has measured payload frequency, device costs, and service restart behavior.
+
 The test also creates a synthetic transfer payee, sets its `transfer_acct`
 through `updatePayee`, and adds a transaction with `runTransfers: true`. Actual
 creates the paired transaction and each leg points to the other leg's ID; the

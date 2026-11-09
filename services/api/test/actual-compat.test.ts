@@ -1,5 +1,5 @@
 import * as Actual from "@actual-app/api";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { createServer } from "node:net";
 import path from "node:path";
@@ -1728,6 +1728,126 @@ describe.skipIf(!compatibilityTestEnabled)(
         `Actual resolved the concurrent amount edits to ${firstMergedAmount}; both workspaces converged.`,
       );
     }, 60_000);
+
+    it("reads a 15,000-transaction snapshot directly from Actual after restart", async () => {
+      if (!serverURL || !serverPassword || !firstDataDir) {
+        throw new Error("Actual compatibility test configuration is missing");
+      }
+
+      const snapshotRoot = path.join(
+        firstDataDir,
+        `direct-snapshot-${randomUUID()}`,
+      );
+      const seedDataDir = path.join(snapshotRoot, "seed");
+      const readerDataDir = path.join(snapshotRoot, "reader");
+      await Promise.all([
+        mkdir(seedDataDir, { recursive: true }),
+        mkdir(readerDataDir, { recursive: true }),
+      ]);
+
+      const budgetName = `ABC direct snapshot budget ${randomUUID()}`;
+      const accountName = "ABC direct snapshot checking";
+      const startDay = Date.UTC(2019, 0, 1);
+      const lastDay = Date.UTC(2025, 11, 31);
+      const transactionCount = 15_000;
+      const transactions = Array.from(
+        { length: transactionCount },
+        (_, index) => {
+          const timestamp =
+            startDay +
+            Math.round((index / (transactionCount - 1)) * (lastDay - startDay));
+          const date = new Date(timestamp).toISOString().slice(0, 10);
+          return {
+            date,
+            amount: -100,
+            notes: `Projection-free read ${index + 1}`,
+            imported_id: `projection-free-read-${index + 1}`,
+          };
+        },
+      );
+
+      const seedDevice = createActualSession({
+        serverURL,
+        dataDir: seedDataDir,
+        password: serverPassword,
+      });
+      let budgetId = "";
+      try {
+        await seedDevice.execute(
+          () =>
+            Actual.runImport(budgetName, async () => {
+              const accountId = await Actual.createAccount(
+                { name: accountName, offbudget: false },
+                transactionCount * 100,
+              );
+              for (
+                let offset = 0;
+                offset < transactions.length;
+                offset += 500
+              ) {
+                await Actual.addTransactions(
+                  accountId,
+                  transactions.slice(offset, offset + 500),
+                );
+              }
+            }),
+          { synchronizeAfterWrite: true },
+        );
+        const budget = (
+          await seedDevice.execute(() => Actual.getBudgets())
+        ).find((item) => item.name === budgetName && item.groupId);
+        if (!budget?.groupId) {
+          throw new Error("Actual did not publish the direct snapshot fixture");
+        }
+        budgetId = budget.groupId;
+      } finally {
+        await seedDevice.close();
+      }
+
+      const readDirectSnapshot = async () => {
+        const readerSession = createActualSession({
+          serverURL,
+          dataDir: readerDataDir,
+          password: serverPassword,
+        });
+        try {
+          const startedAt = performance.now();
+          const snapshot = await new ActualBudgetSnapshotReader(
+            readerSession,
+          ).readFullWithSettings(budgetId);
+          const durationMs = Math.round(performance.now() - startedAt);
+          const transactionRecords = snapshot.records.filter(
+            (record) =>
+              record.type === "transaction" &&
+              typeof record.body.importedId === "string" &&
+              record.body.importedId.startsWith("projection-free-read-"),
+          );
+          expect(transactionRecords).toHaveLength(transactionCount);
+          const digest = createHash("sha256")
+            .update(
+              JSON.stringify(
+                transactionRecords.map(({ id, revision }) => [id, revision]),
+              ),
+            )
+            .digest("hex");
+          return {
+            durationMs,
+            digest,
+            records: snapshot.records.length,
+            bytes: Buffer.byteLength(JSON.stringify(snapshot)),
+          };
+        } finally {
+          await readerSession.close();
+        }
+      };
+
+      const firstRead = await readDirectSnapshot();
+      const restartedRead = await readDirectSnapshot();
+      expect(restartedRead.digest).toBe(firstRead.digest);
+      console.info(
+        `Projection-free Actual snapshot: ${firstRead.records} records, ${firstRead.bytes} JSON bytes, first read ${firstRead.durationMs} ms; after session restart ${restartedRead.durationMs} ms with identical transaction revisions.`,
+      );
+    }, 180_000);
 
     it("reads an end-to-end encrypted synthetic budget through the API adapter", async () => {
       if (!serverURL || !serverPassword || !firstDataDir) {
