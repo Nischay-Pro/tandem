@@ -74,6 +74,13 @@ internal fun SettingsScreen(
                 leading = RowLeading.Icon(Lucide.Tags),
                 onClick = { navigation.open(AppRoute.MANAGE_PAYEES) },
             )
+            DividerLine()
+            ListRow(
+                "Budget rules",
+                "Rules from Actual",
+                leading = RowLeading.Icon(Lucide.Tags),
+                onClick = { navigation.open(AppRoute.BUDGET_RULES) },
+            )
         }
         SectionCard("Connection", "Sync and paired device") {
             ListRow(
@@ -113,13 +120,6 @@ internal fun SettingsScreen(
             )
         }
         SectionCard("Support", "Help and project details") {
-            ListRow(
-                "Budget rules",
-                "Rules from Actual",
-                leading = RowLeading.Icon(Lucide.Tags),
-                onClick = { navigation.open(AppRoute.BUDGET_RULES) },
-            )
-            DividerLine()
             ListRow(
                 "About, help, and licenses",
                 "Version and open-source licenses",
