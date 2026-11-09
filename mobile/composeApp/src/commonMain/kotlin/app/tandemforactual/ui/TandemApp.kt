@@ -253,7 +253,7 @@ fun TandemApp(
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                state.settingsStorageError = "App settings couldn’t be loaded. Retry to load saved preferences."
+                state.settingsStorageError = "Couldn’t load app settings. Try again."
                 snapshotFlow { state.settingsStorageRetry }.first { it != retryAtRead }
             }
         }
@@ -283,9 +283,9 @@ fun TandemApp(
                 } catch (_: Exception) {
                     state.settingsStorageError =
                         if (retryRequested) {
-                            "App settings still couldn’t be saved. Check local storage and retry."
+                            "App settings still couldn’t be saved. Check local storage and try again."
                         } else {
-                            "App settings couldn’t be saved. Retry to save your changes."
+                            "Couldn’t save app settings. Try again."
                         }
                 }
             }

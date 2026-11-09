@@ -67,6 +67,9 @@ jobs:
       - name: Check mobile design tokens
         run: python3 scripts/check-mobile-design-tokens.py
 
+      - name: Check mobile UI vocabulary
+        run: python3 scripts/check-mobile-ui-vocabulary.py
+
   api_android_jvm:
     name: API client · Android and JVM
     runs-on: ubuntu-26.04

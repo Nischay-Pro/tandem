@@ -926,7 +926,7 @@ internal class TandemMobileSession(
                 } catch (error: CancellationException) {
                     throw error
                 } catch (_: Exception) {
-                    credentialStorageError = "Couldn’t access this device’s saved pairing. Retry or pair this device again."
+                    credentialStorageError = "Couldn’t access this device’s saved pairing. Try again or pair this device again."
                     return null
                 } ?: return null
 

@@ -35,6 +35,18 @@ Kotlin framework through
 The shared appearance preference is forwarded to SwiftUI, so iOS system chrome
 follows the selected light, dark, or system mode alongside the Compose screens.
 
+## Wording
+
+| Idea                          | Use                  | Avoid                                         |
+| ----------------------------- | -------------------- | --------------------------------------------- |
+| A local copy                  | Saved on this device | Saved on this phone                           |
+| Repeating an action           | Try again            | Retry sync, Retry edit, Retry loading budgets |
+| Removing a pending local edit | Remove edit          | Discard or Dismiss                            |
+| Deleting one transaction      | Delete transaction?  | Delete this transaction?                      |
+
+Keep action labels consistent when the surrounding screen already makes the
+object clear. Use a short next step in error messages, such as “Try again.”
+
 Android builds and physical-device display checks run from Linux. The shared
 Kotlin targets compile for iOS here, but the native Swift host, Xcode asset
 catalog, and iOS launch screen need a macOS/Xcode build for verification.

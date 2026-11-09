@@ -237,7 +237,7 @@ class TandemMobileSessionTest {
             assertNull(session.restoreStoredSession())
             assertEquals(0, clearCalls)
             assertFalse(session.isCredentialStored)
-            assertTrue(session.credentialStorageError.orEmpty().contains("Retry"))
+            assertTrue(session.credentialStorageError.orEmpty().contains("Try again"))
 
             assertNull(session.restoreStoredSession())
             assertEquals(2, readAttempts)
