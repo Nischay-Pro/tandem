@@ -28,7 +28,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import app.tandemforactual.ui.components.EmptyState
@@ -43,6 +42,7 @@ import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.components.TandemIconButton
+import app.tandemforactual.ui.components.TandemModalHeader
 import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
 import app.tandemforactual.ui.model.booleanValue
@@ -637,7 +637,11 @@ internal fun CategoryGroupNameDialog(
     ) {
         SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = 16.dp)) {
             Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                Text(title, color = tandemPalette.text, fontSize = TandemTypography.sectionTitle, fontWeight = FontWeight.Bold)
+                TandemModalHeader(
+                    title = title,
+                    enabled = !busy,
+                    onClose = { if (!busy) onDismiss() },
+                )
                 TextFieldCard("Name", name, onNameChange, TextFieldOptions(placeholder = placeholder))
                 if (isIncome != null && onIncomeChange != null) {
                     ToggleRow("Income group", "For income categories", isIncome, !busy, onIncomeChange)

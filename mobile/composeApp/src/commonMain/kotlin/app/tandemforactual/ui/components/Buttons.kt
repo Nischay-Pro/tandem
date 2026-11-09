@@ -10,6 +10,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -34,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -43,6 +48,8 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.TandemMotion
 import app.tandemforactual.ui.TandemShapes
@@ -55,6 +62,7 @@ import com.composables.icons.lucide.ChevronLeft
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.GripVertical
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.X
 
 @Composable
 internal fun PrimaryButton(
@@ -153,23 +161,108 @@ internal fun TandemIconButton(
     enabled: Boolean = true,
     tint: Color? = null,
     containerColor: Color? = null,
+    hoveredContainerColor: Color? = null,
     shape: Shape = CircleShape,
     borderColor: Color? = null,
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
+    val modalClose = icon == Lucide.X && contentDescription == "Close"
+    val closeHoverColor = if (palette.surface.luminance() < 0.5f) palette.border else palette.surface
+    val resolvedContainerColor = containerColor ?: palette.raised.takeIf { modalClose }
+    val resolvedHoveredContainerColor = hoveredContainerColor ?: closeHoverColor.takeIf { modalClose }
+    val resolvedBorderColor = borderColor ?: palette.border.copy(alpha = 0.56f).takeIf { modalClose }
+    val interactionSource = remember { MutableInteractionSource() }
+    val hovered by interactionSource.collectIsHoveredAsState()
+    val pressed by interactionSource.collectIsPressedAsState()
+    val backgroundTarget =
+        when {
+            (hovered || pressed) && resolvedHoveredContainerColor != null -> resolvedHoveredContainerColor
+            else -> resolvedContainerColor
+        }
+    val animatedContainerColor by
+        animateColorAsState(
+            targetValue = backgroundTarget ?: Color.Transparent,
+            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+            label = "icon-button-background",
+        )
     Box(
         modifier =
             modifier
                 .size(sizeDp.dp)
                 .clip(shape)
-                .then(containerColor?.let { Modifier.background(it) } ?: Modifier)
-                .then(borderColor?.let { Modifier.border(1.dp, it, shape) } ?: Modifier)
+                .then(
+                    if (resolvedContainerColor != null || resolvedHoveredContainerColor != null) {
+                        Modifier.background(animatedContainerColor)
+                    } else {
+                        Modifier
+                    },
+                ).hoverable(interactionSource)
+                .then(resolvedBorderColor?.let { Modifier.border(1.dp, it, shape) } ?: Modifier)
                 .semantics(mergeDescendants = true) { this.contentDescription = contentDescription }
-                .clickable(enabled = enabled, role = Role.Button, onClickLabel = onClickLabel, onClick = onClick),
+                .clickable(
+                    interactionSource = interactionSource,
+                    enabled = enabled,
+                    role = Role.Button,
+                    onClickLabel = onClickLabel,
+                    onClick = onClick,
+                ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(iconSizeDp.dp), tint = tint ?: palette.text)
+    }
+}
+
+@Composable
+internal fun TandemModalCloseButton(
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    val hoverColor = if (palette.surface.luminance() < 0.5f) palette.border else palette.surface
+    TandemIconButton(
+        icon = Lucide.X,
+        contentDescription = "Close",
+        modifier = modifier,
+        sizeDp = 40,
+        iconSizeDp = 18,
+        enabled = enabled,
+        containerColor = palette.raised,
+        hoveredContainerColor = hoverColor,
+        borderColor = palette.border.copy(alpha = 0.56f),
+        onClick = onClick,
+    )
+}
+
+@Composable
+internal fun TandemModalHeader(
+    title: String,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    titleSize: TextUnit = TandemTypography.sectionTitle,
+    leadingIcon: ImageVector? = null,
+) {
+    val palette = tandemPalette
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+    ) {
+        if (leadingIcon != null) {
+            Icon(leadingIcon, contentDescription = null, modifier = Modifier.size(24.dp), tint = palette.accent)
+        }
+        Text(
+            title,
+            modifier = Modifier.weight(1f),
+            color = palette.text,
+            fontSize = titleSize,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        TandemModalCloseButton(enabled = enabled, onClick = onClose)
     }
 }
 

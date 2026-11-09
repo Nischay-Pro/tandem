@@ -40,6 +40,7 @@ import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SelectableTile
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemChoiceDialog
+import app.tandemforactual.ui.components.TandemModalHeader
 import kotlinx.coroutines.flow.first
 
 @Composable
@@ -168,7 +169,11 @@ internal fun TransactionAccountPickerDialog(
                 Modifier.fillMaxWidth().heightIn(max = 640.dp).padding(TandemSpacing.large),
                 verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
             ) {
-                Text("Choose account", color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
+                TandemModalHeader(
+                    title = "Choose account",
+                    titleSize = TandemTypography.cardTitle,
+                    onClose = onDismiss,
+                )
                 if (values.size > 6) {
                     TextFieldCard("Search accounts", query, { query = it }, TextFieldOptions(placeholder = "Find an account"))
                 }
@@ -214,7 +219,11 @@ internal fun TransactionDatePickerDialog(
                     .padding(TandemSpacing.large),
                 verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
             ) {
-                Text("Choose date", color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
+                TandemModalHeader(
+                    title = "Choose date",
+                    titleSize = TandemTypography.cardTitle,
+                    onClose = onDismiss,
+                )
                 PeriodStepper(
                     title = formatMonth(visibleYear, visibleMonth),
                     previousLabel = "Previous month",

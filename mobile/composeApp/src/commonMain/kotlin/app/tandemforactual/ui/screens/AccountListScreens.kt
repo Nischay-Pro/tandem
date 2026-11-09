@@ -43,6 +43,7 @@ import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.components.TandemChoiceDialog
 import app.tandemforactual.ui.components.TandemIconButton
+import app.tandemforactual.ui.components.TandemModalHeader
 import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.liveAccountGroupLabel
@@ -450,17 +451,12 @@ internal fun AccountsScreen(
                 Modifier.fillMaxWidth().padding(TandemSpacing.large),
                 verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    Icon(Lucide.Landmark, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
-                    Text(
-                        "Bank connections",
-                        modifier = Modifier.weight(1f),
-                        color = tandemPalette.text,
-                        fontSize = TandemTypography.sectionTitle,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    TandemIconButton(Lucide.X, "Close", sizeDp = 40, iconSizeDp = 18) { showBankConnectionsDialog = false }
-                }
+                TandemModalHeader(
+                    title = "Bank connections",
+                    leadingIcon = Lucide.Landmark,
+                    enabled = !isRefreshing,
+                    onClose = { if (!isRefreshing) showBankConnectionsDialog = false },
+                )
                 InfoBubble("Review, add, or remove bank links in Actual Budget. Tandem syncs the connections configured there.")
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     TandemActionButton("Done", TandemActionButtonTone.NEUTRAL, Modifier.weight(1f)) {

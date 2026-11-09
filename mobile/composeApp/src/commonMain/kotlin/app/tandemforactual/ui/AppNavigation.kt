@@ -52,6 +52,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.TandemIconButton
+import app.tandemforactual.ui.components.TandemModalCloseButton
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
 import com.composables.icons.lucide.ChevronDown
@@ -326,6 +327,8 @@ internal fun AppHeader(
                 fontSize = TandemTypography.micro,
                 fontWeight = FontWeight.Bold,
             )
+        } else if (route.isTransactionForm()) {
+            TandemModalCloseButton(onClick = onBack)
         }
     }
 }

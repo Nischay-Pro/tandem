@@ -56,6 +56,7 @@ import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.components.TandemChoiceDialog
 import app.tandemforactual.ui.components.TandemIconButton
+import app.tandemforactual.ui.components.TandemModalHeader
 import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
 import app.tandemforactual.ui.model.LiveCategoryGroupSummary
@@ -1063,7 +1064,11 @@ private fun MonthPickerDialog(
                 Modifier.fillMaxWidth().padding(TandemSpacing.large),
                 verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
             ) {
-                Text("Choose month", color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
+                TandemModalHeader(
+                    title = "Choose month",
+                    titleSize = TandemTypography.cardTitle,
+                    onClose = onDismiss,
+                )
                 PeriodStepper(
                     title = selectedYear.toString(),
                     previousLabel = "Previous year",

@@ -57,6 +57,7 @@ import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.components.TandemChoiceDialog
 import app.tandemforactual.ui.components.TandemIconButton
+import app.tandemforactual.ui.components.TandemModalHeader
 import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.LiveScheduleSummary
@@ -796,6 +797,11 @@ internal fun ScheduleChoiceField(
     TandemChoiceDialog(visible = expanded, onDismissRequest = { expanded = false }) {
         SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 420.dp).padding(horizontal = TandemSpacing.large)) {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(TandemSpacing.medium)) {
+                TandemModalHeader(
+                    title = "Choose $label",
+                    titleSize = TandemTypography.cardTitle,
+                    onClose = { expanded = false },
+                )
                 options.forEach { (id, name) ->
                     ListRow(
                         name,
@@ -829,6 +835,11 @@ internal fun ScheduleDatePickerDialog(
                 Modifier.fillMaxWidth().padding(TandemSpacing.large),
                 verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
             ) {
+                TandemModalHeader(
+                    title = "Choose date",
+                    titleSize = TandemTypography.cardTitle,
+                    onClose = onDismiss,
+                )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TandemIconButton(Lucide.ChevronLeft, "Previous month", sizeDp = 40, iconSizeDp = 18) {
                         if (visibleMonth == 1) {

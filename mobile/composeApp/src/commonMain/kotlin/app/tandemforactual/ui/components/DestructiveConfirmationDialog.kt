@@ -26,7 +26,14 @@ internal fun DestructiveConfirmationDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismissRequest,
-        title = { Text(title, color = tandemPalette.text) },
+        title = {
+            TandemModalHeader(
+                title = title,
+                titleSize = TandemTypography.cardTitle,
+                enabled = enabled,
+                onClose = onDismissRequest,
+            )
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                 if (messageKind == null) {

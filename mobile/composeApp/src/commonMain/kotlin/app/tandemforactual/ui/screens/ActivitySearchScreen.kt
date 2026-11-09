@@ -50,6 +50,7 @@ import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.components.TandemIconButton
+import app.tandemforactual.ui.components.TandemModalHeader
 import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.recordName
 import com.composables.icons.lucide.Lucide
@@ -609,7 +610,10 @@ internal fun ActivitySearchScreen(
                 Modifier.fillMaxWidth().padding(TandemSpacing.large),
                 verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
             ) {
-                Heading("Save search")
+                TandemModalHeader(
+                    title = "Save search",
+                    onClose = { showSaveSearchDialog = false },
+                )
                 TextFieldCard(
                     "Name",
                     savedSearchNameDraft,

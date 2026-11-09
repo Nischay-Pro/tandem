@@ -41,6 +41,7 @@ import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.components.TandemIconButton
+import app.tandemforactual.ui.components.TandemModalHeader
 import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveScheduleSummary
 import app.tandemforactual.ui.model.booleanValue
@@ -251,11 +252,10 @@ internal fun ManagePayeesScreen(
                     .padding(TandemSpacing.large),
                 verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
             ) {
-                Text(
-                    "Add payee",
-                    color = tandemPalette.text,
-                    fontSize = TandemTypography.sectionTitle,
-                    fontWeight = FontWeight.Bold,
+                TandemModalHeader(
+                    title = "Add payee",
+                    enabled = !mobileSession.isPerformingBudgetAction,
+                    onClose = { if (!mobileSession.isPerformingBudgetAction) showAddPayee = false },
                 )
                 TextFieldCard("Name", newPayeeName, { newPayeeName = it })
                 mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
