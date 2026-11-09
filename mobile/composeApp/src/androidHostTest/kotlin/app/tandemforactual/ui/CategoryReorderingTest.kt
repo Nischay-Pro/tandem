@@ -199,11 +199,115 @@ class CategoryReorderingTest {
                 encryptionPassword = "not-persisted",
             )
         val queued = BudgetReorderQueueState().enqueue(hide)
-        val restored = decodeBudgetReorderQueue(encodeBudgetReorderQueue(queued))
+        val encoded = encodeBudgetReorderQueue(queued)
+        val restored = decodeBudgetReorderQueue(encoded)
 
+        assertEquals(false, encoded.contains("not-persisted"))
         assertEquals(true, queued.categoryVisibilityOverridesFor("budget")["mobile"])
         assertEquals(listOf(hide.copy(encryptionPassword = null, requiresEncryptionPassword = true)), restored.moves)
         assertEquals(true, restored.categoryVisibilityOverridesFor("budget")["mobile"])
         assertEquals(1, restored.statusFor("budget", "utilities").pendingCount)
+    }
+
+    @Test
+    fun categoryRenameQueuedBehindCreateUsesTheActualIdAfterCreateCompletes() {
+        val create =
+            QueuedBudgetReorder(
+                budgetId = "budget",
+                scopeId = "utilities",
+                kind = BudgetReorderKind.CREATE_CATEGORY,
+                itemId = "local-category-new",
+                targetId = null,
+                desiredOrder = listOf("phone", "local-category-new"),
+                encryptionPassword = null,
+                name = "New category",
+                parentGroupId = "utilities",
+            )
+        val rename =
+            QueuedBudgetReorder(
+                budgetId = "budget",
+                scopeId = "category-local-category-new",
+                kind = BudgetReorderKind.RENAME_CATEGORY,
+                itemId = "local-category-new",
+                targetId = null,
+                desiredOrder = emptyList(),
+                encryptionPassword = null,
+                name = "Renamed category",
+            )
+        val queued = BudgetReorderQueueState().enqueue(create).enqueue(rename)
+
+        val created = queued.completeCategoryCreate(create, "actual-category-1")
+
+        assertEquals("actual-category-1", created.moves.single().itemId)
+        assertEquals("Renamed category", created.categoryNameOverridesFor("budget")["actual-category-1"])
+        assertEquals("actual-category-1", created.resolveCategoryId("budget", "local-category-new"))
+    }
+
+    @Test
+    fun deletingACategoryCreatedOfflineKeepsTheDeleteUntilTheActualIdIsKnown() {
+        val create =
+            QueuedBudgetReorder(
+                budgetId = "budget",
+                scopeId = "utilities",
+                kind = BudgetReorderKind.CREATE_CATEGORY,
+                itemId = "local-category-temporary",
+                targetId = null,
+                desiredOrder = listOf("local-category-temporary"),
+                encryptionPassword = null,
+                name = "Temporary category",
+                parentGroupId = "utilities",
+            )
+        val delete =
+            QueuedBudgetReorder(
+                budgetId = "budget",
+                scopeId = "category-local-category-temporary",
+                kind = BudgetReorderKind.DELETE_CATEGORY,
+                itemId = "local-category-temporary",
+                targetId = null,
+                desiredOrder = emptyList(),
+                encryptionPassword = null,
+            )
+        val queued = BudgetReorderQueueState().enqueue(create).enqueue(delete)
+
+        assertEquals(setOf("local-category-temporary"), queued.deletedCategoryIdsFor("budget"))
+        val created = queued.completeCategoryCreate(create, "actual-category-2")
+        assertEquals(BudgetReorderKind.DELETE_CATEGORY, created.moves.single().kind)
+        assertEquals("actual-category-2", created.moves.single().itemId)
+        assertEquals(setOf("actual-category-2"), created.deletedCategoryIdsFor("budget"))
+
+        val deleted = created.complete(created.moves.single(), refreshFailed = false, message = null)
+
+        assertEquals(emptyList(), deleted.moves)
+        assertEquals(emptySet(), deleted.deletedCategoryIdsFor("budget"))
+    }
+
+    @Test
+    fun queuedCategoryEditsSurviveDisconnectAndResumeWithoutBeingReplaced() {
+        val rename =
+            QueuedBudgetReorder(
+                budgetId = "budget",
+                scopeId = "category-groceries",
+                kind = BudgetReorderKind.RENAME_CATEGORY,
+                itemId = "groceries",
+                targetId = null,
+                desiredOrder = emptyList(),
+                encryptionPassword = "budget-password",
+                name = "Food",
+            )
+        val queued = BudgetReorderQueueState().enqueue(rename)
+        val request = queued.moves.single()
+        val waiting = queued.waitForConnection(request, "Waiting for a connection to Tandem.")
+        val restored = decodeBudgetReorderQueue(encodeBudgetReorderQueue(waiting))
+
+        assertEquals(true, restored.waitingForConnection)
+        assertEquals("Food", restored.moves.single().name)
+        assertEquals(null, restored.moves.single().encryptionPassword)
+        assertEquals(true, restored.moves.single().requiresEncryptionPassword)
+
+        val resumed = restored.resumeAfterConnection()
+
+        assertEquals(false, resumed.waitingForConnection)
+        assertEquals("Food", resumed.moves.single().name)
+        assertEquals(1, resumed.statusFor("budget", "category-groceries").pendingCount)
     }
 }

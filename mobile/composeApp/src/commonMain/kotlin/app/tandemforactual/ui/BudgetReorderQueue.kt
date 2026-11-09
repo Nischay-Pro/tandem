@@ -846,6 +846,7 @@ private val budgetOrderKinds =
 
 internal fun encodeBudgetReorderQueue(state: BudgetReorderQueueState): String =
     buildJsonObject {
+        put("waitingForConnection", state.waitingForConnection)
         put(
             "moves",
             buildJsonArray {
@@ -910,6 +911,7 @@ internal fun decodeBudgetReorderQueue(encoded: String?): BudgetReorderQueueState
     return reconstructed.copy(
         categoryGroupIdAliases = decodeAliases(body["categoryGroupIdAliases"]),
         categoryIdAliases = decodeAliases(body["categoryIdAliases"]),
+        waitingForConnection = (body["waitingForConnection"] as? JsonPrimitive)?.booleanOrNull ?: false,
     )
 }
 
