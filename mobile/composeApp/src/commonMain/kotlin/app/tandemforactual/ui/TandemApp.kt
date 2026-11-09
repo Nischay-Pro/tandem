@@ -493,6 +493,7 @@ fun TandemApp(
         )
     val routeEntry = backStack.last()
     val route = routeEntry.route
+    SideEffect { mobileSession.setBudgetActionRoute(routeEntry) }
     val transactionSheetIndex = backStack.indexOfLast { it.route.isTransactionForm() }
     val transactionSheetActive = transactionSheetIndex >= 0
     val transactionSheetBaseEntry = backStack.getOrNull(transactionSheetIndex - 1)

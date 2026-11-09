@@ -80,7 +80,40 @@ internal data class TransactionEditDetails(
 internal data class BudgetActionFeedback(
     val text: String,
     val kind: InlineMessageKind,
+    val ownerRoute: AppRouteEntry,
 )
+
+internal class BudgetActionFeedbackState {
+    var currentRouteEntry by mutableStateOf<AppRouteEntry?>(null)
+        private set
+
+    var feedback by mutableStateOf<BudgetActionFeedback?>(null)
+        private set
+
+    fun changeRoute(routeEntry: AppRouteEntry) {
+        if (currentRouteEntry == routeEntry) return
+        currentRouteEntry = routeEntry
+        feedback = null
+    }
+
+    fun show(
+        text: String,
+        kind: InlineMessageKind,
+        ownerRoute: AppRouteEntry?,
+    ) {
+        if (ownerRoute != null) feedback = BudgetActionFeedback(text, kind, ownerRoute)
+    }
+
+    fun clear() {
+        feedback = null
+    }
+
+    fun clear(route: AppRouteEntry?) {
+        if (feedback?.ownerRoute == route) feedback = null
+    }
+
+    fun messageFor(routeEntry: AppRouteEntry): BudgetActionFeedback? = feedback?.takeIf { it.ownerRoute == routeEntry }
+}
 
 internal fun buildTransactionEditPatch(
     base: JsonObject,
@@ -216,16 +249,26 @@ internal class TandemMobileSession(
     var isPerformingBudgetAction by mutableStateOf(false)
         private set
 
-    private var budgetActionFeedback by mutableStateOf<BudgetActionFeedback?>(null)
+    private val budgetActionFeedbackState = BudgetActionFeedbackState()
+    private var suppressBudgetActionFeedback = false
+    private val currentBudgetActionMessageOwner: AppRouteEntry?
+        get() = if (suppressBudgetActionFeedback) null else budgetActionFeedbackState.currentRouteEntry
 
     var budgetActionMessage: String?
-        get() = budgetActionFeedback?.text
+        get() = budgetActionFeedbackState.currentRouteEntry?.let { budgetActionFeedbackState.messageFor(it)?.text }
         private set(value) {
-            budgetActionFeedback = value?.let { BudgetActionFeedback(it, InlineMessageKind.ERROR) }
+            if (value == null) {
+                budgetActionFeedbackState.clear(currentBudgetActionMessageOwner)
+            } else {
+                budgetActionFeedbackState.show(value, InlineMessageKind.ERROR, currentBudgetActionMessageOwner)
+            }
         }
 
     val budgetActionMessageKind: InlineMessageKind
-        get() = budgetActionFeedback?.kind ?: InlineMessageKind.ERROR
+        get() {
+            val routeEntry = budgetActionFeedbackState.currentRouteEntry
+            return routeEntry?.let { budgetActionFeedbackState.messageFor(it)?.kind } ?: InlineMessageKind.ERROR
+        }
 
     var budgetActionWasAppliedButRefreshFailed by mutableStateOf(false)
         private set
@@ -615,6 +658,16 @@ internal class TandemMobileSession(
         budgetReorderQueue = budgetReorderQueue.clearMessage(budgetId, scopeId)
     }
 
+    private suspend fun <T> withoutBudgetActionFeedback(action: suspend () -> T): T {
+        val wasSuppressed = suppressBudgetActionFeedback
+        suppressBudgetActionFeedback = true
+        return try {
+            action()
+        } finally {
+            suppressBudgetActionFeedback = wasSuppressed
+        }
+    }
+
     private fun clearBudgetReorderMessageAfterDelay(
         budgetId: String,
         scopeId: String,
@@ -662,113 +715,117 @@ internal class TandemMobileSession(
             var createdCategoryId: String? = null
             budgetActionWasAppliedButRefreshFailed = false
             val moved =
-                if (request.refreshOnly ||
-                    request.kind in
-                    setOf(
-                        BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE,
-                        BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
-                        BudgetReorderKind.REFRESH_CATEGORY_CREATE,
-                        BudgetReorderKind.REFRESH_CATEGORY_RENAME,
-                    )
-                ) {
-                    synchronize(request.budgetId, request.encryptionPassword) != null
-                } else {
-                    when (request.kind) {
-                        BudgetReorderKind.CATEGORY ->
-                            manageBudgetCategory(
-                                request.budgetId,
-                                request.itemId,
-                                "move",
-                                request.targetId,
-                                request.encryptionPassword,
-                            )
-                        BudgetReorderKind.HIDE_CATEGORY ->
-                            manageBudgetCategory(
-                                request.budgetId,
-                                request.itemId,
-                                "hide",
-                                null,
-                                request.encryptionPassword,
-                            )
-                        BudgetReorderKind.SHOW_CATEGORY ->
-                            manageBudgetCategory(
-                                request.budgetId,
-                                request.itemId,
-                                "show",
-                                null,
-                                request.encryptionPassword,
-                            )
-                        BudgetReorderKind.CREATE_CATEGORY_GROUP -> {
-                            createdCategoryGroupId =
-                                createBudgetCategoryGroup(
+                withoutBudgetActionFeedback {
+                    if (request.refreshOnly ||
+                        request.kind in
+                        setOf(
+                            BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE,
+                            BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
+                            BudgetReorderKind.REFRESH_CATEGORY_CREATE,
+                            BudgetReorderKind.REFRESH_CATEGORY_RENAME,
+                        )
+                    ) {
+                        synchronize(request.budgetId, request.encryptionPassword) != null
+                    } else {
+                        when (request.kind) {
+                            BudgetReorderKind.CATEGORY ->
+                                manageBudgetCategory(
                                     request.budgetId,
-                                    request.name.orEmpty(),
-                                    request.isIncome,
+                                    request.itemId,
+                                    "move",
+                                    request.targetId,
                                     request.encryptionPassword,
                                 )
-                            createdCategoryGroupId != null
-                        }
-                        BudgetReorderKind.RENAME_CATEGORY_GROUP ->
-                            manageBudgetCategoryGroup(
-                                request.budgetId,
-                                request.itemId,
-                                "rename",
-                                request.name,
-                                null,
-                                request.encryptionPassword,
-                            )
-                        BudgetReorderKind.CATEGORY_GROUP ->
-                            manageBudgetCategoryGroup(
-                                request.budgetId,
-                                request.itemId,
-                                "move",
-                                null,
-                                request.targetId,
-                                request.encryptionPassword,
-                            )
-                        BudgetReorderKind.CREATE_CATEGORY -> {
-                            createdCategoryId =
-                                createBudgetCategory(
+                            BudgetReorderKind.HIDE_CATEGORY ->
+                                manageBudgetCategory(
                                     request.budgetId,
-                                    request.name.orEmpty(),
-                                    request.parentGroupId.orEmpty(),
+                                    request.itemId,
+                                    "hide",
+                                    null,
                                     request.encryptionPassword,
                                 )
-                            createdCategoryId != null
+                            BudgetReorderKind.SHOW_CATEGORY ->
+                                manageBudgetCategory(
+                                    request.budgetId,
+                                    request.itemId,
+                                    "show",
+                                    null,
+                                    request.encryptionPassword,
+                                )
+                            BudgetReorderKind.CREATE_CATEGORY_GROUP -> {
+                                createdCategoryGroupId =
+                                    createBudgetCategoryGroup(
+                                        request.budgetId,
+                                        request.name.orEmpty(),
+                                        request.isIncome,
+                                        request.encryptionPassword,
+                                    )
+                                createdCategoryGroupId != null
+                            }
+                            BudgetReorderKind.RENAME_CATEGORY_GROUP ->
+                                manageBudgetCategoryGroup(
+                                    request.budgetId,
+                                    request.itemId,
+                                    "rename",
+                                    request.name,
+                                    null,
+                                    request.encryptionPassword,
+                                )
+                            BudgetReorderKind.CATEGORY_GROUP ->
+                                manageBudgetCategoryGroup(
+                                    request.budgetId,
+                                    request.itemId,
+                                    "move",
+                                    null,
+                                    request.targetId,
+                                    request.encryptionPassword,
+                                )
+                            BudgetReorderKind.CREATE_CATEGORY -> {
+                                createdCategoryId =
+                                    createBudgetCategory(
+                                        request.budgetId,
+                                        request.name.orEmpty(),
+                                        request.parentGroupId.orEmpty(),
+                                        request.encryptionPassword,
+                                    )
+                                createdCategoryId != null
+                            }
+                            BudgetReorderKind.RENAME_CATEGORY ->
+                                renameBudgetCategory(request.budgetId, request.itemId, request.name.orEmpty(), request.encryptionPassword)
+                            BudgetReorderKind.MOVE_CATEGORY_TO_GROUP ->
+                                manageBudgetCategory(
+                                    request.budgetId,
+                                    request.itemId,
+                                    "move",
+                                    null,
+                                    request.encryptionPassword,
+                                    request.parentGroupId,
+                                )
+                            BudgetReorderKind.DELETE_CATEGORY ->
+                                deleteBudgetCategory(request.budgetId, request.itemId, request.targetId, request.encryptionPassword)
+                            BudgetReorderKind.HIDE_CATEGORY_GROUP ->
+                                manageBudgetCategoryGroup(request.budgetId, request.itemId, "hide", null, null, request.encryptionPassword)
+                            BudgetReorderKind.SHOW_CATEGORY_GROUP ->
+                                manageBudgetCategoryGroup(request.budgetId, request.itemId, "show", null, null, request.encryptionPassword)
+                            BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE,
+                            BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
+                            BudgetReorderKind.REFRESH_CATEGORY_CREATE,
+                            BudgetReorderKind.REFRESH_CATEGORY_RENAME,
+                            -> false
                         }
-                        BudgetReorderKind.RENAME_CATEGORY ->
-                            renameBudgetCategory(request.budgetId, request.itemId, request.name.orEmpty(), request.encryptionPassword)
-                        BudgetReorderKind.MOVE_CATEGORY_TO_GROUP ->
-                            manageBudgetCategory(
-                                request.budgetId,
-                                request.itemId,
-                                "move",
-                                null,
-                                request.encryptionPassword,
-                                request.parentGroupId,
-                            )
-                        BudgetReorderKind.DELETE_CATEGORY ->
-                            deleteBudgetCategory(request.budgetId, request.itemId, request.targetId, request.encryptionPassword)
-                        BudgetReorderKind.HIDE_CATEGORY_GROUP ->
-                            manageBudgetCategoryGroup(request.budgetId, request.itemId, "hide", null, null, request.encryptionPassword)
-                        BudgetReorderKind.SHOW_CATEGORY_GROUP ->
-                            manageBudgetCategoryGroup(request.budgetId, request.itemId, "show", null, null, request.encryptionPassword)
-                        BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE,
-                        BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
-                        BudgetReorderKind.REFRESH_CATEGORY_CREATE,
-                        BudgetReorderKind.REFRESH_CATEGORY_RENAME,
-                        -> false
                     }
                 }
-            if (createdCategoryId != null) {
-                repository?.remapPendingCategoryReferences(request.budgetId, request.itemId, createdCategoryId)
+            val createdCategoryGroupIdAfterAction = createdCategoryGroupId
+            val createdCategoryIdAfterAction = createdCategoryId
+            if (createdCategoryIdAfterAction != null) {
+                repository?.remapPendingCategoryReferences(request.budgetId, request.itemId, createdCategoryIdAfterAction)
             }
             val refreshFailed = budgetActionWasAppliedButRefreshFailed
-            if (request.kind == BudgetReorderKind.CREATE_CATEGORY_GROUP && refreshFailed && createdCategoryGroupId != null) {
+            if (request.kind == BudgetReorderKind.CREATE_CATEGORY_GROUP && refreshFailed && createdCategoryGroupIdAfterAction != null) {
                 budgetReorderQueue =
                     budgetReorderQueue.awaitCategoryGroupRefresh(
                         request,
-                        createdCategoryGroupId,
+                        createdCategoryGroupIdAfterAction,
                         BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE,
                         "Created in Actual. Waiting for the budget to refresh.",
                     )
@@ -782,22 +839,21 @@ internal class TandemMobileSession(
                     )
             } else if (request.kind == BudgetReorderKind.RENAME_CATEGORY && refreshFailed) {
                 budgetReorderQueue = budgetReorderQueue.awaitRefresh(request, "Renamed in Actual. Waiting for the budget to refresh.")
-            } else if (request.kind == BudgetReorderKind.CREATE_CATEGORY_GROUP && moved && createdCategoryGroupId != null) {
-                budgetReorderQueue = budgetReorderQueue.completeCategoryGroupCreate(request, createdCategoryGroupId)
-            } else if (request.kind == BudgetReorderKind.CREATE_CATEGORY && refreshFailed && createdCategoryId != null) {
+            } else if (request.kind == BudgetReorderKind.CREATE_CATEGORY_GROUP && moved && createdCategoryGroupIdAfterAction != null) {
+                budgetReorderQueue = budgetReorderQueue.completeCategoryGroupCreate(request, createdCategoryGroupIdAfterAction)
+            } else if (request.kind == BudgetReorderKind.CREATE_CATEGORY && refreshFailed && createdCategoryIdAfterAction != null) {
                 budgetReorderQueue =
                     budgetReorderQueue.awaitCategoryCreateRefresh(
                         request,
-                        createdCategoryId,
+                        createdCategoryIdAfterAction,
                         "Created in Actual. Waiting for the budget to refresh.",
                     )
-            } else if (request.kind == BudgetReorderKind.CREATE_CATEGORY && moved && createdCategoryId != null) {
-                budgetReorderQueue = budgetReorderQueue.completeCategoryCreate(request, createdCategoryId)
+            } else if (request.kind == BudgetReorderKind.CREATE_CATEGORY && moved && createdCategoryIdAfterAction != null) {
+                budgetReorderQueue = budgetReorderQueue.completeCategoryCreate(request, createdCategoryIdAfterAction)
             } else if (refreshFailed) {
                 // The mutation has already been accepted. Keep the optimistic
                 // state and show its retryable refresh status in the queue;
                 // the sync transport error belongs on the cloud indicator.
-                clearBudgetActionMessage()
                 budgetReorderQueue = budgetReorderQueue.awaitRefresh(request, "Saved in Actual. Waiting for the budget to refresh.")
             } else if ((
                     request.refreshOnly ||
@@ -817,16 +873,15 @@ internal class TandemMobileSession(
                         "Waiting for a connection to refresh this category group.",
                     )
             } else if (moved) {
-                budgetReorderQueue = budgetReorderQueue.complete(request, refreshFailed, budgetActionMessage)
+                budgetReorderQueue = budgetReorderQueue.complete(request, refreshFailed, null)
             } else if (budgetActionShouldRetry || !isServerReachable || !apiClient.isAuthenticated) {
-                budgetActionMessage = null
                 budgetReorderQueue =
                     budgetReorderQueue.waitForConnection(
                         request,
                         "Saved on this device. Waiting for Tandem to recover.",
                     )
             } else {
-                val failure = budgetMutationFailureMessage(request.kind, budgetActionMessage)
+                val failure = budgetMutationFailureMessage(request.kind, null)
                 budgetReorderQueue = budgetReorderQueue.failHead(request, failure)
                 clearBudgetReorderMessageAfterDelay(request.budgetId, request.scopeId, failure)
             }
@@ -846,14 +901,19 @@ internal class TandemMobileSession(
     }
 
     fun clearBudgetActionMessage() {
-        budgetActionFeedback = null
+        budgetActionFeedbackState.clear(budgetActionFeedbackState.currentRouteEntry)
+    }
+
+    fun setBudgetActionRoute(routeEntry: AppRouteEntry) {
+        budgetActionFeedbackState.changeRoute(routeEntry)
     }
 
     private fun setBudgetActionMessage(
         text: String,
         kind: InlineMessageKind = InlineMessageKind.ERROR,
+        ownerRoute: AppRouteEntry? = currentBudgetActionMessageOwner,
     ) {
-        budgetActionFeedback = BudgetActionFeedback(text, kind)
+        budgetActionFeedbackState.show(text, kind, ownerRoute)
     }
 
     fun clearTransactionWriteMessage() {
@@ -1408,6 +1468,7 @@ internal class TandemMobileSession(
         name: String,
         encryptionPassword: String?,
     ): String? {
+        val messageOwner = currentBudgetActionMessageOwner
         val cleanName = name.trim()
         if (cleanName.isBlank()) {
             budgetActionMessage = "Enter a payee name."
@@ -1431,17 +1492,21 @@ internal class TandemMobileSession(
         try {
             val payeeId = apiClient.withExclusiveSession { apiClient.createBudgetPayee(budgetId, cleanName, encryptionPassword) }
             if (synchronize(budgetId, encryptionPassword) == null) {
-                budgetActionMessage = "The payee was created, but this device couldn’t refresh the budget."
+                setBudgetActionMessage(
+                    "The payee was created, but this device couldn’t refresh the budget.",
+                    InlineMessageKind.WARNING,
+                    messageOwner,
+                )
                 return null
             }
             return payeeId
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
-            budgetActionMessage = error.message ?: "Couldn’t add this payee. Try again."
+            setBudgetActionMessage(error.message ?: "Couldn’t add this payee. Try again.", ownerRoute = messageOwner)
             return null
         } catch (_: Exception) {
-            budgetActionMessage = "Couldn’t add this payee. Try again."
+            setBudgetActionMessage("Couldn’t add this payee. Try again.", ownerRoute = messageOwner)
             return null
         } finally {
             isPerformingBudgetAction = false
@@ -1494,6 +1559,7 @@ internal class TandemMobileSession(
         transactions: List<StatementImportItem>,
         encryptionPassword: String?,
     ): StatementImportSummary? {
+        val messageOwner = currentBudgetActionMessageOwner
         budgetActionMessage = null
         if (refuseWriteInReadOnlyMode()) {
             budgetActionMessage = transactionWriteMessage
@@ -1514,18 +1580,19 @@ internal class TandemMobileSession(
                 setBudgetActionMessage(
                     syncError ?: "Actual imported the statement, but this device couldn’t refresh the budget.",
                     InlineMessageKind.WARNING,
+                    messageOwner,
                 )
             } else {
-                setBudgetActionMessage(formatStatementImportSummary(result), InlineMessageKind.SUCCESS)
+                setBudgetActionMessage(formatStatementImportSummary(result), InlineMessageKind.SUCCESS, messageOwner)
             }
             return result
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
-            budgetActionMessage = error.message ?: "Couldn’t import this statement. Try again."
+            setBudgetActionMessage(error.message ?: "Couldn’t import this statement. Try again.", ownerRoute = messageOwner)
             return null
         } catch (_: Exception) {
-            budgetActionMessage = "Couldn’t import this statement. Try again."
+            setBudgetActionMessage("Couldn’t import this statement. Try again.", ownerRoute = messageOwner)
             return null
         } finally {
             isPerformingBudgetAction = false
@@ -1663,17 +1730,18 @@ internal class TandemMobileSession(
         budgetId: String,
         encryptionPassword: String?,
         failureMessage: String,
+        messageOwner: AppRouteEntry? = currentBudgetActionMessageOwner,
         action: suspend () -> Unit,
     ): Boolean {
         budgetActionMessage = null
         budgetActionWasAppliedButRefreshFailed = false
         budgetActionShouldRetry = false
         if (refuseWriteInReadOnlyMode()) {
-            budgetActionMessage = transactionWriteMessage
+            transactionWriteMessage?.let { setBudgetActionMessage(it, ownerRoute = messageOwner) }
             return false
         }
         if (budgetId.isBlank() || !apiClient.isAuthenticated) {
-            budgetActionMessage = "Pair this device and open a budget before changing it."
+            setBudgetActionMessage("Pair this device and open a budget before changing it.", ownerRoute = messageOwner)
             return false
         }
         if (isPerformingBudgetAction) return false
@@ -1686,7 +1754,10 @@ internal class TandemMobileSession(
             }
             if (synchronize(budgetId, encryptionPassword) == null) {
                 budgetActionWasAppliedButRefreshFailed = true
-                budgetActionMessage = syncError ?: "Actual was updated, but this device couldn’t refresh the budget."
+                setBudgetActionMessage(
+                    syncError ?: "Actual was updated, but this device couldn’t refresh the budget.",
+                    ownerRoute = messageOwner,
+                )
                 return false
             }
             return true
@@ -1700,11 +1771,14 @@ internal class TandemMobileSession(
                 setBudgetActionMessage(
                     "Actual was updated, but this device couldn’t refresh the budget.",
                     InlineMessageKind.WARNING,
+                    messageOwner,
                 )
             } else {
                 // Network failures are handled by the persistent queue. Do not surface the
                 // transport exception as if the category edit itself was rejected.
-                budgetActionMessage = if (error.httpStatus == null) null else error.message ?: failureMessage
+                if (error.httpStatus != null) {
+                    setBudgetActionMessage(error.message ?: failureMessage, ownerRoute = messageOwner)
+                }
             }
             return false
         } catch (_: Exception) {
@@ -1715,9 +1789,8 @@ internal class TandemMobileSession(
                 setBudgetActionMessage(
                     "Actual was updated, but this device couldn’t refresh the budget.",
                     InlineMessageKind.WARNING,
+                    messageOwner,
                 )
-            } else {
-                budgetActionMessage = null
             }
             return false
         } finally {
