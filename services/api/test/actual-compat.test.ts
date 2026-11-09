@@ -1588,6 +1588,147 @@ describe.skipIf(!compatibilityTestEnabled)(
       }
     }, 60_000);
 
+    it("merges a same-field edit from two independent Actual workspaces", async () => {
+      if (!serverURL || !serverPassword || !firstDataDir) {
+        throw new Error("Actual compatibility test configuration is missing");
+      }
+
+      const concurrencyRoot = path.join(
+        firstDataDir,
+        `crdt-concurrency-${randomUUID()}`,
+      );
+      const seedDataDir = path.join(concurrencyRoot, "seed");
+      const firstDataDirForEdit = path.join(concurrencyRoot, "device-one");
+      const secondDataDirForEdit = path.join(concurrencyRoot, "device-two");
+      await Promise.all([
+        mkdir(seedDataDir, { recursive: true }),
+        mkdir(firstDataDirForEdit, { recursive: true }),
+        mkdir(secondDataDirForEdit, { recursive: true }),
+      ]);
+
+      const budgetName = `ABC concurrent edit budget ${randomUUID()}`;
+      const accountName = "ABC concurrent edit checking";
+      const transactionDate = "2026-10-31";
+      const seedDevice = createActualSession({
+        serverURL,
+        dataDir: seedDataDir,
+        password: serverPassword,
+      });
+      let budgetId = "";
+      let accountId = "";
+      let transactionId = "";
+      try {
+        await seedDevice.execute(
+          () =>
+            Actual.runImport(budgetName, async () => {
+              accountId = await Actual.createAccount(
+                { name: accountName, offbudget: false },
+                0,
+              );
+              await Actual.addTransactions(accountId, [
+                { date: transactionDate, amount: -1500, notes: "Baseline" },
+              ]);
+            }),
+          { synchronizeAfterWrite: true },
+        );
+        const seeded = await seedDevice.execute(async () => {
+          const budget = (await Actual.getBudgets()).find(
+            (item) => item.name === budgetName && item.groupId,
+          );
+          const transaction = (
+            await Actual.getTransactions(
+              accountId,
+              transactionDate,
+              transactionDate,
+            )
+          )[0];
+          if (!budget?.groupId || !transaction?.id) {
+            throw new Error(
+              `Actual did not seed the concurrency fixture (budget=${budget?.name ?? "missing"}, groupId=${budget?.groupId ?? "missing"}, accountId=${accountId || "missing"}, transaction=${transaction?.id ?? "missing"})`,
+            );
+          }
+          budgetId = budget.groupId;
+          transactionId = transaction.id;
+          return transaction;
+        });
+        expect(seeded.amount).toBe(-1500);
+      } finally {
+        await seedDevice.close();
+      }
+
+      const firstDevice = createActualSession({
+        serverURL,
+        dataDir: firstDataDirForEdit,
+        password: serverPassword,
+      });
+      try {
+        await firstDevice.runBudget(budgetId, () =>
+          Actual.updateTransaction(transactionId, { amount: -1700 }),
+        );
+      } finally {
+        await firstDevice.close();
+      }
+
+      const secondDevice = createActualSession({
+        serverURL,
+        dataDir: secondDataDirForEdit,
+        password: serverPassword,
+      });
+      try {
+        await secondDevice.runBudget(
+          budgetId,
+          () => Actual.updateTransaction(transactionId, { amount: -1900 }),
+          { synchronizeAfterWrite: true },
+        );
+      } finally {
+        await secondDevice.close();
+      }
+
+      const firstDeviceAfterReconnect = createActualSession({
+        serverURL,
+        dataDir: firstDataDirForEdit,
+        password: serverPassword,
+      });
+      let firstMergedAmount: number | undefined;
+      try {
+        const transactions = await firstDeviceAfterReconnect.runBudget(
+          budgetId,
+          () =>
+            Actual.getTransactions(accountId, transactionDate, transactionDate),
+        );
+        firstMergedAmount = transactions.find(
+          ({ id }) => id === transactionId,
+        )?.amount;
+      } finally {
+        await firstDeviceAfterReconnect.close();
+      }
+
+      const secondDeviceAfterReconnect = createActualSession({
+        serverURL,
+        dataDir: secondDataDirForEdit,
+        password: serverPassword,
+      });
+      let secondMergedAmount: number | undefined;
+      try {
+        const transactions = await secondDeviceAfterReconnect.runBudget(
+          budgetId,
+          () =>
+            Actual.getTransactions(accountId, transactionDate, transactionDate),
+        );
+        secondMergedAmount = transactions.find(
+          ({ id }) => id === transactionId,
+        )?.amount;
+      } finally {
+        await secondDeviceAfterReconnect.close();
+      }
+
+      expect([-1700, -1900]).toContain(firstMergedAmount);
+      expect(secondMergedAmount).toBe(firstMergedAmount);
+      console.info(
+        `Actual resolved the concurrent amount edits to ${firstMergedAmount}; both workspaces converged.`,
+      );
+    }, 60_000);
+
     it("reads an end-to-end encrypted synthetic budget through the API adapter", async () => {
       if (!serverURL || !serverPassword || !firstDataDir) {
         throw new Error("Actual compatibility test configuration is missing");

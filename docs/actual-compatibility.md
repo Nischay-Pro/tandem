@@ -91,6 +91,16 @@ through `@actual-app/api`. It syncs the update and verifies it from a second
 local data directory, deletes it from that second client, syncs again, then
 verifies its absence from a third independent local data directory.
 
+The suite also gives two independent local workspaces the same baseline
+transaction, edits its amount in both workspaces without synchronizing the
+first edit, then synchronizes the copies in sequence. Actual reconciles the
+same-field edits to one amount, and both workspaces converge on that value.
+The test intentionally does not prescribe which edit wins: it verifies Actual's
+observed merge and convergence behavior, not a stable conflict-winner contract.
+This covers one offline transaction-amount conflict; it does not establish
+concurrent network-write safety, behavior for every field or entity, or a
+publicly supported incremental change cursor.
+
 The test also creates a synthetic transfer payee, sets its `transfer_acct`
 through `updatePayee`, and adds a transaction with `runTransfers: true`. Actual
 creates the paired transaction and each leg points to the other leg's ID; the
