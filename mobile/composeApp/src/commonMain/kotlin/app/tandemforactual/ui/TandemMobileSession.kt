@@ -23,6 +23,7 @@ import app.tandemforactual.data.store.BudgetSyncCoordinator
 import app.tandemforactual.data.store.BudgetSyncProtocolException
 import app.tandemforactual.data.store.BudgetSyncRemoteException
 import app.tandemforactual.data.store.BudgetSyncSummary
+import app.tandemforactual.data.store.LocalBudgetMutationOutboxItem
 import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.LocalRecordProjection
 import app.tandemforactual.data.store.LocalWriteAction
@@ -286,27 +287,70 @@ internal class TandemMobileSession(
 
     private suspend fun restoreBudgetReorderQueue() {
         if (budgetQueueLoaded) return
-        val saved =
-            runCatching {
-                preferencesStore?.read()?.get(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY)
-            }.getOrNull()
         val pendingBeforeRestore = budgetReorderQueueState.moves
-        val restored = decodeBudgetReorderQueue(saved)
+        val restoredFromRoom =
+            runCatching {
+                repository?.readBudgetMutationQueue()
+            }.getOrNull()
+        val restored =
+            if (restoredFromRoom != null && (restoredFromRoom.items.isNotEmpty() || restoredFromRoom.metadataJson != null)) {
+                val metadata = decodeBudgetReorderQueue(restoredFromRoom.metadataJson)
+                val moves =
+                    restoredFromRoom.items.mapNotNull { operation ->
+                        decodeBudgetReorderQueue(operation.patchJson).moves.singleOrNull()?.copy(operationId = operation.operationId)
+                    }
+                moves.fold(BudgetReorderQueueState()) { current, move -> current.enqueue(move) }.copy(
+                    categoryGroupIdAliases = metadata.categoryGroupIdAliases,
+                    categoryIdAliases = metadata.categoryIdAliases,
+                    waitingForConnection = metadata.waitingForConnection && moves.isNotEmpty(),
+                )
+            } else {
+                val saved =
+                    runCatching {
+                        preferencesStore?.read()?.get(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY)
+                    }.getOrNull()
+                decodeBudgetReorderQueue(saved)
+            }
         budgetReorderQueueState =
             pendingBeforeRestore.fold(restored) { current, move ->
                 if (move in current.moves) current else current.enqueue(move)
             }
         budgetQueueLoaded = true
+        if (restoredFromRoom == null || (restoredFromRoom.items.isEmpty() && restoredFromRoom.metadataJson == null)) {
+            persistBudgetReorderQueueNow(budgetReorderQueueState)
+        }
     }
 
     private fun persistBudgetReorderQueue() {
         val store = preferencesStore ?: return
         if (!budgetQueueLoaded) return
         sessionScope.launch {
-            budgetQueuePersistenceMutex.withLock {
-                store.putValue(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY, encodeBudgetReorderQueue(budgetReorderQueueState))
-            }
+            persistCurrentBudgetReorderQueue(store)
         }
+    }
+
+    private suspend fun persistCurrentBudgetReorderQueue(store: AppPreferencesStore? = preferencesStore) {
+        budgetQueuePersistenceMutex.withLock {
+            persistBudgetReorderQueueNow(budgetReorderQueueState)
+            store?.putValue(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY, "")
+        }
+    }
+
+    private suspend fun persistBudgetReorderQueueNow(state: BudgetReorderQueueState) {
+        val localRepository = repository ?: return
+        val persistedAt = nowEpochMillis()
+        val items =
+            state.moves.mapIndexed { index, move ->
+                LocalBudgetMutationOutboxItem(
+                    operationId = move.operationId,
+                    budgetId = move.budgetId,
+                    action = move.kind.name,
+                    recordId = move.itemId,
+                    patchJson = encodeBudgetReorderQueue(BudgetReorderQueueState().enqueue(move)),
+                    createdAtEpochMs = persistedAt + index,
+                )
+            }
+        localRepository.replaceBudgetMutationQueue(items, encodeBudgetReorderQueueMetadata(state))
     }
 
     fun categoryVisibilityOverridesFor(budgetId: String): Map<String, Boolean> = budgetReorderQueue.categoryVisibilityOverridesFor(budgetId)
@@ -688,6 +732,7 @@ internal class TandemMobileSession(
         var observedRetrySignal = budgetReorderRetrySignal
         while (true) {
             val request = snapshotFlow { budgetReorderQueue.moves.firstOrNull() }.first { it != null } ?: continue
+            persistCurrentBudgetReorderQueue()
             if (request.requiresEncryptionPassword && request.encryptionPassword.isNullOrBlank()) {
                 observedRetrySignal = snapshotFlow { budgetReorderRetrySignal }.first { it != observedRetrySignal }
                 continue
@@ -891,6 +936,7 @@ internal class TandemMobileSession(
             ) {
                 synchronize(request.budgetId, request.encryptionPassword)
             }
+            persistCurrentBudgetReorderQueue()
         }
     }
 
@@ -1764,8 +1810,8 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
-            isServerReachable = error.httpStatus != null
             budgetActionShouldRetry = shouldKeepBudgetMutationQueued(error.httpStatus)
+            isServerReachable = error.httpStatus != null && !budgetActionShouldRetry
             if (actionApplied) {
                 budgetActionWasAppliedButRefreshFailed = true
                 setBudgetActionMessage(
@@ -1776,7 +1822,7 @@ internal class TandemMobileSession(
             } else {
                 // Network failures are handled by the persistent queue. Do not surface the
                 // transport exception as if the category edit itself was rejected.
-                if (error.httpStatus != null) {
+                if (!budgetActionShouldRetry && error.httpStatus != null) {
                     setBudgetActionMessage(error.message ?: failureMessage, ownerRoute = messageOwner)
                 }
             }

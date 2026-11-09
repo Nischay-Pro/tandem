@@ -13,6 +13,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
+import kotlin.uuid.Uuid
 
 internal const val BUDGET_GROUP_ORDER_SCOPE = "category-groups"
 
@@ -55,6 +56,7 @@ internal data class QueuedBudgetReorder(
     val parentGroupId: String? = null,
     val refreshOnly: Boolean = false,
     val requiresEncryptionPassword: Boolean = false,
+    val operationId: String = Uuid.random().toString(),
 )
 
 internal data class BudgetReorderStatus(
@@ -861,6 +863,7 @@ internal fun encodeBudgetReorderQueue(state: BudgetReorderQueueState): String =
                     add(
                         buildJsonObject {
                             put("budgetId", move.budgetId)
+                            put("operationId", move.operationId)
                             put("scopeId", move.scopeId)
                             put("kind", move.kind.name)
                             put("itemId", move.itemId)
@@ -876,6 +879,13 @@ internal fun encodeBudgetReorderQueue(state: BudgetReorderQueueState): String =
                 }
             },
         )
+        put("categoryGroupIdAliases", encodeAliases(state.categoryGroupIdAliases))
+        put("categoryIdAliases", encodeAliases(state.categoryIdAliases))
+    }.toString()
+
+internal fun encodeBudgetReorderQueueMetadata(state: BudgetReorderQueueState): String =
+    buildJsonObject {
+        put("waitingForConnection", state.waitingForConnection)
         put("categoryGroupIdAliases", encodeAliases(state.categoryGroupIdAliases))
         put("categoryIdAliases", encodeAliases(state.categoryIdAliases))
     }.toString()
@@ -912,6 +922,7 @@ internal fun decodeBudgetReorderQueue(encoded: String?): BudgetReorderQueueState
                     parentGroupId = move.queueString("parentGroupId"),
                     refreshOnly = move["refreshOnly"]?.let { (it as? JsonPrimitive)?.booleanOrNull } ?: false,
                     requiresEncryptionPassword = move["requiresEncryptionPassword"]?.let { (it as? JsonPrimitive)?.booleanOrNull } ?: false,
+                    operationId = move.queueString("operationId") ?: Uuid.random().toString(),
                 )
             }.orEmpty()
     val reconstructed = moves.fold(BudgetReorderQueueState()) { current, move -> current.enqueue(move) }

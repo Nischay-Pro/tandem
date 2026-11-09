@@ -49,7 +49,10 @@ internal fun SyncCenterScreen(
     liveTransactions: List<TransactionItem>,
 ) {
     if (state.selectedBudgetId.isNotBlank()) {
-        val attention = mobileSession.pendingWrites.filter { it.status in setOf("queued", "conflict", "uncertain", "rejected") }
+        val attention =
+            mobileSession.pendingWrites.filter {
+                it.recordType == "transaction" && it.status in setOf("queued", "conflict", "uncertain", "rejected")
+            }
         val budgetMutations = mobileSession.pendingBudgetMutationsFor(state.selectedBudgetId)
         val pendingCount = attention.size + budgetMutations.size
         PageLazyColumn {

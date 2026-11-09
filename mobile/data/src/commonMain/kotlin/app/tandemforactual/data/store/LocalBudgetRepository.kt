@@ -47,6 +47,13 @@ enum class LocalWriteStatus {
     DISCARDED,
 }
 
+private const val BUDGET_MUTATION_RECORD_TYPE = "budget-mutation"
+private const val BUDGET_MUTATION_METADATA_RECORD_TYPE = "budget-mutation-metadata"
+private const val BUDGET_MUTATION_METADATA_OPERATION_ID = "tandem-budget-mutation-metadata"
+private const val BUDGET_MUTATION_METADATA_IDEMPOTENCY_KEY = "tandem-budget-mutation-metadata-v1"
+private const val BUDGET_MUTATION_METADATA_BUDGET_ID = "tandem-internal"
+private const val BUDGET_MUTATION_METADATA_RECORD_ID = "category-queue"
+
 enum class BudgetSyncStatus {
     IDLE,
     SYNCING,
@@ -186,6 +193,20 @@ data class LocalWriteRequest(
     val optimisticProjection: LocalRecordProjection? = null,
 )
 
+data class LocalBudgetMutationOutboxItem(
+    val operationId: String,
+    val budgetId: String,
+    val action: String,
+    val recordId: String,
+    val patchJson: String,
+    val createdAtEpochMs: Long,
+)
+
+data class LocalBudgetMutationQueueSnapshot(
+    val items: List<OutboxOperationEntity>,
+    val metadataJson: String?,
+)
+
 data class EnqueuedLocalWrite(
     val operation: OutboxOperationEntity,
     val replayed: Boolean,
@@ -216,6 +237,94 @@ class LocalBudgetRepository(
     private val database: TandemDatabase,
     private val now: () -> Long,
 ) {
+    suspend fun readBudgetMutationQueue(): LocalBudgetMutationQueueSnapshot {
+        val outbox = database.outboxDao()
+        val rows = outbox.findByRecordType(BUDGET_MUTATION_RECORD_TYPE)
+        val metadata = outbox.find(BUDGET_MUTATION_METADATA_OPERATION_ID)?.patchJson
+        return LocalBudgetMutationQueueSnapshot(
+            items = rows.filter { it.status == LocalWriteStatus.QUEUED.name.lowercase() },
+            metadataJson = metadata,
+        )
+    }
+
+    suspend fun replaceBudgetMutationQueue(
+        items: List<LocalBudgetMutationOutboxItem>,
+        metadataJson: String,
+    ) {
+        require(items.map { it.operationId }.distinct().size == items.size) { "budget mutation operation IDs must be unique" }
+        items.forEach { item ->
+            requireIdentifier(item.operationId, "operationId")
+            requireIdentifier(item.budgetId, "budgetId")
+            requireIdentifier(item.action, "action")
+            requireIdentifier(item.recordId, "recordId")
+        }
+        database.withWriteTransaction {
+            val outbox = database.outboxDao()
+            val existing = outbox.findByRecordType(BUDGET_MUTATION_RECORD_TYPE)
+            val requestedIds = items.mapTo(mutableSetOf()) { it.operationId }
+            existing.filterNot { it.operationId in requestedIds }.forEach { outbox.deleteQueuedOperation(it.operationId) }
+
+            items.forEach { item ->
+                val previous = outbox.find(item.operationId)
+                val operation =
+                    OutboxOperationEntity(
+                        operationId = item.operationId,
+                        idempotencyKey = "budget-mutation:${item.operationId}",
+                        budgetId = item.budgetId,
+                        recordType = BUDGET_MUTATION_RECORD_TYPE,
+                        recordId = item.recordId,
+                        action = item.action,
+                        baseRevision = null,
+                        baseSnapshotJson = null,
+                        patchJson = item.patchJson,
+                        optimisticJson = null,
+                        optimisticRecordDate = null,
+                        optimisticAccountId = null,
+                        optimisticCategoryId = null,
+                        optimisticPayeeId = null,
+                        optimisticAmountMinor = null,
+                        optimisticBudgetMonth = null,
+                        status = LocalWriteStatus.QUEUED.name.lowercase(),
+                        attemptCount = 0,
+                        serverOperationId = null,
+                        lastErrorCode = null,
+                        createdAtEpochMs = item.createdAtEpochMs,
+                        updatedAtEpochMs = now(),
+                    )
+                if (previous == null || previous.status == LocalWriteStatus.QUEUED.name.lowercase()) {
+                    outbox.put(operation)
+                }
+            }
+
+            val metadata =
+                OutboxOperationEntity(
+                    operationId = BUDGET_MUTATION_METADATA_OPERATION_ID,
+                    idempotencyKey = BUDGET_MUTATION_METADATA_IDEMPOTENCY_KEY,
+                    budgetId = BUDGET_MUTATION_METADATA_BUDGET_ID,
+                    recordType = BUDGET_MUTATION_METADATA_RECORD_TYPE,
+                    recordId = BUDGET_MUTATION_METADATA_RECORD_ID,
+                    action = "METADATA",
+                    baseRevision = null,
+                    baseSnapshotJson = null,
+                    patchJson = metadataJson,
+                    optimisticJson = null,
+                    optimisticRecordDate = null,
+                    optimisticAccountId = null,
+                    optimisticCategoryId = null,
+                    optimisticPayeeId = null,
+                    optimisticAmountMinor = null,
+                    optimisticBudgetMonth = null,
+                    status = LocalWriteStatus.COMMITTED.name.lowercase(),
+                    attemptCount = 0,
+                    serverOperationId = null,
+                    lastErrorCode = null,
+                    createdAtEpochMs = now(),
+                    updatedAtEpochMs = now(),
+                )
+            outbox.put(metadata)
+        }
+    }
+
     fun observeRecords(
         budgetId: String,
         recordType: String,

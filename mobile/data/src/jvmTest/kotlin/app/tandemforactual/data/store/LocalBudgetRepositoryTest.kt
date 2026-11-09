@@ -23,6 +23,47 @@ import kotlin.test.fail
 
 class LocalBudgetRepositoryTest {
     @Test
+    fun budgetMutationQueueUsesTheRoomOutboxAndIsNotClaimedAsATransaction() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 200L }
+                val first =
+                    LocalBudgetMutationOutboxItem(
+                        operationId = "budget-move-1",
+                        budgetId = BUDGET,
+                        action = "CATEGORY",
+                        recordId = "category-1",
+                        patchJson = "{\"operationId\":\"budget-move-1\"}",
+                        createdAtEpochMs = 100L,
+                    )
+                val second =
+                    first.copy(
+                        operationId = "budget-hide-2",
+                        action = "HIDE_CATEGORY",
+                        recordId = "category-2",
+                        patchJson = "{\"operationId\":\"budget-hide-2\"}",
+                        createdAtEpochMs = 101L,
+                    )
+
+                repository.replaceBudgetMutationQueue(listOf(first, second), "{\"waitingForConnection\":true}")
+
+                val saved = repository.readBudgetMutationQueue()
+                assertEquals(listOf("budget-move-1", "budget-hide-2"), saved.items.map { it.operationId })
+                assertEquals("{\"waitingForConnection\":true}", saved.metadataJson)
+                assertEquals(2, repository.readPendingWrites(BUDGET).size)
+                assertNull(repository.claimNextWrite(BUDGET))
+
+                repository.replaceBudgetMutationQueue(listOf(second), "{\"waitingForConnection\":false}")
+                val updated = repository.readBudgetMutationQueue()
+                assertEquals(listOf("budget-hide-2"), updated.items.map { it.operationId })
+                assertEquals("{\"waitingForConnection\":false}", updated.metadataJson)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun remapPendingCategoryReferencesRewritesMatchingQueuedTransactionsOnly() =
         runBlocking {
             val database = newDatabase()

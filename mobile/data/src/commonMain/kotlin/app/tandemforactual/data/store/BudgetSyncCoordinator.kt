@@ -300,7 +300,8 @@ class BudgetSyncCoordinator(
         val pendingOperations = repository.readPendingWrites(budgetId)
         val uncertainOperations =
             pendingOperations.filter {
-                it.status == "uncertain" &&
+                it.recordType == "transaction" &&
+                    it.status == "uncertain" &&
                     (reconcileUncertainOperationId == null || it.operationId == reconcileUncertainOperationId)
             }
         uncertainOperations.forEach { operation ->

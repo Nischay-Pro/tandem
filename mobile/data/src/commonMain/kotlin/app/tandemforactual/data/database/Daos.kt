@@ -448,6 +448,12 @@ interface OutboxDao {
     @Query("SELECT * FROM sync_outbox WHERE idempotencyKey = :idempotencyKey")
     suspend fun findByIdempotencyKey(idempotencyKey: String): OutboxOperationEntity?
 
+    @Query("SELECT * FROM sync_outbox WHERE recordType = :recordType ORDER BY createdAtEpochMs ASC, operationId ASC")
+    suspend fun findByRecordType(recordType: String): List<OutboxOperationEntity>
+
+    @Query("DELETE FROM sync_outbox WHERE operationId = :operationId AND status = 'queued' AND attemptCount = 0")
+    suspend fun deleteQueuedOperation(operationId: String): Int
+
     @Query(
         "SELECT * FROM sync_outbox WHERE budgetId = :budgetId AND recordType = :recordType AND recordId = :recordId AND status = 'queued' AND attemptCount = 0 ORDER BY createdAtEpochMs DESC LIMIT 1",
     )
@@ -470,6 +476,7 @@ interface OutboxDao {
         """
     SELECT queued.* FROM sync_outbox AS queued
     WHERE queued.budgetId = :budgetId
+      AND queued.recordType = 'transaction'
       AND queued.status = 'queued'
       AND NOT EXISTS (
         SELECT 1 FROM sync_outbox AS blocking
