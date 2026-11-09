@@ -80,29 +80,22 @@ internal fun TransactionFormScreen(
             val compactSave by remember(routeScrollState) {
                 derivedStateOf { (routeScrollState?.value ?: 0) > 72 }
             }
-            var amountMinorUnits by
-                rememberSaveable(state.selectedBudgetId, route) {
-                    mutableStateOf(
-                        state
-                            .parseAmountMinorUnits(state.transactionAmount)
-                            ?.let {
-                                (if (it == Long.MIN_VALUE) Long.MAX_VALUE else kotlin.math.abs(it))
-                                    .coerceAtMost(MAX_TRANSACTION_AMOUNT_MINOR_UNITS)
-                            }
-                            ?: 0L,
-                    )
-                }
+
+            val amountMinorUnits =
+                transactionAmountInputMagnitude(state.parseAmountMinorUnits(state.transactionAmount))
 
             fun setAmount(minorUnits: Long) {
-                val magnitude =
-                    (if (minorUnits == Long.MIN_VALUE) Long.MAX_VALUE else kotlin.math.abs(minorUnits))
-                        .coerceAtMost(MAX_TRANSACTION_AMOUNT_MINOR_UNITS)
-                amountMinorUnits = magnitude
+                val magnitude = transactionAmountInputMagnitude(minorUnits)
                 state.transactionAmount = state.formatAmount(magnitude)
             }
 
             fun enterDigit(digit: Int) {
-                val current = if (enterNewOperand) 0L else amountMinorUnits
+                val current =
+                    if (enterNewOperand) {
+                        0L
+                    } else {
+                        transactionAmountInputMagnitude(state.parseAmountMinorUnits(state.transactionAmount))
+                    }
                 val exceededLimit = amountDigitExceedsLimit(current, digit)
                 setAmount(appendAmountDigit(current, digit))
                 amountEntryMessage =
@@ -117,11 +110,13 @@ internal fun TransactionFormScreen(
             fun chooseOperator(operator: String) {
                 val previous = calculatorAccumulator
                 val pending = calculatorOperator
+                val currentAmount =
+                    transactionAmountInputMagnitude(state.parseAmountMinorUnits(state.transactionAmount))
                 if (previous != null && pending != null && !enterNewOperand) {
-                    val result = calculateAmountMinorUnits(previous, amountMinorUnits, pending)
+                    val result = calculateAmountMinorUnits(previous, currentAmount, pending)
                     if (result == null) {
                         amountEntryMessage =
-                            if (pending == "÷" && amountMinorUnits == 0L) {
+                            if (pending == "÷" && currentAmount == 0L) {
                                 "Can’t divide by zero."
                             } else {
                                 "Largest amount is ${state.formatCurrency(MAX_TRANSACTION_AMOUNT_MINOR_UNITS)}."
@@ -131,7 +126,7 @@ internal fun TransactionFormScreen(
                     setAmount(result)
                     calculatorAccumulator = kotlin.math.abs(result)
                 } else if (previous == null) {
-                    calculatorAccumulator = amountMinorUnits
+                    calculatorAccumulator = currentAmount
                 }
                 amountEntryMessage = null
                 calculatorOperator = operator
@@ -142,11 +137,13 @@ internal fun TransactionFormScreen(
                 val previous = calculatorAccumulator
                 val operator = calculatorOperator
                 if (previous != null && operator != null) {
+                    val currentAmount =
+                        transactionAmountInputMagnitude(state.parseAmountMinorUnits(state.transactionAmount))
                     val result =
-                        if (enterNewOperand) previous else calculateAmountMinorUnits(previous, amountMinorUnits, operator)
+                        if (enterNewOperand) previous else calculateAmountMinorUnits(previous, currentAmount, operator)
                     if (result == null) {
                         amountEntryMessage =
-                            if (operator == "÷" && amountMinorUnits == 0L) {
+                            if (operator == "÷" && currentAmount == 0L) {
                                 "Can’t divide by zero."
                             } else {
                                 "Largest amount is ${state.formatCurrency(MAX_TRANSACTION_AMOUNT_MINOR_UNITS)}."
@@ -264,7 +261,12 @@ internal fun TransactionFormScreen(
                     TransactionAmountKeypad(
                         onDigit = ::enterDigit,
                         onDelete = {
-                            val current = if (enterNewOperand) 0L else amountMinorUnits
+                            val current =
+                                if (enterNewOperand) {
+                                    0L
+                                } else {
+                                    transactionAmountInputMagnitude(state.parseAmountMinorUnits(state.transactionAmount))
+                                }
                             setAmount(removeAmountDigit(current))
                             amountEntryMessage = null
                             enterNewOperand = false
@@ -347,17 +349,10 @@ internal fun TransactionFormScreen(
         var calculatorOperator by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf<String?>(null) }
         var enterNewOperand by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf(false) }
         var amountEntryMessage by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf<String?>(null) }
-        var amountMinorUnits by
-            rememberSaveable(state.selectedTransactionRecordId) {
-                mutableStateOf(
-                    state
-                        .parseAmountMinorUnits(state.transactionAmount)
-                        ?.let { kotlin.math.abs(it).coerceAtMost(MAX_TRANSACTION_AMOUNT_MINOR_UNITS) }
-                        ?: kotlin.math
-                            .abs(state.selectedTransactionAmountMinor ?: 0L)
-                            .coerceAtMost(MAX_TRANSACTION_AMOUNT_MINOR_UNITS),
-                )
-            }
+        val amountMinorUnits =
+            transactionAmountInputMagnitude(
+                state.parseAmountMinorUnits(state.transactionAmount) ?: state.selectedTransactionAmountMinor,
+            )
         val focusManager = LocalFocusManager.current
         val routeScrollState = LocalRouteScrollState.current
         val compactSave by remember(routeScrollState) {
@@ -365,15 +360,19 @@ internal fun TransactionFormScreen(
         }
 
         fun setEditAmount(minorUnits: Long) {
-            val magnitude =
-                (if (minorUnits == Long.MIN_VALUE) Long.MAX_VALUE else kotlin.math.abs(minorUnits))
-                    .coerceAtMost(MAX_TRANSACTION_AMOUNT_MINOR_UNITS)
-            amountMinorUnits = magnitude
+            val magnitude = transactionAmountInputMagnitude(minorUnits)
             state.transactionAmount = state.formatAmount(magnitude)
         }
 
         fun enterEditDigit(digit: Int) {
-            val current = if (enterNewOperand) 0L else amountMinorUnits
+            val current =
+                if (enterNewOperand) {
+                    0L
+                } else {
+                    transactionAmountInputMagnitude(
+                        state.parseAmountMinorUnits(state.transactionAmount) ?: state.selectedTransactionAmountMinor,
+                    )
+                }
             setEditAmount(appendAmountDigit(current, digit))
             amountEntryMessage = null
             enterNewOperand = false
@@ -382,12 +381,16 @@ internal fun TransactionFormScreen(
         fun chooseEditOperator(operator: String) {
             val previous = calculatorAccumulator
             val pending = calculatorOperator
+            val currentAmount =
+                transactionAmountInputMagnitude(
+                    state.parseAmountMinorUnits(state.transactionAmount) ?: state.selectedTransactionAmountMinor,
+                )
             if (previous != null && pending != null && !enterNewOperand) {
-                val result = calculateAmountMinorUnits(previous, amountMinorUnits, pending) ?: return
+                val result = calculateAmountMinorUnits(previous, currentAmount, pending) ?: return
                 setEditAmount(result)
                 calculatorAccumulator = kotlin.math.abs(result)
             } else if (previous == null) {
-                calculatorAccumulator = amountMinorUnits
+                calculatorAccumulator = currentAmount
             }
             calculatorOperator = operator
             enterNewOperand = true
@@ -397,8 +400,12 @@ internal fun TransactionFormScreen(
             val previous = calculatorAccumulator
             val operator = calculatorOperator
             if (previous != null && operator != null) {
+                val currentAmount =
+                    transactionAmountInputMagnitude(
+                        state.parseAmountMinorUnits(state.transactionAmount) ?: state.selectedTransactionAmountMinor,
+                    )
                 val result =
-                    if (enterNewOperand) previous else calculateAmountMinorUnits(previous, amountMinorUnits, operator)
+                    if (enterNewOperand) previous else calculateAmountMinorUnits(previous, currentAmount, operator)
                 if (result != null) setEditAmount(result)
             }
             calculatorAccumulator = null
@@ -508,7 +515,15 @@ internal fun TransactionFormScreen(
                 TransactionAmountKeypad(
                     onDigit = ::enterEditDigit,
                     onDelete = {
-                        val current = if (enterNewOperand) 0L else amountMinorUnits
+                        val current =
+                            if (enterNewOperand) {
+                                0L
+                            } else {
+                                transactionAmountInputMagnitude(
+                                    state.parseAmountMinorUnits(state.transactionAmount)
+                                        ?: state.selectedTransactionAmountMinor,
+                                )
+                            }
                         setEditAmount(removeAmountDigit(current))
                         amountEntryMessage = null
                         enterNewOperand = false

@@ -28,6 +28,13 @@ class TransactionAmountInputTest {
     }
 
     @Test
+    fun transactionEntryAlwaysDisplaysAnUnsignedMagnitude() {
+        assertEquals(112L, transactionAmountInputMagnitude(-112L))
+        assertEquals(0L, transactionAmountInputMagnitude(null))
+        assertEquals(MAX_TRANSACTION_AMOUNT_MINOR_UNITS, transactionAmountInputMagnitude(Long.MIN_VALUE))
+    }
+
+    @Test
     fun keypadCalculatorUsesMinorUnitsAndRejectsDivisionByZero() {
         assertEquals(1_125L, calculateAmountMinorUnits(1_000L, 125L, "+"))
         assertEquals(875L, calculateAmountMinorUnits(1_000L, 125L, "−"))

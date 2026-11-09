@@ -6,6 +6,16 @@ import kotlin.math.roundToLong
 // Kept in sync with MAX_TRANSACTION_AMOUNT in the API reconciliation layer.
 internal const val MAX_TRANSACTION_AMOUNT_MINOR_UNITS = 1_000_000_000L
 
+internal fun transactionAmountInputMagnitude(minorUnits: Long?): Long {
+    val magnitude =
+        when (minorUnits) {
+            null -> 0L
+            Long.MIN_VALUE -> Long.MAX_VALUE
+            else -> abs(minorUnits)
+        }
+    return magnitude.coerceAtMost(MAX_TRANSACTION_AMOUNT_MINOR_UNITS)
+}
+
 internal fun amountDigitExceedsLimit(
     currentMinorUnits: Long,
     digit: Int,

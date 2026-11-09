@@ -50,6 +50,8 @@ import app.tandemforactual.ui.model.recordBody
 import app.tandemforactual.ui.model.recordName
 import app.tandemforactual.ui.model.stringValue
 import com.composables.icons.lucide.Check
+import com.composables.icons.lucide.ChevronDown
+import com.composables.icons.lucide.ChevronUp
 import com.composables.icons.lucide.Eye
 import com.composables.icons.lucide.EyeOff
 import com.composables.icons.lucide.Lucide
@@ -581,6 +583,22 @@ internal fun BudgetItemReorderActions(
                 onClick = toggleHidden,
             )
         }
+        TandemIconButton(
+            Lucide.ChevronUp,
+            "Move $itemName up",
+            sizeDp = 44,
+            iconSizeDp = 20,
+            enabled = enabled && canMoveUp,
+            onClick = onMoveUp,
+        )
+        TandemIconButton(
+            Lucide.ChevronDown,
+            "Move $itemName down",
+            sizeDp = 44,
+            iconSizeDp = 20,
+            enabled = enabled && canMoveDown,
+            onClick = onMoveDown,
+        )
         ReorderDragHandle(
             enabled = dragEnabled && (canMoveUp || canMoveDown),
             canMoveUp = canMoveUp,
