@@ -37,10 +37,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.ui.components.CollapsibleSectionCard
+import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
@@ -52,7 +51,9 @@ import app.tandemforactual.ui.components.SelectableTile
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
+import app.tandemforactual.ui.components.TandemChoiceDialog
 import app.tandemforactual.ui.components.TandemIconButton
+import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.LiveScheduleSummary
 import app.tandemforactual.ui.model.recordName
@@ -145,6 +146,8 @@ internal fun UpcomingSchedulesScreen(
     payeeRecords: List<BudgetRecordEntity>,
 ) {
     var selectedScheduleId by rememberSaveable(state.selectedBudgetId) { mutableStateOf<String?>(null) }
+    var showScheduleEditor by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
+    var showDeleteScheduleConfirmation by rememberSaveable(state.selectedBudgetId, selectedScheduleId) { mutableStateOf(false) }
     var dialogMode by rememberSaveable(state.selectedBudgetId, selectedScheduleId) { mutableStateOf("menu") }
     var nameDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
         mutableStateOf(schedules.firstOrNull { it.id == selectedScheduleId }?.name.orEmpty())
@@ -239,6 +242,7 @@ internal fun UpcomingSchedulesScreen(
                             leading = RowLeading.Icon(Lucide.CalendarDays),
                             onClick = {
                                 selectedScheduleId = schedule.id
+                                showScheduleEditor = true
                                 dialogMode = "menu"
                                 mobileSession.clearBudgetActionMessage()
                             },
@@ -252,6 +256,7 @@ internal fun UpcomingSchedulesScreen(
                             containerColor = tandemPalette.raised,
                         ) {
                             selectedScheduleId = schedule.id
+                            showScheduleEditor = true
                             dialogMode = "menu"
                             mobileSession.clearBudgetActionMessage()
                         }
@@ -261,16 +266,16 @@ internal fun UpcomingSchedulesScreen(
         }
     }
 
-    if (selectedSchedule != null) {
-        Dialog(
-            onDismissRequest = {
-                if (!mobileSession.isPerformingBudgetAction) {
-                    selectedScheduleId = null
-                    dialogMode = "menu"
-                }
-            },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
+    TandemTaskSheet(
+        visible = showScheduleEditor && selectedSchedule != null,
+        onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showScheduleEditor = false },
+        onDismissed = {
+            showDeleteScheduleConfirmation = false
+            selectedScheduleId = null
+            dialogMode = "menu"
+        },
+    ) {
+        if (selectedSchedule != null) {
             SurfaceCard(
                 Modifier
                     .fillMaxWidth()
@@ -293,7 +298,6 @@ internal fun UpcomingSchedulesScreen(
                         )
                         Text(
                             when {
-                                dialogMode == "delete" -> "Delete schedule?"
                                 dialogMode == "edit" -> "Edit schedule"
                                 else -> selectedSchedule.name
                             },
@@ -312,38 +316,17 @@ internal fun UpcomingSchedulesScreen(
                             containerColor = tandemPalette.raised,
                             enabled = !mobileSession.isPerformingBudgetAction,
                         ) {
-                            selectedScheduleId = null
+                            showScheduleEditor = false
                             dialogMode = "menu"
                         }
                     }
                     when {
                         dialogMode == "delete" -> {
-                            TandemActionButton(
-                                "Delete",
-                                TandemActionButtonTone.DESTRUCTIVE,
-                                modifier = Modifier.fillMaxWidth(),
-                                icon = Lucide.Trash2,
-                                enabled = !mobileSession.isPerformingBudgetAction,
-                                loading = mobileSession.isPerformingBudgetAction,
-                            ) {
-                                scope.launch {
-                                    val deleted =
-                                        mobileSession.manageBudgetSchedule(
-                                            state.selectedBudgetId,
-                                            selectedSchedule.id,
-                                            "delete",
-                                            null,
-                                            state.encryptedPassword.takeIf { it.isNotBlank() },
-                                        )
-                                    if (deleted) selectedScheduleId = null
-                                }
-                            }
-                            TandemActionButton(
-                                "Keep schedule",
-                                TandemActionButtonTone.NEUTRAL,
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !mobileSession.isPerformingBudgetAction,
-                            ) { dialogMode = "menu" }
+                            Text(
+                                "Confirm deleting this schedule in the alert.",
+                                color = tandemPalette.muted,
+                                fontSize = TandemTypography.body,
+                            )
                         }
                         dialogMode == "edit" -> {
                             TextFieldCard("Name", nameDraft, { nameDraft = it })
@@ -581,7 +564,7 @@ internal fun UpcomingSchedulesScreen(
                                                 state.encryptedPassword.takeIf { it.isNotBlank() },
                                                 fields,
                                             )
-                                        if (saved) selectedScheduleId = null
+                                        if (saved) showScheduleEditor = false
                                     }
                                 }
                             }
@@ -611,7 +594,7 @@ internal fun UpcomingSchedulesScreen(
                                             null,
                                             state.encryptedPassword.takeIf { it.isNotBlank() },
                                         )
-                                    if (posted) selectedScheduleId = null
+                                    if (posted) showScheduleEditor = false
                                 }
                             }
                             if (selectedSchedule.canSkip) {
@@ -632,7 +615,7 @@ internal fun UpcomingSchedulesScreen(
                                                 null,
                                                 state.encryptedPassword.takeIf { it.isNotBlank() },
                                             )
-                                        if (skipped) selectedScheduleId = null
+                                        if (skipped) showScheduleEditor = false
                                     }
                                 }
                             }
@@ -652,23 +635,59 @@ internal fun UpcomingSchedulesScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 icon = Lucide.Trash2,
                                 enabled = !mobileSession.isPerformingBudgetAction,
-                            ) { dialogMode = "delete" }
+                            ) {
+                                dialogMode = "delete"
+                                showDeleteScheduleConfirmation = true
+                            }
                         }
                     }
                 }
             }
         }
     }
-    if (datePickerTarget != null) {
-        ScheduleDatePickerDialog(
-            initialDate = if (datePickerTarget == "end") endDateDraft else dateDraft,
-            onDismiss = { datePickerTarget = null },
-            onSelect = { value ->
-                if (datePickerTarget == "end") endDateDraft = value else dateDraft = value
-                datePickerTarget = null
+    if (showDeleteScheduleConfirmation && selectedSchedule != null) {
+        DestructiveConfirmationDialog(
+            title = "Delete schedule?",
+            message = mobileSession.budgetActionMessage ?: "Remove ${selectedSchedule.name} from upcoming bills?",
+            confirmLabel = if (mobileSession.isPerformingBudgetAction) "Deleting…" else "Delete",
+            dismissLabel = "Keep schedule",
+            enabled = !mobileSession.isPerformingBudgetAction,
+            onDismissRequest = {
+                if (!mobileSession.isPerformingBudgetAction) {
+                    showDeleteScheduleConfirmation = false
+                    dialogMode = "menu"
+                }
+            },
+            onConfirm = {
+                scope.launch {
+                    val deleted =
+                        mobileSession.manageBudgetSchedule(
+                            state.selectedBudgetId,
+                            selectedSchedule.id,
+                            "delete",
+                            null,
+                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                        )
+                    if (deleted) {
+                        showDeleteScheduleConfirmation = false
+                        showScheduleEditor = false
+                    } else {
+                        showDeleteScheduleConfirmation = false
+                        dialogMode = "menu"
+                    }
+                }
             },
         )
     }
+    ScheduleDatePickerDialog(
+        visible = datePickerTarget != null,
+        initialDate = if (datePickerTarget == "end") endDateDraft else dateDraft,
+        onDismiss = { datePickerTarget = null },
+        onSelect = { value ->
+            if (datePickerTarget == "end") endDateDraft = value else dateDraft = value
+            datePickerTarget = null
+        },
+    )
 }
 
 @Composable
@@ -690,20 +709,18 @@ internal fun ScheduleChoiceField(
         )
         Icon(Lucide.ChevronDown, contentDescription = null, modifier = Modifier.size(18.dp), tint = tandemPalette.muted)
     }
-    if (expanded) {
-        Dialog(onDismissRequest = { expanded = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-            SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 420.dp).padding(horizontal = TandemSpacing.large)) {
-                Column(Modifier.verticalScroll(rememberScrollState()).padding(TandemSpacing.medium)) {
-                    options.forEach { (id, name) ->
-                        ListRow(
-                            name,
-                            trailing = if (name == selectedLabel) "✓" else null,
-                            onClick = {
-                                onSelect(id)
-                                expanded = false
-                            },
-                        )
-                    }
+    TandemChoiceDialog(visible = expanded, onDismissRequest = { expanded = false }) {
+        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 420.dp).padding(horizontal = TandemSpacing.large)) {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(TandemSpacing.medium)) {
+                options.forEach { (id, name) ->
+                    ListRow(
+                        name,
+                        trailing = if (name == selectedLabel) "✓" else null,
+                        onClick = {
+                            onSelect(id)
+                            expanded = false
+                        },
+                    )
                 }
             }
         }
@@ -712,6 +729,7 @@ internal fun ScheduleChoiceField(
 
 @Composable
 internal fun ScheduleDatePickerDialog(
+    visible: Boolean,
     initialDate: String,
     onDismiss: () -> Unit,
     onSelect: (String) -> Unit,
@@ -721,7 +739,7 @@ internal fun ScheduleDatePickerDialog(
     var visibleMonth by rememberSaveable(initialDate) { mutableStateOf(selectedDate.second) }
     val firstDayOffset = (platformWeekday(visibleYear, visibleMonth, 1) - platformFirstWeekday() + 7) % 7
     val cells = List<Int?>(firstDayOffset) { null } + (1..daysInMonth(visibleYear, visibleMonth)).map { it }
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    TandemChoiceDialog(visible = visible, onDismissRequest = onDismiss) {
         SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 420.dp).padding(horizontal = TandemSpacing.large)) {
             Column(
                 Modifier.fillMaxWidth().padding(TandemSpacing.large),

@@ -36,8 +36,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import app.tandemforactual.ui.components.AnimatedReveal
 import app.tandemforactual.ui.components.Badge
 import app.tandemforactual.ui.components.CollapsibleSectionCard
@@ -55,6 +53,7 @@ import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.components.TandemChoiceDialog
 import app.tandemforactual.ui.components.TandemIconButton
+import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
 import app.tandemforactual.ui.model.LiveCategoryGroupSummary
 import app.tandemforactual.ui.model.LiveCategorySummary
@@ -79,6 +78,7 @@ internal fun BudgetScreen(
     liveSchedules: List<LiveScheduleSummary>,
     liveBudgetMonth: LiveBudgetMonthSummary?,
     onSyncNow: () -> Unit,
+    onGroupReorderModeChange: (Boolean) -> Unit,
 ) {
     val palette = tandemPalette
     val scope = rememberCoroutineScope()
@@ -86,14 +86,31 @@ internal fun BudgetScreen(
     var showMonthPicker by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
     var showBudgetTemplatesDialog by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
     var showNextMonthHoldDialog by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
+    var holdSheetMounted by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
     var budgetTemplateNameDraft by rememberSaveable(state.selectedBudgetId) { mutableStateOf("") }
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     var selectedGroupOrderId by rememberSaveable(state.selectedBudgetId) { mutableStateOf<String?>(null) }
+    LaunchedEffect(selectedGroupOrderId) {
+        onGroupReorderModeChange(selectedGroupOrderId != null)
+    }
     val isTrackingBudget = isLiveBudget && state.budgetDisplaySettings?.budgetType == "tracking"
     val compact = state.homeLayout == "Compact"
     val essentialsFirst = state.homeLayout == "Essentials"
     val sectionSpacing = if (compact) 10.dp else 16.dp
     val groups = if (isLiveBudget) liveBudgetMonth?.groups.orEmpty() else previewCategoryGroups
+    val queuedGroupMoves = mobileSession.budgetReorderMovesFor(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
+    val groupReorderStatus = mobileSession.budgetReorderStatus(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
+    val orderedGroupIds =
+        budgetOrderForScreen(
+            groups.map { it.id },
+            groupReorderStatus,
+            queuedGroupMoves,
+        )
+    val orderedGroups =
+        remember(groups, orderedGroupIds) {
+            val groupsById = groups.associateBy { it.id }
+            orderedGroupIds.mapNotNull(groupsById::get) + groups.filterNot { it.id in orderedGroupIds }
+        }
     val currentBudgetTemplates =
         remember(state.budgetTemplatesJson, state.selectedBudgetId) {
             decodeBudgetTemplates(state.budgetTemplatesJson).filter { it.budgetId == state.selectedBudgetId }
@@ -137,9 +154,9 @@ internal fun BudgetScreen(
             "summary:${state.selectedMonthId}"
         }
     val displayGroups =
-        remember(essentialsFirst, groups, isLiveBudget) {
+        remember(essentialsFirst, orderedGroups, isLiveBudget) {
             if (essentialsFirst && !isLiveBudget) {
-                groups
+                orderedGroups
                     .withIndex()
                     .sortedWith(
                         compareBy<IndexedValue<LiveCategoryGroupSummary>>(
@@ -148,9 +165,29 @@ internal fun BudgetScreen(
                         ),
                     ).map { it.value }
             } else {
-                groups
+                orderedGroups
             }
         }
+
+    fun enqueueGroupMove(
+        groupId: String,
+        nextIndex: Int,
+    ) {
+        val oldOrder = displayGroups.map { it.id }
+        val nextOrder = reorderItemToIndex(oldOrder, groupId, nextIndex)
+        if (oldOrder == nextOrder) return
+        mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
+        mobileSession.clearBudgetActionMessage()
+        mobileSession.enqueueBudgetReorder(
+            state.selectedBudgetId,
+            BUDGET_GROUP_ORDER_SCOPE,
+            BudgetReorderKind.CATEGORY_GROUP,
+            groupId,
+            itemTargetIdAfterMove(nextOrder, groupId),
+            nextOrder,
+            state.encryptedPassword.takeIf { it.isNotBlank() },
+        )
+    }
     val pinnedCategories =
         remember(groups, state.pinnedCategoryIds) {
             groups.flatMap { group ->
@@ -207,6 +244,16 @@ internal fun BudgetScreen(
         }
         item(key = "budget-month-picker") {
             MonthSelectorCard(state.selectedMonth) { showMonthPicker = true }
+        }
+        if (isLiveBudget) {
+            groupReorderStatus.message?.let { message ->
+                item(key = "budget-group-reorder-message") {
+                    InlineMessage(
+                        message,
+                        if (groupReorderStatus.warning) InlineMessageKind.WARNING else InlineMessageKind.ERROR,
+                    )
+                }
+            }
         }
         if (isLiveBudget && !isTrackingBudget && liveBudgetMonth != null) {
             item(key = "budget-copy-last-month") {
@@ -306,6 +353,7 @@ internal fun BudgetScreen(
                                                 holdKeypadVisible = true
                                                 mobileSession.clearBudgetActionMessage()
                                                 showNextMonthHoldDialog = true
+                                                holdSheetMounted = true
                                             },
                                         )
                                     }
@@ -366,7 +414,7 @@ internal fun BudgetScreen(
                     }
                 val groupExpanded = !state.isBudgetSectionCollapsed(groupSectionKey)
                 val isReordering = selectedGroupOrderId == group.id
-                val groupIndex = groups.indexOfFirst { it.id == group.id }
+                val groupIndex = displayGroups.indexOfFirst { it.id == group.id }
                 val displayCategories =
                     if (essentialsFirst && !isLiveBudget) {
                         group.categories
@@ -404,7 +452,10 @@ internal fun BudgetScreen(
                                                 }
                                             },
                                             onLongClick = {
-                                                if (isLiveBudget && !state.readOnlyMode && !mobileSession.isPerformingBudgetAction) {
+                                                if (isLiveBudget &&
+                                                    !state.readOnlyMode &&
+                                                    (!mobileSession.isPerformingBudgetAction || groupReorderStatus.pendingCount > 0)
+                                                ) {
                                                     selectedGroupOrderId = if (isReordering) null else group.id
                                                 }
                                             },
@@ -434,33 +485,16 @@ internal fun BudgetScreen(
                                 if (isReordering && isLiveBudget) {
                                     BudgetItemReorderActions(
                                         canMoveUp = groupIndex > 0,
-                                        canMoveDown = groupIndex >= 0 && groupIndex < groups.lastIndex,
-                                        enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                                        canMoveDown = groupIndex >= 0 && groupIndex < displayGroups.lastIndex,
+                                        enabled =
+                                            !state.readOnlyMode &&
+                                                (!mobileSession.isPerformingBudgetAction || groupReorderStatus.pendingCount > 0),
                                         itemName = group.name,
                                         onMoveUp = {
-                                            scope.launch {
-                                                mobileSession.manageBudgetCategoryGroup(
-                                                    state.selectedBudgetId,
-                                                    group.id,
-                                                    "move",
-                                                    null,
-                                                    groups.getOrNull(groupIndex - 1)?.id,
-                                                    state.encryptedPassword.takeIf { it.isNotBlank() },
-                                                )
-                                            }
+                                            enqueueGroupMove(group.id, groupIndex - 1)
                                         },
                                         onMoveDown = {
-                                            val targetId = groups.getOrNull(groupIndex + 2)?.id
-                                            scope.launch {
-                                                mobileSession.manageBudgetCategoryGroup(
-                                                    state.selectedBudgetId,
-                                                    group.id,
-                                                    "move",
-                                                    null,
-                                                    targetId,
-                                                    state.encryptedPassword.takeIf { it.isNotBlank() },
-                                                )
-                                            }
+                                            enqueueGroupMove(group.id, groupIndex + 1)
                                         },
                                     )
                                 } else {
@@ -605,173 +639,171 @@ internal fun BudgetScreen(
         }
         item(key = "budget-bottom-spacer") { Spacer(Modifier.height(72.dp)) }
     }
-    if (showCopyLastMonthDialog) {
-        Dialog(
-            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showCopyLastMonthDialog = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
-                Column(
-                    Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                        Icon(Lucide.CalendarDays, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
-                        Text(
-                            "Copy last month?",
-                            modifier = Modifier.weight(1f),
-                            color = tandemPalette.text,
-                            fontSize = TandemTypography.sectionTitle,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        TandemIconButton(
-                            Lucide.X,
-                            "Close",
-                            sizeDp = 40,
-                            iconSizeDp = 18,
-                            enabled = !mobileSession.isPerformingBudgetAction,
-                        ) { showCopyLastMonthDialog = false }
-                    }
+    TandemTaskSheet(
+        visible = showCopyLastMonthDialog,
+        onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showCopyLastMonthDialog = false },
+        onDismissed = {},
+    ) {
+        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
+            Column(
+                Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    Icon(Lucide.CalendarDays, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
                     Text(
-                        "Replace ${state.selectedMonth} category assignments with the previous month’s amounts.",
-                        color = tandemPalette.muted,
-                        fontSize = TandemTypography.body,
+                        "Copy last month?",
+                        modifier = Modifier.weight(1f),
+                        color = tandemPalette.text,
+                        fontSize = TandemTypography.sectionTitle,
+                        fontWeight = FontWeight.Bold,
                     )
-                    mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
-                    TandemActionButton(
-                        if (mobileSession.isPerformingBudgetAction) "Copying…" else "Copy assignments",
-                        TandemActionButtonTone.PRIMARY,
-                        modifier = Modifier.fillMaxWidth(),
-                        icon = Lucide.Check,
-                        enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
-                        loading = mobileSession.isPerformingBudgetAction,
-                    ) {
-                        scope.launch {
-                            val copied =
-                                mobileSession.copyBudgetMonth(
-                                    state.selectedBudgetId,
-                                    state.selectedMonthId,
-                                    state.encryptedPassword.takeIf { it.isNotBlank() },
-                                )
-                            if (copied) showCopyLastMonthDialog = false
-                        }
-                    }
-                    TandemActionButton(
-                        "Cancel",
-                        TandemActionButtonTone.NEUTRAL,
-                        modifier = Modifier.fillMaxWidth(),
+                    TandemIconButton(
+                        Lucide.X,
+                        "Close",
+                        sizeDp = 40,
+                        iconSizeDp = 18,
                         enabled = !mobileSession.isPerformingBudgetAction,
                     ) { showCopyLastMonthDialog = false }
                 }
+                Text(
+                    "Replace ${state.selectedMonth} category assignments with the previous month’s amounts.",
+                    color = tandemPalette.muted,
+                    fontSize = TandemTypography.body,
+                )
+                mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                TandemActionButton(
+                    if (mobileSession.isPerformingBudgetAction) "Copying…" else "Copy assignments",
+                    TandemActionButtonTone.PRIMARY,
+                    modifier = Modifier.fillMaxWidth(),
+                    icon = Lucide.Check,
+                    enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                    loading = mobileSession.isPerformingBudgetAction,
+                ) {
+                    scope.launch {
+                        val copied =
+                            mobileSession.copyBudgetMonth(
+                                state.selectedBudgetId,
+                                state.selectedMonthId,
+                                state.encryptedPassword.takeIf { it.isNotBlank() },
+                            )
+                        if (copied) showCopyLastMonthDialog = false
+                    }
+                }
+                TandemActionButton(
+                    "Cancel",
+                    TandemActionButtonTone.NEUTRAL,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !mobileSession.isPerformingBudgetAction,
+                ) { showCopyLastMonthDialog = false }
             }
         }
     }
-    if (showBudgetTemplatesDialog && isLiveBudget && !isTrackingBudget) {
-        val canSaveCurrentTemplate = currentTemplateAssignments.isNotEmpty() && currentTemplateAssignments.size <= 500
-        Dialog(
-            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showBudgetTemplatesDialog = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 680.dp)
-                        .verticalScroll(rememberScrollState())
-                        .padding(TandemSpacing.large),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                        Icon(Lucide.CalendarDays, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
-                        Text(
-                            "Plan templates",
-                            modifier = Modifier.weight(1f),
-                            color = tandemPalette.text,
-                            fontSize = TandemTypography.sectionTitle,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        TandemIconButton(
-                            Lucide.X,
-                            "Close",
-                            sizeDp = 40,
-                            iconSizeDp = 18,
-                            enabled = !mobileSession.isPerformingBudgetAction,
-                        ) { showBudgetTemplatesDialog = false }
-                    }
-                    TextFieldCard(
-                        "Template name",
-                        budgetTemplateNameDraft,
-                        { budgetTemplateNameDraft = it.take(60) },
-                        TextFieldOptions(placeholder = "Summer plan"),
+    val canSaveCurrentTemplate = currentTemplateAssignments.isNotEmpty() && currentTemplateAssignments.size <= 500
+    TandemTaskSheet(
+        visible = showBudgetTemplatesDialog && isLiveBudget && !isTrackingBudget,
+        onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showBudgetTemplatesDialog = false },
+        onDismissed = {},
+    ) {
+        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 680.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(TandemSpacing.large),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    Icon(Lucide.CalendarDays, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
+                    Text(
+                        "Plan templates",
+                        modifier = Modifier.weight(1f),
+                        color = tandemPalette.text,
+                        fontSize = TandemTypography.sectionTitle,
+                        fontWeight = FontWeight.Bold,
                     )
-                    TandemActionButton(
-                        "Save ${state.selectedMonth} plan",
-                        TandemActionButtonTone.PRIMARY,
-                        modifier = Modifier.fillMaxWidth(),
-                        icon = Lucide.Check,
-                        enabled =
-                            budgetTemplateNameDraft.isNotBlank() &&
-                                canSaveCurrentTemplate &&
-                                !mobileSession.isPerformingBudgetAction,
-                    ) {
-                        val saved =
-                            decodeBudgetTemplates(state.budgetTemplatesJson)
-                                .filterNot { it.budgetId == state.selectedBudgetId && it.name.equals(budgetTemplateNameDraft.trim(), true) }
-                        state.budgetTemplatesJson =
-                            encodeBudgetTemplates(
-                                saved + BudgetTemplate(state.selectedBudgetId, budgetTemplateNameDraft.trim(), currentTemplateAssignments),
-                            )
-                        budgetTemplateNameDraft = ""
-                    }
-                    if (currentTemplateAssignments.size > 500) {
-                        InlineMessage("This plan has more than 500 categories and cannot be saved as a template.", InlineMessageKind.INFO)
-                    }
-                    mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
-                    if (currentBudgetTemplates.isEmpty()) {
-                        Text("Saved templates will appear here.", color = tandemPalette.muted, fontSize = TandemTypography.body)
-                    } else {
-                        currentBudgetTemplates.forEach { template ->
-                            SurfaceCard {
-                                Column(Modifier.fillMaxWidth().padding(TandemSpacing.small)) {
-                                    ListRow(
-                                        template.name,
-                                        subtitle = categoryCountLabel(template.assignments.size),
-                                        leading = RowLeading.Icon(Lucide.CalendarDays),
-                                    )
-                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                                        TandemActionButton(
-                                            if (mobileSession.isPerformingBudgetAction) "Applying…" else "Apply",
-                                            TandemActionButtonTone.PRIMARY,
-                                            modifier = Modifier.weight(1f),
-                                            icon = Lucide.Check,
-                                            enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
-                                            loading = mobileSession.isPerformingBudgetAction,
-                                        ) {
-                                            scope.launch {
-                                                val applied =
-                                                    mobileSession.applyBudgetTemplate(
-                                                        state.selectedBudgetId,
-                                                        state.selectedMonthId,
-                                                        template.assignments,
-                                                        state.encryptedPassword.takeIf { it.isNotBlank() },
-                                                    )
-                                                if (applied) showBudgetTemplatesDialog = false
-                                            }
-                                        }
-                                        TandemIconButton(
-                                            Lucide.Trash2,
-                                            "Delete ${template.name}",
-                                            sizeDp = 48,
-                                            iconSizeDp = 20,
-                                            tint = tandemPalette.negative,
-                                            containerColor = tandemPalette.raised,
-                                            enabled = !mobileSession.isPerformingBudgetAction,
-                                        ) {
-                                            state.budgetTemplatesJson =
-                                                encodeBudgetTemplates(
-                                                    decodeBudgetTemplates(state.budgetTemplatesJson) - template,
+                    TandemIconButton(
+                        Lucide.X,
+                        "Close",
+                        sizeDp = 40,
+                        iconSizeDp = 18,
+                        enabled = !mobileSession.isPerformingBudgetAction,
+                    ) { showBudgetTemplatesDialog = false }
+                }
+                TextFieldCard(
+                    "Template name",
+                    budgetTemplateNameDraft,
+                    { budgetTemplateNameDraft = it.take(60) },
+                    TextFieldOptions(placeholder = "Summer plan"),
+                )
+                TandemActionButton(
+                    "Save ${state.selectedMonth} plan",
+                    TandemActionButtonTone.PRIMARY,
+                    modifier = Modifier.fillMaxWidth(),
+                    icon = Lucide.Check,
+                    enabled =
+                        budgetTemplateNameDraft.isNotBlank() &&
+                            canSaveCurrentTemplate &&
+                            !mobileSession.isPerformingBudgetAction,
+                ) {
+                    val saved =
+                        decodeBudgetTemplates(state.budgetTemplatesJson)
+                            .filterNot { it.budgetId == state.selectedBudgetId && it.name.equals(budgetTemplateNameDraft.trim(), true) }
+                    state.budgetTemplatesJson =
+                        encodeBudgetTemplates(
+                            saved + BudgetTemplate(state.selectedBudgetId, budgetTemplateNameDraft.trim(), currentTemplateAssignments),
+                        )
+                    budgetTemplateNameDraft = ""
+                }
+                if (currentTemplateAssignments.size > 500) {
+                    InlineMessage("This plan has more than 500 categories and cannot be saved as a template.", InlineMessageKind.INFO)
+                }
+                mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                if (currentBudgetTemplates.isEmpty()) {
+                    Text("Saved templates will appear here.", color = tandemPalette.muted, fontSize = TandemTypography.body)
+                } else {
+                    currentBudgetTemplates.forEach { template ->
+                        SurfaceCard {
+                            Column(Modifier.fillMaxWidth().padding(TandemSpacing.small)) {
+                                ListRow(
+                                    template.name,
+                                    subtitle = categoryCountLabel(template.assignments.size),
+                                    leading = RowLeading.Icon(Lucide.CalendarDays),
+                                )
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                                    TandemActionButton(
+                                        if (mobileSession.isPerformingBudgetAction) "Applying…" else "Apply",
+                                        TandemActionButtonTone.PRIMARY,
+                                        modifier = Modifier.weight(1f),
+                                        icon = Lucide.Check,
+                                        enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                                        loading = mobileSession.isPerformingBudgetAction,
+                                    ) {
+                                        scope.launch {
+                                            val applied =
+                                                mobileSession.applyBudgetTemplate(
+                                                    state.selectedBudgetId,
+                                                    state.selectedMonthId,
+                                                    template.assignments,
+                                                    state.encryptedPassword.takeIf { it.isNotBlank() },
                                                 )
+                                            if (applied) showBudgetTemplatesDialog = false
                                         }
+                                    }
+                                    TandemIconButton(
+                                        Lucide.Trash2,
+                                        "Delete ${template.name}",
+                                        sizeDp = 48,
+                                        iconSizeDp = 20,
+                                        tint = tandemPalette.negative,
+                                        containerColor = tandemPalette.raised,
+                                        enabled = !mobileSession.isPerformingBudgetAction,
+                                    ) {
+                                        state.budgetTemplatesJson =
+                                            encodeBudgetTemplates(
+                                                decodeBudgetTemplates(state.budgetTemplatesJson) - template,
+                                            )
                                     }
                                 }
                             }
@@ -781,7 +813,7 @@ internal fun BudgetScreen(
             }
         }
     }
-    if (showNextMonthHoldDialog && isLiveBudget && !isTrackingBudget) {
+    if (holdSheetMounted && isLiveBudget && !isTrackingBudget) {
         val parsedHoldAmount = nextMonthHoldAmountMinor
         val amountFocusRequester = remember { FocusRequester() }
         val softwareKeyboard = LocalSoftwareKeyboardController.current
@@ -855,9 +887,10 @@ internal fun BudgetScreen(
             softwareKeyboard?.hide()
             showNextMonthHoldDialog = false
         }
-        Dialog(
+        TandemTaskSheet(
+            visible = showNextMonthHoldDialog,
             onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) closeHoldDialog() },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
+            onDismissed = { holdSheetMounted = false },
         ) {
             SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
                 Column(

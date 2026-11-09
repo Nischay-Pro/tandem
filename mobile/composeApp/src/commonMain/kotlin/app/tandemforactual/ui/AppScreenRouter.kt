@@ -69,6 +69,7 @@ internal fun ScreenContent(
     liveSchedules: List<LiveScheduleSummary>,
     liveBudgetMonth: LiveBudgetMonthSummary?,
     onSyncNow: () -> Unit,
+    onBudgetGroupReorderModeChange: (Boolean) -> Unit,
     onSaveTransaction: ((Boolean) -> Unit) -> Unit,
     onDeleteTransaction: ((Boolean) -> Unit) -> Unit,
     onCreateTransaction: () -> Unit,
@@ -92,7 +93,17 @@ internal fun ScreenContent(
             BudgetChooserScreen(state, mobileSession, navigation, onSelectBudget, onRefreshBudgets, onOpenSelectedBudget)
         AppRoute.UNLOCK_BUDGET -> UnlockBudgetScreen(state, navigation)
         AppRoute.FIRST_SYNC -> FirstSyncScreen(state, mobileSession, navigation, onRetrySync)
-        AppRoute.BUDGET -> BudgetScreen(state, navigation, mobileSession, liveTransactions, liveSchedules, liveBudgetMonth, onSyncNow)
+        AppRoute.BUDGET ->
+            BudgetScreen(
+                state,
+                navigation,
+                mobileSession,
+                liveTransactions,
+                liveSchedules,
+                liveBudgetMonth,
+                onSyncNow,
+                onBudgetGroupReorderModeChange,
+            )
         AppRoute.CATEGORY_GROUP -> CategoryGroupScreen(state, navigation, liveBudgetMonth, mobileSession)
         AppRoute.CATEGORY_DETAIL -> CategoryDetailScreen(state, navigation, liveBudgetMonth, mobileSession)
         AppRoute.SCHEDULES ->

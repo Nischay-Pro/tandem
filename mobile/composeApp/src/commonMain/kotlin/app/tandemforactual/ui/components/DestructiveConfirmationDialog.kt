@@ -2,10 +2,13 @@
 
 package app.tandemforactual.ui.components
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material.AlertDialog
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
+import app.tandemforactual.ui.TandemSpacing
 import app.tandemforactual.ui.TandemTypography
 import app.tandemforactual.ui.tandemPalette
 
@@ -16,13 +19,19 @@ internal fun DestructiveConfirmationDialog(
     confirmLabel: String,
     dismissLabel: String,
     enabled: Boolean = true,
+    content: @Composable (() -> Unit)? = null,
     onDismissRequest: () -> Unit,
     onConfirm: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismissRequest,
         title = { Text(title, color = tandemPalette.text) },
-        text = { Text(message, color = tandemPalette.muted, fontSize = TandemTypography.body) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                Text(message, color = tandemPalette.muted, fontSize = TandemTypography.body)
+                content?.invoke()
+            }
+        },
         confirmButton = {
             TextButton(enabled = enabled, onClick = onConfirm) {
                 Text(confirmLabel, color = if (enabled) tandemPalette.negative else tandemPalette.muted)

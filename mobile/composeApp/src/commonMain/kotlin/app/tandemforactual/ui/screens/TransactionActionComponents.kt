@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
@@ -24,14 +23,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SurfaceCard
-import app.tandemforactual.ui.components.TandemActionButton
-import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.TandemLoadingIndicator
 import com.composables.icons.lucide.Check
@@ -140,46 +136,15 @@ internal fun TransactionBulkDeleteDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
-    Dialog(
-        onDismissRequest = { if (!isDeleting) onDismiss() },
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = 16.dp)) {
-            Column(
-                Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    Icon(Lucide.Trash2, contentDescription = null, modifier = Modifier.size(22.dp), tint = tandemPalette.negative)
-                    Text(
-                        if (selectedCount == 1) "Delete this transaction?" else "Delete $selectedCount transactions?",
-                        modifier = Modifier.weight(1f),
-                        color = tandemPalette.text,
-                        fontSize = TandemTypography.cardTitle,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    TandemActionButton(
-                        "Cancel",
-                        TandemActionButtonTone.NEUTRAL,
-                        Modifier.weight(1f),
-                        enabled = !isDeleting,
-                        onClick = onDismiss,
-                    )
-                    TandemActionButton(
-                        if (isDeleting) "Deleting…" else "Delete",
-                        TandemActionButtonTone.DESTRUCTIVE,
-                        Modifier.weight(1f),
-                        icon = Lucide.Trash2,
-                        enabled = !isDeleting,
-                        loading = isDeleting,
-                        onClick = onConfirm,
-                    )
-                }
-            }
-        }
-    }
+    DestructiveConfirmationDialog(
+        title = if (selectedCount == 1) "Delete this transaction?" else "Delete $selectedCount transactions?",
+        message = "Deleted transactions leave this device first and sync when the server is available.",
+        confirmLabel = if (isDeleting) "Deleting…" else "Delete",
+        dismissLabel = "Cancel",
+        enabled = !isDeleting,
+        onDismissRequest = onDismiss,
+        onConfirm = onConfirm,
+    )
 }
 
 internal fun openTransaction(

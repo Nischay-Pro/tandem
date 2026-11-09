@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.Snapshot
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.PairedDevice
@@ -33,6 +34,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
@@ -203,6 +205,77 @@ internal class TandemMobileSession(
 
     var budgetActionWasAppliedButRefreshFailed by mutableStateOf(false)
         private set
+
+    private var budgetReorderQueue by mutableStateOf(BudgetReorderQueueState())
+
+    fun budgetReorderMovesFor(
+        budgetId: String,
+        scopeId: String,
+    ): List<QueuedBudgetReorder> = budgetReorderQueue.movesFor(budgetId, scopeId)
+
+    fun budgetReorderStatus(
+        budgetId: String,
+        scopeId: String,
+    ): BudgetReorderStatus = budgetReorderQueue.statusFor(budgetId, scopeId)
+
+    fun enqueueBudgetReorder(
+        budgetId: String,
+        scopeId: String,
+        kind: BudgetReorderKind,
+        itemId: String,
+        targetId: String?,
+        desiredOrder: List<String>,
+        encryptionPassword: String?,
+    ) {
+        budgetReorderQueue =
+            budgetReorderQueue.enqueue(
+                QueuedBudgetReorder(budgetId, scopeId, kind, itemId, targetId, desiredOrder, encryptionPassword),
+            )
+    }
+
+    fun clearBudgetReorderMessage(
+        budgetId: String,
+        scopeId: String,
+    ) {
+        budgetReorderQueue = budgetReorderQueue.clearMessage(budgetId, scopeId)
+    }
+
+    /** Runs outside editor screens so leaving a route cannot cancel unsent reorder operations. */
+    suspend fun processQueuedBudgetReorders() {
+        while (true) {
+            val request = snapshotFlow { budgetReorderQueue.moves.firstOrNull() }.first { it != null } ?: continue
+            snapshotFlow { isPerformingBudgetAction }.first { !it }
+            if (budgetReorderQueue.moves.firstOrNull() != request) continue
+
+            val moved =
+                when (request.kind) {
+                    BudgetReorderKind.CATEGORY ->
+                        manageBudgetCategory(
+                            request.budgetId,
+                            request.itemId,
+                            "move",
+                            request.targetId,
+                            request.encryptionPassword,
+                        )
+                    BudgetReorderKind.CATEGORY_GROUP ->
+                        manageBudgetCategoryGroup(
+                            request.budgetId,
+                            request.itemId,
+                            "move",
+                            null,
+                            request.targetId,
+                            request.encryptionPassword,
+                        )
+                }
+            val refreshFailed = budgetActionWasAppliedButRefreshFailed
+            if (moved || refreshFailed) {
+                budgetReorderQueue = budgetReorderQueue.complete(request, refreshFailed, budgetActionMessage)
+            } else {
+                val failure = budgetActionMessage ?: "Couldn’t reorder this item. The order was restored."
+                budgetReorderQueue = budgetReorderQueue.failAll(failure)
+            }
+        }
+    }
 
     private var readOnlyMode = false
 

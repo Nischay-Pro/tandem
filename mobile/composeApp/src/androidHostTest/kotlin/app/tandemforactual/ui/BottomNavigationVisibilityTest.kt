@@ -26,6 +26,38 @@ class BottomNavigationVisibilityTest {
     }
 
     @Test
+    fun tappingTheActiveTabReturnsToItsRoot() {
+        val currentStack =
+            listOf(
+                AppRouteEntry(AppRoute.BUDGET, 1),
+                AppRouteEntry(AppRoute.ACTIVITY, 2),
+                AppRouteEntry(AppRoute.ACTIVITY_SEARCH, 3),
+            )
+        var nextId = 10L
+
+        val selection =
+            selectAppTabNavigation(currentStack, "", AppRoute.ACTIVITY) { route -> AppRouteEntry(route, nextId++) }
+
+        assertEquals(listOf(AppRoute.BUDGET, AppRoute.ACTIVITY), selection.backStack.map { it.route })
+        assertEquals(listOf(10L, 11L), selection.backStack.map { it.id })
+    }
+
+    @Test
+    fun tappingAnActiveTabRootLeavesTheStackAlone() {
+        val currentStack = listOf(AppRouteEntry(AppRoute.BUDGET, 1), AppRouteEntry(AppRoute.ACTIVITY, 2))
+        var createdEntry = false
+
+        val selection =
+            selectAppTabNavigation(currentStack, "", AppRoute.ACTIVITY) { route ->
+                createdEntry = true
+                AppRouteEntry(route, 3)
+            }
+
+        assertEquals(currentStack, selection.backStack)
+        assertEquals(false, createdEntry)
+    }
+
+    @Test
     fun browsingRoutesKeepBottomNavigation() {
         assertTrue(AppRoute.ACTIVITY_SEARCH.showsBottomNavigation())
         assertTrue(AppRoute.ACCOUNT_DETAIL.showsBottomNavigation())

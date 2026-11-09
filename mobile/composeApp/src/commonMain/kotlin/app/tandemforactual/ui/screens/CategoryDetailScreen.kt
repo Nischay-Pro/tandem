@@ -43,9 +43,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import app.tandemforactual.ui.components.BodyText
+import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
@@ -59,6 +58,7 @@ import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.components.TandemIconButton
+import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
 import app.tandemforactual.ui.model.booleanValue
 import app.tandemforactual.ui.model.recordBody
@@ -104,6 +104,7 @@ internal fun CategoryDetailScreen(
         }
     var showEditDialog by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf(false) }
     var showDeleteDialog by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf(false) }
+    var confirmCategoryDelete by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf(false) }
     var showAssignedAmountDialog by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId, state.selectedMonthId) {
         mutableStateOf(false)
     }
@@ -317,12 +318,13 @@ internal fun CategoryDetailScreen(
             }
         }
     }
-    if (showAssignedAmountDialog && category != null && isLiveBudget && !isTrackingBudget) {
-        val parsedAmount = state.parseAmountMinorUnits(assignedAmountDraft)
-        Dialog(
-            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showAssignedAmountDialog = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
+    TandemTaskSheet(
+        visible = showAssignedAmountDialog && category != null && isLiveBudget && !isTrackingBudget,
+        onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showAssignedAmountDialog = false },
+        onDismissed = {},
+    ) {
+        if (category != null) {
+            val parsedAmount = state.parseAmountMinorUnits(assignedAmountDraft)
             SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 460.dp).padding(horizontal = 16.dp)) {
                 Column(
                     Modifier.fillMaxWidth().padding(TandemSpacing.large),
@@ -391,14 +393,15 @@ internal fun CategoryDetailScreen(
             }
         }
     }
-    if (showMoveMoneyDialog && category != null && isLiveBudget && !isTrackingBudget) {
-        val parsedMoveAmount = state.parseAmountMinorUnits(moveMoneyAmountDraft)
-        val fromLabel = moveMoneyCategories.firstOrNull { it.second.id == moveMoneyFromId }?.second?.name ?: "Choose category"
-        val toLabel = moveMoneyCategories.firstOrNull { it.second.id == moveMoneyToId }?.second?.name ?: "Choose category"
-        Dialog(
-            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showMoveMoneyDialog = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
+    TandemTaskSheet(
+        visible = showMoveMoneyDialog && category != null && isLiveBudget && !isTrackingBudget,
+        onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showMoveMoneyDialog = false },
+        onDismissed = {},
+    ) {
+        if (category != null) {
+            val parsedMoveAmount = state.parseAmountMinorUnits(moveMoneyAmountDraft)
+            val fromLabel = moveMoneyCategories.firstOrNull { it.second.id == moveMoneyFromId }?.second?.name ?: "Choose category"
+            val toLabel = moveMoneyCategories.firstOrNull { it.second.id == moveMoneyToId }?.second?.name ?: "Choose category"
             SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = 16.dp)) {
                 Column(
                     Modifier.fillMaxWidth().padding(TandemSpacing.large),
@@ -502,11 +505,12 @@ internal fun CategoryDetailScreen(
             }
         }
     }
-    if (showEditDialog && category != null) {
-        Dialog(
-            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showEditDialog = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
+    TandemTaskSheet(
+        visible = showEditDialog && category != null,
+        onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showEditDialog = false },
+        onDismissed = {},
+    ) {
+        if (category != null) {
             SurfaceCard(
                 Modifier
                     .fillMaxWidth()
@@ -683,11 +687,12 @@ internal fun CategoryDetailScreen(
             }
         }
     }
-    if (showDeleteDialog && category != null) {
-        Dialog(
-            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showDeleteDialog = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
+    TandemTaskSheet(
+        visible = showDeleteDialog && category != null,
+        onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showDeleteDialog = false },
+        onDismissed = {},
+    ) {
+        if (category != null) {
             SurfaceCard(
                 Modifier
                     .fillMaxWidth()
@@ -798,32 +803,47 @@ internal fun CategoryDetailScreen(
                             enabled = !mobileSession.isPerformingBudgetAction,
                         ) { showDeleteDialog = false }
                         TandemActionButton(
-                            if (mobileSession.isPerformingBudgetAction) "Deleting…" else "Delete",
-                            TandemActionButtonTone.DESTRUCTIVE,
+                            "Continue",
+                            TandemActionButtonTone.PRIMARY,
                             modifier = Modifier.weight(1f),
-                            icon = Lucide.Trash2,
                             enabled = !mobileSession.isPerformingBudgetAction,
-                            loading = mobileSession.isPerformingBudgetAction,
                         ) {
-                            scope.launch {
-                                val deleted =
-                                    mobileSession.deleteBudgetCategory(
-                                        state.selectedBudgetId,
-                                        category.id,
-                                        deleteDestinationId,
-                                        state.encryptedPassword.takeIf { it.isNotBlank() },
-                                    )
-                                if (deleted) {
-                                    state.setCategoryIconChoice(category.id, "Automatic")
-                                    showDeleteDialog = false
-                                    navigation.back()
-                                }
-                            }
+                            confirmCategoryDelete = true
                         }
                     }
                 }
             }
         }
+    }
+    if (confirmCategoryDelete && category != null) {
+        DestructiveConfirmationDialog(
+            title = "Delete ${category.name}?",
+            message =
+                "Transactions will be moved to ${deleteDestinationId?.let { id ->
+                    deleteDestinations.firstOrNull { it.id == id }?.name
+                } ?: "Unassigned"}.",
+            confirmLabel = if (mobileSession.isPerformingBudgetAction) "Deleting…" else "Delete",
+            dismissLabel = "Keep category",
+            enabled = !mobileSession.isPerformingBudgetAction,
+            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) confirmCategoryDelete = false },
+            onConfirm = {
+                scope.launch {
+                    val deleted =
+                        mobileSession.deleteBudgetCategory(
+                            state.selectedBudgetId,
+                            category.id,
+                            deleteDestinationId,
+                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                        )
+                    confirmCategoryDelete = false
+                    if (deleted) {
+                        state.setCategoryIconChoice(category.id, "Automatic")
+                        showDeleteDialog = false
+                        navigation.back()
+                    }
+                }
+            },
+        )
     }
 }
 

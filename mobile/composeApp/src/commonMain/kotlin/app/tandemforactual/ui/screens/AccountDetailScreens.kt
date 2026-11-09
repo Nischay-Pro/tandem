@@ -28,8 +28,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
@@ -43,6 +41,7 @@ import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.components.TandemIconButton
+import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveAccountSummary
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
@@ -281,8 +280,9 @@ internal fun AccountDetailScreen(
             onConfirm = didReconcile,
         )
     }
-    if (showStatementImportDialog && liveAccount != null) {
+    if (liveAccount != null) {
         StatementImportDialog(
+            visible = showStatementImportDialog,
             state = state,
             accountName = liveAccount.name,
             filename = pickedStatementFile?.name.orEmpty(),
@@ -295,9 +295,9 @@ internal fun AccountDetailScreen(
             onDismiss = {
                 if (!mobileSession.isPerformingBudgetAction) {
                     showStatementImportDialog = false
-                    pickedStatementFile = null
                 }
             },
+            onDismissed = { pickedStatementFile = null },
             onImport = { parsed ->
                 scope.launch {
                     val imported =
@@ -317,7 +317,6 @@ internal fun AccountDetailScreen(
                         )
                     if (imported != null) {
                         showStatementImportDialog = false
-                        pickedStatementFile = null
                     }
                 }
             },
@@ -327,6 +326,7 @@ internal fun AccountDetailScreen(
 
 @Composable
 internal fun StatementImportDialog(
+    visible: Boolean,
     state: AppState,
     accountName: String,
     filename: String,
@@ -337,9 +337,10 @@ internal fun StatementImportDialog(
     busy: Boolean,
     onDateOrderChange: (StatementDateOrder) -> Unit,
     onDismiss: () -> Unit,
+    onDismissed: () -> Unit,
     onImport: (StatementParseResult) -> Unit,
 ) {
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    TandemTaskSheet(visible = visible, onDismissRequest = onDismiss, onDismissed = onDismissed) {
         SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = TandemSpacing.large)) {
             Column(
                 Modifier

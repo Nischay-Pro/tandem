@@ -43,8 +43,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
@@ -52,6 +50,7 @@ import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.components.TandemIconButton
+import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.recordName
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
@@ -600,55 +599,54 @@ internal fun ActivitySearchScreen(
             )
         }
     }
-    if (showSaveSearchDialog) {
-        Dialog(
-            onDismissRequest = { showSaveSearchDialog = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 400.dp).padding(horizontal = TandemSpacing.large)) {
-                Column(
-                    Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+    TandemTaskSheet(
+        visible = showSaveSearchDialog,
+        onDismissRequest = { showSaveSearchDialog = false },
+        onDismissed = {},
+    ) {
+        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 400.dp).padding(horizontal = TandemSpacing.large)) {
+            Column(
+                Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+            ) {
+                Heading("Save search")
+                TextFieldCard(
+                    "Name",
+                    savedSearchNameDraft,
+                    { savedSearchNameDraft = it.take(80) },
+                    TextFieldOptions(placeholder = "Name this search"),
+                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                 ) {
-                    Heading("Save search")
-                    TextFieldCard(
-                        "Name",
-                        savedSearchNameDraft,
-                        { savedSearchNameDraft = it.take(80) },
-                        TextFieldOptions(placeholder = "Name this search"),
+                    TandemActionButton(
+                        "Cancel",
+                        TandemActionButtonTone.NEUTRAL,
+                        modifier = Modifier.weight(1f),
+                        onClick = { showSaveSearchDialog = false },
                     )
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                    ) {
-                        TandemActionButton(
-                            "Cancel",
-                            TandemActionButtonTone.NEUTRAL,
-                            modifier = Modifier.weight(1f),
-                            onClick = { showSaveSearchDialog = false },
-                        )
-                        TandemActionButton(
-                            "Save",
-                            TandemActionButtonTone.PRIMARY,
-                            modifier = Modifier.weight(1f),
-                            enabled = savedSearchNameDraft.isNotBlank(),
-                            onClick = {
-                                val entry =
-                                    SavedActivitySearch(
-                                        budgetId = state.selectedBudgetId,
-                                        name = savedSearchNameDraft.trim(),
-                                        query = search,
-                                        filters = filters,
-                                    )
-                                val updated =
-                                    decodeSavedActivitySearches(state.savedActivitySearchesJson)
-                                        .filterNot { it.budgetId == entry.budgetId && it.name.equals(entry.name, ignoreCase = true) } +
-                                        entry
-                                state.savedActivitySearchesJson = encodeSavedActivitySearches(updated)
-                                showSaveSearchDialog = false
-                            },
-                        )
-                    }
+                    TandemActionButton(
+                        "Save",
+                        TandemActionButtonTone.PRIMARY,
+                        modifier = Modifier.weight(1f),
+                        enabled = savedSearchNameDraft.isNotBlank(),
+                        onClick = {
+                            val entry =
+                                SavedActivitySearch(
+                                    budgetId = state.selectedBudgetId,
+                                    name = savedSearchNameDraft.trim(),
+                                    query = search,
+                                    filters = filters,
+                                )
+                            val updated =
+                                decodeSavedActivitySearches(state.savedActivitySearchesJson)
+                                    .filterNot { it.budgetId == entry.budgetId && it.name.equals(entry.name, ignoreCase = true) } +
+                                    entry
+                            state.savedActivitySearchesJson = encodeSavedActivitySearches(updated)
+                            showSaveSearchDialog = false
+                        },
+                    )
                 }
             }
         }

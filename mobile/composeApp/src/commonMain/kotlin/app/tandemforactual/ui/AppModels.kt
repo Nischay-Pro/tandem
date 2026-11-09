@@ -818,6 +818,40 @@ internal fun decodeAppTabBackStacks(value: String): Map<AppRoute, List<AppRouteE
             }
         }.toMap()
 
+internal data class AppTabSelection(
+    val backStack: List<AppRouteEntry>,
+    val savedTabBackStacks: String,
+)
+
+internal fun selectAppTabNavigation(
+    currentBackStack: List<AppRouteEntry>,
+    savedTabBackStacks: String,
+    selectedTab: AppRoute,
+    newRouteEntry: (AppRoute) -> AppRouteEntry,
+): AppTabSelection {
+    val tabStacks = decodeAppTabBackStacks(savedTabBackStacks).toMutableMap()
+    val activeTab = currentBackStack.lastOrNull { it.route.isTab() }?.route
+    val nextBackStack =
+        if (activeTab == selectedTab) {
+            if (currentBackStack.lastOrNull()?.route == selectedTab) {
+                currentBackStack
+            } else {
+                tabStacks.remove(selectedTab)
+                buildList {
+                    if (selectedTab != AppRoute.BUDGET) add(newRouteEntry(AppRoute.BUDGET))
+                    add(newRouteEntry(selectedTab))
+                }
+            }
+        } else {
+            activeTab?.let { tabStacks[it] = currentBackStack }
+            tabStacks[selectedTab] ?: buildList {
+                if (selectedTab != AppRoute.BUDGET) add(newRouteEntry(AppRoute.BUDGET))
+                add(newRouteEntry(selectedTab))
+            }
+        }
+    return AppTabSelection(nextBackStack, encodeAppTabBackStacks(tabStacks))
+}
+
 internal val appRouteStackSaver =
     listSaver<SnapshotStateList<AppRouteEntry>, String>(
         save = { stack -> stack.map { "${it.id}:${it.route.name}" } },

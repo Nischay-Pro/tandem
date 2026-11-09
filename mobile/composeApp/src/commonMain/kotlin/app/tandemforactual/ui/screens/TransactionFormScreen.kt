@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.AlertDialog
-import androidx.compose.material.Text
-import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -33,6 +30,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.AnimatedReveal
 import app.tandemforactual.ui.components.BodyText
+import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
@@ -456,29 +454,19 @@ internal fun TransactionFormScreen(
             onDismiss = { showDatePicker = false },
         )
         if (confirmDelete) {
-            AlertDialog(
-                onDismissRequest = { if (!mobileSession.isSavingTransaction) confirmDelete = false },
-                title = { Text("Delete transaction?", color = tandemPalette.text) },
-                text = { Text("It’ll be removed from this device. The removal will sync later.", color = tandemPalette.muted) },
-                confirmButton = {
-                    TextButton(
-                        enabled = !mobileSession.isSavingTransaction,
-                        onClick = {
-                            onDeleteTransaction { deleted ->
-                                confirmDelete = false
-                                if (deleted) navigation.backToList()
-                            }
-                        },
-                    ) {
-                        Text("Delete", color = tandemPalette.negative)
+            DestructiveConfirmationDialog(
+                title = "Delete transaction?",
+                message = "It’ll be removed from this device. The removal will sync later.",
+                confirmLabel = "Delete",
+                dismissLabel = "Keep",
+                enabled = !mobileSession.isSavingTransaction,
+                onDismissRequest = { confirmDelete = false },
+                onConfirm = {
+                    onDeleteTransaction { deleted ->
+                        confirmDelete = false
+                        if (deleted) navigation.backToList()
                     }
                 },
-                dismissButton = {
-                    TextButton(enabled = !mobileSession.isSavingTransaction, onClick = { confirmDelete = false }) {
-                        Text("Keep", color = tandemPalette.muted)
-                    }
-                },
-                backgroundColor = tandemPalette.surface,
             )
         }
         return

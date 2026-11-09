@@ -108,6 +108,9 @@ fun TandemApp(
         remember(apiClient, database, deviceCredentialStore) {
             TandemMobileSession(apiClient, database, nowEpochMillis, deviceCredentialStore)
         }
+    LaunchedEffect(mobileSession) {
+        mobileSession.processQueuedBudgetReorders()
+    }
     SideEffect { mobileSession.setReadOnlyMode(state.readOnlyMode) }
     val appPreferencesStore = remember(database) { database?.let(::AppPreferencesStore) }
     val coroutineScope = rememberCoroutineScope()
@@ -130,6 +133,7 @@ fun TandemApp(
     var lastAutomaticSyncBudgetId by remember { mutableStateOf<String?>(null) }
     var automaticSyncInFlight by remember { mutableStateOf(false) }
     var pendingAutomaticSync by remember { mutableStateOf(false) }
+    var budgetGroupReorderActive by remember(state.selectedBudgetId) { mutableStateOf(false) }
     var cacheDiscoveryComplete by remember { mutableStateOf(false) }
     var sessionRestoreComplete by remember { mutableStateOf(false) }
     var routeTransitionDirection by remember { mutableStateOf(0f) }
@@ -392,31 +396,13 @@ fun TandemApp(
         }
     }
     val selectTab: (AppRoute) -> Unit = { selectedTab ->
-        val activeTab = backStack.lastOrNull { it.route.isTab() }?.route
-        if (activeTab == selectedTab) {
-            if (backStack.lastOrNull()?.route != selectedTab) {
-                val tabStacks = decodeAppTabBackStacks(savedTabBackStacks).toMutableMap()
-                tabStacks.remove(selectedTab)
-                savedTabBackStacks = encodeAppTabBackStacks(tabStacks)
-                routeTransitionDirection = 0f
-                backStack.clear()
-                if (selectedTab != AppRoute.BUDGET) backStack.add(newRouteEntry(AppRoute.BUDGET))
-                backStack.add(newRouteEntry(selectedTab))
-            }
-        } else {
-            val tabStacks = decodeAppTabBackStacks(savedTabBackStacks).toMutableMap()
-            activeTab?.let { tabStacks[it] = backStack.toList() }
-            val targetStack = tabStacks[selectedTab]
+        val tabSelection = selectAppTabNavigation(backStack.toList(), savedTabBackStacks, selectedTab, newRouteEntry)
+        if (tabSelection.backStack != backStack.toList()) {
             routeTransitionDirection = 0f
             backStack.clear()
-            if (targetStack != null) {
-                backStack.addAll(targetStack)
-            } else {
-                if (selectedTab != AppRoute.BUDGET) backStack.add(newRouteEntry(AppRoute.BUDGET))
-                backStack.add(newRouteEntry(selectedTab))
-            }
-            savedTabBackStacks = encodeAppTabBackStacks(tabStacks)
+            backStack.addAll(tabSelection.backStack)
         }
+        savedTabBackStacks = tabSelection.savedTabBackStacks
     }
     val performBack: () -> Unit = {
         if (backButtonTransitionRunning) {
@@ -1124,6 +1110,7 @@ fun TandemApp(
                                 liveSchedules = liveSchedules,
                                 liveBudgetMonth = liveBudgetMonth,
                                 onSyncNow = syncNow,
+                                onBudgetGroupReorderModeChange = { budgetGroupReorderActive = it },
                                 onSaveTransaction = saveTransaction,
                                 onDeleteTransaction = deleteTransaction,
                                 onCreateTransaction = createTransaction,
@@ -1138,7 +1125,9 @@ fun TandemApp(
                                 notificationPermissionEnabled = notificationPermissionEnabled,
                                 onToggleNotificationPermission = onToggleNotificationPermission,
                             )
-                            if (visibleRoute == AppRoute.BUDGET && state.selectedBudgetId.isNotBlank()) {
+                            if (visibleRoute == AppRoute.BUDGET &&
+                                shouldShowBudgetCreateAction(state.selectedBudgetId.isNotBlank(), budgetGroupReorderActive)
+                            ) {
                                 val transactionActionCompact by
                                     remember(routeScrollState, routeLazyListState) {
                                         derivedStateOf {
@@ -1304,6 +1293,7 @@ fun TandemApp(
                 TandemTaskSheet(
                     visible = !transactionSheetClosing,
                     onDismissRequest = handleBack,
+                    fullScreen = true,
                     onDismissed = {
                         routeTransitionDirection = 0f
                         repeat(transactionSheetPopCount.coerceAtMost(backStack.size - 1)) {
@@ -1316,27 +1306,7 @@ fun TandemApp(
                     AnimatedContent(
                         targetState = routeEntry,
                         modifier = Modifier.fillMaxSize().clipToBounds(),
-                        transitionSpec = {
-                            when {
-                                reduceMotion || skipNextRouteTransition ->
-                                    EnterTransition.None togetherWith ExitTransition.None
-                                routeTransitionDirection > 0f ->
-                                    slideInHorizontally(
-                                        tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                    ) { it } togetherWith
-                                        slideOutHorizontally(
-                                            tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                        ) { -it } using null
-                                routeTransitionDirection < 0f ->
-                                    slideInHorizontally(
-                                        tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                    ) { -it } togetherWith
-                                        slideOutHorizontally(
-                                            tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                        ) { it } using null
-                                else -> EnterTransition.None togetherWith ExitTransition.None
-                            }
-                        },
+                        transitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
                         label = "tandem-task-sheet-content",
                     ) { sheetEntry ->
                         renderRoute(sheetEntry, Modifier.fillMaxSize(), true, true)

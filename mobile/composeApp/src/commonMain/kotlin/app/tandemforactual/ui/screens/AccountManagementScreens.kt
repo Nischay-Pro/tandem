@@ -13,12 +13,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.AlertDialog
 import androidx.compose.material.DropdownMenu
 import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
-import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +33,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.BodyText
+import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
@@ -96,117 +95,117 @@ internal fun AccountReconcileDialog(
         onDismissRequest = requestDismiss,
         onDismissed = onDismiss,
     ) {
-        Column(
-            Modifier.fillMaxSize(),
-        ) {
-            Column(
-                Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(TandemSpacing.large),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-            ) {
+        SurfaceCard(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize()) {
+                Column(
+                    Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(TandemSpacing.large),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                    ) {
+                        Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
+                        Text(
+                            "Reconcile",
+                            modifier = Modifier.weight(1f),
+                            color = tandemPalette.text,
+                            fontSize = TandemTypography.sectionTitle,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        TandemIconButton(Lucide.X, "Close", sizeDp = 40, iconSizeDp = 18, enabled = !busy, onClick = requestDismiss)
+                    }
+                    BodyText(accountName)
+                    TextFieldCard(
+                        "Statement balance",
+                        statementBalance,
+                        onStatementBalanceChange,
+                        TextFieldOptions(
+                            placeholder = state.formatCurrency(0),
+                            currencySymbol = currencySymbol,
+                            currencySymbolAfter = currencySymbolIsAfter,
+                            currencySymbolSpace = currencySettings?.currencySpaceBetweenAmountAndSymbol == true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        ),
+                    )
+                    if (statementMinor == null) {
+                        InlineMessage("Enter your statement balance", InlineMessageKind.INFO)
+                    }
+                    SurfaceCard {
+                        Column {
+                            ListRow("Cleared balance", trailing = projectedClearedBalance?.let(state::formatCurrency) ?: "Unavailable")
+                            DividerLine()
+                            ListRow(
+                                "Difference",
+                                trailing = differenceMinor?.let(state::formatCurrency) ?: "—",
+                                leading = RowLeading.Icon(Lucide.Check),
+                                options =
+                                    ListRowOptions(
+                                        trailingColor = if (balanceMatches) tandemPalette.positive else tandemPalette.warning,
+                                    ),
+                            )
+                        }
+                    }
+                    if (statementMinor != null) {
+                        InlineMessage(
+                            if (balanceMatches) {
+                                "Cleared transactions match this statement balance."
+                            } else {
+                                "Adjust the selected transactions until the difference is 0."
+                            },
+                            if (balanceMatches) InlineMessageKind.SUCCESS else InlineMessageKind.INFO,
+                        )
+                    }
+                    SectionCard("Transactions", "Select the items on this statement") {
+                        transactions.forEachIndexed { index, transaction ->
+                            val id = transaction.recordId ?: return@forEachIndexed
+                            CheckBoxRow(
+                                transaction.payee,
+                                "${transaction.dateLabel} · ${state.formatCurrency(transaction.amountMinorUnits)}",
+                                checked = id in selectedIds,
+                                enabled = !busy,
+                                onChange = { onSelectedChange(id, it) },
+                            )
+                            if (index < transactions.lastIndex) DividerLine()
+                        }
+                        if (hasMoreTransactions) {
+                            if (transactions.isNotEmpty()) DividerLine()
+                            TandemActionButton(
+                                if (loadingMoreTransactions) "Loading…" else "Load older transactions",
+                                TandemActionButtonTone.NEUTRAL,
+                                Modifier.fillMaxWidth(),
+                                enabled = !busy && !loadingMoreTransactions,
+                                loading = loadingMoreTransactions,
+                                onClick = onLoadMoreTransactions,
+                            )
+                        }
+                    }
+                }
+                message?.let { InlineMessage(it, InlineMessageKind.INFO, Modifier.padding(horizontal = TandemSpacing.large)) }
                 Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
+                    Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
                     horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                 ) {
-                    Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
-                    Text(
-                        "Reconcile",
-                        modifier = Modifier.weight(1f),
-                        color = tandemPalette.text,
-                        fontSize = TandemTypography.sectionTitle,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                    TandemActionButton(
+                        "Cancel",
+                        TandemActionButtonTone.NEUTRAL,
+                        Modifier.weight(1f),
+                        enabled = !busy,
+                        onClick = requestDismiss,
                     )
-                    TandemIconButton(Lucide.X, "Close", sizeDp = 40, iconSizeDp = 18, enabled = !busy, onClick = requestDismiss)
-                }
-                BodyText(accountName)
-                TextFieldCard(
-                    "Statement balance",
-                    statementBalance,
-                    onStatementBalanceChange,
-                    TextFieldOptions(
-                        placeholder = state.formatCurrency(0),
-                        currencySymbol = currencySymbol,
-                        currencySymbolAfter = currencySymbolIsAfter,
-                        currencySymbolSpace = currencySettings?.currencySpaceBetweenAmountAndSymbol == true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    ),
-                )
-                if (statementMinor == null) {
-                    InlineMessage("Enter your statement balance", InlineMessageKind.INFO)
-                }
-                SurfaceCard {
-                    Column {
-                        ListRow("Cleared balance", trailing = projectedClearedBalance?.let(state::formatCurrency) ?: "Unavailable")
-                        DividerLine()
-                        ListRow(
-                            "Difference",
-                            trailing = differenceMinor?.let(state::formatCurrency) ?: "—",
-                            leading = RowLeading.Icon(Lucide.Check),
-                            options =
-                                ListRowOptions(
-                                    trailingColor = if (balanceMatches) tandemPalette.positive else tandemPalette.warning,
-                                ),
-                        )
-                    }
-                }
-                if (statementMinor != null) {
-                    InlineMessage(
-                        if (balanceMatches) {
-                            "Cleared transactions match this statement balance."
-                        } else {
-                            "Adjust the selected transactions until the difference is 0."
-                        },
-                        if (balanceMatches) InlineMessageKind.SUCCESS else InlineMessageKind.INFO,
+                    TandemActionButton(
+                        if (busy) "Working…" else "Mark reconciled",
+                        TandemActionButtonTone.PRIMARY,
+                        Modifier.weight(1f),
+                        icon = Lucide.Check,
+                        enabled = canFinishReconciliation(statementMinor, differenceMinor, busy),
+                        loading = busy,
+                        onClick = { onConfirm(requestDismiss) },
                     )
                 }
-                SectionCard("Transactions", "Select the items on this statement") {
-                    transactions.forEachIndexed { index, transaction ->
-                        val id = transaction.recordId ?: return@forEachIndexed
-                        CheckBoxRow(
-                            transaction.payee,
-                            "${transaction.dateLabel} · ${state.formatCurrency(transaction.amountMinorUnits)}",
-                            checked = id in selectedIds,
-                            enabled = !busy,
-                            onChange = { onSelectedChange(id, it) },
-                        )
-                        if (index < transactions.lastIndex) DividerLine()
-                    }
-                    if (hasMoreTransactions) {
-                        if (transactions.isNotEmpty()) DividerLine()
-                        TandemActionButton(
-                            if (loadingMoreTransactions) "Loading…" else "Load older transactions",
-                            TandemActionButtonTone.NEUTRAL,
-                            Modifier.fillMaxWidth(),
-                            enabled = !busy && !loadingMoreTransactions,
-                            loading = loadingMoreTransactions,
-                            onClick = onLoadMoreTransactions,
-                        )
-                    }
-                }
-            }
-            message?.let { InlineMessage(it, InlineMessageKind.INFO, Modifier.padding(horizontal = TandemSpacing.large)) }
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
-                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-            ) {
-                TandemActionButton(
-                    "Cancel",
-                    TandemActionButtonTone.NEUTRAL,
-                    Modifier.weight(1f),
-                    enabled = !busy,
-                    onClick = requestDismiss,
-                )
-                TandemActionButton(
-                    if (busy) "Working…" else "Mark reconciled",
-                    TandemActionButtonTone.PRIMARY,
-                    Modifier.weight(1f),
-                    icon = Lucide.Check,
-                    enabled = canFinishReconciliation(statementMinor, differenceMinor, busy),
-                    loading = busy,
-                    onClick = { onConfirm(requestDismiss) },
-                )
             }
         }
     }
@@ -358,54 +357,81 @@ internal fun AccountOptionsScreen(
             }
         }
     }
-    if (renameDialog && liveAccount != null) {
-        AlertDialog(
-            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) renameDialog = false },
-            title = { Text("Rename account", color = tandemPalette.text) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+    TandemTaskSheet(
+        visible = renameDialog && liveAccount != null,
+        onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) renameDialog = false },
+        onDismissed = {},
+    ) {
+        val account = liveAccount
+        if (account != null) {
+            SurfaceCard(Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large)) {
+                Column(
+                    Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Rename account",
+                            modifier = Modifier.weight(1f),
+                            color = tandemPalette.text,
+                            fontSize = TandemTypography.sectionTitle,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        TandemIconButton(
+                            Lucide.X,
+                            "Close",
+                            sizeDp = 40,
+                            iconSizeDp = 18,
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                            onClick = { renameDialog = false },
+                        )
+                    }
                     TextFieldCard("Name", renameValue, { renameValue = it }, TextFieldOptions(placeholder = "Account name"))
                     mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = renameValue.isNotBlank() && !mobileSession.isPerformingBudgetAction,
-                    onClick = {
-                        scope.launch {
-                            if (mobileSession.renameBudgetAccount(
-                                    state.selectedBudgetId,
-                                    liveAccount.id,
-                                    renameValue,
-                                    state.encryptedPassword.takeIf { it.isNotBlank() },
-                                )
-                            ) {
-                                renameDialog = false
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        TandemActionButton(
+                            "Cancel",
+                            TandemActionButtonTone.NEUTRAL,
+                            Modifier.weight(1f),
+                            enabled = !mobileSession.isPerformingBudgetAction,
+                            onClick = { renameDialog = false },
+                        )
+                        TandemActionButton(
+                            if (mobileSession.isPerformingBudgetAction) "Saving…" else "Save",
+                            TandemActionButtonTone.PRIMARY,
+                            Modifier.weight(1f),
+                            icon = Lucide.Check,
+                            enabled = renameValue.isNotBlank() && !mobileSession.isPerformingBudgetAction,
+                            loading = mobileSession.isPerformingBudgetAction,
+                        ) {
+                            scope.launch {
+                                if (mobileSession.renameBudgetAccount(
+                                        state.selectedBudgetId,
+                                        account.id,
+                                        renameValue,
+                                        state.encryptedPassword.takeIf { it.isNotBlank() },
+                                    )
+                                ) {
+                                    renameDialog = false
+                                }
                             }
                         }
-                    },
-                ) {
-                    Text(if (mobileSession.isPerformingBudgetAction) "Saving…" else "Save", color = tandemPalette.accent)
+                    }
                 }
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = !mobileSession.isPerformingBudgetAction,
-                    onClick = { renameDialog = false },
-                ) {
-                    Text("Cancel", color = tandemPalette.muted)
-                }
-            },
-            backgroundColor = tandemPalette.surface,
-        )
+            }
+        }
     }
     if (confirmClose && liveAccount != null) {
-        AlertDialog(
-            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) confirmClose = false },
-            title = { Text("Close ${liveAccount.name}?", color = tandemPalette.text) },
-            text = {
+        DestructiveConfirmationDialog(
+            title = "Close ${liveAccount.name}?",
+            message = "Actual will close this account and unlink its bank connection.",
+            confirmLabel = if (mobileSession.isPerformingBudgetAction) "Closing…" else "Close account",
+            dismissLabel = "Cancel",
+            enabled =
+                !mobileSession.isPerformingBudgetAction &&
+                    (!nonZeroBalance || transferAccountId.isNotBlank()),
+            content = {
                 Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    BodyText("Actual will close this account and unlink its bank connection.")
                     if (nonZeroBalance) {
                         AccountActionDropdown(
                             title = "Move balance to",
@@ -423,40 +449,23 @@ internal fun AccountOptionsScreen(
                     mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
                 }
             },
-            confirmButton = {
-                TextButton(
-                    enabled =
-                        !mobileSession.isPerformingBudgetAction &&
-                            (!nonZeroBalance || transferAccountId.isNotBlank()),
-                    onClick = {
-                        scope.launch {
-                            val closed =
-                                mobileSession.closeBudgetAccount(
-                                    state.selectedBudgetId,
-                                    liveAccount.id,
-                                    transferAccountId.takeIf(String::isNotBlank),
-                                    transferCategoryId.takeIf(String::isNotBlank),
-                                    state.encryptedPassword.takeIf { it.isNotBlank() },
-                                )
-                            if (closed) {
-                                confirmClose = false
-                                navigation.selectTab(AppRoute.ACCOUNTS)
-                            }
-                        }
-                    },
-                ) {
-                    Text(if (mobileSession.isPerformingBudgetAction) "Closing…" else "Close account", color = tandemPalette.negative)
+            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) confirmClose = false },
+            onConfirm = {
+                scope.launch {
+                    val closed =
+                        mobileSession.closeBudgetAccount(
+                            state.selectedBudgetId,
+                            liveAccount.id,
+                            transferAccountId.takeIf(String::isNotBlank),
+                            transferCategoryId.takeIf(String::isNotBlank),
+                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                        )
+                    if (closed) {
+                        confirmClose = false
+                        navigation.selectTab(AppRoute.ACCOUNTS)
+                    }
                 }
             },
-            dismissButton = {
-                TextButton(
-                    enabled = !mobileSession.isPerformingBudgetAction,
-                    onClick = { confirmClose = false },
-                ) {
-                    Text("Cancel", color = tandemPalette.muted)
-                }
-            },
-            backgroundColor = tandemPalette.surface,
         )
     }
 }

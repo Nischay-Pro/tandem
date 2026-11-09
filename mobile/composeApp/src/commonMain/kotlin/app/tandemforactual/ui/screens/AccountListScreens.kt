@@ -31,8 +31,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
@@ -44,7 +42,9 @@ import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
+import app.tandemforactual.ui.components.TandemChoiceDialog
 import app.tandemforactual.ui.components.TandemIconButton
+import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.liveAccountGroupLabel
 import app.tandemforactual.ui.model.recordName
@@ -332,154 +332,151 @@ internal fun AccountsScreen(
             }
         }
     }
-    if (addAccountDialog) {
-        Dialog(
-            onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) addAccountDialog = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
+    TandemTaskSheet(
+        visible = addAccountDialog,
+        onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) addAccountDialog = false },
+        onDismissed = {},
+    ) {
+        SurfaceCard(
+            Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = 16.dp),
         ) {
-            SurfaceCard(
-                Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = 16.dp),
+            Column(
+                Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
             ) {
-                Column(
-                    Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                        Box(
-                            Modifier.size(42.dp).clip(CircleShape).background(tandemPalette.accentSurface),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Lucide.WalletCards,
-                                contentDescription = null,
-                                modifier = Modifier.size(22.dp),
-                                tint = tandemPalette.accent,
-                            )
-                        }
-                        Text(
-                            "Add account",
-                            modifier = Modifier.weight(1f),
-                            color = tandemPalette.text,
-                            fontSize = TandemTypography.sectionTitle,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    Box(
+                        Modifier.size(42.dp).clip(CircleShape).background(tandemPalette.accentSurface),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Lucide.WalletCards,
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp),
+                            tint = tandemPalette.accent,
                         )
-                        TandemIconButton(
-                            Lucide.X,
-                            "Close",
-                            sizeDp = 40,
-                            iconSizeDp = 18,
-                            containerColor = tandemPalette.raised,
-                            enabled = !mobileSession.isPerformingBudgetAction,
-                        ) { addAccountDialog = false }
                     }
-                    TextFieldCard("Name", newAccountName, { newAccountName = it }, TextFieldOptions(placeholder = "Checking"))
-                    Box {
-                        ListRow(
-                            "Account group",
-                            trailing = accountGroupOptions.firstOrNull { it.first == newAccountGroupId }?.second ?: "No group",
-                            leading = RowLeading.Icon(Lucide.FolderKey),
-                            onClick = { accountGroupMenuExpanded = true },
-                        )
-                        DropdownMenu(
-                            expanded = accountGroupMenuExpanded,
-                            onDismissRequest = { accountGroupMenuExpanded = false },
-                        ) {
+                    Text(
+                        "Add account",
+                        modifier = Modifier.weight(1f),
+                        color = tandemPalette.text,
+                        fontSize = TandemTypography.sectionTitle,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                    TandemIconButton(
+                        Lucide.X,
+                        "Close",
+                        sizeDp = 40,
+                        iconSizeDp = 18,
+                        containerColor = tandemPalette.raised,
+                        enabled = !mobileSession.isPerformingBudgetAction,
+                    ) { addAccountDialog = false }
+                }
+                TextFieldCard("Name", newAccountName, { newAccountName = it }, TextFieldOptions(placeholder = "Checking"))
+                Box {
+                    ListRow(
+                        "Account group",
+                        trailing = accountGroupOptions.firstOrNull { it.first == newAccountGroupId }?.second ?: "No group",
+                        leading = RowLeading.Icon(Lucide.FolderKey),
+                        onClick = { accountGroupMenuExpanded = true },
+                    )
+                    DropdownMenu(
+                        expanded = accountGroupMenuExpanded,
+                        onDismissRequest = { accountGroupMenuExpanded = false },
+                    ) {
+                        DropdownMenuItem(onClick = {
+                            newAccountGroupId = ""
+                            accountGroupMenuExpanded = false
+                        }) {
+                            Text("No group", color = tandemPalette.text, fontSize = TandemTypography.compactBody)
+                        }
+                        accountGroupOptions.forEach { (groupId, groupName) ->
                             DropdownMenuItem(onClick = {
-                                newAccountGroupId = ""
+                                newAccountGroupId = groupId
                                 accountGroupMenuExpanded = false
                             }) {
-                                Text("No group", color = tandemPalette.text, fontSize = TandemTypography.compactBody)
-                            }
-                            accountGroupOptions.forEach { (groupId, groupName) ->
-                                DropdownMenuItem(onClick = {
-                                    newAccountGroupId = groupId
-                                    accountGroupMenuExpanded = false
-                                }) {
-                                    Text(groupName, color = tandemPalette.text, fontSize = TandemTypography.compactBody)
-                                }
+                                Text(groupName, color = tandemPalette.text, fontSize = TandemTypography.compactBody)
                             }
                         }
                     }
-                    SurfaceCard {
-                        CheckBoxRow(
-                            "Off budget",
-                            "Excluded from the budget",
-                            checked = newAccountOffBudget,
-                            enabled = !mobileSession.isPerformingBudgetAction,
-                            onChange = { newAccountOffBudget = it },
-                        )
-                    }
-                    mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                        TandemActionButton(
-                            "Cancel",
-                            TandemActionButtonTone.NEUTRAL,
-                            Modifier.weight(1f),
-                            enabled = !mobileSession.isPerformingBudgetAction,
-                        ) { addAccountDialog = false }
-                        TandemActionButton(
-                            if (mobileSession.isPerformingBudgetAction) "Adding…" else "Add account",
-                            TandemActionButtonTone.PRIMARY,
-                            Modifier.weight(1f),
-                            icon = Lucide.Plus,
-                            enabled = !mobileSession.isPerformingBudgetAction && newAccountName.isNotBlank(),
-                            loading = mobileSession.isPerformingBudgetAction,
-                        ) {
-                            scope.launch {
-                                val created =
-                                    mobileSession.createBudgetAccount(
-                                        state.selectedBudgetId,
-                                        newAccountName,
-                                        newAccountOffBudget,
-                                        newAccountGroupId.ifBlank { null },
-                                        state.encryptedPassword.takeIf { it.isNotBlank() },
-                                    )
-                                if (created) addAccountDialog = false
-                            }
+                }
+                SurfaceCard {
+                    CheckBoxRow(
+                        "Off budget",
+                        "Excluded from the budget",
+                        checked = newAccountOffBudget,
+                        enabled = !mobileSession.isPerformingBudgetAction,
+                        onChange = { newAccountOffBudget = it },
+                    )
+                }
+                mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    TandemActionButton(
+                        "Cancel",
+                        TandemActionButtonTone.NEUTRAL,
+                        Modifier.weight(1f),
+                        enabled = !mobileSession.isPerformingBudgetAction,
+                    ) { addAccountDialog = false }
+                    TandemActionButton(
+                        if (mobileSession.isPerformingBudgetAction) "Adding…" else "Add account",
+                        TandemActionButtonTone.PRIMARY,
+                        Modifier.weight(1f),
+                        icon = Lucide.Plus,
+                        enabled = !mobileSession.isPerformingBudgetAction && newAccountName.isNotBlank(),
+                        loading = mobileSession.isPerformingBudgetAction,
+                    ) {
+                        scope.launch {
+                            val created =
+                                mobileSession.createBudgetAccount(
+                                    state.selectedBudgetId,
+                                    newAccountName,
+                                    newAccountOffBudget,
+                                    newAccountGroupId.ifBlank { null },
+                                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                                )
+                            if (created) addAccountDialog = false
                         }
                     }
                 }
             }
         }
     }
-    if (showBankConnectionsDialog) {
-        Dialog(
-            onDismissRequest = { if (!isRefreshing) showBankConnectionsDialog = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = 16.dp)) {
-                Column(
-                    Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                        Icon(Lucide.Landmark, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
-                        Text(
-                            "Bank connections",
-                            modifier = Modifier.weight(1f),
-                            color = tandemPalette.text,
-                            fontSize = TandemTypography.sectionTitle,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        TandemIconButton(Lucide.X, "Close", sizeDp = 40, iconSizeDp = 18) { showBankConnectionsDialog = false }
+    TandemChoiceDialog(
+        visible = showBankConnectionsDialog,
+        onDismissRequest = { if (!isRefreshing) showBankConnectionsDialog = false },
+    ) {
+        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = 16.dp)) {
+            Column(
+                Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    Icon(Lucide.Landmark, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
+                    Text(
+                        "Bank connections",
+                        modifier = Modifier.weight(1f),
+                        color = tandemPalette.text,
+                        fontSize = TandemTypography.sectionTitle,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    TandemIconButton(Lucide.X, "Close", sizeDp = 40, iconSizeDp = 18) { showBankConnectionsDialog = false }
+                }
+                InfoBubble("Review, add, or remove bank links in Actual Budget. Tandem syncs the connections configured there.")
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    TandemActionButton("Done", TandemActionButtonTone.NEUTRAL, Modifier.weight(1f)) {
+                        showBankConnectionsDialog = false
                     }
-                    InfoBubble("Review, add, or remove bank links in Actual Budget. Tandem syncs the connections configured there.")
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                        TandemActionButton("Done", TandemActionButtonTone.NEUTRAL, Modifier.weight(1f)) {
-                            showBankConnectionsDialog = false
-                        }
-                        TandemActionButton(
-                            "Sync accounts",
-                            TandemActionButtonTone.PRIMARY,
-                            Modifier.weight(1f),
-                            icon = Lucide.RefreshCw,
-                            enabled = !isRefreshing && !state.readOnlyMode,
-                            loading = isRefreshing,
-                        ) {
-                            showBankConnectionsDialog = false
-                            runBankSync()
-                        }
+                    TandemActionButton(
+                        "Sync accounts",
+                        TandemActionButtonTone.PRIMARY,
+                        Modifier.weight(1f),
+                        icon = Lucide.RefreshCw,
+                        enabled = !isRefreshing && !state.readOnlyMode,
+                        loading = isRefreshing,
+                    ) {
+                        showBankConnectionsDialog = false
+                        runBankSync()
                     }
                 }
             }

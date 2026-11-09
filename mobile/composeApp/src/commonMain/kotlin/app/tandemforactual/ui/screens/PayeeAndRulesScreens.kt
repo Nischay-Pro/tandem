@@ -29,9 +29,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import app.tandemforactual.data.database.BudgetRecordEntity
+import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
@@ -43,6 +42,7 @@ import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.components.TandemIconButton
+import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveScheduleSummary
 import app.tandemforactual.ui.model.booleanValue
 import app.tandemforactual.ui.model.recordBody
@@ -104,6 +104,7 @@ internal fun ManagePayeesScreen(
     var mode by rememberSaveable(state.selectedBudgetId) { mutableStateOf("menu") }
     var searchQuery by rememberSaveable(state.selectedBudgetId) { mutableStateOf("") }
     var showAddPayee by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
+    var selectedPayeeSheetVisible by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
     var newPayeeName by rememberSaveable(state.selectedBudgetId) { mutableStateOf("") }
     var nameDraft by rememberSaveable(state.selectedBudgetId, selectedPayeeId) { mutableStateOf("") }
     var mergeTargetId by rememberSaveable(state.selectedBudgetId, selectedPayeeId) { mutableStateOf<String?>(null) }
@@ -198,6 +199,7 @@ internal fun ManagePayeesScreen(
                 val (payeeId, name) = visiblePayees[index]
                 val openManagePayee = {
                     selectedPayeeId = payeeId
+                    selectedPayeeSheetVisible = true
                     nameDraft = name
                     mergeTargetId = null
                     defaultCategoryDraft = defaultCategories[payeeId]?.singleOrNull().orEmpty()
@@ -231,63 +233,62 @@ internal fun ManagePayeesScreen(
         }
     }
 
-    if (showAddPayee) {
-        Dialog(
-            onDismissRequest = {
-                if (!mobileSession.isPerformingBudgetAction) showAddPayee = false
-            },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
+    TandemTaskSheet(
+        visible = showAddPayee,
+        onDismissRequest = {
+            if (!mobileSession.isPerformingBudgetAction) showAddPayee = false
+        },
+        onDismissed = {},
+    ) {
+        SurfaceCard(
+            Modifier
+                .fillMaxWidth()
+                .widthIn(max = 480.dp)
+                .padding(horizontal = TandemSpacing.large),
         ) {
-            SurfaceCard(
+            Column(
                 Modifier
                     .fillMaxWidth()
-                    .widthIn(max = 480.dp)
-                    .padding(horizontal = TandemSpacing.large),
+                    .padding(TandemSpacing.large),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
             ) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(TandemSpacing.large),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                ) {
-                    Text(
-                        "Add payee",
-                        color = tandemPalette.text,
-                        fontSize = TandemTypography.sectionTitle,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    TextFieldCard("Name", newPayeeName, { newPayeeName = it })
-                    mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
-                    Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                        TandemActionButton(
-                            "Cancel",
-                            TandemActionButtonTone.NEUTRAL,
-                            modifier = Modifier.weight(1f),
-                            enabled = !mobileSession.isPerformingBudgetAction,
-                        ) { showAddPayee = false }
-                        TandemActionButton(
-                            if (mobileSession.isPerformingBudgetAction) "Adding…" else "Add",
-                            TandemActionButtonTone.PRIMARY,
-                            modifier = Modifier.weight(1f),
-                            icon = Lucide.Plus,
-                            enabled =
-                                !state.readOnlyMode &&
-                                    !mobileSession.isPerformingBudgetAction &&
-                                    newPayeeName.isNotBlank() &&
-                                    payees.none { it.second.equals(newPayeeName.trim(), ignoreCase = true) },
-                            loading = mobileSession.isPerformingBudgetAction,
-                        ) {
-                            scope.launch {
-                                val created =
-                                    mobileSession.createBudgetPayee(
-                                        state.selectedBudgetId,
-                                        newPayeeName.trim(),
-                                        state.encryptedPassword.takeIf { it.isNotBlank() },
-                                    )
-                                if (created != null) {
-                                    showAddPayee = false
-                                    newPayeeName = ""
-                                }
+                Text(
+                    "Add payee",
+                    color = tandemPalette.text,
+                    fontSize = TandemTypography.sectionTitle,
+                    fontWeight = FontWeight.Bold,
+                )
+                TextFieldCard("Name", newPayeeName, { newPayeeName = it })
+                mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                    TandemActionButton(
+                        "Cancel",
+                        TandemActionButtonTone.NEUTRAL,
+                        modifier = Modifier.weight(1f),
+                        enabled = !mobileSession.isPerformingBudgetAction,
+                    ) { showAddPayee = false }
+                    TandemActionButton(
+                        if (mobileSession.isPerformingBudgetAction) "Adding…" else "Add",
+                        TandemActionButtonTone.PRIMARY,
+                        modifier = Modifier.weight(1f),
+                        icon = Lucide.Plus,
+                        enabled =
+                            !state.readOnlyMode &&
+                                !mobileSession.isPerformingBudgetAction &&
+                                newPayeeName.isNotBlank() &&
+                                payees.none { it.second.equals(newPayeeName.trim(), ignoreCase = true) },
+                        loading = mobileSession.isPerformingBudgetAction,
+                    ) {
+                        scope.launch {
+                            val created =
+                                mobileSession.createBudgetPayee(
+                                    state.selectedBudgetId,
+                                    newPayeeName.trim(),
+                                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                                )
+                            if (created != null) {
+                                showAddPayee = false
+                                newPayeeName = ""
                             }
                         }
                     }
@@ -296,13 +297,17 @@ internal fun ManagePayeesScreen(
         }
     }
 
-    if (selectedPayee != null) {
-        Dialog(
-            onDismissRequest = {
-                if (!mobileSession.isPerformingBudgetAction) selectedPayeeId = null
-            },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
+    TandemTaskSheet(
+        visible = selectedPayeeSheetVisible && selectedPayee != null,
+        onDismissRequest = {
+            if (!mobileSession.isPerformingBudgetAction) selectedPayeeSheetVisible = false
+        },
+        onDismissed = {
+            selectedPayeeId = null
+            mode = "menu"
+        },
+    ) {
+        if (selectedPayee != null) {
             SurfaceCard(
                 Modifier
                     .fillMaxWidth()
@@ -349,7 +354,7 @@ internal fun ManagePayeesScreen(
                             iconSizeDp = 18,
                             containerColor = tandemPalette.raised,
                             enabled = !mobileSession.isPerformingBudgetAction,
-                        ) { selectedPayeeId = null }
+                        ) { selectedPayeeSheetVisible = false }
                     }
                     when (mode) {
                         "default-category" -> {
@@ -384,7 +389,7 @@ internal fun ManagePayeesScreen(
                                             state.encryptedPassword.takeIf { it.isNotBlank() },
                                             defaultCategoryDraft.ifBlank { null },
                                         )
-                                    if (saved) selectedPayeeId = null
+                                    if (saved) selectedPayeeSheetVisible = false
                                 }
                             }
                             TandemActionButton(
@@ -415,7 +420,7 @@ internal fun ManagePayeesScreen(
                                             null,
                                             state.encryptedPassword.takeIf { it.isNotBlank() },
                                         )
-                                    if (saved) selectedPayeeId = null
+                                    if (saved) selectedPayeeSheetVisible = false
                                 }
                             }
                             TandemActionButton(
@@ -427,6 +432,7 @@ internal fun ManagePayeesScreen(
                         }
                         "merge" -> {
                             Text("Choose the payee to keep.", color = tandemPalette.muted, fontSize = TandemTypography.body)
+                            mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
                             payees.filterNot { it.first == selectedPayee.first }.forEach { target ->
                                 SurfaceCard {
                                     ListRow(
@@ -446,69 +452,10 @@ internal fun ManagePayeesScreen(
                             ) { mode = "menu" }
                         }
                         "confirm-merge" -> {
-                            Text(
-                                "Move transactions to ${mergeTarget?.second ?: "the selected payee"}?",
-                                color = tandemPalette.muted,
-                                fontSize = TandemTypography.body,
-                            )
-                            mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
-                            TandemActionButton(
-                                if (mobileSession.isPerformingBudgetAction) "Merging…" else "Merge payees",
-                                TandemActionButtonTone.PRIMARY,
-                                modifier = Modifier.fillMaxWidth(),
-                                icon = Lucide.Tags,
-                                enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction && mergeTarget != null,
-                                loading = mobileSession.isPerformingBudgetAction,
-                            ) {
-                                scope.launch {
-                                    val merged =
-                                        mobileSession.manageBudgetPayee(
-                                            state.selectedBudgetId,
-                                            selectedPayee.first,
-                                            "merge",
-                                            null,
-                                            mergeTarget?.first,
-                                            state.encryptedPassword.takeIf { it.isNotBlank() },
-                                        )
-                                    if (merged) selectedPayeeId = null
-                                }
-                            }
-                            TandemActionButton(
-                                "Choose another",
-                                TandemActionButtonTone.NEUTRAL,
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !mobileSession.isPerformingBudgetAction,
-                            ) { mode = "merge" }
+                            Text("Confirm the merge in the alert.", color = tandemPalette.muted, fontSize = TandemTypography.body)
                         }
                         "delete" -> {
-                            mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
-                            TandemActionButton(
-                                if (mobileSession.isPerformingBudgetAction) "Deleting…" else "Delete payee",
-                                TandemActionButtonTone.DESTRUCTIVE,
-                                modifier = Modifier.fillMaxWidth(),
-                                icon = Lucide.Trash2,
-                                enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
-                                loading = mobileSession.isPerformingBudgetAction,
-                            ) {
-                                scope.launch {
-                                    val deleted =
-                                        mobileSession.manageBudgetPayee(
-                                            state.selectedBudgetId,
-                                            selectedPayee.first,
-                                            "delete",
-                                            null,
-                                            null,
-                                            state.encryptedPassword.takeIf { it.isNotBlank() },
-                                        )
-                                    if (deleted) selectedPayeeId = null
-                                }
-                            }
-                            TandemActionButton(
-                                "Keep payee",
-                                TandemActionButtonTone.NEUTRAL,
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !mobileSession.isPerformingBudgetAction,
-                            ) { mode = "menu" }
+                            Text("Confirm deletion in the alert.", color = tandemPalette.muted, fontSize = TandemTypography.body)
                         }
                         else -> {
                             mobileSession.budgetActionMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
@@ -560,6 +507,60 @@ internal fun ManagePayeesScreen(
                 }
             }
         }
+    }
+    if (selectedPayeeSheetVisible && selectedPayee != null && mode == "confirm-merge") {
+        DestructiveConfirmationDialog(
+            title = "Merge payees?",
+            message =
+                mobileSession.budgetActionMessage
+                    ?: "Move transactions from ${selectedPayee.second} to ${mergeTarget?.second ?: "the selected payee"}?",
+            confirmLabel = if (mobileSession.isPerformingBudgetAction) "Merging…" else "Merge",
+            dismissLabel = "Choose another",
+            enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction && mergeTarget != null,
+            onDismissRequest = {
+                if (!mobileSession.isPerformingBudgetAction) mode = "merge"
+            },
+            onConfirm = {
+                scope.launch {
+                    val merged =
+                        mobileSession.manageBudgetPayee(
+                            state.selectedBudgetId,
+                            selectedPayee.first,
+                            "merge",
+                            null,
+                            mergeTarget?.first,
+                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                        )
+                    if (merged) selectedPayeeSheetVisible = false else mode = "merge"
+                }
+            },
+        )
+    }
+    if (selectedPayeeSheetVisible && selectedPayee != null && mode == "delete") {
+        DestructiveConfirmationDialog(
+            title = "Delete ${selectedPayee.second}?",
+            message = mobileSession.budgetActionMessage ?: "Remove this payee from the budget?",
+            confirmLabel = if (mobileSession.isPerformingBudgetAction) "Deleting…" else "Delete",
+            dismissLabel = "Keep payee",
+            enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+            onDismissRequest = {
+                if (!mobileSession.isPerformingBudgetAction) mode = "menu"
+            },
+            onConfirm = {
+                scope.launch {
+                    val deleted =
+                        mobileSession.manageBudgetPayee(
+                            state.selectedBudgetId,
+                            selectedPayee.first,
+                            "delete",
+                            null,
+                            null,
+                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                        )
+                    if (deleted) selectedPayeeSheetVisible = false else mode = "menu"
+                }
+            },
+        )
     }
 }
 

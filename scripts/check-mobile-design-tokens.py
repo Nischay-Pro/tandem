@@ -16,6 +16,7 @@ RULES = {
     ),
     "hard-coded Color; use TandemPalette": re.compile(r"\bColor\s*\(\s*0x[0-9A-Fa-f]{6,8}\s*\)"),
 }
+DIALOG_CALL = re.compile(r"\b(?:AlertDialog|Dialog)\s*\(")
 
 
 def main() -> int:
@@ -29,9 +30,14 @@ def main() -> int:
                 if pattern.search(line):
                     relative = source.relative_to(ROOT)
                     violations.append(f"{relative}:{line_number}: {rule}")
+        if UI_ROOT / "components" not in source.parents:
+            for match in DIALOG_CALL.finditer(content):
+                relative = source.relative_to(ROOT)
+                line_number = content.count("\n", 0, match.start()) + 1
+                violations.append(f"{relative}:{line_number}: raw dialog; use a shared ui/components wrapper")
 
     if violations:
-        print("Mobile design-token violations:", file=sys.stderr)
+        print("Mobile UI consistency violations:", file=sys.stderr)
         print("\n".join(violations), file=sys.stderr)
         return 1
 
