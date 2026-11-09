@@ -43,7 +43,7 @@
     "/api/v1/health/ready": {
       "get": {
         "operationId": "getReadiness",
-        "summary": "Check whether the API can reach PostgreSQL",
+        "summary": "Check whether the API can reach its configured services",
         "tags": ["Health"],
         "responses": {
           "200": {
@@ -68,7 +68,8 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "status": { "type": "string", "enum": ["not_ready"] }
+                    "status": { "type": "string", "enum": ["not_ready"] },
+                    "message": { "type": "string" }
                   },
                   "required": ["status"],
                   "additionalProperties": false

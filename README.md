@@ -125,6 +125,8 @@ networks:
 
 The API joins the Compose project's `default` network so it can reach Actual and a proxy in the same project. PostgreSQL is isolated on `tandem-data`. If Actual or the proxy uses a named network, replace `default` under `tandem-api` with the shared network name and ensure the Actual service and proxy join it too. `expose` makes the API available to containers on that network without publishing a host port. If the reverse proxy runs directly on the host, add `ports: ["127.0.0.1:19753:19753"]` to `tandem-api` and point the proxy at `127.0.0.1:19753`.
 
+The example mounts the Actual server password as a secret. For an Actual server using OpenID, replace `ACTUAL_SERVER_PASSWORD_FILE` in the API environment with `ACTUAL_SESSION_TOKEN_FILE`, pointing it at that mounted secret; keep only one credential configured.
+
 Keep Tandem's secret files in a private directory beside your Compose file. Compose mounts them read-only at `/run/secrets`; Tandem reads the values from those files, so they do not appear in the container environment. Create the directory and generate the database password, database URL, and pairing-code key:
 
 ```sh
@@ -248,7 +250,7 @@ export ACTUAL_API_DATA_DIR='/var/lib/tandem/actual-api'
 node services/api/dist/entrypoint.js
 ```
 
-Store these values in the supervisor's protected environment file instead of a shell history, keep `ACTUAL_API_DATA_DIR` on persistent storage, and place the API behind the HTTPS reverse proxy. Set `ACTUAL_SERVER_URL` to an address reachable from the host process. If Nginx runs on the same host, proxy `/api/v1/` to `http://127.0.0.1:19753` and keep `HOST=127.0.0.1`. Generate pairing codes with `node services/api/dist-cli/bin/pairing-cli.js --budget-id '<Actual budget sync ID>'`. The `pnpm api:dev` command is for development only; it does not replace a production process supervisor.
+Store these values in the supervisor's protected environment file instead of a shell history, keep `ACTUAL_API_DATA_DIR` on persistent storage, and place the API behind the HTTPS reverse proxy. For an Actual server using OpenID, use `ACTUAL_SESSION_TOKEN` or `ACTUAL_SESSION_TOKEN_FILE` in place of `ACTUAL_SERVER_PASSWORD`; keep the token in a protected secret file and never configure both. Set `ACTUAL_SERVER_URL` to an address reachable from the host process. If Nginx runs on the same host, proxy `/api/v1/` to `http://127.0.0.1:19753` and keep `HOST=127.0.0.1`. Generate pairing codes with `node services/api/dist-cli/bin/pairing-cli.js --budget-id '<Actual budget sync ID>'`. The `pnpm api:dev` command is for development only; it does not replace a production process supervisor.
 
 ### 3. Build and run Android
 

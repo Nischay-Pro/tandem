@@ -1,7 +1,17 @@
 import * as actualApi from "@actual-app/api";
+import { OperatorMessageError } from "../operator-message-error.js";
 
 export const SUPPORTED_ACTUAL_SERVER_VERSION = "26.11.0";
 export const ACTUAL_SESSION_OPERATION_TIMEOUT_MS = 5 * 60 * 1_000;
+export const ACTUAL_SESSION_TOKEN_REJECTED_MESSAGE =
+  "Actual rejected ACTUAL_SESSION_TOKEN. Replace the token and restart Tandem.";
+
+export class ActualSessionTokenRejectedError extends OperatorMessageError {
+  constructor() {
+    super(ACTUAL_SESSION_TOKEN_REJECTED_MESSAGE);
+    this.name = "ActualSessionTokenRejectedError";
+  }
+}
 
 export type ActualConnectionConfig = {
   serverURL: string;
@@ -119,6 +129,8 @@ export class ActualSession {
   #closing = false;
   #poisoned = false;
   #cleanupFailed = false;
+  #readinessErrorMessage: string | undefined;
+  #sessionTokenErrorLogged = false;
   #closePromise: Promise<void> | undefined;
   #loadedBudgetSyncId: string | undefined;
   #loadedBudgetWasOpenedWithPassword = false;
@@ -141,9 +153,24 @@ export class ActualSession {
 
   async start(): Promise<void> {
     this.#assertAcceptingWork();
-    return enqueueActualApiOperation(() =>
-      this.#withTimeout(() => this.#initialize()),
+    try {
+      await enqueueActualApiOperation(() =>
+        this.#withTimeout(() => this.#initialize()),
+      );
+    } catch (error) {
+      if (!(error instanceof ActualSessionTokenRejectedError)) throw error;
+    }
+  }
+
+  get isReady(): boolean {
+    return (
+      this.#readinessErrorMessage === undefined &&
+      activeActualSession === this.#sessionId
     );
+  }
+
+  get readinessMessage(): string | undefined {
+    return this.#readinessErrorMessage;
   }
 
   async execute<T>(
@@ -202,7 +229,7 @@ export class ActualSession {
           options.encryptionPassword === undefined;
         if (canReuseLoadedBudget) {
           this.#lastSyncEvent = undefined;
-          await this.client.sync();
+          await this.#runClientOperation(() => this.client.sync());
           const event = this.#readLastSyncEvent();
           const changed =
             this.#dirtyBudgetSyncIds.has(normalizedSyncId) ||
@@ -232,7 +259,9 @@ export class ActualSession {
             options.encryptionPassword === undefined
               ? undefined
               : { password: options.encryptionPassword };
-          await this.client.downloadBudget(normalizedSyncId, encryptionOptions);
+          await this.#runClientOperation(() =>
+            this.client.downloadBudget(normalizedSyncId, encryptionOptions),
+          );
           this.#loadedBudgetSyncId = normalizedSyncId;
           this.#loadedBudgetWasOpenedWithPassword =
             options.encryptionPassword !== undefined;
@@ -367,7 +396,9 @@ export class ActualSession {
         );
       }
       this.#attachSyncEventListener(initialized);
+      this.#readinessErrorMessage = undefined;
     } catch (error) {
+      const reportedError = this.#mapCredentialFailure(error);
       let cleanupFailed = false;
       let cleanupError: unknown;
       try {
@@ -381,13 +412,13 @@ export class ActualSession {
       if (cleanupFailed) {
         this.#reportSecondaryFailure({
           phase: "initialization-cleanup",
-          primaryError: error,
+          primaryError: reportedError,
           secondaryError: cleanupError,
         });
       } else {
         activeActualSession = undefined;
       }
-      throw error;
+      throw reportedError;
     }
   }
 
@@ -429,7 +460,7 @@ export class ActualSession {
       result = await operation();
     } catch (error) {
       operationFailed = true;
-      operationError = error;
+      operationError = this.#mapCredentialFailure(error);
     }
 
     let shouldSynchronize = synchronizeAfterWrite === true;
@@ -455,13 +486,14 @@ export class ActualSession {
       try {
         await this.client.sync();
       } catch (syncError) {
+        const reportedSyncError = this.#mapCredentialFailure(syncError);
         if (!operationFailed) {
-          throw new ActualPostWriteSyncError(result!, syncError);
+          throw new ActualPostWriteSyncError(result!, reportedSyncError);
         }
         this.#reportSecondaryFailure({
           phase: "post-write-sync",
           primaryError: operationError,
-          secondaryError: syncError,
+          secondaryError: reportedSyncError,
         });
       }
     }
@@ -472,6 +504,29 @@ export class ActualSession {
     return result!;
   }
 
+  async #runClientOperation<T>(operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      throw this.#mapCredentialFailure(error);
+    }
+  }
+
+  #mapCredentialFailure(error: unknown): unknown {
+    if (
+      !("sessionToken" in this.config) ||
+      !isActualAuthenticationFailure(error)
+    ) {
+      return error;
+    }
+    this.#readinessErrorMessage = ACTUAL_SESSION_TOKEN_REJECTED_MESSAGE;
+    if (!this.#sessionTokenErrorLogged) {
+      this.#sessionTokenErrorLogged = true;
+      console.error(ACTUAL_SESSION_TOKEN_REJECTED_MESSAGE);
+    }
+    return new ActualSessionTokenRejectedError();
+  }
+
   #reportSecondaryFailure(failure: ActualSecondaryFailure): void {
     try {
       this.onSecondaryFailure(failure);
@@ -479,6 +534,23 @@ export class ActualSession {
       // An observability callback must never replace the financial operation error.
     }
   }
+}
+
+function isActualAuthenticationFailure(error: unknown): boolean {
+  if (!isRecord(error)) return false;
+  const status = error.status ?? error.statusCode;
+  const reason = error.reason ?? error.code;
+  const message = typeof error.message === "string" ? error.message : "";
+  const nested = isRecord(error.error) ? error.error : undefined;
+  return (
+    status === 401 ||
+    status === 403 ||
+    reason === "unauthorized" ||
+    reason === "invalid-token" ||
+    reason === "token-expired" ||
+    nested?.reason === "unauthorized" ||
+    /\b(unauthorized|token (expired|rejected|invalid))\b/i.test(message)
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

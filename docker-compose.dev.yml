@@ -31,6 +31,7 @@ services:
       CHANGE_FEED_EPOCH: ${CHANGE_FEED_EPOCH:-default}
       ACTUAL_SERVER_URL: ${ACTUAL_SERVER_URL:-}
       ACTUAL_SERVER_PASSWORD: ${ACTUAL_SERVER_PASSWORD:-}
+      ACTUAL_SESSION_TOKEN: ${ACTUAL_SESSION_TOKEN:-}
       ACTUAL_API_DATA_DIR: /data/actual-api
     depends_on:
       postgres:

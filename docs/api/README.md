@@ -13,21 +13,21 @@ definitions and is part of `pnpm check:all`.
 
 ## Implemented endpoints
 
-| Method   | Path                                                                 | Purpose                                                        |
-| -------- | -------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `GET`    | `/api/v1/health/live`                                                | Liveness check for the API process.                            |
-| `GET`    | `/api/v1/health/ready`                                               | Readiness check; returns `503` when PostgreSQL is unavailable. |
-| `GET`    | `/api/v1/openapi.json`                                               | Generated API contract.                                        |
-| `POST`   | `/api/v1/auth/pair`                                                  | Exchange a one-time pairing code for a device token.           |
-| `GET`    | `/api/v1/auth/me`                                                    | Return the authenticated device and its budget scope.          |
-| `GET`    | `/api/v1/devices`                                                    | List devices paired to the same principal.                     |
-| `DELETE` | `/api/v1/devices/{deviceId}`                                         | Revoke a paired device token.                                  |
-| `GET`    | `/api/v1/budgets`                                                    | List Actual budgets visible to the authenticated device.       |
-| `GET`    | `/api/v1/budgets/{budgetId}/snapshot`                                | Refresh and read a complete budget snapshot.                   |
-| `GET`    | `/api/v1/budgets/{budgetId}/changes`                                 | Read generation-aware pages of budget changes.                 |
-| `GET`    | `/api/v1/budgets/{budgetId}/transactions/{transactionId}`            | Read a transaction snapshot and revision.                      |
-| `POST`   | `/api/v1/budgets/{budgetId}/transactions/{transactionId}/operations` | Create, update, or delete a transaction idempotently.          |
-| `GET`    | `/api/v1/operations/{operationId}`                                   | Read operation status and conflict details.                    |
+| Method   | Path                                                                 | Purpose                                                  |
+| -------- | -------------------------------------------------------------------- | -------------------------------------------------------- |
+| `GET`    | `/api/v1/health/live`                                                | Liveness check for the API process.                      |
+| `GET`    | `/api/v1/health/ready`                                               | Check readiness of configured services.                  |
+| `GET`    | `/api/v1/openapi.json`                                               | Generated API contract.                                  |
+| `POST`   | `/api/v1/auth/pair`                                                  | Exchange a one-time pairing code for a device token.     |
+| `GET`    | `/api/v1/auth/me`                                                    | Return the authenticated device and its budget scope.    |
+| `GET`    | `/api/v1/devices`                                                    | List devices paired to the same principal.               |
+| `DELETE` | `/api/v1/devices/{deviceId}`                                         | Revoke a paired device token.                            |
+| `GET`    | `/api/v1/budgets`                                                    | List Actual budgets visible to the authenticated device. |
+| `GET`    | `/api/v1/budgets/{budgetId}/snapshot`                                | Refresh and read a complete budget snapshot.             |
+| `GET`    | `/api/v1/budgets/{budgetId}/changes`                                 | Read generation-aware pages of budget changes.           |
+| `GET`    | `/api/v1/budgets/{budgetId}/transactions/{transactionId}`            | Read a transaction snapshot and revision.                |
+| `POST`   | `/api/v1/budgets/{budgetId}/transactions/{transactionId}/operations` | Create, update, or delete a transaction idempotently.    |
+| `GET`    | `/api/v1/operations/{operationId}`                                   | Read operation status and conflict details.              |
 
 ## Device pairing and authentication
 
@@ -60,8 +60,11 @@ HMAC with SHA-256 and the independent `PAIRING_CODE_HASH_KEY`. Set it to at
 least 32 random bytes and provide the same value to the API and pairing CLI.
 For production Compose, set `PAIRING_CODE_HASH_KEY_FILE` to the mounted secret
 path instead; the API and pairing CLI accept either setting and reject having
-both set. Production Compose uses the same file-based configuration for
-`DATABASE_URL` and the optional `ACTUAL_SERVER_PASSWORD`.
+both set. Production Compose uses file-based configuration for `DATABASE_URL`
+and the Actual server password by default. To use a session token, replace the
+API service's `ACTUAL_SERVER_PASSWORD_FILE` mapping with
+`ACTUAL_SESSION_TOKEN_FILE`, pointing it at the mounted Actual credential
+secret. Do not set both.
 Rotating the key invalidates pending pairing codes but does not affect paired
 devices. Device tokens expire after 90 days without an
 authenticated request; each successful request refreshes that idle window.
@@ -99,16 +102,27 @@ an encryption key or password and uses `Cache-Control: no-store`.
 
 ## Transaction reads and reconciliation
 
-Set `ACTUAL_SERVER_URL` and `ACTUAL_SERVER_PASSWORD` on the Tandem API
-container to enable Actual integration. The server must be the exact version
-supported by the API build; the API fails startup if it cannot verify that
-version. `ACTUAL_API_DATA_DIR` defaults to `/data/actual-api` and must be mounted
-on persistent storage. This workspace belongs to the official Node.js API and
-contains decrypted Actual budget files; protect it and its backups as financial
-data. PostgreSQL stores a readable projection of budget records, including
-records from encrypted budgets. Device Room caches also contain readable data.
-The server password authenticates the Tandem service to Actual. It is never
-sent to mobile devices.
+Set `ACTUAL_SERVER_URL` and exactly one of `ACTUAL_SERVER_PASSWORD` or
+`ACTUAL_SESSION_TOKEN` on the Tandem API container to enable Actual integration.
+Use the matching `_FILE` variable for a read-only mounted secret. A session
+token lets the API connect to an Actual server configured for OpenID sign-in;
+it is an API-to-Actual credential and does not change mobile device pairing or
+sign-in. First sign in through Actual's [OpenID login flow](https://actualbudget.org/docs/config/oauth-auth/).
+Capture the session token Actual returns to its browser callback; this is the
+Actual session token, not the identity provider's access token. Keep it only in
+the API's protected secret store, and never send it to a mobile device or
+include it in logs. Session tokens can expire or be revoked. When Actual rejects
+the token, `GET /api/v1/health/ready` returns `503` with a message to replace
+the token and restart Tandem. The API does not refresh the token automatically.
+
+The Actual server must be the exact version supported by the API build; the API
+fails startup if it cannot verify that version. `ACTUAL_API_DATA_DIR` defaults
+to `/data/actual-api` and must be mounted on persistent storage. This workspace
+belongs to the official Node.js API and contains decrypted Actual budget files;
+protect it and its backups as financial data. PostgreSQL stores a readable
+projection of budget records, including records from encrypted budgets. Device
+Room caches also contain readable data. Neither the Actual password nor session
+token is sent to mobile devices.
 
 Startup logs include application-controlled configuration and migration-history
 messages. PostgreSQL driver errors and other unexpected failures log only their

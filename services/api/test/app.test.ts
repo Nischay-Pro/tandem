@@ -90,6 +90,54 @@ describe("health routes and OpenAPI", () => {
     await app.close();
   });
 
+  it("reports a safe Actual credential problem from the readiness check", async () => {
+    const app = await buildApiApp(
+      {
+        ping: vi.fn<() => Promise<void>>(),
+        close: vi.fn<() => Promise<void>>(),
+      },
+      {
+        actualReadiness: () => ({
+          ready: false,
+          message:
+            "Actual rejected ACTUAL_SESSION_TOKEN. Replace the token and restart Tandem.",
+        }),
+      },
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/health/ready",
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({
+      status: "not_ready",
+      message:
+        "Actual rejected ACTUAL_SESSION_TOKEN. Replace the token and restart Tandem.",
+    });
+    await app.close();
+  });
+
+  it("returns not ready without a message when Actual is unavailable", async () => {
+    const app = await buildApiApp(
+      {
+        ping: vi.fn<() => Promise<void>>(),
+        close: vi.fn<() => Promise<void>>(),
+      },
+      { actualReadiness: () => ({ ready: false }) },
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/health/ready",
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ status: "not_ready" });
+    await app.close();
+  });
+
   it("returns unavailable when the PostgreSQL readiness probe stalls", async () => {
     let resolvePing: () => void = () => {};
     const ping = vi.fn(

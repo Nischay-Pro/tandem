@@ -27,13 +27,21 @@ unset postgres_password
 
 Compose secrets are mounted read-only inside the containers. The `.env` file
 contains their paths, not their values; the API reads the database URL, pairing
-key, and optional Actual password from those mounted files. Keep the secrets
+key, and optional Actual credential from those mounted files. Keep the secrets
 directory private (`chmod 700 deploy/compose/secrets`). The `0444` file mode
 lets the unprivileged API process read the bind-mounted files even when the
 deployment host uses a different numeric user ID. If Actual requires a
 password, write it to `actual_server_password` without a trailing newline and
 restore that file's mode to `0444`; leave it empty when Actual integration is
 disabled. Do not change the secret paths in `.env` unless you move these files.
+
+For an Actual server using OpenID sign-in, put the Actual session token in the
+configured Actual credential file. In `deploy/compose/production.yml`, replace
+`ACTUAL_SERVER_PASSWORD_FILE` in the API environment with
+`ACTUAL_SESSION_TOKEN_FILE`, keeping the same `/run/secrets/actual_server_password`
+path. Do not configure both variables. Obtain the token through an authenticated
+Actual OpenID browser sign-in; it belongs to the Actual session, not the
+identity provider. When Actual rejects it, replace the file and restart Tandem.
 
 Set `CHANGE_FEED_EPOCH` in `deploy/compose/.env` to a random stable value. Keep
 it unchanged for ordinary restarts. Use a new value after restoring a database

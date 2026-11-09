@@ -18,6 +18,7 @@ export interface ApiRuntime {
   budgetMaintenanceApi?: BudgetMaintenanceApiPort;
   budgetReadApi?: BudgetReadApiPort;
   start?(): Promise<void>;
+  actualReadiness?(): { ready: boolean; message?: string };
   close?(): Promise<void>;
 }
 
@@ -43,6 +44,9 @@ export async function startApiServer(
         }
       },
       deviceAuth: database.deviceAuth,
+      ...(runtime.actualReadiness === undefined
+        ? {}
+        : { actualReadiness: runtime.actualReadiness }),
       ...(runtime.transactionApi === undefined
         ? {}
         : { transactionApi: runtime.transactionApi }),

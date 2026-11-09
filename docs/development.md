@@ -69,8 +69,11 @@ docker compose -f docker-compose.dev.yml up --build api
 Then fetch `http://localhost:19753/api/v1/openapi.json`.
 
 To enable the Actual-backed budget routes, provide `ACTUAL_SERVER_URL` and
-`ACTUAL_SERVER_PASSWORD` to Compose, for example in an ignored local `.env`
-file. Set `PAIRING_CODE_HASH_KEY` in that file when running the API or pairing
+exactly one of `ACTUAL_SERVER_PASSWORD` or `ACTUAL_SESSION_TOKEN` to Compose,
+for example in an ignored local `.env` file. Use the matching `_FILE` setting
+for a mounted secret where possible. A session token supports an Actual server
+using OpenID sign-in; it expires independently and must be replaced when
+Actual rejects it. Set `PAIRING_CODE_HASH_KEY` in that file when running the API or pairing
 CLI directly; generate it with `openssl rand -hex 32` and use the same value
 for both processes. The Docker development Compose file supplies a
 development-only default. The API accepts only the server release pinned in

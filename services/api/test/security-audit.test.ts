@@ -17,6 +17,7 @@ describe("security audit events", () => {
         pairingCode: "4DF7-J1M9",
         accessToken: "secret-token",
         access_token: "secret-token",
+        sessionToken: "actual-session-token",
         sessionPassword: "budget-password",
       },
       writeLine,
@@ -36,9 +37,11 @@ describe("security audit events", () => {
       pairingCode: "[REDACTED]",
       accessToken: "[REDACTED]",
       access_token: "[REDACTED]",
+      sessionToken: "[REDACTED]",
       sessionPassword: "[REDACTED]",
     });
     expect(writeLine.mock.calls[0]![0]).not.toContain("secret-token");
+    expect(writeLine.mock.calls[0]![0]).not.toContain("actual-session-token");
     expect(writeLine.mock.calls[0]![0]).not.toContain("4DF7-J1M9");
   });
 

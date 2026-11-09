@@ -90,6 +90,52 @@ describe("parseApiConfig", () => {
     ).toBe("/data/actual-api");
   });
 
+  it("accepts an Actual session token instead of a server password", () => {
+    expect(
+      parseApiConfig({
+        DATABASE_URL: databaseUrl,
+        ACTUAL_SERVER_URL: "https://budget.example.com/",
+        ACTUAL_SESSION_TOKEN: "browser-session-token",
+      }).actual,
+    ).toEqual({
+      serverURL: "https://budget.example.com",
+      sessionToken: "browser-session-token",
+      dataDir: "/data/actual-api",
+    });
+  });
+
+  it("reads Actual session tokens from a mounted secret file", () => {
+    withSecretFiles(
+      { ACTUAL_SESSION_TOKEN: "browser-session-token\n" },
+      (paths) => {
+        expect(
+          parseApiConfig({
+            DATABASE_URL: databaseUrl,
+            ACTUAL_SERVER_URL: "https://budget.example.com",
+            ACTUAL_SESSION_TOKEN_FILE: paths.ACTUAL_SESSION_TOKEN,
+          }).actual,
+        ).toEqual({
+          serverURL: "https://budget.example.com",
+          sessionToken: "browser-session-token",
+          dataDir: "/data/actual-api",
+        });
+      },
+    );
+  });
+
+  it("rejects simultaneous Actual password and session token credentials", () => {
+    expect(() =>
+      parseApiConfig({
+        DATABASE_URL: databaseUrl,
+        ACTUAL_SERVER_URL: "https://budget.example.com",
+        ACTUAL_SERVER_PASSWORD: "server-password",
+        ACTUAL_SESSION_TOKEN: "browser-session-token",
+      }),
+    ).toThrow(
+      "Configure either ACTUAL_SERVER_PASSWORD or ACTUAL_SESSION_TOKEN, not both",
+    );
+  });
+
   it.each([
     { ACTUAL_SERVER_URL: "https://actual.example.com" },
     { ACTUAL_SERVER_PASSWORD: "server-secret" },
@@ -97,10 +143,15 @@ describe("parseApiConfig", () => {
       ACTUAL_SERVER_URL: "https://actual.example.com",
       ACTUAL_SERVER_PASSWORD: "",
     },
+    { ACTUAL_SESSION_TOKEN: "browser-session-token" },
+    {
+      ACTUAL_SERVER_URL: "https://actual.example.com",
+      ACTUAL_SESSION_TOKEN: "",
+    },
   ])("rejects incomplete Actual connection settings", (actual) => {
     expect(() =>
       parseApiConfig({ DATABASE_URL: databaseUrl, ...actual }),
-    ).toThrow(/ACTUAL_SERVER_URL and/);
+    ).toThrow(/ACTUAL_SERVER_URL and exactly one/);
   });
 
   it.each([

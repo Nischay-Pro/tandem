@@ -21,7 +21,7 @@ interface FakeClient {
   setVersion(
     result: Awaited<ReturnType<ActualApiPort["getServerVersion"]>>,
   ): void;
-  failInit(error: Error): void;
+  failInit(error: unknown): void;
   failShutdown(error?: Error): void;
   failDownload(error?: Error): void;
   failSync(error: unknown): void;
@@ -35,7 +35,7 @@ function createFakeClient(): FakeClient {
   let version: Awaited<ReturnType<ActualApiPort["getServerVersion"]>> = {
     version: SUPPORTED_ACTUAL_SERVER_VERSION,
   };
-  let initError: Error | undefined;
+  let initError: unknown;
   let shutdownError: Error | undefined;
   let downloadError: Error | undefined;
   let syncError: unknown;
@@ -143,6 +143,158 @@ describe("ActualSession", () => {
 
     expect(fake.calls).toEqual(["init", "version"]);
     await session.close();
+  });
+
+  it("marks a rejected session token unready and logs only a safe instruction", async () => {
+    const fake = createFakeClient();
+    fake.failInit(Object.assign(new Error("unauthorized"), { status: 401 }));
+    const session = new ActualSession(fake.api, {
+      serverURL: "https://actual.example.test",
+      dataDir: "/tmp/actual-api",
+      sessionToken: "private-session-token",
+    });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      await session.start();
+
+      expect(session.isReady).toBe(false);
+      expect(session.readinessMessage).toBe(
+        "Actual rejected ACTUAL_SESSION_TOKEN. Replace the token and restart Tandem.",
+      );
+      expect(log).toHaveBeenCalledWith(session.readinessMessage);
+      expect(JSON.stringify(log.mock.calls)).not.toContain(
+        "private-session-token",
+      );
+    } finally {
+      log.mockRestore();
+      await session.close();
+    }
+  });
+
+  it.each([
+    ["HTTP 401", Object.assign(new Error("unauthorized"), { status: 401 })],
+    [
+      "HTTP 403 statusCode",
+      Object.assign(new Error("forbidden"), { statusCode: 403 }),
+    ],
+    [
+      "unauthorized reason",
+      Object.assign(new Error("denied"), { reason: "unauthorized" }),
+    ],
+    [
+      "invalid-token code",
+      Object.assign(new Error("denied"), { code: "invalid-token" }),
+    ],
+    [
+      "expired-token reason",
+      Object.assign(new Error("denied"), { reason: "token-expired" }),
+    ],
+    [
+      "nested unauthorized reason",
+      Object.assign(new Error("denied"), { error: { reason: "unauthorized" } }),
+    ],
+    ["unauthorized message", new Error("unauthorized")],
+    ["expired-token message", new Error("token expired")],
+    ["rejected-token message", new Error("token rejected")],
+    ["invalid-token message", new Error("token invalid")],
+  ] as const)(
+    "maps Actual's %s response to a safe operator error",
+    async (_label, error) => {
+      const fake = createFakeClient();
+      fake.failInit(error);
+      const session = new ActualSession(fake.api, {
+        serverURL: "https://actual.example.test",
+        dataDir: "/tmp/actual-api",
+        sessionToken: "private-session-token",
+      });
+      const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      try {
+        await session.start();
+
+        expect(session.isReady).toBe(false);
+        expect(session.readinessMessage).toBe(
+          "Actual rejected ACTUAL_SESSION_TOKEN. Replace the token and restart Tandem.",
+        );
+        expect(log).toHaveBeenCalledOnce();
+        expect(JSON.stringify(log.mock.calls)).not.toContain(
+          "private-session-token",
+        );
+      } finally {
+        log.mockRestore();
+        await session.close();
+      }
+    },
+  );
+
+  it.each([
+    ["plain text errors", "unauthorized"],
+    [
+      "unrelated HTTP error with non-text detail",
+      Object.assign(new Error("unavailable"), {
+        status: 400,
+        message: 17,
+        error: { reason: "unknown" },
+      }),
+    ],
+  ] as const)(
+    "preserves %s for session-token configuration",
+    async (_label, error) => {
+      const fake = createFakeClient();
+      fake.failInit(error);
+      const session = new ActualSession(fake.api, {
+        serverURL: "https://actual.example.test",
+        dataDir: "/tmp/actual-api",
+        sessionToken: "private-session-token",
+      });
+
+      try {
+        await expect(session.start()).rejects.toBe(error);
+        expect(session.readinessMessage).toBeUndefined();
+      } finally {
+        await session.close();
+      }
+    },
+  );
+
+  it("marks readiness false when an active session token expires", async () => {
+    const fake = createFakeClient();
+    const sessionToken = "private-session-token";
+    const session = new ActualSession(fake.api, {
+      serverURL: "https://actual.example.test",
+      dataDir: "/tmp/actual-api",
+      sessionToken,
+    });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      await session.start();
+      await session.runBudget("budget-a", async () => undefined);
+      fake.failSync(
+        Object.assign(new Error(`unauthorized ${sessionToken}`), {
+          status: 401,
+        }),
+      );
+
+      await expect(
+        session.runBudget("budget-a", async () => undefined),
+      ).rejects.toThrow(
+        "Actual rejected ACTUAL_SESSION_TOKEN. Replace the token and restart Tandem.",
+      );
+      expect(session.isReady).toBe(false);
+      expect(log).toHaveBeenCalledOnce();
+      await expect(
+        session.runBudget("budget-a", async () => undefined),
+      ).rejects.toThrow(
+        "Actual rejected ACTUAL_SESSION_TOKEN. Replace the token and restart Tandem.",
+      );
+      expect(log).toHaveBeenCalledOnce();
+      expect(JSON.stringify(log.mock.calls)).not.toContain(sessionToken);
+    } finally {
+      log.mockRestore();
+      await session.close();
+    }
   });
 
   it("downloads a budget with its optional encryption password before the operation", async () => {

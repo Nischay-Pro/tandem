@@ -68,6 +68,12 @@ function createActualRuntime(
     ),
     budgetMaintenanceApi: createBudgetMaintenanceApi(database, session),
     budgetReadApi,
+    actualReadiness: () => ({
+      ready: session.isReady,
+      ...(session.readinessMessage === undefined
+        ? {}
+        : { message: session.readinessMessage }),
+    }),
     start: () => session.start(),
     close: () => session.close(),
   };

@@ -289,6 +289,11 @@ describe("API bootstrap integration", () => {
       method: "GET",
       url: "/api/v1/openapi.json",
     });
+    const readiness = await app.inject({
+      method: "GET",
+      url: "/api/v1/health/ready",
+    });
+    expect(readiness.statusCode).toBe(200);
     expect(
       response.json().paths[
         "/api/v1/budgets/{budgetId}/transactions/{transactionId}"
@@ -298,6 +303,56 @@ describe("API bootstrap integration", () => {
     await app.close();
     expect(actualApi.shutdown).toHaveBeenCalledOnce();
     expect(database.close).toHaveBeenCalledOnce();
+  });
+
+  it("exposes a safe readiness message when Actual rejects the session token", async () => {
+    const port = await findAvailablePort();
+    const sessionToken = "synthetic-private-session-token";
+    actualApi.init.mockClear();
+    actualApi.init.mockRejectedValueOnce(
+      Object.assign(new Error(`unauthorized ${sessionToken}`), { status: 401 }),
+    );
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const app = await runApi(
+      {
+        DATABASE_URL: isolatedDatabaseUrl,
+        PAIRING_CODE_HASH_KEY: testPairingCodeHashKey,
+        HOST: "127.0.0.1",
+        PORT: String(port),
+        ACTUAL_SERVER_URL: "http://actual.example",
+        ACTUAL_SESSION_TOKEN: sessionToken,
+        ACTUAL_API_DATA_DIR: `/tmp/tandem-main-${randomUUID()}`,
+      },
+      createPostgresDatabase,
+      () => {},
+    );
+
+    try {
+      const readiness = await app.inject({
+        method: "GET",
+        url: "/api/v1/health/ready",
+      });
+
+      expect(actualApi.init).toHaveBeenCalledWith({
+        serverURL: "http://actual.example",
+        sessionToken,
+        dataDir: expect.stringMatching(/^\/tmp\/tandem-main-/),
+      });
+      expect(readiness.statusCode).toBe(503);
+      expect(readiness.json()).toEqual({
+        status: "not_ready",
+        message:
+          "Actual rejected ACTUAL_SESSION_TOKEN. Replace the token and restart Tandem.",
+      });
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+        sessionToken,
+      );
+    } finally {
+      vi.restoreAllMocks();
+      await app.close();
+    }
   });
 
   it("handles shutdown failures from process signal callbacks", async () => {

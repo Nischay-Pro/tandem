@@ -49,7 +49,10 @@ const statusOk = {
 
 const statusNotReady = {
   type: "object",
-  properties: { status: { type: "string", const: "not_ready" } },
+  properties: {
+    status: { type: "string", const: "not_ready" },
+    message: { type: "string" },
+  },
   required: ["status"],
   additionalProperties: false,
 };
@@ -64,12 +67,13 @@ const liveSchema: FastifySchema = {
 const readySchema: FastifySchema = {
   tags: ["Health"],
   operationId: "getReadiness",
-  summary: "Check whether the API can reach PostgreSQL",
+  summary: "Check whether the API can reach its configured services",
   response: { 200: statusOk, 503: statusNotReady },
 };
 
 export interface ApiAppOptions {
   readinessTimeoutMs?: number;
+  actualReadiness?: () => { ready: boolean; message?: string };
   onClose?: () => Promise<void>;
   deviceAuth?: DeviceAuthorization;
   transactionApi?: TransactionApiPort;
@@ -131,10 +135,19 @@ export async function buildApiApp(
     async (_request, reply) => {
       try {
         await pingWithTimeout(() => database.ping(), readinessTimeoutMs);
-        return reply.code(200).send({ status: "ok" });
       } catch {
         return reply.code(503).send({ status: "not_ready" });
       }
+      const actualReadiness = options.actualReadiness?.();
+      if (actualReadiness && !actualReadiness.ready) {
+        return reply.code(503).send({
+          status: "not_ready",
+          ...(actualReadiness.message === undefined
+            ? {}
+            : { message: actualReadiness.message }),
+        });
+      }
+      return reply.code(200).send({ status: "ok" });
     },
   );
 

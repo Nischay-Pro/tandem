@@ -12,7 +12,7 @@ export interface ApiConfig {
   port: number;
   trustProxy: false | string[];
   changeFeedEpoch: string;
-  actual?: Extract<ActualConnectionConfig, { password: string }>;
+  actual?: ActualConnectionConfig;
 }
 
 export type Environment = Record<string, string | undefined>;
@@ -89,17 +89,23 @@ export function parseApiConfig(environment: Environment): ApiConfig {
 
 function parseActualConnection(
   environment: Environment,
-): Extract<ActualConnectionConfig, { password: string }> | undefined {
+): ActualConnectionConfig | undefined {
   const serverUrl = environment.ACTUAL_SERVER_URL?.trim() || undefined;
   const password = readSecret(environment, "ACTUAL_SERVER_PASSWORD");
+  const sessionToken = readSecret(environment, "ACTUAL_SESSION_TOKEN");
   const configuredDataDirectory = environment.ACTUAL_API_DATA_DIR?.trim();
 
-  if (!serverUrl && !password) {
+  if (password && sessionToken) {
+    throw new OperatorMessageError(
+      "Configure either ACTUAL_SERVER_PASSWORD or ACTUAL_SESSION_TOKEN, not both",
+    );
+  }
+  if (!serverUrl && !password && !sessionToken) {
     return undefined;
   }
-  if (!serverUrl || !password) {
+  if (!serverUrl || (!password && !sessionToken)) {
     throw new OperatorMessageError(
-      "ACTUAL_SERVER_URL and a non-empty ACTUAL_SERVER_PASSWORD must be configured together",
+      "ACTUAL_SERVER_URL and exactly one non-empty Actual credential must be configured together",
     );
   }
 
@@ -131,14 +137,20 @@ function parseActualConnection(
 
   return {
     serverURL: parsedServerUrl.toString().replace(/\/$/, ""),
-    password,
+    ...(password === undefined
+      ? { sessionToken: sessionToken! }
+      : { password }),
     dataDir,
   };
 }
 
 function readSecret(
   environment: Environment,
-  name: "DATABASE_URL" | "PAIRING_CODE_HASH_KEY" | "ACTUAL_SERVER_PASSWORD",
+  name:
+    | "DATABASE_URL"
+    | "PAIRING_CODE_HASH_KEY"
+    | "ACTUAL_SERVER_PASSWORD"
+    | "ACTUAL_SESSION_TOKEN",
 ): string | undefined {
   const directValue = environment[name];
   const fileVariable = `${name}_FILE`;
