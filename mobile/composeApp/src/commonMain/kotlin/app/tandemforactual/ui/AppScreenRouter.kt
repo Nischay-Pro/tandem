@@ -51,6 +51,7 @@ internal fun ScreenContent(
     reportsDataCache: ReportsDataCache,
     onPairDevice: () -> Unit,
     onRetryStoredSession: () -> Unit,
+    pairingCompleted: Boolean,
     onSelectBudget: (BudgetCatalogItem) -> Unit,
     onRefreshBudgets: () -> Unit,
     onOpenSelectedBudget: () -> Unit,
@@ -86,9 +87,7 @@ internal fun ScreenContent(
         AppRoute.STARTUP -> StartupScreen()
         AppRoute.WELCOME -> WelcomeScreen(navigation)
         AppRoute.SERVER_ADDRESS -> ServerAddressScreen(state, navigation)
-        AppRoute.PAIRING_OPTIONS -> PairingOptionsScreen(navigation)
-        AppRoute.PAIRING_CODE -> PairingCodeScreen(state, mobileSession, navigation, onPairDevice, onRetryStoredSession)
-        AppRoute.PAIRING_RESULT -> PairingResultScreen(mobileSession, navigation)
+        AppRoute.PAIRING_CODE -> PairingCodeScreen(state, mobileSession, navigation, onPairDevice, onRetryStoredSession, pairingCompleted)
         AppRoute.BUDGET_CHOOSER ->
             BudgetChooserScreen(state, mobileSession, navigation, onSelectBudget, onRefreshBudgets, onOpenSelectedBudget)
         AppRoute.UNLOCK_BUDGET -> UnlockBudgetScreen(state, navigation)
@@ -474,17 +473,25 @@ internal fun ScreenContent(
         AppRoute.SYNC_CENTER -> SyncCenterScreen(state, mobileSession, navigation, liveTransactions)
         AppRoute.CONFLICT_INBOX -> ConflictInboxScreen(state, mobileSession, navigation, liveTransactions)
         AppRoute.CONFLICT_REVIEW -> ConflictReviewScreen(state, mobileSession, onResolveConflict, liveTransactions)
-        AppRoute.UNCERTAIN_WRITE ->
-            UncertainWriteScreen(
-                state,
-                mobileSession,
-                navigation,
-                onCheckUncertainWriteStatus,
-                onRetryUncertainWrite,
-                onDiscardWrite,
-                liveTransactions,
-            )
-        AppRoute.REJECTED_WRITE -> RejectedWriteScreen(state, mobileSession, navigation, onDiscardWrite, liveTransactions)
+        AppRoute.UNCERTAIN_WRITE -> {
+            val selectedWriteStatus =
+                mobileSession.pendingWrites
+                    .firstOrNull { it.operationId == state.selectedConflictOperationId }
+                    ?.status
+            if (selectedWriteStatus == "rejected") {
+                RejectedWriteScreen(state, mobileSession, navigation, onDiscardWrite, liveTransactions)
+            } else {
+                UncertainWriteScreen(
+                    state,
+                    mobileSession,
+                    navigation,
+                    onCheckUncertainWriteStatus,
+                    onRetryUncertainWrite,
+                    onDiscardWrite,
+                    liveTransactions,
+                )
+            }
+        }
         AppRoute.SETTINGS -> SettingsScreen(state, navigation)
         AppRoute.APPEARANCE -> AppearanceScreen(state)
         AppRoute.BUDGET_PREFERENCES -> BudgetPreferencesScreen(state, mobileSession)

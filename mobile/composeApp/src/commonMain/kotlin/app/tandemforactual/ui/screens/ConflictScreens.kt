@@ -347,7 +347,7 @@ internal fun UncertainWriteScreen(
                     operation.status == "rejected" ->
                         PrimaryButton("Review change") {
                             state.selectedConflictOperationId = operation.operationId
-                            navigation.open(AppRoute.REJECTED_WRITE)
+                            navigation.open(AppRoute.UNCERTAIN_WRITE)
                         }
                     else -> PrimaryButton("Done") { navigation.back() }
                 }

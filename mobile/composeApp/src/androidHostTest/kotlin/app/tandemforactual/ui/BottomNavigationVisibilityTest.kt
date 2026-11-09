@@ -1,10 +1,30 @@
 package app.tandemforactual.ui
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class BottomNavigationVisibilityTest {
+    @Test
+    fun fullScreenRoutesStayBelowForty() {
+        assertTrue(AppRoute.entries.size < 40)
+    }
+
+    @Test
+    fun tabBackStacksPreserveNestedRouteEntries() {
+        val activityStack =
+            listOf(
+                AppRouteEntry(AppRoute.BUDGET, 1),
+                AppRouteEntry(AppRoute.ACTIVITY, 2),
+                AppRouteEntry(AppRoute.ACTIVITY_SEARCH, 3),
+            )
+
+        val restored = decodeAppTabBackStacks(encodeAppTabBackStacks(mapOf(AppRoute.ACTIVITY to activityStack)))
+
+        assertEquals(activityStack, restored[AppRoute.ACTIVITY])
+    }
+
     @Test
     fun browsingRoutesKeepBottomNavigation() {
         assertTrue(AppRoute.ACTIVITY_SEARCH.showsBottomNavigation())

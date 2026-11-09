@@ -110,9 +110,7 @@ internal enum class AppRoute(
     STARTUP("Tandem"),
     WELCOME("Tandem"),
     SERVER_ADDRESS("Server address"),
-    PAIRING_OPTIONS("Pair this device"),
-    PAIRING_CODE("Enter pairing code"),
-    PAIRING_RESULT("Device paired"),
+    PAIRING_CODE("Pair this device"),
     BUDGET_CHOOSER("Budgets"),
     UNLOCK_BUDGET("Unlock budget"),
     FIRST_SYNC("Preparing budget"),
@@ -137,8 +135,7 @@ internal enum class AppRoute(
     SYNC_CENTER("Sync center"),
     CONFLICT_INBOX("Needs review"),
     CONFLICT_REVIEW("Review conflict"),
-    UNCERTAIN_WRITE("Status unknown"),
-    REJECTED_WRITE("Not applied"),
+    UNCERTAIN_WRITE("Change status"),
     SETTINGS("Settings"),
     APPEARANCE("Appearance"),
     BUDGET_PREFERENCES("Budget preferences"),
@@ -786,6 +783,40 @@ internal data class AppRouteEntry(
     val stateKey: String
         get() = if (route.isTab()) "tab-${route.name}" else "route-${route.name}-$id"
 }
+
+internal fun encodeAppTabBackStacks(stacks: Map<AppRoute, List<AppRouteEntry>>): String =
+    stacks.entries
+        .filter { (tab, _) -> tab.isTab() }
+        .joinToString("|") { (tab, entries) ->
+            "${tab.name}=" + entries.joinToString(",") { "${it.id}:${it.route.name}" }
+        }
+
+internal fun decodeAppTabBackStacks(value: String): Map<AppRoute, List<AppRouteEntry>> =
+    value
+        .split('|')
+        .mapNotNull { encodedStack ->
+            val separator = encodedStack.indexOf('=')
+            if (separator < 1) {
+                null
+            } else {
+                val tab = AppRoute.entries.firstOrNull { it.name == encodedStack.substring(0, separator) && it.isTab() }
+                val entries =
+                    encodedStack
+                        .substring(separator + 1)
+                        .split(',')
+                        .mapNotNull { encodedEntry ->
+                            val entrySeparator = encodedEntry.indexOf(':')
+                            if (entrySeparator < 1) {
+                                null
+                            } else {
+                                val id = encodedEntry.substring(0, entrySeparator).toLongOrNull()
+                                val route = AppRoute.entries.firstOrNull { it.name == encodedEntry.substring(entrySeparator + 1) }
+                                if (id == null || route == null) null else AppRouteEntry(route, id)
+                            }
+                        }
+                if (tab == null || entries.isEmpty()) null else tab to entries
+            }
+        }.toMap()
 
 internal val appRouteStackSaver =
     listSaver<SnapshotStateList<AppRouteEntry>, String>(

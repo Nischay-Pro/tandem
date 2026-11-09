@@ -143,6 +143,7 @@ fun TandemApp(
     var queuedBackPresses by remember { mutableStateOf(0) }
     var skipNextRouteTransition by remember { mutableStateOf(false) }
     var showDiscardTransactionDialog by rememberSaveable { mutableStateOf(false) }
+    var pairingCompleted by rememberSaveable { mutableStateOf(false) }
     var transactionSheetClosing by remember { mutableStateOf(false) }
     var transactionSheetPopCount by remember { mutableStateOf(1) }
     var nextRouteEntryId by rememberSaveable { mutableStateOf(2L) }
@@ -150,6 +151,7 @@ fun TandemApp(
         rememberSaveable(startInPreview, saver = appRouteStackSaver) {
             mutableStateListOf(AppRouteEntry(if (startInPreview) AppRoute.BUDGET else AppRoute.STARTUP, 1))
         }
+    var savedTabBackStacks by rememberSaveable { mutableStateOf("") }
     val newRouteEntry: (AppRoute) -> AppRouteEntry = { nextRoute ->
         val entryId = nextRouteEntryId
         nextRouteEntryId += 1
@@ -390,19 +392,30 @@ fun TandemApp(
         }
     }
     val selectTab: (AppRoute) -> Unit = { selectedTab ->
-        if (backStack.lastOrNull()?.route != selectedTab) {
+        val activeTab = backStack.lastOrNull { it.route.isTab() }?.route
+        if (activeTab == selectedTab) {
+            if (backStack.lastOrNull()?.route != selectedTab) {
+                val tabStacks = decodeAppTabBackStacks(savedTabBackStacks).toMutableMap()
+                tabStacks.remove(selectedTab)
+                savedTabBackStacks = encodeAppTabBackStacks(tabStacks)
+                routeTransitionDirection = 0f
+                backStack.clear()
+                if (selectedTab != AppRoute.BUDGET) backStack.add(newRouteEntry(AppRoute.BUDGET))
+                backStack.add(newRouteEntry(selectedTab))
+            }
+        } else {
+            val tabStacks = decodeAppTabBackStacks(savedTabBackStacks).toMutableMap()
+            activeTab?.let { tabStacks[it] = backStack.toList() }
+            val targetStack = tabStacks[selectedTab]
             routeTransitionDirection = 0f
             backStack.clear()
-            backStack.add(newRouteEntry(AppRoute.BUDGET))
-            if (selectedTab != AppRoute.BUDGET) backStack.add(newRouteEntry(selectedTab))
-            if (selectedTab == AppRoute.REPORTS) {
-                val reportsStateKey = "tab-${AppRoute.REPORTS.name}"
-                state.scrollPositions[reportsStateKey] = 0
-                state.lazyScrollPositions[reportsStateKey] = 0 to 0
-                routeLazyListStates[reportsStateKey]?.let { listState ->
-                    listState.requestScrollToItem(0)
-                }
+            if (targetStack != null) {
+                backStack.addAll(targetStack)
+            } else {
+                if (selectedTab != AppRoute.BUDGET) backStack.add(newRouteEntry(AppRoute.BUDGET))
+                backStack.add(newRouteEntry(selectedTab))
             }
+            savedTabBackStacks = encodeAppTabBackStacks(tabStacks)
         }
     }
     val performBack: () -> Unit = {
@@ -451,6 +464,7 @@ fun TandemApp(
     val navigation =
         AppNavigation(
             open = { next ->
+                if (next == AppRoute.PAIRING_CODE) pairingCompleted = false
                 if (next == AppRoute.NEW_TRANSACTION) {
                     newTransaction(null)
                 } else {
@@ -758,7 +772,8 @@ fun TandemApp(
                 mobileSession.pair(state.serverUrl, state.pairingCode, deviceName)
                 if (mobileSession.pairedDevice != null) {
                     state.pairingCode = ""
-                    navigation.reset(AppRoute.PAIRING_RESULT)
+                    pairingCompleted = true
+                    navigation.reset(AppRoute.PAIRING_CODE)
                 }
             }
         }
@@ -1057,7 +1072,15 @@ fun TandemApp(
                         state.scrollPositions[visibleEntry.stateKey] = routeScrollState.value
                         state.lazyScrollPositions[visibleEntry.stateKey] =
                             routeLazyListState.firstVisibleItemIndex to routeLazyListState.firstVisibleItemScrollOffset
-                        if (!visibleRoute.isTab() && backStack.none { it.stateKey == visibleEntry.stateKey }) {
+                        val tabStackContainsRoute =
+                            decodeAppTabBackStacks(savedTabBackStacks)
+                                .values
+                                .flatten()
+                                .any { it.stateKey == visibleEntry.stateKey }
+                        if (!visibleRoute.isTab() &&
+                            backStack.none { it.stateKey == visibleEntry.stateKey } &&
+                            !tabStackContainsRoute
+                        ) {
                             state.scrollPositions.remove(visibleEntry.stateKey)
                             state.lazyScrollPositions.remove(visibleEntry.stateKey)
                             routeLazyListStates.remove(visibleEntry.stateKey)
@@ -1083,6 +1106,7 @@ fun TandemApp(
                                 reportsDataCache = reportsDataCache,
                                 onPairDevice = pairDevice,
                                 onRetryStoredSession = retryStoredSession,
+                                pairingCompleted = pairingCompleted,
                                 onSelectBudget = selectBudget,
                                 onRefreshBudgets = refreshBudgets,
                                 onOpenSelectedBudget = openSelectedBudget,
@@ -1364,9 +1388,7 @@ internal fun AppRoute.showsBottomNavigation(): Boolean =
         AppRoute.STARTUP,
         AppRoute.WELCOME,
         AppRoute.SERVER_ADDRESS,
-        AppRoute.PAIRING_OPTIONS,
         AppRoute.PAIRING_CODE,
-        AppRoute.PAIRING_RESULT,
         AppRoute.BUDGET_CHOOSER,
         AppRoute.UNLOCK_BUDGET,
         AppRoute.FIRST_SYNC,

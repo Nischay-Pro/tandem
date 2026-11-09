@@ -191,7 +191,14 @@ internal fun BudgetScreen(
                         "$rejectedCount edit${if (rejectedCount == 1) "" else "s"} not applied",
                         "Review the edit.",
                         "Review edits",
-                    ) { navigation.open(AppRoute.REJECTED_WRITE) }
+                    ) {
+                        state.selectedConflictOperationId =
+                            mobileSession.pendingWrites
+                                .firstOrNull { it.status == "rejected" }
+                                ?.operationId
+                                .orEmpty()
+                        navigation.open(AppRoute.UNCERTAIN_WRITE)
+                    }
                 }
             }
         }

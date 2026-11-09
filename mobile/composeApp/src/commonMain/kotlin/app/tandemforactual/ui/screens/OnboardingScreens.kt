@@ -153,7 +153,7 @@ internal fun ServerAddressScreen(
                 )
             }
         }
-        PrimaryButton("Continue", enabled = serverAddressIsValid(state.serverUrl)) { navigation.open(AppRoute.PAIRING_OPTIONS) }
+        PrimaryButton("Continue", enabled = serverAddressIsValid(state.serverUrl)) { navigation.open(AppRoute.PAIRING_CODE) }
     }
 }
 
@@ -218,82 +218,69 @@ internal fun serverAddressMayBeInsecure(value: String): Boolean {
 }
 
 @Composable
-internal fun PairingOptionsScreen(navigation: AppNavigation) {
-    PageColumn {
-        Heading("Pair this device")
-        PrimaryButton("Enter pairing code") { navigation.open(AppRoute.PAIRING_CODE) }
-    }
-}
-
-@Composable
 internal fun PairingCodeScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
     onPairDevice: () -> Unit,
     onRetryStoredSession: () -> Unit,
-) {
-    PageColumn {
-        Heading("Enter pairing code")
-        TextFieldCard(
-            "Pairing code",
-            state.pairingCode,
-            { state.pairingCode = sanitizePairingCodeInput(it) },
-            TextFieldOptions(
-                placeholder = "For example, 4DF7-J1M9",
-                keyboardOptions =
-                    KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Characters,
-                        autoCorrectEnabled = false,
-                        keyboardType = KeyboardType.Ascii,
-                    ),
-                textAlign = TextAlign.Center,
-            ),
-        )
-        InfoBubble("This pairing code expires after five minutes. Tandem doesn’t save it or your budget password.")
-        mobileSession.pairingError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
-        mobileSession.credentialStorageError?.let { error ->
-            InlineMessage(error, InlineMessageKind.ERROR)
-            SecondaryButton(
-                if (mobileSession.isRestoringStoredSession) "Checking storage" else "Retry saved pairing",
-                enabled = !mobileSession.isRestoringStoredSession,
-                onClick = onRetryStoredSession,
-            )
-        }
-        PrimaryButton(
-            if (mobileSession.isPairing) "Pairing" else "Pair this device",
-            enabled = !mobileSession.isPairing && state.pairingCode.filter(Char::isLetterOrDigit).length == 8,
-            onClick = onPairDevice,
-        )
-    }
-}
-
-@Composable
-internal fun PairingResultScreen(
-    mobileSession: TandemMobileSession,
-    navigation: AppNavigation,
+    pairingCompleted: Boolean,
 ) {
     val palette = tandemPalette
     PageColumn {
-        Spacer(Modifier.height(24.dp))
-        Box(Modifier.size(60.dp).clip(CircleShape).background(palette.accentSurface), contentAlignment = Alignment.Center) {
-            Text("✓", color = palette.accent, fontSize = TandemTypography.heroTitle, fontWeight = FontWeight.Bold)
-        }
-        Heading("Device paired")
-        mobileSession.pairedDevice?.let { device ->
-            SurfaceCard {
-                Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-                    LabelText("Device access")
-                    BodyText(
-                        "This device can open ${device.budgetIds.size} budget${if (device.budgetIds.size == 1) "" else "s"}.",
-                    )
-                }
+        if (pairingCompleted) {
+            Spacer(Modifier.height(24.dp))
+            Box(Modifier.size(60.dp).clip(CircleShape).background(palette.accentSurface), contentAlignment = Alignment.Center) {
+                Text("✓", color = palette.accent, fontSize = TandemTypography.heroTitle, fontWeight = FontWeight.Bold)
             }
-            InfoBubble("Pairing codes and budget passwords are never saved.")
-        }
-        mobileSession.budgetError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
-        PrimaryButton("Choose a budget", enabled = mobileSession.pairedDevice != null) {
-            navigation.reset(AppRoute.BUDGET_CHOOSER)
+            Heading("Device paired")
+            mobileSession.pairedDevice?.let { device ->
+                SurfaceCard {
+                    Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+                        LabelText("Device access")
+                        BodyText(
+                            "This device can open ${device.budgetIds.size} budget${if (device.budgetIds.size == 1) "" else "s"}.",
+                        )
+                    }
+                }
+                InfoBubble("Pairing codes and budget passwords are never saved.")
+            }
+            mobileSession.budgetError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
+            PrimaryButton("Choose a budget", enabled = mobileSession.pairedDevice != null) {
+                navigation.reset(AppRoute.BUDGET_CHOOSER)
+            }
+        } else {
+            Heading("Pair this device")
+            TextFieldCard(
+                "Pairing code",
+                state.pairingCode,
+                { state.pairingCode = sanitizePairingCodeInput(it) },
+                TextFieldOptions(
+                    placeholder = "For example, 4DF7-J1M9",
+                    keyboardOptions =
+                        KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Characters,
+                            autoCorrectEnabled = false,
+                            keyboardType = KeyboardType.Ascii,
+                        ),
+                    textAlign = TextAlign.Center,
+                ),
+            )
+            InfoBubble("This pairing code expires after five minutes. Tandem doesn’t save it or your budget password.")
+            mobileSession.pairingError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
+            mobileSession.credentialStorageError?.let { error ->
+                InlineMessage(error, InlineMessageKind.ERROR)
+                SecondaryButton(
+                    if (mobileSession.isRestoringStoredSession) "Checking storage" else "Retry saved pairing",
+                    enabled = !mobileSession.isRestoringStoredSession,
+                    onClick = onRetryStoredSession,
+                )
+            }
+            PrimaryButton(
+                if (mobileSession.isPairing) "Pairing" else "Pair this device",
+                enabled = !mobileSession.isPairing && state.pairingCode.filter(Char::isLetterOrDigit).length == 8,
+                onClick = onPairDevice,
+            )
         }
     }
 }

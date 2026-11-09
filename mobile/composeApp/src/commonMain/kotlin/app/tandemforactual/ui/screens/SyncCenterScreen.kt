@@ -133,7 +133,7 @@ internal fun SyncCenterScreen(
                                     when (operation.status) {
                                         "conflict" -> AppRoute.CONFLICT_REVIEW
                                         "uncertain" -> AppRoute.UNCERTAIN_WRITE
-                                        "rejected" -> AppRoute.REJECTED_WRITE
+                                        "rejected" -> AppRoute.UNCERTAIN_WRITE
                                         else -> AppRoute.UNCERTAIN_WRITE
                                     },
                                 )
@@ -184,13 +184,6 @@ internal fun SyncCenterScreen(
                 "1",
                 options = ListRowOptions(trailingColor = tandemPalette.warning),
             ) { navigation.open(AppRoute.UNCERTAIN_WRITE) }
-            DividerLine()
-            ListRow(
-                "Not applied",
-                "New transactions aren’t available yet",
-                "1",
-                options = ListRowOptions(trailingColor = tandemPalette.negative),
-            ) { navigation.open(AppRoute.REJECTED_WRITE) }
         }
         SectionCard("Recent sync activity", "Sample events", "") {
             ListRow("Budget snapshot", "Ready for initial download", "Pending")
