@@ -629,6 +629,16 @@ internal class TandemMobileSession(
             } else {
                 observedRetrySignal = budgetReorderRetrySignal
             }
+            if (!isServerReachable || !apiClient.isAuthenticated) {
+                budgetReorderQueue =
+                    budgetReorderQueue.waitForConnection(
+                        request,
+                        "Saved on this device. Waiting for a connection to Tandem.",
+                    )
+                observedRetrySignal = snapshotFlow { budgetReorderRetrySignal }.first { it != observedRetrySignal }
+                budgetReorderQueue = budgetReorderQueue.resumeAfterConnection()
+                continue
+            }
             snapshotFlow { isPerformingBudgetAction }.first { !it }
             if (budgetReorderQueue.moves.firstOrNull() != request) continue
 

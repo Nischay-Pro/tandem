@@ -210,6 +210,63 @@ class CategoryReorderingTest {
     }
 
     @Test
+    fun categoryMoveWaitsOfflineWithoutRollingBackTheLocalOrder() {
+        val originalOrder = listOf("rent", "utilities", "internet")
+        val move =
+            QueuedBudgetReorder(
+                budgetId = "budget",
+                scopeId = "housing",
+                kind = BudgetReorderKind.CATEGORY,
+                itemId = "internet",
+                targetId = "rent",
+                desiredOrder = listOf("internet", "rent", "utilities"),
+                encryptionPassword = null,
+            )
+        val waitingMessage = "Saved on this device. Waiting for a connection to Tandem."
+        val waiting = BudgetReorderQueueState().enqueue(move).waitForConnection(move, waitingMessage)
+
+        assertEquals(true, waiting.waitingForConnection)
+        assertEquals(listOf(move), waiting.moves)
+        assertEquals(
+            move.desiredOrder,
+            budgetOrderForScreen(originalOrder, waiting.statusFor("budget", "housing"), waiting.movesFor("budget", "housing")),
+        )
+        assertEquals(waitingMessage, waiting.statusFor("budget", "housing").message)
+
+        val resumed = waiting.resumeAfterConnection()
+
+        assertEquals(false, resumed.waitingForConnection)
+        assertEquals(listOf(move), resumed.moves)
+        assertEquals(move.desiredOrder, resumed.statusFor("budget", "housing").optimisticOrder)
+    }
+
+    @Test
+    fun categoryHideWaitsOfflineAndKeepsTheVisibilityOverride() {
+        val hide =
+            QueuedBudgetReorder(
+                budgetId = "budget",
+                scopeId = "utilities",
+                kind = BudgetReorderKind.HIDE_CATEGORY,
+                itemId = "mobile",
+                targetId = null,
+                desiredOrder = listOf("internet"),
+                encryptionPassword = null,
+            )
+        val waiting =
+            BudgetReorderQueueState()
+                .enqueue(hide)
+                .waitForConnection(hide, "Saved on this device. Waiting for a connection to Tandem.")
+
+        assertEquals(true, waiting.categoryVisibilityOverridesFor("budget")["mobile"])
+        assertEquals(listOf(hide), waiting.moves)
+
+        val resumed = waiting.resumeAfterConnection()
+
+        assertEquals(true, resumed.categoryVisibilityOverridesFor("budget")["mobile"])
+        assertEquals(listOf(hide), resumed.moves)
+    }
+
+    @Test
     fun categoryRenameQueuedBehindCreateUsesTheActualIdAfterCreateCompletes() {
         val create =
             QueuedBudgetReorder(
