@@ -257,6 +257,31 @@ class CategoryReorderingTest {
     }
 
     @Test
+    fun appliedCategoryMoveKeepsItsOptimisticOrderWhileBudgetRefreshWaits() {
+        val originalOrder = listOf("rent", "utilities", "internet")
+        val move =
+            QueuedBudgetReorder(
+                budgetId = "budget",
+                scopeId = "housing",
+                kind = BudgetReorderKind.CATEGORY,
+                itemId = "internet",
+                targetId = "rent",
+                desiredOrder = listOf("internet", "rent", "utilities"),
+                encryptionPassword = null,
+            )
+        val status = BudgetReorderQueueState().enqueue(move).awaitRefresh(move, "Saved in Actual. Waiting for the budget to refresh.")
+
+        assertEquals(true, status.waitingForConnection)
+        assertEquals(true, status.moves.single().refreshOnly)
+        assertEquals(true, status.statusFor("budget", "housing").warning)
+        assertEquals("Saved in Actual. Waiting for the budget to refresh.", status.statusFor("budget", "housing").message)
+        assertEquals(
+            move.desiredOrder,
+            budgetOrderForScreen(originalOrder, status.statusFor("budget", "housing"), status.movesFor("budget", "housing")),
+        )
+    }
+
+    @Test
     fun categoryHideWaitsOfflineAndKeepsTheVisibilityOverride() {
         val hide =
             QueuedBudgetReorder(

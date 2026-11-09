@@ -794,6 +794,10 @@ internal class TandemMobileSession(
             } else if (request.kind == BudgetReorderKind.CREATE_CATEGORY && moved && createdCategoryId != null) {
                 budgetReorderQueue = budgetReorderQueue.completeCategoryCreate(request, createdCategoryId)
             } else if (refreshFailed) {
+                // The mutation has already been accepted. Keep the optimistic
+                // state and show its retryable refresh status in the queue;
+                // the sync transport error belongs on the cloud indicator.
+                clearBudgetActionMessage()
                 budgetReorderQueue = budgetReorderQueue.awaitRefresh(request, "Saved in Actual. Waiting for the budget to refresh.")
             } else if ((
                     request.refreshOnly ||
