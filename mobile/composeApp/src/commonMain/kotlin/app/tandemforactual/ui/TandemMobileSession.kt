@@ -2901,128 +2901,43 @@ internal class TandemMobileSession(
             return
         }
         isSavingTransaction = true
-        var replacementOperationId: String? = null
         try {
-            if (!confirmConflictWithServer(budgetId, operationId, encryptionPassword)) {
-                reportConflictResolution(
-                    operationId,
-                    "The server didn’t confirm this conflict. Nothing was resolved; your edit is still on this device.",
-                )
-                return
-            }
-            val operation =
-                localRepository
-                    .readPendingWrites(budgetId)
-                    .firstOrNull { it.operationId == operationId }
-                    ?.takeIf { it.status == "conflict" }
-            if (operation == null) {
-                reportConflictResolution(operationId, "The server confirmed the budget, but this change no longer needs review.")
-                return
-            }
-            if (!keepDeviceVersion) {
-                localRepository.discardWrite(operationId)
-                loadLocalRecords(budgetId)
-                reportConflictResolution(
-                    operationId,
-                    "The server confirmed Actual’s latest copy. Kept it on this device and discarded your edit.",
-                )
-                return
-            }
+            val workflow =
+                TransactionConflictResolution(
+                    store = RepositoryConflictResolutionStore(localRepository),
+                    sync =
+                        object : ConflictResolutionSync {
+                            override suspend fun confirmConflictWithServer(
+                                budgetId: String,
+                                operationId: String,
+                                encryptionPassword: String?,
+                            ): Boolean = this@TandemMobileSession.confirmConflictWithServer(budgetId, operationId, encryptionPassword)
 
-            val current = localRepository.findRecord(budgetId, operation.recordType, operation.recordId)
-            val baseJson = current?.remoteJson
-            val revision = current?.remoteRevision
-            if (current?.remoteDeleted == true && operation.action == LocalWriteAction.DELETE.name) {
-                localRepository.discardWrite(operationId)
-                loadLocalRecords(budgetId)
-                reportConflictResolution(
-                    operationId,
-                    "The server confirmed this transaction is deleted. Cleared the pending deletion here.",
+                            override suspend fun synchronize(
+                                budgetId: String,
+                                encryptionPassword: String?,
+                                retryQueuedBudgetMutations: Boolean,
+                            ): BudgetSyncSummary? =
+                                this@TandemMobileSession.synchronize(
+                                    budgetId = budgetId,
+                                    encryptionPassword = encryptionPassword,
+                                    retryQueuedBudgetMutations = retryQueuedBudgetMutations,
+                                )
+                        },
+                    nowEpochMillis = nowEpochMillis,
                 )
-                return
-            }
-            if (current == null || current.remoteDeleted || baseJson == null || revision.isNullOrBlank()) {
-                reportConflictResolution(operationId, "The server didn’t return a current transaction. Nothing was changed.")
-                return
-            }
-            val base = runCatching { Json.parseToJsonElement(baseJson).jsonObject }.getOrNull()
-            val patch = runCatching { Json.parseToJsonElement(operation.patchJson).jsonObject }.getOrNull()
-            if (base == null) {
-                reportConflictResolution(operationId, "The server returned an unreadable transaction. Nothing was changed.")
-                return
-            }
-            if (operation.action == LocalWriteAction.UPDATE.name && patch == null) {
-                reportConflictResolution(operationId, "The saved edit can’t be read. Nothing was changed.")
-                return
-            }
-
-            val newOperationId = Uuid.random().toString()
-            replacementOperationId = newOperationId
-            val action = if (operation.action == LocalWriteAction.DELETE.name) LocalWriteAction.DELETE else LocalWriteAction.UPDATE
-            val rebased = patch?.let { JsonObject(base + it) }
-            localRepository.enqueueWrite(
-                LocalWriteRequest(
-                    operationId = newOperationId,
-                    idempotencyKey = newOperationId,
-                    budgetId = budgetId,
-                    recordType = operation.recordType,
-                    recordId = operation.recordId,
-                    action = action,
-                    baseRevision = revision,
-                    baseSnapshotJson = baseJson,
-                    patchJson = if (action == LocalWriteAction.DELETE) "{}" else checkNotNull(patch).toString(),
-                    optimisticJson = rebased?.toString(),
-                    createdAtEpochMs = nowEpochMillis(),
-                    optimisticProjection = rebased?.toProjection(),
-                    supersedesConflictOperationId = operationId,
-                ),
+            reportConflictResolution(
+                operationId,
+                workflow.resolve(budgetId, operationId, keepDeviceVersion, encryptionPassword),
             )
-            val summary =
-                synchronize(
-                    budgetId = budgetId,
-                    encryptionPassword = encryptionPassword,
-                    retryQueuedBudgetMutations = false,
-                )
-            val resolvedWrite = localRepository.findWrite(newOperationId)
-            val message =
-                when (resolvedWrite?.status) {
-                    "committed" ->
-                        if (action ==
-                            LocalWriteAction.DELETE
-                        ) {
-                            "The server confirmed the deletion in Actual."
-                        } else {
-                            "The server confirmed your edit in Actual."
-                        }
-                    "queued" -> "The server didn’t confirm this choice. Your edit is still on this device and the conflict isn’t resolved."
-                    "conflict" -> "The server returned a new conflict. Your edit is still on this device; review the updated versions."
-                    "uncertain", "sending" ->
-                        "The server didn’t confirm this choice. Your edit is still on this device; check its status before trying again."
-                    "rejected" ->
-                        if (resolvedWrite.lastErrorCode == "split-child-field-not-editable") {
-                            "Actual controls this split child field through its parent. The server rejected the edit."
-                        } else {
-                            "The server rejected this edit. Your previous Actual value remains unchanged."
-                        }
-                    else ->
-                        if (summary == null) {
-                            "The server didn’t confirm this choice. Your edit is still on this device and the conflict isn’t resolved."
-                        } else {
-                            "The server didn’t confirm this choice. Your edit is still on this device."
-                        }
-                }
-            reportConflictResolution(operationId, message)
             loadLocalRecords(budgetId)
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            val message =
-                if (replacementOperationId == null) {
-                    "The server didn’t confirm this conflict. Nothing was resolved; your edit is still on this device."
-                } else {
-                    "The server didn’t confirm this choice. Your edit is still on this device and the conflict isn’t resolved."
-                }
-            reportConflictResolution(operationId, message)
+            reportConflictResolution(
+                operationId,
+                "The server didn’t confirm this conflict. Nothing was resolved; your edit is still on this device.",
+            )
             loadLocalRecords(budgetId)
         } finally {
             isSavingTransaction = false
@@ -3459,7 +3374,7 @@ private fun JsonObject.stringValue(name: String): String? = (this[name] as? Json
 private fun JsonObject.longValue(name: String): Long? =
     (this[name] as? JsonPrimitive)?.let { it.longOrNull ?: it.contentOrNull?.toLongOrNull() }
 
-private fun JsonObject.toProjection(): LocalRecordProjection =
+internal fun JsonObject.toProjection(): LocalRecordProjection =
     LocalRecordProjection(
         recordDate = stringValue("date"),
         accountId = stringValue("account"),
