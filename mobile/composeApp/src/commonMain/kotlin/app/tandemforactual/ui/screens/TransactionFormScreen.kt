@@ -36,6 +36,8 @@ import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.model.LiveAccountSummary
+import app.tandemforactual.ui.model.recordBody
+import app.tandemforactual.ui.model.stringValue
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Receipt
@@ -81,6 +83,19 @@ internal fun TransactionFormScreen(
 
             val amountMinorUnits =
                 transactionAmountInputMagnitude(state.parseAmountMinorUnits(state.transactionAmount))
+            val transferDestinationAccountId =
+                remember(state.newTransactionPayeeId, mobileSession.payeeRecords) {
+                    mobileSession.payeeRecords
+                        .firstOrNull { it.recordId == state.newTransactionPayeeId }
+                        ?.recordBody()
+                        ?.stringValue("transfer_acct")
+                }
+            val transactionTargetIsValid =
+                if (state.transactionType == "Transfer") {
+                    isValidTransferDestination(state.newTransactionAccountId, transferDestinationAccountId)
+                } else {
+                    state.transactionCategory.isNotBlank()
+                }
 
             fun setAmount(minorUnits: Long) {
                 val magnitude = transactionAmountInputMagnitude(minorUnits)
@@ -197,36 +212,48 @@ internal fun TransactionFormScreen(
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         TransactionTypePicker(
                             state.transactionType,
+                            allowTransfer = true,
                             onBeforeOpen = ::dismissKeypad,
-                            onSelect = { state.transactionType = it },
+                            onSelect = { type ->
+                                if (type == "Transfer") {
+                                    state.transactionPayee = ""
+                                    state.newTransactionPayeeId = ""
+                                    state.transactionCategory = ""
+                                    state.newTransactionCategoryId = ""
+                                } else if (state.transactionType == "Transfer") {
+                                    state.transactionPayee = ""
+                                    state.newTransactionPayeeId = ""
+                                }
+                                state.transactionType = type
+                            },
                         )
                     }
                     SectionCard(title = "") {
-                        TransactionPickerRow(
-                            state.transactionPayee,
-                            "Choose payee",
-                            Lucide.Receipt,
-                        ) {
-                            dismissKeypad()
-                            navigation.open(AppRoute.CHOOSE_PAYEE)
-                        }
-                        DividerLine()
-                        TransactionPickerRow(
-                            state.transactionCategory,
-                            "Choose category",
-                            Lucide.Tags,
-                        ) {
-                            dismissKeypad()
-                            navigation.open(AppRoute.CHOOSE_CATEGORY)
-                        }
-                        DividerLine()
-                        TransactionPickerRow(
-                            state.transactionAccount,
-                            "Choose account",
-                            Lucide.WalletCards,
-                        ) {
-                            dismissKeypad()
-                            showAccountPicker = true
+                        if (state.transactionType == "Transfer") {
+                            TransactionPickerRow(state.transactionAccount, "Choose source account", Lucide.WalletCards) {
+                                dismissKeypad()
+                                showAccountPicker = true
+                            }
+                            DividerLine()
+                            TransactionPickerRow(state.transactionPayee, "Choose destination account", Lucide.WalletCards) {
+                                dismissKeypad()
+                                navigation.open(AppRoute.CHOOSE_PAYEE)
+                            }
+                        } else {
+                            TransactionPickerRow(state.transactionPayee, "Choose payee", Lucide.Receipt) {
+                                dismissKeypad()
+                                navigation.open(AppRoute.CHOOSE_PAYEE)
+                            }
+                            DividerLine()
+                            TransactionPickerRow(state.transactionCategory, "Choose category", Lucide.Tags) {
+                                dismissKeypad()
+                                navigation.open(AppRoute.CHOOSE_CATEGORY)
+                            }
+                            DividerLine()
+                            TransactionPickerRow(state.transactionAccount, "Choose account", Lucide.WalletCards) {
+                                dismissKeypad()
+                                showAccountPicker = true
+                            }
                         }
                         DividerLine()
                         TransactionPickerRow(
@@ -297,7 +324,7 @@ internal fun TransactionFormScreen(
                                 !mobileSession.isSavingTransaction &&
                                     state.newTransactionAccountId.isNotBlank() &&
                                     state.transactionPayee.isNotBlank() &&
-                                    state.transactionCategory.isNotBlank() &&
+                                    transactionTargetIsValid &&
                                     amountMinorUnits > 0,
                             onClick = {
                                 dismissKeypad()

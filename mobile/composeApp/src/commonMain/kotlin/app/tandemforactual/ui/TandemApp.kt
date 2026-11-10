@@ -910,12 +910,13 @@ fun TandemApp(
                         budgetId = state.selectedBudgetId,
                         accountId = state.newTransactionAccountId,
                         payeeId = state.newTransactionPayeeId.takeIf { it.isNotBlank() },
-                        categoryId = state.newTransactionCategoryId.takeIf { it.isNotBlank() },
+                        categoryId = state.newTransactionCategoryId.takeIf { it.isNotBlank() && state.transactionType != "Transfer" },
                         amountText = signedAmountText,
                         dateText = state.transactionDate,
                         notes = state.transactionNotes,
                         encryptionPassword = state.encryptedPassword.takeIf { it.isNotBlank() },
                         displaySettings = state.budgetDisplaySettings,
+                        isTransfer = state.transactionType == "Transfer",
                     )
                 if (created) {
                     restoreTransactionFormBaseline(state, AppRoute.NEW_TRANSACTION)

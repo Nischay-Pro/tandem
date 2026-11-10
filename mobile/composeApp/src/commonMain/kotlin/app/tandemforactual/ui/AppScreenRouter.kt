@@ -34,6 +34,7 @@ import app.tandemforactual.ui.model.LiveScheduleSummary
 import app.tandemforactual.ui.model.booleanValue
 import app.tandemforactual.ui.model.recordBody
 import app.tandemforactual.ui.model.recordName
+import app.tandemforactual.ui.model.stringValue
 import app.tandemforactual.ui.reports.ReportKind
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
@@ -214,37 +215,53 @@ internal fun ScreenContent(
         AppRoute.CHOOSE_PAYEE -> {
             val scope = rememberCoroutineScope()
             val isLiveBudget = state.selectedBudgetId.isNotBlank()
+            val selectingTransferDestination = isLiveBudget && state.transactionType == "Transfer"
+            val activePayees =
+                mobileSession.payeeRecords.filterNot { record ->
+                    val body = record.recordBody()
+                    record.localDeleted || record.remoteDeleted || body?.booleanValue("tombstone") == true
+                }
             val values =
                 if (!isLiveBudget) {
                     listOf("Corner Market", "Electric Company", "Acme Corp", "Riverside Cafe", "City Transit")
                         .map { SelectorItem(it, it) }
+                } else if (selectingTransferDestination) {
+                    activePayees
+                        .mapNotNull { record ->
+                            val destinationId = record.recordBody()?.stringValue("transfer_acct")
+                            val name = record.recordName()
+                            if (destinationId.isNullOrBlank() ||
+                                destinationId == state.newTransactionAccountId ||
+                                name.isNullOrBlank()
+                            ) {
+                                null
+                            } else {
+                                val accountName = name.removePrefix("Transfer:").trim().ifBlank { name }
+                                SelectorItem(record.recordId, accountName)
+                            }
+                        }.distinctBy { it.id }
                 } else {
                     listOf(SelectorItem("", "No payee")) +
-                        mobileSession.payeeRecords
-                            .mapNotNull { record ->
-                                record.recordName()?.let { SelectorItem(record.recordId, it) }
-                            }.distinctBy { it.id }
+                        activePayees
+                            .filter { it.recordBody()?.stringValue("transfer_acct").isNullOrBlank() }
+                            .mapNotNull { record -> record.recordName()?.let { SelectorItem(record.recordId, it) } }
+                            .distinctBy { it.id }
                 }
             val payeeGroups =
-                if (!isLiveBudget) {
+                if (!selectingTransferDestination || values.isEmpty()) {
                     emptyList()
                 } else {
-                    buildList {
-                        val transfers = values.filter { it.id.isNotBlank() && it.label.startsWith("Transfer:", ignoreCase = true) }
-                        val payees = values.filter { it.id.isNotBlank() && !it.label.startsWith("Transfer:", ignoreCase = true) }
-                        if (transfers.isNotEmpty()) add(SelectorGroup("Transfers", transfers))
-                        if (payees.isNotEmpty()) add(SelectorGroup("Payees", payees))
-                    }
+                    listOf(SelectorGroup("To account", values))
                 }
             SelectorScreen(
                 values,
                 if (isLiveBudget) state.newTransactionPayeeId else state.transactionPayee,
                 live = isLiveBudget,
                 groups = payeeGroups,
-                searchLabel = "Search payees",
-                searchPlaceholder = "Find a payee",
+                searchLabel = if (selectingTransferDestination) "Search accounts" else "Search payees",
+                searchPlaceholder = if (selectingTransferDestination) "Find an account" else "Find a payee",
                 topContent =
-                    if (isLiveBudget) {
+                    if (isLiveBudget && !selectingTransferDestination) {
                         {
                             SurfaceCard {
                                 ListRow(
@@ -260,35 +277,39 @@ internal fun ScreenContent(
                     if (isLiveBudget) {
                         { query ->
                             val newName = query.trim()
-                            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                                if (newName.isNotEmpty()) {
-                                    SurfaceCard {
-                                        ListRow(
-                                            if (mobileSession.isPerformingBudgetAction) "Adding payee…" else "Add $newName",
-                                            leading = RowLeading.Icon(Lucide.Plus),
-                                            onClick = {
-                                                if (!mobileSession.isPerformingBudgetAction) {
-                                                    scope.launch {
-                                                        val payeeId =
-                                                            mobileSession.createBudgetPayee(
-                                                                state.selectedBudgetId,
-                                                                newName,
-                                                                state.encryptedPassword.takeIf { it.isNotBlank() },
-                                                            )
-                                                        if (payeeId != null) {
-                                                            state.transactionPayee = newName
-                                                            state.newTransactionPayeeId = payeeId
-                                                            navigation.back()
+                            if (selectingTransferDestination) {
+                                EmptyState("No destination account found", modifier = Modifier.padding(TandemSpacing.large))
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                                    if (newName.isNotEmpty()) {
+                                        SurfaceCard {
+                                            ListRow(
+                                                if (mobileSession.isPerformingBudgetAction) "Adding payee…" else "Add $newName",
+                                                leading = RowLeading.Icon(Lucide.Plus),
+                                                onClick = {
+                                                    if (!mobileSession.isPerformingBudgetAction) {
+                                                        scope.launch {
+                                                            val payeeId =
+                                                                mobileSession.createBudgetPayee(
+                                                                    state.selectedBudgetId,
+                                                                    newName,
+                                                                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                                                                )
+                                                            if (payeeId != null) {
+                                                                state.transactionPayee = newName
+                                                                state.newTransactionPayeeId = payeeId
+                                                                navigation.back()
+                                                            }
                                                         }
                                                     }
-                                                }
-                                            },
-                                        )
+                                                },
+                                            )
+                                        }
+                                    } else {
+                                        EmptyState("No matches", modifier = Modifier.padding(TandemSpacing.large))
                                     }
-                                } else {
-                                    EmptyState("No matches", modifier = Modifier.padding(TandemSpacing.large))
+                                    mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
                                 }
-                                mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
                             }
                         }
                     } else {

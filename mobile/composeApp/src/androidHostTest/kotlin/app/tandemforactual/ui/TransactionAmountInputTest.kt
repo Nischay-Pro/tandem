@@ -54,4 +54,12 @@ class TransactionAmountInputTest {
         assertEquals(-11L, removeAmountDigit(-112L))
         assertEquals(0L, removeAmountDigit(9L))
     }
+
+    @Test
+    fun transferRequiresARealDestinationDifferentFromTheSource() {
+        assertTrue(isValidTransferDestination("checking", "savings"))
+        assertTrue(!isValidTransferDestination("checking", "checking"))
+        assertTrue(!isValidTransferDestination("checking", null))
+        assertTrue(!isValidTransferDestination("", "savings"))
+    }
 }

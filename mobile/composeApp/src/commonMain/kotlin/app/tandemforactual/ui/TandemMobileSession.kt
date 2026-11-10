@@ -2223,6 +2223,7 @@ internal class TandemMobileSession(
         notes: String,
         encryptionPassword: String?,
         displaySettings: BudgetDisplaySettings? = null,
+        isTransfer: Boolean = false,
     ): Boolean {
         transactionWriteMessage = null
         if (refuseWriteInReadOnlyMode()) return false
@@ -2260,6 +2261,23 @@ internal class TandemMobileSession(
             transactionWriteMessage = "Choose an existing payee or clear the payee field."
             return false
         }
+        val transferDestinationId =
+            payeeId
+                ?.let { id -> payeeRecords.firstOrNull { it.recordId == id } }
+                ?.recordBody()
+                ?.stringValue("transfer_acct")
+        if (isTransfer && transferDestinationId.isNullOrBlank()) {
+            transactionWriteMessage = "Choose a destination account for this transfer."
+            return false
+        }
+        if (isTransfer && transferDestinationId == accountId) {
+            transactionWriteMessage = "Choose a different destination account."
+            return false
+        }
+        if (!isTransfer && !transferDestinationId.isNullOrBlank()) {
+            transactionWriteMessage = "Choose Transfer as the transaction type for this payee."
+            return false
+        }
         val categoryIsPending =
             categoryId != null &&
                 budgetReorderQueue.moves.any {
@@ -2273,13 +2291,14 @@ internal class TandemMobileSession(
         }
         val transactionId = "tandem:${Uuid.random()}"
         val operationId = Uuid.random().toString()
+        val requestedCategoryId = categoryId.takeUnless { isTransfer }
         val patch =
             buildJsonObject {
                 put("account", account.recordId)
                 put("amount", amount)
                 put("date", date)
                 put("payee", payeeId?.let(::JsonPrimitive) ?: JsonNull)
-                put("category", categoryId?.let(::JsonPrimitive) ?: JsonNull)
+                put("category", requestedCategoryId?.let(::JsonPrimitive) ?: JsonNull)
                 put("notes", notes)
                 put("cleared", false)
             }
@@ -2323,7 +2342,7 @@ internal class TandemMobileSession(
                         LocalRecordProjection(
                             recordDate = date,
                             accountId = account.recordId,
-                            categoryId = categoryId,
+                            categoryId = requestedCategoryId,
                             payeeId = payeeId,
                             amountMinor = amount,
                             budgetMonth = date.take(7),

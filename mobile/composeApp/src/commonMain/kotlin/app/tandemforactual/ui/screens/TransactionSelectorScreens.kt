@@ -116,6 +116,7 @@ internal fun SelectorScreen(
 @Composable
 internal fun TransactionTypePicker(
     type: String,
+    allowTransfer: Boolean = false,
     onBeforeOpen: () -> Unit = {},
     onSelect: (String) -> Unit,
 ) {
@@ -126,7 +127,7 @@ internal fun TransactionTypePicker(
             expanded = true
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            listOf("Spending", "Income").forEach { choice ->
+            (if (allowTransfer) listOf("Spending", "Income", "Transfer") else listOf("Spending", "Income")).forEach { choice ->
                 DropdownMenuItem(
                     onClick = {
                         expanded = false
@@ -135,7 +136,12 @@ internal fun TransactionTypePicker(
                 ) {
                     Text(
                         choice,
-                        color = if (choice == "Income") tandemPalette.positive else tandemPalette.negative,
+                        color =
+                            when (choice) {
+                                "Income" -> tandemPalette.positive
+                                "Transfer" -> tandemPalette.accent
+                                else -> tandemPalette.negative
+                            },
                         fontSize = TandemTypography.compactBody,
                         fontWeight = FontWeight.SemiBold,
                     )

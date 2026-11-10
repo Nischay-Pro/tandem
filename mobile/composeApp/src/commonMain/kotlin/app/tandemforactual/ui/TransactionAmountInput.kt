@@ -6,6 +6,14 @@ import kotlin.math.roundToLong
 // Kept in sync with MAX_TRANSACTION_AMOUNT in the API reconciliation layer.
 internal const val MAX_TRANSACTION_AMOUNT_MINOR_UNITS = 1_000_000_000L
 
+internal fun isValidTransferDestination(
+    sourceAccountId: String,
+    destinationAccountId: String?,
+): Boolean =
+    sourceAccountId.isNotBlank() &&
+        !destinationAccountId.isNullOrBlank() &&
+        sourceAccountId != destinationAccountId
+
 internal fun transactionAmountInputMagnitude(minorUnits: Long?): Long {
     val magnitude =
         when (minorUnits) {
