@@ -11,10 +11,14 @@ class LocaleFormattingTest {
     @Test
     fun transactionDatesUseThePhoneLocaleMediumDateFormat() {
         withPhoneLocale(Locale.US) {
-            assertEquals("May 14, 2026", platformFormatDate(2026, 5, 14, includeYear = true))
+            val expected = "May 14, 2026"
+            assertEquals(expected, platformFormatDate(2026, 5, 14, includeYear = true))
+            assertEquals(expected, formatLiveDate("2026-05-14"))
         }
         withPhoneLocale(Locale.UK) {
-            assertEquals("14 May 2026", platformFormatDate(2026, 5, 14, includeYear = true))
+            val expected = "14 May 2026"
+            assertEquals(expected, platformFormatDate(2026, 5, 14, includeYear = true))
+            assertEquals(expected, formatLiveDate("2026-05-14"))
         }
     }
 

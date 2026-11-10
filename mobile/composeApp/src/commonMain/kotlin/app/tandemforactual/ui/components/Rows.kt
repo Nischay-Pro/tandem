@@ -59,6 +59,7 @@ internal data class ListRowOptions(
     val animateChanges: Boolean = false,
     val trailingAction: ListRowAction? = null,
     val showChevron: Boolean = true,
+    val subtitleMaxLines: Int = 3,
 )
 
 internal data class ListRowAction(
@@ -208,14 +209,14 @@ internal fun ListRow(
                         subtitle,
                         palette.muted,
                         fontSize = TandemTypography.caption,
-                        maxLines = 3,
+                        maxLines = options.subtitleMaxLines,
                     )
                 } else {
                     Text(
                         subtitle,
                         color = palette.muted,
                         fontSize = TandemTypography.caption,
-                        maxLines = 3,
+                        maxLines = options.subtitleMaxLines,
                     )
                 }
             }

@@ -528,7 +528,7 @@ internal fun ActivitySearchScreen(
                     state = resultsListState,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     contentPadding = PaddingValues(bottom = if (selectionMode) 88.dp else 0.dp),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
                 ) {
                     itemsIndexed(
                         sortedResultIndices,
@@ -553,6 +553,8 @@ internal fun ActivitySearchScreen(
                                 selectionMode = selectionMode,
                                 selected = transactionId != null && transactionId in selectedTransactionIds,
                                 showDateHeader = previousDate != record.dateIso,
+                                showAccount = true,
+                                showDivider = true,
                                 onLongClick =
                                     if (isLiveBudget && !state.readOnlyMode && transactionId != null) {
                                         {

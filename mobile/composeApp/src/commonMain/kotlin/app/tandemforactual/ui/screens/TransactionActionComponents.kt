@@ -5,9 +5,11 @@ package app.tandemforactual.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -43,11 +45,13 @@ internal fun TransactionRow(
     selected: Boolean = false,
     showDateHeader: Boolean = true,
     showAccount: Boolean = false,
+    showDivider: Boolean = false,
+    modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
-    Column {
+    Column(modifier) {
         if (showDateHeader) {
             Text(
                 transaction.dateLabel,
@@ -56,11 +60,7 @@ internal fun TransactionRow(
                 fontSize = TandemTypography.micro,
             )
         }
-        val secondaryLabel =
-            listOfNotNull(
-                transaction.category.takeIf(String::isNotBlank),
-                transaction.account.takeIf { showAccount && it.isNotBlank() },
-            ).joinToString(" · ")
+        val secondaryLabel = activityTransactionSubtitle(transaction, showAccount)
         ListRow(
             transaction.payee,
             secondaryLabel,
@@ -71,11 +71,36 @@ internal fun TransactionRow(
                 } else {
                     RowLeading.Merchant(transaction.merchantIcon, fallback = transaction.categoryIcon ?: Lucide.Receipt)
                 },
-            options = ListRowOptions(trailingColor = if (transaction.amountMinorUnits > 0) palette.positive else palette.text),
+            options =
+                ListRowOptions(
+                    trailingColor = if (transaction.amountMinorUnits > 0) palette.positive else palette.text,
+                    subtitleMaxLines = 1,
+                ),
             onClick = onClick,
             onLongClick = onLongClick,
         )
+        if (showDivider) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = TandemSpacing.large)
+                    .height(1.dp)
+                    .background(palette.border.copy(alpha = 0.35f)),
+            )
+        }
     }
+}
+
+internal fun activityTransactionSubtitle(
+    transaction: TransactionItem,
+    showAccount: Boolean,
+): String {
+    val note = transaction.notes.trim()
+    if (note.isNotEmpty()) return note
+    return listOfNotNull(
+        transaction.category.takeIf(String::isNotBlank),
+        transaction.account.takeIf { showAccount && it.isNotBlank() },
+    ).joinToString(" · ")
 }
 
 @Composable

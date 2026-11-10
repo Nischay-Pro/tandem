@@ -143,11 +143,15 @@ internal fun ActivityScreen(
     }
     Box(Modifier.fillMaxSize()) {
         PageLazyColumn(
+            verticalSpacing = TandemSpacing.xxSmall,
             isRefreshing = isRefreshing,
             onRefresh = onSyncNow.takeIf { isLiveBudget },
         ) {
             item(key = "activity-search-entry") {
-                SurfaceCard(onClick = { openGeneralActivitySearch(state, navigation) }) {
+                SurfaceCard(
+                    Modifier.padding(bottom = TandemSpacing.small),
+                    onClick = { openGeneralActivitySearch(state, navigation) },
+                ) {
                     Row(
                         Modifier.fillMaxWidth().padding(TandemSpacing.medium),
                         verticalAlignment = Alignment.CenterVertically,
@@ -190,39 +194,39 @@ internal fun ActivityScreen(
                         "activity:${transaction.recordId ?: "$index:${transaction.dateLabel}:${transaction.payee}:${transaction.amountMinorUnits}"}"
                     },
                 ) { index, transaction ->
-                    SurfaceCard(modifier = if (isLiveBudget) tandemListItemModifier(tandemReduceMotion) else Modifier) {
-                        val transactionId = transaction.recordId
-                        TransactionRow(
-                            transaction,
-                            selectionMode = selectionMode,
-                            selected = transactionId != null && transactionId in selectedTransactionIds,
-                            showDateHeader =
-                                shouldShowActivityDateHeader(
-                                    transaction.dateLabel,
-                                    sortedTransactions.getOrNull(index - 1)?.dateLabel,
-                                ),
-                            showAccount = showAccountName,
-                            onLongClick =
-                                if (isLiveBudget && !state.readOnlyMode && transactionId != null) {
-                                    {
-                                        selectionMode = true
-                                        selectedTransactionIds = selectedTransactionIds + transactionId
-                                    }
-                                } else {
-                                    null
-                                },
-                        ) {
-                            if (selectionMode && transactionId != null) {
-                                selectedTransactionIds =
-                                    if (transactionId in selectedTransactionIds) {
-                                        selectedTransactionIds - transactionId
-                                    } else {
-                                        selectedTransactionIds + transactionId
-                                    }
-                                if (selectedTransactionIds.isEmpty()) selectionMode = false
+                    val transactionId = transaction.recordId
+                    TransactionRow(
+                        transaction,
+                        selectionMode = selectionMode,
+                        selected = transactionId != null && transactionId in selectedTransactionIds,
+                        showDateHeader =
+                            shouldShowActivityDateHeader(
+                                transaction.dateLabel,
+                                sortedTransactions.getOrNull(index - 1)?.dateLabel,
+                            ),
+                        showAccount = showAccountName,
+                        showDivider = true,
+                        modifier = if (isLiveBudget) tandemListItemModifier(tandemReduceMotion) else Modifier,
+                        onLongClick =
+                            if (isLiveBudget && !state.readOnlyMode && transactionId != null) {
+                                {
+                                    selectionMode = true
+                                    selectedTransactionIds = selectedTransactionIds + transactionId
+                                }
                             } else {
-                                openTransaction(state, navigation, transaction, isLive = isLiveBudget)
-                            }
+                                null
+                            },
+                    ) {
+                        if (selectionMode && transactionId != null) {
+                            selectedTransactionIds =
+                                if (transactionId in selectedTransactionIds) {
+                                    selectedTransactionIds - transactionId
+                                } else {
+                                    selectedTransactionIds + transactionId
+                                }
+                            if (selectedTransactionIds.isEmpty()) selectionMode = false
+                        } else {
+                            openTransaction(state, navigation, transaction, isLive = isLiveBudget)
                         }
                     }
                 }

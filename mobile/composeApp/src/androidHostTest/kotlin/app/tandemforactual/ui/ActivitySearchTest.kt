@@ -10,6 +10,24 @@ import kotlin.test.assertTrue
 
 class ActivitySearchTest {
     @Test
+    fun activityRowsUseOneQuietLineForNotesOrCategoryAndAccount() {
+        val transaction =
+            TransactionItem(
+                payee = "Corner Market",
+                category = "Groceries",
+                dateLabel = "May 14, 2026",
+                amountMinorUnits = -4_218,
+                icon = "C",
+                account = "Checking",
+                notes = "  Weekly groceries  ",
+            )
+
+        assertEquals("Weekly groceries", activityTransactionSubtitle(transaction, showAccount = true))
+        assertEquals("Groceries · Checking", activityTransactionSubtitle(transaction.copy(notes = ""), showAccount = true))
+        assertEquals("Groceries", activityTransactionSubtitle(transaction.copy(notes = ""), showAccount = false))
+    }
+
+    @Test
     fun activityDateHeaderAppearsOnlyAtAdjacentDateBoundaries() {
         assertTrue(shouldShowActivityDateHeader("Nov 5, 2026", null))
         assertFalse(shouldShowActivityDateHeader("Nov 5, 2026", "Nov 5, 2026"))
