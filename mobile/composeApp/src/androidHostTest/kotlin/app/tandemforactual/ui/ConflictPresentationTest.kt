@@ -2,6 +2,7 @@ package app.tandemforactual.ui
 
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import org.junit.Rule
@@ -10,6 +11,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -109,5 +111,28 @@ class ConflictPresentationTest {
 
         listOf("Changed details", "Payee", "Target", "Costco", "Notes", "Hardware", "Groceries", "Uncleared")
             .forEach { composeTestRule.onNodeWithText(it).assertExists() }
+    }
+
+    @Test
+    fun cancellingKeepLastSyncedConfirmationKeepsTheConflictEdit() {
+        var editDiscarded = false
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                KeepLastSyncedConflictAction(
+                    operationId = "conflicted-edit",
+                    enabled = true,
+                    onResolveConflict = { _, keepYourEdit ->
+                        if (!keepYourEdit) editDiscarded = true
+                    },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Keep last synced").performClick()
+        composeTestRule.onNodeWithText("Discard your edit?").assertExists()
+        composeTestRule.onNodeWithText("Keep editing").performClick()
+
+        composeTestRule.onNodeWithText("Discard your edit?").assertDoesNotExist()
+        assertFalse(editDiscarded)
     }
 }

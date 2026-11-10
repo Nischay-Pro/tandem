@@ -272,7 +272,6 @@ internal fun ConflictReviewScreen(
         mobileSession.pendingWrites.firstOrNull {
             it.operationId == state.selectedConflictOperationId && it.status == "conflict"
         }
-    var confirmKeepLastSynced by rememberSaveable(operation?.operationId) { mutableStateOf(false) }
     var serverCheckAttempt by rememberSaveable(operation?.operationId) { mutableStateOf(0) }
     LaunchedEffect(operation?.operationId, serverCheckAttempt) {
         operation?.let {
@@ -405,31 +404,42 @@ internal fun ConflictReviewScreen(
                         !mobileSession.isSavingTransaction &&
                         (operation.action == "DELETE" || record?.remoteDeleted != true),
             ) { onResolveConflict(operation.operationId, true) }
-            SecondaryButton(
-                "Keep last synced",
+            KeepLastSyncedConflictAction(
+                operationId = operation.operationId,
                 enabled = serverConfirmed && !state.readOnlyMode && !mobileSession.isSavingTransaction,
-            ) { confirmKeepLastSynced = true }
-            Text(
-                "Discards your edit and keeps Actual’s version. The server must confirm it first.",
-                color = tandemPalette.muted,
-                fontSize = TandemTypography.caption,
+                onResolveConflict = onResolveConflict,
             )
         }
     }
-    if (confirmKeepLastSynced && operation != null) {
+}
+
+@Composable
+internal fun KeepLastSyncedConflictAction(
+    operationId: String,
+    enabled: Boolean,
+    onResolveConflict: (String, Boolean) -> Unit,
+) {
+    var confirmDiscard by rememberSaveable(operationId) { mutableStateOf(false) }
+    SecondaryButton(
+        "Keep last synced",
+        enabled = enabled,
+    ) { confirmDiscard = true }
+    Text(
+        "Discards your edit and keeps Actual’s version. The server must confirm it first.",
+        color = tandemPalette.muted,
+        fontSize = TandemTypography.caption,
+    )
+    if (confirmDiscard) {
         DestructiveConfirmationDialog(
             title = "Discard your edit?",
             message = "Tandem will check Actual’s latest version, then remove your edit from this device. Actual won’t be changed.",
             confirmLabel = "Discard edit",
             dismissLabel = "Keep editing",
-            enabled =
-                serverConfirmed &&
-                    !state.readOnlyMode &&
-                    !mobileSession.isSavingTransaction,
-            onDismissRequest = { confirmKeepLastSynced = false },
+            enabled = enabled,
+            onDismissRequest = { confirmDiscard = false },
             onConfirm = {
-                confirmKeepLastSynced = false
-                onResolveConflict(operation.operationId, false)
+                confirmDiscard = false
+                onResolveConflict(operationId, false)
             },
         )
     }
