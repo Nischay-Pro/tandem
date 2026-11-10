@@ -20,6 +20,7 @@ import { ActualBudgetSnapshotReader } from "../src/actual/budget-snapshot-reader
 import { createBudgetMaintenanceApi } from "../src/actual/budget-maintenance-api.js";
 import { createTransactionApi } from "../src/actual/transaction-api.js";
 import { TransactionReconciler } from "../src/actual/transaction-reconciler.js";
+import type { JsonValue } from "../src/write-journal/contracts.js";
 import {
   MAX_TRANSACTION_AMOUNT,
   createTransactionRevision,
@@ -1662,6 +1663,184 @@ describe.skipIf(!compatibilityTestEnabled)(
         };
       } finally {
         await firstDevice.close();
+      }
+    }, 60_000);
+
+    it("recovers an applied uncertain edit after the Tandem API process restarts", async () => {
+      if (
+        !serverURL ||
+        !serverPassword ||
+        !firstDataDir ||
+        !database ||
+        !compatibilityDatabaseUrl
+      ) {
+        throw new Error(
+          "Actual restart compatibility test configuration is missing",
+        );
+      }
+
+      const fixtureRoot = path.join(
+        firstDataDir,
+        `uncertain-restart-${randomUUID()}`,
+      );
+      const ownerDataDir = path.join(fixtureRoot, "owner");
+      const runtimeDataDir = path.join(fixtureRoot, "api");
+      await Promise.all([
+        mkdir(ownerDataDir, { recursive: true }),
+        mkdir(runtimeDataDir, { recursive: true }),
+      ]);
+
+      const budgetName = `ABC uncertain restart budget ${randomUUID()}`;
+      const accountName = `ABC uncertain restart checking ${randomUUID()}`;
+      const transactionDate = "2026-11-10";
+      const baselineNotes = `ABC uncertain restart baseline ${randomUUID()}`;
+      const owner = createCompatibilitySession({
+        serverURL,
+        dataDir: ownerDataDir,
+        password: serverPassword,
+      });
+      let budgetId: string;
+      let transactionId: string;
+      let baseSnapshot: TransactionSnapshot;
+
+      try {
+        let accountId = "";
+        await owner.execute(
+          () =>
+            Actual.runImport(budgetName, async () => {
+              accountId = await Actual.createAccount(
+                { name: accountName, offbudget: false },
+                0,
+              );
+              await Actual.addTransactions(accountId, [
+                {
+                  date: transactionDate,
+                  amount: -1500,
+                  notes: baselineNotes,
+                },
+              ]);
+            }),
+          { synchronizeAfterWrite: true },
+        );
+
+        const seed = await owner.execute(async () => {
+          const budget = (await Actual.getBudgets()).find(
+            (item) => item.name === budgetName && item.groupId,
+          );
+          const account = (await Actual.getAccounts()).find(
+            (item) => item.name === accountName,
+          );
+          if (!budget?.groupId || !account) {
+            throw new Error(
+              "Actual did not return the uncertain-write fixture",
+            );
+          }
+          const transaction = (
+            await Actual.getTransactions(
+              account.id,
+              transactionDate,
+              transactionDate,
+            )
+          ).find((item) => item.notes === baselineNotes);
+          if (!transaction?.id) {
+            throw new Error(
+              "Actual did not return the uncertain-write transaction",
+            );
+          }
+          return { budgetId: budget.groupId, transaction };
+        });
+        budgetId = seed.budgetId;
+        transactionId = seed.transaction.id;
+        baseSnapshot = snapshotActualTransaction(seed.transaction);
+
+        await owner.runBudget(
+          budgetId,
+          () => Actual.updateTransaction(transactionId, { amount: -1200 }),
+          { synchronizeAfterWrite: true },
+        );
+      } finally {
+        await owner.close();
+      }
+
+      const principalId = `uncertain-restart-${randomUUID()}`;
+      const device = await database.deviceAuth.createDevice({
+        principalId,
+        budgetIds: [budgetId],
+        deviceName: "Synthetic restart test",
+      });
+      const operationId = randomUUID();
+      const idempotencyKey = randomUUID();
+      await database.journal.enqueue({
+        operationId,
+        principalId,
+        budgetId,
+        idempotencyKey,
+        entityType: "transaction",
+        action: "update",
+        entityId: transactionId,
+        baseRevision: createTransactionRevision(baseSnapshot),
+        baseSnapshot: baseSnapshot as unknown as JsonValue,
+        patch: { amount: -1200 },
+      });
+      expect((await database.journal.claim(operationId)).claimed).toBe(true);
+      await database.journal.markUncertain(operationId, "claim-lease-expired");
+
+      const sessionToken = await loginCompatibilitySessionToken(
+        serverURL,
+        serverPassword,
+      );
+      const startApi = async () => {
+        const signalHandlers = new Map<ShutdownSignal, () => Promise<void>>();
+        const app = await runApi(
+          {
+            DATABASE_URL: compatibilityDatabaseUrl,
+            AUTH_TOKEN_ENCRYPTION_KEY: authTokenEncryptionKey,
+            ACTUAL_SERVER_URL: serverURL,
+            ACTUAL_SESSION_TOKEN: sessionToken,
+            ACTUAL_API_DATA_DIR: runtimeDataDir,
+            HOST: "127.0.0.1",
+            PORT: String(await findAvailablePort()),
+          },
+          createPostgresDatabase,
+          (signal, handler) => signalHandlers.set(signal, handler),
+        );
+        return {
+          app,
+          async stop() {
+            await signalHandlers.get("SIGTERM")?.();
+          },
+        };
+      };
+
+      let runtime: Awaited<ReturnType<typeof startApi>> | undefined;
+      try {
+        runtime = await startApi();
+        await runtime.stop();
+        runtime = await startApi();
+
+        const response = await runtime.app.inject({
+          method: "GET",
+          url: `/api/v1/operations/${operationId}`,
+          headers: { authorization: `Bearer ${device.accessToken}` },
+        });
+        expect(response.statusCode).toBe(200);
+        expect(response.json().operation.status).toBe("committed");
+        expect((await database.journal.get(operationId))?.status).toBe(
+          "committed",
+        );
+
+        const transactionResponse = await runtime.app.inject({
+          method: "GET",
+          url: `/api/v1/budgets/${budgetId}/transactions/${transactionId}`,
+          headers: { authorization: `Bearer ${device.accessToken}` },
+        });
+        expect(transactionResponse.statusCode).toBe(200);
+        expect(transactionResponse.json().transaction).toMatchObject({
+          id: transactionId,
+          amount: -1200,
+        });
+      } finally {
+        await runtime?.stop();
       }
     }, 60_000);
 
