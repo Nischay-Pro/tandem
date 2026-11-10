@@ -119,4 +119,13 @@ class MerchantIconMatchingTest {
             ),
         )
     }
+
+    @Test
+    fun closedAccountsSortAfterEveryOpenAccountGroup() {
+        val closedOrder = accountGroupOrder("Closed")
+
+        assertTrue(closedOrder > accountGroupOrder("On budget · Other"))
+        assertTrue(closedOrder > accountGroupOrder("Off budget · Investment"))
+        assertTrue(closedOrder > accountGroupOrder("Unrecognized account group"))
+    }
 }

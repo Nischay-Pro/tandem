@@ -18,7 +18,6 @@ import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -31,7 +30,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.ListRowOptions
@@ -119,7 +117,7 @@ internal fun accountGroupOrder(groupName: String): Int {
             else -> 8
         }
     return when {
-        name == "closed" -> 2_000
+        name == "closed" -> Int.MAX_VALUE
         name.startsWith("on budget") -> typeOrder
         name.startsWith("off budget") -> 1_000 + typeOrder
         else -> 3_000
@@ -205,6 +203,7 @@ internal fun AccountsScreen(
         }
 
     PageLazyColumn(
+        verticalSpacing = TandemSpacing.small,
         isRefreshing = isRefreshing,
         onRefresh = runBankSync.takeIf { isLiveBudget && !state.readOnlyMode },
     ) {
@@ -244,9 +243,9 @@ internal fun AccountsScreen(
                             Spacer(Modifier.weight(1f))
                             Text(group.total, color = tandemPalette.muted, fontSize = TandemTypography.caption, maxLines = 1)
                         }
-                        SurfaceCard {
-                            Column {
-                                group.accounts.forEachIndexed { index, account ->
+                        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                            group.accounts.forEach { account ->
+                                SurfaceCard {
                                     ListRow(
                                         account.name,
                                         trailing = account.balance,
@@ -257,7 +256,7 @@ internal fun AccountsScreen(
                                             ),
                                         options =
                                             ListRowOptions(
-                                                dense = true,
+                                                muted = account.closed,
                                                 trailingColor =
                                                     when {
                                                         account.closed || account.balanceMinor == null || account.balanceMinor == 0L ->
@@ -271,7 +270,6 @@ internal fun AccountsScreen(
                                             navigation.open(AppRoute.ACCOUNT_DETAIL)
                                         },
                                     )
-                                    if (index < group.accounts.lastIndex) DividerLine()
                                 }
                             }
                         }

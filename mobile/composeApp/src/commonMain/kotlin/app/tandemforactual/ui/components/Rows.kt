@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -56,6 +57,7 @@ import org.jetbrains.compose.resources.painterResource
 internal data class ListRowOptions(
     val trailingColor: Color? = null,
     val dense: Boolean = false,
+    val muted: Boolean = false,
     val animateChanges: Boolean = false,
     val trailingAction: ListRowAction? = null,
     val showChevron: Boolean = true,
@@ -106,6 +108,7 @@ internal fun ListRow(
     trailingContent: (@Composable () -> Unit)? = null,
 ) {
     val palette = tandemPalette
+    val titleColor = if (options.muted) palette.muted else palette.text
     val stackTrailing = LocalDensity.current.fontScale >= 1.5f
     val merchantResource = (leading as? RowLeading.Merchant)?.resource
     val resolvedPainter = merchantResource?.let { painterResource(it) }
@@ -153,7 +156,7 @@ internal fun ListRow(
                         .size(
                             if (options.dense) 36.dp else 44.dp,
                         ).clip(RoundedCornerShape(TandemShapes.medium))
-                        .background(palette.raised),
+                        .background(if (options.muted) palette.surface else palette.raised),
                 contentAlignment = Alignment.Center,
             ) {
                 when {
@@ -161,7 +164,11 @@ internal fun ListRow(
                         Image(
                             painter = resolvedPainter,
                             contentDescription = null,
-                            modifier = Modifier.size(if (options.dense) 28.dp else 32.dp).padding(TandemSpacing.xxSmall),
+                            modifier =
+                                Modifier
+                                    .size(if (options.dense) 28.dp else 32.dp)
+                                    .padding(TandemSpacing.xxSmall)
+                                    .alpha(if (options.muted) 0.48f else 1f),
                             contentScale = ContentScale.Fit,
                         )
                     }
@@ -170,14 +177,14 @@ internal fun ListRow(
                             imageVector = resolvedVector,
                             contentDescription = null,
                             modifier = Modifier.size(if (options.dense) 24.dp else 30.dp),
-                            tint = palette.accent,
+                            tint = if (options.muted) palette.muted else palette.accent,
                         )
                     }
                     leading is RowLeading.Letter -> {
                         Text(
                             leading.value,
                             modifier = Modifier.clearAndSetSemantics {},
-                            color = palette.accent,
+                            color = titleColor,
                             fontSize = if (options.dense) TandemTypography.action else TandemTypography.cardTitle,
                             fontWeight = FontWeight.Bold,
                         )
@@ -189,7 +196,7 @@ internal fun ListRow(
             if (options.animateChanges) {
                 AnimatedStatusText(
                     title,
-                    palette.text,
+                    titleColor,
                     fontSize = TandemTypography.body,
                     fontWeight = FontWeight.Medium,
                     maxLines = 2,
@@ -197,7 +204,7 @@ internal fun ListRow(
             } else {
                 Text(
                     title,
-                    color = palette.text,
+                    color = titleColor,
                     fontSize = TandemTypography.body,
                     fontWeight = FontWeight.Medium,
                     maxLines = 2,
@@ -229,7 +236,7 @@ internal fun ListRow(
                 if (options.animateChanges) {
                     AnimatedStatusText(
                         trailing,
-                        options.trailingColor ?: palette.muted,
+                        if (options.muted) palette.muted else options.trailingColor ?: palette.muted,
                         fontSize = TandemTypography.compactBody,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 2,
@@ -237,7 +244,7 @@ internal fun ListRow(
                 } else {
                     Text(
                         trailing,
-                        color = options.trailingColor ?: palette.muted,
+                        color = if (options.muted) palette.muted else options.trailingColor ?: palette.muted,
                         fontSize = TandemTypography.compactBody,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 2,
@@ -248,7 +255,7 @@ internal fun ListRow(
         if (!stackTrailing && trailingContent != null) {
             trailingContent()
         } else if (trailing != null && !stackTrailing) {
-            val effectiveColor = options.trailingColor ?: palette.muted
+            val effectiveColor = if (options.muted) palette.muted else options.trailingColor ?: palette.muted
             if (options.animateChanges) {
                 AnimatedStatusText(
                     trailing,
