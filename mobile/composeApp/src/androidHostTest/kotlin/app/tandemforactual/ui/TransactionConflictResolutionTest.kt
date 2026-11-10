@@ -28,7 +28,7 @@ class TransactionConflictResolutionTest {
             assertEquals("discarded", store.writes[CONFLICT_ID]?.status)
             assertTrue(store.requests.isEmpty())
             assertEquals(0, sync.syncCalls)
-            assertEquals("The server confirmed Actual’s latest copy. Kept it on this device and discarded your edit.", message)
+            assertEquals("The server confirmed Actual’s latest version. Tandem kept that version and removed your edit.", message)
         }
 
     @Test
@@ -42,8 +42,9 @@ class TransactionConflictResolutionTest {
             assertEquals("conflict", store.writes[CONFLICT_ID]?.status)
             assertTrue(store.requests.isEmpty())
             assertEquals(0, sync.syncCalls)
-            assertTrue(message.contains("Nothing was resolved"))
-            assertTrue(message.contains("your edit is still on this device"))
+            assertTrue(message.contains("The server hasn’t confirmed your choice"))
+            assertTrue(message.contains("Your edit remains on this device"))
+            assertTrue(message.contains("Check the connection and try again"))
         }
 
     @Test
@@ -94,7 +95,7 @@ class TransactionConflictResolutionTest {
             assertEquals("discarded", store.writes[CONFLICT_ID]?.status)
             assertTrue(store.requests.isEmpty())
             assertEquals(0, sync.syncCalls)
-            assertTrue(message.contains("Cleared the pending deletion"))
+            assertTrue(message.contains("Tandem removed the waiting deletion"))
         }
 
     @Test
@@ -107,7 +108,7 @@ class TransactionConflictResolutionTest {
 
             assertEquals("conflict", store.writes[CONFLICT_ID]?.status)
             assertTrue(store.requests.isEmpty())
-            assertTrue(message.contains("Nothing was changed"))
+            assertTrue(message.contains("Sync the budget and try again"))
         }
 
     @Test
@@ -120,7 +121,7 @@ class TransactionConflictResolutionTest {
 
             assertEquals("superseded", store.writes[CONFLICT_ID]?.status)
             assertEquals("conflict", store.writes[REPLACEMENT_ID]?.status)
-            assertTrue(message.contains("review the updated versions"))
+            assertTrue(message.contains("Review the versions again"))
         }
 
     @Test
@@ -133,7 +134,7 @@ class TransactionConflictResolutionTest {
 
             assertEquals("superseded", store.writes[CONFLICT_ID]?.status)
             assertEquals("queued", store.writes[REPLACEMENT_ID]?.status)
-            assertTrue(message.contains("conflict isn’t resolved"))
+            assertTrue(message.contains("Check the connection and try again"))
         }
 
     private fun workflow(

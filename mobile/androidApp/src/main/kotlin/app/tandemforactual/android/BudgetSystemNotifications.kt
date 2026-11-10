@@ -26,7 +26,7 @@ internal object BudgetSystemNotifications {
             context,
             SYNC_FAILURE_ID,
             "Budget sync needs attention",
-            "Tandem couldn’t refresh your budget. Open the app to retry.",
+            "Tandem couldn’t refresh your budget. Open Tandem and try again.",
         )
     }
 
@@ -41,21 +41,26 @@ internal object BudgetSystemNotifications {
 
     fun conflicts(context: Context, count: Int) {
         if (count <= 0) return
+        val noun = if (count == 1) "budget change" else "budget changes"
+        val verb = if (count == 1) "needs" else "need"
         show(
             context,
             CONFLICT_ID,
-            "Budget changes need review",
-            "$count change${if (count == 1) "" else "s"} need${if (count == 1) "s" else ""} your choice.",
+            "Needs review",
+            "$count $noun $verb review in Tandem. Open Tandem to choose which version to keep.",
         )
     }
 
     fun rejected(context: Context, count: Int) {
         if (count <= 0) return
+        val noun = if (count == 1) "edit" else "edits"
+        val verb = if (count == 1) "needs" else "need"
+        val review = if (count == 1) "Review the edit" else "Review the edits"
         show(
             context,
             REJECTED_ID,
-            "An edit wasn’t applied",
-            "$count edit${if (count == 1) "" else "s"} need${if (count == 1) "s" else ""} review.",
+            "Rejected",
+            "$count rejected $noun $verb review. $review in Tandem.",
         )
     }
 

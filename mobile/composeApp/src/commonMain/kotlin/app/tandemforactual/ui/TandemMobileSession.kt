@@ -89,7 +89,7 @@ internal fun pendingTransactionEditMessage(): String = "This transaction is wait
 internal fun blockedTransactionEditMessage(status: String): String =
     when (status) {
         "conflict" -> "Review this transaction in Pending Changes before editing it."
-        "uncertain" -> "This transaction needs confirmation. Check Pending Changes before editing again."
+        "uncertain" -> "This transaction’s status is unknown. Check Pending Changes before editing it again."
         else -> "This transaction is syncing. Wait for it to finish before editing."
     }
 
@@ -3056,7 +3056,7 @@ internal class TandemMobileSession(
         } catch (_: Exception) {
             reportConflictResolution(
                 operationId,
-                "The server didn’t confirm this conflict. Nothing was resolved; your edit is still on this device.",
+                "The server hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again.",
             )
             loadLocalRecords(budgetId)
         } finally {

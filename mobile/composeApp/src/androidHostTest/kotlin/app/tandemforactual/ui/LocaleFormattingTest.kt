@@ -125,9 +125,9 @@ class LocaleFormattingTest {
         val germany = displaySettings(currencyCode = "EUR", numberFormat = "dot-comma", currencySymbol = "€")
         val yen = displaySettings(currencyCode = "JPY", numberFormat = "comma-dot", currencySymbol = "¥", currencyFractionDigits = 0)
 
-        assertEquals("Use a period for cents in this budget.", transactionAmountInputError("12,50", us))
-        assertEquals("Use a comma for cents in this budget.", transactionAmountInputError("12.50", germany))
-        assertEquals("This budget uses whole-unit amounts.", transactionAmountInputError("12.50", yen))
+        assertEquals("Use a period for decimals in this budget, such as 12.00.", transactionAmountInputError("12,50", us))
+        assertEquals("Use a comma for decimals in this budget, such as 12,00.", transactionAmountInputError("12.50", germany))
+        assertEquals("This budget doesn’t use decimals. Enter a whole amount, such as 12.", transactionAmountInputError("12.50", yen))
     }
 
     @Test

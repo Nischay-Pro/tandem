@@ -131,8 +131,8 @@ internal enum class AppRoute(
     CHOOSE_CATEGORY("Choose category"),
     SYNC_CENTER("Sync center"),
     CONFLICT_INBOX("Needs review"),
-    CONFLICT_REVIEW("Review conflict"),
-    UNCERTAIN_WRITE("Change status"),
+    CONFLICT_REVIEW("Review versions"),
+    UNCERTAIN_WRITE("Status unknown"),
     SETTINGS("Settings"),
     APPEARANCE("Appearance"),
     BUDGET_PREFERENCES("Budget preferences"),
@@ -180,9 +180,9 @@ internal fun writeStatusLabel(status: String): String =
     when (status) {
         "queued" -> "Waiting to sync"
         "sending" -> "Syncing"
-        "uncertain" -> "Needs confirmation"
+        "uncertain" -> "Status unknown"
         "conflict" -> "Needs review"
-        "rejected" -> "Not applied"
+        "rejected" -> "Rejected"
         "committed" -> "Saved"
         "discarded" -> "Discarded"
         else -> "Change"

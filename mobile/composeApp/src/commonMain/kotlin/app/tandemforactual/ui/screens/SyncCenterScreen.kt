@@ -179,9 +179,9 @@ internal fun SyncCenterScreen(
                         ListRow(
                             title,
                             when (operation.status) {
-                                "uncertain" -> "Needs confirmation · Check Actual before trying again"
-                                "conflict" -> "Needs review · The budget changed in Actual"
-                                else -> "Change not applied · Review it before trying again"
+                                "uncertain" -> "Status unknown · Check Actual before trying again"
+                                "conflict" -> "Needs review · Refresh the budget before trying again"
+                                else -> "Rejected · Review the change before trying again"
                             },
                             "Review",
                             leading = RowLeading.Icon(Lucide.CloudAlert),

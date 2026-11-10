@@ -255,7 +255,7 @@ class TandemMobileSessionTest {
             pendingTransactionEditMessage(),
         )
         assertEquals(
-            "This transaction needs confirmation. Check Pending Changes before editing again.",
+            "This transaction’s status is unknown. Check Pending Changes before editing it again.",
             blockedTransactionEditMessage("uncertain"),
         )
         assertEquals(

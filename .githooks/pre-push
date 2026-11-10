@@ -15,6 +15,7 @@ fi
 
 python3 scripts/check-mobile-ui-apostrophes.py
 python3 scripts/check-mobile-design-tokens.py
+python3 scripts/check-mobile-ui-vocabulary.py
 
 if [ ! -x "$repo_root/node_modules/.bin/eslint" ]; then
   printf '%s\n' 'ESLint checks need the JavaScript dependencies. Run pnpm install first.' >&2

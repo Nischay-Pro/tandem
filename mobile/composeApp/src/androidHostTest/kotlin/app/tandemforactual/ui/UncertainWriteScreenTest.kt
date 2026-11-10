@@ -42,7 +42,7 @@ class UncertainWriteScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Still unconfirmed").assertExists()
+        composeTestRule.onNodeWithText("Status unknown").assertExists()
         composeTestRule
             .onNodeWithText(
                 "Actual still can’t confirm whether this edit was saved. You can try again or remove it.",

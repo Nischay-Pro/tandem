@@ -54,6 +54,32 @@ follows the selected light, dark, or system mode alongside the Compose screens.
 Keep action labels consistent when the surrounding screen already makes the
 object clear. Use a short next step in error messages, such as “Try again.”
 
+### Messages about an edit or a sync
+
+These rules apply to every message that reports what happened to a person’s
+edit. They follow the Apple Human Interface Guidelines for writing.
+
+- Say what happened to the edit first, then what to do. For example: “Your edit
+  is still on this device. Try again.” If nothing is needed, say so.
+- Every message that reports a failure ends with a next step. “Nothing was
+  changed.” alone is not enough.
+- Write whole sentences with a subject. Name the thing you mean instead of
+  “it” or “here”: “Tandem removed the waiting deletion”, not “Cleared the
+  pending deletion here.”
+- Use the words people see on screen. Do not put internal terms in a message,
+  such as “split child”, “revision”, “operation”, or “projection”.
+- Name the states the same way on the badge, the row, the banner, and in
+  messages: Needs review, Status unknown, and Rejected. Do not mix in
+  “conflict” or “uncertain” as a status name. “Conflict” may still name the two
+  differing versions on the review screen.
+- For an amount that is refused, say which mark to use and give an example
+  that fits the budget. Say “decimals” rather than “cents” unless the currency
+  has exactly two decimal places.
+- Use curly apostrophes in text. The apostrophe check in CI enforces this.
+- Keep an alert switch for a phone notification separate from the in-app
+  banner. A banner for a change that needs review, a rejected edit, or an edit
+  with an unknown status always shows, whatever the notification switches say.
+
 Android builds and physical-device display checks run from Linux. The shared
 Kotlin targets compile for iOS here, but the native Swift host, Xcode asset
 catalog, and iOS launch screen need a macOS/Xcode build for verification.

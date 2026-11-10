@@ -1029,6 +1029,22 @@ class TandemApiClientTest {
     }
 
     @Test
+    fun budgetMutationErrorCodesHaveDistinctActionableMessages() {
+        val messages =
+            mapOf(
+                "operation_uncertain" to "Tandem couldn’t confirm whether Actual saved this change. Check Actual, then try again.",
+                "operation_in_progress" to "The server is still processing this change. Wait a moment, then try again.",
+                "operation_rejected" to "Actual rejected this change earlier. Refresh the budget, then try again.",
+                "idempotency_key_reused" to "Tandem matched this change to a different request. Refresh the budget, then try again.",
+                "operation_result_unavailable" to "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget.",
+            )
+
+        messages.forEach { (errorCode, message) ->
+            assertEquals(message, TandemApiException(errorCode, httpStatus = 409).message, errorCode)
+        }
+    }
+
+    @Test
     fun importingStatementTransactionsValidatesRequestsAndResponses() =
         runBlocking {
             val requests = mutableListOf<HttpRequestData>()

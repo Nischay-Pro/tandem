@@ -258,7 +258,7 @@ internal fun NotificationsScreen(
                 }
             }
         }
-        SectionCard("Alert preferences") {
+        SectionCard("Phone notifications") {
             ToggleRow(
                 "Sync reminders",
                 "When background sync fails",
@@ -268,7 +268,7 @@ internal fun NotificationsScreen(
             }
             DividerLine()
             ToggleRow(
-                "Review alerts",
+                "Needs review alerts",
                 "When a change needs review",
                 state.conflictReviewAlerts,
             ) {
@@ -284,6 +284,6 @@ internal fun NotificationsScreen(
                 state.rejectedEditAlerts = it
             }
         }
-        InfoBubble("In-app alerts appear when you open Tandem.")
+        InfoBubble("In-app banners always show, even when phone notifications are off.")
     }
 }

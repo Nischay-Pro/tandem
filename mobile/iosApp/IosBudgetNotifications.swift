@@ -30,18 +30,18 @@ final class IosBudgetNotifications {
         post(
             identifier: "tandem-sync-failed",
             title: "Budget sync needs attention",
-            body: "Tandem couldn’t refresh your budget. Open the app to retry."
+            body: "Tandem couldn’t refresh your budget. Open Tandem and try again."
         )
     }
 
     func conflicts(_ count: Int32) {
         guard count > 0 else { return }
-        let noun = count == 1 ? "change" : "changes"
+        let noun = count == 1 ? "budget change" : "budget changes"
         let verb = count == 1 ? "needs" : "need"
         post(
             identifier: "tandem-conflicts",
-            title: "Budget changes need review",
-            body: "\(count) \(noun) \(verb) your choice."
+            title: "Needs review",
+            body: "\(count) \(noun) \(verb) review in Tandem. Open Tandem to choose which version to keep."
         )
     }
 
@@ -49,10 +49,11 @@ final class IosBudgetNotifications {
         guard count > 0 else { return }
         let noun = count == 1 ? "edit" : "edits"
         let verb = count == 1 ? "needs" : "need"
+        let review = count == 1 ? "Review the edit" : "Review the edits"
         post(
             identifier: "tandem-rejected-edits",
-            title: "An edit wasn’t applied",
-            body: "\(count) \(noun) \(verb) review."
+            title: "Rejected",
+            body: "\(count) rejected \(noun) \(verb) review. \(review) in Tandem."
         )
     }
 

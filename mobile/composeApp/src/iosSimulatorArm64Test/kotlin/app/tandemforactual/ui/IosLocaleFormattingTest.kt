@@ -61,8 +61,8 @@ class IosLocaleFormattingTest {
                 currencyFractionDigits = 0,
             )
 
-        assertEquals("Use a comma for cents in this budget.", transactionAmountInputError("12.50", german))
-        assertEquals("This budget uses whole-unit amounts.", transactionAmountInputError("12.50", yen))
+        assertEquals("Use a comma for decimals in this budget, such as 12,00.", transactionAmountInputError("12.50", german))
+        assertEquals("This budget doesn’t use decimals. Enter a whole amount, such as 12.", transactionAmountInputError("12.50", yen))
         assertTrue(transactionAmountNeedsFormatConfirmation("1234,56", 123_456, german))
         assertFalse(transactionAmountNeedsFormatConfirmation("1.234,56", 123_456, german))
         assertEquals("1.234,56", platformFormatDecimal(123_456, german))

@@ -128,7 +128,7 @@ class ConflictPresentationTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Keep last synced").performClick()
+        composeTestRule.onNodeWithText("Keep Actual’s version").performClick()
         composeTestRule.onNodeWithText("Discard your edit?").assertExists()
         composeTestRule.onNodeWithText("Keep editing").performClick()
 

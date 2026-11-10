@@ -65,7 +65,7 @@ internal fun transactionAmountInputError(
     val fractionDigits = displaySettings?.currencyFractionDigits ?: 2
     val input = value.trim()
     if (fractionDigits == 0 && ('.' in input || ',' in input)) {
-        return "This budget uses whole-unit amounts."
+        return "This budget doesn’t use decimals. Enter a whole amount, such as 12."
     }
 
     val decimalSeparator =
@@ -79,7 +79,8 @@ internal fun transactionAmountInputError(
         val possibleFraction = input.substringAfterLast(wrongDecimalSeparator, "")
         if (possibleFraction.length in 1..fractionDigits && possibleFraction.all(Char::isDigit)) {
             val expectedMark = if (decimalSeparator == ',') "a comma" else "a period"
-            return "Use $expectedMark for cents in this budget."
+            val example = "12$decimalSeparator${"0".repeat(fractionDigits)}"
+            return "Use $expectedMark for decimals in this budget, such as $example."
         }
     }
 

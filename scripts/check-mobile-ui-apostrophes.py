@@ -12,13 +12,15 @@ ROOT = Path(__file__).resolve().parent.parent
 SOURCE_ROOTS = (
     ROOT / "mobile" / "composeApp" / "src",
     ROOT / "mobile" / "androidApp" / "src",
+    ROOT / "mobile" / "iosApp",
 )
 STRING_LITERAL = re.compile(r'"""[\s\S]*?"""|"(?:\\.|[^"\\])*"')
 STRAIGHT_APOSTROPHE = re.compile(r"[A-Za-z]'[a-z]")
+SOURCE_SUFFIXES = {".kt", ".swift"}
 
 
 def is_test_source(path: Path) -> bool:
-    return path.name.endswith("Test.kt") or any(part.endswith("Test") for part in path.parts)
+    return path.name.endswith(("Test.kt", "Tests.swift")) or any(part.endswith("Test") for part in path.parts)
 
 
 def main() -> int:
@@ -30,8 +32,8 @@ def main() -> int:
             print(f"missing mobile source directory: {source_root}", file=sys.stderr)
             return 2
 
-        for path in sorted(source_root.rglob("*.kt")):
-            if "build" in path.parts or is_test_source(path):
+        for path in sorted(source_root.rglob("*")):
+            if path.suffix not in SOURCE_SUFFIXES or "build" in path.parts or is_test_source(path):
                 continue
             source_count += 1
             content = path.read_text(encoding="utf-8")
@@ -52,7 +54,7 @@ def main() -> int:
         print("\n".join(failures))
         return 1
 
-    print(f"mobile-ui-apostrophes: passed ({source_count} Kotlin source files)")
+    print(f"mobile-ui-apostrophes: passed ({source_count} mobile source files)")
     return 0
 
 

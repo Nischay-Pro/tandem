@@ -21,7 +21,8 @@ class BudgetSystemNotificationsTest {
 
     @After
     fun clearNotifications() {
-        notificationManager().cancelAll()
+        val manager = notificationManager()
+        notificationIds.forEach { manager.cancel(it) }
     }
 
     @Test
@@ -44,8 +45,8 @@ class BudgetSystemNotificationsTest {
         val active = notificationManager().activeNotifications.associateBy { it.id }
         assertEquals(notificationIds.toSet(), active.keys.intersect(notificationIds.toSet()))
         assertNotification(active.getValue(4101).notification, "Budget sync needs attention")
-        assertNotification(active.getValue(4102).notification, "Budget changes need review")
-        assertNotification(active.getValue(4103).notification, "An edit wasn’t applied")
+        assertNotification(active.getValue(4102).notification, "Needs review")
+        assertNotification(active.getValue(4103).notification, "Rejected")
         assertNotification(active.getValue(4104).notification, "Sign in to Tandem")
         val failureMessage = active.getValue(4101).notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
         assertEquals(true, failureMessage.contains("couldn’t"))

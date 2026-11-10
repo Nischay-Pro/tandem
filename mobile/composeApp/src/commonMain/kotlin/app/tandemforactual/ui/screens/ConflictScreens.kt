@@ -158,7 +158,7 @@ internal fun ConflictInboxScreen(
             }
     PageLazyColumn {
         item(key = "conflicts-title") {
-            BodyText("Choose between your edit and the last synced Actual version.")
+            BodyText("Choose between your edit and the latest version in Actual.")
         }
         if (conflicts.isEmpty()) {
             item(key = "conflicts-empty") {
@@ -360,7 +360,10 @@ internal fun ConflictReviewScreen(
                 mobileSession.isSyncing -> BodyText("Checking the latest transaction with the server…")
                 serverConfirmed -> BodyText("The server confirmed the latest Actual version.")
                 else -> {
-                    BodyText("Connect to the server before resolving this conflict. Your edit stays on this device.")
+                    BodyText(
+                        "Connect to the server before choosing a version. Your edit stays on this device. " +
+                            "Check the connection and try again.",
+                    )
                     SecondaryButton(
                         "Check again",
                         enabled = !mobileSession.isSavingTransaction,
@@ -421,7 +424,7 @@ internal fun KeepLastSyncedConflictAction(
 ) {
     var confirmDiscard by rememberSaveable(operationId) { mutableStateOf(false) }
     SecondaryButton(
-        "Keep last synced",
+        "Keep Actual’s version",
         enabled = enabled,
     ) { confirmDiscard = true }
     Text(
@@ -545,22 +548,22 @@ internal fun UncertainWriteDetailsScreen(
     PageColumn {
         if (operation == null) {
             Heading("Nothing to check")
-            InfoBubble("This edit no longer needs confirmation.")
+            InfoBubble("This edit no longer needs a status check.")
         } else {
             val heading =
                 when {
                     checkErrorForOperation != null -> "Couldn’t check this change"
                     operation.status == "committed" -> "Saved to Actual"
                     operation.status == "conflict" -> "Needs review"
-                    operation.status == "rejected" -> "Change not applied"
+                    operation.status == "rejected" -> "Rejected"
                     operation.status == "discarded" -> "Change discarded"
                     operation.status == "queued" -> "Waiting to sync"
                     operation.status == "sending" -> "Syncing"
                     isNotFound -> "Ready to try again"
-                    isChecked -> "Still unconfirmed"
-                    operation.status == "uncertain" -> "Needs confirmation"
+                    isChecked -> "Status unknown"
+                    operation.status == "uncertain" -> "Status unknown"
                     isSyncing -> "Checking status"
-                    else -> "Needs confirmation"
+                    else -> "Status unknown"
                 }
             val message =
                 when {
@@ -569,7 +572,7 @@ internal fun UncertainWriteDetailsScreen(
                     operation.status == "conflict" -> "Actual changed this transaction. Review both versions."
                     operation.status == "rejected" -> "Actual kept the previous value."
                     operation.status == "discarded" -> "Your edit was removed."
-                    operation.status == "queued" && isChecked -> "Actual confirmed this edit was not applied. It’s ready to try again."
+                    operation.status == "queued" && isChecked -> "Actual confirmed this edit wasn’t saved. Try again."
                     operation.status == "queued" -> "Your edit is saved on this device and is waiting to sync."
                     operation.status == "sending" && isSyncing -> "Syncing this edit with Actual."
                     operation.status == "sending" -> "Tandem couldn’t confirm the save. Check its status before trying again."
@@ -783,9 +786,9 @@ internal fun RejectedWriteScreen(
         val operationAmountText = operationAmount?.let(state::formatSignedCurrency) ?: "Unavailable"
         var confirmDismiss by rememberSaveable(operation?.operationId) { mutableStateOf(false) }
         PageColumn {
-            Heading("Change not applied")
+            Heading("Rejected")
             if (operation == null) {
-                BodyText("No unapplied edits need review.")
+                BodyText("No rejected edits need review.")
             } else {
                 SectionCard(transaction?.payee ?: "Deleted transaction", transaction?.dateLabel ?: operationAmountText) {
                     ListRow(
@@ -800,7 +803,7 @@ internal fun RejectedWriteScreen(
             DestructiveConfirmationDialog(
                 title = "Remove this edit?",
                 message =
-                    "Remove the rejected edit for $operationPayee ($operationAmountText) from this device? It wasn’t applied in Actual.",
+                    "Remove the rejected edit for $operationPayee ($operationAmountText) from this device? Actual kept the previous value.",
                 confirmLabel = "Remove edit",
                 dismissLabel = "Keep edit",
                 enabled = !state.readOnlyMode,

@@ -150,6 +150,7 @@ internal fun BudgetScreen(
     val recentTransactions = remember(liveTransactions) { liveTransactions.filterNot(TransactionItem::isSplitParent) }
     val conflictCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "conflict" } else 0
     val rejectedCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "rejected" } else 0
+    val unknownStatusCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "uncertain" } else 0
     val readyToAssignMinor = liveBudgetMonth?.toBudgetMinor ?: 0
     val assignmentPresentation = presentBudgetAssignment(readyToAssignMinor)
     val displayedAssignmentMinor = assignmentPresentation.amountMinor
@@ -208,10 +209,10 @@ internal fun BudgetScreen(
         ) {
             if (isLiveBudget) {
                 item(key = "budget-conflict-alert") {
-                    AnimatedReveal(visible = state.conflictReviewAlerts && conflictCount > 0) {
+                    AnimatedReveal(visible = conflictCount > 0) {
                         AttentionBanner(
-                            "$conflictCount change${if (conflictCount == 1) "" else "s"} need${if (conflictCount == 1) "s" else ""} review",
-                            "Choose which version of the edit to keep.",
+                            "Needs review",
+                            if (conflictCount == 1) "Choose which version to keep." else "Review $conflictCount changes.",
                             "Review",
                         ) {
                             state.selectedConflictOperationId = ""
@@ -220,15 +221,35 @@ internal fun BudgetScreen(
                     }
                 }
                 item(key = "budget-rejected-alert") {
-                    AnimatedReveal(visible = state.rejectedEditAlerts && rejectedCount > 0) {
+                    AnimatedReveal(visible = rejectedCount > 0) {
                         AttentionBanner(
-                            "$rejectedCount edit${if (rejectedCount == 1) "" else "s"} not applied",
-                            "Review the edit.",
+                            "Rejected",
+                            if (rejectedCount == 1) {
+                                "Actual kept the previous value. Review it."
+                            } else {
+                                "Actual kept the previous values. Review them."
+                            },
                             "Review",
                         ) {
                             state.selectedConflictOperationId =
                                 mobileSession.pendingWrites
                                     .firstOrNull { it.status == "rejected" }
+                                    ?.operationId
+                                    .orEmpty()
+                            navigation.open(AppRoute.UNCERTAIN_WRITE)
+                        }
+                    }
+                }
+                item(key = "budget-status-unknown-alert") {
+                    AnimatedReveal(visible = unknownStatusCount > 0) {
+                        AttentionBanner(
+                            "Status unknown",
+                            "The server hasn’t confirmed these edits. Check their status.",
+                            "Check status",
+                        ) {
+                            state.selectedConflictOperationId =
+                                mobileSession.pendingWrites
+                                    .firstOrNull { it.status == "uncertain" }
                                     ?.operationId
                                     .orEmpty()
                             navigation.open(AppRoute.UNCERTAIN_WRITE)

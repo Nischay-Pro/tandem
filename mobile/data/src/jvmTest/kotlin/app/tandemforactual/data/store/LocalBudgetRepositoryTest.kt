@@ -280,6 +280,36 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
+    fun serverConfirmationCompletesAnUncertainBudgetMutation() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 400L }
+                val mutation =
+                    LocalBudgetMutationOutboxItem(
+                        operationId = "budget-operation-confirmed",
+                        budgetId = BUDGET,
+                        action = "RENAME_CATEGORY",
+                        recordId = "category-1",
+                        patchJson = "{\"operationId\":\"budget-operation-confirmed\"}",
+                        createdAtEpochMs = 200L,
+                    )
+                repository.replaceBudgetMutationQueue(listOf(mutation), "{}")
+                assertTrue(repository.beginBudgetMutation(mutation.operationId))
+                repository.markBudgetMutationUncertain(mutation.operationId, "network-error")
+
+                val completed = repository.completeBudgetMutationAfterConfirmation(mutation.operationId)
+
+                assertEquals("committed", completed.status)
+                assertEquals(mutation.operationId, completed.serverOperationId)
+                assertNull(completed.lastErrorCode)
+                assertTrue(repository.readBudgetMutationQueue().items.isEmpty())
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun remapPendingCategoryReferencesRewritesMatchingQueuedTransactionsOnly() =
         runBlocking {
             val database = newDatabase()
