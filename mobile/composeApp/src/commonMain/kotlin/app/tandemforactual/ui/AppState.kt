@@ -51,7 +51,7 @@ internal fun normalizeHomeLayoutName(layout: String): String =
 internal class AppState {
     var theme by mutableStateOf(ThemeMode.DARK)
     var accent by mutableStateOf(AccentChoice.ACTUAL_PURPLE)
-    var selectedBudget by mutableStateOf("Household")
+    var selectedBudget by mutableStateOf("")
     var selectedBudgetId by mutableStateOf("")
     var selectedBudgetEncrypted by mutableStateOf(false)
     var cachedBudgetCatalogJson by mutableStateOf("")
@@ -90,16 +90,16 @@ internal class AppState {
     var serverUrl by mutableStateOf("")
     var pairingCode by mutableStateOf("")
     var encryptedPassword by mutableStateOf("")
-    var transactionAmount by mutableStateOf(formatAmount(4_218))
-    var transactionAccount by mutableStateOf("Checking")
+    var transactionAmount by mutableStateOf(formatAmount(0))
+    var transactionAccount by mutableStateOf("")
     var newTransactionAccountId by mutableStateOf("")
     var newTransactionInitialAccountId by mutableStateOf("")
-    var newTransactionInitialAccountName by mutableStateOf("Checking")
-    var transactionPayee by mutableStateOf("Corner Market")
+    var newTransactionInitialAccountName by mutableStateOf("")
+    var transactionPayee by mutableStateOf("")
     var newTransactionPayeeId by mutableStateOf("")
-    var transactionCategory by mutableStateOf("Groceries")
+    var transactionCategory by mutableStateOf("")
     var newTransactionCategoryId by mutableStateOf("")
-    var transactionDate by mutableStateOf(formatDate(SampleDate(2026, 5, 14)))
+    var transactionDate by mutableStateOf(formatLiveDate(platformTodayIsoDate()))
     var newTransactionInitialDate by mutableStateOf("")
     var transactionType by mutableStateOf("Spending")
     var transactionNotes by mutableStateOf("")
@@ -113,6 +113,7 @@ internal class AppState {
     var pinnedCategoryIds by mutableStateOf("")
     var categoryIconOverrides by mutableStateOf("")
     var readOnlyMode by mutableStateOf(false)
+    var hasDismissedBudgetHint by mutableStateOf(false)
     var reduceMotionOverride by mutableStateOf<Boolean?>(null)
     var systemReduceMotionEnabled by mutableStateOf(false)
     val reduceMotion: Boolean get() = reduceMotionOverride ?: systemReduceMotionEnabled
@@ -128,6 +129,63 @@ internal class AppState {
     val scrollPositions = mutableMapOf<String, Int>()
     val lazyScrollPositions = mutableMapOf<String, Pair<Int, Int>>()
 
+    fun clearBudgetSession() {
+        selectedBudget = ""
+        selectedBudgetId = ""
+        selectedBudgetEncrypted = false
+        cachedBudgetCatalogJson = ""
+        budgetDisplaySettings = null
+        reportsBudgetId = ""
+        reportsMonthId = currentMonthId()
+        selectedReportKindName = ReportKind.SPENDING_BY_CATEGORY.name
+        savedActivitySearchesJson = ""
+        budgetTemplatesJson = ""
+        selectedAccountId = ""
+        selectedCategoryGroupId = ""
+        selectedCategoryId = ""
+        selectedMonth = currentMonthLabel()
+        selectedMonthId = currentMonthId()
+        pendingScheduleToOpenId = null
+        categoryEditRequested = false
+        selectedTransactionRecordId = ""
+        selectedTransactionAccountId = ""
+        selectedTransactionPayeeId = ""
+        selectedTransactionCategoryId = ""
+        selectedTransactionDate = ""
+        selectedTransactionAccountName = ""
+        selectedTransactionPayeeName = ""
+        selectedTransactionCategoryName = ""
+        selectedConflictOperationId = ""
+        pairingCode = ""
+        encryptedPassword = ""
+        transactionAmount = formatAmount(0)
+        transactionAccount = ""
+        newTransactionAccountId = ""
+        newTransactionInitialAccountId = ""
+        newTransactionInitialAccountName = ""
+        transactionPayee = ""
+        newTransactionPayeeId = ""
+        transactionCategory = ""
+        newTransactionCategoryId = ""
+        transactionDate = formatLiveDate(platformTodayIsoDate())
+        newTransactionInitialDate = ""
+        transactionType = "Spending"
+        transactionNotes = ""
+        selectedTransactionAmountMinor = null
+        selectedTransactionNotes = ""
+        selectedTransactionIsLive = false
+        conflictChoice = ""
+        collapsedBudgetSections = ""
+        pinnedCategoryIds = ""
+        categoryIconOverrides = ""
+        activitySearchQuery = ""
+        activitySearchFilters = emptyList()
+        activitySearchCache = null
+        activitySearchResultCache = null
+        scrollPositions.clear()
+        lazyScrollPositions.clear()
+    }
+
     fun persistentSettings(): Map<String, String> =
         mapOf(
             "theme" to theme.name,
@@ -138,6 +196,7 @@ internal class AppState {
             "pinnedCategoryIds" to pinnedCategoryIds,
             "categoryIconOverrides" to categoryIconOverrides,
             "readOnlyMode" to readOnlyMode.toString(),
+            "hasDismissedBudgetHint" to hasDismissedBudgetHint.toString(),
             "selectedBudget" to selectedBudget,
             "selectedBudgetId" to selectedBudgetId,
             "selectedBudgetEncrypted" to selectedBudgetEncrypted.toString(),
@@ -169,6 +228,7 @@ internal class AppState {
         pinnedCategoryIds = saved["pinnedCategoryIds"] ?: pinnedCategoryIds
         categoryIconOverrides = saved["categoryIconOverrides"] ?: categoryIconOverrides
         readOnlyMode = saved["readOnlyMode"]?.toBooleanStrictOrNull() ?: readOnlyMode
+        hasDismissedBudgetHint = saved["hasDismissedBudgetHint"]?.toBooleanStrictOrNull() ?: hasDismissedBudgetHint
         selectedBudget = saved["selectedBudget"] ?: selectedBudget
         selectedBudgetId = saved["selectedBudgetId"] ?: selectedBudgetId
         selectedBudgetEncrypted = saved["selectedBudgetEncrypted"]?.toBooleanStrictOrNull() ?: selectedBudgetEncrypted
@@ -259,6 +319,7 @@ internal class AppState {
                         "pinnedCategoryIds" to state.pinnedCategoryIds,
                         "categoryIconOverrides" to state.categoryIconOverrides,
                         "readOnlyMode" to state.readOnlyMode,
+                        "hasDismissedBudgetHint" to state.hasDismissedBudgetHint,
                         "reduceMotionOverride" to state.reduceMotionOverride,
                         "syncOnOpen" to state.syncOnOpen,
                         "backgroundSyncEnabled" to state.backgroundSyncEnabled,
@@ -333,6 +394,7 @@ internal class AppState {
                         pinnedCategoryIds = saved["pinnedCategoryIds"] as? String ?: pinnedCategoryIds
                         categoryIconOverrides = saved["categoryIconOverrides"] as? String ?: categoryIconOverrides
                         readOnlyMode = saved["readOnlyMode"] as? Boolean ?: readOnlyMode
+                        hasDismissedBudgetHint = saved["hasDismissedBudgetHint"] as? Boolean ?: hasDismissedBudgetHint
                         selectedBudgetId = saved["selectedBudgetId"] as? String ?: selectedBudgetId
                         reduceMotionOverride =
                             (saved["reduceMotionOverride"] as? Boolean) ?: (saved["reduceMotion"] as? Boolean)

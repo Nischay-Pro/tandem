@@ -445,6 +445,11 @@ interface OutboxDao {
     @Query("SELECT * FROM sync_outbox WHERE operationId = :operationId")
     suspend fun find(operationId: String): OutboxOperationEntity?
 
+    @Query(
+        "SELECT EXISTS(SELECT 1 FROM sync_outbox WHERE status IN ('queued', 'sending', 'uncertain', 'conflict', 'rejected'))",
+    )
+    suspend fun hasUnresolvedWrites(): Boolean
+
     @Query("SELECT * FROM sync_outbox WHERE idempotencyKey = :idempotencyKey")
     suspend fun findByIdempotencyKey(idempotencyKey: String): OutboxOperationEntity?
 

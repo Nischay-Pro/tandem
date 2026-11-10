@@ -35,25 +35,6 @@ import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
 
 @Composable
-internal fun SampleBanner(message: String = "Sample data") {
-    val palette = tandemPalette
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(
-                    RoundedCornerShape(TandemShapes.control),
-                ).background(palette.accentSurface)
-                .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-    ) {
-        Text("●", color = palette.accent, fontSize = TandemTypography.indicator)
-        Text(message, color = palette.muted, fontSize = TandemTypography.caption)
-    }
-}
-
-@Composable
 internal fun AttentionBanner(
     title: String,
     detail: String,

@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.BodyText
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
+import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.LabelText
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.RowLeading
@@ -73,7 +74,6 @@ import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.X
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @Composable
@@ -85,21 +85,22 @@ internal fun CategoryDetailScreen(
 ) {
     val scope = rememberCoroutineScope()
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    if (!isLiveBudget) {
+        EmptyState(
+            "Choose a budget",
+            "Open an Actual budget to view its categories.",
+            actionLabel = "Choose budget",
+            onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+        )
+        return
+    }
     val isTrackingBudget = isLiveBudget && state.budgetDisplaySettings?.budgetType == "tracking"
     val category =
-        if (isLiveBudget) {
-            liveBudgetMonth
-                ?.groups
-                ?.asSequence()
-                ?.flatMap { it.categories.asSequence() }
-                ?.firstOrNull { it.id == state.selectedCategoryId }
-        } else {
-            previewCategoryGroups
-                .firstOrNull { it.id == state.selectedCategoryGroupId }
-                ?.categories
-                ?.firstOrNull { it.id == state.selectedCategoryId }
-                ?: previewCategoryGroups.first().categories.first()
-        }
+        liveBudgetMonth
+            ?.groups
+            ?.asSequence()
+            ?.flatMap { it.categories.asSequence() }
+            ?.firstOrNull { it.id == state.selectedCategoryId }
     var showEditDialog by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf(false) }
     var showDeleteDialog by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf(false) }
     var confirmCategoryDelete by rememberSaveable(state.selectedBudgetId, state.selectedCategoryId) { mutableStateOf(false) }
@@ -186,7 +187,6 @@ internal fun CategoryDetailScreen(
         }
     }
     PageColumn {
-        if (!isLiveBudget) SampleBanner()
         if (category == null) {
             LabelText(state.selectedMonth)
             BodyText("This category isn’t in the saved plan for this month.")
@@ -551,7 +551,7 @@ internal fun CategoryDetailScreen(
                     ) {
                         TextFieldCard("Name", editName, { editName = it }, TextFieldOptions(placeholder = category.name))
                         val destinationGroups =
-                            liveBudgetMonth?.groups.orEmpty().filter { candidateGroup ->
+                            liveBudgetMonth.groups.filter { candidateGroup ->
                                 candidateGroup.isIncome == currentIncomeType
                             }
                         TransactionPickerRow(

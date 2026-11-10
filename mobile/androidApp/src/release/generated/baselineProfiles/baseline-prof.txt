@@ -18431,7 +18431,6 @@ Lapp/tandemforactual/ui/AccountListUi;
 SPLapp/tandemforactual/ui/AccountListUi;-><init>(Ljava/util/List;ZZ)V
 SPLapp/tandemforactual/ui/AccountListUi;->getGroups()Ljava/util/List;
 SPLapp/tandemforactual/ui/AccountListUi;->getShowAccountOptions()Z
-SPLapp/tandemforactual/ui/AccountListUi;->isSample()Z
 Lapp/tandemforactual/ui/ActivitySearchField;
 SPLapp/tandemforactual/ui/ActivitySearchField;->$values()[Lapp/tandemforactual/ui/ActivitySearchField;
 SPLapp/tandemforactual/ui/ActivitySearchField;-><clinit>()V
@@ -18796,10 +18795,8 @@ Lapp/tandemforactual/ui/DeviceCredentialStore;
 Lapp/tandemforactual/ui/LocaleFormattingKt;
 SPLapp/tandemforactual/ui/LocaleFormattingKt;->formatAmount(JLapp/tandemforactual/data/store/BudgetDisplaySettings;)Ljava/lang/String;
 SPLapp/tandemforactual/ui/LocaleFormattingKt;->formatCurrency(JLapp/tandemforactual/data/store/BudgetDisplaySettings;)Ljava/lang/String;
-SPLapp/tandemforactual/ui/LocaleFormattingKt;->formatDate(Lapp/tandemforactual/ui/SampleDate;)Ljava/lang/String;
 SPLapp/tandemforactual/ui/LocaleFormattingKt;->formatInteger(I)Ljava/lang/String;
 SPLapp/tandemforactual/ui/LocaleFormattingKt;->formatMonth(II)Ljava/lang/String;
-SPLapp/tandemforactual/ui/LocaleFormattingKt;->formatShortDate(Lapp/tandemforactual/ui/SampleDate;)Ljava/lang/String;
 SPLapp/tandemforactual/ui/LocaleFormattingKt;->formatSignedCurrency(JLapp/tandemforactual/data/store/BudgetDisplaySettings;)Ljava/lang/String;
 Lapp/tandemforactual/ui/LocaleFormatting_androidKt;
 SPLapp/tandemforactual/ui/LocaleFormatting_androidKt;->budgetNumberFormat(Lapp/tandemforactual/data/store/BudgetDisplaySettings;I)Ljava/text/NumberFormat;
@@ -18828,16 +18825,6 @@ HSPLapp/tandemforactual/ui/MerchantIconMatchingKt;->labelWords(Ljava/lang/String
 Lapp/tandemforactual/ui/PreparedActivitySearch;
 SPLapp/tandemforactual/ui/PreparedActivitySearch;-><clinit>()V
 SPLapp/tandemforactual/ui/PreparedActivitySearch;-><init>(Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Lapp/tandemforactual/ui/ActivitySearchDateQuery;ZLjava/util/List;)V
-Lapp/tandemforactual/ui/PreviewAccount;
-SPLapp/tandemforactual/ui/PreviewAccount;-><clinit>()V
-SPLapp/tandemforactual/ui/PreviewAccount;-><init>(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JZ)V
-SPLapp/tandemforactual/ui/PreviewAccount;-><init>(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JZILkotlin/jvm/internal/DefaultConstructorMarker;)V
-PLapp/tandemforactual/ui/PreviewAccount;->getBalanceMinor()J
-SPLapp/tandemforactual/ui/PreviewAccount;->getDescription()Ljava/lang/String;
-SPLapp/tandemforactual/ui/PreviewAccount;->getGroup()Ljava/lang/String;
-PLapp/tandemforactual/ui/PreviewAccount;->getId()Ljava/lang/String;
-PLapp/tandemforactual/ui/PreviewAccount;->getName()Ljava/lang/String;
-PLapp/tandemforactual/ui/PreviewAccount;->getOffBudget()Z
 PLapp/tandemforactual/ui/ReportDataBundle;-><clinit>()V
 PLapp/tandemforactual/ui/ReportDataBundle;-><init>(Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lapp/tandemforactual/data/store/BudgetDisplaySettings;)V
 PLapp/tandemforactual/ui/ReportDataBundle;->equals(Ljava/lang/Object;)Z
@@ -18887,10 +18874,6 @@ PLapp/tandemforactual/ui/ReportsScreenKt;->rememberReportData$lambda$9(Landroidx
 PLapp/tandemforactual/ui/ReportsScreenKt;->rememberReportData(Lapp/tandemforactual/ui/AppState;Lapp/tandemforactual/ui/TandemMobileSession;Ljava/util/List;Lapp/tandemforactual/ui/reports/ReportWindow;Lapp/tandemforactual/ui/reports/ReportWindow;Lapp/tandemforactual/ui/ReportsDataCache;Landroidx/compose/runtime/Composer;I)Lapp/tandemforactual/ui/ReportDataBundle;
 PLapp/tandemforactual/ui/ReportsScreenKt;->reportHasNoData(Lapp/tandemforactual/ui/reports/ReportKind;Lapp/tandemforactual/ui/ReportDataBundle;)Z
 PLapp/tandemforactual/ui/ReportsScreenKt;->reportIcon(Lapp/tandemforactual/ui/reports/ReportKind;)Landroidx/compose/ui/graphics/vector/ImageVector;
-PLapp/tandemforactual/ui/ReportsScreenKt;->sampleBudgetedSpent(Lapp/tandemforactual/ui/reports/ReportWindow;)Ljava/util/List;
-PLapp/tandemforactual/ui/ReportsScreenKt;->sampleCategorySpending(Lapp/tandemforactual/ui/reports/ReportWindow;)Ljava/util/List;
-PLapp/tandemforactual/ui/ReportsScreenKt;->sampleMonthlyMoney(Lapp/tandemforactual/ui/reports/ReportWindow;)Ljava/util/List;
-PLapp/tandemforactual/ui/ReportsScreenKt;->sampleNetWorth(Ljava/util/List;Ljava/lang/String;)Ljava/util/List;
 PLapp/tandemforactual/ui/ReportsScreenKt$$ExternalSyntheticLambda10;-><init>(Lapp/tandemforactual/ui/reports/ReportWindow;Lapp/tandemforactual/ui/AppState;Lapp/tandemforactual/ui/reports/ReportPeriodMode;Lapp/tandemforactual/ui/reports/ReportRangePreset;Lapp/tandemforactual/ui/ReportDataBundle;Lapp/tandemforactual/ui/reports/ReportWindow;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;)V
 PLapp/tandemforactual/ui/ReportsScreenKt$$ExternalSyntheticLambda10;->invoke(Ljava/lang/Object;)Ljava/lang/Object;
 PLapp/tandemforactual/ui/ReportsScreenKt$$ExternalSyntheticLambda12;-><init>(Lapp/tandemforactual/ui/AppState;Lapp/tandemforactual/ui/TandemMobileSession;Ljava/util/List;Lapp/tandemforactual/ui/ReportsDataCache;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;I)V
@@ -18931,14 +18914,6 @@ PLapp/tandemforactual/ui/ReportsScreenKt$ReportsScreen$1$1;-><init>(Lapp/tandemf
 PLapp/tandemforactual/ui/ReportsScreenKt$ReportsScreen$1$1;->create(Ljava/lang/Object;Lkotlin/coroutines/Continuation;)Lkotlin/coroutines/Continuation;
 PLapp/tandemforactual/ui/ReportsScreenKt$ReportsScreen$1$1;->invokeSuspend(Ljava/lang/Object;)Ljava/lang/Object;
 PLapp/tandemforactual/ui/ReportsScreenKt$WhenMappings;-><clinit>()V
-PLapp/tandemforactual/ui/ReportsScreenKt$sampleBudgetedSpent$$inlined$sortedByDescending$1;-><init>()V
-PLapp/tandemforactual/ui/ReportsScreenKt$sampleBudgetedSpent$$inlined$sortedByDescending$1;->compare(Ljava/lang/Object;Ljava/lang/Object;)I
-Lapp/tandemforactual/ui/SampleDate;
-SPLapp/tandemforactual/ui/SampleDate;-><clinit>()V
-SPLapp/tandemforactual/ui/SampleDate;-><init>(III)V
-SPLapp/tandemforactual/ui/SampleDate;->getDay()I
-SPLapp/tandemforactual/ui/SampleDate;->getMonth()I
-SPLapp/tandemforactual/ui/SampleDate;->getYear()I
 Lapp/tandemforactual/ui/SyncPresentationState;
 SPLapp/tandemforactual/ui/SyncPresentationState;-><clinit>()V
 SPLapp/tandemforactual/ui/SyncPresentationState;-><init>(ZLjava/lang/String;)V
@@ -19127,7 +19102,6 @@ SPLapp/tandemforactual/ui/TandemAppKt;->ReadOnlyField$lambda$0$0$0(Landroidx/com
 SPLapp/tandemforactual/ui/TandemAppKt;->ReadOnlyField$lambda$0$1$0(Landroidx/compose/ui/semantics/SemanticsPropertyReceiver;)Lkotlin/Unit;
 SPLapp/tandemforactual/ui/TandemAppKt;->ReadOnlyField$lambda$0(Landroidx/compose/ui/graphics/vector/ImageVector;Lapp/tandemforactual/ui/TandemPalette;Ljava/lang/String;Ljava/lang/String;Landroidx/compose/foundation/layout/RowScope;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;
 SPLapp/tandemforactual/ui/TandemAppKt;->ReadOnlyField(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Landroidx/compose/ui/graphics/vector/ImageVector;Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;II)V
-SPLapp/tandemforactual/ui/TandemAppKt;->SampleBanner(Ljava/lang/String;Landroidx/compose/runtime/Composer;II)V
 PLapp/tandemforactual/ui/TandemAppKt;->ScreenContent$lambda$0$0(Lapp/tandemforactual/ui/AppNavigation;Lapp/tandemforactual/ui/reports/ReportKind;)Lkotlin/Unit;
 HSPLapp/tandemforactual/ui/TandemAppKt;->ScreenContent(Lapp/tandemforactual/ui/AppRoute;Lapp/tandemforactual/ui/AppState;Ljava/lang/String;Lapp/tandemforactual/ui/AppNavigation;Lapp/tandemforactual/ui/TandemMobileSession;Lapp/tandemforactual/ui/ReportsDataCache;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;ZLapp/tandemforactual/ui/MerchantIconMatcherPack;Ljava/lang/String;Lapp/tandemforactual/ui/MerchantIconCatalog;Ljava/lang/String;Ljava/util/List;Lapp/tandemforactual/ui/ActivityTransactionSortCache;Ljava/util/List;Ljava/util/List;Lapp/tandemforactual/ui/model/LiveBudgetMonthSummary;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Ljava/lang/Boolean;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;IIII)V
 SPLapp/tandemforactual/ui/TandemAppKt;->SettingsScreen$lambda$0$1(Lapp/tandemforactual/ui/AppState;Lapp/tandemforactual/ui/AppNavigation;Landroidx/compose/foundation/layout/ColumnScope;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;
@@ -19235,7 +19209,6 @@ SPLapp/tandemforactual/ui/TandemAppKt;->access$ActivitySearchScreen$lambda$4(Lan
 SPLapp/tandemforactual/ui/TandemAppKt;->access$ActivitySearchScreen$lambda$41(Landroidx/compose/runtime/MutableState;Ljava/util/List;)V
 SPLapp/tandemforactual/ui/TandemAppKt;->access$ActivitySearchScreen$lambda$5(Landroidx/compose/runtime/MutableState;Z)V
 SPLapp/tandemforactual/ui/TandemAppKt;->access$ActivitySearchScreen$lambda$8(Landroidx/compose/runtime/MutableState;Ljava/util/Set;)V
-SPLapp/tandemforactual/ui/TandemAppKt;->access$SampleBanner(Ljava/lang/String;Landroidx/compose/runtime/Composer;II)V
 SPLapp/tandemforactual/ui/TandemAppKt;->access$TandemApp$lambda$109(Landroidx/compose/runtime/MutableState;)Lapp/tandemforactual/ui/AppRoute;
 SPLapp/tandemforactual/ui/TandemAppKt;->access$TandemApp$lambda$110(Landroidx/compose/runtime/MutableState;Lapp/tandemforactual/ui/AppRoute;)V
 SPLapp/tandemforactual/ui/TandemAppKt;->access$TandemApp$lambda$124(Landroidx/compose/runtime/MutableState;Ljava/util/List;)V
@@ -19286,9 +19259,6 @@ SPLapp/tandemforactual/ui/TandemAppKt;->formatAmount(Lapp/tandemforactual/ui/App
 SPLapp/tandemforactual/ui/TandemAppKt;->formatCurrency(Lapp/tandemforactual/ui/AppState;J)Ljava/lang/String;
 SPLapp/tandemforactual/ui/TandemAppKt;->formatLiveDate(Ljava/lang/String;)Ljava/lang/String;
 PLapp/tandemforactual/ui/TandemAppKt;->getLocalRouteLazyListState()Landroidx/compose/runtime/ProvidableCompositionLocal;
-PLapp/tandemforactual/ui/TandemAppKt;->getPreviewAccounts()Ljava/util/List;
-PLapp/tandemforactual/ui/TandemAppKt;->getPreviewCategoryGroups()Ljava/util/List;
-SPLapp/tandemforactual/ui/TandemAppKt;->getPreviewTransactions()Ljava/util/List;
 SPLapp/tandemforactual/ui/TandemAppKt;->isBudgetSectionCollapsed(Lapp/tandemforactual/ui/AppState;Ljava/lang/String;)Z
 SPLapp/tandemforactual/ui/TandemAppKt;->isCategoryPinned(Lapp/tandemforactual/ui/AppState;Ljava/lang/String;)Z
 SPLapp/tandemforactual/ui/TandemAppKt;->isReportDetail(Lapp/tandemforactual/ui/AppRoute;)Z

@@ -89,8 +89,17 @@ internal fun CategoryGroupScreen(
 ) {
     val palette = tandemPalette
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    if (!isLiveBudget) {
+        EmptyState(
+            "Choose a budget",
+            "Open an Actual budget to view its categories.",
+            actionLabel = "Choose budget",
+            onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+        )
+        return
+    }
     val isTrackingBudget = isLiveBudget && state.budgetDisplaySettings?.budgetType == "tracking"
-    val groups = if (isLiveBudget) liveBudgetMonth?.groups.orEmpty() else previewCategoryGroups
+    val groups = liveBudgetMonth?.groups.orEmpty()
     val selectedGroupId = mobileSession.resolveCategoryGroupId(state.selectedBudgetId, state.selectedCategoryGroupId)
     val group = groups.firstOrNull { it.id == selectedGroupId } ?: groups.firstOrNull()
     var showHidden by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
@@ -172,9 +181,6 @@ internal fun CategoryGroupScreen(
         }
     Box(Modifier.fillMaxSize()) {
         PageLazyColumn {
-            if (!isLiveBudget) {
-                item(key = "category-group-sample-banner") { SampleBanner() }
-            }
             if (group == null) {
                 item(key = "category-group-empty-message") {
                     EmptyState(

@@ -14493,9 +14493,7 @@ Lapp/tandemforactual/ui/DeviceCredentialStore;
 Lapp/tandemforactual/ui/LocaleFormattingKt;
 SPLapp/tandemforactual/ui/LocaleFormattingKt;->formatAmount(JLapp/tandemforactual/data/store/BudgetDisplaySettings;)Ljava/lang/String;
 SPLapp/tandemforactual/ui/LocaleFormattingKt;->formatCurrency(JLapp/tandemforactual/data/store/BudgetDisplaySettings;)Ljava/lang/String;
-SPLapp/tandemforactual/ui/LocaleFormattingKt;->formatDate(Lapp/tandemforactual/ui/SampleDate;)Ljava/lang/String;
 SPLapp/tandemforactual/ui/LocaleFormattingKt;->formatMonth(II)Ljava/lang/String;
-SPLapp/tandemforactual/ui/LocaleFormattingKt;->formatShortDate(Lapp/tandemforactual/ui/SampleDate;)Ljava/lang/String;
 Lapp/tandemforactual/ui/LocaleFormatting_androidKt;
 SPLapp/tandemforactual/ui/LocaleFormatting_androidKt;->budgetNumberFormat(Lapp/tandemforactual/data/store/BudgetDisplaySettings;I)Ljava/text/NumberFormat;
 SPLapp/tandemforactual/ui/LocaleFormatting_androidKt;->calendarDate(III)Ljava/util/Date;
@@ -14519,19 +14517,9 @@ Lapp/tandemforactual/ui/MerchantIconMatcherPack;
 Lapp/tandemforactual/ui/MerchantIconMatchingKt;
 SPLapp/tandemforactual/ui/MerchantIconMatchingKt;-><clinit>()V
 HSPLapp/tandemforactual/ui/MerchantIconMatchingKt;->labelWords(Ljava/lang/String;)Ljava/util/List;
-Lapp/tandemforactual/ui/PreviewAccount;
-SPLapp/tandemforactual/ui/PreviewAccount;-><clinit>()V
-SPLapp/tandemforactual/ui/PreviewAccount;-><init>(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JZ)V
-SPLapp/tandemforactual/ui/PreviewAccount;-><init>(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JZILkotlin/jvm/internal/DefaultConstructorMarker;)V
 Lapp/tandemforactual/ui/ReportsDataCache;
 SPLapp/tandemforactual/ui/ReportsDataCache;-><clinit>()V
 SPLapp/tandemforactual/ui/ReportsDataCache;-><init>()V
-Lapp/tandemforactual/ui/SampleDate;
-SPLapp/tandemforactual/ui/SampleDate;-><clinit>()V
-SPLapp/tandemforactual/ui/SampleDate;-><init>(III)V
-SPLapp/tandemforactual/ui/SampleDate;->getDay()I
-SPLapp/tandemforactual/ui/SampleDate;->getMonth()I
-SPLapp/tandemforactual/ui/SampleDate;->getYear()I
 Lapp/tandemforactual/ui/SyncPresentationState;
 SPLapp/tandemforactual/ui/SyncPresentationState;-><clinit>()V
 SPLapp/tandemforactual/ui/SyncPresentationState;-><init>(ZLjava/lang/String;)V
@@ -14602,7 +14590,6 @@ SPLapp/tandemforactual/ui/TandemAppKt;->NavigationGlyph_iJQMabo$lambda$0$0(FLand
 SPLapp/tandemforactual/ui/TandemAppKt;->NavigationGlyph_iJQMabo$lambda$1$0(Landroidx/compose/ui/semantics/SemanticsPropertyReceiver;)Lkotlin/Unit;
 SPLapp/tandemforactual/ui/TandemAppKt;->NavigationGlyph_iJQMabo$lambda$2$0(Lapp/tandemforactual/ui/AppRoute;JJLandroidx/compose/ui/graphics/drawscope/DrawScope;)Lkotlin/Unit;
 SPLapp/tandemforactual/ui/TandemAppKt;->PageLazyColumn-X35cekY(FFLandroidx/compose/ui/Modifier;ZLkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;II)V
-SPLapp/tandemforactual/ui/TandemAppKt;->SampleBanner(Ljava/lang/String;Landroidx/compose/runtime/Composer;II)V
 SPLapp/tandemforactual/ui/TandemAppKt;->ScreenContent(Lapp/tandemforactual/ui/AppRoute;Lapp/tandemforactual/ui/AppState;Ljava/lang/String;Lapp/tandemforactual/ui/AppNavigation;Lapp/tandemforactual/ui/TandemMobileSession;Lapp/tandemforactual/ui/ReportsDataCache;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;ZLapp/tandemforactual/ui/MerchantIconMatcherPack;Ljava/lang/String;Lapp/tandemforactual/ui/MerchantIconCatalog;Ljava/lang/String;Ljava/util/List;Lapp/tandemforactual/ui/ActivityTransactionSortCache;Ljava/util/List;Ljava/util/List;Lapp/tandemforactual/ui/model/LiveBudgetMonthSummary;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Ljava/lang/Boolean;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;IIII)V
 SPLapp/tandemforactual/ui/TandemAppKt;->TandemApp$lambda$109(Landroidx/compose/runtime/MutableState;)Lapp/tandemforactual/ui/AppRoute;
 SPLapp/tandemforactual/ui/TandemAppKt;->TandemApp$lambda$110(Landroidx/compose/runtime/MutableState;Lapp/tandemforactual/ui/AppRoute;)V

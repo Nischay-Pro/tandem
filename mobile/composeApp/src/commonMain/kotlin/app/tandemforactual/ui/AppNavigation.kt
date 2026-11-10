@@ -185,9 +185,7 @@ internal fun AppHeader(
         } else {
             64.dp
         }
-    val headerCategoryGroups =
-        liveBudgetMonth?.groups
-            ?: if (state.selectedBudgetId.isBlank()) previewCategoryGroups else emptyList()
+    val headerCategoryGroups = liveBudgetMonth?.groups.orEmpty()
     val headerGroup =
         headerCategoryGroups.firstOrNull { it.id == state.selectedCategoryGroupId }
             ?: headerCategoryGroups.firstOrNull()
@@ -198,31 +196,16 @@ internal fun AppHeader(
             .flatMap { it.categories.asSequence() }
             .firstOrNull { it.id == state.selectedCategoryId }
             ?.name
-    val previewCategoryName =
-        headerCategoryGroups
-            .firstOrNull()
-            ?.categories
-            ?.firstOrNull()
-            ?.name ?: route.title
     val headerTitle =
         when (route) {
             AppRoute.NEW_TRANSACTION -> "Add transaction"
-            AppRoute.BUDGET -> state.selectedBudget
+            AppRoute.BUDGET -> state.selectedBudget.ifBlank { "Choose a budget" }
             AppRoute.CATEGORY_GROUP ->
-                headerGroupName ?: if (state.selectedBudgetId.isBlank()) route.title else "Category group"
+                headerGroupName ?: "Category group"
             AppRoute.CATEGORY_DETAIL ->
-                headerCategoryName
-                    ?: if (state.selectedBudgetId.isBlank()) {
-                        previewCategoryName
-                    } else {
-                        "Category"
-                    }
+                headerCategoryName ?: "Category"
             AppRoute.ACCOUNT_DETAIL ->
-                if (state.selectedBudgetId.isNotBlank()) {
-                    liveAccounts.firstOrNull { it.id == state.selectedAccountId }?.name ?: "Account"
-                } else {
-                    previewAccountById(state.selectedAccountId).name
-                }
+                liveAccounts.firstOrNull { it.id == state.selectedAccountId }?.name ?: "Account"
             AppRoute.TRANSACTION_DETAIL -> state.transactionPayee.ifBlank { route.title }
             AppRoute.ACTIVITY,
             AppRoute.ACTIVITY_SEARCH,
@@ -282,7 +265,7 @@ internal fun AppHeader(
                 }
                 if (route == AppRoute.BUDGET) {
                     Text(
-                        if (state.selectedBudgetId.isNotBlank()) state.selectedMonth else "${state.selectedMonth} · Sample budget",
+                        state.selectedMonth,
                         color = palette.muted,
                         fontSize = TandemTypography.caption,
                     )
@@ -321,7 +304,7 @@ internal fun AppHeader(
                 when {
                     actualConnected -> "Actual budgets"
                     state.selectedBudgetId.isNotBlank() -> "Offline copy"
-                    else -> "Sample data"
+                    else -> "Connect to Actual"
                 },
                 color = palette.muted,
                 fontSize = TandemTypography.micro,

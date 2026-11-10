@@ -17,8 +17,6 @@ import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.allDrawableResources
-import app.tandemforactual.ui.model.LiveCategoryGroupSummary
-import app.tandemforactual.ui.model.LiveCategorySummary
 import app.tandemforactual.ui.model.recordName
 import app.tandemforactual.ui.model.stringValue
 import com.composables.icons.lucide.Baby
@@ -67,7 +65,6 @@ import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.Wifi
 import com.composables.icons.lucide.Wrench
 import com.composables.icons.lucide.Zap
-import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -342,83 +339,6 @@ internal fun AppState.formatSignedCurrency(minorUnits: Long): String = formatSig
 
 internal fun AppState.parseAmountMinorUnits(value: String): Long? = parseAmountMinorUnits(value, budgetDisplaySettings)
 
-internal val previewTransactions =
-    listOf(
-        TransactionItem(
-            "Corner Market",
-            "Groceries",
-            formatShortDate(SampleDate(2026, 5, 14)),
-            -4_218,
-            "G",
-            categoryIcon = financeIcon("Groceries"),
-            dateIso = "2026-05-14",
-        ),
-        TransactionItem(
-            "Electric Company",
-            "Utilities",
-            formatShortDate(SampleDate(2026, 5, 12)),
-            -12_000,
-            "E",
-            categoryIcon = financeIcon("Utilities"),
-            dateIso = "2026-05-12",
-        ),
-        TransactionItem(
-            "Acme Corp",
-            "Paycheck",
-            formatShortDate(SampleDate(2026, 5, 10)),
-            250_000,
-            "A",
-            categoryIcon = financeIcon("Paycheck"),
-            dateIso = "2026-05-10",
-        ),
-        TransactionItem(
-            "Riverside Cafe",
-            "Dining",
-            formatShortDate(SampleDate(2026, 5, 8)),
-            -2_840,
-            "R",
-            categoryIcon = financeIcon("Dining"),
-            dateIso = "2026-05-08",
-        ),
-        TransactionItem(
-            "City Transit",
-            "Transport",
-            formatShortDate(SampleDate(2026, 5, 6)),
-            -1_650,
-            "C",
-            categoryIcon = financeIcon("Transport"),
-            dateIso = "2026-05-06",
-        ),
-        TransactionItem(
-            "Book Nook",
-            "Personal",
-            formatShortDate(SampleDate(2026, 5, 4)),
-            -2_399,
-            "B",
-            categoryIcon = Lucide.Receipt,
-            dateIso = "2026-05-04",
-        ),
-    )
-
-internal val previewCategoryGroups =
-    listOf(
-        LiveCategoryGroupSummary(
-            id = "sample-essentials",
-            name = "Essentials",
-            categories =
-                listOf(
-                    LiveCategorySummary("sample-rent", "Rent", 150_000, 0, 150_000),
-                    LiveCategorySummary("sample-groceries", "Groceries", 50_000, -18_400, 31_600),
-                    LiveCategorySummary("sample-utilities", "Utilities", 32_000, -11_200, 20_800),
-                ),
-        ),
-        LiveCategoryGroupSummary(
-            id = "sample-everyday",
-            name = "Everyday",
-            categories = listOf(LiveCategorySummary("sample-dining", "Dining", 35_000, -17_000, 18_000)),
-        ),
-    )
-
 internal fun buildLiveTransactionItems(
     records: List<BudgetRecordEntity>,
     accountRecords: List<BudgetRecordEntity>,
@@ -462,31 +382,6 @@ internal fun buildLiveTransactionItems(
     }
 }
 
-internal data class PreviewAccount(
-    val id: String,
-    val name: String,
-    val description: String,
-    val group: String,
-    val balanceMinor: Long,
-    val offBudget: Boolean = false,
-)
-
-internal val previewAccounts =
-    listOf(
-        PreviewAccount("sample:checking", "Checking", "Everyday spending", "Cash accounts", 348_216),
-        PreviewAccount("sample:savings", "Savings", "Emergency fund", "Cash accounts", 820_000),
-        PreviewAccount(
-            "sample:travel-card",
-            "Travel card",
-            "Statement closes ${formatShortDate(SampleDate(2026, 5, 22))}",
-            "Credit",
-            -64_280,
-        ),
-        PreviewAccount("sample:car-loan", "Car loan", "Off budget", "Tracking", -830_000, offBudget = true),
-    )
-
-internal fun previewAccountById(id: String): PreviewAccount = previewAccounts.firstOrNull { it.id == id } ?: previewAccounts.first()
-
 internal data class SelectorItem(
     val id: String,
     val label: String,
@@ -503,7 +398,7 @@ internal fun formatLiveDate(value: String?): String {
     val month = parts?.getOrNull(1)?.toIntOrNull()
     val day = parts?.getOrNull(2)?.take(2)?.toIntOrNull()
     return if (year != null && month != null && day != null) {
-        formatDate(SampleDate(year, month, day))
+        formatDate(CalendarDate(year, month, day))
     } else {
         value ?: "Undated"
     }
@@ -780,7 +675,7 @@ internal fun AppState.togglePinnedCategory(categoryId: String) {
     pinnedCategoryIds = pinned.joinToString("\u001f")
 }
 
-internal fun AppState.categoryPinKey(categoryId: String): String = "${selectedBudgetId.ifBlank { "sample" }}:$categoryId"
+internal fun AppState.categoryPinKey(categoryId: String): String = "$selectedBudgetId:$categoryId"
 
 internal data class AppNavigation(
     val open: (AppRoute) -> Unit,

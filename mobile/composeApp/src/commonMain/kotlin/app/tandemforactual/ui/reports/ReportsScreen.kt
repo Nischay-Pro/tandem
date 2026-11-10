@@ -63,9 +63,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import app.tandemforactual.data.database.AccountDayAggregate
-import app.tandemforactual.data.database.CategoryMonthAggregate
-import app.tandemforactual.data.database.MonthlyIncomeSpendingAggregate
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
@@ -89,13 +86,10 @@ import app.tandemforactual.ui.reports.ReportWindow
 import app.tandemforactual.ui.reports.budgetedSpentSummary
 import app.tandemforactual.ui.reports.categoryChartPoints
 import app.tandemforactual.ui.reports.categoryPercentage
-import app.tandemforactual.ui.reports.categorySpendingPoints
 import app.tandemforactual.ui.reports.categorySpendingSummary
 import app.tandemforactual.ui.reports.createReportHistoryWindow
 import app.tandemforactual.ui.reports.createReportWindow
 import app.tandemforactual.ui.reports.incomeSpendingSummary
-import app.tandemforactual.ui.reports.monthlyMoneyPoints
-import app.tandemforactual.ui.reports.netWorthPoints
 import app.tandemforactual.ui.reports.netWorthSummary
 import app.tandemforactual.ui.reports.reportMonthAxisLabel
 import app.tandemforactual.ui.reports.reportMonthLabel
@@ -127,8 +121,8 @@ internal fun ReportsScreen(
     reportsDataCache: ReportsDataCache,
     onOpenReport: (ReportKind) -> Unit,
     onOpenCategoryActivity: (String, String, ReportWindow) -> Unit,
-    onOpenActivity: () -> Unit,
     onAddTransaction: () -> Unit,
+    onChooseBudget: () -> Unit,
 ) {
     LaunchedEffect(state.selectedBudgetId) {
         if (state.reportsBudgetId != state.selectedBudgetId) {
@@ -142,24 +136,25 @@ internal fun ReportsScreen(
     val rangePreset = ReportRangePreset.entries.firstOrNull { it.name == state.reportsRangePreset } ?: ReportRangePreset.LAST_6_MONTHS
     val today = platformTodayIsoDate()
     val window = createReportWindow(state.reportsMonthId, periodMode, rangePreset, today)
-    val netWorthMonthIds =
-        if (state.selectedBudgetId.isBlank()) {
-            previewTransactions.mapNotNull { it.dateIso.takeIf(String::isNotBlank)?.take(7) }
-        } else {
-            mobileSession.budgetMonthIds
-        }
-    val netWorthWindow =
-        remember(netWorthMonthIds, today) { createReportHistoryWindow(netWorthMonthIds, today) }
-    val dataWindow =
-        window
-            ?: ReportWindow(
-                "2026-05-01",
-                "2026-05-31",
-                "2026-05",
-                "2026-05",
-                listOf("2026-05"),
+    if (state.selectedBudgetId.isBlank()) {
+        PageColumn {
+            EmptyState(
+                "Choose a budget",
+                "Open an Actual budget to view reports.",
+                actionLabel = "Choose budget",
+                onAction = onChooseBudget,
             )
-    val data = rememberReportData(state, mobileSession, accounts, dataWindow, netWorthWindow ?: dataWindow, reportsDataCache)
+        }
+        return
+    }
+    if (window == null) {
+        PageColumn { EmptyState("Choose a report period", "Choose a month to see your reports.") }
+        return
+    }
+    val netWorthMonthIds = mobileSession.budgetMonthIds
+    val netWorthWindow =
+        remember(netWorthMonthIds, today) { createReportHistoryWindow(netWorthMonthIds, today) } ?: window
+    val data = rememberReportData(state, mobileSession, accounts, window, netWorthWindow, reportsDataCache)
     val listState = LocalRouteLazyListState.current ?: rememberLazyListState()
     LazyColumn(
         state = listState,
@@ -180,29 +175,17 @@ internal fun ReportsScreen(
                 },
             )
         }
-        if (window == null) {
-            item(key = "reports-invalid-period") {
-                SurfaceCard {
-                    EmptyState(
-                        "Choose a report period",
-                        "Choose a month to see your reports.",
-                        Modifier.padding(TandemSpacing.large),
-                    )
-                }
-            }
-        } else {
-            ReportKind.entries.forEach { kind ->
-                item(key = "report-card-${kind.name}") {
-                    ReportCard(
-                        kind,
-                        data,
-                        if (kind == ReportKind.NET_WORTH) netWorthWindow ?: window else window,
-                        onSeeAll = { onOpenReport(kind) },
-                        onOpenCategoryActivity = onOpenCategoryActivity,
-                        onEmptyAction = if (state.selectedBudgetId.isBlank()) onOpenActivity else onAddTransaction,
-                        emptyActionLabel = if (state.selectedBudgetId.isBlank()) "Open activity" else "Add transaction",
-                    )
-                }
+        ReportKind.entries.forEach { kind ->
+            item(key = "report-card-${kind.name}") {
+                ReportCard(
+                    kind,
+                    data,
+                    if (kind == ReportKind.NET_WORTH) netWorthWindow else window,
+                    onSeeAll = { onOpenReport(kind) },
+                    onOpenCategoryActivity = onOpenCategoryActivity,
+                    onEmptyAction = onAddTransaction,
+                    emptyActionLabel = "Add transaction",
+                )
             }
         }
     }
@@ -224,18 +207,24 @@ internal fun ReportDetailScreen(
     val rangePreset = ReportRangePreset.entries.firstOrNull { it.name == state.reportsRangePreset } ?: ReportRangePreset.LAST_6_MONTHS
     val today = platformTodayIsoDate()
     val window = createReportWindow(state.reportsMonthId, periodMode, rangePreset, today)
+    if (state.selectedBudgetId.isBlank()) {
+        Column(Modifier.fillMaxSize().padding(TandemSpacing.screen)) {
+            EmptyState(
+                "Choose a budget",
+                "Open an Actual budget to view this report.",
+                actionLabel = "Choose budget",
+                onAction = onEmptyAction,
+            )
+        }
+        return
+    }
     if (window == null) {
         Column(Modifier.fillMaxSize().padding(TandemSpacing.screen), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
             EmptyState("Choose a report period", "Choose a month to see this report.")
         }
         return
     }
-    val netWorthMonthIds =
-        if (state.selectedBudgetId.isBlank()) {
-            previewTransactions.mapNotNull { it.dateIso.takeIf(String::isNotBlank)?.take(7) }
-        } else {
-            mobileSession.budgetMonthIds
-        }
+    val netWorthMonthIds = mobileSession.budgetMonthIds
     val netWorthWindow = createReportHistoryWindow(netWorthMonthIds, today) ?: window
     val selectedWindow = if (kind == ReportKind.NET_WORTH) netWorthWindow else window
     val data = rememberReportData(state, mobileSession, accounts, window, netWorthWindow, reportsDataCache)
@@ -266,7 +255,7 @@ internal fun ReportDetailScreen(
                         "No report data yet",
                         "Add transactions and sync your budget to build this report.",
                         Modifier.padding(TandemSpacing.large),
-                        if (state.selectedBudgetId.isBlank()) "Open activity" else "Add transaction",
+                        "Add transaction",
                         onEmptyAction,
                     )
                 }
@@ -336,7 +325,7 @@ private fun rememberReportData(
             if (budgetId.isNotBlank() && mobileSession.reportViewModels != null) {
                 mobileSession.reportViewModels.spendingByCategory.observe(budgetId, window, categoryNames)
             } else {
-                flowOf(sampleCategorySpending(window))
+                flowOf(emptyList())
             }
         }
     val monthlyFlow =
@@ -344,7 +333,7 @@ private fun rememberReportData(
             if (budgetId.isNotBlank() && mobileSession.reportViewModels != null) {
                 mobileSession.reportViewModels.spendingOverTime.observe(budgetId, window)
             } else {
-                flowOf(sampleMonthlyMoney(window))
+                flowOf(emptyList())
             }
         }
     val incomeAndSpendingFlow =
@@ -352,7 +341,7 @@ private fun rememberReportData(
             if (budgetId.isNotBlank() && mobileSession.reportViewModels != null) {
                 mobileSession.reportViewModels.incomeAndSpending.observe(budgetId, window)
             } else {
-                flowOf(sampleMonthlyMoney(window))
+                flowOf(emptyList())
             }
         }
     val budgetedFlow =
@@ -360,7 +349,7 @@ private fun rememberReportData(
             if (budgetId.isNotBlank() && mobileSession.reportViewModels != null) {
                 mobileSession.reportViewModels.budgetedAndSpent.observe(budgetId, window, categoryNames)
             } else {
-                flowOf(sampleBudgetedSpent(window))
+                flowOf(emptyList())
             }
         }
     val today = platformTodayIsoDate()
@@ -369,18 +358,18 @@ private fun rememberReportData(
             if (budgetId.isNotBlank() && mobileSession.reportViewModels != null) {
                 mobileSession.reportViewModels.netWorth.observe(budgetId, netWorthWindow.monthIds, today, accounts)
             } else {
-                flowOf(sampleNetWorth(netWorthWindow.monthIds, today))
+                flowOf(emptyList())
             }
         }
     val cacheKey =
         "$budgetId|${window.startDate}|${window.throughDate}|${window.allDates}|" +
             "${netWorthWindow.monthIds}|${categoryNames.hashCode()}|${accounts.hashCode()}"
     val cachedData = reportsDataCache.get(cacheKey)
-    val categoryInitial = if (budgetId.isBlank()) sampleCategorySpending(window) else emptyList()
-    val monthlyInitial = if (budgetId.isBlank()) sampleMonthlyMoney(window) else emptyList()
-    val incomeAndSpendingInitial = if (budgetId.isBlank()) sampleMonthlyMoney(window) else emptyList()
-    val budgetedInitial = if (budgetId.isBlank()) sampleBudgetedSpent(window) else emptyList()
-    val netWorthInitial = if (budgetId.isBlank()) sampleNetWorth(netWorthWindow.monthIds, today) else emptyList()
+    val categoryInitial = emptyList<CategorySpendingPoint>()
+    val monthlyInitial = emptyList<MonthlyMoneyPoint>()
+    val incomeAndSpendingInitial = emptyList<MonthlyMoneyPoint>()
+    val budgetedInitial = emptyList<BudgetedSpentPoint>()
+    val netWorthInitial = emptyList<NetWorthPoint>()
     val categoriesBySpend by categoryFlow.collectAsState(cachedData?.categories ?: categoryInitial)
     val monthly by monthlyFlow.collectAsState(cachedData?.monthly ?: monthlyInitial)
     val incomeAndSpending by incomeAndSpendingFlow.collectAsState(cachedData?.incomeAndSpending ?: incomeAndSpendingInitial)
@@ -391,78 +380,6 @@ private fun rememberReportData(
         if (reportsDataCache.get(cacheKey) != data) reportsDataCache.put(cacheKey, data)
     }
     return data
-}
-
-private fun sampleCategorySpending(window: ReportWindow): List<CategorySpendingPoint> {
-    val rows =
-        previewTransactions
-            .filter { it.dateIso in window.startDate..window.throughDate && it.amountMinorUnits < 0 && !it.isTransfer }
-            .map { transaction ->
-                CategoryMonthAggregate(
-                    transaction.dateIso.take(7),
-                    transaction.categoryId ?: transaction.category,
-                    kotlin.math.abs(transaction.amountMinorUnits),
-                )
-            }
-    val names = rows.associate { it.categoryId to it.categoryId }
-    return app.tandemforactual.ui.reports
-        .categorySpendingPoints(rows, names)
-}
-
-private fun sampleMonthlyMoney(window: ReportWindow): List<MonthlyMoneyPoint> {
-    val rows =
-        previewTransactions
-            .filter { it.dateIso in window.startDate..window.throughDate && !it.isTransfer }
-            .groupBy { it.dateIso.take(7) }
-            .map { (monthId, transactions) ->
-                MonthlyIncomeSpendingAggregate(
-                    monthId,
-                    transactions.filter { it.amountMinorUnits > 0 }.sumOf { it.amountMinorUnits },
-                    transactions.filter { it.amountMinorUnits < 0 }.sumOf { kotlin.math.abs(it.amountMinorUnits) },
-                )
-            }
-    return monthlyMoneyPoints(rows, window)
-}
-
-private fun sampleBudgetedSpent(window: ReportWindow): List<BudgetedSpentPoint> {
-    val names = previewCategoryGroups.flatMap { it.categories }.associate { it.id to it.name }
-    val spent =
-        sampleCategorySpending(window).map { point ->
-            point.copy(categoryId = names.entries.firstOrNull { it.value.equals(point.category, ignoreCase = true) }?.key ?: point.category)
-        }
-    val budgetRows =
-        previewCategoryGroups
-            .flatMap { it.categories }
-            .map { category ->
-                BudgetedSpentPoint(
-                    category.id,
-                    category.name,
-                    category.assignedMinor * window.monthCount,
-                    spent.firstOrNull { it.categoryId == category.id }?.spendingMinor ?: kotlin.math.abs(category.activityMinor),
-                )
-            }
-    return (
-        budgetRows +
-            spent.filterNot { value -> budgetRows.any { it.categoryId == value.categoryId } }.map { value ->
-                BudgetedSpentPoint(value.categoryId, value.category, 0, value.spendingMinor)
-            }
-    ).sortedByDescending(BudgetedSpentPoint::spentMinor)
-}
-
-private fun sampleNetWorth(
-    monthIds: List<String>,
-    today: String,
-): List<NetWorthPoint> {
-    val accounts =
-        previewAccounts.map { account ->
-            LiveAccountSummary(account.id, account.name, account.balanceMinor, null, account.offBudget)
-        }
-    val accountId = previewAccounts.firstOrNull()?.id ?: "sample:checking"
-    val daily =
-        previewTransactions
-            .filter { it.dateIso.isNotBlank() && it.amountMinorUnits != 0L }
-            .map { AccountDayAggregate(accountId, it.dateIso, it.amountMinorUnits) }
-    return netWorthPoints(daily, accounts, monthIds, today)
 }
 
 @Composable

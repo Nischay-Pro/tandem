@@ -12,6 +12,7 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -33,6 +34,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Server
 import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.Wifi
+import kotlinx.coroutines.launch
 
 @Composable
 internal fun ServerDeviceScreen(
@@ -44,6 +46,7 @@ internal fun ServerDeviceScreen(
     onForgetDeviceLocally: () -> Unit,
 ) {
     val device = mobileSession.pairedDevice
+    val scope = rememberCoroutineScope()
     var confirmation by rememberSaveable { mutableStateOf("") }
     PageColumn {
         SectionCard("Server") {
@@ -101,11 +104,20 @@ internal fun ServerDeviceScreen(
             )
         }
         InfoBubble("One-time pairing codes and budget passwords aren’t saved.")
+        if (mobileSession.signOutError != null) {
+            InfoBubble(mobileSession.signOutError.orEmpty())
+        }
         mobileSession.deviceRevocationError?.let { message ->
             AttentionBanner("Couldn’t remove this device", message, "Try again", onForgetDevice)
             InfoBubble("The server still trusts this device until its owner removes it there.")
         }
         AnimatedPreviewNote(mobileSession.credentialStorageError)
+        InfoBubble("Sign out clears all cached budgets from this device. Your budgets on the server stay unchanged.")
+        SecondaryButton(
+            if (mobileSession.isSigningOut) "Signing out" else "Sign out and clear data",
+            enabled = !mobileSession.isSigningOut,
+            onClick = { confirmation = "signout" },
+        )
         if (device == null) {
             SecondaryButton("Pair this device") { navigation.open(AppRoute.SERVER_ADDRESS) }
         } else if (mobileSession.deviceRevocationError != null) {
@@ -123,6 +135,25 @@ internal fun ServerDeviceScreen(
         }
     }
     when (confirmation) {
+        "signout" ->
+            DestructiveConfirmationDialog(
+                title = "Sign out and clear data?",
+                message =
+                    "This removes saved access and every cached budget from this device. Your budgets on the server will stay unchanged. Pending changes must be synced or resolved first.",
+                confirmLabel = "Sign out and clear data",
+                dismissLabel = "Cancel",
+                enabled = !mobileSession.isSigningOut,
+                onDismissRequest = { if (!mobileSession.isSigningOut) confirmation = "" },
+                onConfirm = {
+                    confirmation = ""
+                    scope.launch {
+                        if (mobileSession.signOutAndClearLocalData()) {
+                            state.clearBudgetSession()
+                            navigation.reset(AppRoute.WELCOME)
+                        }
+                    }
+                },
+            )
         "server" ->
             DestructiveConfirmationDialog(
                 title = "Remove this device?",

@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
@@ -89,6 +90,7 @@ internal fun StartupScreen() {
 @Composable
 internal fun WelcomeScreen(navigation: AppNavigation) {
     val palette = tandemPalette
+    val uriHandler = LocalUriHandler.current
     Column(
         modifier =
             Modifier
@@ -100,22 +102,24 @@ internal fun WelcomeScreen(navigation: AppNavigation) {
     ) {
         Spacer(Modifier.height(14.dp))
         TandemBrandMark(Modifier.size(72.dp))
-        Heading("Budget and account overview", "Plan spending, review accounts, and follow recent changes.")
+        Heading("Tandem for Actual Budget", "A phone companion for your own Actual Budget server.")
         SurfaceCard {
-            Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.large)) {
+            Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                Text("Before you start", color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
+                BodyText("Have the address where Tandem is running ready.")
                 Text(
-                    "Tandem saves a copy on this device. Actual Budget remains the source of truth.",
+                    "Your budget data stays between your phone and your server.",
                     color = palette.text,
-                    fontSize = TandemTypography.action,
-                    lineHeight = TandemTypography.actionLineHeight,
-                    fontWeight = FontWeight.Medium,
+                    fontSize = TandemTypography.compactBody,
+                    lineHeight = TandemTypography.bodyLineHeight,
                 )
             }
         }
+        SecondaryButton("How to set up a server", modifier = Modifier.fillMaxWidth()) {
+            uriHandler.openUri("https://github.com/Nischay-Pro/tandem#readme")
+        }
         Spacer(Modifier.weight(1f, fill = false))
         PrimaryButton("Get started") { navigation.open(AppRoute.SERVER_ADDRESS) }
-        SecondaryButton("View sample budget") { navigation.selectTab(AppRoute.BUDGET) }
-        PreviewNote("Names and amounts are sample data. This screen isn’t connected to a server.")
     }
 }
 

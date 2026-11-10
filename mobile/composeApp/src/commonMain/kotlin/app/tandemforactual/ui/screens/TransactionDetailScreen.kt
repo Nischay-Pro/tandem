@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.DividerLine
+import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.PrimaryButton
 import app.tandemforactual.ui.components.RowLeading
@@ -48,7 +49,18 @@ internal fun TransactionDetailScreen(
     merchantIconMatcher: MerchantIconMatcherPack?,
 ) {
     val isLive = state.selectedTransactionIsLive
-    val amount = state.selectedTransactionAmountMinor ?: -4_218L
+    val amount = state.selectedTransactionAmountMinor
+    if (!isLive || amount == null || state.selectedTransactionRecordId.isBlank()) {
+        PageColumn {
+            EmptyState(
+                "Transaction unavailable",
+                "Choose a transaction from an open Actual budget.",
+                actionLabel = "Choose budget",
+                onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+            )
+        }
+        return
+    }
     val merchantIcon = remember(merchantIconMatcher, state.transactionPayee) { merchantIconMatcher?.iconFor(state.transactionPayee) }
     val categoryIcon =
         remember(state.categoryIconOverrides, state.transactionCategory, state.newTransactionCategoryId) {
@@ -64,8 +76,7 @@ internal fun TransactionDetailScreen(
     val syncDescription =
         when {
             isSyncedToActual -> "Synced to Actual"
-            isLive -> "Changes not synced to Actual"
-            else -> "Sample transaction, not synced to Actual"
+            else -> "Changes not synced to Actual"
         }
     PageColumn(verticalSpacing = 12.dp) {
         Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
@@ -130,13 +141,8 @@ internal fun TransactionDetailScreen(
                 trailing = state.transactionNotes.ifBlank { "No notes" },
             )
         }
-        if (isLive) {
-            PrimaryButton("Edit transaction", enabled = state.selectedTransactionRecordId.isNotBlank() && !state.readOnlyMode) {
-                navigation.open(AppRoute.EDIT_TRANSACTION)
-            }
-        } else {
-            PreviewNote("This sample transaction is read-only. Editing it won’t change Actual Budget.")
-            PrimaryButton("Edit transaction", enabled = !state.readOnlyMode) { navigation.open(AppRoute.EDIT_TRANSACTION) }
+        PrimaryButton("Edit transaction", enabled = !state.readOnlyMode) {
+            navigation.open(AppRoute.EDIT_TRANSACTION)
         }
     }
 }

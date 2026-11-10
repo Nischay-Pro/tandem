@@ -104,8 +104,8 @@ internal fun ActivityScreen(
         selectedTransactionIds = emptySet()
         confirmBulkDelete = false
     }
-    val transactionSource = if (isLiveBudget) liveTransactions else previewTransactions
-    val transactions = if (isLiveBudget) transactionSource.filterNot(TransactionItem::isSplitParent) else transactionSource
+    val transactionSource = liveTransactions
+    val transactions = transactionSource.filterNot(TransactionItem::isSplitParent)
     val selectedSortOrder = state.activitySortOrder
     val showAccountName =
         remember(transactions) {
@@ -146,7 +146,6 @@ internal fun ActivityScreen(
             isRefreshing = isRefreshing,
             onRefresh = onSyncNow.takeIf { isLiveBudget },
         ) {
-            if (!isLiveBudget) item(key = "activity-preview-banner") { SampleBanner() }
             item(key = "activity-search-entry") {
                 SurfaceCard(onClick = { openGeneralActivitySearch(state, navigation) }) {
                     Row(
@@ -177,17 +176,18 @@ internal fun ActivityScreen(
             } else if (transactions.isEmpty()) {
                 item(key = "activity-empty") {
                     EmptyState(
-                        if (isLiveBudget) "No transactions yet" else "No sample transactions",
-                        if (isLiveBudget) "Sync the budget to refresh." else null,
+                        if (isLiveBudget) "No transactions yet" else "Choose a budget",
+                        if (isLiveBudget) "Sync the budget to refresh." else "Open an Actual budget to view activity.",
                         modifier = Modifier.padding(TandemSpacing.large),
+                        actionLabel = "Choose budget".takeIf { !isLiveBudget },
+                        onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) }.takeIf { !isLiveBudget },
                     )
                 }
             } else {
                 itemsIndexed(
                     sortedTransactions,
                     key = { index, transaction ->
-                        val prefix = if (isLiveBudget) "activity" else "sample"
-                        "$prefix:${transaction.recordId ?: "$index:${transaction.dateLabel}:${transaction.payee}:${transaction.amountMinorUnits}"}"
+                        "activity:${transaction.recordId ?: "$index:${transaction.dateLabel}:${transaction.payee}:${transaction.amountMinorUnits}"}"
                     },
                 ) { index, transaction ->
                     SurfaceCard(modifier = if (isLiveBudget) tandemListItemModifier(tandemReduceMotion) else Modifier) {
@@ -246,7 +246,6 @@ internal fun ActivityScreen(
                     }
                 }
             }
-            if (!isLiveBudget) item(key = "activity-sample-note") { PreviewNote("Transactions use sample data.") }
             if (selectionMode) item(key = "activity-selection-bottom-inset") { Spacer(Modifier.height(104.dp)) }
         }
         AnimatedVisibility(

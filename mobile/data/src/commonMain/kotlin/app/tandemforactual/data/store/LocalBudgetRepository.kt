@@ -616,6 +616,19 @@ class LocalBudgetRepository(
 
     suspend fun readPendingWrites(budgetId: String): List<OutboxOperationEntity> = database.outboxDao().findPending(budgetId)
 
+    suspend fun hasUnresolvedWrites(): Boolean = database.outboxDao().hasUnresolvedWrites()
+
+    suspend fun clearAllLocalData() {
+        val preservedPreferences =
+            database.appPreferenceDao().readAll().filterNot {
+                it.name == AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY
+            }
+        database.clearAllTables()
+        if (preservedPreferences.isNotEmpty()) {
+            database.appPreferenceDao().putAll(preservedPreferences)
+        }
+    }
+
     /** Replaces a temporary category id in unsent transaction edits after the category is created remotely. */
     suspend fun remapPendingCategoryReferences(
         budgetId: String,

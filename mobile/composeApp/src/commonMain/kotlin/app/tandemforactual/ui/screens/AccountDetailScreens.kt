@@ -65,9 +65,17 @@ internal fun AccountDetailScreen(
 ) {
     val scope = rememberCoroutineScope()
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
-    val liveAccount = if (isLiveBudget) liveAccounts.firstOrNull { it.id == state.selectedAccountId } else null
-    val previewAccount = if (isLiveBudget) null else previewAccountById(state.selectedAccountId)
-    val accountName = liveAccount?.name ?: previewAccount?.name
+    if (!isLiveBudget) {
+        EmptyState(
+            "Choose a budget",
+            "Open an Actual budget to view its accounts.",
+            actionLabel = "Choose budget",
+            onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+        )
+        return
+    }
+    val liveAccount = liveAccounts.firstOrNull { it.id == state.selectedAccountId }
+    val accountName = liveAccount?.name
     var accountActivity by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(emptyList<TransactionItem>()) }
     var accountActivityOffset by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(0) }
     var accountActivityHasMore by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(false) }
@@ -153,33 +161,18 @@ internal fun AccountDetailScreen(
         val clearedBalanceFlow = mobileSession.observeClearedAccountBalance(state.selectedBudgetId, accountId) ?: return@LaunchedEffect
         clearedBalanceFlow.collect { clearedAccountBalanceMinor = it }
     }
-    val shownAccountActivity =
-        when {
-            liveAccount != null -> accountActivity
-            previewAccount != null -> previewTransactions.filter { it.account == previewAccount.name }
-            else -> emptyList()
-        }
-    val offBudget = liveAccount?.offBudget ?: previewAccount?.offBudget ?: false
+    val shownAccountActivity = accountActivity
+    val offBudget = liveAccount?.offBudget ?: false
     val reconciliationCandidates =
         shownAccountActivity.filter { !it.isSplitParent && it.reconciled != true && it.recordId != null }
-    val description =
-        when {
-            liveAccount != null -> if (liveAccount.offBudget) "Off budget" else "On budget"
-            previewAccount != null && previewAccount.offBudget -> "Off budget"
-            previewAccount != null -> "Updated ${formatShortDate(SampleDate(2026, 5, 14))}"
-            else -> ""
-        }
-    val balance =
-        liveAccount?.balanceMinor?.let(state::formatCurrency)
-            ?: previewAccount?.balanceMinor?.let(state::formatCurrency)
-            ?: "Unavailable"
+    val description = liveAccount?.let { if (it.offBudget) "Off budget" else "On budget" }.orEmpty()
+    val balance = liveAccount?.balanceMinor?.let(state::formatCurrency) ?: "Unavailable"
     PageColumn {
-        if (!isLiveBudget) SampleBanner()
         if (accountName == null) {
             Heading("Account details", "This account isn’t saved on this device.")
         } else {
             AmountHero("Available balance", balance, "$accountName · $description")
-            if (isLiveBudget && liveAccount != null) {
+            if (liveAccount != null) {
                 TandemActionButton(
                     "Reconcile",
                     TandemActionButtonTone.NEUTRAL,
@@ -201,13 +194,9 @@ internal fun AccountDetailScreen(
                 "Add transaction",
                 enabled = !offBudget && !state.readOnlyMode,
             ) {
-                if (isLiveBudget) {
-                    navigation.newTransaction(liveAccount!!.id)
-                } else {
-                    navigation.open(AppRoute.NEW_TRANSACTION)
-                }
+                navigation.newTransaction(liveAccount.id)
             }
-            if (isLiveBudget && liveAccount != null) {
+            if (liveAccount != null) {
                 TandemActionButton(
                     "Import statement",
                     TandemActionButtonTone.NEUTRAL,
@@ -231,13 +220,13 @@ internal fun AccountDetailScreen(
                 SectionCard("Recent activity", action = "See all", onClick = { navigation.selectTab(AppRoute.ACTIVITY) }) {
                     shownAccountActivity.take(6).forEachIndexed { index, item ->
                         if (index > 0) DividerLine()
-                        TransactionRow(item) { openTransaction(state, navigation, item, isLive = isLiveBudget) }
+                        TransactionRow(item) { openTransaction(state, navigation, item, isLive = true) }
                     }
                 }
             }
             SettingRow(
                 "Account options",
-                if (isLiveBudget) "Close account" else "$accountName settings",
+                "Close account",
                 onClick = { navigation.open(AppRoute.ACCOUNT_OPTIONS) },
             )
         }

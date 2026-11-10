@@ -214,6 +214,12 @@ internal class TandemMobileSession(
     var deviceRevocationError by mutableStateOf<String?>(null)
         private set
 
+    var signOutError by mutableStateOf<String?>(null)
+        private set
+
+    var isSigningOut by mutableStateOf(false)
+        private set
+
     var isRevokingDevice by mutableStateOf(false)
         private set
 
@@ -369,6 +375,7 @@ internal class TandemMobileSession(
     }
 
     private fun persistBudgetReorderQueue() {
+        if (isSigningOut) return
         val store = preferencesStore ?: return
         if (!budgetQueueLoaded) return
         sessionScope.launch {
@@ -802,6 +809,7 @@ internal class TandemMobileSession(
 
     /** Runs outside editor screens so leaving a route cannot cancel unsent reorder operations. */
     suspend fun processQueuedBudgetReorders() {
+        if (isSigningOut) return
         restoreBudgetReorderQueue()
         var observedRetrySignal = budgetReorderRetrySignal
         while (true) {
@@ -1295,6 +1303,95 @@ internal class TandemMobileSession(
         clearDeviceSession()
     }
 
+    suspend fun signOutAndClearLocalData(): Boolean {
+        if (isSigningOut) return false
+        isSigningOut = true
+        signOutError = null
+        try {
+            if (isSyncing || isSavingTransaction || isPerformingBudgetAction || isLoadingBudgets) {
+                signOutError = "Wait for the current sync or change to finish before signing out."
+                return false
+            }
+            restoreBudgetReorderQueue()
+            if (budgetReorderQueue.moves.isNotEmpty()) {
+                signOutError = "Sync or resolve pending changes before signing out."
+                return false
+            }
+            if (repository?.hasUnresolvedWrites() == true) {
+                signOutError = "Sync or resolve pending changes before signing out."
+                return false
+            }
+            val store = credentialStore
+            try {
+                if (store != null) withContext(Dispatchers.Default) { store.clear() }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                signOutError = "Couldn’t remove this device’s saved access. Try again."
+                return false
+            }
+            budgetQueuePersistenceMutex.withLock {
+                budgetReorderQueueState = BudgetReorderQueueState()
+                budgetQueueLoaded = true
+                repository?.clearAllLocalData()
+                preferencesStore?.putValue(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY, "")
+            }
+            apiClient.forgetSession()
+            pairedDevice = null
+            budgets = emptyList()
+            cachedBudgets = emptyList()
+            budgetCatalogLoaded = false
+            budgetCatalogVersion += 1
+            isServerReachable = false
+            hasCachedSnapshot = false
+            cachedSnapshotBudgetId = ""
+            isCredentialStored = false
+            credentialStorageError = null
+            deviceRevocationError = null
+            budgetError = null
+            isLoadingBudgets = false
+            localSyncState = null
+            budgetDisplaySettings = null
+            budgetDisplaySettingsBudgetId = null
+            transactionRecords = emptyList()
+            activityTransactionRecords.clear()
+            activityTransactionRecordsVersion += 1
+            activityTransactionPageBudgetId = ""
+            activityTransactionPageError = null
+            hasMoreActivityTransactions = false
+            activitySearchRecords = emptyList()
+            activitySearchRecordsBudgetId = ""
+            payeeRecords = emptyList()
+            categoryRecords = emptyList()
+            categoryGroupRecords = emptyList()
+            budgetMonthIds = emptyList()
+            selectedBudgetMonthRecord = null
+            accountRecords = emptyList()
+            accountGroupRecords = emptyList()
+            scheduleRecords = emptyList()
+            ruleRecords = emptyList()
+            pendingWrites = emptyList()
+            cachedTransactionCount = 0
+            syncedTransactionCount = 0
+            checkedWriteOperation = null
+            checkedWriteOperationId = null
+            uncertainWriteCheckError = null
+            uncertainWriteCheckErrorOperationId = null
+            transactionWriteMessage = null
+            syncComplete = false
+            lastSyncSummary = null
+            syncPresentation = SyncPresentationState()
+            return true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            signOutError = "Couldn’t clear this device’s cached budgets. Try again."
+            return false
+        } finally {
+            isSigningOut = false
+        }
+    }
+
     suspend fun pair(
         serverUrl: String,
         pairingCode: String,
@@ -1357,6 +1454,7 @@ internal class TandemMobileSession(
         sendQueuedWrites: Boolean = true,
         reconcileUncertainOperationId: String? = null,
     ): BudgetSyncSummary? {
+        if (isSigningOut) return null
         restoreBudgetReorderQueue()
         if (!encryptionPassword.isNullOrBlank()) retryQueuedBudgetReorders(budgetId, encryptionPassword)
         syncComplete = false
@@ -2163,7 +2261,7 @@ internal class TandemMobileSession(
             return false
         }
         if (requestedDate != null && requestedDate < "1995-01-01") {
-            transactionWriteMessage = "Choose a date on or after ${formatDate(SampleDate(1995, 1, 1))}."
+            transactionWriteMessage = "Choose a date on or after ${formatDate(CalendarDate(1995, 1, 1))}."
             return false
         }
         val signedAmount = if (transactionType == "Income") enteredAmount else -enteredAmount

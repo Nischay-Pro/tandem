@@ -99,7 +99,7 @@ internal fun ActivitySearchScreen(
         if (isLiveBudget) mobileSession.observeActivitySearchRecords(state.selectedBudgetId)
     }
     var searchableRecords by remember(state.selectedBudgetId) {
-        mutableStateOf(cachedSearch?.searchableRecords ?: previewTransactions.map(TransactionItem::toActivitySearchRecord))
+        mutableStateOf(cachedSearch?.searchableRecords ?: emptyList())
     }
     var loadedSearchBudgetId by remember(state.selectedBudgetId) {
         mutableStateOf(cachedSearch?.budgetId ?: "")
@@ -115,7 +115,7 @@ internal fun ActivitySearchScreen(
         mobileSession.budgetDisplaySettings,
     ) {
         if (!isLiveBudget) {
-            searchableRecords = previewTransactions.map(TransactionItem::toActivitySearchRecord)
+            searchableRecords = emptyList()
             loadedSearchBudgetId = ""
             isBuildingSearchRecords = false
         } else if (mobileSession.activitySearchRecordsBudgetId != state.selectedBudgetId) {

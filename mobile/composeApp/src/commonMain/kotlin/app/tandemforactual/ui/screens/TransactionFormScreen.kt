@@ -31,6 +31,7 @@ import app.tandemforactual.ui.components.AnimatedReveal
 import app.tandemforactual.ui.components.BodyText
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
+import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.SecondaryButton
@@ -640,56 +641,11 @@ internal fun TransactionFormScreen(
         return
     }
     PageColumn {
-        SampleBanner()
-        TextFieldCard(
-            "Amount",
-            state.transactionAmount,
-            { state.transactionAmount = it },
-            TextFieldOptions(placeholder = "For example, ${state.formatAmount(1_250)}"),
-        )
-        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            TransactionTypePicker(state.transactionType, onSelect = { state.transactionType = it })
-        }
-        ReadOnlyField("Account", state.transactionAccount, leadingVector = Lucide.WalletCards) {
-            showAccountPicker = true
-        }
-        ReadOnlyField("Payee", state.transactionPayee, leadingVector = Lucide.Receipt) { navigation.open(AppRoute.CHOOSE_PAYEE) }
-        ReadOnlyField("Category", state.transactionCategory, leadingVector = Lucide.Tags) { navigation.open(AppRoute.CHOOSE_CATEGORY) }
-        ReadOnlyField("Date", state.transactionDate, leadingVector = Lucide.CalendarDays) { showDatePicker = true }
-        TextFieldCard(
-            "Notes",
-            state.transactionNotes,
-            { state.transactionNotes = it },
-            TextFieldOptions(placeholder = "Add a note (optional)", singleLine = false),
-        )
-        PreviewNote(
-            if (isNew) {
-                "New transactions aren’t available here yet. This sample form doesn’t save or sync changes."
-            } else {
-                "This sample form isn’t connected. Changes won’t be saved or synced."
-            },
+        EmptyState(
+            "Choose a budget",
+            "Open an Actual budget before adding or editing a transaction.",
+            actionLabel = "Choose budget",
+            onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
         )
     }
-    TransactionAccountPickerDialog(
-        visible = showAccountPicker,
-        liveAccounts,
-        selectedId = "",
-        selectedName = state.transactionAccount,
-        live = false,
-        onSelect = { account ->
-            state.transactionAccount = account.label
-            state.newTransactionAccountId = ""
-            showAccountPicker = false
-        },
-        onDismiss = { showAccountPicker = false },
-    )
-    TransactionDatePickerDialog(
-        visible = showDatePicker,
-        selectedDate = state.transactionDate,
-        onSelect = {
-            state.transactionDate = it
-            showDatePicker = false
-        },
-        onDismiss = { showDatePicker = false },
-    )
 }

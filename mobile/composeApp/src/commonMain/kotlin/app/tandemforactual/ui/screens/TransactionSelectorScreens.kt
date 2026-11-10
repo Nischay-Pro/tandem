@@ -339,4 +339,4 @@ internal fun transactionIsoDate(
 ): String = "${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}"
 
 internal fun displayTransactionDate(value: String): String =
-    parseIsoDate(value)?.let { (year, month, day) -> formatDate(SampleDate(year, month, day)) } ?: value
+    parseIsoDate(value)?.let { (year, month, day) -> formatDate(CalendarDate(year, month, day)) } ?: value

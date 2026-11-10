@@ -804,7 +804,7 @@ private fun dateRangeLabel(
 ): String {
     fun display(value: String): String {
         val (year, month, day) = value.split('-').map(String::toInt)
-        return formatDate(SampleDate(year, month, day))
+        return formatDate(CalendarDate(year, month, day))
     }
     return if (start == end) display(start) else "${display(start)} – ${display(end)}"
 }

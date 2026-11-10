@@ -33,6 +33,7 @@ import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
 import com.composables.icons.lucide.Bell
+import com.composables.icons.lucide.BookOpen
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Database
 import com.composables.icons.lucide.Info
@@ -116,6 +117,15 @@ internal fun SettingsScreen(
             )
         }
         SectionCard("Support") {
+            ListRow(
+                "Getting started",
+                leading = RowLeading.Icon(Lucide.BookOpen),
+                onClick = {
+                    state.hasDismissedBudgetHint = false
+                    navigation.selectTab(AppRoute.BUDGET)
+                },
+            )
+            DividerLine()
             ListRow(
                 "About, help, and licenses",
                 "Version and open-source licenses",

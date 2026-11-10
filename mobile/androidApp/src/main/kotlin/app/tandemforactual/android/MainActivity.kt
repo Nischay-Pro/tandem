@@ -58,8 +58,6 @@ class MainActivity : ComponentActivity() {
       !appStartupComplete && SystemClock.uptimeMillis() < splashDeadline
     }
     super.onCreate(savedInstanceState)
-    val previewBuild = BuildConfig.DEBUG || BuildConfig.BUILD_TYPE == "nonMinifiedRelease"
-    val openPreview = previewBuild && intent.getBooleanExtra("preview", false)
     notificationPermissionEnabled = hasNotificationPermission()
     BudgetSystemNotifications.initialize(applicationContext)
     val database = openTandemDatabase(tandemDatabaseBuilder(applicationContext))
@@ -71,12 +69,11 @@ class MainActivity : ComponentActivity() {
         }
       }
       TandemApp(
-        startInPreview = openPreview,
         deviceName =
           Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME)
             ?.takeIf { it.isNotBlank() } ?: Build.MODEL ?: "Android device",
         database = database,
-        deviceCredentialStore = if (openPreview) null else AndroidDeviceCredentialStore(applicationContext),
+        deviceCredentialStore = AndroidDeviceCredentialStore(applicationContext),
         nowEpochMillis = { System.currentTimeMillis() },
         allowInsecurePrivateNetwork = true,
         onBackgroundSyncSettingsChanged = onBackgroundSyncSettingsChanged,
@@ -86,7 +83,6 @@ class MainActivity : ComponentActivity() {
         onToggleNotificationPermission = { updateNotificationPermission(it) },
         onStartupComplete = {
           appStartupComplete = true
-          if (!openPreview) requestNotificationPermissionOnFirstLaunch()
         },
         appResumeEvents = appResumeEvents,
         networkRestoredEvents = networkRestoredEvents,
@@ -121,15 +117,6 @@ class MainActivity : ComponentActivity() {
       openNotificationSettings()
     } else {
       requestNotificationPermission()
-    }
-  }
-
-  private fun requestNotificationPermissionOnFirstLaunch() {
-    val preferences = notificationPreferences()
-    if (preferences.getBoolean(NOTIFICATION_PERMISSION_PROMPTED, false)) return
-    preferences.edit().putBoolean(NOTIFICATION_PERMISSION_PROMPTED, true).apply()
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission()) {
-      notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
   }
 

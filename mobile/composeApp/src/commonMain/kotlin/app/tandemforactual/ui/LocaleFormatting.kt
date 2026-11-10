@@ -2,7 +2,7 @@ package app.tandemforactual.ui
 
 import app.tandemforactual.data.store.BudgetDisplaySettings
 
-internal data class SampleDate(
+internal data class CalendarDate(
     val year: Int,
     val month: Int,
     val day: Int,
@@ -100,9 +100,9 @@ internal fun formatSignedCurrency(
     displaySettings: BudgetDisplaySettings? = null,
 ): String = if (minorUnits > 0) "+${formatCurrency(minorUnits, displaySettings)}" else formatCurrency(minorUnits, displaySettings)
 
-internal fun formatDate(date: SampleDate): String = platformFormatDate(date.year, date.month, date.day, includeYear = true)
+internal fun formatDate(date: CalendarDate): String = platformFormatDate(date.year, date.month, date.day, includeYear = true)
 
-internal fun formatShortDate(date: SampleDate): String = platformFormatDate(date.year, date.month, date.day, includeYear = false)
+internal fun formatShortDate(date: CalendarDate): String = platformFormatDate(date.year, date.month, date.day, includeYear = false)
 
 internal fun formatMonth(
     year: Int,

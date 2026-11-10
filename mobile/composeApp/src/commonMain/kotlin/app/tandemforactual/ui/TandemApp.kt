@@ -78,7 +78,6 @@ import kotlinx.coroutines.withContext
 
 @Composable
 fun TandemApp(
-    startInPreview: Boolean = false,
     deviceName: String = "This device",
     database: TandemDatabase? = null,
     deviceCredentialStore: DeviceCredentialStore? = null,
@@ -152,10 +151,7 @@ fun TandemApp(
     var transactionSheetClosing by remember { mutableStateOf(false) }
     var transactionSheetPopCount by remember { mutableStateOf(1) }
     var nextRouteEntryId by rememberSaveable { mutableStateOf(2L) }
-    val backStack =
-        rememberSaveable(startInPreview, saver = appRouteStackSaver) {
-            mutableStateListOf(AppRouteEntry(if (startInPreview) AppRoute.BUDGET else AppRoute.STARTUP, 1))
-        }
+    val backStack = rememberSaveable(saver = appRouteStackSaver) { mutableStateListOf(AppRouteEntry(AppRoute.STARTUP, 1)) }
     var savedTabBackStacks by rememberSaveable { mutableStateOf("") }
     val newRouteEntry: (AppRoute) -> AppRouteEntry = { nextRoute ->
         val entryId = nextRouteEntryId

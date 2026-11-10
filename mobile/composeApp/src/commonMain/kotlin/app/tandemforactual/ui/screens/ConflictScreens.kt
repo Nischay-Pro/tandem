@@ -47,33 +47,31 @@ internal fun ConflictInboxScreen(
     liveTransactions: List<TransactionItem>,
 ) {
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
-    val conflicts =
-        if (isLiveBudget) {
-            mobileSession.pendingWrites
-                .filter { it.status == "conflict" }
-                .map { operation ->
-                    val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
-                    ConflictInboxItemUi(
-                        operation.operationId,
-                        transaction?.payee ?: "Deleted transaction",
-                        "${transaction?.dateLabel ?: "Actual changed"} · ${transaction?.category ?: "Transaction"}",
-                    )
-                }
-        } else {
-            listOf(
-                ConflictInboxItemUi(
-                    "sample-conflict",
-                    "Corner Market",
-                    "${formatDate(SampleDate(2026, 5, 14))} · Groceries · Checking",
-                ),
+    if (!isLiveBudget) {
+        PageColumn {
+            EmptyState(
+                "Choose a budget",
+                "Open an Actual budget to review pending changes.",
+                actionLabel = "Choose budget",
+                onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
             )
         }
+        return
+    }
+    val conflicts =
+        mobileSession.pendingWrites
+            .filter { it.status == "conflict" }
+            .map { operation ->
+                val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
+                ConflictInboxItemUi(
+                    operation.operationId,
+                    transaction?.payee ?: "Deleted transaction",
+                    "${transaction?.dateLabel ?: "Actual changed"} · ${transaction?.category ?: "Transaction"}",
+                )
+            }
     PageLazyColumn {
-        if (!isLiveBudget) item(key = "conflicts-sample-banner") { SampleBanner() }
         item(key = "conflicts-title") {
-            BodyText(
-                if (isLiveBudget) "Choose whether to keep your edit or the latest Actual version." else "Choose which version to keep.",
-            )
+            BodyText("Choose whether to keep your edit or the latest Actual version.")
         }
         if (conflicts.isEmpty()) {
             item(key = "conflicts-empty") {
@@ -98,10 +96,8 @@ internal fun ConflictInboxScreen(
                 }
             }
         }
-        if (isLiveBudget) {
-            mobileSession.transactionWriteMessage?.let { message ->
-                item(key = "conflicts-write-message") { BodyText(message) }
-            }
+        mobileSession.transactionWriteMessage?.let { message ->
+            item(key = "conflicts-write-message") { BodyText(message) }
         }
     }
 }
@@ -131,18 +127,25 @@ internal fun ConflictValueCard(
 internal fun ConflictReviewScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
     onResolveConflict: (String, Boolean) -> Unit,
     liveTransactions: List<TransactionItem>,
 ) {
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    if (!isLiveBudget) {
+        PageColumn {
+            EmptyState(
+                "Choose a budget",
+                "Open an Actual budget to review pending changes.",
+                actionLabel = "Choose budget",
+                onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+            )
+        }
+        return
+    }
     val operation =
-        if (isLiveBudget) {
-            mobileSession.pendingWrites.firstOrNull {
-                it.operationId == state.selectedConflictOperationId &&
-                    it.status == "conflict"
-            }
-        } else {
-            null
+        mobileSession.pendingWrites.firstOrNull {
+            it.operationId == state.selectedConflictOperationId && it.status == "conflict"
         }
     val record = operation?.let { item -> mobileSession.transactionRecords.firstOrNull { it.recordId == item.recordId } }
     val deviceVersion = operation?.optimisticJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
@@ -150,26 +153,13 @@ internal fun ConflictReviewScreen(
     val deviceAmount = deviceVersion?.longValue("amount")
     val actualAmount = actualVersion?.longValue("amount")
     val transaction = operation?.let { conflict -> liveTransactions.firstOrNull { it.recordId == conflict.recordId } }
-    val deviceAmountText =
-        if (isLiveBudget) {
-            deviceAmount?.let(::formatSignedCurrency) ?: "Deleted"
-        } else {
-            state.formatCurrency(1_200)
-        }
-    val actualAmountText =
-        if (isLiveBudget) {
-            actualAmount?.let(::formatSignedCurrency) ?: "Deleted"
-        } else {
-            state.formatCurrency(1_500)
-        }
-    val accountName = transaction?.account ?: if (isLiveBudget) "Unavailable" else "Checking"
-    val categoryName = transaction?.category ?: if (isLiveBudget) "Unavailable" else "Groceries"
-    val dateLabel =
-        transaction?.dateLabel
-            ?: if (isLiveBudget) "Unavailable" else formatShortDate(SampleDate(2026, 5, 14))
+    val deviceAmountText = deviceAmount?.let(::formatSignedCurrency) ?: "Deleted"
+    val actualAmountText = actualAmount?.let(::formatSignedCurrency) ?: "Deleted"
+    val accountName = transaction?.account ?: "Unavailable"
+    val categoryName = transaction?.category ?: "Unavailable"
+    val dateLabel = transaction?.dateLabel ?: "Unavailable"
     PageColumn {
-        if (!isLiveBudget) SampleBanner()
-        if (isLiveBudget && operation == null) {
+        if (operation == null) {
             EmptyState("No change to review", "This change no longer needs attention.")
         } else {
             Heading("Two versions differ")
@@ -184,21 +174,13 @@ internal fun ConflictReviewScreen(
                 DividerLine()
                 ListRow("Date", trailing = dateLabel)
             }
-            if (isLiveBudget) {
-                mobileSession.transactionWriteMessage?.let { BodyText(it) }
-                PrimaryButton(
-                    "Keep your edit",
-                    enabled = !state.readOnlyMode && !mobileSession.isSavingTransaction && record?.remoteDeleted != true,
-                ) { onResolveConflict(operation!!.operationId, true) }
-                SecondaryButton("Keep Actual", enabled = !state.readOnlyMode && !mobileSession.isSavingTransaction) {
-                    onResolveConflict(operation!!.operationId, false)
-                }
-            } else {
-                PrimaryButton("Keep $deviceAmountText") { state.conflictChoice = "Your edit" }
-                SecondaryButton("Keep $actualAmountText") { state.conflictChoice = "Actual" }
-                if (state.conflictChoice.isNotBlank()) {
-                    InfoBubble("Sample choice: ${state.conflictChoice}")
-                }
+            mobileSession.transactionWriteMessage?.let { BodyText(it) }
+            PrimaryButton(
+                "Keep your edit",
+                enabled = !state.readOnlyMode && !mobileSession.isSavingTransaction && record?.remoteDeleted != true,
+            ) { onResolveConflict(operation.operationId, true) }
+            SecondaryButton("Keep Actual", enabled = !state.readOnlyMode && !mobileSession.isSavingTransaction) {
+                onResolveConflict(operation.operationId, false)
             }
         }
     }
@@ -365,24 +347,12 @@ internal fun UncertainWriteScreen(
         return
     }
     PageColumn {
-        Heading("Status unknown")
-        SectionCard("Corner Market", "${formatShortDate(SampleDate(2026, 5, 14))} · Groceries") {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.large),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Amount", color = tandemPalette.muted, fontSize = TandemTypography.body)
-                Text(
-                    state.formatCurrency(1_200),
-                    color = tandemPalette.text,
-                    fontSize = TandemTypography.cardTitle,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-        }
-        InfoBubble("Tandem couldn’t confirm whether Actual saved this edit. Check its status before retrying.")
-        PrimaryButton("Check status", enabled = false) {}
+        EmptyState(
+            "Choose a budget",
+            "Open an Actual budget to check pending changes.",
+            actionLabel = "Choose budget",
+            onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+        )
     }
 }
 
@@ -520,17 +490,11 @@ internal fun RejectedWriteScreen(
         return
     }
     PageColumn {
-        Heading("Change not applied")
-        SectionCard("Sample edit", "Corner Market · ${formatShortDate(SampleDate(2026, 5, 14))}") {
-            ListRow("Your edit", trailing = state.formatCurrency(1_200))
-            DividerLine()
-            ListRow(
-                "Reason",
-                "New transactions aren’t available yet",
-                "Unavailable",
-                options = ListRowOptions(trailingColor = tandemPalette.warning),
-            )
-        }
-        PrimaryButton("Close details") { navigation.back() }
+        EmptyState(
+            "Choose a budget",
+            "Open an Actual budget to review rejected changes.",
+            actionLabel = "Choose budget",
+            onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+        )
     }
 }

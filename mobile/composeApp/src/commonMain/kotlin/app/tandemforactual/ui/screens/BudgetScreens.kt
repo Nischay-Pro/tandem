@@ -1,6 +1,7 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -39,7 +40,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.AnimatedReveal
-import app.tandemforactual.ui.components.Badge
 import app.tandemforactual.ui.components.CollapsibleSectionCard
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
@@ -58,14 +58,13 @@ import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.TandemModalHeader
 import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
-import app.tandemforactual.ui.model.LiveCategoryGroupSummary
-import app.tandemforactual.ui.model.LiveCategorySummary
 import app.tandemforactual.ui.model.LiveScheduleSummary
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.ChartNoAxesCombined
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Trash2
@@ -96,6 +95,17 @@ internal fun BudgetScreen(
     var holdSheetMounted by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
     var budgetTemplateNameDraft by rememberSaveable(state.selectedBudgetId) { mutableStateOf("") }
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    if (!isLiveBudget) {
+        PageColumn {
+            EmptyState(
+                "Choose a budget",
+                "Open an Actual budget to view its plan and activity.",
+                actionLabel = "Choose budget",
+                onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+            )
+        }
+        return
+    }
     val routeScrollState = LocalRouteScrollState.current
     val routeListState = LocalRouteLazyListState.current
     val transactionActionCompact by remember(routeScrollState, routeListState) {
@@ -112,9 +122,8 @@ internal fun BudgetScreen(
     }
     val isTrackingBudget = isLiveBudget && state.budgetDisplaySettings?.budgetType == "tracking"
     val compact = state.homeLayout == "Compact"
-    val essentialsFirst = state.homeLayout == "Essentials"
     val sectionSpacing = if (compact) 10.dp else 16.dp
-    val groups = if (isLiveBudget) liveBudgetMonth?.groups.orEmpty() else previewCategoryGroups
+    val groups = liveBudgetMonth?.groups.orEmpty()
     val queuedGroupMoves = mobileSession.budgetReorderMovesFor(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
     val groupReorderStatus = mobileSession.budgetReorderStatus(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
     val orderedGroupIds =
@@ -136,19 +145,12 @@ internal fun BudgetScreen(
         remember(groups) {
             groups.flatMap { group -> group.categories }.map { it.id to it.assignedMinor }
         }
-    val recentTransactions =
-        remember(isLiveBudget, liveTransactions) {
-            if (isLiveBudget) {
-                liveTransactions.filterNot(TransactionItem::isSplitParent)
-            } else {
-                liveTransactions.takeIf { it.isNotEmpty() } ?: previewTransactions
-            }
-        }
+    val recentTransactions = remember(liveTransactions) { liveTransactions.filterNot(TransactionItem::isSplitParent) }
     val conflictCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "conflict" } else 0
     val rejectedCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "rejected" } else 0
-    val readyToAssignMinor = if (isLiveBudget) liveBudgetMonth?.toBudgetMinor ?: 0 else 124_000L
+    val readyToAssignMinor = liveBudgetMonth?.toBudgetMinor ?: 0
     val assignmentPresentation = presentBudgetAssignment(readyToAssignMinor)
-    val displayedAssignmentMinor = if (isLiveBudget) assignmentPresentation.amountMinor else readyToAssignMinor
+    val displayedAssignmentMinor = assignmentPresentation.amountMinor
     val heldForNextMonthMinor = liveBudgetMonth?.heldForNextMonthMinor?.coerceAtLeast(0) ?: 0L
     var nextMonthHoldAmountMinor by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) {
         mutableStateOf(readyToAssignMinor.coerceAtLeast(0))
@@ -164,27 +166,8 @@ internal fun BudgetScreen(
             BudgetAssignmentKind.TO_BUDGET -> palette.positive
             BudgetAssignmentKind.ALL_ASSIGNED -> palette.muted
         }
-    val summaryKey =
-        if (isLiveBudget) {
-            "live:${state.selectedBudgetId}:summary:${state.selectedMonthId}"
-        } else {
-            "summary:${state.selectedMonthId}"
-        }
-    val displayGroups =
-        remember(essentialsFirst, orderedGroups, isLiveBudget) {
-            if (essentialsFirst && !isLiveBudget) {
-                orderedGroups
-                    .withIndex()
-                    .sortedWith(
-                        compareBy<IndexedValue<LiveCategoryGroupSummary>>(
-                            { essentialGroupOrder(it.value.name) },
-                            { it.index },
-                        ),
-                    ).map { it.value }
-            } else {
-                orderedGroups
-            }
-        }
+    val summaryKey = "live:${state.selectedBudgetId}:summary:${state.selectedMonthId}"
+    val displayGroups = orderedGroups
 
     fun enqueueGroupMove(
         groupId: String,
@@ -219,17 +202,6 @@ internal fun BudgetScreen(
             isRefreshing = isLiveBudget && mobileSession.isSyncing,
             onRefresh = onSyncNow.takeIf { isLiveBudget },
         ) {
-            if (!isLiveBudget) {
-                item(key = "budget-sample-banner") {
-                    SampleBanner(
-                        if (liveTransactions.isNotEmpty()) {
-                            "Categories use sample data; activity is synced"
-                        } else {
-                            "Categories use sample data"
-                        },
-                    )
-                }
-            }
             if (isLiveBudget) {
                 item(key = "budget-conflict-alert") {
                     AnimatedReveal(visible = state.conflictReviewAlerts && conflictCount > 0) {
@@ -259,6 +231,44 @@ internal fun BudgetScreen(
             }
             item(key = "budget-overview-title") {
                 Heading("Budget overview")
+            }
+            if (mobileSession.syncComplete && !state.hasDismissedBudgetHint) {
+                item(key = "budget-getting-started-hint") {
+                    SurfaceCard {
+                        Row(
+                            Modifier.fillMaxWidth().padding(TandemSpacing.medium),
+                            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                            verticalAlignment = Alignment.Top,
+                        ) {
+                            Icon(
+                                Lucide.Info,
+                                contentDescription = null,
+                                modifier = Modifier.padding(top = 2.dp).size(20.dp),
+                                tint = palette.accent,
+                            )
+                            Column(
+                                Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
+                            ) {
+                                Text(
+                                    "Getting started",
+                                    color = palette.text,
+                                    fontSize = TandemTypography.compactBody,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    "Choose a category to review activity. Changes save here and sync when connected.",
+                                    color = palette.muted,
+                                    fontSize = TandemTypography.label,
+                                    lineHeight = TandemTypography.compactLineHeight,
+                                )
+                            }
+                            TandemIconButton(Lucide.X, "Dismiss getting-started hint", sizeDp = 36, iconSizeDp = 16) {
+                                state.hasDismissedBudgetHint = true
+                            }
+                        }
+                    }
+                }
             }
             item(key = "budget-month-picker") {
                 MonthSelectorCard(state.selectedMonth) { showMonthPicker = true }
@@ -389,11 +399,8 @@ internal fun BudgetScreen(
                         }
                     }
                 }
-                if (!isLiveBudget && essentialsFirst) {
-                    item(key = "sample-upcoming-before-groups") { UpcomingBillsCard(state, navigation) }
-                }
                 if (pinnedCategories.isNotEmpty()) {
-                    val pinnedSectionKey = if (isLiveBudget) "live:${state.selectedBudgetId}:pinned" else "sample:pinned"
+                    val pinnedSectionKey = "live:${state.selectedBudgetId}:pinned"
                     val pinnedExpanded = !state.isBudgetSectionCollapsed(pinnedSectionKey)
                     item(key = "$pinnedSectionKey:section") {
                         Column {
@@ -432,28 +439,11 @@ internal fun BudgetScreen(
                     }
                 }
                 displayGroups.forEach { group ->
-                    val groupSectionKey =
-                        if (isLiveBudget) {
-                            "live:${state.selectedBudgetId}:group:${group.id}"
-                        } else {
-                            "sample:${group.id.removePrefix("sample-")}"
-                        }
+                    val groupSectionKey = "live:${state.selectedBudgetId}:group:${group.id}"
                     val groupExpanded = !state.isBudgetSectionCollapsed(groupSectionKey)
                     val isReordering = selectedGroupOrderId == group.id
                     val groupIndex = displayGroups.indexOfFirst { it.id == group.id }
-                    val displayCategories =
-                        if (essentialsFirst && !isLiveBudget) {
-                            group.categories
-                                .withIndex()
-                                .sortedWith(
-                                    compareBy<IndexedValue<LiveCategorySummary>>(
-                                        { essentialCategoryOrder(it.value.name) },
-                                        { it.index },
-                                    ),
-                                ).map { it.value }
-                        } else {
-                            group.categories
-                        }
+                    val displayCategories = group.categories
                     item(key = "$groupSectionKey:section") {
                         SurfaceCard {
                             Column {
@@ -470,11 +460,9 @@ internal fun BudgetScreen(
                                                         selectedGroupOrderId = null
                                                     } else if (selectedGroupOrderId != null) {
                                                         selectedGroupOrderId = null
-                                                    } else if (isLiveBudget) {
+                                                    } else {
                                                         state.selectedCategoryGroupId = group.id
                                                         navigation.open(AppRoute.CATEGORY_GROUP)
-                                                    } else {
-                                                        openPreviewCategoryGroup(state, navigation, group.id)
                                                     }
                                                 },
                                                 onLongClick = {
@@ -567,21 +555,14 @@ internal fun BudgetScreen(
                                             dense = compact,
                                         ),
                                     onClick = {
-                                        if (isLiveBudget) {
-                                            state.selectedCategoryGroupId = group.id
-                                            state.selectedCategoryId = category.id
-                                            navigation.open(AppRoute.CATEGORY_DETAIL)
-                                        } else {
-                                            openPreviewCategory(state, navigation, group.id, category.id)
-                                        }
+                                        state.selectedCategoryGroupId = group.id
+                                        state.selectedCategoryId = category.id
+                                        navigation.open(AppRoute.CATEGORY_DETAIL)
                                     },
                                 )
                             }
                         }
                     }
-                }
-                if (!isLiveBudget && !essentialsFirst) {
-                    item(key = "sample-upcoming-after-groups") { UpcomingBillsCard(state, navigation) }
                 }
                 if (isLiveBudget && liveSchedules.isNotEmpty()) {
                     item(key = "actual-upcoming-schedules") {
@@ -590,14 +571,13 @@ internal fun BudgetScreen(
                 }
             }
             if (recentTransactions.isNotEmpty()) {
-                val recentSectionKey =
-                    if (isLiveBudget) "live:${state.selectedBudgetId}:recent-activity" else "sample:recent-activity"
+                val recentSectionKey = "live:${state.selectedBudgetId}:recent-activity"
                 val recentExpanded = !state.isBudgetSectionCollapsed(recentSectionKey)
                 item(key = "$recentSectionKey:section") {
                     Column {
                         CollapsibleSectionCard(
                             "Recent activity",
-                            if (isLiveBudget) "${liveTransactions.size} synced transactions" else "Latest budget changes",
+                            "${liveTransactions.size} synced transactions",
                             "See all",
                             onClick = { navigation.selectTab(AppRoute.ACTIVITY) },
                             expanded = recentExpanded,
@@ -612,50 +592,19 @@ internal fun BudgetScreen(
                                 Modifier.padding(top = sectionSpacing),
                                 verticalArrangement = Arrangement.spacedBy(sectionSpacing),
                             ) {
-                                recentTransactions.take(if (isLiveBudget) 3 else 2).forEach { transaction ->
+                                recentTransactions.take(3).forEach { transaction ->
                                     SurfaceCard {
                                         TransactionRow(transaction) {
                                             openTransaction(
                                                 state,
                                                 navigation,
                                                 transaction,
-                                                isLive = isLiveBudget || liveTransactions.isNotEmpty(),
+                                                isLive = true,
                                             )
                                         }
                                     }
                                 }
                             }
-                        }
-                    }
-                }
-            }
-            if (!isLiveBudget) {
-                item(key = "sample-sync-summary") {
-                    SurfaceCard(onClick = { navigation.open(AppRoute.SYNC_CENTER) }) {
-                        Row(
-                            Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                        ) {
-                            Badge("✓", palette.positive)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "All changes accounted for",
-                                    color = palette.text,
-                                    fontSize = TandemTypography.compactBody,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                    if (liveTransactions.isNotEmpty()) {
-                                        "${liveTransactions.size} recent Actual transactions cached"
-                                    } else {
-                                        "Nothing has synced"
-                                    },
-                                    color = palette.muted,
-                                    fontSize = TandemTypography.caption,
-                                )
-                            }
-                            Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.muted)
                         }
                     }
                 }
@@ -1138,35 +1087,3 @@ private fun MonthPickerDialog(
         }
     }
 }
-
-internal fun openPreviewCategoryGroup(
-    state: AppState,
-    navigation: AppNavigation,
-    groupId: String,
-) {
-    state.selectedCategoryGroupId = groupId
-    state.selectedCategoryId = ""
-    navigation.open(AppRoute.CATEGORY_GROUP)
-}
-
-internal fun openPreviewCategory(
-    state: AppState,
-    navigation: AppNavigation,
-    groupId: String,
-    categoryId: String,
-) {
-    state.selectedCategoryGroupId = groupId
-    state.selectedCategoryId = categoryId
-    navigation.open(AppRoute.CATEGORY_DETAIL)
-}
-
-internal fun essentialGroupOrder(name: String): Int =
-    if (listOf("essential", "housing", "fixed bill", "bill").any { it in name.lowercase() }) 0 else 1
-
-internal fun essentialCategoryOrder(name: String): Int =
-    when {
-        listOf("rent", "mortgage", "housing").any { it in name.lowercase() } -> 0
-        listOf("utility", "electric", "water", "gas").any { it in name.lowercase() } -> 1
-        listOf("insurance", "groceries", "food").any { it in name.lowercase() } -> 2
-        else -> 3
-    }

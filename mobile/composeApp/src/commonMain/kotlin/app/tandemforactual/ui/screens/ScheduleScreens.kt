@@ -49,7 +49,6 @@ import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.ListRow
-import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SelectableTile
 import app.tandemforactual.ui.components.SurfaceCard
@@ -82,38 +81,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-
-@Composable
-internal fun UpcomingBillsCard(
-    state: AppState,
-    navigation: AppNavigation,
-) {
-    val palette = tandemPalette
-    CollapsibleSectionCard(
-        "Upcoming",
-        "Two bills before the end of the month",
-        "View all",
-        onClick = { openPreviewCategoryGroup(state, navigation, "sample-essentials") },
-        expanded = !state.isBudgetSectionCollapsed("sample:upcoming"),
-        onToggleExpanded = { state.toggleBudgetSection("sample:upcoming") },
-    ) {
-        ListRow(
-            "Electric Company",
-            "Utilities · due ${formatShortDate(SampleDate(2026, 5, 18))}",
-            state.formatCurrency(12_000),
-            leading = RowLeading.Icon(financeIcon("Utilities")),
-            options = ListRowOptions(trailingColor = palette.text),
-        )
-        DividerLine()
-        ListRow(
-            "Rent",
-            "Essentials · due ${formatShortDate(SampleDate(2026, 6, 1))}",
-            state.formatCurrency(150_000),
-            leading = RowLeading.Icon(financeIcon("Rent")),
-            options = ListRowOptions(trailingColor = palette.text),
-        )
-    }
-}
 
 @Composable
 internal fun LiveUpcomingBillsCard(

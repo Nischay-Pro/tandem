@@ -268,19 +268,6 @@ class AppStateTest {
     }
 
     @Test
-    fun sampleAccountSelectionKeepsTheChosenAccountDetails() {
-        val savings = previewAccountById("sample:savings")
-        val carLoan = previewAccountById("sample:car-loan")
-
-        assertEquals("Savings", savings.name)
-        assertEquals(820_000L, savings.balanceMinor)
-        assertFalse(savings.offBudget)
-        assertEquals("Car loan", carLoan.name)
-        assertTrue(carLoan.offBudget)
-        assertEquals("Checking", previewAccountById("").name)
-    }
-
-    @Test
     fun serverChoicesKeepCachedBudgetsAvailableForLocalViewing() {
         val server = listOf(BudgetCatalogItem("remote", "Travel", false), BudgetCatalogItem("cached", "Household", true))
         val cached = listOf(BudgetCatalogItem("cached", "Household", true), BudgetCatalogItem("offline", "Saved budget · USD", false))

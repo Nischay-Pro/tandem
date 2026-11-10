@@ -36,7 +36,6 @@ import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.RowLeading
-import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
@@ -80,8 +79,6 @@ internal data class AccountListGroupUi(
 
 internal data class AccountListUi(
     val groups: List<AccountListGroupUi>,
-    val isSample: Boolean,
-    val showAccountOptions: Boolean,
 )
 
 internal fun accountTypeIcon(
@@ -199,32 +196,10 @@ internal fun AccountsScreen(
                         }
                 AccountListUi(
                     groupedAccounts,
-                    isSample = false,
-                    showAccountOptions = false,
                 )
             } else {
-                val groupedAccounts =
-                    previewAccounts.groupBy { it.group }.map { (groupName, accounts) ->
-                        AccountListGroupUi(
-                            groupName,
-                            state.formatCurrency(accounts.sumOf { it.balanceMinor }),
-                            accounts.map { account ->
-                                AccountListItemUi(
-                                    account.id,
-                                    account.name,
-                                    account.description,
-                                    state.formatCurrency(account.balanceMinor),
-                                    account.offBudget,
-                                    accountType = account.group,
-                                    balanceMinor = account.balanceMinor,
-                                )
-                            },
-                        )
-                    }
                 AccountListUi(
-                    groupedAccounts,
-                    isSample = true,
-                    showAccountOptions = true,
+                    groups = emptyList(),
                 )
             }
         }
@@ -233,7 +208,6 @@ internal fun AccountsScreen(
         isRefreshing = isRefreshing,
         onRefresh = runBankSync.takeIf { isLiveBudget && !state.readOnlyMode },
     ) {
-        if (model.isSample) item(key = "accounts-preview-banner") { SampleBanner() }
         mobileSession.budgetActionMessage?.let {
             item(key = "account-action-message") { budgetActionFeedbackMessage(mobileSession) }
         }
@@ -241,9 +215,15 @@ internal fun AccountsScreen(
             item(key = "accounts-empty") {
                 SurfaceCard {
                     EmptyState(
-                        "No accounts yet",
-                        if (model.isSample) null else "Sync this budget to load its account list and balances.",
+                        if (isLiveBudget) "No accounts yet" else "Choose a budget",
+                        if (isLiveBudget) {
+                            "Sync this budget to load its account list and balances."
+                        } else {
+                            "Open an Actual budget to view its accounts."
+                        },
                         modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                        actionLabel = "Choose budget".takeIf { !isLiveBudget },
+                        onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) }.takeIf { !isLiveBudget },
                     )
                 }
             }
@@ -323,11 +303,6 @@ internal fun AccountsScreen(
                         enabled = !isRefreshing,
                     ) { showBankConnectionsDialog = true }
                 }
-            }
-        }
-        if (model.showAccountOptions) {
-            item(key = "account-options") {
-                SecondaryButton("Account options") { navigation.open(AppRoute.ACCOUNT_OPTIONS) }
             }
         }
     }

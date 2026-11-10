@@ -166,8 +166,8 @@ internal fun ScreenContent(
                 onOpenCategoryActivity = { categoryId, categoryName, window ->
                     openReportCategoryActivity(state, navigation, categoryId, categoryName, window)
                 },
-                onOpenActivity = { navigation.selectTab(AppRoute.ACTIVITY) },
                 onAddTransaction = { navigation.newTransaction(null) },
+                onChooseBudget = { navigation.open(AppRoute.BUDGET_CHOOSER) },
             )
         AppRoute.REPORT_DETAIL -> {
             val kind =
@@ -182,12 +182,7 @@ internal fun ScreenContent(
                 onOpenCategoryActivity = { categoryId, categoryName, window ->
                     openReportCategoryActivity(state, navigation, categoryId, categoryName, window)
                 },
-                onEmptyAction =
-                    if (state.selectedBudgetId.isBlank()) {
-                        { navigation.selectTab(AppRoute.ACTIVITY) }
-                    } else {
-                        { navigation.newTransaction(null) }
-                    },
+                onEmptyAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
             )
         }
         AppRoute.ACTIVITY_SEARCH ->
@@ -513,7 +508,7 @@ internal fun ScreenContent(
         }
         AppRoute.SYNC_CENTER -> SyncCenterScreen(state, mobileSession, navigation, liveTransactions)
         AppRoute.CONFLICT_INBOX -> ConflictInboxScreen(state, mobileSession, navigation, liveTransactions)
-        AppRoute.CONFLICT_REVIEW -> ConflictReviewScreen(state, mobileSession, onResolveConflict, liveTransactions)
+        AppRoute.CONFLICT_REVIEW -> ConflictReviewScreen(state, mobileSession, navigation, onResolveConflict, liveTransactions)
         AppRoute.UNCERTAIN_WRITE -> {
             val selectedWrite =
                 mobileSession.pendingWrites

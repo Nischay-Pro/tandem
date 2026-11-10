@@ -5,7 +5,6 @@ package app.tandemforactual.ui
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -14,20 +13,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.Icon
-import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.AnimatedReveal
 import app.tandemforactual.ui.components.AnimatedStatusText
 import app.tandemforactual.ui.components.BodyText
-import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.LabelText
 import app.tandemforactual.ui.components.ListRow
@@ -208,42 +203,12 @@ internal fun SyncCenterScreen(
         return
     }
     PageColumn {
-        SampleBanner()
-        SurfaceCard {
-            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "No server connection",
-                        color = tandemPalette.text,
-                        fontSize = TandemTypography.compactBody,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-                Text("Last sync", color = tandemPalette.muted, fontSize = TandemTypography.label)
-            }
-        }
-        SectionCard("Attention needed") {
-            ListRow(
-                "Needs review",
-                "Corner Market · two versions",
-                "1",
-                options = ListRowOptions(trailingColor = tandemPalette.warning),
-            ) {
-                navigation.open(AppRoute.CONFLICT_INBOX)
-            }
-            DividerLine()
-            ListRow(
-                "Status unknown",
-                "Check before retrying",
-                "1",
-                options = ListRowOptions(trailingColor = tandemPalette.warning),
-            ) { navigation.open(AppRoute.UNCERTAIN_WRITE) }
-        }
-        SectionCard("Recent sync activity") {
-            ListRow("Budget snapshot", "Ready for initial download", "Pending")
-            DividerLine()
-            ListRow("Local edits", trailing = "None")
-        }
+        EmptyState(
+            "Choose a budget",
+            "Open an Actual budget to see its sync status.",
+            actionLabel = "Choose budget",
+            onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+        )
     }
 }
 

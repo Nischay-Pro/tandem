@@ -220,14 +220,19 @@ internal fun AccountOptionsScreen(
 ) {
     val scope = rememberCoroutineScope()
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
-    val liveAccount = if (isLiveBudget) liveAccounts.firstOrNull { it.id == state.selectedAccountId } else null
-    val previewAccount = if (isLiveBudget) null else previewAccountById(state.selectedAccountId)
-    val accountName = liveAccount?.name ?: previewAccount?.name
-    val accountBalance =
-        liveAccount?.balanceMinor?.let(::formatCurrency)
-            ?: previewAccount?.balanceMinor?.let(::formatCurrency)
-            ?: "Unavailable"
-    val accountScope = if (liveAccount?.offBudget ?: previewAccount?.offBudget ?: false) "Off budget" else "On budget"
+    if (!isLiveBudget) {
+        EmptyState(
+            "Choose a budget",
+            "Open an Actual budget to manage its accounts.",
+            actionLabel = "Choose budget",
+            onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+        )
+        return
+    }
+    val liveAccount = liveAccounts.firstOrNull { it.id == state.selectedAccountId }
+    val accountName = liveAccount?.name
+    val accountBalance = liveAccount?.balanceMinor?.let(::formatCurrency) ?: "Unavailable"
+    val accountScope = if (liveAccount?.offBudget == true) "Off budget" else "On budget"
     var confirmClose by rememberSaveable(state.selectedAccountId) { mutableStateOf(false) }
     var renameDialog by rememberSaveable(state.selectedAccountId) { mutableStateOf(false) }
     var renameValue by rememberSaveable(state.selectedAccountId) { mutableStateOf(liveAccount?.name.orEmpty()) }
@@ -254,9 +259,8 @@ internal fun AccountOptionsScreen(
                 }.orEmpty()
         }
     val accountOrderIndex = reorderableAccounts.indexOfFirst { it.id == liveAccount?.id }
-    val canClose = isLiveBudget && liveAccount != null && !liveAccount.closed && liveAccount.balanceMinor != null && !state.readOnlyMode
+    val canClose = liveAccount != null && !liveAccount.closed && liveAccount.balanceMinor != null && !state.readOnlyMode
     PageColumn {
-        if (!isLiveBudget) SampleBanner()
         if (accountName == null) {
             EmptyState("Account unavailable", "This account isn’t saved on this device.")
         } else {
@@ -268,7 +272,7 @@ internal fun AccountOptionsScreen(
                 DividerLine()
                 ListRow("Budget status", "Account scope", accountScope)
             }
-            if (isLiveBudget && liveAccount != null) {
+            if (liveAccount != null) {
                 SectionCard(
                     "Position in ${if (liveAccount.closed) {
                         "closed accounts"
