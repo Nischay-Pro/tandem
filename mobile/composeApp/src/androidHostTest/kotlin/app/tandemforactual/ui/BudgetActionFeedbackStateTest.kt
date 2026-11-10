@@ -20,6 +20,17 @@ class BudgetActionFeedbackStateTest {
     }
 
     @Test
+    fun retryableBudgetActionUsesTheTryAgainLabelOnItsOwningRoute() {
+        val state = BudgetActionFeedbackState()
+        val schedule = AppRouteEntry(AppRoute.SCHEDULES, 2)
+        state.changeRoute(schedule)
+
+        state.show("Couldn’t save this schedule. Try again.", InlineMessageKind.ERROR, schedule, "Try again")
+
+        assertEquals("Try again", state.messageFor(schedule)?.actionLabel)
+    }
+
+    @Test
     fun leavingTheOwningRouteClearsItsMessage() {
         val state = BudgetActionFeedbackState()
         val categoryGroup = AppRouteEntry(AppRoute.CATEGORY_GROUP, 3)
@@ -65,7 +76,7 @@ class BudgetActionFeedbackStateTest {
         val state = BudgetActionFeedbackState()
         val accountDetail = AppRouteEntry(AppRoute.ACCOUNT_DETAIL, 9)
         state.changeRoute(accountDetail)
-        state.show("Could not save the account.", InlineMessageKind.ERROR, accountDetail, "Retry")
+        state.show("Could not save the account.", InlineMessageKind.ERROR, accountDetail, "Try again")
 
         state.show("Enter an account name.", InlineMessageKind.ERROR, accountDetail)
 

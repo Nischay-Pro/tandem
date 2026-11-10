@@ -359,7 +359,7 @@ internal fun UpcomingSchedulesScreen(
                                 nameDraft = it
                                 clearEditError("name")
                             })
-                            ScheduleFieldError(editError.takeIf { editErrorField == "name" })
+                            ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "name"))
                             TextFieldCard(
                                 "Amount",
                                 amountDraft,
@@ -369,7 +369,7 @@ internal fun UpcomingSchedulesScreen(
                                 },
                                 TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)),
                             )
-                            ScheduleFieldError(editError.takeIf { editErrorField == "amount" })
+                            ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "amount"))
                             ScheduleChoiceField(
                                 "Amount rule",
                                 when (amountRuleDraft) {
@@ -392,7 +392,7 @@ internal fun UpcomingSchedulesScreen(
                                     },
                                     TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)),
                                 )
-                                ScheduleFieldError(editError.takeIf { editErrorField == "maximum" })
+                                ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "maximum"))
                             }
                             ScheduleChoiceField(
                                 "Account",
@@ -402,7 +402,7 @@ internal fun UpcomingSchedulesScreen(
                                 accountIdDraft = it
                                 clearEditError("account")
                             }
-                            ScheduleFieldError(editError.takeIf { editErrorField == "account" })
+                            ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "account"))
                             ScheduleChoiceField(
                                 "Payee",
                                 payeeOptions.firstOrNull { it.first == payeeIdDraft }?.second ?: "Choose payee",
@@ -411,7 +411,7 @@ internal fun UpcomingSchedulesScreen(
                                 payeeIdDraft = it
                                 clearEditError("payee")
                             }
-                            ScheduleFieldError(editError.takeIf { editErrorField == "payee" })
+                            ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "payee"))
                             ScheduleChoiceField(
                                 if (frequencyDraft == "once") "Repeats" else "Repeats every",
                                 when (frequencyDraft) {
@@ -447,7 +447,7 @@ internal fun UpcomingSchedulesScreen(
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     ),
                                 )
-                                ScheduleFieldError(editError.takeIf { editErrorField == "interval" })
+                                ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "interval"))
                             }
                             FieldFrame(
                                 if (frequencyDraft == "once") "Date" else "Start date",
@@ -467,7 +467,7 @@ internal fun UpcomingSchedulesScreen(
                                     tint = tandemPalette.muted,
                                 )
                             }
-                            ScheduleFieldError(editError.takeIf { editErrorField == "startDate" })
+                            ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "startDate"))
                             if (frequencyDraft != "once") {
                                 ToggleRow("Skip weekends", checked = skipWeekendDraft) {
                                     skipWeekendDraft = it
@@ -498,7 +498,7 @@ internal fun UpcomingSchedulesScreen(
                                         },
                                         TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)),
                                     )
-                                    ScheduleFieldError(editError.takeIf { editErrorField == "occurrences" })
+                                    ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "occurrences"))
                                 }
                                 if (endModeDraft == "on_date") {
                                     FieldFrame(
@@ -519,7 +519,7 @@ internal fun UpcomingSchedulesScreen(
                                             tint = tandemPalette.muted,
                                         )
                                     }
-                                    ScheduleFieldError(editError.takeIf { editErrorField == "endDate" })
+                                    ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "endDate"))
                                 }
                             }
                             budgetActionFeedbackMessage(mobileSession)
@@ -760,6 +760,12 @@ internal fun UpcomingSchedulesScreen(
         },
     )
 }
+
+internal fun scheduleFieldErrorMessage(
+    message: String?,
+    messageField: String?,
+    field: String,
+): String? = message?.takeIf { messageField == field }
 
 @Composable
 private fun ScheduleFieldError(message: String?) {
