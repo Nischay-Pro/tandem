@@ -229,6 +229,43 @@ class CategoryReorderingTest {
     }
 
     @Test
+    fun persistedBudgetMutationOrderDoesNotDependOnDeviceClock() {
+        data class StampedOperation(
+            val operationId: String,
+            val createdAtEpochMs: Long,
+        )
+
+        val orderedIds = listOf("create-group", "rename-category")
+        val metadata =
+            encodeBudgetReorderQueueMetadata(
+                BudgetReorderQueueState(
+                    moves =
+                        orderedIds.map { operationId ->
+                            QueuedBudgetReorder(
+                                budgetId = "budget",
+                                scopeId = BUDGET_GROUP_ORDER_SCOPE,
+                                kind = BudgetReorderKind.CATEGORY_GROUP,
+                                itemId = operationId,
+                                targetId = null,
+                                desiredOrder = emptyList(),
+                                encryptionPassword = null,
+                                operationId = operationId,
+                            )
+                        },
+                ),
+            )
+        val restoredItems =
+            orderBudgetMutationQueueItems(
+                items = listOf(StampedOperation("rename-category", 10), StampedOperation("create-group", 900)),
+                operationOrder = decodeBudgetReorderQueueOperationOrder(metadata),
+                operationId = StampedOperation::operationId,
+                createdAtEpochMs = StampedOperation::createdAtEpochMs,
+            )
+
+        assertEquals(orderedIds, restoredItems.map(StampedOperation::operationId))
+    }
+
+    @Test
     fun categoryMoveWaitsOfflineWithoutRollingBackTheLocalOrder() {
         val originalOrder = listOf("rent", "utilities", "internet")
         val move =

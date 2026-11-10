@@ -26,6 +26,7 @@ import app.tandemforactual.data.store.BudgetSyncProtocolException
 import app.tandemforactual.data.store.BudgetSyncRemoteException
 import app.tandemforactual.data.store.BudgetSyncSummary
 import app.tandemforactual.data.store.LocalBudgetMutationOutboxItem
+import app.tandemforactual.data.store.LocalBudgetMutationQueueSnapshot
 import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.LocalOperationConflictException
 import app.tandemforactual.data.store.LocalRecordProjection
@@ -172,17 +173,41 @@ internal fun buildTransactionEditPatch(
         }
     }
 
+internal interface BudgetMutationQueuePersistence {
+    suspend fun read(): LocalBudgetMutationQueueSnapshot
+
+    suspend fun replace(
+        items: List<LocalBudgetMutationOutboxItem>,
+        metadataJson: String,
+    )
+}
+
+private class LocalBudgetRepositoryMutationQueuePersistence(
+    private val repository: LocalBudgetRepository,
+) : BudgetMutationQueuePersistence {
+    override suspend fun read(): LocalBudgetMutationQueueSnapshot = repository.readBudgetMutationQueue()
+
+    override suspend fun replace(
+        items: List<LocalBudgetMutationOutboxItem>,
+        metadataJson: String,
+    ) = repository.replaceBudgetMutationQueue(items, metadataJson)
+}
+
 /** In-memory session state. Device credentials use a platform store; budget passwords are never persisted. */
 internal class TandemMobileSession(
     private val apiClient: TandemApiClient,
     database: TandemDatabase?,
     private val nowEpochMillis: () -> Long,
     private val credentialStore: DeviceCredentialStore? = null,
+    budgetMutationQueuePersistenceOverride: BudgetMutationQueuePersistence? = null,
 ) {
     private val repository = database?.let { LocalBudgetRepository(it, nowEpochMillis) }
+    private val budgetMutationQueuePersistence =
+        budgetMutationQueuePersistenceOverride ?: repository?.let(::LocalBudgetRepositoryMutationQueuePersistence)
     private val preferencesStore = database?.let(::AppPreferencesStore)
     private val sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val budgetQueuePersistenceMutex = Mutex()
+    private val budgetQueueRestoreMutex = Mutex()
     private var budgetQueueLoaded = false
     internal val reportViewModels = repository?.let(::ReportsViewModels)
     private val syncCoordinator =
@@ -356,6 +381,8 @@ internal class TandemMobileSession(
     private var lastBudgetActionErrorMessage: String? = null
 
     private var budgetReorderQueueState by mutableStateOf(BudgetReorderQueueState())
+    var isPersistingBudgetMutation by mutableStateOf(false)
+        private set
     private var budgetReorderQueue: BudgetReorderQueueState
         get() = budgetReorderQueueState
         set(value) {
@@ -364,65 +391,99 @@ internal class TandemMobileSession(
         }
     private var budgetReorderRetrySignal by mutableStateOf(0)
 
-    private suspend fun restoreBudgetReorderQueue() {
-        if (budgetQueueLoaded) return
-        val pendingBeforeRestore = budgetReorderQueueState.moves
-        val restoredFromRoom =
-            runCatching {
-                repository?.readBudgetMutationQueue()
-            }.getOrNull()
-        val restored =
-            if (restoredFromRoom != null && (restoredFromRoom.items.isNotEmpty() || restoredFromRoom.metadataJson != null)) {
-                val metadata = decodeBudgetReorderQueue(restoredFromRoom.metadataJson)
-                val moves =
-                    restoredFromRoom.items.mapNotNull { operation ->
-                        decodeBudgetReorderQueue(operation.patchJson).moves.singleOrNull()?.copy(operationId = operation.operationId)
+    internal suspend fun restoreBudgetReorderQueue(): Boolean =
+        budgetQueueRestoreMutex.withLock {
+            if (budgetQueueLoaded) return@withLock true
+            val persistence = budgetMutationQueuePersistence
+            if (persistence == null) {
+                budgetQueueLoaded = true
+                return@withLock true
+            }
+
+            try {
+                val pendingBeforeRestore = budgetReorderQueueState.moves
+                val restoredFromRoom = persistence.read()
+                val hasStoredRoomQueue = restoredFromRoom.items.isNotEmpty() || restoredFromRoom.metadataJson != null
+                val restored =
+                    if (hasStoredRoomQueue) {
+                        val metadata = decodeBudgetReorderQueue(restoredFromRoom.metadataJson)
+                        val orderedItems =
+                            orderBudgetMutationQueueItems(
+                                items = restoredFromRoom.items,
+                                operationOrder = decodeBudgetReorderQueueOperationOrder(restoredFromRoom.metadataJson),
+                                operationId = OutboxOperationEntity::operationId,
+                                createdAtEpochMs = OutboxOperationEntity::createdAtEpochMs,
+                            )
+                        val moves =
+                            orderedItems.map { operation ->
+                                decodeBudgetReorderQueue(
+                                    operation.patchJson,
+                                ).moves.singleOrNull()?.copy(operationId = operation.operationId)
+                                    ?: error("A saved budget change could not be read.")
+                            }
+                        moves.fold(BudgetReorderQueueState()) { current, move -> current.enqueue(move) }.copy(
+                            categoryGroupIdAliases = metadata.categoryGroupIdAliases,
+                            categoryIdAliases = metadata.categoryIdAliases,
+                            waitingForConnection =
+                                moves.isNotEmpty() &&
+                                    (
+                                        metadata.waitingForConnection ||
+                                            restoredFromRoom.items.any { it.status in setOf("uncertain", "conflict") }
+                                    ),
+                        )
+                    } else {
+                        val saved = preferencesStore?.read()?.get(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY)
+                        decodeBudgetReorderQueue(saved)
                     }
-                moves.fold(BudgetReorderQueueState()) { current, move -> current.enqueue(move) }.copy(
-                    categoryGroupIdAliases = metadata.categoryGroupIdAliases,
-                    categoryIdAliases = metadata.categoryIdAliases,
-                    waitingForConnection =
-                        moves.isNotEmpty() &&
-                            (
-                                metadata.waitingForConnection ||
-                                    restoredFromRoom.items.any { it.status in setOf("uncertain", "conflict") }
-                            ),
+                val restoredState =
+                    pendingBeforeRestore.fold(restored) { current, move ->
+                        if (move in current.moves) current else current.enqueue(move)
+                    }
+                val hasUnpersistedMoves =
+                    restoredState.moves.any { move ->
+                        restoredFromRoom.items.none { it.operationId == move.operationId }
+                    }
+                if (hasUnpersistedMoves || (!hasStoredRoomQueue && restoredState.moves.isNotEmpty())) {
+                    persistBudgetReorderQueueNow(restoredState)
+                    preferencesStore?.putValue(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY, "")
+                }
+                budgetReorderQueueState = restoredState
+                budgetQueueLoaded = true
+                if (budgetActionMessage == BUDGET_QUEUE_RESTORE_ERROR) clearBudgetActionMessage()
+                true
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                setBudgetActionMessage(
+                    text = BUDGET_QUEUE_RESTORE_ERROR,
+                    actionLabel = "Try again",
+                    retryAction = {
+                        val restored = restoreBudgetReorderQueue()
+                        if (restored) clearBudgetActionMessage()
+                        restored
+                    },
                 )
-            } else {
-                val saved =
-                    runCatching {
-                        preferencesStore?.read()?.get(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY)
-                    }.getOrNull()
-                decodeBudgetReorderQueue(saved)
+                false
             }
-        budgetReorderQueueState =
-            pendingBeforeRestore.fold(restored) { current, move ->
-                if (move in current.moves) current else current.enqueue(move)
-            }
-        budgetQueueLoaded = true
-        if (restoredFromRoom == null || (restoredFromRoom.items.isEmpty() && restoredFromRoom.metadataJson == null)) {
-            persistBudgetReorderQueueNow(budgetReorderQueueState)
         }
-    }
 
     private fun persistBudgetReorderQueue() {
         if (isSigningOut) return
-        val store = preferencesStore ?: return
         if (!budgetQueueLoaded) return
+        if (budgetMutationQueuePersistence == null) return
         sessionScope.launch {
-            persistCurrentBudgetReorderQueue(store)
+            persistCurrentBudgetReorderQueue()
         }
     }
 
-    private suspend fun persistCurrentBudgetReorderQueue(store: AppPreferencesStore? = preferencesStore) {
+    private suspend fun persistCurrentBudgetReorderQueue() {
         budgetQueuePersistenceMutex.withLock {
             persistBudgetReorderQueueNow(budgetReorderQueueState)
-            store?.putValue(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY, "")
         }
     }
 
     private suspend fun persistBudgetReorderQueueNow(state: BudgetReorderQueueState) {
-        val localRepository = repository ?: return
+        val persistence = budgetMutationQueuePersistence ?: return
         val persistedAt = nowEpochMillis()
         val items =
             state.moves.mapIndexed { index, move ->
@@ -435,7 +496,43 @@ internal class TandemMobileSession(
                     createdAtEpochMs = persistedAt + index,
                 )
             }
-        localRepository.replaceBudgetMutationQueue(items, encodeBudgetReorderQueueMetadata(state))
+        persistence.replace(items, encodeBudgetReorderQueueMetadata(state))
+        preferencesStore?.putValue(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY, "")
+    }
+
+    private suspend fun persistBudgetReorderQueueMutation(transform: (BudgetReorderQueueState) -> BudgetReorderQueueState): Boolean {
+        if (isPersistingBudgetMutation) {
+            budgetActionMessage = "Saving a category change on this device. Try again in a moment."
+            return false
+        }
+        isPersistingBudgetMutation = true
+        try {
+            if (!restoreBudgetReorderQueue()) return false
+            if (budgetMutationQueuePersistence == null) {
+                budgetActionMessage = "Tandem can’t save this change on this device. Restart the app and try again."
+                return false
+            }
+            return budgetQueuePersistenceMutex.withLock {
+                val next = transform(budgetReorderQueueState)
+                try {
+                    persistBudgetReorderQueueNow(next)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    setBudgetActionMessage(
+                        text = "Couldn’t save this change on this device.",
+                        actionLabel = "Try again",
+                        retryAction = { persistBudgetReorderQueueMutation(transform) },
+                    )
+                    return@withLock false
+                }
+                budgetReorderQueueState = next
+                budgetActionMessage = null
+                true
+            }
+        } finally {
+            isPersistingBudgetMutation = false
+        }
     }
 
     fun categoryVisibilityOverridesFor(budgetId: String): Map<String, Boolean> = budgetReorderQueue.categoryVisibilityOverridesFor(budgetId)
@@ -533,7 +630,7 @@ internal class TandemMobileSession(
     fun budgetMutationsWaitingForConnection(budgetId: String): Boolean =
         budgetReorderQueue.waitingForConnection && budgetReorderQueue.moves.firstOrNull()?.budgetId == budgetId
 
-    fun enqueueBudgetReorder(
+    suspend fun enqueueBudgetReorder(
         budgetId: String,
         scopeId: String,
         kind: BudgetReorderKind,
@@ -541,25 +638,25 @@ internal class TandemMobileSession(
         targetId: String?,
         desiredOrder: List<String>,
         encryptionPassword: String?,
-    ) {
-        budgetReorderQueue =
-            budgetReorderQueue.enqueue(
+    ): Boolean =
+        persistBudgetReorderQueueMutation { queue ->
+            queue.enqueueIfMissing(
                 QueuedBudgetReorder(budgetId, scopeId, kind, itemId, targetId, desiredOrder, encryptionPassword),
             )
-    }
+        }
 
-    fun enqueueBudgetCategoryVisibilityChange(
+    suspend fun enqueueBudgetCategoryVisibilityChange(
         budgetId: String,
         categoryId: String,
         groupId: String,
         hidden: Boolean,
         currentOrder: List<String>,
         encryptionPassword: String?,
-    ) {
+    ): Boolean {
         budgetActionMessage = null
         val scopeId = groupId
-        budgetReorderQueue =
-            budgetReorderQueue.enqueue(
+        return persistBudgetReorderQueueMutation { queue ->
+            queue.enqueueIfMissing(
                 QueuedBudgetReorder(
                     budgetId = budgetId,
                     scopeId = scopeId,
@@ -570,9 +667,10 @@ internal class TandemMobileSession(
                     encryptionPassword = encryptionPassword,
                 ),
             )
+        }
     }
 
-    fun enqueueBudgetCategoryGroupCreate(
+    suspend fun enqueueBudgetCategoryGroupCreate(
         budgetId: String,
         name: String,
         isIncome: Boolean,
@@ -594,24 +692,26 @@ internal class TandemMobileSession(
         }
         val localGroupId = "local-${Uuid.random()}"
         budgetActionMessage = null
-        budgetReorderQueue =
-            budgetReorderQueue.enqueue(
-                QueuedBudgetReorder(
-                    budgetId = budgetId,
-                    scopeId = BUDGET_GROUP_ORDER_SCOPE,
-                    kind = BudgetReorderKind.CREATE_CATEGORY_GROUP,
-                    itemId = localGroupId,
-                    targetId = null,
-                    desiredOrder = currentOrder + localGroupId,
-                    encryptionPassword = encryptionPassword,
-                    name = cleanName,
-                    isIncome = isIncome,
-                ),
-            )
-        return localGroupId
+        val persisted =
+            persistBudgetReorderQueueMutation { queue ->
+                queue.enqueueIfMissing(
+                    QueuedBudgetReorder(
+                        budgetId = budgetId,
+                        scopeId = BUDGET_GROUP_ORDER_SCOPE,
+                        kind = BudgetReorderKind.CREATE_CATEGORY_GROUP,
+                        itemId = localGroupId,
+                        targetId = null,
+                        desiredOrder = currentOrder + localGroupId,
+                        encryptionPassword = encryptionPassword,
+                        name = cleanName,
+                        isIncome = isIncome,
+                    ),
+                )
+            }
+        return localGroupId.takeIf { persisted }
     }
 
-    fun enqueueBudgetCategoryGroupRename(
+    suspend fun enqueueBudgetCategoryGroupRename(
         budgetId: String,
         groupId: String,
         name: String,
@@ -632,8 +732,8 @@ internal class TandemMobileSession(
             return false
         }
         budgetActionMessage = null
-        budgetReorderQueue =
-            budgetReorderQueue.enqueue(
+        return persistBudgetReorderQueueMutation { queue ->
+            queue.enqueueIfMissing(
                 QueuedBudgetReorder(
                     budgetId = budgetId,
                     scopeId = BUDGET_GROUP_ORDER_SCOPE,
@@ -645,10 +745,10 @@ internal class TandemMobileSession(
                     name = cleanName,
                 ),
             )
-        return true
+        }
     }
 
-    fun enqueueBudgetCategoryCreate(
+    suspend fun enqueueBudgetCategoryCreate(
         budgetId: String,
         groupId: String,
         name: String,
@@ -669,26 +769,28 @@ internal class TandemMobileSession(
             return null
         }
         val localCategoryId = "local-category-${Uuid.random()}"
-        val resolvedGroupId = budgetReorderQueue.resolveCategoryGroupId(budgetId, groupId)
         budgetActionMessage = null
-        budgetReorderQueue =
-            budgetReorderQueue.enqueue(
-                QueuedBudgetReorder(
-                    budgetId = budgetId,
-                    scopeId = groupId,
-                    kind = BudgetReorderKind.CREATE_CATEGORY,
-                    itemId = localCategoryId,
-                    targetId = null,
-                    desiredOrder = currentOrder + localCategoryId,
-                    encryptionPassword = encryptionPassword,
-                    name = cleanName,
-                    parentGroupId = resolvedGroupId,
-                ),
-            )
-        return localCategoryId
+        val persisted =
+            persistBudgetReorderQueueMutation { queue ->
+                val resolvedGroupId = queue.resolveCategoryGroupId(budgetId, groupId)
+                queue.enqueueIfMissing(
+                    QueuedBudgetReorder(
+                        budgetId = budgetId,
+                        scopeId = groupId,
+                        kind = BudgetReorderKind.CREATE_CATEGORY,
+                        itemId = localCategoryId,
+                        targetId = null,
+                        desiredOrder = currentOrder + localCategoryId,
+                        encryptionPassword = encryptionPassword,
+                        name = cleanName,
+                        parentGroupId = resolvedGroupId,
+                    ),
+                )
+            }
+        return localCategoryId.takeIf { persisted }
     }
 
-    fun enqueueBudgetCategoryRename(
+    suspend fun enqueueBudgetCategoryRename(
         budgetId: String,
         categoryId: String,
         name: String,
@@ -708,23 +810,23 @@ internal class TandemMobileSession(
             return false
         }
         budgetActionMessage = null
-        budgetReorderQueue =
-            budgetReorderQueue.enqueue(
+        return persistBudgetReorderQueueMutation { queue ->
+            queue.enqueueIfMissing(
                 QueuedBudgetReorder(
                     budgetId = budgetId,
                     scopeId = "category-$categoryId",
                     kind = BudgetReorderKind.RENAME_CATEGORY,
-                    itemId = budgetReorderQueue.resolveCategoryId(budgetId, categoryId),
+                    itemId = queue.resolveCategoryId(budgetId, categoryId),
                     targetId = null,
                     desiredOrder = emptyList(),
                     encryptionPassword = encryptionPassword,
                     name = cleanName,
                 ),
             )
-        return true
+        }
     }
 
-    fun enqueueBudgetCategoryMoveToGroup(
+    suspend fun enqueueBudgetCategoryMoveToGroup(
         budgetId: String,
         categoryId: String,
         groupId: String,
@@ -739,23 +841,23 @@ internal class TandemMobileSession(
             return false
         }
         budgetActionMessage = null
-        budgetReorderQueue =
-            budgetReorderQueue.enqueue(
+        return persistBudgetReorderQueueMutation { queue ->
+            queue.enqueueIfMissing(
                 QueuedBudgetReorder(
                     budgetId = budgetId,
                     scopeId = "category-$categoryId",
                     kind = BudgetReorderKind.MOVE_CATEGORY_TO_GROUP,
-                    itemId = budgetReorderQueue.resolveCategoryId(budgetId, categoryId),
+                    itemId = queue.resolveCategoryId(budgetId, categoryId),
                     targetId = null,
                     desiredOrder = emptyList(),
                     encryptionPassword = encryptionPassword,
-                    parentGroupId = budgetReorderQueue.resolveCategoryGroupId(budgetId, groupId),
+                    parentGroupId = queue.resolveCategoryGroupId(budgetId, groupId),
                 ),
             )
-        return true
+        }
     }
 
-    fun enqueueBudgetCategoryDelete(
+    suspend fun enqueueBudgetCategoryDelete(
         budgetId: String,
         categoryId: String,
         transferCategoryId: String?,
@@ -770,41 +872,42 @@ internal class TandemMobileSession(
             return false
         }
         budgetActionMessage = null
-        budgetReorderQueue =
-            budgetReorderQueue.enqueue(
+        return persistBudgetReorderQueueMutation { queue ->
+            queue.enqueueIfMissing(
                 QueuedBudgetReorder(
                     budgetId = budgetId,
                     scopeId = "category-$categoryId",
                     kind = BudgetReorderKind.DELETE_CATEGORY,
-                    itemId = budgetReorderQueue.resolveCategoryId(budgetId, categoryId),
-                    targetId = transferCategoryId?.let { budgetReorderQueue.resolveCategoryId(budgetId, it) },
+                    itemId = queue.resolveCategoryId(budgetId, categoryId),
+                    targetId = transferCategoryId?.let { queue.resolveCategoryId(budgetId, it) },
                     desiredOrder = emptyList(),
                     encryptionPassword = encryptionPassword,
                 ),
             )
-        return true
+        }
     }
 
-    fun enqueueBudgetCategoryGroupVisibilityChange(
+    suspend fun enqueueBudgetCategoryGroupVisibilityChange(
         budgetId: String,
         groupId: String,
         hidden: Boolean,
         encryptionPassword: String?,
-    ) {
-        if (budgetId.isBlank() || groupId.isBlank() || refuseWriteInReadOnlyMode()) return
+    ): Boolean {
+        if (budgetId.isBlank() || groupId.isBlank() || refuseWriteInReadOnlyMode()) return false
         budgetActionMessage = null
-        budgetReorderQueue =
-            budgetReorderQueue.enqueue(
+        return persistBudgetReorderQueueMutation { queue ->
+            queue.enqueueIfMissing(
                 QueuedBudgetReorder(
                     budgetId = budgetId,
                     scopeId = BUDGET_GROUP_ORDER_SCOPE,
                     kind = if (hidden) BudgetReorderKind.HIDE_CATEGORY_GROUP else BudgetReorderKind.SHOW_CATEGORY_GROUP,
-                    itemId = budgetReorderQueue.resolveCategoryGroupId(budgetId, groupId),
+                    itemId = queue.resolveCategoryGroupId(budgetId, groupId),
                     targetId = null,
                     desiredOrder = emptyList(),
                     encryptionPassword = encryptionPassword,
                 ),
             )
+        }
     }
 
     fun clearBudgetReorderMessage(
@@ -841,7 +944,8 @@ internal class TandemMobileSession(
     /** Runs outside editor screens so leaving a route cannot cancel unsent reorder operations. */
     suspend fun processQueuedBudgetReorders() {
         if (isSigningOut) return
-        restoreBudgetReorderQueue()
+        while (!isSigningOut && !restoreBudgetReorderQueue()) delay(1_000)
+        if (isSigningOut) return
         var observedRetrySignal = budgetReorderRetrySignal
         while (true) {
             val request = snapshotFlow { budgetReorderQueue.moves.firstOrNull() }.first { it != null } ?: continue
@@ -1357,7 +1461,10 @@ internal class TandemMobileSession(
                 signOutError = "Wait for the current sync or change to finish before signing out."
                 return false
             }
-            restoreBudgetReorderQueue()
+            if (!restoreBudgetReorderQueue()) {
+                signOutError = "Couldn’t verify pending changes. Try again before signing out."
+                return false
+            }
             if (budgetReorderQueue.moves.isNotEmpty()) {
                 signOutError = "Sync or resolve pending changes before signing out."
                 return false
@@ -1569,8 +1676,8 @@ internal class TandemMobileSession(
         retryQueuedBudgetMutations: Boolean = true,
     ): BudgetSyncSummary? {
         if (isSigningOut) return null
-        restoreBudgetReorderQueue()
-        if (retryQueuedBudgetMutations && !encryptionPassword.isNullOrBlank()) {
+        val budgetQueueRestored = restoreBudgetReorderQueue()
+        if (budgetQueueRestored && retryQueuedBudgetMutations && !encryptionPassword.isNullOrBlank()) {
             retryQueuedBudgetReorders(budgetId, encryptionPassword)
         }
         syncComplete = false
@@ -1602,8 +1709,10 @@ internal class TandemMobileSession(
                 localRepository.countVisibleRecords(budgetId, "transaction").coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
             syncComplete = true
             syncPresentation = syncPresentation.succeeded()
-            budgetReorderQueue = budgetReorderQueue.clearCompletedVisibilityOverrides(budgetId)
-            if (retryQueuedBudgetMutations) retryQueuedBudgetReorders(budgetId, encryptionPassword)
+            if (budgetQueueRestored) {
+                budgetReorderQueue = budgetReorderQueue.clearCompletedVisibilityOverrides(budgetId)
+                if (retryQueuedBudgetMutations) retryQueuedBudgetReorders(budgetId, encryptionPassword)
+            }
             if (activityTransactionPageBudgetId == budgetId) refreshActivityTransactionPages(budgetId)
             return summary
         } catch (error: CancellationException) {
@@ -2885,7 +2994,10 @@ internal class TandemMobileSession(
         if (refuseWriteInReadOnlyMode()) return
         val localRepository = repository ?: return
         val operation = localRepository.findWrite(operationId)
-        if (operation?.recordType == "budget-mutation") restoreBudgetReorderQueue()
+        if (operation?.recordType == "budget-mutation" && !restoreBudgetReorderQueue()) {
+            transactionWriteMessage = "Couldn’t verify this pending change. Try again before removing it."
+            return
+        }
         localRepository.discardWrite(operationId)
         if (operation?.recordType == "budget-mutation") {
             budgetReorderQueue = budgetReorderQueue.discardOperation(operationId)
@@ -3272,6 +3384,10 @@ internal fun budgetApiErrorMessage(
 
 private const val ACTIVITY_TRANSACTION_PAGE_SIZE = 50
 private const val ACTIVITY_TRANSACTION_REFRESH_LIMIT = 200
+private const val BUDGET_QUEUE_RESTORE_ERROR = "Couldn’t load saved category changes. Try again before editing categories."
+
+private fun BudgetReorderQueueState.enqueueIfMissing(move: QueuedBudgetReorder): BudgetReorderQueueState =
+    if (moves.any { it.operationId == move.operationId }) this else enqueue(move)
 
 internal fun activityTransactionRefreshLimit(loadedRecordCount: Int): Int =
     minOf(

@@ -82,6 +82,7 @@ internal fun ScreenContent(
     notificationPermissionEnabled: Boolean?,
     onToggleNotificationPermission: ((Boolean) -> Unit)?,
 ) {
+    val scope = rememberCoroutineScope()
     when (route) {
         AppRoute.STARTUP -> StartupScreen()
         AppRoute.WELCOME -> WelcomeScreen(navigation)
@@ -473,22 +474,24 @@ internal fun ScreenContent(
                                                         newName.length <= 100,
                                             ) {
                                                 mobileSession.clearBudgetActionMessage()
-                                                val categoryId =
-                                                    mobileSession.enqueueBudgetCategoryCreate(
-                                                        state.selectedBudgetId,
-                                                        createGroupId,
-                                                        newName,
-                                                        visibleMonthGroups
-                                                            .firstOrNull { it.id == createGroupId }
-                                                            ?.categories
-                                                            ?.map { it.id }
-                                                            .orEmpty(),
-                                                        state.encryptedPassword.takeIf { it.isNotBlank() },
-                                                    )
-                                                if (categoryId != null) {
-                                                    state.transactionCategory = newName
-                                                    state.newTransactionCategoryId = categoryId
-                                                    navigation.back()
+                                                scope.launch {
+                                                    val categoryId =
+                                                        mobileSession.enqueueBudgetCategoryCreate(
+                                                            state.selectedBudgetId,
+                                                            createGroupId,
+                                                            newName,
+                                                            visibleMonthGroups
+                                                                .firstOrNull { it.id == createGroupId }
+                                                                ?.categories
+                                                                ?.map { it.id }
+                                                                .orEmpty(),
+                                                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                                                        )
+                                                    if (categoryId != null) {
+                                                        state.transactionCategory = newName
+                                                        state.newTransactionCategoryId = categoryId
+                                                        navigation.back()
+                                                    }
                                                 }
                                             }
                                         }

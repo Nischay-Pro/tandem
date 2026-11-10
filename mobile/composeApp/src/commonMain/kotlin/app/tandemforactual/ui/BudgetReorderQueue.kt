@@ -914,7 +914,35 @@ internal fun encodeBudgetReorderQueueMetadata(state: BudgetReorderQueueState): S
         put("waitingForConnection", state.waitingForConnection)
         put("categoryGroupIdAliases", encodeAliases(state.categoryGroupIdAliases))
         put("categoryIdAliases", encodeAliases(state.categoryIdAliases))
+        put("operationOrder", buildJsonArray { state.moves.forEach { add(JsonPrimitive(it.operationId)) } })
     }.toString()
+
+internal fun decodeBudgetReorderQueueOperationOrder(encoded: String?): List<String> =
+    encoded
+        ?.let {
+            runCatching {
+                (
+                    kotlinx.serialization.json.Json
+                        .parseToJsonElement(it)
+                        .jsonObject["operationOrder"] as? JsonArray
+                )?.mapNotNull { value -> (value as? JsonPrimitive)?.contentOrNull }
+                    .orEmpty()
+            }.getOrNull()
+        }.orEmpty()
+
+internal fun <T> orderBudgetMutationQueueItems(
+    items: List<T>,
+    operationOrder: List<String>,
+    operationId: (T) -> String,
+    createdAtEpochMs: (T) -> Long,
+): List<T> {
+    val sequenceById = operationOrder.withIndex().associate { it.value to it.index }
+    return items.sortedWith(
+        compareBy<T> { sequenceById[operationId(it)] ?: Int.MAX_VALUE }
+            .thenBy(createdAtEpochMs)
+            .thenBy(operationId),
+    )
+}
 
 internal fun decodeBudgetReorderQueue(encoded: String?): BudgetReorderQueueState {
     val body =

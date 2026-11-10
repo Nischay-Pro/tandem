@@ -91,6 +91,7 @@ internal fun BudgetScreen(
     var showBudgetTemplatesDialog by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
     var showNextMonthHoldDialog by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
     var showCreateCategoryGroupDialog by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
+    var isCreatingCategoryGroup by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
     var categoryGroupNameDraft by rememberSaveable(state.selectedBudgetId) { mutableStateOf("") }
     var newCategoryGroupIsIncome by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
     var holdSheetMounted by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
@@ -177,17 +178,19 @@ internal fun BudgetScreen(
         val oldOrder = displayGroups.map { it.id }
         val nextOrder = reorderItemToIndex(oldOrder, groupId, nextIndex)
         if (oldOrder == nextOrder) return
-        mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
-        mobileSession.clearBudgetActionMessage()
-        mobileSession.enqueueBudgetReorder(
-            state.selectedBudgetId,
-            BUDGET_GROUP_ORDER_SCOPE,
-            BudgetReorderKind.CATEGORY_GROUP,
-            groupId,
-            itemTargetIdAfterMove(nextOrder, groupId),
-            nextOrder,
-            state.encryptedPassword.takeIf { it.isNotBlank() },
-        )
+        scope.launch {
+            mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
+            mobileSession.clearBudgetActionMessage()
+            mobileSession.enqueueBudgetReorder(
+                state.selectedBudgetId,
+                BUDGET_GROUP_ORDER_SCOPE,
+                BudgetReorderKind.CATEGORY_GROUP,
+                groupId,
+                itemTargetIdAfterMove(nextOrder, groupId),
+                nextOrder,
+                state.encryptedPassword.takeIf { it.isNotBlank() },
+            )
+        }
     }
     val pinnedCategories =
         remember(groups, state.pinnedCategoryIds) {
@@ -999,7 +1002,7 @@ internal fun BudgetScreen(
             title = "Add category group",
             name = categoryGroupNameDraft,
             onNameChange = { categoryGroupNameDraft = it },
-            busy = false,
+            busy = isCreatingCategoryGroup || mobileSession.isPersistingBudgetMutation,
             message = mobileSession.budgetActionMessage,
             messageKind = mobileSession.budgetActionMessageKind,
             messageActionLabel = mobileSession.budgetActionMessageActionLabel,
@@ -1010,15 +1013,24 @@ internal fun BudgetScreen(
             saveLabel = "Add group",
             onDismiss = { showCreateCategoryGroupDialog = false },
             onSave = {
-                if (mobileSession.enqueueBudgetCategoryGroupCreate(
-                        state.selectedBudgetId,
-                        categoryGroupNameDraft,
-                        newCategoryGroupIsIncome,
-                        displayGroups.map { it.id },
-                        state.encryptedPassword.takeIf { it.isNotBlank() },
-                    ) != null
-                ) {
-                    showCreateCategoryGroupDialog = false
+                if (!isCreatingCategoryGroup) {
+                    isCreatingCategoryGroup = true
+                    scope.launch {
+                        try {
+                            if (mobileSession.enqueueBudgetCategoryGroupCreate(
+                                    state.selectedBudgetId,
+                                    categoryGroupNameDraft,
+                                    newCategoryGroupIsIncome,
+                                    displayGroups.map { it.id },
+                                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                                ) != null
+                            ) {
+                                showCreateCategoryGroupDialog = false
+                            }
+                        } finally {
+                            isCreatingCategoryGroup = false
+                        }
+                    }
                 }
             },
         )

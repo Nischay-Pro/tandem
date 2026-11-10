@@ -3,6 +3,9 @@ package app.tandemforactual.ui
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.data.database.BudgetRecordEntity
+import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.data.store.LocalBudgetMutationOutboxItem
+import app.tandemforactual.data.store.LocalBudgetMutationQueueSnapshot
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -113,6 +116,72 @@ class TandemMobileSessionTest {
         assertTrue(warning.contains("Actual may already have saved it"))
         assertTrue(warning.contains("won’t undo a change already stored there"))
     }
+
+    @Test
+    fun budgetQueueReadFailureDoesNotOverwriteSavedChangesAndCanRetry() =
+        runBlocking {
+            val savedMove =
+                QueuedBudgetReorder(
+                    budgetId = "budget-1",
+                    scopeId = "group-1",
+                    kind = BudgetReorderKind.CATEGORY,
+                    itemId = "category-1",
+                    targetId = null,
+                    desiredOrder = listOf("category-1"),
+                    encryptionPassword = null,
+                    operationId = "operation-1",
+                )
+            val savedState = BudgetReorderQueueState().enqueue(savedMove)
+            val persistence =
+                InMemoryBudgetMutationQueuePersistence(
+                    items = listOf(budgetMutationItem(savedMove)),
+                    metadataJson = encodeBudgetReorderQueueMetadata(savedState),
+                    readFailuresRemaining = 1,
+                )
+            val session =
+                TandemMobileSession(
+                    apiClient = TandemApiClient(),
+                    database = null,
+                    nowEpochMillis = { 10L },
+                    budgetMutationQueuePersistenceOverride = persistence,
+                )
+
+            assertFalse(session.restoreBudgetReorderQueue())
+            assertEquals(0, persistence.replaceCount)
+            assertEquals(listOf("operation-1"), persistence.items.map { it.operationId })
+
+            assertTrue(session.restoreBudgetReorderQueue())
+            assertEquals(listOf("operation-1"), session.budgetReorderMovesFor("budget-1", "group-1").map { it.operationId })
+        }
+
+    @Test
+    fun budgetMutationIsPersistedBeforeEnqueueReturnsAndRestoresInANewSession() =
+        runBlocking {
+            val persistence = InMemoryBudgetMutationQueuePersistence()
+            val originalSession =
+                TandemMobileSession(
+                    apiClient = TandemApiClient(),
+                    database = null,
+                    nowEpochMillis = { 10L },
+                    budgetMutationQueuePersistenceOverride = persistence,
+                )
+
+            val localGroupId = originalSession.enqueueBudgetCategoryGroupCreate("budget-1", "Travel", false, emptyList(), null)
+
+            assertTrue(localGroupId != null)
+            assertEquals(1, persistence.items.size)
+            assertEquals("CREATE_CATEGORY_GROUP", persistence.items.single().action)
+
+            val restartedSession =
+                TandemMobileSession(
+                    apiClient = TandemApiClient(),
+                    database = null,
+                    nowEpochMillis = { 20L },
+                    budgetMutationQueuePersistenceOverride = persistence,
+                )
+            assertTrue(restartedSession.restoreBudgetReorderQueue())
+            assertEquals(1, restartedSession.budgetReorderMovesFor("budget-1", BUDGET_GROUP_ORDER_SCOPE).size)
+        }
 
     @Test
     fun waitingTransactionEditUsesTheSpecificSyncMessage() {
@@ -392,4 +461,66 @@ class TandemMobileSessionTest {
         amountMinor = amountMinor,
         budgetMonth = date.take(7),
     )
+
+    private fun budgetMutationItem(move: QueuedBudgetReorder) =
+        LocalBudgetMutationOutboxItem(
+            operationId = move.operationId,
+            budgetId = move.budgetId,
+            action = move.kind.name,
+            recordId = move.itemId,
+            patchJson = encodeBudgetReorderQueue(BudgetReorderQueueState().enqueue(move)),
+            createdAtEpochMs = 1L,
+        )
+
+    private class InMemoryBudgetMutationQueuePersistence(
+        var items: List<LocalBudgetMutationOutboxItem> = emptyList(),
+        var metadataJson: String? = null,
+        var readFailuresRemaining: Int = 0,
+    ) : BudgetMutationQueuePersistence {
+        var replaceCount = 0
+            private set
+
+        override suspend fun read(): LocalBudgetMutationQueueSnapshot {
+            if (readFailuresRemaining > 0) {
+                readFailuresRemaining -= 1
+                error("temporary local read failure")
+            }
+            return LocalBudgetMutationQueueSnapshot(items.map(::toEntity), metadataJson)
+        }
+
+        override suspend fun replace(
+            items: List<LocalBudgetMutationOutboxItem>,
+            metadataJson: String,
+        ) {
+            replaceCount += 1
+            this.items = items
+            this.metadataJson = metadataJson
+        }
+
+        private fun toEntity(item: LocalBudgetMutationOutboxItem) =
+            OutboxOperationEntity(
+                operationId = item.operationId,
+                idempotencyKey = "budget-mutation:${item.operationId}",
+                budgetId = item.budgetId,
+                recordType = "budget-mutation",
+                recordId = item.recordId,
+                action = item.action,
+                baseRevision = null,
+                baseSnapshotJson = null,
+                patchJson = item.patchJson,
+                optimisticJson = null,
+                optimisticRecordDate = null,
+                optimisticAccountId = null,
+                optimisticCategoryId = null,
+                optimisticPayeeId = null,
+                optimisticAmountMinor = null,
+                optimisticBudgetMonth = null,
+                status = "queued",
+                attemptCount = 0,
+                serverOperationId = null,
+                lastErrorCode = null,
+                createdAtEpochMs = item.createdAtEpochMs,
+                updatedAtEpochMs = item.createdAtEpochMs,
+            )
+    }
 }

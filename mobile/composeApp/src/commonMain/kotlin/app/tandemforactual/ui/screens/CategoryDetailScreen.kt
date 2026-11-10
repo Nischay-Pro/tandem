@@ -649,30 +649,32 @@ internal fun CategoryDetailScreen(
                             modifier = Modifier.weight(1f),
                             enabled = !state.readOnlyMode && editName.isNotBlank(),
                         ) {
-                            var saved = true
-                            val currentGroupId = selectedGroup?.id ?: state.selectedCategoryGroupId
-                            if (editCategoryGroupId != currentGroupId) {
-                                saved =
-                                    mobileSession.enqueueBudgetCategoryMoveToGroup(
-                                        state.selectedBudgetId,
-                                        category.id,
-                                        editCategoryGroupId,
-                                        state.encryptedPassword.takeIf { it.isNotBlank() },
-                                    )
-                                if (saved) state.selectedCategoryGroupId = editCategoryGroupId
-                            }
-                            if (saved && editName.trim() != category.name) {
-                                saved =
-                                    mobileSession.enqueueBudgetCategoryRename(
-                                        state.selectedBudgetId,
-                                        category.id,
-                                        editName,
-                                        state.encryptedPassword.takeIf { it.isNotBlank() },
-                                    )
-                            }
-                            if (saved) {
-                                state.setCategoryIconChoice(category.id, selectedIconChoice)
-                                showEditDialog = false
+                            scope.launch {
+                                var saved = true
+                                val currentGroupId = selectedGroup?.id ?: state.selectedCategoryGroupId
+                                if (editCategoryGroupId != currentGroupId) {
+                                    saved =
+                                        mobileSession.enqueueBudgetCategoryMoveToGroup(
+                                            state.selectedBudgetId,
+                                            category.id,
+                                            editCategoryGroupId,
+                                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                                        )
+                                    if (saved) state.selectedCategoryGroupId = editCategoryGroupId
+                                }
+                                if (saved && editName.trim() != category.name) {
+                                    saved =
+                                        mobileSession.enqueueBudgetCategoryRename(
+                                            state.selectedBudgetId,
+                                            category.id,
+                                            editName,
+                                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                                        )
+                                }
+                                if (saved) {
+                                    state.setCategoryIconChoice(category.id, selectedIconChoice)
+                                    showEditDialog = false
+                                }
                             }
                         }
                     }
@@ -820,18 +822,20 @@ internal fun CategoryDetailScreen(
             enabled = !state.readOnlyMode,
             onDismissRequest = { confirmCategoryDelete = false },
             onConfirm = {
-                val deleted =
-                    mobileSession.enqueueBudgetCategoryDelete(
-                        state.selectedBudgetId,
-                        category.id,
-                        deleteDestinationId,
-                        state.encryptedPassword.takeIf { it.isNotBlank() },
-                    )
-                confirmCategoryDelete = false
-                if (deleted) {
-                    state.setCategoryIconChoice(category.id, "Automatic")
-                    showDeleteDialog = false
-                    navigation.back()
+                scope.launch {
+                    val deleted =
+                        mobileSession.enqueueBudgetCategoryDelete(
+                            state.selectedBudgetId,
+                            category.id,
+                            deleteDestinationId,
+                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                        )
+                    confirmCategoryDelete = false
+                    if (deleted) {
+                        state.setCategoryIconChoice(category.id, "Automatic")
+                        showDeleteDialog = false
+                        navigation.back()
+                    }
                 }
             },
         )
