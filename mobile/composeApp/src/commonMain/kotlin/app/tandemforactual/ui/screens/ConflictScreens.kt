@@ -42,10 +42,8 @@ import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.model.longValue
 import app.tandemforactual.ui.model.recordName
 import app.tandemforactual.ui.model.stringValue
-import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Receipt
-import com.composables.icons.lucide.WalletCards
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -225,6 +223,31 @@ internal fun ConflictValueCard(
 }
 
 @Composable
+internal fun ConflictComparisonCard(comparisons: List<ConflictFieldComparison>) {
+    SectionCard("Changed details") {
+        comparisons.forEachIndexed { index, comparison ->
+            if (index > 0) DividerLine()
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+            ) {
+                Text(comparison.label, color = tandemPalette.text, fontSize = TandemTypography.label, fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+                        Text("Your edit", color = tandemPalette.muted, fontSize = TandemTypography.micro)
+                        Text(comparison.editedValue, color = tandemPalette.text, fontSize = TandemTypography.compactBody)
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+                        Text("Actual", color = tandemPalette.muted, fontSize = TandemTypography.micro)
+                        Text(comparison.actualValue, color = tandemPalette.text, fontSize = TandemTypography.compactBody)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 internal fun ConflictReviewScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
@@ -267,30 +290,65 @@ internal fun ConflictReviewScreen(
                 ?: mobileSession.transactionRecords.firstOrNull { it.recordId == item.recordId }
         }
     val deviceVersion = operation?.optimisticJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
-    val actualVersion = record?.remoteJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
-    val baseVersion = operation?.baseSnapshotJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
-    val detailVersion = actualVersion ?: baseVersion ?: deviceVersion
+    val actualDeleted = serverConfirmed && record?.remoteDeleted == true
+    val actualVersion =
+        if (serverConfirmed && !actualDeleted) {
+            record?.remoteJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
+        } else {
+            null
+        }
     val deviceAmount = deviceVersion?.longValue("amount")
     val actualAmount = actualVersion?.longValue("amount")
     val transaction = operation?.let { conflict -> liveTransactions.firstOrNull { it.recordId == conflict.recordId } }
     val transactionTitle = conflictPayeeTitle(operation, liveTransactions, mobileSession) ?: "Transaction"
-    val deviceAmountText = deviceAmount?.let(::formatSignedCurrency) ?: "Deleted"
-    val actualAmountText = actualAmount?.let(::formatSignedCurrency) ?: "Deleted"
-    val accountName =
-        transaction?.account
-            ?: detailVersion?.stringValue("account")?.let { id ->
-                mobileSession.accountRecords.firstOrNull { it.recordId == id }?.recordName()
-            }
-            ?: "Unavailable"
-    val categoryId = detailVersion?.stringValue("category")
+    val deviceAmountText = deviceAmount?.let { amount -> state.formatSignedCurrency(amount) } ?: "Deleted"
+    val actualAmountText =
+        conflictActualAmountText(
+            serverConfirmed = serverConfirmed,
+            isSyncing = mobileSession.isSyncing,
+            actualDeleted = actualDeleted,
+            amount = actualAmount,
+            formatAmount = { amount -> state.formatSignedCurrency(amount) },
+        )
+    val categoryId = deviceVersion?.stringValue("category")
     val categoryName =
         transaction?.category
             ?: categoryId?.let { id -> mobileSession.categoryRecords.firstOrNull { it.recordId == id }?.recordName() }
-            ?: if (detailVersion != null && categoryId == null) "Uncategorized" else "Unavailable"
+            ?: if (deviceVersion != null && categoryId == null) "Uncategorized" else "Unavailable"
     val dateLabel =
         transaction?.dateLabel
-            ?: detailVersion?.stringValue("date")?.let(::formatLiveDate)
+            ?: deviceVersion?.stringValue("date")?.let(::formatLiveDate)
             ?: "Unavailable"
+    val comparisons =
+        if (deviceVersion != null && actualVersion != null) {
+            conflictFieldComparisons(
+                edited = deviceVersion,
+                actual = actualVersion,
+                names =
+                    ConflictFieldNameLookup(
+                        payees =
+                            mobileSession.payeeRecords
+                                .mapNotNull { record ->
+                                    record.recordName()?.let { record.recordId to it }
+                                }.toMap(),
+                        accounts =
+                            mobileSession.accountRecords
+                                .mapNotNull { record ->
+                                    record.recordName()?.let { record.recordId to it }
+                                }.toMap(),
+                        categories =
+                            mobileSession.categoryRecords
+                                .mapNotNull { record ->
+                                    record.recordName()?.let { record.recordId to it }
+                                }.toMap(),
+                    ),
+                formatAmount = { amount -> state.formatSignedCurrency(amount) },
+                formatDate = ::formatLiveDate,
+            )
+        } else {
+            emptyList()
+        }
+    val detailComparisons = comparisons.filterNot { it.label == "Amount" }
     PageColumn {
         if (operation == null) {
             EmptyState("No change to review", "This change no longer needs attention.")
@@ -322,18 +380,15 @@ internal fun ConflictReviewScreen(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                 ConflictValueCard("Your edit", deviceAmountText, Modifier.weight(1f))
-                ConflictValueCard("Last synced", actualAmountText, Modifier.weight(1f))
+                ConflictValueCard("Actual", actualAmountText, Modifier.weight(1f))
             }
-            SectionCard("Details") {
-                ListRow("Account", leading = RowLeading.Icon(Lucide.WalletCards), trailing = accountName)
-                DividerLine()
-                ListRow(
-                    "Category",
-                    leading = RowLeading.Icon(state.categoryIconFor(categoryId.orEmpty(), categoryName)),
-                    trailing = categoryName,
-                )
-                DividerLine()
-                ListRow("Date", leading = RowLeading.Icon(Lucide.CalendarDays), trailing = dateLabel)
+            when {
+                !serverConfirmed -> BodyText("Actual’s latest transaction details appear after the server check.")
+                actualDeleted -> BodyText("Actual no longer has this transaction.")
+                actualVersion == null -> BodyText("Actual’s latest transaction details aren’t available.")
+                comparisons.isEmpty() -> BodyText("The server returned no differing transaction fields.")
+                detailComparisons.isEmpty() -> BodyText("Amount is the only differing field.")
+                else -> ConflictComparisonCard(detailComparisons)
             }
             mobileSession.conflictResolutionFeedback
                 ?.takeIf { it.operationId == operation.operationId }
