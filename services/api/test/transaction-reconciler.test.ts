@@ -345,19 +345,29 @@ class MemoryWriteJournal implements DurableWriteJournal {
     return this.operation;
   }
 
-  async requeueUncertain(operationId: string): Promise<WriteOperation> {
+  async requeueUncertain(
+    operationId: string,
+    verifiedWriteEvidence?: ActualWriteEvidence,
+  ): Promise<WriteOperation> {
     this.#throwIfFailed("requeueUncertain");
     const operation = this.#requireOperation();
     if (operation.operationId !== operationId) {
       throw new Error("Cannot requeue a different uncertain operation");
     }
-    if (operation.status !== "uncertain" || operation.writeEvidence !== null) {
+    if (
+      operation.status !== "uncertain" ||
+      (operation.writeEvidence !== null &&
+        JSON.stringify(operation.writeEvidence) !==
+          JSON.stringify(verifiedWriteEvidence))
+    ) {
       throw new Error("Cannot requeue this uncertain operation");
     }
     this.operation = {
       ...operation,
       status: "queued",
       errorCode: "actual-readback-not-applied",
+      writeEvidence: null,
+      actualResult: null,
     };
     return this.operation;
   }
@@ -2234,6 +2244,7 @@ describe("Actual transaction reconciliation", () => {
       initialStatus: "uncertain",
       initialWriteEvidence: deleteEvidence,
     });
+    harness.actual = actualFrom(createSnapshot({ amount: 1300 }));
 
     const result = await harness.reconciler.submit(request);
 
@@ -2259,6 +2270,7 @@ describe("Actual transaction reconciliation", () => {
       initialStatus: "uncertain",
       initialWriteEvidence: updateEvidence,
     });
+    harness.actual = actualFrom(createSnapshot({ amount: 1300 }));
 
     const result = await harness.reconciler.submit(request);
 
@@ -2387,6 +2399,34 @@ describe("Actual transaction reconciliation", () => {
       errorCode: "actual-readback-not-applied",
     });
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it("requeues a returned update only after read-back confirms its patch was not applied", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: updateEvidence,
+    });
+    harness.actual = actualFrom(createSnapshot());
+    await harness.journal.enqueue(operationInputFor(request));
+    const update = vi.spyOn(harness.store, "update");
+
+    const checked = await harness.reconciler.checkOperationStatus(
+      request.operationId,
+    );
+
+    expect(checked?.operation).toMatchObject({
+      status: "queued",
+      errorCode: "actual-readback-not-applied",
+      writeEvidence: null,
+    });
+    expect(update).not.toHaveBeenCalled();
+
+    const retried = await harness.reconciler.submit(request);
+
+    expect(retried.operation.status).toBe("committed");
+    expect(harness.actual).toMatchObject({ amount: 1200 });
+    expect(update).toHaveBeenCalledTimes(1);
   });
 
   it("returns no status when an operation is missing", async () => {

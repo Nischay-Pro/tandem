@@ -786,6 +786,58 @@ describe("durable write journal integration", () => {
     );
   });
 
+  it("clears matching write evidence when read-back proves the write was not applied", async () => {
+    const input = createOperation();
+    const evidence: ActualWriteEvidence = {
+      kind: "transaction-update-returned",
+      appliedPatch: { amount: 1200 },
+    };
+    await database.journal.enqueue(input);
+    await database.journal.claim(input.operationId);
+    await database.journal.markUncertain(
+      input.operationId,
+      "operation-finalization-failed",
+      evidence,
+    );
+
+    const requeued = await database.journal.requeueUncertain(
+      input.operationId,
+      evidence,
+    );
+
+    expect(requeued).toMatchObject({
+      status: "queued",
+      errorCode: "actual-readback-not-applied",
+      actualResult: null,
+      writeEvidence: null,
+    });
+  });
+
+  it("does not clear write evidence unless the read-back evidence matches", async () => {
+    const input = createOperation();
+    const evidence: ActualWriteEvidence = {
+      kind: "transaction-update-returned",
+      appliedPatch: { amount: 1200 },
+    };
+    await database.journal.enqueue(input);
+    await database.journal.claim(input.operationId);
+    await database.journal.markUncertain(
+      input.operationId,
+      "operation-finalization-failed",
+      evidence,
+    );
+
+    await expect(
+      database.journal.requeueUncertain(input.operationId, {
+        kind: "transaction-update-returned",
+        appliedPatch: { amount: 1500 },
+      }),
+    ).rejects.toThrow("cannot transition from uncertain to queued");
+    await expect(
+      database.journal.get(input.operationId),
+    ).resolves.toMatchObject({ status: "uncertain", writeEvidence: evidence });
+  });
+
   it("returns the queued operation when read-back requeue is retried", async () => {
     const input = createOperation();
     await database.journal.enqueue(input);

@@ -711,30 +711,28 @@ export class TransactionReconciler {
     let recoveredEvidence: ActualWriteEvidence;
     let actualResult: JsonValue;
     if (operation.action === "delete") {
-      if (evidence?.kind === "transaction-delete-returned") {
-        if (current !== undefined) return this.#existingResult(operation);
-        recoveredEvidence = evidence;
+      if (
+        evidence !== null &&
+        evidence.kind !== "transaction-delete-returned"
+      ) {
+        return this.#existingResult(operation);
+      }
+      if (current === undefined) {
+        recoveredEvidence = evidence ?? {
+          kind: "transaction-delete-returned",
+        };
         actualResult = {
           transactionId: prepared.request.transactionId,
           deleted: true,
           recoveredByReadback: true,
         };
-      } else if (evidence === null && current === undefined) {
-        recoveredEvidence = { kind: "transaction-delete-returned" };
-        actualResult = {
-          transactionId: prepared.request.transactionId,
-          deleted: true,
-          recoveredByReadback: true,
-        };
-      } else if (evidence === null && current !== undefined) {
+      } else {
         const snapshot = snapshotActualTransaction(current);
         if (
           createTransactionRevision(snapshot) === prepared.request.baseRevision
         ) {
           return this.#requeueAfterReadback(operation);
         }
-        return this.#existingResult(operation);
-      } else {
         return this.#existingResult(operation);
       }
     } else {
@@ -766,7 +764,6 @@ export class TransactionReconciler {
           verifiedRevision: createTransactionRevision(snapshot),
         };
       } else if (
-        evidence === null &&
         transactionMatchesBaseFields(snapshot, prepared.base, prepared.patch)
       ) {
         return this.#requeueAfterReadback(operation);
@@ -855,6 +852,7 @@ export class TransactionReconciler {
     try {
       const requeued = await this.journal.requeueUncertain(
         operation.operationId,
+        operation.writeEvidence ?? undefined,
       );
       return { operation: requeued, conflict: null };
     } catch {

@@ -85,7 +85,10 @@ export interface DurableWriteJournal {
     errorCode: string,
     writeEvidence?: ActualWriteEvidence,
   ): Promise<WriteOperation>;
-  requeueUncertain(operationId: string): Promise<WriteOperation>;
+  requeueUncertain(
+    operationId: string,
+    verifiedWriteEvidence?: ActualWriteEvidence,
+  ): Promise<WriteOperation>;
   resolveUncertainAsCommitted(
     operationId: string,
     actualResult: JsonValue,
