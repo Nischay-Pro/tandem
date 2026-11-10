@@ -97,7 +97,7 @@ function safeDisplayName(value: unknown, fallback: string): string {
   if (typeof value !== "string") return fallback;
   const displayName = [...value]
     .filter((character) => {
-      const codePoint = character.codePointAt(0) ?? 0;
+      const codePoint = character.codePointAt(0) as number;
       return codePoint >= 0x20 && codePoint !== 0x7f;
     })
     .join("")
