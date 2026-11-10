@@ -59,8 +59,14 @@ class TandemMobileSessionTest {
                 "bank_sync_busy" to (null to "Bank sync is already running. Try again shortly."),
                 "duplicate_imported_id" to (null to "Two statement rows share a reference. Choose a column with unique values."),
                 "actual_operation_failed" to (null to "Actual couldn’t save this change. Check the details and try again."),
-                "operation_uncertain" to (null to "Tandem couldn’t confirm this change. Check Actual before trying again."),
-                "operation_rejected" to (null to "Actual didn’t accept this change. Review the details and try again."),
+                "operation_uncertain" to
+                    (null to "Tandem couldn’t confirm whether Actual saved this change. Check Actual, then try again."),
+                "operation_in_progress" to (null to "The server is still processing this change. Wait a moment, then try again."),
+                "operation_rejected" to (null to "Actual rejected this change earlier. Refresh the budget, then try again."),
+                "idempotency_key_reused" to
+                    (null to "Tandem matched this change to a different request. Refresh the budget, then try again."),
+                "operation_result_unavailable" to
+                    (null to "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget."),
                 "invalid_request" to (null to "Check the details and try again."),
                 "server-error" to (503 to "Tandem is temporarily unavailable. Try again shortly."),
             )
@@ -72,6 +78,65 @@ class TandemMobileSessionTest {
             assertFalse(message.contains("failed", ignoreCase = true), message)
             assertFalse(message.contains("error", ignoreCase = true), message)
         }
+    }
+
+    @Test
+    fun mapsEveryBudgetMutationConflictCodeToItsRecoveryActionAndMessage() {
+        val cases =
+            mapOf(
+                "operation_in_progress" to
+                    (
+                        BudgetMutationFailureDisposition.OPERATION_IN_PROGRESS to
+                            "The server is still processing this change. Wait a moment, then try again."
+                    ),
+                "operation_uncertain" to
+                    (
+                        BudgetMutationFailureDisposition.OPERATION_UNCERTAIN to
+                            "Tandem couldn’t confirm whether Actual saved this change. Check Actual, then try again."
+                    ),
+                "operation_rejected" to
+                    (
+                        BudgetMutationFailureDisposition.OPERATION_REJECTED to
+                            "Actual rejected this change earlier. Refresh the budget, then try again."
+                    ),
+                "idempotency_key_reused" to
+                    (
+                        BudgetMutationFailureDisposition.IDEMPOTENCY_KEY_REUSED to
+                            "Tandem matched this change to a different request. Refresh the budget, then try again."
+                    ),
+                "operation_result_unavailable" to
+                    (
+                        BudgetMutationFailureDisposition.RESULT_UNAVAILABLE to
+                            "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget."
+                    ),
+            )
+
+        cases.forEach { (code, expected) ->
+            assertEquals(expected.first, budgetMutationFailureDisposition(code), code)
+            assertEquals(expected.second, budgetMutationFailureMessage(code), code)
+        }
+        assertEquals(
+            cases.size,
+            cases.values
+                .map { it.first }
+                .distinct()
+                .size,
+        )
+        assertTrue(budgetMutationRetryNeedsNewKey("operation_rejected"))
+        assertTrue(budgetMutationRetryNeedsNewKey("idempotency_key_reused"))
+        assertFalse(budgetMutationRetryNeedsNewKey("operation_in_progress"))
+        assertFalse(budgetMutationRetryNeedsNewKey("operation_uncertain"))
+        assertFalse(budgetMutationRetryNeedsNewKey("operation_result_unavailable"))
+        assertTrue(budgetMutationNeedsRefresh("operation_result_unavailable"))
+        assertFalse(budgetMutationNeedsRefresh("operation_uncertain"))
+    }
+
+    @Test
+    fun budgetMutationReviewUsesTheSharedUserFacingStatusNames() {
+        assertEquals("Needs review", budgetMutationStatusLabel("conflict"))
+        assertEquals("Status unknown", budgetMutationStatusLabel("uncertain"))
+        assertEquals("Rejected", budgetMutationStatusLabel("rejected"))
+        assertEquals("Waiting to sync", budgetMutationStatusLabel("queued"))
     }
 
     @Test
@@ -552,6 +617,7 @@ class TandemMobileSessionTest {
         override suspend fun replace(
             items: List<LocalBudgetMutationOutboxItem>,
             metadataJson: String,
+            supersededOperationIds: Set<String>,
         ) {
             replaceCount += 1
             this.items = items

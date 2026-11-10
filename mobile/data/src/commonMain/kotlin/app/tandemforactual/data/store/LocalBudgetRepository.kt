@@ -259,6 +259,7 @@ class LocalBudgetRepository(
     suspend fun replaceBudgetMutationQueue(
         items: List<LocalBudgetMutationOutboxItem>,
         metadataJson: String,
+        supersededOperationIds: Set<String> = emptySet(),
     ) {
         require(items.map { it.operationId }.distinct().size == items.size) { "budget mutation operation IDs must be unique" }
         items.forEach { item ->
@@ -271,7 +272,22 @@ class LocalBudgetRepository(
             val outbox = database.outboxDao()
             val existing = outbox.findByRecordType(BUDGET_MUTATION_RECORD_TYPE)
             val requestedIds = items.mapTo(mutableSetOf()) { it.operationId }
-            existing.filterNot { it.operationId in requestedIds }.forEach { outbox.deleteQueuedOperation(it.operationId) }
+            existing.filterNot { it.operationId in requestedIds }.forEach { previous ->
+                if (previous.operationId in supersededOperationIds) {
+                    require(previous.status in setOf("conflict", "rejected", "uncertain")) {
+                        "Only a reviewed budget mutation can be superseded"
+                    }
+                    outbox.put(
+                        previous.copy(
+                            status = LocalWriteStatus.SUPERSEDED.name.lowercase(),
+                            lastErrorCode = null,
+                            updatedAtEpochMs = now(),
+                        ),
+                    )
+                } else {
+                    outbox.deleteQueuedOperation(previous.operationId)
+                }
+            }
 
             items.forEach { item ->
                 val previous = outbox.find(item.operationId)
@@ -349,6 +365,13 @@ class LocalBudgetRepository(
         updateBudgetMutationStatus(
             operationId = operationId,
             fromStatuses = setOf("sending"),
+            status = LocalWriteStatus.COMMITTED,
+        )
+
+    suspend fun completeBudgetMutationAfterConfirmation(operationId: String): OutboxOperationEntity =
+        updateBudgetMutationStatus(
+            operationId = operationId,
+            fromStatuses = setOf("sending", "uncertain", "conflict", "rejected"),
             status = LocalWriteStatus.COMMITTED,
         )
 

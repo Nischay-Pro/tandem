@@ -24,6 +24,56 @@ internal fun shouldKeepBudgetMutationQueued(httpStatus: Int?): Boolean =
     httpStatus == null ||
         isRetryableBudgetMutationStatus(httpStatus)
 
+internal enum class BudgetMutationFailureDisposition {
+    OPERATION_IN_PROGRESS,
+    OPERATION_UNCERTAIN,
+    OPERATION_REJECTED,
+    IDEMPOTENCY_KEY_REUSED,
+    RESULT_UNAVAILABLE,
+    REVIEW,
+}
+
+internal fun budgetMutationFailureDisposition(errorCode: String?): BudgetMutationFailureDisposition =
+    when (errorCode) {
+        "operation_in_progress" -> BudgetMutationFailureDisposition.OPERATION_IN_PROGRESS
+        "operation_uncertain" -> BudgetMutationFailureDisposition.OPERATION_UNCERTAIN
+        "operation_rejected" -> BudgetMutationFailureDisposition.OPERATION_REJECTED
+        "idempotency_key_reused" -> BudgetMutationFailureDisposition.IDEMPOTENCY_KEY_REUSED
+        "operation_result_unavailable" -> BudgetMutationFailureDisposition.RESULT_UNAVAILABLE
+        else -> BudgetMutationFailureDisposition.REVIEW
+    }
+
+internal fun budgetMutationFailureMessage(errorCode: String?): String =
+    when (errorCode) {
+        "idempotency_key_reused" -> "Tandem matched this change to a different request. Refresh the budget, then try again."
+        "operation_in_progress" -> "The server is still processing this change. Wait a moment, then try again."
+        "operation_uncertain" -> "Tandem couldn’t confirm whether Actual saved this change. Check Actual, then try again."
+        "operation_rejected" -> "Actual rejected this change earlier. Refresh the budget, then try again."
+        "operation_result_unavailable" -> "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget."
+        else -> "Tandem needs a fresh budget copy before this change can be reviewed. Refresh the budget, then try again."
+    }
+
+internal fun budgetMutationStatusLabel(status: String): String =
+    when (status) {
+        "conflict" -> "Needs review"
+        "uncertain" -> "Status unknown"
+        "rejected" -> "Rejected"
+        "queued" -> "Waiting to sync"
+        "sending" -> "Syncing"
+        else -> "Pending"
+    }
+
+internal fun budgetMutationRetryNeedsNewKey(errorCode: String?): Boolean =
+    budgetMutationFailureDisposition(errorCode) in
+        setOf(
+            BudgetMutationFailureDisposition.OPERATION_REJECTED,
+            BudgetMutationFailureDisposition.IDEMPOTENCY_KEY_REUSED,
+            BudgetMutationFailureDisposition.REVIEW,
+        )
+
+internal fun budgetMutationNeedsRefresh(errorCode: String?): Boolean =
+    budgetMutationFailureDisposition(errorCode) == BudgetMutationFailureDisposition.RESULT_UNAVAILABLE
+
 internal enum class BudgetReorderKind {
     CATEGORY,
     CATEGORY_GROUP,
@@ -262,6 +312,17 @@ internal data class BudgetReorderQueueState(
                 },
         )
     }
+
+    fun replaceOperationId(
+        currentOperationId: String,
+        newOperationId: String,
+    ): BudgetReorderQueueState =
+        copy(
+            moves =
+                moves.map { move ->
+                    if (move.operationId == currentOperationId) move.copy(operationId = newOperationId) else move
+                },
+        )
 
     fun complete(
         move: QueuedBudgetReorder,

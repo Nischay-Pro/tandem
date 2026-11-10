@@ -239,6 +239,47 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
+    fun retryingRejectedBudgetMutationSupersedesItsKeyAndPersistsANewQueuedOperation() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 400L }
+                val rejected =
+                    LocalBudgetMutationOutboxItem(
+                        operationId = "budget-operation-rejected",
+                        budgetId = BUDGET,
+                        action = "RENAME_CATEGORY",
+                        recordId = "category-1",
+                        patchJson = "{\"operationId\":\"budget-operation-rejected\"}",
+                        createdAtEpochMs = 200L,
+                    )
+                repository.replaceBudgetMutationQueue(listOf(rejected), "{}")
+                assertTrue(repository.beginBudgetMutation(rejected.operationId))
+                repository.markBudgetMutationRejected(rejected.operationId, "operation_rejected")
+
+                val replacement =
+                    rejected.copy(
+                        operationId = "budget-operation-retry",
+                        patchJson = "{\"operationId\":\"budget-operation-retry\"}",
+                        createdAtEpochMs = 300L,
+                    )
+                repository.replaceBudgetMutationQueue(
+                    items = listOf(replacement),
+                    metadataJson = "{}",
+                    supersededOperationIds = setOf(rejected.operationId),
+                )
+
+                assertEquals("superseded", database.outboxDao().find(rejected.operationId)?.status)
+                val queued = database.outboxDao().find(replacement.operationId) ?: fail("Replacement operation was not saved")
+                assertEquals("queued", queued.status)
+                assertEquals("budget-mutation:${replacement.operationId}", queued.idempotencyKey)
+                assertEquals(listOf(replacement.operationId), repository.readBudgetMutationQueue().items.map { it.operationId })
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun remapPendingCategoryReferencesRewritesMatchingQueuedTransactionsOnly() =
         runBlocking {
             val database = newDatabase()

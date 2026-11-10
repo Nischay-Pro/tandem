@@ -86,8 +86,13 @@ class TandemApiException(
                 "This statement has repeated reference values. " +
                     "Choose a unique reference column and try again."
             errorCode == "actual_operation_failed" -> "Actual couldn’t complete this change. Check the budget and try again."
-            errorCode == "operation_uncertain" -> "Tandem couldn’t confirm this change. Check Actual before submitting it again."
-            errorCode == "operation_rejected" -> "This change was rejected. Correct it before submitting again."
+            errorCode == "operation_uncertain" -> "Tandem couldn’t confirm whether Actual saved this change. Check Actual, then try again."
+            errorCode == "operation_in_progress" -> "The server is still processing this change. Wait a moment, then try again."
+            errorCode == "operation_rejected" -> "Actual rejected this change earlier. Refresh the budget, then try again."
+            errorCode == "idempotency_key_reused" ->
+                "Tandem matched this change to a different request. Refresh the budget, then try again."
+            errorCode == "operation_result_unavailable" ->
+                "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget."
             errorCode == "invalid_request" -> "Check the details and try again."
             httpStatus == 400 -> "The server rejected this request. Check the details and try again."
             httpStatus == 401 -> "The server couldn’t verify this request. Check the server address and try again."

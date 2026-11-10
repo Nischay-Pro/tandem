@@ -675,19 +675,15 @@ internal fun BudgetMutationReviewScreen(
     val mutation = operation?.let { decodeBudgetReorderQueue(it.patchJson).moves.singleOrNull() }
     val itemName = mutation?.name ?: "budget item"
     val title = operation?.let { budgetMutationTitle(it.action, itemName) } ?: "Budget change"
+    val statusLabel = operation?.let { budgetMutationStatusLabel(it.status) } ?: "Pending"
     var confirmDiscard by rememberSaveable(operation?.operationId) { mutableStateOf(false) }
 
     PageColumn {
-        when (operation?.status) {
-            "conflict" -> Heading("Needs review")
-            "rejected" -> Heading("Change not applied")
-            "queued" -> Heading("Waiting to sync")
-            else -> Heading("Needs confirmation")
-        }
+        Heading(statusLabel)
         if (operation == null) {
             InfoBubble("This budget change no longer needs review.")
         } else {
-            SectionCard(title, operation.status.replaceFirstChar { it.uppercase() }) {
+            SectionCard(title) {
                 ListRow("Budget item", itemName)
                 DividerLine()
                 ListRow(
@@ -700,9 +696,8 @@ internal fun BudgetMutationReviewScreen(
             }
             InfoBubble(
                 when (operation.status) {
-                    "conflict" -> "The budget changed in Actual while this edit was waiting. Review the latest budget before trying again."
-                    "rejected" -> "Actual did not apply this change. Remove it from Pending Changes or leave it for review."
-                    else -> "Tandem couldn’t confirm whether Actual saved this change. Check Actual before trying again."
+                    "conflict", "rejected", "uncertain" -> budgetMutationFailureMessage(operation.lastErrorCode)
+                    else -> "Tandem couldn’t confirm whether Actual saved this change. Check Actual, then try again."
                 },
             )
             when (operation.status) {
@@ -710,20 +705,44 @@ internal fun BudgetMutationReviewScreen(
                     if (mutation?.requiresEncryptionPassword == true) {
                         InfoBubble("Unlock this encrypted budget before trying again.")
                     }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                    if (budgetMutationNeedsRefresh(operation.lastErrorCode)) {
                         PrimaryButton(
-                            "Try again",
+                            "Refresh budget",
                             enabled = !state.readOnlyMode && mutation?.requiresEncryptionPassword != true,
-                            modifier = Modifier.weight(1f),
                         ) { mobileSession.retryBudgetMutation(operation.operationId) }
-                        SecondaryButton(
-                            "Discard change",
-                            modifier = Modifier.weight(1f),
-                            enabled = !state.readOnlyMode,
-                        ) { confirmDiscard = true }
+                    } else {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                            PrimaryButton(
+                                "Try again",
+                                enabled = !state.readOnlyMode && mutation?.requiresEncryptionPassword != true,
+                                modifier = Modifier.weight(1f),
+                            ) { mobileSession.retryBudgetMutation(operation.operationId) }
+                            SecondaryButton(
+                                "Discard change",
+                                modifier = Modifier.weight(1f),
+                                enabled = !state.readOnlyMode,
+                            ) { confirmDiscard = true }
+                        }
                     }
                 }
-                "rejected" -> PrimaryButton("Discard change", enabled = !state.readOnlyMode) { confirmDiscard = true }
+                "rejected" -> {
+                    if (operation.lastErrorCode == "operation_rejected") {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                            PrimaryButton(
+                                "Try again",
+                                modifier = Modifier.weight(1f),
+                                enabled = !state.readOnlyMode && mutation?.requiresEncryptionPassword != true,
+                            ) { mobileSession.retryBudgetMutation(operation.operationId) }
+                            SecondaryButton(
+                                "Discard change",
+                                modifier = Modifier.weight(1f),
+                                enabled = !state.readOnlyMode,
+                            ) { confirmDiscard = true }
+                        }
+                    } else {
+                        PrimaryButton("Discard change", enabled = !state.readOnlyMode) { confirmDiscard = true }
+                    }
+                }
                 else -> Spacer(Modifier.height(72.dp))
             }
         }
