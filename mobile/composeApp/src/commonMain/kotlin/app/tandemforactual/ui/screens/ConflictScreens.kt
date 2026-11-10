@@ -459,144 +459,40 @@ internal fun UncertainWriteScreen(
             }
         val operation = checkedOperation ?: pendingOperation
         val transaction = operation?.let { write -> liveTransactions.firstOrNull { it.recordId == write.recordId } }
-        val operationPayee = transaction?.payee ?: "this transaction"
-        val operationAmount = operation?.optimisticAmountMinor ?: transaction?.amountMinorUnits
-        val operationAmountText = operationAmount?.let(state::formatSignedCurrency) ?: "Unavailable"
-        var confirmDiscard by rememberSaveable(operation?.operationId) { mutableStateOf(false) }
-        PageColumn {
-            if (operation == null) {
-                Heading("Nothing to check")
-                InfoBubble("This edit no longer needs confirmation.")
-            } else {
-                val isChecked = mobileSession.checkedWriteOperationId == operation.operationId
-                val isNotFound = isChecked && operation.status == "uncertain" && operation.lastErrorCode == "http-404"
-                val checkError =
-                    mobileSession.uncertainWriteCheckError.takeIf {
-                        mobileSession.uncertainWriteCheckErrorOperationId == operation.operationId
-                    }
-                val canRetryOrRemove = canOfferUncertainWriteRecoveryActions(operation.status, isChecked && checkError == null)
-                val heading =
-                    when {
-                        checkError != null -> "Couldn’t check this change"
-                        operation.status == "committed" -> "Saved to Actual"
-                        operation.status == "conflict" -> "Needs review"
-                        operation.status == "rejected" -> "Change not applied"
-                        operation.status == "discarded" -> "Change discarded"
-                        operation.status == "queued" -> "Waiting to sync"
-                        operation.status == "sending" -> "Syncing"
-                        operation.status == "uncertain" -> "Needs confirmation"
-                        isNotFound -> "Ready to try again"
-                        isChecked -> "Still unconfirmed"
-                        mobileSession.isSyncing -> "Checking status"
-                        else -> "Needs confirmation"
-                    }
-                val message =
-                    when {
-                        checkError != null -> checkError
-                        operation.status == "committed" -> "This change is saved in your budget."
-                        operation.status == "conflict" -> "Actual changed this transaction. Review both versions."
-                        operation.status == "rejected" -> "Actual kept the previous value."
-                        operation.status == "discarded" -> "Your edit was removed."
-                        operation.status == "queued" && isChecked -> "Actual confirmed this edit was not applied. It’s ready to try again."
-                        operation.status == "queued" -> "Your edit is saved on this device and is waiting to sync."
-                        operation.status == "sending" && mobileSession.isSyncing -> "Syncing this edit with Actual."
-                        operation.status == "sending" -> "Tandem couldn’t confirm the save. Check its status before trying again."
-                        isNotFound -> "Actual has no copy of this edit. Try sending it again once."
-                        isChecked -> "Actual still can’t confirm whether this edit was saved. You can try again or remove it."
-                        mobileSession.isSyncing -> "Checking Actual for this edit."
-                        else -> "Tandem couldn’t confirm whether Actual saved this edit. Check its status before trying again."
-                    }
-                Heading(heading)
-                SectionCard(
-                    transaction?.payee ?: "Transaction",
-                    transaction?.dateLabel ?: "Saved on this device",
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.large),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text("Amount", color = tandemPalette.muted, fontSize = TandemTypography.body)
-                        Text(
-                            operation.optimisticAmountMinor?.let { state.formatSignedCurrency(it) } ?: "Unavailable",
-                            color = tandemPalette.text,
-                            fontSize = TandemTypography.cardTitle,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-                InfoBubble(message)
-                when {
-                    checkError != null -> {
-                        UncertainWriteRecoveryActions(
-                            showCheckAgain = true,
-                            showRetryAndRemove = false,
-                            isSyncing = mobileSession.isSyncing,
-                            readOnly = state.readOnlyMode,
-                            onCheckAgain = { onCheckStatus(operation.operationId) },
-                            onRetry = { onRetry(operation.operationId) },
-                            onRemove = { confirmDiscard = true },
-                        )
-                    }
-                    canRetryOrRemove -> {
-                        UncertainWriteRecoveryActions(
-                            showCheckAgain = false,
-                            showRetryAndRemove = true,
-                            isSyncing = mobileSession.isSyncing,
-                            readOnly = state.readOnlyMode,
-                            onCheckAgain = { onCheckStatus(operation.operationId) },
-                            onRetry = { onRetry(operation.operationId) },
-                            onRemove = { confirmDiscard = true },
-                        )
-                    }
-                    operation.status == "uncertain" -> {
-                        PrimaryButton(
-                            if (isChecked) "Check again" else "Check status",
-                            enabled = !mobileSession.isSyncing,
-                            loading = mobileSession.isSyncing,
-                        ) { onCheckStatus(operation.operationId) }
-                    }
-                    operation.status == "queued" -> Spacer(Modifier.height(72.dp))
-                    operation.status == "sending" ->
-                        PrimaryButton(
-                            if (mobileSession.isSyncing) "Syncing" else "Check status",
-                            enabled = !mobileSession.isSyncing,
-                            loading = mobileSession.isSyncing,
-                        ) {
-                            if (!mobileSession.isSyncing) onCheckStatus(operation.operationId)
-                        }
-                    operation.status == "conflict" ->
-                        PrimaryButton("Review") {
-                            mobileSession.clearTransactionWriteMessage()
-                            state.selectedConflictOperationId = operation.operationId
-                            navigation.open(AppRoute.CONFLICT_REVIEW)
-                        }
-                    operation.status == "rejected" ->
-                        PrimaryButton("Review change") {
-                            state.selectedConflictOperationId = operation.operationId
-                            navigation.open(AppRoute.UNCERTAIN_WRITE)
-                        }
-                    else -> PrimaryButton("Done") { navigation.back() }
+        val isChecked = operation != null && mobileSession.checkedWriteOperationId == operation.operationId
+        val isNotFound = operation != null && isChecked && operation.status == "uncertain" && operation.lastErrorCode == "http-404"
+        val checkError =
+            operation?.let { checked ->
+                mobileSession.uncertainWriteCheckError.takeIf {
+                    mobileSession.uncertainWriteCheckErrorOperationId == checked.operationId
                 }
             }
-        }
-        if (confirmDiscard && operation != null) {
-            DestructiveConfirmationDialog(
-                title = "Remove this edit?",
-                message =
-                    uncertainWriteRemovalWarning(operationPayee, operationAmountText),
-                confirmLabel = "Remove edit",
-                dismissLabel = "Keep edit",
-                enabled = !state.readOnlyMode && !mobileSession.isSyncing,
-                onDismissRequest = { if (!mobileSession.isSyncing) confirmDiscard = false },
-                onConfirm = {
-                    confirmDiscard = false
-                    onDiscard(operation.operationId)
-                },
-            )
-        }
+        UncertainWriteDetailsScreen(
+            state = state,
+            operation = operation,
+            transaction = transaction,
+            isChecked = isChecked,
+            isNotFound = isNotFound,
+            checkError = checkError,
+            isSyncing = mobileSession.isSyncing,
+            onCheckStatus = { operation?.let { onCheckStatus(it.operationId) } },
+            onRetry = { operation?.let { onRetry(it.operationId) } },
+            onDiscard = { operation?.let { onDiscard(it.operationId) } },
+            onReviewConflict = {
+                operation?.let {
+                    mobileSession.clearTransactionWriteMessage()
+                    state.selectedConflictOperationId = it.operationId
+                    navigation.open(AppRoute.CONFLICT_REVIEW)
+                }
+            },
+            onReviewRejected = {
+                operation?.let {
+                    state.selectedConflictOperationId = it.operationId
+                    navigation.open(AppRoute.UNCERTAIN_WRITE)
+                }
+            },
+            onDone = navigation.back,
+        )
         return
     }
     PageColumn {
@@ -605,6 +501,152 @@ internal fun UncertainWriteScreen(
             "Open an Actual budget to check pending changes.",
             actionLabel = "Choose budget",
             onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+        )
+    }
+}
+
+@Composable
+internal fun UncertainWriteDetailsScreen(
+    state: AppState,
+    operation: OutboxOperationEntity?,
+    transaction: TransactionItem?,
+    isChecked: Boolean,
+    isNotFound: Boolean,
+    checkError: String?,
+    isSyncing: Boolean,
+    onCheckStatus: () -> Unit,
+    onRetry: () -> Unit,
+    onDiscard: () -> Unit,
+    onReviewConflict: () -> Unit,
+    onReviewRejected: () -> Unit,
+    onDone: () -> Unit,
+) {
+    val operationPayee = transaction?.payee ?: "this transaction"
+    val operationAmount = operation?.optimisticAmountMinor ?: transaction?.amountMinorUnits
+    val operationAmountText = operationAmount?.let(state::formatSignedCurrency) ?: "Unavailable"
+    var confirmDiscard by rememberSaveable(operation?.operationId) { mutableStateOf(false) }
+    val checkErrorForOperation = checkError.takeIf { operation != null }
+    val canRetryOrRemove =
+        operation != null &&
+            canOfferUncertainWriteRecoveryActions(
+                operation.status,
+                isChecked && checkErrorForOperation == null,
+            )
+    PageColumn {
+        if (operation == null) {
+            Heading("Nothing to check")
+            InfoBubble("This edit no longer needs confirmation.")
+        } else {
+            val heading =
+                when {
+                    checkErrorForOperation != null -> "Couldn’t check this change"
+                    operation.status == "committed" -> "Saved to Actual"
+                    operation.status == "conflict" -> "Needs review"
+                    operation.status == "rejected" -> "Change not applied"
+                    operation.status == "discarded" -> "Change discarded"
+                    operation.status == "queued" -> "Waiting to sync"
+                    operation.status == "sending" -> "Syncing"
+                    isNotFound -> "Ready to try again"
+                    isChecked -> "Still unconfirmed"
+                    operation.status == "uncertain" -> "Needs confirmation"
+                    isSyncing -> "Checking status"
+                    else -> "Needs confirmation"
+                }
+            val message =
+                when {
+                    checkErrorForOperation != null -> checkErrorForOperation
+                    operation.status == "committed" -> "This change is saved in your budget."
+                    operation.status == "conflict" -> "Actual changed this transaction. Review both versions."
+                    operation.status == "rejected" -> "Actual kept the previous value."
+                    operation.status == "discarded" -> "Your edit was removed."
+                    operation.status == "queued" && isChecked -> "Actual confirmed this edit was not applied. It’s ready to try again."
+                    operation.status == "queued" -> "Your edit is saved on this device and is waiting to sync."
+                    operation.status == "sending" && isSyncing -> "Syncing this edit with Actual."
+                    operation.status == "sending" -> "Tandem couldn’t confirm the save. Check its status before trying again."
+                    isNotFound -> "Actual has no copy of this edit. Try sending it again once."
+                    isChecked -> "Actual still can’t confirm whether this edit was saved. You can try again or remove it."
+                    isSyncing -> "Checking Actual for this edit."
+                    else -> "Tandem couldn’t confirm whether Actual saved this edit. Check its status before trying again."
+                }
+            Heading(heading)
+            SectionCard(
+                transaction?.payee ?: "Transaction",
+                transaction?.dateLabel ?: "Saved on this device",
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.large),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Amount", color = tandemPalette.muted, fontSize = TandemTypography.body)
+                    Text(
+                        operation.optimisticAmountMinor?.let { state.formatSignedCurrency(it) } ?: "Unavailable",
+                        color = tandemPalette.text,
+                        fontSize = TandemTypography.cardTitle,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            InfoBubble(message)
+            when {
+                checkErrorForOperation != null -> {
+                    UncertainWriteRecoveryActions(
+                        showCheckAgain = true,
+                        showRetryAndRemove = false,
+                        isSyncing = isSyncing,
+                        readOnly = state.readOnlyMode,
+                        onCheckAgain = onCheckStatus,
+                        onRetry = onRetry,
+                        onRemove = { confirmDiscard = true },
+                    )
+                }
+                canRetryOrRemove -> {
+                    UncertainWriteRecoveryActions(
+                        showCheckAgain = false,
+                        showRetryAndRemove = true,
+                        isSyncing = isSyncing,
+                        readOnly = state.readOnlyMode,
+                        onCheckAgain = onCheckStatus,
+                        onRetry = onRetry,
+                        onRemove = { confirmDiscard = true },
+                    )
+                }
+                operation.status == "uncertain" -> {
+                    PrimaryButton(
+                        if (isChecked) "Check again" else "Check status",
+                        enabled = !isSyncing,
+                        loading = isSyncing,
+                    ) { onCheckStatus() }
+                }
+                operation.status == "queued" -> Spacer(Modifier.height(72.dp))
+                operation.status == "sending" ->
+                    PrimaryButton(
+                        if (isSyncing) "Syncing" else "Check status",
+                        enabled = !isSyncing,
+                        loading = isSyncing,
+                    ) {
+                        if (!isSyncing) onCheckStatus()
+                    }
+                operation.status == "conflict" -> PrimaryButton("Review", onClick = onReviewConflict)
+                operation.status == "rejected" -> PrimaryButton("Review change", onClick = onReviewRejected)
+                else -> PrimaryButton("Done", onClick = onDone)
+            }
+        }
+    }
+    if (confirmDiscard && operation != null) {
+        DestructiveConfirmationDialog(
+            title = "Remove this edit?",
+            message = uncertainWriteRemovalWarning(operationPayee, operationAmountText),
+            confirmLabel = "Remove edit",
+            dismissLabel = "Keep edit",
+            enabled = !state.readOnlyMode && !isSyncing,
+            onDismissRequest = { if (!isSyncing) confirmDiscard = false },
+            onConfirm = {
+                confirmDiscard = false
+                onDiscard()
+            },
         )
     }
 }
