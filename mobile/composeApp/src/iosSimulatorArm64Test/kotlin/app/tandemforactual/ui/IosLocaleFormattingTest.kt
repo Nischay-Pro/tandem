@@ -5,6 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class IosLocaleFormattingTest {
     @Test
@@ -48,6 +49,23 @@ class IosLocaleFormattingTest {
                 assertEquals(123_456_789L, platformParseDecimalMinorUnits("1,234,567.89", settings), "western grouping")
             }
         }
+    }
+
+    @Test
+    fun invalidAmountGuidanceAndConfirmationUseTheIosBudgetFormat() {
+        val german = settings("dot-comma")
+        val yen =
+            german.copy(
+                currencyCode = "JPY",
+                currencySymbol = "¥",
+                currencyFractionDigits = 0,
+            )
+
+        assertEquals("Use a comma for cents in this budget.", transactionAmountInputError("12.50", german))
+        assertEquals("This budget uses whole-unit amounts.", transactionAmountInputError("12.50", yen))
+        assertTrue(transactionAmountNeedsFormatConfirmation("1234,56", 123_456, german))
+        assertFalse(transactionAmountNeedsFormatConfirmation("1.234,56", 123_456, german))
+        assertEquals("1.234,56", platformFormatDecimal(123_456, german))
     }
 
     @Test

@@ -104,6 +104,43 @@ class LocaleFormattingTest {
     }
 
     @Test
+    fun amountParsingRejectsTheOtherDecimalMarkForEveryBudgetFormat() {
+        val cases =
+            listOf(
+                displaySettings("USD", "comma-dot") to "12,50",
+                displaySettings("EUR", "dot-comma", "€") to "12.50",
+                displaySettings("EUR", "space-comma", "€") to "12.50",
+                displaySettings("CHF", "apostrophe-dot", "CHF") to "12,50",
+                displaySettings("INR", "comma-dot-in", "₹") to "12,50",
+            )
+
+        cases.forEach { (settings, swappedDecimal) ->
+            assertNull(platformParseDecimalMinorUnits(swappedDecimal, settings), settings.numberFormat)
+        }
+    }
+
+    @Test
+    fun invalidAmountMessageNamesTheBudgetDecimalMark() {
+        val us = displaySettings(currencyCode = "USD", numberFormat = "comma-dot")
+        val germany = displaySettings(currencyCode = "EUR", numberFormat = "dot-comma", currencySymbol = "€")
+        val yen = displaySettings(currencyCode = "JPY", numberFormat = "comma-dot", currencySymbol = "¥", currencyFractionDigits = 0)
+
+        assertEquals("Use a period for cents in this budget.", transactionAmountInputError("12,50", us))
+        assertEquals("Use a comma for cents in this budget.", transactionAmountInputError("12.50", germany))
+        assertEquals("This budget uses whole-unit amounts.", transactionAmountInputError("12.50", yen))
+    }
+
+    @Test
+    fun nonCanonicalParsedAmountsRequireAFormattedPreviewConfirmation() {
+        val us = displaySettings(currencyCode = "USD", numberFormat = "comma-dot")
+        val germany = displaySettings(currencyCode = "EUR", numberFormat = "dot-comma", currencySymbol = "€")
+
+        assertFalse(transactionAmountNeedsFormatConfirmation("1,234.56", 123_456, us))
+        assertTrue(transactionAmountNeedsFormatConfirmation("1234,56", 123_456, germany))
+        assertEquals("1.234,56", formatAmount(123_456, germany))
+    }
+
+    @Test
     fun amountParsingUsesValidGroupingForEveryBudgetNumberFormat() {
         val examples =
             listOf(

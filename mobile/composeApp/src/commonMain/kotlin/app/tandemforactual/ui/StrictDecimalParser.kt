@@ -1,5 +1,7 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.data.store.BudgetDisplaySettings
+
 internal data class DecimalSeparators(
     val decimal: Char,
     val grouping: Char,
@@ -55,6 +57,55 @@ internal fun parseStrictMinorUnits(
         }
     return signedMinorUnits.toLongOrNull()
 }
+
+internal fun transactionAmountInputError(
+    value: String,
+    displaySettings: BudgetDisplaySettings?,
+): String {
+    val fractionDigits = displaySettings?.currencyFractionDigits ?: 2
+    val input = value.trim()
+    if (fractionDigits == 0 && ('.' in input || ',' in input)) {
+        return "This budget uses whole-unit amounts."
+    }
+
+    val decimalSeparator =
+        when (displaySettings?.numberFormat) {
+            "dot-comma", "space-comma" -> ','
+            "comma-dot", "apostrophe-dot", "comma-dot-in" -> '.'
+            else -> null
+        }
+    val wrongDecimalSeparator = decimalSeparator?.let { if (it == '.') ',' else '.' }
+    if (wrongDecimalSeparator != null && fractionDigits > 0 && decimalSeparator !in input) {
+        val possibleFraction = input.substringAfterLast(wrongDecimalSeparator, "")
+        if (possibleFraction.length in 1..fractionDigits && possibleFraction.all(Char::isDigit)) {
+            val expectedMark = if (decimalSeparator == ',') "a comma" else "a period"
+            return "Use $expectedMark for cents in this budget."
+        }
+    }
+
+    return "Enter an amount using this budget’s number format."
+}
+
+internal fun transactionAmountNeedsFormatConfirmation(
+    value: String,
+    amountMinorUnits: Long,
+    displaySettings: BudgetDisplaySettings?,
+): Boolean =
+    normalizeAmountForDisplayComparison(value) !=
+        normalizeAmountForDisplayComparison(formatAmount(amountMinorUnits, displaySettings))
+
+private fun normalizeAmountForDisplayComparison(value: String): String =
+    buildString(value.length) {
+        value.trim().forEach { character ->
+            append(
+                when {
+                    character == '\u00a0' || character == '\u202f' || character == '\u2009' -> ' '
+                    character == '\u2018' || character == '\u2019' || character == '\u02bc' -> '\''
+                    else -> character
+                },
+            )
+        }
+    }
 
 private fun normalizeGroupingSeparators(
     value: String,

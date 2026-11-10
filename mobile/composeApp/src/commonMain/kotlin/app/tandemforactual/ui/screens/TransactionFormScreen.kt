@@ -1,6 +1,7 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.components.AmountConfirmationDialog
 import app.tandemforactual.ui.components.AnimatedReveal
 import app.tandemforactual.ui.components.BodyText
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
@@ -75,6 +77,7 @@ internal fun TransactionFormScreen(
             var calculatorOperator by rememberSaveable { mutableStateOf<String?>(null) }
             var enterNewOperand by rememberSaveable { mutableStateOf(false) }
             var amountEntryMessage by rememberSaveable { mutableStateOf<String?>(null) }
+            var confirmAmount by rememberSaveable { mutableStateOf(false) }
             var notesFocused by remember { mutableStateOf(false) }
             val focusManager = LocalFocusManager.current
             val routeScrollState = LocalRouteScrollState.current
@@ -82,8 +85,25 @@ internal fun TransactionFormScreen(
                 derivedStateOf { (routeScrollState?.value ?: 0) > 72 }
             }
 
-            val amountMinorUnits =
-                transactionAmountInputMagnitude(state.parseAmountMinorUnits(state.transactionAmount))
+            val parsedAmountMinorUnits = state.parseAmountMinorUnits(state.transactionAmount)
+            val amountMinorUnits = transactionAmountInputMagnitude(parsedAmountMinorUnits)
+            val amountInputErrorMessage =
+                when {
+                    state.transactionAmount.isBlank() -> null
+                    parsedAmountMinorUnits == null -> transactionAmountInputError(state.transactionAmount, state.budgetDisplaySettings)
+                    parsedAmountMinorUnits < 0 -> "Enter a positive amount."
+                    else -> null
+                }
+            val budgetAmountPreview =
+                parsedAmountMinorUnits
+                    ?.takeIf {
+                        it > 0 &&
+                            transactionAmountNeedsFormatConfirmation(
+                                state.transactionAmount,
+                                it,
+                                state.budgetDisplaySettings,
+                            )
+                    }?.let(state::formatCurrency)
             val transferDestinationAccountId =
                 remember(state.newTransactionPayeeId, mobileSession.payeeRecords) {
                     mobileSession.payeeRecords
@@ -178,6 +198,15 @@ internal fun TransactionFormScreen(
                 softwareKeyboard?.hide()
             }
 
+            fun requestCreateTransaction() {
+                dismissKeypad()
+                if (budgetAmountPreview != null) {
+                    confirmAmount = true
+                } else {
+                    onCreateTransaction()
+                }
+            }
+
             LaunchedEffect(keypadVisible) {
                 if (keypadVisible) {
                     softwareKeyboard?.hide()
@@ -204,11 +233,10 @@ internal fun TransactionFormScreen(
                         showCursor = keypadVisible,
                         onShowKeypad = { keypadVisible = true },
                     )
-                    AnimatedReveal(visible = amountEntryMessage != null) {
-                        InlineMessage(amountEntryMessage.orEmpty(), InlineMessageKind.ERROR)
-                    }
-                    AnimatedReveal(visible = mobileSession.transactionWriteMessage != null) {
-                        InlineMessage(mobileSession.transactionWriteMessage.orEmpty(), InlineMessageKind.ERROR)
+                    budgetAmountPreview?.let { BodyText("Budget format: $it") }
+                    val transactionErrorMessage = amountInputErrorMessage ?: amountEntryMessage ?: mobileSession.transactionWriteMessage
+                    AnimatedReveal(visible = transactionErrorMessage != null) {
+                        InlineMessage(transactionErrorMessage.orEmpty(), InlineMessageKind.ERROR)
                     }
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         TransactionTypePicker(
@@ -326,11 +354,10 @@ internal fun TransactionFormScreen(
                                     state.newTransactionAccountId.isNotBlank() &&
                                     state.transactionPayee.isNotBlank() &&
                                     transactionTargetIsValid &&
+                                    parsedAmountMinorUnits != null &&
+                                    parsedAmountMinorUnits > 0 &&
                                     amountMinorUnits > 0,
-                            onClick = {
-                                dismissKeypad()
-                                onCreateTransaction()
-                            },
+                            onClick = ::requestCreateTransaction,
                         )
                     }
                 }
@@ -357,6 +384,15 @@ internal fun TransactionFormScreen(
                 },
                 onDismiss = { showDatePicker = false },
             )
+            AmountConfirmationDialog(
+                visible = confirmAmount,
+                formattedAmount = budgetAmountPreview.orEmpty(),
+                onDismissRequest = { confirmAmount = false },
+                onConfirm = {
+                    confirmAmount = false
+                    onCreateTransaction()
+                },
+            )
             return
         }
         var originalAmountMinor by remember(state.selectedTransactionRecordId) { mutableStateOf(state.selectedTransactionAmountMinor) }
@@ -367,16 +403,35 @@ internal fun TransactionFormScreen(
         var originalNotes by remember(state.selectedTransactionRecordId) { mutableStateOf(state.selectedTransactionNotes) }
         var savedFeedback by remember(state.selectedTransactionRecordId) { mutableStateOf(false) }
         var confirmDelete by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf(false) }
+        var confirmAmount by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf(false) }
         var keypadVisible by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf(false) }
         var notesFocused by remember { mutableStateOf(false) }
         var calculatorAccumulator by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf<Long?>(null) }
         var calculatorOperator by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf<String?>(null) }
         var enterNewOperand by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf(false) }
         var amountEntryMessage by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf<String?>(null) }
+        val parsedAmount = state.parseAmountMinorUnits(state.transactionAmount)
         val amountMinorUnits =
             transactionAmountInputMagnitude(
-                state.parseAmountMinorUnits(state.transactionAmount) ?: state.selectedTransactionAmountMinor,
+                parsedAmount ?: state.selectedTransactionAmountMinor,
             )
+        val amountInputErrorMessage =
+            when {
+                state.transactionAmount.isBlank() -> null
+                parsedAmount == null -> transactionAmountInputError(state.transactionAmount, state.budgetDisplaySettings)
+                parsedAmount < 0 -> "Enter a positive amount."
+                else -> null
+            }
+        val budgetAmountPreview =
+            parsedAmount
+                ?.takeIf {
+                    it > 0 &&
+                        transactionAmountNeedsFormatConfirmation(
+                            state.transactionAmount,
+                            it,
+                            state.budgetDisplaySettings,
+                        )
+                }?.let(state::formatCurrency)
         val focusManager = LocalFocusManager.current
         val routeScrollState = LocalRouteScrollState.current
         val compactSave by remember(routeScrollState) {
@@ -443,7 +498,26 @@ internal fun TransactionFormScreen(
             softwareKeyboard?.hide()
         }
 
-        val parsedAmount = state.parseAmountMinorUnits(state.transactionAmount)
+        fun saveEditTransaction() {
+            onSaveTransaction { saved ->
+                if (saved) {
+                    originalAmountMinor = state.selectedTransactionAmountMinor
+                    originalTransactionType = state.transactionType
+                    originalNotes = state.selectedTransactionNotes
+                    savedFeedback = true
+                }
+            }
+        }
+
+        fun requestEditSave() {
+            dismissEditKeypad()
+            if (budgetAmountPreview != null) {
+                confirmAmount = true
+            } else {
+                saveEditTransaction()
+            }
+        }
+
         val baselineAmount = originalAmountMinor?.let { kotlin.math.abs(it) }
         val hasChanges =
             parsedAmount != baselineAmount ||
@@ -484,11 +558,10 @@ internal fun TransactionFormScreen(
                     showCursor = keypadVisible,
                     onShowKeypad = { keypadVisible = true },
                 )
-                AnimatedReveal(visible = amountEntryMessage != null) {
-                    InlineMessage(amountEntryMessage.orEmpty(), InlineMessageKind.ERROR)
-                }
-                AnimatedReveal(visible = mobileSession.transactionWriteMessage != null) {
-                    InlineMessage(mobileSession.transactionWriteMessage.orEmpty(), InlineMessageKind.ERROR)
+                budgetAmountPreview?.let { BodyText("Budget format: $it") }
+                val transactionErrorMessage = amountInputErrorMessage ?: amountEntryMessage ?: mobileSession.transactionWriteMessage
+                AnimatedReveal(visible = transactionErrorMessage != null) {
+                    InlineMessage(transactionErrorMessage.orEmpty(), InlineMessageKind.ERROR)
                 }
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     TransactionTypePicker(
@@ -584,17 +657,7 @@ internal fun TransactionFormScreen(
                             compact = compactSave || savedFeedback,
                             enabled = hasChanges && !mobileSession.isSavingTransaction && parsedAmount != null && parsedAmount > 0,
                             saved = savedFeedback,
-                            onClick = {
-                                dismissEditKeypad()
-                                onSaveTransaction { saved ->
-                                    if (saved) {
-                                        originalAmountMinor = state.selectedTransactionAmountMinor
-                                        originalTransactionType = state.transactionType
-                                        originalNotes = state.selectedTransactionNotes
-                                        savedFeedback = true
-                                    }
-                                }
-                            },
+                            onClick = ::requestEditSave,
                         )
                     }
                 }
@@ -621,6 +684,15 @@ internal fun TransactionFormScreen(
                 showDatePicker = false
             },
             onDismiss = { showDatePicker = false },
+        )
+        AmountConfirmationDialog(
+            visible = confirmAmount,
+            formattedAmount = budgetAmountPreview.orEmpty(),
+            onDismissRequest = { confirmAmount = false },
+            onConfirm = {
+                confirmAmount = false
+                saveEditTransaction()
+            },
         )
         if (confirmDelete) {
             DestructiveConfirmationDialog(

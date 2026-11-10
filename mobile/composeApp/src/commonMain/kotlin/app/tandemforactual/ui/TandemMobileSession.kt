@@ -2471,8 +2471,12 @@ internal class TandemMobileSession(
         transactionWriteMessage = null
         if (refuseWriteInReadOnlyMode()) return false
         val enteredAmount = parseAmountMinorUnits(amountText, displaySettings)
-        if (enteredAmount == null || enteredAmount < 0) {
-            transactionWriteMessage = "Enter a valid positive amount using this device’s number format."
+        if (enteredAmount == null) {
+            transactionWriteMessage = transactionAmountInputError(amountText, displaySettings)
+            return false
+        }
+        if (enteredAmount < 0) {
+            transactionWriteMessage = "Enter a positive amount."
             return false
         }
         if (enteredAmount > MAX_TRANSACTION_AMOUNT_MINOR_UNITS) {
@@ -2712,7 +2716,15 @@ internal class TandemMobileSession(
         transactionWriteMessage = null
         if (refuseWriteInReadOnlyMode()) return false
         val amount = parseAmountMinorUnits(amountText, displaySettings)
-        if (amount == null || amount == 0L) {
+        if (amount == null) {
+            transactionWriteMessage = transactionAmountInputError(amountText, displaySettings)
+            return false
+        }
+        if (amount < 0) {
+            transactionWriteMessage = "Enter a positive amount."
+            return false
+        }
+        if (amount == 0L) {
             transactionWriteMessage = "Enter an amount greater than zero."
             return false
         }
