@@ -19,7 +19,6 @@ import platform.Foundation.NSRecursiveLock
 import platform.Foundation.currentLocale
 import kotlin.math.abs
 import kotlin.math.pow
-import kotlin.math.roundToLong
 
 internal actual fun platformFormatCurrency(
     minorUnits: Long,
@@ -86,23 +85,27 @@ internal actual fun platformParseDecimalMinorUnits(
     value: String,
     displaySettings: BudgetDisplaySettings?,
 ): Long? {
-    val input = value.trim()
-    if (input.isEmpty()) return null
     val locale = numberLocale(displaySettings)
     val fractionDigits = displaySettings.currencyFractionDigits()
-    val amount =
-        withNumberFormatter("decimal:$locale:$fractionDigits", {
-            NSNumberFormatter().apply {
-                this.locale = locale
-                numberStyle = NSNumberFormatterDecimalStyle
-                usesGroupingSeparator = true
-                maximumFractionDigits = fractionDigits.toULong()
-            }
-        }) { it.numberFromString(input)?.doubleValue } ?: return null
-    val minorUnits = amount * 10.0.pow(fractionDigits.toDouble())
-    if (!minorUnits.isFinite() || abs(minorUnits) > Long.MAX_VALUE.toDouble()) return null
-    val rounded = minorUnits.roundToLong()
-    return rounded.takeIf { abs(minorUnits - it.toDouble()) < 0.000001 }
+    val symbols =
+        NSNumberFormatter().apply {
+            this.locale = locale
+            numberStyle = NSNumberFormatterDecimalStyle
+            usesGroupingSeparator = true
+        }
+    val decimalSeparator = symbols.decimalSeparator?.firstOrNull() ?: return null
+    val groupingSeparator = symbols.groupingSeparator?.firstOrNull() ?: return null
+    val secondaryGroupingSize = if (displaySettings?.numberFormat == "comma-dot-in") 2 else 3
+    return parseStrictMinorUnits(
+        value = value,
+        fractionDigits = fractionDigits,
+        separators =
+            DecimalSeparators(
+                decimal = decimalSeparator,
+                grouping = groupingSeparator,
+                secondaryGroupingSize = secondaryGroupingSize,
+            ),
+    )
 }
 
 private fun formatBudgetNumber(

@@ -2,10 +2,9 @@ package app.tandemforactual.ui
 
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import java.math.BigDecimal
-import java.math.RoundingMode
 import java.text.DateFormat
+import java.text.DecimalFormatSymbols
 import java.text.NumberFormat
-import java.text.ParsePosition
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Currency
@@ -68,17 +67,19 @@ internal actual fun platformParseDecimalMinorUnits(
     value: String,
     displaySettings: BudgetDisplaySettings?,
 ): Long? {
-    val input = value.trim()
-    if (input.isEmpty()) return null
-    val position = ParsePosition(0)
-    val parsed = budgetNumberFormat(displaySettings, displaySettings.currencyFractionDigits()).parse(input, position) ?: return null
-    if (position.index != input.length || position.errorIndex >= 0) return null
-    return runCatching {
-        BigDecimal(parsed.toString())
-            .movePointRight(displaySettings.currencyFractionDigits())
-            .setScale(0, RoundingMode.UNNECESSARY)
-            .longValueExact()
-    }.getOrNull()
+    val locale = numberLocale(displaySettings)
+    val symbols = DecimalFormatSymbols.getInstance(locale)
+    val secondaryGroupingSize = if (displaySettings?.numberFormat == "comma-dot-in") 2 else 3
+    return parseStrictMinorUnits(
+        value = value,
+        fractionDigits = displaySettings.currencyFractionDigits(),
+        separators =
+            DecimalSeparators(
+                decimal = symbols.decimalSeparator,
+                grouping = symbols.groupingSeparator,
+                secondaryGroupingSize = secondaryGroupingSize,
+            ),
+    )
 }
 
 private fun formatBudgetNumber(
@@ -103,20 +104,22 @@ private fun budgetNumberFormat(
     displaySettings: BudgetDisplaySettings?,
     fractionDigits: Int,
 ): NumberFormat {
-    val locale =
-        when (displaySettings?.numberFormat) {
-            "comma-dot" -> Locale.US
-            "dot-comma" -> Locale.GERMANY
-            "space-comma" -> Locale.FRANCE
-            "apostrophe-dot" -> Locale.forLanguageTag("de-CH")
-            "comma-dot-in" -> Locale.forLanguageTag("en-IN")
-            else -> Locale.getDefault()
-        }
+    val locale = numberLocale(displaySettings)
     return NumberFormat.getNumberInstance(locale).apply {
         minimumFractionDigits = fractionDigits
         maximumFractionDigits = fractionDigits
     }
 }
+
+private fun numberLocale(displaySettings: BudgetDisplaySettings?): Locale =
+    when (displaySettings?.numberFormat) {
+        "comma-dot" -> Locale.US
+        "dot-comma" -> Locale.GERMANY
+        "space-comma" -> Locale.FRANCE
+        "apostrophe-dot" -> Locale.forLanguageTag("de-CH")
+        "comma-dot-in" -> Locale.forLanguageTag("en-IN")
+        else -> Locale.getDefault()
+    }
 
 private fun BudgetDisplaySettings?.currencyFractionDigits(): Int {
     if (this != null) return this.currencyFractionDigits

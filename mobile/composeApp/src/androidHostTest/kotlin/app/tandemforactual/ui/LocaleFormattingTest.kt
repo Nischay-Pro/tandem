@@ -5,6 +5,7 @@ import java.util.Locale
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LocaleFormattingTest {
@@ -79,6 +80,55 @@ class LocaleFormattingTest {
             assertEquals("1.234,56", platformFormatDecimal(123_456, hideFraction))
             assertEquals(123_456L, platformParseDecimalMinorUnits("1.234,56", hideFraction))
         }
+    }
+
+    @Test
+    fun amountParsingRejectsSwappedDecimalMarksAndMalformedGrouping() {
+        val us = displaySettings(currencyCode = "USD", numberFormat = "comma-dot")
+        val germany = displaySettings(currencyCode = "EUR", numberFormat = "dot-comma", currencySymbol = "€")
+
+        assertEquals(1_250L, platformParseDecimalMinorUnits("12.50", us))
+        assertEquals(1_250L, platformParseDecimalMinorUnits("12.5", us))
+        assertNull(platformParseDecimalMinorUnits("12,50", us))
+        assertNull(platformParseDecimalMinorUnits("1,5", us))
+        assertEquals(123_456L, platformParseDecimalMinorUnits("1,234.56", us))
+        assertNull(platformParseDecimalMinorUnits("12,34.56", us))
+
+        assertEquals(1_250L, platformParseDecimalMinorUnits("12,50", germany))
+        assertEquals(1_250L, platformParseDecimalMinorUnits("12,5", germany))
+        assertNull(platformParseDecimalMinorUnits("12.50", germany))
+        assertNull(platformParseDecimalMinorUnits("12.5", germany))
+        assertEquals(123_456L, platformParseDecimalMinorUnits("1.234,56", germany))
+        assertEquals(123_456L, platformParseDecimalMinorUnits("1234,56", germany))
+        assertNull(platformParseDecimalMinorUnits("1.23.4,56", germany))
+    }
+
+    @Test
+    fun amountParsingUsesValidGroupingForEveryBudgetNumberFormat() {
+        val examples =
+            listOf(
+                displaySettings("USD", "comma-dot") to "1,234,567.89",
+                displaySettings("EUR", "dot-comma", "€") to "1.234.567,89",
+                displaySettings("EUR", "space-comma", "€") to "1\u202f234\u202f567,89",
+                displaySettings("CHF", "apostrophe-dot", "CHF") to "1’234’567.89",
+                displaySettings("INR", "comma-dot-in", "₹") to "12,34,567.89",
+            )
+
+        examples.forEach { (settings, formatted) ->
+            assertEquals(123_456_789L, platformParseDecimalMinorUnits(formatted, settings), formatted)
+            val platformFormatted = platformFormatDecimal(123_456_789L, settings)
+            assertEquals(
+                123_456_789L,
+                platformParseDecimalMinorUnits(platformFormatted, settings),
+                "${settings.numberFormat}: $platformFormatted",
+            )
+        }
+
+        val indian = displaySettings("INR", "comma-dot-in", "₹")
+        assertEquals(123_456_789L, platformParseDecimalMinorUnits("1,234,567.89", indian))
+        assertNull(platformParseDecimalMinorUnits("12,34.56", indian))
+        assertEquals(123_456L, platformParseDecimalMinorUnits("123,456", displaySettings("JPY", "comma-dot", "¥", 0)))
+        assertNull(platformParseDecimalMinorUnits("123.45", displaySettings("JPY", "comma-dot", "¥", 0)))
     }
 
     @Test
