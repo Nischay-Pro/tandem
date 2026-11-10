@@ -108,6 +108,7 @@ type InitialPlan =
       remoteSnapshot: JsonValue;
       conflictingFields: string[];
     }
+  | { kind: "rejected"; errorCode: string }
   | { kind: "unchanged"; remoteSnapshot: TransactionSnapshot }
   | { kind: "already-absent" }
   | { kind: "write-update"; patch: TransactionPatch }
@@ -161,9 +162,13 @@ export class TransactionReconciler {
     }
 
     if (operation.status === "uncertain") {
-      return this.locks.withBudgetLock(operation.budgetId, () =>
-        this.#recoverUncertain(operation, prepared),
-      );
+      return this.locks.withBudgetLock(operation.budgetId, async () => {
+        const recovered = await this.#recoverUncertain(operation, prepared);
+        if (recovered.operation.status !== "queued") return recovered;
+        const claim = await this.journal.claim(operation.operationId);
+        if (!claim.claimed) return this.#existingResult(claim.operation);
+        return this.#applyClaimed(claim.operation, prepared);
+      });
     }
     if (operation.status !== "queued") {
       return this.#existingResult(operation);
@@ -195,9 +200,18 @@ export class TransactionReconciler {
     }
 
     if (operation.status === "uncertain") {
-      return this.locks.withBudgetLock(operation.budgetId, () =>
-        this.#recoverUncertainCreate(operation, prepared),
-      );
+      return this.locks.withBudgetLock(operation.budgetId, async () => {
+        const recovered = await this.#recoverUncertainCreate(
+          operation,
+          prepared,
+        );
+        if (recovered.operation.status !== "queued") return recovered;
+        const claim = await this.journal.claim(operation.operationId);
+        if (!claim.claimed) return this.#existingResult(claim.operation);
+        return withLeaseRenewal(this.journal, operation.operationId, () =>
+          this.#applyClaimedCreate(claim.operation, prepared),
+        );
+      });
     }
     if (operation.status !== "queued") {
       return this.#existingResult(operation);
@@ -211,6 +225,58 @@ export class TransactionReconciler {
       return withLeaseRenewal(this.journal, operation.operationId, () =>
         this.#applyClaimedCreate(claim.operation, prepared),
       );
+    });
+  }
+
+  async checkOperationStatus(
+    operationId: string,
+    encryptionPassword?: string,
+  ): Promise<TransactionReconciliationResult | undefined> {
+    const operation = await this.journal.get(operationId);
+    if (!operation) return undefined;
+    if (operation.status !== "uncertain")
+      return this.#existingResult(operation);
+
+    return this.locks.withBudgetLock(operation.budgetId, async () => {
+      const current = await this.journal.get(operationId);
+      if (!current) return undefined;
+      if (current.status !== "uncertain") return this.#existingResult(current);
+      try {
+        if (current.action === "create") {
+          const prepared = prepareCreateRequest({
+            operationId: current.operationId,
+            principalId: current.principalId,
+            budgetId: current.budgetId,
+            idempotencyKey: current.idempotencyKey,
+            transactionId: current.entityId ?? "",
+            action: "create",
+            patch: current.patch,
+            ...(encryptionPassword === undefined ? {} : { encryptionPassword }),
+          });
+          return this.#recoverUncertainCreate(current, prepared);
+        }
+        if (current.action !== "update" && current.action !== "delete") {
+          return this.#existingResult(current);
+        }
+        const prepared = prepareRequest({
+          operationId: current.operationId,
+          principalId: current.principalId,
+          budgetId: current.budgetId,
+          idempotencyKey: current.idempotencyKey,
+          transactionId: current.entityId ?? "",
+          action: current.action,
+          baseRevision: current.baseRevision ?? "",
+          baseSnapshot: current.baseSnapshot,
+          patch: current.patch,
+          ...(encryptionPassword === undefined ? {} : { encryptionPassword }),
+        });
+        return this.#recoverUncertain(current, prepared);
+      } catch (error) {
+        if (error instanceof TransactionRequestValidationError) {
+          return this.#existingResult(current);
+        }
+        throw error;
+      }
     });
   }
 
@@ -401,6 +467,12 @@ export class TransactionReconciler {
                 conflictingFields: updatePlan.conflictingFields,
               };
             }
+            if (updatePlan.kind === "unsupported") {
+              return {
+                kind: "rejected",
+                errorCode: "split-child-field-not-editable",
+              };
+            }
             if (updatePlan.kind === "unchanged") {
               return { kind: "unchanged", remoteSnapshot: latest };
             }
@@ -437,6 +509,13 @@ export class TransactionReconciler {
     }
 
     try {
+      if (plan.kind === "rejected") {
+        const rejected = await this.journal.markRejected(
+          operation.operationId,
+          plan.errorCode,
+        );
+        return { operation: rejected, conflict: null };
+      }
       if (plan.kind === "conflict") {
         return await this.#recordConflict(operation, plan);
       }
@@ -614,7 +693,7 @@ export class TransactionReconciler {
     prepared: PreparedRequest,
   ): Promise<TransactionReconciliationResult> {
     const evidence = operation.writeEvidence;
-    if (!evidence || evidence.kind === "transaction-create-returned") {
+    if (evidence?.kind === "transaction-create-returned") {
       return this.#existingResult(operation);
     }
 
@@ -629,23 +708,69 @@ export class TransactionReconciler {
       return this.#existingResult(operation);
     }
 
-    if (evidence.kind === "transaction-delete-returned") {
-      if (operation.action !== "delete" || current !== undefined) {
+    let recoveredEvidence: ActualWriteEvidence | null = null;
+    let actualResult: JsonValue;
+    if (operation.action === "delete") {
+      if (evidence?.kind === "transaction-delete-returned") {
+        if (current !== undefined) return this.#existingResult(operation);
+        recoveredEvidence = evidence;
+        actualResult = {
+          transactionId: prepared.request.transactionId,
+          deleted: true,
+          recoveredByReadback: true,
+        };
+      } else if (evidence === null && current === undefined) {
+        recoveredEvidence = { kind: "transaction-delete-returned" };
+        actualResult = {
+          transactionId: prepared.request.transactionId,
+          deleted: true,
+          recoveredByReadback: true,
+        };
+      } else if (evidence === null && current !== undefined) {
+        const snapshot = snapshotActualTransaction(current);
+        if (
+          createTransactionRevision(snapshot) === prepared.request.baseRevision
+        ) {
+          return this.#requeueAfterReadback(operation);
+        }
+        return this.#existingResult(operation);
+      } else {
         return this.#existingResult(operation);
       }
     } else {
       if (operation.action !== "update" || current === undefined) {
         return this.#existingResult(operation);
       }
-      let recoveredPatch: TransactionPatch;
-      let recoveredSnapshot: TransactionSnapshot;
+      let snapshot: TransactionSnapshot;
+      let patch: TransactionPatch;
       try {
-        recoveredPatch = parseTransactionPatch(evidence.appliedPatch);
-        recoveredSnapshot = snapshotActualTransaction(current);
+        snapshot = snapshotActualTransaction(current);
+        patch =
+          evidence?.kind === "transaction-update-returned"
+            ? parseTransactionPatch(evidence.appliedPatch)
+            : prepared.patch;
       } catch {
         return this.#existingResult(operation);
       }
-      if (mismatchedPatchFields(recoveredSnapshot, recoveredPatch).length > 0) {
+      if (evidence && evidence.kind !== "transaction-update-returned") {
+        return this.#existingResult(operation);
+      }
+      if (mismatchedPatchFields(snapshot, patch).length === 0) {
+        recoveredEvidence = evidence ?? {
+          kind: "transaction-update-returned",
+          appliedPatch: toJsonValue(patch) as { [key: string]: JsonValue },
+        };
+        actualResult = {
+          transactionId: prepared.request.transactionId,
+          recoveredByReadback: true,
+          verifiedRevision: createTransactionRevision(snapshot),
+        };
+      } else if (
+        evidence === null &&
+        transactionMatchesBaseFields(snapshot, prepared.base, prepared.patch)
+      ) {
+        return this.#requeueAfterReadback(operation);
+      } else {
         return this.#existingResult(operation);
       }
     }
@@ -653,11 +778,8 @@ export class TransactionReconciler {
     try {
       const committed = await this.journal.resolveUncertainAsCommitted(
         operation.operationId,
-        {
-          transactionId: prepared.request.transactionId,
-          recoveredByReadback: true,
-        },
-        evidence,
+        actualResult,
+        recoveredEvidence ?? undefined,
       );
       return { operation: committed, conflict: null };
     } catch {
@@ -681,6 +803,9 @@ export class TransactionReconciler {
       return this.#existingResult(operation);
     }
     if (current === undefined) {
+      if (operation.writeEvidence === null) {
+        return this.#requeueAfterReadback(operation);
+      }
       return this.#existingResult(operation);
     }
 
@@ -691,11 +816,18 @@ export class TransactionReconciler {
       return this.#existingResult(operation);
     }
     if (
-      snapshot.id !== prepared.request.transactionId ||
-      snapshot.account !== prepared.input.account ||
-      snapshot.amount !== prepared.input.amount ||
-      snapshot.date !== prepared.input.date
+      operation.writeEvidence !== null &&
+      operation.writeEvidence.kind !== "transaction-create-returned"
     ) {
+      return this.#existingResult(operation);
+    }
+    const matchesCreate =
+      (snapshot.id === prepared.request.transactionId ||
+        snapshot.importedId === prepared.request.transactionId) &&
+      snapshot.account === prepared.input.account &&
+      snapshot.amount === prepared.input.amount &&
+      snapshot.date === prepared.input.date;
+    if (!matchesCreate) {
       return this.#existingResult(operation);
     }
 
@@ -708,13 +840,26 @@ export class TransactionReconciler {
           recoveredByReadback: true,
           verifiedRevision: createTransactionRevision(snapshot),
         },
-        { kind: "transaction-create-returned" },
+        operation.writeEvidence ?? { kind: "transaction-create-returned" },
       );
       return { operation: committed, conflict: null };
     } catch {
       // Keep the durable state uncertain whenever the journal cannot record recovery.
     }
     return this.#existingResult(operation);
+  }
+
+  async #requeueAfterReadback(
+    operation: WriteOperation,
+  ): Promise<TransactionReconciliationResult> {
+    try {
+      const requeued = await this.journal.requeueUncertain(
+        operation.operationId,
+      );
+      return { operation: requeued, conflict: null };
+    } catch {
+      return this.#existingResult(operation);
+    }
   }
 
   async #handleActualFailure(
@@ -919,6 +1064,27 @@ function mismatchedPatchFields(
         : patch[field as keyof TransactionPatch];
     return !Object.is(snapshot[field as keyof TransactionSnapshot], patchValue);
   });
+}
+
+function transactionMatchesBaseFields(
+  snapshot: TransactionSnapshot,
+  base: TransactionSnapshot,
+  patch: TransactionPatch,
+): boolean {
+  return Object.keys(patch).every((field) => {
+    const key = field as keyof TransactionPatch;
+    if (key === "notes") {
+      return normalizedNotes(snapshot.notes) === normalizedNotes(base.notes);
+    }
+    return Object.is(
+      snapshot[key as keyof TransactionSnapshot],
+      base[key as keyof TransactionSnapshot],
+    );
+  });
+}
+
+function normalizedNotes(value: string | null): string | null {
+  return value === "" ? null : value;
 }
 
 function structuredFields(

@@ -812,7 +812,7 @@ describe("transaction snapshots and merge planning", () => {
     ).toEqual({ kind: "conflict", conflictingFields: ["subtransactions"] });
   });
 
-  it("conflicts on parent category changes and split child metadata edits", () => {
+  it("conflicts on parent category changes and marks derived split child fields unsupported", () => {
     const child = createSnapshot({
       id: "split-child",
       isChild: true,
@@ -859,10 +859,14 @@ describe("transaction snapshots and merge planning", () => {
         [scenario.field]: scenario.remote,
       });
       expect(planTransactionUpdate(childBase, remote, local)).toEqual({
-        kind: "conflict",
-        conflictingFields: [scenario.field],
+        kind: "unsupported",
+        unsupportedFields: [scenario.field],
       });
     }
+
+    expect(
+      planTransactionUpdate(childBase, childBase, { date: childBase.date }),
+    ).toEqual({ kind: "unchanged" });
   });
 
   it("reports overlapping same-field edits and does not apply the safe subset", () => {

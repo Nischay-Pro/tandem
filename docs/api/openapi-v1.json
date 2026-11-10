@@ -1535,6 +1535,12 @@
             "in": "path",
             "name": "operationId",
             "required": true
+          },
+          {
+            "schema": { "type": "string", "minLength": 1, "maxLength": 1024 },
+            "in": "header",
+            "name": "x-budget-encryption-password",
+            "required": false
           }
         ],
         "security": [{ "bearerAuth": [] }],

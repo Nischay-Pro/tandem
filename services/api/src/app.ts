@@ -866,6 +866,10 @@ interface OperationRouteParams {
   operationId: string;
 }
 
+interface OperationHeaders {
+  "x-budget-encryption-password"?: string;
+}
+
 interface SubmitTransactionBody {
   operationId: string;
   action: "create" | "update" | "delete";
@@ -1288,7 +1292,7 @@ function registerTransactionRoutes(
     },
   );
 
-  app.get<{ Params: OperationRouteParams }>(
+  app.get<{ Params: OperationRouteParams; Headers: OperationHeaders }>(
     "/api/v1/operations/:operationId",
     {
       schema: {
@@ -1302,6 +1306,7 @@ function registerTransactionRoutes(
           required: ["operationId"],
           additionalProperties: false,
         },
+        headers: budgetEncryptionHeaderSchema,
         response: {
           200: operationResultSchema,
           400: errorSchema,
@@ -1319,10 +1324,19 @@ function registerTransactionRoutes(
       if (!transactionApi) return actualNotConfigured(reply);
 
       try {
-        const result = await transactionApi.getOperation(
-          device.principalId,
-          request.params.operationId,
-        );
+        const encryptionPassword =
+          request.headers["x-budget-encryption-password"];
+        const result =
+          encryptionPassword === undefined
+            ? await transactionApi.getOperation(
+                device.principalId,
+                request.params.operationId,
+              )
+            : await transactionApi.getOperation(
+                device.principalId,
+                request.params.operationId,
+                encryptionPassword,
+              );
         if (
           !result ||
           !DeviceAuthorization.canAccessBudget(

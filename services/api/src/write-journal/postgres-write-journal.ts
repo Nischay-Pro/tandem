@@ -326,6 +326,38 @@ export class PostgresWriteJournal implements DurableWriteJournal {
     );
   }
 
+  async requeueUncertain(operationId: string): Promise<WriteOperation> {
+    validateUuid("operationId", operationId);
+    return withTransaction(this.pool, async (client) => {
+      const result = await client.query<OperationRow>(
+        `UPDATE companion_operations
+        SET status = 'queued', error_code = 'actual-readback-not-applied',
+            completed_at = NULL, lease_expires_at = NULL,
+            updated_at = clock_timestamp()
+        WHERE operation_id = $1 AND status = 'uncertain' AND actual_result IS NULL
+        RETURNING *`,
+        [operationId],
+      );
+      const requeued = result.rows[0];
+      if (requeued) return mapOperation(requeued);
+
+      const existing = await selectOperation(client, operationId);
+      if (!existing) throw new OperationNotFoundError(operationId);
+      const operation = mapOperation(existing);
+      if (
+        operation.status === "queued" &&
+        operation.errorCode === "actual-readback-not-applied"
+      ) {
+        return operation;
+      }
+      throw new InvalidOperationTransitionError(
+        operationId,
+        operation.status,
+        "queued",
+      );
+    });
+  }
+
   async resolveUncertainAsCommitted(
     operationId: string,
     actualResult: JsonValue,

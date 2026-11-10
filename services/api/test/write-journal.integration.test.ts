@@ -765,6 +765,27 @@ describe("durable write journal integration", () => {
     expect(claim.operation.status).toBe("uncertain");
   });
 
+  it("requeues an uncertain operation after a read-back proves it was not applied", async () => {
+    const input = createOperation();
+    await database.journal.enqueue(input);
+    await database.journal.claim(input.operationId);
+    await database.journal.markUncertain(
+      input.operationId,
+      "claim-lease-expired",
+    );
+
+    const requeued = await database.journal.requeueUncertain(input.operationId);
+
+    expect(requeued).toMatchObject({
+      status: "queued",
+      errorCode: "actual-readback-not-applied",
+      writeEvidence: null,
+    });
+    expect((await database.journal.claim(input.operationId)).claimed).toBe(
+      true,
+    );
+  });
+
   it("rejects uncertain resolution when write completion was never acknowledged", async () => {
     const input = createOperation();
     const result = { transactionId: input.entityId, amount: 1200 };
@@ -802,6 +823,9 @@ describe("durable write journal integration", () => {
       actualResult: unknownResult,
       writeEvidence: null,
     });
+    await expect(
+      database.journal.requeueUncertain(input.operationId),
+    ).rejects.toThrow("cannot transition from uncertain to queued");
   });
 
   it("persists write evidence before allowing uncertain resolution", async () => {

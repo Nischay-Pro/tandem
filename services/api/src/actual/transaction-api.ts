@@ -29,6 +29,7 @@ export interface TransactionApiPort {
   getOperation(
     principalId: string,
     operationId: string,
+    encryptionPassword?: string,
   ): Promise<TransactionReconciliationResult | undefined>;
 }
 
@@ -62,7 +63,7 @@ export function createTransactionApi(
     submit(request) {
       return reconciler.submit(request);
     },
-    async getOperation(principalId, operationId) {
+    async getOperation(principalId, operationId, encryptionPassword) {
       const operation = await journal.get(operationId);
       if (
         !operation ||
@@ -70,6 +71,9 @@ export function createTransactionApi(
         operation.entityType !== "transaction"
       ) {
         return undefined;
+      }
+      if (operation.status === "uncertain") {
+        return reconciler.checkOperationStatus(operationId, encryptionPassword);
       }
       const conflict =
         operation.status === "conflict"

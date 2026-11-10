@@ -71,6 +71,7 @@ export type TransactionPatch = Omit<
 export type TransactionMergePlan =
   | { kind: "apply"; patch: TransactionPatch }
   | { kind: "unchanged" }
+  | { kind: "unsupported"; unsupportedFields: TransactionEditField[] }
   | { kind: "conflict"; conflictingFields: TransactionConflictField[] };
 
 const EDIT_FIELDS: readonly TransactionEditField[] = [
@@ -327,6 +328,19 @@ export function planTransactionUpdate(
       conflictingFields: structuredConflictFields(base, remote),
     };
   }
+  const splitChildUnsupportedFields = base.isChild
+    ? (["account", "date", "cleared", "reconciled"] as const).filter(
+        (field) =>
+          Object.hasOwn(local, field) &&
+          !sameSnapshotValue(field, local[field], base[field]),
+      )
+    : [];
+  if (splitChildUnsupportedFields.length > 0) {
+    return {
+      kind: "unsupported",
+      unsupportedFields: [...splitChildUnsupportedFields],
+    };
+  }
   const applicable: TransactionPatch = {};
   const conflicts: TransactionConflictField[] = [];
 
@@ -360,25 +374,6 @@ export function planTransactionUpdate(
   ) {
     conflicts.push("category");
   }
-  if (
-    base.isChild &&
-    (["account", "date", "cleared", "reconciled"] as const).some(
-      (field) =>
-        Object.hasOwn(local, field) &&
-        !sameSnapshotValue(field, local[field], base[field]) &&
-        !sameSnapshotValue(field, local[field], remote[field]),
-    )
-  ) {
-    conflicts.push(
-      ...(["account", "date", "cleared", "reconciled"] as const).filter(
-        (field) =>
-          Object.hasOwn(local, field) &&
-          !sameSnapshotValue(field, local[field], base[field]) &&
-          !sameSnapshotValue(field, local[field], remote[field]),
-      ),
-    );
-  }
-
   if (conflicts.length > 0) {
     return { kind: "conflict", conflictingFields: [...new Set(conflicts)] };
   }

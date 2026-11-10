@@ -102,18 +102,23 @@ function createApi(
     conflict: null,
   };
   const submit = vi.fn(async () => submitted);
+  const checkOperationStatus = vi.fn(async () => submitted);
   const operation = overrides.operation;
   const conflict = overrides.conflict;
   const journal = {
     get: vi.fn(async () => operation),
     getConflict: vi.fn(async () => conflict),
   } as Pick<DurableWriteJournal, "get" | "getConflict">;
-  const reconciler = { submit } as unknown as TransactionReconciler;
+  const reconciler = {
+    submit,
+    checkOperationStatus,
+  } as unknown as TransactionReconciler;
   return {
     api: createTransactionApi(session, transactions, reconciler, journal),
     runBudgetCalls,
     read,
     submit,
+    checkOperationStatus,
     journal,
     submitted,
   };
@@ -236,6 +241,20 @@ describe("transaction API adapter", () => {
     await expect(
       fake.api.getOperation("owner", operation.operationId),
     ).resolves.toEqual({ operation, conflict: null });
+    expect(fake.journal.getConflict).not.toHaveBeenCalled();
+  });
+
+  it("checks uncertain operation status against Actual using the current budget password", async () => {
+    const operation = createOperation({ status: "uncertain" });
+    const fake = createApi({ operation });
+
+    await expect(
+      fake.api.getOperation("owner", operation.operationId, "budget-password"),
+    ).resolves.toBe(fake.submitted);
+    expect(fake.checkOperationStatus).toHaveBeenCalledWith(
+      operation.operationId,
+      "budget-password",
+    );
     expect(fake.journal.getConflict).not.toHaveBeenCalled();
   });
 });
