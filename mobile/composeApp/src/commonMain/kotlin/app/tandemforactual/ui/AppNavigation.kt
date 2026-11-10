@@ -333,8 +333,6 @@ internal fun AppHeader(
     }
 }
 
-internal fun Modifier.wrapContentAlignment(): Modifier = this
-
 @Composable
 internal fun BottomNavigation(
     selected: AppRoute,

@@ -4,7 +4,6 @@ import {
   ActualCompatibilityError,
   ActualSession,
   SUPPORTED_ACTUAL_SERVER_VERSION,
-  createActualSession,
   type ActualApiPort,
   type ActualConnectionConfig,
 } from "../src/actual/actual-session.js";
@@ -136,7 +135,7 @@ describe("ActualSession", () => {
 
   it("initializes once and verifies the supported server release", async () => {
     const fake = createFakeClient();
-    const session = createActualSession(config, fake.api);
+    const session = new ActualSession(fake.api, config);
 
     await session.start();
     await session.start();

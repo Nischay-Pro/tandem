@@ -129,7 +129,6 @@ fun TandemApp(
         }
     val availableBudgets =
         budgetChoicesForSelection(mobileSession.budgets, cachedBudgetCatalog, mobileSession.budgetCatalogLoaded)
-    val usingCachedBudgetCatalog = !mobileSession.budgetCatalogLoaded && cachedBudgetCatalog.isNotEmpty()
     var syncRetryCounter by remember { mutableStateOf(0) }
     var lastAutomaticSyncAtEpochMillis by remember { mutableStateOf<Long?>(null) }
     var lastAutomaticSyncBudgetId by remember { mutableStateOf<String?>(null) }

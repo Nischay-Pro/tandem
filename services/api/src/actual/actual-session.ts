@@ -1,4 +1,3 @@
-import * as actualApi from "@actual-app/api";
 import { OperatorMessageError } from "../operator-message-error.js";
 
 export const SUPPORTED_ACTUAL_SERVER_VERSION = "26.11.0";
@@ -555,17 +554,4 @@ function isActualAuthenticationFailure(error: unknown): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-export function createActualSession(
-  config: ActualConnectionConfig,
-  client: ActualApiPort = actualApi,
-  onSecondaryFailure?: ActualSecondaryFailureHandler,
-): ActualSession {
-  return new ActualSession(
-    client,
-    config,
-    SUPPORTED_ACTUAL_SERVER_VERSION,
-    onSecondaryFailure,
-  );
 }

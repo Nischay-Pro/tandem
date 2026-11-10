@@ -39,8 +39,6 @@ export const MAX_TRANSACTION_AMOUNT = 1_000_000_000;
 // Actual 26.11.0 silently drops transactions dated before 1995-01-01.
 export const MIN_TRANSACTION_DATE = "1995-01-01";
 
-export const COMPANION_TRANSACTION_ID_PREFIX = "tandem:";
-
 export function isCompanionTransactionId(value: string): boolean {
   return /^tandem:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(
     value,
@@ -445,21 +443,6 @@ function sameSplitStructure(
   const baseChildIds = base.subtransactions.map(({ id }) => id).sort();
   const remoteChildIds = remote.subtransactions.map(({ id }) => id).sort();
   return JSON.stringify(baseChildIds) === JSON.stringify(remoteChildIds);
-}
-
-export function isStructuredTransaction(
-  snapshot: TransactionSnapshot,
-): boolean {
-  return snapshot.transferId !== null || isSplitTransaction(snapshot);
-}
-
-export function isSplitTransaction(snapshot: TransactionSnapshot): boolean {
-  return (
-    snapshot.isParent ||
-    snapshot.isChild ||
-    snapshot.parentId !== null ||
-    snapshot.subtransactions.length > 0
-  );
 }
 
 function structuredConflictFields(

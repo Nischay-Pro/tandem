@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -286,20 +285,6 @@ internal fun ReportDetailScreen(
                     onOpenCategoryActivity = onOpenCategoryActivity,
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun FixedReportPeriod(label: String) {
-    SurfaceCard {
-        Row(
-            Modifier.fillMaxWidth().padding(TandemSpacing.large),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Period", color = tandemPalette.muted, fontSize = TandemTypography.caption, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.weight(1f))
-            Text(label, color = tandemPalette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -623,32 +608,6 @@ private fun ReportSegmentedSelector(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun ReportChoiceTile(
-    label: String,
-    selected: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    SelectableTile(
-        selected = selected,
-        contentDescription = label,
-        onSelect = onClick,
-        modifier = modifier.heightIn(min = 44.dp),
-        selectedBackground = tandemPalette.accentSurface,
-        unselectedBackground = tandemPalette.raised,
-        selectedBorder = tandemPalette.accent,
-    ) {
-        Text(
-            label,
-            color = tandemPalette.text,
-            fontSize = TandemTypography.compactBody,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            maxLines = 2,
-        )
     }
 }
 

@@ -54,7 +54,6 @@ internal object TandemTypography {
     val heroTitle = 28.sp
     val amount = 32.sp
     val amountField = 40.sp
-    val illustration = 62.sp
     val microLineHeight = 13.sp
     val tightLineHeight = 14.sp
     val compactLineHeight = 17.sp
@@ -73,7 +72,6 @@ internal object TandemShapes {
     val medium = 14.dp
     val roomy = 16.dp
     val large = 18.dp
-    val panel = 20.dp
     val capsule = 28.dp
     val pill = 999.dp
 }

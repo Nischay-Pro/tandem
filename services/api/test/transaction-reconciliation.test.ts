@@ -4,7 +4,6 @@ import {
   MAX_TRANSACTION_AMOUNT,
   MIN_TRANSACTION_DATE,
   createTransactionRevision,
-  isStructuredTransaction,
   parseTransactionCreateInput,
   parseTransactionPatch,
   parseTransactionSnapshot,
@@ -719,7 +718,6 @@ describe("transaction snapshots and merge planning", () => {
     ];
 
     for (const structured of structuredBases) {
-      expect(isStructuredTransaction(structured)).toBe(true);
       for (const [base, remote] of [
         [structured, ordinary],
         [ordinary, structured],
@@ -904,21 +902,5 @@ describe("transaction snapshots and merge planning", () => {
     expect(() =>
       planTransactionDeletion(base, createSnapshot({ id: "different" })),
     ).toThrow("Transaction snapshot IDs do not match");
-  });
-
-  it("identifies transfers and split members as structured transactions", () => {
-    expect(isStructuredTransaction(createSnapshot())).toBe(false);
-    expect(
-      isStructuredTransaction(createSnapshot({ transferId: "peer" })),
-    ).toBe(true);
-    expect(isStructuredTransaction(createSnapshot({ isParent: true }))).toBe(
-      true,
-    );
-    expect(isStructuredTransaction(createSnapshot({ isChild: true }))).toBe(
-      true,
-    );
-    expect(
-      isStructuredTransaction(createSnapshot({ parentId: "parent" })),
-    ).toBe(true);
   });
 });

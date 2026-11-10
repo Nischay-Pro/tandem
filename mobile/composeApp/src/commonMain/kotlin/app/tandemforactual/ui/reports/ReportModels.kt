@@ -21,13 +21,12 @@ import kotlin.math.pow
 
 internal enum class ReportKind(
     val title: String,
-    val detailDescription: String,
 ) {
-    SPENDING_BY_CATEGORY("Spending by category", "Where the selected period’s spending went."),
-    SPENDING_OVER_TIME("Spending over time", "Monthly spending with the period average."),
-    INCOME_AND_SPENDING("Income and spending", "Monthly income, spending, and the difference."),
-    BUDGETED_AND_SPENT("Budgeted and spent", "Category amounts planned and spent."),
-    NET_WORTH("Net worth", "Estimated from current balances and transaction history."),
+    SPENDING_BY_CATEGORY("Spending by category"),
+    SPENDING_OVER_TIME("Spending over time"),
+    INCOME_AND_SPENDING("Income and spending"),
+    BUDGETED_AND_SPENT("Budgeted and spent"),
+    NET_WORTH("Net worth"),
 }
 
 internal enum class ReportPeriodMode {
@@ -242,11 +241,6 @@ private fun reportMonthsBetween(
     }
     return result
 }
-
-internal fun reportMonthIds(
-    endMonthId: String,
-    count: Int,
-): List<String> = createReportWindow(endMonthId, ReportPeriodMode.RANGE, count)?.monthIds.orEmpty()
 
 internal fun shiftReportMonthId(
     monthId: String,

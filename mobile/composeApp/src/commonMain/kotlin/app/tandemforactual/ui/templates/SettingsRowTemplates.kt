@@ -466,5 +466,3 @@ internal fun AnimatedPreviewNote(text: String?) {
         PreviewNote(text ?: retainedText.orEmpty())
     }
 }
-
-internal fun Color.withOpacity(alpha: Float) = copy(alpha = alpha)

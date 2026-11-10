@@ -12,7 +12,10 @@ import type {
   DeviceRecord,
 } from "../src/auth/device-auth.js";
 import { ActualLoginMethodsReader } from "../src/auth/actual-login-methods.js";
-import { createActualSession } from "../src/actual/actual-session.js";
+import {
+  ActualSession,
+  type ActualConnectionConfig,
+} from "../src/actual/actual-session.js";
 import { ActualBudgetSnapshotReader } from "../src/actual/budget-snapshot-reader.js";
 import { createBudgetMaintenanceApi } from "../src/actual/budget-maintenance-api.js";
 import { createTransactionApi } from "../src/actual/transaction-api.js";
@@ -39,6 +42,12 @@ const pairingCodeHashKey =
 const compatibilityTestEnabled = Boolean(
   serverURL && serverPassword && firstDataDir && databaseUrl,
 );
+
+function createCompatibilitySession(
+  config: ActualConnectionConfig,
+): ActualSession {
+  return new ActualSession(Actual, config);
+}
 
 let database: Database | undefined;
 let adminPool: Pool | undefined;
@@ -178,7 +187,7 @@ describe.skipIf(!compatibilityTestEnabled)(
         `session-token-${randomUUID()}`,
       );
       await mkdir(tokenDataDir, { recursive: true });
-      const tokenDevice = createActualSession({
+      const tokenDevice = createCompatibilitySession({
         serverURL,
         dataDir: tokenDataDir,
         sessionToken,
@@ -191,7 +200,7 @@ describe.skipIf(!compatibilityTestEnabled)(
         await tokenDevice.close();
       }
 
-      let firstDevice = createActualSession({
+      let firstDevice = createCompatibilitySession({
         serverURL,
         dataDir: firstDataDir,
         password: serverPassword,
@@ -314,7 +323,7 @@ describe.skipIf(!compatibilityTestEnabled)(
         }
 
         await firstDevice.close();
-        const tokenWriteDevice = createActualSession({
+        const tokenWriteDevice = createCompatibilitySession({
           serverURL,
           dataDir: tokenDataDir,
           sessionToken,
@@ -365,7 +374,7 @@ describe.skipIf(!compatibilityTestEnabled)(
         } finally {
           await tokenWriteDevice.close();
         }
-        firstDevice = createActualSession({
+        firstDevice = createCompatibilitySession({
           serverURL,
           dataDir: firstDataDir,
           password: serverPassword,
@@ -1587,7 +1596,7 @@ describe.skipIf(!compatibilityTestEnabled)(
 
         const secondDataDir = path.join(firstDataDir, "device-two");
         await mkdir(secondDataDir, { recursive: true });
-        const secondDevice = createActualSession({
+        const secondDevice = createCompatibilitySession({
           serverURL,
           dataDir: secondDataDir,
           password: serverPassword,
@@ -1634,7 +1643,7 @@ describe.skipIf(!compatibilityTestEnabled)(
 
         const thirdDataDir = path.join(firstDataDir, "device-three");
         await mkdir(thirdDataDir, { recursive: true });
-        const thirdDevice = createActualSession({
+        const thirdDevice = createCompatibilitySession({
           serverURL,
           dataDir: thirdDataDir,
           password: serverPassword,
@@ -1679,7 +1688,7 @@ describe.skipIf(!compatibilityTestEnabled)(
       const budgetName = `ABC concurrent edit budget ${randomUUID()}`;
       const accountName = "ABC concurrent edit checking";
       const transactionDate = "2026-10-31";
-      const seedDevice = createActualSession({
+      const seedDevice = createCompatibilitySession({
         serverURL,
         dataDir: seedDataDir,
         password: serverPassword,
@@ -1726,7 +1735,7 @@ describe.skipIf(!compatibilityTestEnabled)(
         await seedDevice.close();
       }
 
-      const firstDevice = createActualSession({
+      const firstDevice = createCompatibilitySession({
         serverURL,
         dataDir: firstDataDirForEdit,
         password: serverPassword,
@@ -1739,7 +1748,7 @@ describe.skipIf(!compatibilityTestEnabled)(
         await firstDevice.close();
       }
 
-      const secondDevice = createActualSession({
+      const secondDevice = createCompatibilitySession({
         serverURL,
         dataDir: secondDataDirForEdit,
         password: serverPassword,
@@ -1754,7 +1763,7 @@ describe.skipIf(!compatibilityTestEnabled)(
         await secondDevice.close();
       }
 
-      const firstDeviceAfterReconnect = createActualSession({
+      const firstDeviceAfterReconnect = createCompatibilitySession({
         serverURL,
         dataDir: firstDataDirForEdit,
         password: serverPassword,
@@ -1773,7 +1782,7 @@ describe.skipIf(!compatibilityTestEnabled)(
         await firstDeviceAfterReconnect.close();
       }
 
-      const secondDeviceAfterReconnect = createActualSession({
+      const secondDeviceAfterReconnect = createCompatibilitySession({
         serverURL,
         dataDir: secondDataDirForEdit,
         password: serverPassword,
@@ -1836,7 +1845,7 @@ describe.skipIf(!compatibilityTestEnabled)(
         },
       );
 
-      const seedDevice = createActualSession({
+      const seedDevice = createCompatibilitySession({
         serverURL,
         dataDir: seedDataDir,
         password: serverPassword,
@@ -1875,7 +1884,7 @@ describe.skipIf(!compatibilityTestEnabled)(
       }
 
       const readDirectSnapshot = async () => {
-        const readerSession = createActualSession({
+        const readerSession = createCompatibilitySession({
           serverURL,
           dataDir: readerDataDir,
           password: serverPassword,
@@ -1938,7 +1947,7 @@ describe.skipIf(!compatibilityTestEnabled)(
       );
       await mkdir(ownerDataDir, { recursive: true });
 
-      const encryptedOwner = createActualSession({
+      const encryptedOwner = createCompatibilitySession({
         serverURL,
         password: serverPassword,
         dataDir: ownerDataDir,
