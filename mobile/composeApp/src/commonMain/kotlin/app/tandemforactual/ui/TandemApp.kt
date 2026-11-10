@@ -14,6 +14,8 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,6 +52,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -70,6 +74,7 @@ import app.tandemforactual.ui.model.liveScheduleSummaries
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.emptyFlow
@@ -139,6 +144,9 @@ fun TandemApp(
     var cacheDiscoveryComplete by remember { mutableStateOf(false) }
     var sessionRestoreComplete by remember { mutableStateOf(false) }
     var routeTransitionDirection by remember { mutableStateOf(0f) }
+    var routeTransitionInputBlocked by remember { mutableStateOf(false) }
+    var routeTransitionInputJob by remember { mutableStateOf<Job?>(null) }
+    val routeTransitionInputBlockedState = rememberUpdatedState(routeTransitionInputBlocked)
     var backGestureProgress by remember { mutableStateOf(0f) }
     var backGestureDirection by remember { mutableStateOf(1f) }
     var backGestureCommitPending by remember { mutableStateOf(false) }
@@ -158,6 +166,21 @@ fun TandemApp(
         val entryId = nextRouteEntryId
         nextRouteEntryId += 1
         AppRouteEntry(nextRoute, entryId)
+    }
+    val beginRouteTransition: () -> Boolean = {
+        if (routeTransitionInputBlocked) {
+            false
+        } else {
+            routeTransitionInputBlocked = true
+            routeTransitionInputJob?.cancel()
+            routeTransitionInputJob =
+                coroutineScope.launch {
+                    delay(TandemMotion.ROUTE_MILLIS.toLong() + 80L)
+                    routeTransitionInputBlocked = false
+                    routeTransitionInputJob = null
+                }
+            true
+        }
     }
     LaunchedEffect(mobileSession) {
         try {
@@ -403,20 +426,22 @@ fun TandemApp(
         savedTabBackStacks = tabSelection.savedTabBackStacks
     }
     val performBack: () -> Unit = {
-        if (backButtonTransitionRunning) {
-            queuedBackPresses += 1
-        } else {
-            val backAnimationWasRunning = backGestureCancelJob != null
-            backGestureCancelJob?.cancel()
-            backGestureCancelJob = null
-            if (backGestureCommitPending || backAnimationWasRunning) {
-                backGestureCommitPending = false
-                backGestureProgress = 1f
-                skipNextRouteTransition = true
-                popRoute()
-            } else if (backStack.size > 1) {
-                // Button back runs the same route pair and progress transform as predictive back.
-                startBackButtonTransition()
+        if (beginRouteTransition()) {
+            if (backButtonTransitionRunning) {
+                queuedBackPresses += 1
+            } else {
+                val backAnimationWasRunning = backGestureCancelJob != null
+                backGestureCancelJob?.cancel()
+                backGestureCancelJob = null
+                if (backGestureCommitPending || backAnimationWasRunning) {
+                    backGestureCommitPending = false
+                    backGestureProgress = 1f
+                    skipNextRouteTransition = true
+                    popRoute()
+                } else if (backStack.size > 1) {
+                    // Button back runs the same route pair and progress transform as predictive back.
+                    startBackButtonTransition()
+                }
             }
         }
     }
@@ -448,18 +473,24 @@ fun TandemApp(
     val navigation =
         AppNavigation(
             open = { next ->
-                if (next == AppRoute.NEW_TRANSACTION) {
-                    newTransaction(null)
-                } else {
-                    if (next.isTransactionForm()) {
-                        transactionSheetClosing = false
-                        transactionSheetPopCount = 1
+                if (beginRouteTransition()) {
+                    coroutineScope.launch {
+                        // Finish the opening pointer dispatch before swapping in interactive content.
+                        withFrameNanos { }
+                        if (next == AppRoute.NEW_TRANSACTION) {
+                            newTransaction(null)
+                        } else if (backStack.lastOrNull()?.route != next) {
+                            if (next.isTransactionForm()) {
+                                transactionSheetClosing = false
+                                transactionSheetPopCount = 1
+                            }
+                            if (next.isReportDetail() && backStack.lastOrNull()?.route != AppRoute.REPORTS) {
+                                selectTab(AppRoute.REPORTS)
+                            }
+                            routeTransitionDirection = 1f
+                            backStack.add(newRouteEntry(next))
+                        }
                     }
-                    if (next.isReportDetail() && backStack.lastOrNull()?.route != AppRoute.REPORTS) {
-                        selectTab(AppRoute.REPORTS)
-                    }
-                    routeTransitionDirection = 1f
-                    backStack.add(newRouteEntry(next))
                 }
             },
             reset = { next ->
@@ -1254,12 +1285,31 @@ fun TandemApp(
                     else -> route
                 }
             if (tabShellRoute != null) renderHeader(shellHeaderRoute)
+            val transitionInputModifier =
+                Modifier.pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down =
+                            awaitFirstDown(
+                                requireUnconsumed = false,
+                                pass = PointerEventPass.Initial,
+                            )
+                        state.pointerInputSequence += 1
+                        if (routeTransitionInputBlockedState.value) down.consume()
+                        do {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            if (routeTransitionInputBlockedState.value) {
+                                event.changes.forEach { it.consume() }
+                            }
+                        } while (event.changes.any { it.pressed })
+                    }
+                }
             Box(
                 modifier =
                     Modifier
                         .weight(1f)
                         .fillMaxWidth()
                         .clipToBounds()
+                        .then(transitionInputModifier)
                         .tandemEdgeBackGesture(backStack.size > 1 && !transactionSheetActive, handleBack, updateBackGesture),
             ) {
                 if (!transactionSheetActive && backGestureProgress > 0f && backPreviewRoute != null && backPreviewRoute != routeEntry) {

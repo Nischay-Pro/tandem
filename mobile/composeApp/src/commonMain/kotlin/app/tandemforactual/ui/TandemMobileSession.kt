@@ -27,6 +27,7 @@ import app.tandemforactual.data.store.BudgetSyncRemoteException
 import app.tandemforactual.data.store.BudgetSyncSummary
 import app.tandemforactual.data.store.LocalBudgetMutationOutboxItem
 import app.tandemforactual.data.store.LocalBudgetRepository
+import app.tandemforactual.data.store.LocalOperationConflictException
 import app.tandemforactual.data.store.LocalRecordProjection
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
@@ -79,6 +80,20 @@ internal data class TransactionEditDetails(
     val payeeId: String?,
     val categoryId: String?,
     val date: String,
+)
+
+internal fun pendingTransactionEditMessage(): String = "This transaction is waiting to sync. Try again after it syncs."
+
+internal fun blockedTransactionEditMessage(status: String): String =
+    when (status) {
+        "conflict" -> "Review this transaction in Pending Changes before editing it."
+        "uncertain" -> "This transaction needs confirmation. Check Pending Changes before editing again."
+        else -> "This transaction is syncing. Wait for it to finish before editing."
+    }
+
+internal data class ConflictResolutionFeedback(
+    val operationId: String,
+    val message: String,
 )
 
 internal data class BudgetActionFeedback(
@@ -277,6 +292,12 @@ internal class TandemMobileSession(
         private set
 
     var transactionWriteMessage by mutableStateOf<String?>(null)
+        private set
+
+    var conflictResolutionFeedback by mutableStateOf<ConflictResolutionFeedback?>(null)
+        private set
+
+    var serverConfirmedConflictOperationId by mutableStateOf<String?>(null)
         private set
 
     var isPerformingBudgetAction by mutableStateOf(false)
@@ -1164,6 +1185,20 @@ internal class TandemMobileSession(
 
     fun clearTransactionWriteMessage() {
         transactionWriteMessage = null
+        conflictResolutionFeedback = null
+        serverConfirmedConflictOperationId = null
+    }
+
+    fun clearConflictResolutionFeedback() {
+        conflictResolutionFeedback = null
+    }
+
+    private fun reportConflictResolution(
+        operationId: String,
+        message: String,
+    ) {
+        transactionWriteMessage = message
+        conflictResolutionFeedback = ConflictResolutionFeedback(operationId, message)
     }
 
     private fun refuseWriteInReadOnlyMode(): Boolean {
@@ -1389,6 +1424,7 @@ internal class TandemMobileSession(
             uncertainWriteCheckError = null
             uncertainWriteCheckErrorOperationId = null
             transactionWriteMessage = null
+            conflictResolutionFeedback = null
             syncComplete = false
             lastSyncSummary = null
             syncPresentation = SyncPresentationState()
@@ -1530,10 +1566,13 @@ internal class TandemMobileSession(
         encryptionPassword: String?,
         sendQueuedWrites: Boolean = true,
         reconcileUncertainOperationId: String? = null,
+        retryQueuedBudgetMutations: Boolean = true,
     ): BudgetSyncSummary? {
         if (isSigningOut) return null
         restoreBudgetReorderQueue()
-        if (!encryptionPassword.isNullOrBlank()) retryQueuedBudgetReorders(budgetId, encryptionPassword)
+        if (retryQueuedBudgetMutations && !encryptionPassword.isNullOrBlank()) {
+            retryQueuedBudgetReorders(budgetId, encryptionPassword)
+        }
         syncComplete = false
         syncedTransactionCount = 0
         lastSyncSummary = null
@@ -1564,7 +1603,7 @@ internal class TandemMobileSession(
             syncComplete = true
             syncPresentation = syncPresentation.succeeded()
             budgetReorderQueue = budgetReorderQueue.clearCompletedVisibilityOverrides(budgetId)
-            retryQueuedBudgetReorders(budgetId, encryptionPassword)
+            if (retryQueuedBudgetMutations) retryQueuedBudgetReorders(budgetId, encryptionPassword)
             if (activityTransactionPageBudgetId == budgetId) refreshActivityTransactionPages(budgetId)
             return summary
         } catch (error: CancellationException) {
@@ -1594,6 +1633,25 @@ internal class TandemMobileSession(
         } finally {
             if (syncPresentation.isSyncing) syncPresentation = syncPresentation.stopped()
         }
+    }
+
+    suspend fun confirmConflictWithServer(
+        budgetId: String,
+        operationId: String,
+        encryptionPassword: String?,
+    ): Boolean {
+        serverConfirmedConflictOperationId = null
+        val summary =
+            synchronize(
+                budgetId = budgetId,
+                encryptionPassword = encryptionPassword,
+                sendQueuedWrites = false,
+                retryQueuedBudgetMutations = false,
+            ) ?: return false
+        val operation = repository?.readPendingWrites(budgetId)?.firstOrNull { it.operationId == operationId }
+        if (operation?.status != "conflict") return false
+        serverConfirmedConflictOperationId = operationId
+        return true
     }
 
     suspend fun runBankSync(
@@ -2295,10 +2353,26 @@ internal class TandemMobileSession(
             transactionWriteMessage = "Budget data isn’t available on this device. Reopen the budget and try again."
             return false
         }
+        val pendingForRecord =
+            localRepository
+                .readPendingWrites(budgetId)
+                .filter { it.recordType == "transaction" && it.recordId == transactionId }
+        val blockingWrite = pendingForRecord.firstOrNull { it.status in setOf("sending", "uncertain", "conflict") }
+        if (blockingWrite != null) {
+            transactionWriteMessage = blockedTransactionEditMessage(blockingWrite.status)
+            return false
+        }
         val current = localRepository.findRecord(budgetId, "transaction", transactionId)
-        val baseJson = current?.remoteJson
-        val revision = current?.remoteRevision
-        if (current == null || current.remoteDeleted || baseJson == null || revision.isNullOrBlank()) {
+        val queuedCreate =
+            pendingForRecord.firstOrNull {
+                it.action == LocalWriteAction.CREATE.name &&
+                    it.status == "queued" &&
+                    it.serverOperationId == null
+            }
+        val editingLocalCreate = queuedCreate != null
+        val baseJson = if (editingLocalCreate) current?.localJson else current?.remoteJson
+        val revision = if (editingLocalCreate) null else current?.remoteRevision
+        if (current == null || current.remoteDeleted || baseJson == null || (!editingLocalCreate && revision.isNullOrBlank())) {
             transactionWriteMessage = "This transaction isn’t up to date. Sync the budget before editing."
             return false
         }
@@ -2377,10 +2451,10 @@ internal class TandemMobileSession(
                     budgetId = budgetId,
                     recordType = "transaction",
                     recordId = transactionId,
-                    action = LocalWriteAction.UPDATE,
+                    action = if (editingLocalCreate) LocalWriteAction.CREATE else LocalWriteAction.UPDATE,
                     baseRevision = revision,
-                    baseSnapshotJson = baseJson,
-                    patchJson = patchJson.toString(),
+                    baseSnapshotJson = if (editingLocalCreate) null else baseJson,
+                    patchJson = if (editingLocalCreate) optimistic.toString() else patchJson.toString(),
                     optimisticJson = optimistic.toString(),
                     createdAtEpochMs = nowEpochMillis(),
                     optimisticProjection = optimistic.toProjection(),
@@ -2391,6 +2465,10 @@ internal class TandemMobileSession(
             return true
         } catch (error: CancellationException) {
             throw error
+        } catch (_: LocalOperationConflictException) {
+            transactionWriteMessage = pendingTransactionEditMessage()
+            loadLocalRecords(budgetId)
+            return false
         } catch (_: Exception) {
             transactionWriteMessage = "Tandem couldn’t save your edit. Check the budget and try again."
             loadLocalRecords(budgetId)
@@ -2649,87 +2727,86 @@ internal class TandemMobileSession(
         keepDeviceVersion: Boolean,
         encryptionPassword: String?,
     ) {
-        transactionWriteMessage = null
-        if (refuseWriteInReadOnlyMode()) return
+        clearTransactionWriteMessage()
+        if (refuseWriteInReadOnlyMode()) {
+            reportConflictResolution(operationId, transactionWriteMessage ?: "Read-only mode is on.")
+            return
+        }
+        if (isSavingTransaction || isSyncing) {
+            reportConflictResolution(operationId, "Wait for the current save or sync to finish, then review this change again.")
+            return
+        }
         val localRepository = repository
         if (localRepository == null) {
-            transactionWriteMessage = "Budget data isn’t available on this device. Restart the app and try again."
+            reportConflictResolution(operationId, "Budget data isn’t available on this device. Restart the app and try again.")
             return
         }
         val operation = localRepository.readPendingWrites(budgetId).firstOrNull { it.operationId == operationId }
         if (operation == null || operation.status != "conflict") {
-            transactionWriteMessage = "This edit no longer needs review. Sync and try again."
+            reportConflictResolution(operationId, "This change no longer needs review. Sync the budget to refresh its status.")
             loadLocalRecords(budgetId)
-            return
-        }
-        if (!keepDeviceVersion) {
-            localRepository.discardWrite(operationId)
-            loadLocalRecords(budgetId)
-            transactionWriteMessage = "Kept the latest Actual version and discarded your edit."
-            return
-        }
-        val current = localRepository.findRecord(budgetId, operation.recordType, operation.recordId)
-        val baseJson = current?.remoteJson
-        val revision = current?.remoteRevision
-        if (current == null || current.remoteDeleted || baseJson == null || revision.isNullOrBlank()) {
-            transactionWriteMessage = "This transaction was deleted in Actual. Keep Actual to discard your edit."
-            return
-        }
-        val base = runCatching { Json.parseToJsonElement(baseJson).jsonObject }.getOrNull()
-        val patch = runCatching { Json.parseToJsonElement(operation.patchJson).jsonObject }.getOrNull()
-        if (base == null) {
-            transactionWriteMessage = "This edit can’t be applied to the latest Actual version. Keep Actual and discard your edit."
-            return
-        }
-        if (operation.action == LocalWriteAction.DELETE.name) {
-            isSavingTransaction = true
-            try {
-                val newOperationId = Uuid.random().toString()
-                localRepository.enqueueWrite(
-                    LocalWriteRequest(
-                        operationId = newOperationId,
-                        idempotencyKey = newOperationId,
-                        budgetId = budgetId,
-                        recordType = operation.recordType,
-                        recordId = operation.recordId,
-                        action = LocalWriteAction.DELETE,
-                        baseRevision = revision,
-                        baseSnapshotJson = baseJson,
-                        patchJson = "{}",
-                        optimisticJson = null,
-                        createdAtEpochMs = nowEpochMillis(),
-                        optimisticProjection = null,
-                    ),
-                )
-                val summary = synchronize(budgetId, encryptionPassword)
-                transactionWriteMessage =
-                    when {
-                        summary == null -> "Your deletion is saved on this device and will sync when you reconnect."
-                        summary.writesCommitted > 0 -> "The transaction was deleted in Actual."
-                        summary.writesConflicted > 0 -> "Actual changed this transaction again. Review the latest versions."
-                        summary.writesUncertain > 0 -> "Tandem couldn’t confirm the deletion. Check Activity before trying again."
-                        summary.writesRejected > 0 -> "Actual didn’t apply the deletion. Review the transaction and try again."
-                        else -> "Your deletion is waiting to sync."
-                    }
-                loadLocalRecords(budgetId)
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                transactionWriteMessage = "Your deletion is saved here, but not confirmed. Check Activity before trying again."
-                loadLocalRecords(budgetId)
-            } finally {
-                isSavingTransaction = false
-            }
-            return
-        }
-        if (patch == null || operation.action != LocalWriteAction.UPDATE.name) {
-            transactionWriteMessage = "This edit can’t be applied to the latest Actual version. Keep Actual and discard your edit."
             return
         }
         isSavingTransaction = true
+        var replacementOperationId: String? = null
         try {
-            val rebased = JsonObject(base + patch)
+            if (!confirmConflictWithServer(budgetId, operationId, encryptionPassword)) {
+                reportConflictResolution(
+                    operationId,
+                    "The server didn’t confirm this conflict. Nothing was resolved; your edit is still on this device.",
+                )
+                return
+            }
+            val operation =
+                localRepository
+                    .readPendingWrites(budgetId)
+                    .firstOrNull { it.operationId == operationId }
+                    ?.takeIf { it.status == "conflict" }
+            if (operation == null) {
+                reportConflictResolution(operationId, "The server confirmed the budget, but this change no longer needs review.")
+                return
+            }
+            if (!keepDeviceVersion) {
+                localRepository.discardWrite(operationId)
+                loadLocalRecords(budgetId)
+                reportConflictResolution(
+                    operationId,
+                    "The server confirmed Actual’s latest copy. Kept it on this device and discarded your edit.",
+                )
+                return
+            }
+
+            val current = localRepository.findRecord(budgetId, operation.recordType, operation.recordId)
+            val baseJson = current?.remoteJson
+            val revision = current?.remoteRevision
+            if (current?.remoteDeleted == true && operation.action == LocalWriteAction.DELETE.name) {
+                localRepository.discardWrite(operationId)
+                loadLocalRecords(budgetId)
+                reportConflictResolution(
+                    operationId,
+                    "The server confirmed this transaction is deleted. Cleared the pending deletion here.",
+                )
+                return
+            }
+            if (current == null || current.remoteDeleted || baseJson == null || revision.isNullOrBlank()) {
+                reportConflictResolution(operationId, "The server didn’t return a current transaction. Nothing was changed.")
+                return
+            }
+            val base = runCatching { Json.parseToJsonElement(baseJson).jsonObject }.getOrNull()
+            val patch = runCatching { Json.parseToJsonElement(operation.patchJson).jsonObject }.getOrNull()
+            if (base == null) {
+                reportConflictResolution(operationId, "The server returned an unreadable transaction. Nothing was changed.")
+                return
+            }
+            if (operation.action == LocalWriteAction.UPDATE.name && patch == null) {
+                reportConflictResolution(operationId, "The saved edit can’t be read. Nothing was changed.")
+                return
+            }
+
             val newOperationId = Uuid.random().toString()
+            replacementOperationId = newOperationId
+            val action = if (operation.action == LocalWriteAction.DELETE.name) LocalWriteAction.DELETE else LocalWriteAction.UPDATE
+            val rebased = patch?.let { JsonObject(base + it) }
             localRepository.enqueueWrite(
                 LocalWriteRequest(
                     operationId = newOperationId,
@@ -2737,30 +2814,62 @@ internal class TandemMobileSession(
                     budgetId = budgetId,
                     recordType = operation.recordType,
                     recordId = operation.recordId,
-                    action = LocalWriteAction.UPDATE,
+                    action = action,
                     baseRevision = revision,
                     baseSnapshotJson = baseJson,
-                    patchJson = patch.toString(),
-                    optimisticJson = rebased.toString(),
+                    patchJson = if (action == LocalWriteAction.DELETE) "{}" else checkNotNull(patch).toString(),
+                    optimisticJson = rebased?.toString(),
                     createdAtEpochMs = nowEpochMillis(),
-                    optimisticProjection = rebased.toProjection(),
+                    optimisticProjection = rebased?.toProjection(),
+                    supersedesConflictOperationId = operationId,
                 ),
             )
-            val summary = synchronize(budgetId, encryptionPassword)
-            transactionWriteMessage =
-                when {
-                    summary == null -> "Your edit is saved on this device and will sync when you reconnect."
-                    summary.writesCommitted > 0 -> "Your edit was synced to Actual."
-                    summary.writesConflicted > 0 -> "Actual changed this transaction again. Review the latest versions."
-                    summary.writesUncertain > 0 -> "Tandem couldn’t confirm the save. Check Activity before editing again."
-                    summary.writesRejected > 0 -> "Actual didn’t apply your edit, so the previous value remains. Review it and try again."
-                    else -> "Your edit is waiting to sync."
+            val summary =
+                synchronize(
+                    budgetId = budgetId,
+                    encryptionPassword = encryptionPassword,
+                    retryQueuedBudgetMutations = false,
+                )
+            val resolvedWrite = localRepository.findWrite(newOperationId)
+            val message =
+                when (resolvedWrite?.status) {
+                    "committed" ->
+                        if (action ==
+                            LocalWriteAction.DELETE
+                        ) {
+                            "The server confirmed the deletion in Actual."
+                        } else {
+                            "The server confirmed your edit in Actual."
+                        }
+                    "queued" -> "The server didn’t confirm this choice. Your edit is still on this device and the conflict isn’t resolved."
+                    "conflict" -> "The server returned a new conflict. Your edit is still on this device; review the updated versions."
+                    "uncertain", "sending" ->
+                        "The server didn’t confirm this choice. Your edit is still on this device; check its status before trying again."
+                    "rejected" ->
+                        if (resolvedWrite.lastErrorCode == "split-child-field-not-editable") {
+                            "Actual controls this split child field through its parent. The server rejected the edit."
+                        } else {
+                            "The server rejected this edit. Your previous Actual value remains unchanged."
+                        }
+                    else ->
+                        if (summary == null) {
+                            "The server didn’t confirm this choice. Your edit is still on this device and the conflict isn’t resolved."
+                        } else {
+                            "The server didn’t confirm this choice. Your edit is still on this device."
+                        }
                 }
+            reportConflictResolution(operationId, message)
             loadLocalRecords(budgetId)
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            transactionWriteMessage = "Your edit is saved here, but not confirmed. Check Activity before editing again."
+            val message =
+                if (replacementOperationId == null) {
+                    "The server didn’t confirm this conflict. Nothing was resolved; your edit is still on this device."
+                } else {
+                    "The server didn’t confirm this choice. Your edit is still on this device and the conflict isn’t resolved."
+                }
+            reportConflictResolution(operationId, message)
             loadLocalRecords(budgetId)
         } finally {
             isSavingTransaction = false
@@ -2795,7 +2904,15 @@ internal class TandemMobileSession(
         clearUncertainWriteCheck()
         if (refuseWriteInReadOnlyMode()) return
         val localRepository = repository ?: return
-        localRepository.retryUncertainWrite(operationId)
+        when (localRepository.findWrite(operationId)?.status) {
+            "uncertain" -> localRepository.retryUncertainWrite(operationId)
+            "queued" -> Unit
+            else -> {
+                transactionWriteMessage = "This edit is no longer waiting for confirmation. Refresh Pending Changes."
+                loadLocalRecords(budgetId)
+                return
+            }
+        }
         synchronize(budgetId, encryptionPassword)
         loadLocalRecords(budgetId)
     }
@@ -2815,6 +2932,7 @@ internal class TandemMobileSession(
                 reconcileUncertainOperationId = operationId,
             )
         if (summary == null) {
+            checkedWriteOperationId = operationId
             uncertainWriteCheckError = syncError ?: "Tandem couldn’t check this change. Try again."
             uncertainWriteCheckErrorOperationId = operationId
             return

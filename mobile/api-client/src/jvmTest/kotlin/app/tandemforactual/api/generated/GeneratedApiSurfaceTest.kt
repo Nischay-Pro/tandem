@@ -165,7 +165,12 @@ class GeneratedApiSurfaceTest {
                 )
                 val operationId = Uuid.parse("6461dd06-cfe0-4854-9ced-16b7011fb87d")
                 assertTrue(
-                    TransactionsApi.getTransactionOperation(operationId).getOrNull()?.isSuccessful == true,
+                    TransactionsApi
+                        .getTransactionOperation(
+                            xBudgetEncryptionPassword = "budget-secret",
+                            operationId = operationId,
+                        ).getOrNull()
+                        ?.isSuccessful == true,
                 )
                 assertTrue(
                     TransactionsApi
@@ -296,6 +301,7 @@ class GeneratedApiSurfaceTest {
                 assertEquals("budget-secret", capturedRequests[12].headers["x-budget-encryption-password"])
                 assertEquals("budget-secret", capturedRequests[13].headers["x-budget-encryption-password"])
                 assertEquals("operation-key-1", capturedRequests[13].headers["idempotency-key"])
+                assertEquals("budget-secret", capturedRequests[14].headers["x-budget-encryption-password"])
                 assertNull(capturedRequests[15].headers["x-budget-encryption-password"])
                 assertNull(capturedRequests[16].headers["x-budget-encryption-password"])
                 assertEquals("operation-key-defaults", capturedRequests[16].headers["idempotency-key"])

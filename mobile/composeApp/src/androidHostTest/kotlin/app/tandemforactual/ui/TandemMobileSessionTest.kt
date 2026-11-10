@@ -102,6 +102,35 @@ class TandemMobileSessionTest {
     }
 
     @Test
+    fun uncertainWriteScreenOffersRecoveryActionsOnlyAfterASettledStatusResponse() {
+        assertFalse(canOfferUncertainWriteRecoveryActions("uncertain", statusCheckSucceeded = false))
+        assertTrue(canOfferUncertainWriteRecoveryActions("uncertain", statusCheckSucceeded = true))
+        assertTrue(canOfferUncertainWriteRecoveryActions("queued", statusCheckSucceeded = true))
+        assertFalse(canOfferUncertainWriteRecoveryActions("committed", statusCheckSucceeded = true))
+        assertFalse(canOfferUncertainWriteRecoveryActions("conflict", statusCheckSucceeded = true))
+
+        val warning = uncertainWriteRemovalWarning("Walgreens", "$108.14")
+        assertTrue(warning.contains("Actual may already have saved it"))
+        assertTrue(warning.contains("won’t undo a change already stored there"))
+    }
+
+    @Test
+    fun waitingTransactionEditUsesTheSpecificSyncMessage() {
+        assertEquals(
+            "This transaction is waiting to sync. Try again after it syncs.",
+            pendingTransactionEditMessage(),
+        )
+        assertEquals(
+            "This transaction needs confirmation. Check Pending Changes before editing again.",
+            blockedTransactionEditMessage("uncertain"),
+        )
+        assertEquals(
+            "This transaction is syncing. Wait for it to finish before editing.",
+            blockedTransactionEditMessage("sending"),
+        )
+    }
+
+    @Test
     fun transactionEditPatchIncludesPayeeCategoryDateAndAccountChanges() {
         val base =
             Json

@@ -46,6 +46,9 @@ files with the credentials already in use. In particular, the Postgres
 password secret and database URL must match the existing database role; setting
 `POSTGRES_PASSWORD_FILE` does not rotate a password in an initialized volume.
 The existing PostgreSQL and Actual workspace volumes are preserved.
+Keep the `actual-workspace` named volume while any write operation is
+uncertain. It contains Actual's local budget data, including writes that may
+not yet have reached the budget file; deleting it can discard those changes.
 
 The production Postgres and Node images are pinned by multi-platform registry
 digests. Review and update those digests together with their version tags when

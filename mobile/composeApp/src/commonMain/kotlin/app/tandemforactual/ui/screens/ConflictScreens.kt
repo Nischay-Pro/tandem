@@ -14,9 +14,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -33,12 +35,17 @@ import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.PrimaryButton
+import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.model.longValue
 import app.tandemforactual.ui.model.recordName
 import app.tandemforactual.ui.model.stringValue
+import com.composables.icons.lucide.CalendarDays
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Receipt
+import com.composables.icons.lucide.WalletCards
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -61,12 +68,24 @@ internal fun conflictPayeeTitle(
         }
 }
 
+internal fun canOfferUncertainWriteRecoveryActions(
+    operationStatus: String,
+    statusCheckSucceeded: Boolean,
+): Boolean = statusCheckSucceeded && operationStatus in setOf("uncertain", "queued")
+
+internal fun uncertainWriteRemovalWarning(
+    payee: String,
+    amount: String,
+): String =
+    "Remove the pending edit for $payee ($amount)? Actual may already have saved it; removing it here won’t undo a change already stored there."
+
 @Composable
 internal fun ConflictInboxScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
     liveTransactions: List<TransactionItem>,
+    merchantIconMatcher: MerchantIconMatcherPack?,
 ) {
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     if (!isLiveBudget) {
@@ -80,6 +99,8 @@ internal fun ConflictInboxScreen(
         }
         return
     }
+    val entryPointerSequence = remember(state.selectedBudgetId) { state.pointerInputSequence }
+    val canOpenConflict = state.pointerInputSequence > entryPointerSequence
     val conflicts =
         mobileSession.pendingWrites
             .filter { it.status == "conflict" }
@@ -97,11 +118,13 @@ internal fun ConflictInboxScreen(
                     operation.operationId,
                     conflictPayeeTitle(operation, liveTransactions, mobileSession) ?: "Transaction",
                     "${transaction?.dateLabel ?: formatLiveDate(snapshot?.stringValue("date"))} · $categoryName",
+                    transaction?.merchantIcon,
+                    transaction?.categoryIcon,
                 )
             }
     PageLazyColumn {
         item(key = "conflicts-title") {
-            BodyText("Choose whether to keep your edit or the latest Actual version.")
+            BodyText("Choose between your edit and the last synced Actual version.")
         }
         if (conflicts.isEmpty()) {
             item(key = "conflicts-empty") {
@@ -114,20 +137,30 @@ internal fun ConflictInboxScreen(
         } else {
             items(conflicts, key = { "conflict:${it.id}" }) { conflict ->
                 SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
+                    val merchantIcon = conflict.merchantIcon ?: merchantIconMatcher?.iconFor(conflict.title)
                     ListRow(
                         conflict.title,
                         conflict.description,
                         "Review",
+                        leading =
+                            RowLeading.Merchant(
+                                merchantIcon,
+                                fallback = conflict.categoryIcon ?: Lucide.Receipt,
+                            ),
                         options = ListRowOptions(trailingColor = tandemPalette.warning),
-                    ) {
-                        state.selectedConflictOperationId = conflict.id
-                        navigation.open(AppRoute.CONFLICT_REVIEW)
-                    }
+                        onClick =
+                            if (canOpenConflict) {
+                                {
+                                    mobileSession.clearTransactionWriteMessage()
+                                    state.selectedConflictOperationId = conflict.id
+                                    navigation.open(AppRoute.CONFLICT_REVIEW)
+                                }
+                            } else {
+                                null
+                            },
+                    )
                 }
             }
-        }
-        mobileSession.transactionWriteMessage?.let { message ->
-            item(key = "conflicts-write-message") { BodyText(message) }
         }
     }
 }
@@ -136,6 +169,8 @@ internal data class ConflictInboxItemUi(
     val id: String,
     val title: String,
     val description: String,
+    val merchantIcon: org.jetbrains.compose.resources.DrawableResource?,
+    val categoryIcon: androidx.compose.ui.graphics.vector.ImageVector?,
 )
 
 @Composable
@@ -160,6 +195,7 @@ internal fun ConflictReviewScreen(
     navigation: AppNavigation,
     onResolveConflict: (String, Boolean) -> Unit,
     liveTransactions: List<TransactionItem>,
+    merchantIconMatcher: MerchantIconMatcherPack?,
 ) {
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     if (!isLiveBudget) {
@@ -177,6 +213,18 @@ internal fun ConflictReviewScreen(
         mobileSession.pendingWrites.firstOrNull {
             it.operationId == state.selectedConflictOperationId && it.status == "conflict"
         }
+    var confirmKeepLastSynced by rememberSaveable(operation?.operationId) { mutableStateOf(false) }
+    var serverCheckAttempt by rememberSaveable(operation?.operationId) { mutableStateOf(0) }
+    LaunchedEffect(operation?.operationId, serverCheckAttempt) {
+        operation?.let {
+            mobileSession.confirmConflictWithServer(
+                state.selectedBudgetId,
+                it.operationId,
+                state.encryptedPassword.takeIf(String::isNotBlank),
+            )
+        }
+    }
+    val serverConfirmed = operation != null && mobileSession.serverConfirmedConflictOperationId == operation.operationId
     val record =
         operation?.let { item ->
             mobileSession.conflictRecordsByRecordId[item.recordId]
@@ -189,6 +237,7 @@ internal fun ConflictReviewScreen(
     val deviceAmount = deviceVersion?.longValue("amount")
     val actualAmount = actualVersion?.longValue("amount")
     val transaction = operation?.let { conflict -> liveTransactions.firstOrNull { it.recordId == conflict.recordId } }
+    val transactionTitle = conflictPayeeTitle(operation, liveTransactions, mobileSession) ?: "Transaction"
     val deviceAmountText = deviceAmount?.let(::formatSignedCurrency) ?: "Deleted"
     val actualAmountText = actualAmount?.let(::formatSignedCurrency) ?: "Deleted"
     val accountName =
@@ -209,28 +258,89 @@ internal fun ConflictReviewScreen(
     PageColumn {
         if (operation == null) {
             EmptyState("No change to review", "This change no longer needs attention.")
+            mobileSession.conflictResolutionFeedback
+                ?.takeIf { it.operationId == state.selectedConflictOperationId }
+                ?.let { feedback -> BodyText(feedback.message) }
         } else {
             Heading("Two versions differ")
+            when {
+                mobileSession.isSyncing -> BodyText("Checking the latest transaction with the server…")
+                serverConfirmed -> BodyText("The server confirmed the latest Actual version.")
+                else -> {
+                    BodyText("Connect to the server before resolving this conflict. Your edit stays on this device.")
+                    SecondaryButton(
+                        "Check again",
+                        enabled = !mobileSession.isSavingTransaction,
+                    ) { serverCheckAttempt += 1 }
+                }
+            }
+            ListRow(
+                transactionTitle,
+                "$dateLabel · $categoryName",
+                leading =
+                    RowLeading.Merchant(
+                        transaction?.merchantIcon ?: merchantIconMatcher?.iconFor(transactionTitle),
+                        fallback = transaction?.categoryIcon ?: state.categoryIconFor(categoryId.orEmpty(), categoryName),
+                    ),
+                options = ListRowOptions(dense = true),
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                 ConflictValueCard("Your edit", deviceAmountText, Modifier.weight(1f))
-                ConflictValueCard("In Actual", actualAmountText, Modifier.weight(1f))
+                ConflictValueCard("Last synced", actualAmountText, Modifier.weight(1f))
             }
             SectionCard("Details") {
-                ListRow("Account", trailing = accountName)
+                ListRow("Account", leading = RowLeading.Icon(Lucide.WalletCards), trailing = accountName)
                 DividerLine()
-                ListRow("Category", trailing = categoryName)
+                ListRow(
+                    "Category",
+                    leading = RowLeading.Icon(state.categoryIconFor(categoryId.orEmpty(), categoryName)),
+                    trailing = categoryName,
+                )
                 DividerLine()
-                ListRow("Date", trailing = dateLabel)
+                ListRow("Date", leading = RowLeading.Icon(Lucide.CalendarDays), trailing = dateLabel)
             }
-            mobileSession.transactionWriteMessage?.let { BodyText(it) }
+            mobileSession.conflictResolutionFeedback
+                ?.takeIf { it.operationId == operation.operationId }
+                ?.let { feedback -> BodyText(feedback.message) }
             PrimaryButton(
-                if (operation.action == "DELETE") "Keep deletion" else "Keep your edit",
-                enabled = !state.readOnlyMode && !mobileSession.isSavingTransaction && record?.remoteDeleted != true,
+                when {
+                    operation.action == "DELETE" && record?.remoteDeleted == true -> "Clear pending deletion"
+                    operation.action == "DELETE" -> "Keep deletion"
+                    else -> "Keep your edit"
+                },
+                enabled =
+                    serverConfirmed &&
+                        !state.readOnlyMode &&
+                        !mobileSession.isSavingTransaction &&
+                        (operation.action == "DELETE" || record?.remoteDeleted != true),
             ) { onResolveConflict(operation.operationId, true) }
-            SecondaryButton("Keep Actual", enabled = !state.readOnlyMode && !mobileSession.isSavingTransaction) {
-                onResolveConflict(operation.operationId, false)
-            }
+            SecondaryButton(
+                "Keep last synced",
+                enabled = serverConfirmed && !state.readOnlyMode && !mobileSession.isSavingTransaction,
+            ) { confirmKeepLastSynced = true }
+            Text(
+                "Discards your edit and keeps Actual’s version. The server must confirm it first.",
+                color = tandemPalette.muted,
+                fontSize = TandemTypography.caption,
+            )
         }
+    }
+    if (confirmKeepLastSynced && operation != null) {
+        DestructiveConfirmationDialog(
+            title = "Discard your edit?",
+            message = "Tandem will check Actual’s latest version, then remove your edit from this device. Actual won’t be changed.",
+            confirmLabel = "Discard edit",
+            dismissLabel = "Keep editing",
+            enabled =
+                serverConfirmed &&
+                    !state.readOnlyMode &&
+                    !mobileSession.isSavingTransaction,
+            onDismissRequest = { confirmKeepLastSynced = false },
+            onConfirm = {
+                confirmKeepLastSynced = false
+                onResolveConflict(operation.operationId, false)
+            },
+        )
     }
 }
 
@@ -273,6 +383,7 @@ internal fun UncertainWriteScreen(
                     mobileSession.uncertainWriteCheckError.takeIf {
                         mobileSession.uncertainWriteCheckErrorOperationId == operation.operationId
                     }
+                val canRetryOrRemove = canOfferUncertainWriteRecoveryActions(operation.status, isChecked && checkError == null)
                 val heading =
                     when {
                         checkError != null -> "Couldn’t check this change"
@@ -295,11 +406,12 @@ internal fun UncertainWriteScreen(
                         operation.status == "conflict" -> "Actual changed this transaction. Review both versions."
                         operation.status == "rejected" -> "Actual kept the previous value."
                         operation.status == "discarded" -> "Your edit was removed."
+                        operation.status == "queued" && isChecked -> "Actual confirmed this edit was not applied. It’s ready to try again."
                         operation.status == "queued" -> "Your edit is saved on this device and is waiting to sync."
                         operation.status == "sending" && mobileSession.isSyncing -> "Syncing this edit with Actual."
                         operation.status == "sending" -> "Tandem couldn’t confirm the save. Check its status before trying again."
                         isNotFound -> "Actual has no copy of this edit. Try sending it again once."
-                        isChecked -> "Actual still hasn’t confirmed this edit. Check again before trying it."
+                        isChecked -> "Actual still can’t confirm whether this edit was saved. You can try again or remove it."
                         mobileSession.isSyncing -> "Checking Actual for this edit."
                         else -> "Tandem couldn’t confirm whether Actual saved this edit. Check its status before trying again."
                     }
@@ -333,7 +445,7 @@ internal fun UncertainWriteScreen(
                             loading = mobileSession.isSyncing,
                         ) { onCheckStatus(operation.operationId) }
                     }
-                    operation.status == "uncertain" && isNotFound -> {
+                    canRetryOrRemove -> {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                             PrimaryButton(
                                 "Try again",
@@ -365,6 +477,7 @@ internal fun UncertainWriteScreen(
                         }
                     operation.status == "conflict" ->
                         PrimaryButton("Review") {
+                            mobileSession.clearTransactionWriteMessage()
                             state.selectedConflictOperationId = operation.operationId
                             navigation.open(AppRoute.CONFLICT_REVIEW)
                         }
@@ -381,7 +494,7 @@ internal fun UncertainWriteScreen(
             DestructiveConfirmationDialog(
                 title = "Remove this edit?",
                 message =
-                    "Remove the pending edit for $operationPayee ($operationAmountText)? Actual may already have saved it; removing it here won’t undo a change already stored there.",
+                    uncertainWriteRemovalWarning(operationPayee, operationAmountText),
                 confirmLabel = "Remove edit",
                 dismissLabel = "Keep edit",
                 enabled = !state.readOnlyMode && !mobileSession.isSyncing,

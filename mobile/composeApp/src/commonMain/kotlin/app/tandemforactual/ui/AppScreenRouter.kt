@@ -506,8 +506,9 @@ internal fun ScreenContent(
             }
         }
         AppRoute.SYNC_CENTER -> SyncCenterScreen(state, mobileSession, navigation, liveTransactions)
-        AppRoute.CONFLICT_INBOX -> ConflictInboxScreen(state, mobileSession, navigation, liveTransactions)
-        AppRoute.CONFLICT_REVIEW -> ConflictReviewScreen(state, mobileSession, navigation, onResolveConflict, liveTransactions)
+        AppRoute.CONFLICT_INBOX -> ConflictInboxScreen(state, mobileSession, navigation, liveTransactions, merchantIconMatcher)
+        AppRoute.CONFLICT_REVIEW ->
+            ConflictReviewScreen(state, mobileSession, navigation, onResolveConflict, liveTransactions, merchantIconMatcher)
         AppRoute.UNCERTAIN_WRITE -> {
             val selectedWrite =
                 mobileSession.pendingWrites

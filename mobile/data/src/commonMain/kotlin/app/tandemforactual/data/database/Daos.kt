@@ -460,9 +460,9 @@ interface OutboxDao {
     suspend fun deleteQueuedOperation(operationId: String): Int
 
     @Query(
-        "SELECT * FROM sync_outbox WHERE budgetId = :budgetId AND recordType = :recordType AND recordId = :recordId AND status = 'queued' AND attemptCount = 0 ORDER BY createdAtEpochMs DESC LIMIT 1",
+        "SELECT * FROM sync_outbox WHERE budgetId = :budgetId AND recordType = :recordType AND recordId = :recordId AND status = 'queued' AND serverOperationId IS NULL ORDER BY createdAtEpochMs DESC LIMIT 1",
     )
-    suspend fun findUnsentForRecord(
+    suspend fun findMergeableQueuedForRecord(
         budgetId: String,
         recordType: String,
         recordId: String,
@@ -516,9 +516,6 @@ interface OutboxDao {
 
     @Upsert
     suspend fun put(operation: OutboxOperationEntity)
-
-    @Query("DELETE FROM sync_outbox WHERE operationId = :operationId AND status = 'queued' AND attemptCount = 0")
-    suspend fun deleteUnsent(operationId: String): Int
 
     @Query(
         "UPDATE sync_outbox SET status = 'sending', attemptCount = attemptCount + 1, updatedAtEpochMs = :updatedAtEpochMs WHERE operationId = :operationId AND status = 'queued'",

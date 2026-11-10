@@ -128,6 +128,7 @@ internal fun SyncCenterScreen(
                                         },
                                 ),
                             onClick = {
+                                mobileSession.clearTransactionWriteMessage()
                                 state.selectedConflictOperationId = operation.operationId
                                 navigation.open(
                                     when (operation.status) {

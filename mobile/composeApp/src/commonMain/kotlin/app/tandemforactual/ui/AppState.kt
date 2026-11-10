@@ -87,6 +87,7 @@ internal class AppState {
     var selectedTransactionPayeeName by mutableStateOf("")
     var selectedTransactionCategoryName by mutableStateOf("")
     var selectedConflictOperationId by mutableStateOf("")
+    var pointerInputSequence by mutableStateOf(0)
     var serverUrl by mutableStateOf("")
     var actualPassword by mutableStateOf("")
     var encryptedPassword by mutableStateOf("")

@@ -191,6 +191,7 @@ data class LocalWriteRequest(
     val optimisticJson: String?,
     val createdAtEpochMs: Long,
     val optimisticProjection: LocalRecordProjection? = null,
+    val supersedesConflictOperationId: String? = null,
 )
 
 data class LocalBudgetMutationOutboxItem(
@@ -1020,25 +1021,44 @@ class LocalBudgetRepository(
         val records = database.budgetRecordDao()
         val current = records.find(request.budgetId, request.recordType, request.recordId)
         validateWriteBase(request, current)
-        val unsent = outbox.findUnsentForRecord(request.budgetId, request.recordType, request.recordId)
+        val mergeableQueued = outbox.findMergeableQueuedForRecord(request.budgetId, request.recordType, request.recordId)
         val blocker = outbox.findBlockingForRecord(request.budgetId, request.recordType, request.recordId)
         val resolvedConflict =
             blocker?.takeIf {
                 it.status == LocalWriteStatus.CONFLICT.name.lowercase() &&
-                    it.operationId != unsent?.operationId &&
+                    it.operationId == request.supersedesConflictOperationId &&
                     request.action != LocalWriteAction.CREATE
             }
-        if (blocker != null && blocker.operationId != unsent?.operationId && resolvedConflict == null) {
+        if (request.supersedesConflictOperationId != null && resolvedConflict == null) {
             throw LocalOperationConflictException()
         }
-        if (unsent != null && !sameBase(unsent, request)) {
+        if (blocker != null && blocker.operationId != mergeableQueued?.operationId && resolvedConflict == null) {
             throw LocalOperationConflictException()
         }
 
-        val operation = request.toEntity()
-        if (unsent != null) {
-            outbox.deleteUnsent(unsent.operationId)
+        val requestedOperation = request.toEntity()
+        if (mergeableQueued != null) {
+            val actionCanBeConsolidated =
+                when (mergeableQueued.action) {
+                    LocalWriteAction.CREATE.name -> request.action == LocalWriteAction.CREATE
+                    LocalWriteAction.UPDATE.name -> request.action in setOf(LocalWriteAction.UPDATE, LocalWriteAction.DELETE)
+                    LocalWriteAction.DELETE.name -> request.action == LocalWriteAction.DELETE
+                    else -> false
+                }
+            if (!actionCanBeConsolidated) throw LocalOperationConflictException()
+            val operation =
+                requestedOperation.copy(
+                    operationId = mergeableQueued.operationId,
+                    idempotencyKey = mergeableQueued.idempotencyKey,
+                    attemptCount = mergeableQueued.attemptCount,
+                    createdAtEpochMs = mergeableQueued.createdAtEpochMs,
+                )
+            outbox.put(operation)
+            applyLocalOverlay(records, current, request)
+            return EnqueuedLocalWrite(operation, replayed = false, replacedUnsent = true)
         }
+
+        val operation = requestedOperation
         resolvedConflict?.let {
             outbox.put(
                 it.copy(
@@ -1050,7 +1070,7 @@ class LocalBudgetRepository(
         }
         outbox.insert(operation)
         applyLocalOverlay(records, current, request)
-        return EnqueuedLocalWrite(operation, replayed = false, replacedUnsent = unsent != null)
+        return EnqueuedLocalWrite(operation, replayed = false, replacedUnsent = false)
     }
 
     suspend fun claimNextWrite(budgetId: String): OutboxOperationEntity? {
@@ -1102,6 +1122,7 @@ class LocalBudgetRepository(
             val queued =
                 operation.copy(
                     status = LocalWriteStatus.QUEUED.name.lowercase(),
+                    serverOperationId = operation.serverOperationId ?: operation.operationId,
                     lastErrorCode = null,
                     updatedAtEpochMs = now(),
                 )
@@ -1548,16 +1569,6 @@ class LocalBudgetRepository(
             throw InvalidLocalWriteException("$name must be a non-empty, trimmed value")
         }
     }
-
-    private fun sameBase(
-        operation: OutboxOperationEntity,
-        request: LocalWriteRequest,
-    ): Boolean =
-        operation.baseRevision == request.baseRevision &&
-            operation.baseSnapshotJson == request.baseSnapshotJson &&
-            operation.budgetId == request.budgetId &&
-            operation.recordType == request.recordType &&
-            operation.recordId == request.recordId
 
     private fun matchesRequest(
         operation: OutboxOperationEntity,

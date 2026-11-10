@@ -777,8 +777,9 @@ class LocalBudgetRepositoryTest {
                 val result = repository.enqueueWrite(replacement)
 
                 assertTrue(result.replacedUnsent)
-                assertEquals("create-2", result.operation.operationId)
-                assertEquals(listOf("create-2"), repository.readPendingWrites(BUDGET).map { it.operationId })
+                assertEquals("create-1", result.operation.operationId)
+                assertEquals("create-key-1", result.operation.idempotencyKey)
+                assertEquals(listOf("create-1"), repository.readPendingWrites(BUDGET).map { it.operationId })
                 assertEquals(replacement.optimisticJson, repository.findRecords(BUDGET, "transaction").single().localJson)
             } finally {
                 database.close()
@@ -1141,7 +1142,7 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
-    fun unsentEditsReplaceTheQueuedCommandButCannotChangeItsBase() =
+    fun queuedEditsConsolidateAndRebaseOnTheLatestSnapshot() =
         runBlocking {
             val database = newDatabase()
             try {
@@ -1159,18 +1160,227 @@ class LocalBudgetRepositoryTest {
                 val result = repository.enqueueWrite(replacement)
 
                 assertTrue(result.replacedUnsent)
-                assertEquals("op-2", result.operation.operationId)
-                assertEquals("key-2", result.operation.idempotencyKey)
+                assertEquals("op-1", result.operation.operationId)
+                assertEquals("key-1", result.operation.idempotencyKey)
                 assertEquals(1, repository.readPendingWrites(BUDGET).size)
                 assertEquals(replacement.optimisticJson, repository.findRecords(BUDGET, "transaction").single().localJson)
 
-                val incompatibleBase =
-                    replacement.copy(
-                        operationId = "op-3",
-                        idempotencyKey = "key-3",
-                        baseSnapshotJson = "{\"id\":\"txn-1\",\"amount\":1001}",
+                assertEquals(replacement.patchJson, repository.findWrite("op-1")?.patchJson)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun editAfterPreSubmissionFailureKeepsOneIdempotentQueuedWrite() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                repository.applySnapshot(BUDGET, GENERATION, "c1", listOf(transaction()))
+                val first = repository.enqueueWrite(updateRequest())
+                val attempted = assertNotNull(repository.claimNextWrite(BUDGET))
+                assertEquals(1, attempted.attemptCount)
+                repository.returnWriteToQueue(attempted.operationId, "offline-before-send")
+
+                val secondRequest =
+                    updateRequest(
+                        operationId = "op-2",
+                        idempotencyKey = "key-2",
+                        patch = "{\"amount\":1400,\"notes\":\"revised\"}",
+                        optimistic = "{\"id\":\"txn-1\",\"amount\":1400,\"notes\":\"revised\"}",
                     )
-                assertFails<LocalOperationConflictException> { repository.enqueueWrite(incompatibleBase) }
+                val merged = repository.enqueueWrite(secondRequest)
+
+                assertEquals(first.operation.operationId, merged.operation.operationId)
+                assertEquals(first.operation.idempotencyKey, merged.operation.idempotencyKey)
+                assertEquals(1, merged.operation.attemptCount)
+                assertEquals("queued", merged.operation.status)
+                assertEquals(secondRequest.patchJson, merged.operation.patchJson)
+                assertEquals(1, repository.readPendingWrites(BUDGET).size)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun editAfterRemotePullRebasesTheQueuedWriteOnTheNewRevision() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                repository.applySnapshot(BUDGET, GENERATION, "c1", listOf(transaction()))
+                val first = repository.enqueueWrite(updateRequest())
+                val sending = assertNotNull(repository.claimNextWrite(BUDGET))
+                repository.returnWriteToQueue(sending.operationId, "offline-before-send")
+                val pulled =
+                    transaction(
+                        revision = "revision-2",
+                        bodyJson =
+                            """
+                            {
+                              "id":"txn-1",
+                              "amount":1500,
+                              "date":"2026-10-02",
+                              "account":"checking",
+                              "category":"food",
+                              "payee":"market",
+                              "month":"2026-10"
+                            }
+                            """.trimIndent(),
+                        date = "2026-10-02",
+                        amountMinor = 1500L,
+                    )
+                repository.applySnapshot(BUDGET, GENERATION, "c2", listOf(pulled))
+
+                val rebasedRequest =
+                    updateRequest(
+                        operationId = "op-rebased",
+                        idempotencyKey = "key-rebased",
+                        baseRevision = pulled.revision,
+                        baseSnapshot = pulled.bodyJson,
+                        patch = "{\"amount\":1400,\"notes\":\"revised\"}",
+                        optimistic = "{\"id\":\"txn-1\",\"amount\":1400,\"notes\":\"revised\"}",
+                        projection = LocalRecordProjection("2026-10-02", "checking", "food", "market", 1400L, "2026-10"),
+                    )
+                val merged = repository.enqueueWrite(rebasedRequest)
+
+                assertEquals(first.operation.operationId, merged.operation.operationId)
+                assertEquals(pulled.revision, merged.operation.baseRevision)
+                assertEquals(pulled.bodyJson, merged.operation.baseSnapshotJson)
+                assertEquals(rebasedRequest.patchJson, merged.operation.patchJson)
+                assertEquals(1, repository.readPendingWrites(BUDGET).size)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun queuedCreateAfterPreSubmissionFailureKeepsItsTransactionAndOperationIds() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val firstRequest =
+                    updateRequest(
+                        operationId = "create-1",
+                        idempotencyKey = "create-key-1",
+                        recordId = "txn-local",
+                        action = LocalWriteAction.CREATE,
+                        baseRevision = null,
+                        baseSnapshot = null,
+                        patch =
+                            """
+                            {
+                              "account":"checking",
+                              "amount":1000,
+                              "date":"2026-10-01",
+                              "payee":null,
+                              "category":null,
+                              "notes":"before",
+                              "cleared":false
+                            }
+                            """.trimIndent(),
+                        optimistic =
+                            """
+                            {
+                              "id":"txn-local",
+                              "account":"checking",
+                              "amount":1000,
+                              "date":"2026-10-01",
+                              "payee":null,
+                              "category":null,
+                              "notes":"before",
+                              "cleared":false
+                            }
+                            """.trimIndent(),
+                    )
+                val first = repository.enqueueWrite(firstRequest)
+                val sending = assertNotNull(repository.claimNextWrite(BUDGET))
+                repository.returnWriteToQueue(sending.operationId, "offline-before-send")
+                val secondRequest =
+                    firstRequest.copy(
+                        operationId = "create-2",
+                        idempotencyKey = "create-key-2",
+                        patchJson = firstRequest.patchJson.replace("1000", "1500").replace("before", "corrected"),
+                        optimisticJson = firstRequest.optimisticJson?.replace("1000", "1500")?.replace("before", "corrected"),
+                    )
+
+                val merged = repository.enqueueWrite(secondRequest)
+
+                assertEquals("txn-local", merged.operation.recordId)
+                assertEquals(first.operation.operationId, merged.operation.operationId)
+                assertEquals(first.operation.idempotencyKey, merged.operation.idempotencyKey)
+                assertEquals(1, merged.operation.attemptCount)
+                assertEquals(secondRequest.patchJson, merged.operation.patchJson)
+                assertEquals(1, repository.readPendingWrites(BUDGET).size)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun sendingUncertainAndConflictedWritesBlockConsolidation() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                repository.applySnapshot(
+                    BUDGET,
+                    GENERATION,
+                    "c1",
+                    listOf(transaction(), transaction(recordId = "txn-2"), transaction(recordId = "txn-3")),
+                )
+                val sending = repository.enqueueWrite(updateRequest(recordId = "txn-1"))
+                repository.claimNextWrite(BUDGET)
+                assertFails<LocalOperationConflictException> {
+                    repository.enqueueWrite(updateRequest(operationId = "sending-edit", idempotencyKey = "sending-key"))
+                }
+
+                val uncertain =
+                    repository.enqueueWrite(
+                        updateRequest(
+                            recordId = "txn-2",
+                            operationId = "uncertain-op",
+                            idempotencyKey = "uncertain-key",
+                        ),
+                    )
+                val uncertainClaim = repository.claimNextWrite(BUDGET)
+                assertEquals(uncertain.operation.operationId, uncertainClaim?.operationId)
+                repository.markWriteUncertain(uncertain.operation.operationId, "network-timeout")
+                assertFails<LocalOperationConflictException> {
+                    repository.enqueueWrite(
+                        updateRequest(
+                            recordId = "txn-2",
+                            operationId = "uncertain-edit",
+                            idempotencyKey = "uncertain-edit-key",
+                        ),
+                    )
+                }
+
+                val conflicted =
+                    repository.enqueueWrite(
+                        updateRequest(recordId = "txn-3", operationId = "conflict-op", idempotencyKey = "conflict-key"),
+                    )
+                repository.claimNextWrite(BUDGET)
+                repository.markWriteConflict(
+                    conflicted.operation.operationId,
+                    "concurrent-edit",
+                    transaction(recordId = "txn-3", revision = "revision-3"),
+                )
+                assertFails<LocalOperationConflictException> {
+                    repository.enqueueWrite(
+                        updateRequest(
+                            recordId = "txn-3",
+                            operationId = "conflict-edit",
+                            idempotencyKey = "conflict-edit-key",
+                            baseRevision = "revision-3",
+                        ),
+                    )
+                }
+                assertEquals("sending", repository.findWrite(sending.operation.operationId)?.status)
+                assertEquals("uncertain", repository.findWrite(uncertain.operation.operationId)?.status)
+                assertEquals("conflict", repository.findWrite(conflicted.operation.operationId)?.status)
             } finally {
                 database.close()
             }
@@ -1327,6 +1537,7 @@ class LocalBudgetRepositoryTest {
                         patch = "{\"amount\":1800}",
                         optimistic = "{\"id\":\"txn-1\",\"amount\":1800}",
                         projection = LocalRecordProjection("2026-10-02", "remote", "rent", "landlord", 1800L, "2026-10"),
+                        supersedesConflictOperationId = conflicted.operation.operationId,
                     )
                 val resolution = repository.enqueueWrite(resolutionRequest)
 
@@ -1335,6 +1546,68 @@ class LocalBudgetRepositoryTest {
                 assertEquals(remote.revision, resolution.operation.baseRevision)
                 assertEquals(resolutionRequest.optimisticJson, repository.findRecord(BUDGET, "transaction", "txn-1")?.localJson)
                 assertEquals("op-resolution", repository.claimNextWrite(BUDGET)?.operationId)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun ordinaryEditCannotReplaceAConflictedEdit() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                repository.applySnapshot(BUDGET, GENERATION, "c1", listOf(transaction()))
+                val conflicted = repository.enqueueWrite(updateRequest())
+                repository.claimNextWrite(BUDGET)
+                val remote =
+                    transaction(
+                        recordId = "txn-1",
+                        revision = "revision-2",
+                        bodyJson = "{\"id\":\"txn-1\",\"amount\":1500}",
+                        amountMinor = 1500L,
+                    )
+                repository.markWriteConflict(conflicted.operation.operationId, "concurrent-edit", remote)
+
+                assertFails<LocalOperationConflictException> {
+                    repository.enqueueWrite(
+                        updateRequest(
+                            operationId = "ordinary-follow-up",
+                            idempotencyKey = "ordinary-follow-up-key",
+                            baseRevision = remote.revision,
+                            baseSnapshot = remote.bodyJson,
+                            patch = "{\"amount\":1700}",
+                            optimistic = "{\"id\":\"txn-1\",\"amount\":1700}",
+                            projection =
+                                LocalRecordProjection(
+                                    "2026-10-01",
+                                    "checking",
+                                    "food",
+                                    "market",
+                                    1700L,
+                                    null,
+                                ),
+                        ),
+                    )
+                }
+                assertFails<LocalOperationConflictException> {
+                    repository.enqueueWrite(
+                        updateRequest(
+                            operationId = "ordinary-delete",
+                            idempotencyKey = "ordinary-delete-key",
+                            action = LocalWriteAction.DELETE,
+                            baseRevision = remote.revision,
+                            baseSnapshot = remote.bodyJson,
+                            patch = "{}",
+                            optimistic = null,
+                            projection = null,
+                        ),
+                    )
+                }
+
+                assertEquals("conflict", repository.findWrite(conflicted.operation.operationId)?.status)
+                assertEquals(conflicted.operation.operationId, repository.readPendingWrites(BUDGET).single().operationId)
+                assertEquals("{\"id\":\"txn-1\",\"amount\":1200}", repository.findRecord(BUDGET, "transaction", "txn-1")?.localJson)
             } finally {
                 database.close()
             }
@@ -2079,6 +2352,7 @@ class LocalBudgetRepositoryTest {
                 amountMinor = 1200L,
                 budgetMonth = null,
             ),
+        supersedesConflictOperationId: String? = null,
     ): LocalWriteRequest =
         LocalWriteRequest(
             operationId = operationId,
@@ -2093,6 +2367,7 @@ class LocalBudgetRepositoryTest {
             optimisticJson = optimistic,
             optimisticProjection = projection,
             createdAtEpochMs = 100L,
+            supersedesConflictOperationId = supersedesConflictOperationId,
         )
 
     private suspend inline fun <reified T : Throwable> assertFails(noinline block: suspend () -> Any?) {

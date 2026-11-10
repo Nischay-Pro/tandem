@@ -131,7 +131,12 @@ class GeneratedBudgetSyncRemote(
         )
     }
 
-    override suspend fun readOperation(operationId: String): RemoteOperationResult {
+    override suspend fun readOperation(operationId: String): RemoteOperationResult = readOperation(operationId, null)
+
+    override suspend fun readOperation(
+        operationId: String,
+        encryptionPassword: String?,
+    ): RemoteOperationResult {
         val parsedId =
             try {
                 Uuid.parse(operationId)
@@ -139,7 +144,14 @@ class GeneratedBudgetSyncRemote(
                 throw BudgetSyncProtocolException("Outbox operation ID is not a UUID", error)
             }
         return BudgetSyncJson.parseOperation(
-            unwrap(withApiRequest { TransactionsApi.getTransactionOperation(parsedId) }),
+            unwrap(
+                withApiRequest {
+                    TransactionsApi.getTransactionOperation(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        operationId = parsedId,
+                    )
+                },
+            ),
         )
     }
 
