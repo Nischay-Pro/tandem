@@ -48,9 +48,8 @@ internal fun ScreenContent(
     navigation: AppNavigation,
     mobileSession: TandemMobileSession,
     reportsDataCache: ReportsDataCache,
-    onPairDevice: () -> Unit,
-    onRetryStoredSession: () -> Unit,
-    pairingCompleted: Boolean,
+    onSignIn: () -> Unit,
+    onStartOpenIdSignIn: () -> Unit,
     onSelectBudget: (BudgetCatalogItem) -> Unit,
     onRefreshBudgets: () -> Unit,
     onOpenSelectedBudget: () -> Unit,
@@ -87,7 +86,7 @@ internal fun ScreenContent(
         AppRoute.STARTUP -> StartupScreen()
         AppRoute.WELCOME -> WelcomeScreen(navigation)
         AppRoute.SERVER_ADDRESS -> ServerAddressScreen(state, navigation)
-        AppRoute.PAIRING_CODE -> PairingCodeScreen(state, mobileSession, navigation, onPairDevice, onRetryStoredSession, pairingCompleted)
+        AppRoute.SIGN_IN -> SignInScreen(state, mobileSession, onSignIn, onStartOpenIdSignIn)
         AppRoute.BUDGET_CHOOSER ->
             BudgetChooserScreen(state, mobileSession, navigation, onSelectBudget, onRefreshBudgets, onOpenSelectedBudget)
         AppRoute.UNLOCK_BUDGET -> UnlockBudgetScreen(state, navigation)

@@ -7,8 +7,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.Snapshot
+import app.tandemforactual.api.client.ActualLoginMethods
+import app.tandemforactual.api.client.AuthenticatedDevice
 import app.tandemforactual.api.client.BudgetCatalogItem
-import app.tandemforactual.api.client.PairedDevice
 import app.tandemforactual.api.client.StatementImportItem
 import app.tandemforactual.api.client.StatementImportSummary
 import app.tandemforactual.api.client.TandemApiClient
@@ -178,7 +179,7 @@ internal class TandemMobileSession(
             )
         }
 
-    var pairedDevice by mutableStateOf<PairedDevice?>(null)
+    var authenticatedDevice by mutableStateOf<AuthenticatedDevice?>(null)
         private set
 
     var budgets by mutableStateOf<List<BudgetCatalogItem>>(emptyList())
@@ -202,10 +203,16 @@ internal class TandemMobileSession(
     var cachedSnapshotBudgetId by mutableStateOf("")
         private set
 
-    var isPairing by mutableStateOf(false)
+    var isSigningIn by mutableStateOf(false)
         private set
 
-    var pairingError by mutableStateOf<String?>(null)
+    var signInError by mutableStateOf<String?>(null)
+        private set
+
+    var actualLoginMethods by mutableStateOf<ActualLoginMethods?>(null)
+        private set
+
+    var isLoadingLoginMethods by mutableStateOf(false)
         private set
 
     var credentialStorageError by mutableStateOf<String?>(null)
@@ -1249,20 +1256,20 @@ internal class TandemMobileSession(
                 } catch (error: CancellationException) {
                     throw error
                 } catch (_: Exception) {
-                    credentialStorageError = "Couldn’t access this device’s saved pairing. Try again or pair this device again."
+                    credentialStorageError = "Couldn’t access this device’s saved sign-in. Try again or sign in again."
                     return null
                 } ?: return null
 
-            pairedDevice =
+            authenticatedDevice =
                 try {
                     apiClient.restoreStoredSession(storedSession)
                 } catch (error: CancellationException) {
                     throw error
                 } catch (_: Exception) {
                     apiClient.forgetSession()
-                    pairedDevice = null
+                    authenticatedDevice = null
                     budgets = emptyList()
-                    credentialStorageError = "This device’s saved access no longer works. Pair this device again."
+                    credentialStorageError = "This device’s saved access no longer works. Sign in again."
                     clearStoredCredential()
                     return null
                 }
@@ -1274,7 +1281,7 @@ internal class TandemMobileSession(
     }
 
     suspend fun forgetDevice() {
-        if (pairedDevice == null || isRevokingDevice) return
+        if (authenticatedDevice == null || isRevokingDevice) return
         deviceRevocationError = null
         isRevokingDevice = true
         try {
@@ -1298,7 +1305,7 @@ internal class TandemMobileSession(
     }
 
     suspend fun forgetDeviceLocally() {
-        if (pairedDevice == null || isRevokingDevice) return
+        if (authenticatedDevice == null || isRevokingDevice) return
         deviceRevocationError = null
         clearDeviceSession()
     }
@@ -1337,7 +1344,7 @@ internal class TandemMobileSession(
                 preferencesStore?.putValue(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY, "")
             }
             apiClient.forgetSession()
-            pairedDevice = null
+            authenticatedDevice = null
             budgets = emptyList()
             cachedBudgets = emptyList()
             budgetCatalogLoaded = false
@@ -1392,16 +1399,32 @@ internal class TandemMobileSession(
         }
     }
 
-    suspend fun pair(
+    suspend fun loadActualLoginMethods(serverUrl: String) {
+        isLoadingLoginMethods = true
+        signInError = null
+        try {
+            actualLoginMethods = apiClient.readActualLoginMethods(serverUrl)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: TandemApiException) {
+            signInError = error.userFacingMessage("Couldn’t check the Actual server. Check its address and try again.")
+        } catch (_: Exception) {
+            signInError = "Couldn’t check the Actual server. Check its address and try again."
+        } finally {
+            isLoadingLoginMethods = false
+        }
+    }
+
+    suspend fun signInWithPassword(
         serverUrl: String,
-        pairingCode: String,
+        password: String,
         deviceName: String,
     ) {
-        pairingError = null
+        signInError = null
         deviceRevocationError = null
-        isPairing = true
+        isSigningIn = true
         try {
-            pairedDevice = apiClient.pair(serverUrl, pairingCode, deviceName)
+            authenticatedDevice = apiClient.signInWithPassword(serverUrl, password, deviceName)
             isServerReachable = true
             persistCurrentSession()
             loadBudgets()
@@ -1409,13 +1432,63 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
-            pairingError = error.userFacingMessage("Couldn’t pair this device. Check the server address and pairing code, then try again.")
-            pairedDevice = null
+            signInError = error.userFacingMessage("Couldn’t sign in. Check the password and try again.")
+            authenticatedDevice = null
         } catch (error: Exception) {
-            pairingError = "Couldn’t pair this device. Check the server address and pairing code, then try again."
-            pairedDevice = null
+            signInError = "Couldn’t sign in. Check the password and try again."
+            authenticatedDevice = null
         } finally {
-            isPairing = false
+            isSigningIn = false
+        }
+    }
+
+    suspend fun startActualOpenIdSignIn(
+        serverUrl: String,
+        deviceName: String,
+    ): String? {
+        signInError = null
+        isSigningIn = true
+        try {
+            return apiClient.startActualOpenIdSignIn(serverUrl, deviceName)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: TandemApiException) {
+            signInError = error.userFacingMessage("Couldn’t start sign-in. Check the connection and try again.")
+        } catch (_: Exception) {
+            signInError = "Couldn’t start sign-in. Check the connection and try again."
+        } finally {
+            isSigningIn = false
+        }
+        return null
+    }
+
+    fun reportSignInError(message: String) {
+        signInError = message
+    }
+
+    suspend fun completeActualOpenIdSignIn(
+        serverUrl: String,
+        code: String,
+    ) {
+        signInError = null
+        deviceRevocationError = null
+        isSigningIn = true
+        try {
+            authenticatedDevice = apiClient.completeActualOpenIdSignIn(serverUrl, code)
+            isServerReachable = true
+            persistCurrentSession()
+            loadBudgets()
+            retryQueuedBudgetReorders()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: TandemApiException) {
+            signInError = error.userFacingMessage("Couldn’t finish sign-in. Start again.")
+            authenticatedDevice = null
+        } catch (_: Exception) {
+            signInError = "Couldn’t finish sign-in. Start again."
+            authenticatedDevice = null
+        } finally {
+            isSigningIn = false
         }
     }
 
@@ -1435,9 +1508,9 @@ internal class TandemMobileSession(
             budgetError = error.userFacingMessage("Couldn’t load your budgets. Check the connection and try again.")
             if (error.errorCode == "invalid_device_credential") {
                 apiClient.forgetSession()
-                pairedDevice = null
+                authenticatedDevice = null
                 budgets = emptyList()
-                credentialStorageError = "Pair this device again to restore access."
+                credentialStorageError = "Sign in again to restore access."
                 clearStoredCredential()
             }
         } catch (error: Exception) {
@@ -1497,7 +1570,7 @@ internal class TandemMobileSession(
             syncPresentation =
                 syncPresentation.failed(
                     when (error.httpStatus) {
-                        401 -> "Pair this device again to restore access."
+                        401 -> "Sign in again to restore access."
                         403 -> "This device can’t open this budget. Ask the budget owner for access."
                         404 -> "This budget is no longer available. Choose another budget."
                         400, 422 -> "That password didn’t unlock this budget. Check it and try again."
@@ -1618,7 +1691,7 @@ internal class TandemMobileSession(
         if (refuseWriteInReadOnlyMode()) return false
         val localRepository = repository
         if (localRepository == null || !isAuthenticated || budgetId.isBlank()) {
-            transactionWriteMessage = "Open a paired budget before reconciling transactions."
+            transactionWriteMessage = "Sign in and open a budget before reconciling transactions."
             return false
         }
         val ids = transactionIds.filter(String::isNotBlank).distinct()
@@ -1819,7 +1892,7 @@ internal class TandemMobileSession(
             return null
         }
         if (budgetId.isBlank() || !apiClient.isAuthenticated) {
-            budgetActionMessage = "Pair this device and open a budget before changing it."
+            budgetActionMessage = "Sign in and open a budget before changing it."
             return null
         }
         if (isPerformingBudgetAction) return null
@@ -1901,7 +1974,7 @@ internal class TandemMobileSession(
             return null
         }
         if (budgetId.isBlank() || !apiClient.isAuthenticated) {
-            budgetActionMessage = "Pair this device and open a budget before importing a statement."
+            budgetActionMessage = "Sign in and open a budget before importing a statement."
             return null
         }
         if (isPerformingBudgetAction) return null
@@ -2080,7 +2153,7 @@ internal class TandemMobileSession(
             return false
         }
         if (budgetId.isBlank() || !apiClient.isAuthenticated) {
-            setBudgetActionMessage("Pair this device and open a budget before changing it.", ownerRoute = messageOwner)
+            setBudgetActionMessage("Sign in and open a budget before changing it.", ownerRoute = messageOwner)
             return false
         }
         if (isPerformingBudgetAction) return false
@@ -2704,7 +2777,7 @@ internal class TandemMobileSession(
         if (summary.operationStatusErrorCode != null && summary.operationStatusErrorCode != "http-404") {
             uncertainWriteCheckError =
                 when (summary.operationStatusErrorCode) {
-                    "http-401" -> "Pair this device again to check the status."
+                    "http-401" -> "Sign in again to check the status."
                     "http-403" -> "This device can’t open this budget."
                     "http-503" -> "Tandem is temporarily unavailable. Try again shortly."
                     "network-error" -> "Couldn’t reach Tandem. Check the connection and try again."
@@ -2954,7 +3027,7 @@ internal class TandemMobileSession(
             throw error
         } catch (_: Exception) {
             isCredentialStored = false
-            credentialStorageError = "This pairing will end when the app closes because saved access is unavailable."
+            credentialStorageError = "This sign-in will end when the app closes because saved access is unavailable."
         }
     }
 
@@ -2972,7 +3045,7 @@ internal class TandemMobileSession(
 
     private suspend fun clearDeviceSession() {
         apiClient.forgetSession()
-        pairedDevice = null
+        authenticatedDevice = null
         budgets = emptyList()
         budgetCatalogLoaded = false
         isServerReachable = false
@@ -2989,9 +3062,9 @@ internal fun budgetApiErrorMessage(
     fallback: String,
 ): String =
     when (errorCode) {
-        "not-paired" -> "Pair this device to open a budget."
-        "invalid_pairing_code" -> "The pairing code didn’t work. Request a new code."
-        "invalid_device_credential" -> "Pair this device again to restore access."
+        "sign_in_required" -> "Sign in to open a budget."
+        "invalid_credentials" -> "The password didn’t match this Actual server."
+        "invalid_device_credential" -> "Sign in again to restore access."
         "bank_sync_failed" -> "Actual couldn’t sync your bank transactions. Check the bank connection and try again."
         "bank_sync_busy" -> "Bank sync is already running. Try again shortly."
         "duplicate_imported_id" -> "Two statement rows share a reference. Choose a column with unique values."
@@ -3002,7 +3075,7 @@ internal fun budgetApiErrorMessage(
         else ->
             when (httpStatus) {
                 400, 422 -> "Check the details and try again."
-                401 -> "Pair this device again to restore access."
+                401 -> "Sign in again to restore access."
                 403 -> "Ask the budget owner to let this device change the budget."
                 404 -> "This item is no longer available. Refresh the budget and try again."
                 408, 425, 429 -> "Tandem is temporarily unavailable. Try again shortly."

@@ -93,7 +93,7 @@ internal fun SettingsScreen(
             )
             DividerLine()
             ListRow(
-                "Server and paired device",
+                "Server and device",
                 leading = RowLeading.Icon(Lucide.Smartphone),
                 onClick = { navigation.open(AppRoute.SERVER_DEVICE) },
             )

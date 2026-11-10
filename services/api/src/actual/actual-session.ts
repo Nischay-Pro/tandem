@@ -1,4 +1,5 @@
 import { OperatorMessageError } from "../operator-message-error.js";
+import { getActualPrincipalId } from "../auth/actual-principal-context.js";
 
 export const SUPPORTED_ACTUAL_SERVER_VERSION = "26.11.0";
 export const ACTUAL_SESSION_OPERATION_TIMEOUT_MS = 5 * 60 * 1_000;
@@ -12,14 +13,28 @@ export class ActualSessionTokenRejectedError extends OperatorMessageError {
   }
 }
 
-export type ActualConnectionConfig = {
+interface ActualConnectionOptions {
   serverURL: string;
   dataDir: string;
   verbose?: boolean;
-} & (
-  | { password: string; sessionToken?: never }
-  | { sessionToken: string; password?: never }
-);
+}
+
+export type ActualConnectionConfig = ActualConnectionOptions &
+  (
+    | { password: string; sessionToken?: never }
+    | { sessionToken: string; password?: never }
+  );
+
+export interface ActualSessionConfig extends ActualConnectionOptions {
+  password?: string;
+  sessionToken?: string;
+  publicURL?: string;
+}
+
+export interface ActualPrincipalSessionResolver {
+  sessionToken(principalId: string): Promise<string | undefined>;
+  dataDir(principalId: string): Promise<string>;
+}
 
 export type ActualServerVersion =
   { version: string } | { error: "no-server" | "network-failure" };
@@ -125,6 +140,9 @@ function reportSecondaryFailure(failure: ActualSecondaryFailure): void {
 
 export class ActualSession {
   #sessionId = Symbol("ActualSession");
+  #config: ActualSessionConfig;
+  #baseConfig: ActualSessionConfig;
+  #activePrincipalId: string | undefined;
   #closing = false;
   #poisoned = false;
   #cleanupFailed = false;
@@ -140,17 +158,21 @@ export class ActualSession {
 
   constructor(
     private readonly client: ActualApiPort,
-    private readonly config: ActualConnectionConfig,
+    config: ActualSessionConfig,
     private readonly expectedVersion = SUPPORTED_ACTUAL_SERVER_VERSION,
     private readonly onSecondaryFailure: ActualSecondaryFailureHandler = reportSecondaryFailure,
     private readonly operationTimeoutMs = ACTUAL_SESSION_OPERATION_TIMEOUT_MS,
+    private readonly principalSessions?: ActualPrincipalSessionResolver,
   ) {
+    this.#config = { ...config };
+    this.#baseConfig = { ...config };
     if (!Number.isSafeInteger(operationTimeoutMs) || operationTimeoutMs < 1) {
       throw new Error("Actual operation timeout must be a positive integer");
     }
   }
 
   async start(): Promise<void> {
+    if (!this.#hasCredential()) return;
     this.#assertAcceptingWork();
     try {
       await enqueueActualApiOperation(() =>
@@ -159,6 +181,39 @@ export class ActualSession {
     } catch (error) {
       if (!(error instanceof ActualSessionTokenRejectedError)) throw error;
     }
+  }
+
+  async useSessionToken(sessionToken: string): Promise<void> {
+    if (sessionToken.trim().length === 0) {
+      throw new Error("Actual session token must not be empty");
+    }
+    await enqueueActualApiOperation(async () => {
+      if (this.#poisoned) {
+        throw new Error(
+          "Actual session is unavailable after an operation timed out; restart the API process",
+        );
+      }
+      if (this.#closing) this.#closing = false;
+      if (activeActualSession === this.#sessionId) {
+        await this.#withTimeout(() => this.client.shutdown());
+        activeActualSession = undefined;
+      }
+      this.#config = {
+        serverURL: this.#config.serverURL,
+        dataDir: this.#config.dataDir,
+        ...(this.#config.verbose === undefined
+          ? {}
+          : { verbose: this.#config.verbose }),
+        sessionToken,
+      };
+      this.#baseConfig = { ...this.#config };
+      this.#activePrincipalId = undefined;
+      this.#loadedBudgetSyncId = undefined;
+      this.#loadedBudgetWasOpenedWithPassword = false;
+      this.#closePromise = undefined;
+      this.#readinessErrorMessage = undefined;
+      await this.#withTimeout(() => this.#initialize());
+    });
   }
 
   get isReady(): boolean {
@@ -360,6 +415,14 @@ export class ActualSession {
         "Actual client cleanup previously failed; close the session before retrying",
       );
     }
+    const principalId = getActualPrincipalId();
+    if (principalId && this.principalSessions) {
+      await this.#selectPrincipal(principalId);
+    } else if (this.#activePrincipalId !== undefined) {
+      await this.#shutdownActivePrincipal();
+      this.#config = { ...this.#baseConfig };
+    }
+
     if (
       activeActualSession !== undefined &&
       activeActualSession !== this.#sessionId
@@ -372,10 +435,15 @@ export class ActualSession {
       return;
     }
 
+    if (!this.#hasCredential()) {
+      this.#readinessErrorMessage = "Sign in to Actual to load budgets.";
+      return;
+    }
+
     activeActualSession = this.#sessionId;
 
     try {
-      const initialized = await this.client.init(this.config);
+      const initialized = await this.client.init(this.#clientConfig());
 
       const server = await this.client.getServerVersion();
       if ("error" in server) {
@@ -416,9 +484,39 @@ export class ActualSession {
         });
       } else {
         activeActualSession = undefined;
+        this.#activePrincipalId = undefined;
       }
       throw reportedError;
     }
+  }
+
+  async #selectPrincipal(principalId: string): Promise<void> {
+    if (this.#activePrincipalId === principalId) return;
+    const [sessionToken, dataDir] = await Promise.all([
+      this.principalSessions?.sessionToken(principalId),
+      this.principalSessions?.dataDir(principalId),
+    ]);
+    if (!sessionToken || !dataDir) {
+      throw new ActualSessionTokenRejectedError();
+    }
+    if (activeActualSession === this.#sessionId) {
+      await this.#shutdownActivePrincipal();
+    }
+    this.#config = {
+      serverURL: this.#baseConfig.serverURL,
+      dataDir,
+      sessionToken,
+    };
+    this.#activePrincipalId = principalId;
+  }
+
+  async #shutdownActivePrincipal(): Promise<void> {
+    if (activeActualSession !== this.#sessionId) return;
+    await this.#withTimeout(() => this.client.shutdown());
+    activeActualSession = undefined;
+    this.#activePrincipalId = undefined;
+    this.#loadedBudgetSyncId = undefined;
+    this.#loadedBudgetWasOpenedWithPassword = false;
   }
 
   #attachSyncEventListener(initialized: unknown): void {
@@ -513,7 +611,7 @@ export class ActualSession {
 
   #mapCredentialFailure(error: unknown): unknown {
     if (
-      !("sessionToken" in this.config) ||
+      this.#config.sessionToken === undefined ||
       !isActualAuthenticationFailure(error)
     ) {
       return error;
@@ -524,6 +622,34 @@ export class ActualSession {
       console.error(ACTUAL_SESSION_TOKEN_REJECTED_MESSAGE);
     }
     return new ActualSessionTokenRejectedError();
+  }
+
+  #hasCredential(): boolean {
+    return Boolean(this.#config.password || this.#config.sessionToken);
+  }
+
+  #clientConfig(): ActualConnectionConfig {
+    if (this.#config.password && !this.#config.sessionToken) {
+      return {
+        serverURL: this.#config.serverURL,
+        dataDir: this.#config.dataDir,
+        ...(this.#config.verbose === undefined
+          ? {}
+          : { verbose: this.#config.verbose }),
+        password: this.#config.password,
+      };
+    }
+    if (this.#config.sessionToken && !this.#config.password) {
+      return {
+        serverURL: this.#config.serverURL,
+        dataDir: this.#config.dataDir,
+        ...(this.#config.verbose === undefined
+          ? {}
+          : { verbose: this.#config.verbose }),
+        sessionToken: this.#config.sessionToken,
+      };
+    }
+    throw new Error("Actual sign-in is required before accessing budgets");
   }
 
   #reportSecondaryFailure(failure: ActualSecondaryFailure): void {

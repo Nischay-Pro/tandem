@@ -34,7 +34,7 @@ class BudgetSystemNotificationsTest {
         BudgetSystemNotifications.initialize(context)
         BudgetSystemNotifications.syncFailed(context)
         SystemClock.sleep(1_100)
-        BudgetSystemNotifications.pairingRequired(context)
+        BudgetSystemNotifications.signInRequired(context)
         SystemClock.sleep(1_100)
         BudgetSystemNotifications.conflicts(context, count = 2)
         SystemClock.sleep(1_100)
@@ -46,12 +46,12 @@ class BudgetSystemNotificationsTest {
         assertNotification(active.getValue(4101).notification, "Budget sync needs attention")
         assertNotification(active.getValue(4102).notification, "Budget changes need review")
         assertNotification(active.getValue(4103).notification, "An edit wasn’t applied")
-        assertNotification(active.getValue(4104).notification, "Device pairing needs attention")
+        assertNotification(active.getValue(4104).notification, "Sign in to Tandem")
         val failureMessage = active.getValue(4101).notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
         assertEquals(true, failureMessage.contains("couldn’t"))
         assertEquals(false, failureMessage.contains("couldn't"))
-        val pairingMessage = active.getValue(4104).notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
-        assertEquals(true, pairingMessage.contains("new pairing code"))
+        val signInMessage = active.getValue(4104).notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
+        assertEquals(true, signInMessage.contains("Sign in again"))
     }
 
     private fun notificationManager() =

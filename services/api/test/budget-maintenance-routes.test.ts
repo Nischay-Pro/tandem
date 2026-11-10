@@ -72,7 +72,7 @@ async function createApi(
   );
   const deviceAuth = {
     authenticate,
-    createPairingCode: vi.fn(),
+    createDevice: vi.fn(),
     pair: vi.fn(),
     listDevicesForDevice: vi.fn(),
     revokeDeviceForDevice: vi.fn(),
@@ -453,7 +453,7 @@ describe("budget maintenance routes", () => {
     await missingJournalFake.app.close();
   });
 
-  it("requires a paired device and budget scope for bank sync", async () => {
+  it("requires an authenticated device and budget scope for bank sync", async () => {
     const fake = await createApi();
     const unauthorized = await fake.app.inject({
       method: "POST",

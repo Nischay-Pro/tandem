@@ -76,8 +76,8 @@ class BackgroundBudgetSyncWorker(
             val storedSession = credentialStore.read() ?: return Result.success()
             val sessionClient = TandemApiClient(allowInsecurePrivateNetwork = true)
             apiClient = sessionClient
-            val pairedDevice = sessionClient.restoreStoredSession(storedSession)
-            if (budgetId !in pairedDevice.budgetIds) return Result.success()
+            val authenticatedDevice = sessionClient.restoreStoredSession(storedSession)
+            if (budgetId !in authenticatedDevice.budgetIds) return Result.success()
             val budget = sessionClient.listBudgets().firstOrNull { it.budgetId == budgetId } ?: return Result.success()
             if (budget.isEncrypted) return Result.success()
 
@@ -100,7 +100,7 @@ class BackgroundBudgetSyncWorker(
                     apiClient?.let { client -> runCatching { client.forgetSession() } }
                     runCatching { credentialStore.clear() }
                     if (backgroundAlertEnabled(notificationPreferences?.get("syncReminders"))) {
-                        BudgetSystemNotifications.pairingRequired(applicationContext)
+                        BudgetSystemNotifications.signInRequired(applicationContext)
                     }
                     Result.success()
                 }

@@ -91,8 +91,8 @@ describe("durable write journal integration", () => {
     isolatedConnection.searchParams.set("options", searchPath);
     database = createPostgresDatabase(
       isolatedConnection.toString(),
-      process.env.PAIRING_CODE_HASH_KEY ??
-        "synthetic-pairing-code-hash-key-32-bytes",
+      process.env.AUTH_TOKEN_ENCRYPTION_KEY ??
+        "synthetic-session-token-encryption-key-32",
     );
     inspectionPool = new Pool({
       connectionString,
@@ -158,14 +158,11 @@ describe("durable write journal integration", () => {
       );
       const tables = await isolatedPool.query<{
         devices: string | null;
-        codes: string | null;
         operations: string | null;
       }>(`SELECT to_regclass('companion_devices') AS devices,
-        to_regclass('companion_pairing_codes') AS codes,
         to_regclass('companion_operations') AS operations`);
       expect(tables.rows[0]).toEqual({
         devices: null,
-        codes: null,
         operations: null,
       });
     } finally {
@@ -194,80 +191,6 @@ describe("durable write journal integration", () => {
     expect(() => validateMigrationOrder([migration], ["unexpected"])).toThrow(
       "ORDER mismatch",
     );
-  });
-
-  it("reverses and reapplies the journal retention migration", async () => {
-    const connectionString = process.env.DATABASE_URL;
-    const migration = MIGRATIONS[1];
-    if (!connectionString || !migration) {
-      throw new Error("Migration test configuration is incomplete");
-    }
-    const schemaName = `migration_retention_${randomUUID().replaceAll("-", "")}`;
-    await inspectionPool.query(`CREATE SCHEMA ${schemaName}`);
-    const isolatedPool = new Pool({
-      connectionString,
-      max: 2,
-      options: `-c search_path=${schemaName}`,
-    });
-
-    try {
-      const migrationsThroughRetention = MIGRATIONS.slice(0, 2);
-      const migrationOrder = migrationsThroughRetention.map(({ name }) => name);
-      await applyMigrations(
-        isolatedPool,
-        migrationsThroughRetention,
-        migrationOrder,
-      );
-      const before = await isolatedPool.query<{ column_name: string }>(
-        `SELECT column_name FROM information_schema.columns
-         WHERE table_schema = current_schema()
-           AND table_name = 'companion_operations'
-           AND column_name = 'payload_compacted_at'`,
-      );
-      expect(before.rows.map(({ column_name }) => column_name)).toEqual([
-        "payload_compacted_at",
-      ]);
-
-      const client = await isolatedPool.connect();
-      try {
-        await client.query("BEGIN");
-        await migration.down(client);
-        await client.query("DELETE FROM companion_migrations WHERE name = $1", [
-          migration.name,
-        ]);
-        await client.query("COMMIT");
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      } finally {
-        client.release();
-      }
-
-      const after = await isolatedPool.query<{ column_name: string }>(
-        `SELECT column_name FROM information_schema.columns
-         WHERE table_schema = current_schema()
-           AND table_name = 'companion_operations'
-           AND column_name = 'payload_compacted_at'`,
-      );
-      expect(after.rows).toEqual([]);
-      await applyMigrations(
-        isolatedPool,
-        migrationsThroughRetention,
-        migrationOrder,
-      );
-      const reapplied = await isolatedPool.query<{ column_name: string }>(
-        `SELECT column_name FROM information_schema.columns
-         WHERE table_schema = current_schema()
-           AND table_name = 'companion_operations'
-           AND column_name = 'payload_compacted_at'`,
-      );
-      expect(reapplied.rows.map(({ column_name }) => column_name)).toEqual([
-        "payload_compacted_at",
-      ]);
-    } finally {
-      await isolatedPool.end();
-      await inspectionPool.query(`DROP SCHEMA ${schemaName} CASCADE`);
-    }
   });
 
   it("runs and rolls back an ordered migration transactionally in an isolated schema", async () => {
@@ -317,7 +240,7 @@ describe("durable write journal integration", () => {
     }
   });
 
-  it("can reverse and reapply the point-release migration in an isolated schema", async () => {
+  it("can reverse and reapply the single initial schema in an isolated schema", async () => {
     const connectionString = process.env.DATABASE_URL;
     const migration = MIGRATIONS[0];
     if (!connectionString || !migration) {
@@ -340,11 +263,13 @@ describe("durable write journal integration", () => {
       const deviceTable = await isolatedPool.query<{
         relation: string | null;
       }>("SELECT to_regclass('companion_devices') AS relation");
-      const pairingTable = await isolatedPool.query<{
+      const actualSessionTable = await isolatedPool.query<{
         relation: string | null;
-      }>("SELECT to_regclass('companion_pairing_codes') AS relation");
+      }>("SELECT to_regclass('companion_actual_sessions') AS relation");
       expect(deviceTable.rows[0]?.relation).toBe("companion_devices");
-      expect(pairingTable.rows[0]?.relation).toBe("companion_pairing_codes");
+      expect(actualSessionTable.rows[0]?.relation).toBe(
+        "companion_actual_sessions",
+      );
 
       const client = await isolatedPool.connect();
       try {
@@ -368,11 +293,11 @@ describe("durable write journal integration", () => {
       const afterDevice = await isolatedPool.query<{
         relation: string | null;
       }>("SELECT to_regclass('companion_devices') AS relation");
-      const afterPairing = await isolatedPool.query<{
+      const afterActualSession = await isolatedPool.query<{
         relation: string | null;
-      }>("SELECT to_regclass('companion_pairing_codes') AS relation");
+      }>("SELECT to_regclass('companion_actual_sessions') AS relation");
       expect(afterDevice.rows[0]?.relation).toBeNull();
-      expect(afterPairing.rows[0]?.relation).toBeNull();
+      expect(afterActualSession.rows[0]?.relation).toBeNull();
       await applyMigrations(isolatedPool, [migration], [migration.name]);
       const reapplied = await isolatedPool.query<{ relation: string | null }>(
         "SELECT to_regclass('companion_operations') AS relation",
@@ -482,8 +407,8 @@ describe("durable write journal integration", () => {
     );
     const beforeRestart = createPostgresDatabase(
       isolatedConnection.toString(),
-      process.env.PAIRING_CODE_HASH_KEY ??
-        "synthetic-pairing-code-hash-key-32-bytes",
+      process.env.AUTH_TOKEN_ENCRYPTION_KEY ??
+        "synthetic-session-token-encryption-key-32",
     );
     try {
       await beforeRestart.journal.enqueue(input);
@@ -493,8 +418,8 @@ describe("durable write journal integration", () => {
 
     const afterRestart = createPostgresDatabase(
       isolatedConnection.toString(),
-      process.env.PAIRING_CODE_HASH_KEY ??
-        "synthetic-pairing-code-hash-key-32-bytes",
+      process.env.AUTH_TOKEN_ENCRYPTION_KEY ??
+        "synthetic-session-token-encryption-key-32",
     );
     try {
       await expect(

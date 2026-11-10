@@ -80,8 +80,8 @@ private suspend fun runSelectedBudgetBackgroundSync(): IosBackgroundSyncAlerts {
         val storedSession = credentialStore.read() ?: return IosBackgroundSyncAlerts(taskSucceeded = true)
         val sessionClient = TandemApiClient()
         apiClient = sessionClient
-        val pairedDevice = sessionClient.restoreStoredSession(storedSession)
-        if (budgetId !in pairedDevice.budgetIds) return IosBackgroundSyncAlerts(taskSucceeded = true)
+        val authenticatedDevice = sessionClient.restoreStoredSession(storedSession)
+        if (budgetId !in authenticatedDevice.budgetIds) return IosBackgroundSyncAlerts(taskSucceeded = true)
         val budget =
             sessionClient.listBudgets().firstOrNull { it.budgetId == budgetId }
                 ?: return IosBackgroundSyncAlerts(taskSucceeded = true)

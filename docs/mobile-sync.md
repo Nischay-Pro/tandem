@@ -32,9 +32,9 @@ sequenceDiagram
   participant API as Tandem API
   participant Actual as Actual Budget
   participant Room
-  Person->>App: Pair device and choose budget
-  App->>API: Pair, then list authorized budgets
-  API-->>App: Authorized budget list
+  Person->>App: Sign in to Actual
+  App->>API: Sign in and request visible budgets
+  API-->>App: Device token and budget list
   opt Encrypted budget
     Person->>App: Enter budget password
   end
@@ -48,8 +48,8 @@ sequenceDiagram
 
 After a successful first sync, Tandem remembers the selected budget locally.
 On later launches it opens that cached budget immediately, even if Tandem or
-Actual is unreachable. Pairing is needed again only when remote access is
-required and the server has explicitly rejected the saved device credential.
+Actual is unreachable. Sign in again only if the saved device credential has
+expired, been revoked, or cleared from the device.
 
 ## Later refreshes
 
@@ -147,12 +147,13 @@ multi-instance invalidation keeps the visible screens current.
 
 ## Credentials and encryption
 
-| Item              | Handling                                                                                        |
-| ----------------- | ----------------------------------------------------------------------------------------------- |
-| Pairing code      | Used once for pairing; never persisted                                                          |
-| Device credential | Android stores an AES-GCM record with its key in Keystore; iOS uses a device-only Keychain item |
-| Budget password   | Sent only on requests that need it; never stored in Room or the outbox                          |
-| Cached budget     | Stored locally so the selected budget remains readable offline                                  |
+| Item               | Handling                                                                                        |
+| ------------------ | ----------------------------------------------------------------------------------------------- |
+| Actual password    | Sent for sign-in; never stored on the device or server                                          |
+| OpenID return code | One-use and short-lived; exchanged immediately for a device credential                          |
+| Device credential  | Android stores an AES-GCM record with its key in Keystore; iOS uses a device-only Keychain item |
+| Budget password    | Sent only on requests that need it; never stored in Room or the outbox                          |
+| Cached budget      | Stored locally so the selected budget remains readable offline                                  |
 
 Actual-encrypted budgets are decrypted by Actual's API for Tandem's server-side
 projection and the mobile cache. Actual's encryption therefore does not protect

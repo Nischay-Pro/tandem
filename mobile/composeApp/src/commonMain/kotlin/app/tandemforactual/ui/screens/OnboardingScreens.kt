@@ -6,7 +6,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,9 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
@@ -35,9 +32,6 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.isLocalHttpHost
@@ -157,7 +151,7 @@ internal fun ServerAddressScreen(
                 )
             }
         }
-        PrimaryButton("Continue", enabled = serverAddressIsValid(state.serverUrl)) { navigation.open(AppRoute.PAIRING_CODE) }
+        PrimaryButton("Continue", enabled = serverAddressIsValid(state.serverUrl)) { navigation.open(AppRoute.SIGN_IN) }
     }
 }
 
@@ -222,67 +216,64 @@ internal fun serverAddressMayBeInsecure(value: String): Boolean {
 }
 
 @Composable
-internal fun PairingCodeScreen(
+internal fun SignInScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
-    navigation: AppNavigation,
-    onPairDevice: () -> Unit,
-    onRetryStoredSession: () -> Unit,
-    pairingCompleted: Boolean,
+    onSignIn: () -> Unit,
+    onStartOpenIdSignIn: () -> Unit,
 ) {
-    val palette = tandemPalette
+    LaunchedEffect(state.serverUrl) {
+        state.actualPassword = ""
+        mobileSession.loadActualLoginMethods(state.serverUrl)
+    }
     PageColumn {
-        if (pairingCompleted) {
-            Spacer(Modifier.height(24.dp))
-            Box(Modifier.size(60.dp).clip(CircleShape).background(palette.accentSurface), contentAlignment = Alignment.Center) {
-                Text("✓", color = palette.accent, fontSize = TandemTypography.heroTitle, fontWeight = FontWeight.Bold)
+        Heading("Sign in to Actual")
+        when {
+            mobileSession.isLoadingLoginMethods -> {
+                TandemLoadingIndicator(Modifier.size(24.dp), color = tandemPalette.accent, strokeWidth = 2.dp)
             }
-            Heading("Device paired")
-            mobileSession.pairedDevice?.let { device ->
-                SurfaceCard {
-                    Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-                        LabelText("Device access")
-                        BodyText(
-                            "This device can open ${device.budgetIds.size} budget${if (device.budgetIds.size == 1) "" else "s"}.",
-                        )
-                    }
+            mobileSession.actualLoginMethods?.bootstrapped == false -> {
+                InlineMessage("Set up your Actual server before signing in.", InlineMessageKind.INFO)
+            }
+            mobileSession.actualLoginMethods != null -> {
+                val loginMethods = mobileSession.actualLoginMethods
+                val passwordActive =
+                    loginMethods?.availableLoginMethods?.any { it.method == "password" && it.active }
+                        ?: (loginMethods?.loginMethod == "password")
+                val openIdActive =
+                    loginMethods?.availableLoginMethods?.any { it.method == "openid" && it.active }
+                        ?: (loginMethods?.loginMethod == "openid")
+                if (passwordActive) {
+                    TextFieldCard(
+                        "Actual password",
+                        state.actualPassword,
+                        { state.actualPassword = it },
+                        TextFieldOptions(placeholder = "Password", isSecret = true),
+                    )
+                    InfoBubble("Your password is used to sign in and isn’t saved on this device.")
+                    PrimaryButton(
+                        if (mobileSession.isSigningIn) "Signing in" else "Sign in",
+                        enabled = !mobileSession.isSigningIn && state.actualPassword.isNotBlank(),
+                        onClick = onSignIn,
+                    )
+                }
+                if (openIdActive) {
+                    SecondaryButton(
+                        if (mobileSession.isSigningIn) "Opening sign-in" else "Continue with OpenID",
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !mobileSession.isSigningIn,
+                        onClick = onStartOpenIdSignIn,
+                    )
+                }
+                mobileSession.signInError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
+                mobileSession.credentialStorageError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
+                if (!passwordActive && !openIdActive) {
+                    InlineMessage("This Actual server’s sign-in method isn’t supported yet.", InlineMessageKind.INFO)
                 }
             }
-            mobileSession.budgetError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
-            PrimaryButton("Choose a budget", enabled = mobileSession.pairedDevice != null) {
-                navigation.reset(AppRoute.BUDGET_CHOOSER)
-            }
-        } else {
-            TextFieldCard(
-                "Pairing code",
-                state.pairingCode,
-                { state.pairingCode = sanitizePairingCodeInput(it) },
-                TextFieldOptions(
-                    placeholder = "For example, 4DF7-J1M9",
-                    keyboardOptions =
-                        KeyboardOptions(
-                            capitalization = KeyboardCapitalization.Characters,
-                            autoCorrectEnabled = false,
-                            keyboardType = KeyboardType.Ascii,
-                        ),
-                    textAlign = TextAlign.Center,
-                ),
-            )
-            InfoBubble("This one-time code expires in five minutes and isn’t saved.")
-            mobileSession.pairingError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
-            mobileSession.credentialStorageError?.let { error ->
-                InlineMessage(error, InlineMessageKind.ERROR)
-                SecondaryButton(
-                    if (mobileSession.isRestoringStoredSession) "Checking storage" else "Try again",
-                    enabled = !mobileSession.isRestoringStoredSession,
-                    onClick = onRetryStoredSession,
-                )
-            }
-            PrimaryButton(
-                if (mobileSession.isPairing) "Pairing" else "Pair this device",
-                enabled = !mobileSession.isPairing && state.pairingCode.filter(Char::isLetterOrDigit).length == 8,
-                onClick = onPairDevice,
-            )
+            mobileSession.signInError != null ->
+                InlineMessage(mobileSession.signInError.orEmpty(), InlineMessageKind.ERROR)
+            else -> InlineMessage("This Actual server’s sign-in method isn’t supported yet.", InlineMessageKind.INFO)
         }
     }
 }
@@ -360,11 +351,11 @@ internal fun BudgetChooserScreen(
             mobileSession.budgets.isEmpty() -> {
                 SurfaceCard {
                     Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                        LabelText("Pair this device first")
+                        LabelText("Sign in first")
                         BodyText("Connect this device to your Tandem server to choose a budget.")
                     }
                 }
-                SecondaryButton("Pair a device") { navigation.open(AppRoute.SERVER_ADDRESS) }
+                SecondaryButton("Sign in") { navigation.open(AppRoute.SERVER_ADDRESS) }
             }
         }
         mobileSession.budgetError?.takeIf { selectableBudgets.isNotEmpty() }?.let { error ->

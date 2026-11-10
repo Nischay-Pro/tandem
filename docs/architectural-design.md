@@ -14,7 +14,7 @@ with an Actual server. Kotlin and Swift are not supported API runtimes.
 Tandem's Android and iOS apps share a Kotlin Multiplatform client. Keeping the
 official Actual package in one small Node.js service means the two apps can
 share the same network and data code without each implementing Actual's
-sync protocol. The service is more than a proxy: it pairs devices, limits
+sync protocol. The service is more than a proxy: it signs in through Actual, limits
 each device to authorized budgets, turns supported API reads into snapshots
 and a change feed, and serializes transaction writes so it can detect and
 recover from uncertain results and surface conflicts.
@@ -22,7 +22,7 @@ recover from uncertain results and surface conflicts.
 | Decision                                                  | Why it fits Tandem                                                              | Cost                                                                    |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | Use Actual's official API in the Tandem service           | Uses the supported Actual integration and gives Android and iOS one shared path | Remote sync and writes require the Tandem service and the Actual server |
-| Keep pairing, budget scopes, and write recovery in Tandem | Access checks and conflict behavior have one implementation                     | Tandem's service and storage become trusted with readable budget data   |
+| Keep sign-in, budget scopes, and write recovery in Tandem | Access checks and conflict behavior have one implementation                     | Tandem's service and storage become trusted with readable budget data   |
 | Cache snapshots in Room on each phone                     | Previously synced budgets stay readable offline                                 | The phone stores a readable local copy                                  |
 
 Actual's synchronization system uses CRDT techniques for multi-device changes.
@@ -34,10 +34,10 @@ encrypted sync, use Actuali.
 
 ## Unencrypted and encrypted budgets
 
-The diagrams compare both paths side by side. The Actual server password is
-configured on the Tandem service so it can connect to Actual. An encrypted
-budget has a second password: the person enters it in Tandem, which passes it
-to Actual's API to unlock that budget.
+The diagrams compare both paths side by side. Each person signs in to Actual
+from Tandem, and the API keeps that account's session token encrypted on the
+server. An encrypted budget has a second password: the person enters it in
+Tandem, which passes it to Actual's API to unlock that budget.
 
 ```mermaid
 flowchart LR

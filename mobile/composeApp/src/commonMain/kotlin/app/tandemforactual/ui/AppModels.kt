@@ -107,7 +107,7 @@ internal enum class AppRoute(
     STARTUP("Tandem"),
     WELCOME("Tandem"),
     SERVER_ADDRESS("Server address"),
-    PAIRING_CODE("Pair this device"),
+    SIGN_IN("Sign in"),
     BUDGET_CHOOSER("Budgets"),
     UNLOCK_BUDGET("Unlock budget"),
     FIRST_SYNC("Preparing budget"),
@@ -137,7 +137,7 @@ internal enum class AppRoute(
     APPEARANCE("Appearance"),
     BUDGET_PREFERENCES("Budget preferences"),
     SYNC_PREFERENCES("Sync preferences"),
-    SERVER_DEVICE("Server and paired device"),
+    SERVER_DEVICE("Server and device"),
     SECURITY_PRIVACY("Security and privacy"),
     NOTIFICATIONS("Notifications"),
     LOCAL_DATA("Local data and storage"),
@@ -403,9 +403,6 @@ internal fun formatLiveDate(value: String?): String {
         value ?: "Undated"
     }
 }
-
-internal fun sanitizePairingCodeInput(value: String): String =
-    value.uppercase().filter { it in 'A'..'Z' || it in '0'..'9' || it == '-' }.take(9)
 
 internal fun encodeCachedBudgetCatalog(budgets: List<BudgetCatalogItem>): String =
     JsonArray(

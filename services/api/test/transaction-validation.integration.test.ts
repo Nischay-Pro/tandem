@@ -59,8 +59,8 @@ describe("transaction request validation integration", () => {
     );
     database = createPostgresDatabase(
       isolatedConnection.toString(),
-      process.env.PAIRING_CODE_HASH_KEY ??
-        "synthetic-pairing-code-hash-key-32-bytes",
+      process.env.AUTH_TOKEN_ENCRYPTION_KEY ??
+        "synthetic-session-token-encryption-key-32",
     );
     await database.migrate();
   }, 30_000);
@@ -123,17 +123,11 @@ describe("transaction request validation integration", () => {
       reconciler,
       database!.journal,
     );
-    const pairing = await database!.deviceAuth.createPairingCode({
+    const signedInDevice = await database!.deviceAuth.createDevice({
       principalId: `validation-owner-${randomUUID()}`,
       budgetIds: ["synthetic-budget"],
-    });
-    const pairedDevice = await database!.deviceAuth.pair({
-      code: pairing.code,
       deviceName: "Validation test device",
     });
-    if (!pairedDevice) {
-      throw new Error("Synthetic pairing code was not accepted");
-    }
 
     const app = await buildApiApp(
       { ping: async () => undefined, close: async () => undefined },
@@ -153,7 +147,7 @@ describe("transaction request validation integration", () => {
           method: "POST",
           url: "/api/v1/budgets/synthetic-budget/transactions/synthetic-transaction/operations",
           headers: {
-            authorization: `Bearer ${pairedDevice.accessToken}`,
+            authorization: `Bearer ${signedInDevice.accessToken}`,
             "idempotency-key": testCase.idempotencyKey,
           },
           payload: {
@@ -201,7 +195,7 @@ describe("transaction request validation integration", () => {
           method: "POST" as const,
           url: `/api/v1/budgets/synthetic-budget/transactions/tandem:${randomUUID()}/operations`,
           headers: {
-            authorization: `Bearer ${pairedDevice.accessToken}`,
+            authorization: `Bearer ${signedInDevice.accessToken}`,
             "idempotency-key": `invalid-reference-${index}`,
           },
           payload: {

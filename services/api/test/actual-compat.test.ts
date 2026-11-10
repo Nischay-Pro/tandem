@@ -33,12 +33,12 @@ import { runApi } from "../src/main.js";
 import type { ShutdownSignal } from "../src/server.js";
 
 const serverURL = process.env.ACTUAL_SERVER_URL;
-const serverPassword = process.env.ACTUAL_SERVER_PASSWORD;
+const serverPassword = process.env.ACTUAL_COMPAT_TEST_PASSWORD;
 const firstDataDir = process.env.ACTUAL_API_DATA_DIR;
 const databaseUrl = process.env.DATABASE_URL;
-const pairingCodeHashKey =
-  process.env.PAIRING_CODE_HASH_KEY ??
-  "synthetic-pairing-code-hash-key-32-bytes";
+const authTokenEncryptionKey =
+  process.env.AUTH_TOKEN_ENCRYPTION_KEY ??
+  "synthetic-session-token-encryption-key-32";
 const compatibilityTestEnabled = Boolean(
   serverURL && serverPassword && firstDataDir && databaseUrl,
 );
@@ -106,6 +106,29 @@ async function bootstrapDisposableServer(
   }
 }
 
+async function loginCompatibilitySessionToken(
+  url: string,
+  password: string,
+): Promise<string> {
+  const response = await fetch(new URL("/account/login", url), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ loginMethod: "password", password }),
+  });
+  if (!response.ok) {
+    throw new Error("Actual did not issue a compatibility session token");
+  }
+  const login = (await response.json()) as {
+    token?: unknown;
+    data?: { token?: unknown };
+  };
+  const token = login.data?.token ?? login.token;
+  if (typeof token !== "string" || token.length === 0) {
+    throw new Error("Actual returned no compatibility session token");
+  }
+  return token;
+}
+
 describe.skipIf(!compatibilityTestEnabled)(
   "Actual Budget 26.11.0 compatibility",
   () => {
@@ -126,7 +149,7 @@ describe.skipIf(!compatibilityTestEnabled)(
       compatibilityDatabaseUrl = isolatedUrl.toString();
       database = createPostgresDatabase(
         isolatedUrl.toString(),
-        pairingCodeHashKey,
+        authTokenEncryptionKey,
       );
       await database.migrate();
     }, 30_000);
@@ -158,29 +181,10 @@ describe.skipIf(!compatibilityTestEnabled)(
         active: true,
       });
 
-      const loginResponse = await fetch(new URL("/account/login", serverURL), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          loginMethod: "password",
-          password: serverPassword,
-        }),
-      });
-      if (!loginResponse.ok) {
-        throw new Error(
-          "Actual did not issue a disposable compatibility session token",
-        );
-      }
-      const login = (await loginResponse.json()) as {
-        token?: unknown;
-        data?: { token?: unknown };
-      };
-      const sessionToken = login.data?.token ?? login.token;
-      if (typeof sessionToken !== "string" || sessionToken.length === 0) {
-        throw new Error(
-          "Actual returned no disposable compatibility session token",
-        );
-      }
+      const sessionToken = await loginCompatibilitySessionToken(
+        serverURL,
+        serverPassword,
+      );
 
       const tokenDataDir = path.join(
         firstDataDir,
@@ -1460,17 +1464,11 @@ describe.skipIf(!compatibilityTestEnabled)(
         if (!compatibilityDatabaseUrl) {
           throw new Error("Isolated database URL was not initialized");
         }
-        const runtimePairing = await database.deviceAuth.createPairingCode({
+        const runtimeDevice = await database.deviceAuth.createDevice({
           principalId: "actual-production-runtime-owner",
           budgetIds: [budget.groupId],
-        });
-        const runtimeDevice = await database.deviceAuth.pair({
-          code: runtimePairing.code,
           deviceName: "Synthetic runtime client",
         });
-        if (!runtimeDevice) {
-          throw new Error("Could not pair the production runtime test device");
-        }
         const runtimeAuthorizationHeaders = {
           authorization: `Bearer ${runtimeDevice.accessToken}`,
         };
@@ -1480,9 +1478,9 @@ describe.skipIf(!compatibilityTestEnabled)(
         const productionApp = await runApi(
           {
             DATABASE_URL: compatibilityDatabaseUrl,
-            PAIRING_CODE_HASH_KEY: pairingCodeHashKey,
+            AUTH_TOKEN_ENCRYPTION_KEY: authTokenEncryptionKey,
             ACTUAL_SERVER_URL: serverURL,
-            ACTUAL_SERVER_PASSWORD: serverPassword,
+            ACTUAL_SESSION_TOKEN: sessionToken,
             ACTUAL_API_DATA_DIR: runtimeDataDir,
             HOST: "127.0.0.1",
             PORT: String(await findAvailablePort()),
@@ -1988,31 +1986,27 @@ describe.skipIf(!compatibilityTestEnabled)(
         throw new Error("Encrypted Actual budget ID is unavailable");
       }
 
-      const pairing = await database.deviceAuth.createPairingCode({
+      const device = await database.deviceAuth.createDevice({
         principalId: `encrypted-owner-${randomUUID()}`,
         budgetIds: [encryptedBudgetId],
-      });
-      const device = await database.deviceAuth.pair({
-        code: pairing.code,
         deviceName: "Synthetic encrypted compatibility client",
       });
-      if (!device) {
-        throw new Error(
-          "Could not pair the encrypted compatibility test client",
-        );
-      }
 
       const apiDataDir = path.join(
         firstDataDir,
         `encrypted-api-${randomUUID()}`,
       );
+      const sessionToken = await loginCompatibilitySessionToken(
+        serverURL,
+        serverPassword,
+      );
       await mkdir(apiDataDir, { recursive: true });
       const encryptedApp = await runApi(
         {
           DATABASE_URL: compatibilityDatabaseUrl,
-          PAIRING_CODE_HASH_KEY: pairingCodeHashKey,
+          AUTH_TOKEN_ENCRYPTION_KEY: authTokenEncryptionKey,
           ACTUAL_SERVER_URL: serverURL,
-          ACTUAL_SERVER_PASSWORD: serverPassword,
+          ACTUAL_SESSION_TOKEN: sessionToken,
           ACTUAL_API_DATA_DIR: apiDataDir,
           HOST: "127.0.0.1",
           PORT: String(await findAvailablePort()),

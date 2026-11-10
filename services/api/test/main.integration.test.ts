@@ -5,7 +5,6 @@ import { Pool } from "pg";
 import { reportProcessFailure, runApi, runProductionApi } from "../src/main.js";
 import type { Database } from "../src/database.js";
 import { createPostgresDatabase } from "../src/database.js";
-import { runPairingCommand } from "../src/auth/pairing-cli.js";
 import type { ShutdownSignal } from "../src/server.js";
 import { OperatorMessageError } from "../src/operator-message-error.js";
 
@@ -23,7 +22,7 @@ const actualApi = vi.hoisted(() => ({
   sync: vi.fn(async () => undefined),
   shutdown: vi.fn(async () => undefined),
 }));
-const testPairingCodeHashKey = "synthetic-pairing-code-hash-key-32-bytes";
+const testAuthTokenEncryptionKey = "synthetic-session-token-encryption-key-32";
 
 vi.mock("@actual-app/api", () => actualApi);
 
@@ -115,7 +114,7 @@ describe("API bootstrap integration", () => {
     const port = await findAvailablePort();
     const environment = {
       DATABASE_URL: isolatedDatabaseUrl,
-      PAIRING_CODE_HASH_KEY: testPairingCodeHashKey,
+      AUTH_TOKEN_ENCRYPTION_KEY: testAuthTokenEncryptionKey,
       HOST: "127.0.0.1",
       PORT: String(port),
     };
@@ -147,33 +146,43 @@ describe("API bootstrap integration", () => {
     const port = await findAvailablePort();
     const environment = {
       DATABASE_URL: isolatedDatabaseUrl,
-      PAIRING_CODE_HASH_KEY: testPairingCodeHashKey,
+      AUTH_TOKEN_ENCRYPTION_KEY: testAuthTokenEncryptionKey,
       HOST: "127.0.0.1",
       PORT: String(port),
       ACTUAL_SERVER_URL: "http://actual.example",
-      ACTUAL_SERVER_PASSWORD: "synthetic-actual-server-password",
       ACTUAL_API_DATA_DIR: `/tmp/tandem-main-${randomUUID()}`,
     };
     actualApi.getBudgets.mockClear();
+    const actualFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const endpoint = new URL(input.toString());
+      const body =
+        endpoint.pathname === "/account/validate"
+          ? { status: "ok", data: { userId: "synthetic-actual-user" } }
+          : { status: "ok", data: { token: "synthetic-actual-session-token" } };
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", actualFetch);
     const app = await runApi(environment, createPostgresDatabase, () => {});
 
     try {
-      const pairing = await runPairingCommand(["--all-budgets"], {
-        DATABASE_URL: isolatedDatabaseUrl,
-        PAIRING_CODE_HASH_KEY: testPairingCodeHashKey,
-      });
-      const pairedResponse = await app.inject({
+      const signInResponse = await app.inject({
         method: "POST",
-        url: "/api/v1/auth/pair",
-        payload: { code: pairing.code, deviceName: "Synthetic test phone" },
+        url: "/api/v1/auth/login",
+        payload: {
+          password: "synthetic-actual-server-password",
+          deviceName: "Synthetic test phone",
+        },
       });
-      expect(pairedResponse.statusCode).toBe(201);
-      const paired = pairedResponse.json() as { accessToken: string };
+      expect(signInResponse.statusCode).toBe(201);
+      const signedIn = signInResponse.json() as { accessToken: string };
 
       const response = await app.inject({
         method: "GET",
         url: "/api/v1/budgets",
-        headers: { authorization: `Bearer ${paired.accessToken}` },
+        headers: { authorization: `Bearer ${signedIn.accessToken}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -186,9 +195,10 @@ describe("API bootstrap integration", () => {
           },
         ],
       });
-      expect(actualApi.getBudgets).toHaveBeenCalledOnce();
+      expect(actualApi.getBudgets).toHaveBeenCalledTimes(2);
     } finally {
       await app.close();
+      vi.unstubAllGlobals();
     }
   });
 
@@ -226,7 +236,7 @@ describe("API bootstrap integration", () => {
       const startup = runProductionApi(
         {
           DATABASE_URL: isolatedUrl.toString(),
-          PAIRING_CODE_HASH_KEY: testPairingCodeHashKey,
+          AUTH_TOKEN_ENCRYPTION_KEY: testAuthTokenEncryptionKey,
           HOST: "127.0.0.1",
           PORT: String(port),
         },
@@ -240,7 +250,7 @@ describe("API bootstrap integration", () => {
       expect(error).toBeInstanceOf(OperatorMessageError);
       expect(consoleError).toHaveBeenCalledWith("API startup failed", {
         message: expect.stringContaining(
-          "Tandem migration history mismatch at position 1: expected 20261101155148-companion-schema-v2, found 20261101000000-older-schema",
+          "Tandem migration history mismatch at position 1: expected 20261101000000-initial-schema, found 20261101000000-older-schema",
         ),
       });
     } finally {
@@ -278,17 +288,18 @@ describe("API bootstrap integration", () => {
       journal: {
         expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
       },
-      deviceAuth: {},
+      deviceAuth: { authenticate: async () => undefined },
     } as unknown as Database;
     const port = await findAvailablePort();
     const app = await runApi(
       {
         DATABASE_URL: "postgres://local/test",
-        PAIRING_CODE_HASH_KEY: testPairingCodeHashKey,
+        AUTH_TOKEN_ENCRYPTION_KEY: testAuthTokenEncryptionKey,
         HOST: "127.0.0.1",
         PORT: String(port),
         ACTUAL_SERVER_URL: "http://127.0.0.1:5006",
-        ACTUAL_SERVER_PASSWORD: "synthetic-server-password",
+        ACTUAL_PUBLIC_URL: "https://tandem.example",
+        ACTUAL_SESSION_TOKEN: "synthetic-server-session-token",
         ACTUAL_API_DATA_DIR: "/tmp/tandem-runtime-test",
       },
       () => database,
@@ -298,7 +309,7 @@ describe("API bootstrap integration", () => {
     try {
       expect(actualApi.init).toHaveBeenCalledWith({
         serverURL: "http://127.0.0.1:5006",
-        password: "synthetic-server-password",
+        sessionToken: "synthetic-server-session-token",
         dataDir: "/tmp/tandem-runtime-test",
       });
       expect(actualApi.getServerVersion).toHaveBeenCalledOnce();
@@ -356,7 +367,7 @@ describe("API bootstrap integration", () => {
     const app = await runApi(
       {
         DATABASE_URL: isolatedDatabaseUrl,
-        PAIRING_CODE_HASH_KEY: testPairingCodeHashKey,
+        AUTH_TOKEN_ENCRYPTION_KEY: testAuthTokenEncryptionKey,
         HOST: "127.0.0.1",
         PORT: String(port),
         ACTUAL_SERVER_URL: "http://actual.example",
@@ -397,7 +408,7 @@ describe("API bootstrap integration", () => {
     const port = await findAvailablePort();
     const environment = {
       DATABASE_URL: isolatedDatabaseUrl,
-      PAIRING_CODE_HASH_KEY: testPairingCodeHashKey,
+      AUTH_TOKEN_ENCRYPTION_KEY: testAuthTokenEncryptionKey,
       HOST: "127.0.0.1",
       PORT: String(port),
     };

@@ -19,34 +19,25 @@ mkdir -m 700 -p deploy/compose/secrets
 postgres_password="$(openssl rand -hex 32)"
 printf '%s' "$postgres_password" > deploy/compose/secrets/postgres_password
 printf 'postgresql://tandem:%s@postgres:5432/tandem' "$postgres_password" > deploy/compose/secrets/database_url
-openssl rand -hex 32 > deploy/compose/secrets/pairing_code_hash_key
-: > deploy/compose/secrets/actual_server_password
+openssl rand -hex 32 > deploy/compose/secrets/auth_token_encryption_key
 chmod 444 deploy/compose/secrets/*
 unset postgres_password
 ```
 
 Compose secrets are mounted read-only inside the containers. The `.env` file
-contains their paths, not their values; the API reads the database URL, pairing
-key, and optional Actual credential from those mounted files. Keep the secrets
+contains their paths, not their values; the API reads the database URL and
+auth encryption key from those mounted files. Keep the secrets
 directory private (`chmod 700 deploy/compose/secrets`). The `0444` file mode
 lets the unprivileged API process read the bind-mounted files even when the
-deployment host uses a different numeric user ID. If Actual requires a
-password, write it to `actual_server_password` without a trailing newline and
-restore that file's mode to `0444`; leave it empty when Actual integration is
-disabled. Do not change the secret paths in `.env` unless you move these files.
-
-For an Actual server using OpenID sign-in, put the Actual session token in the
-configured Actual credential file. In `deploy/compose/production.yml`, replace
-`ACTUAL_SERVER_PASSWORD_FILE` in the API environment with
-`ACTUAL_SESSION_TOKEN_FILE`, keeping the same `/run/secrets/actual_server_password`
-path. Do not configure both variables. Obtain the token through an authenticated
-Actual OpenID browser sign-in; it belongs to the Actual session, not the
-identity provider. When Actual rejects it, replace the file and restart Tandem.
+deployment host uses a different numeric user ID. Actual account passwords are
+entered in Tandem and are not deployment secrets. Do not change the secret
+paths in `.env` unless you move these files.
 
 Set `CHANGE_FEED_EPOCH` in `deploy/compose/.env` to a random stable value. Keep
 it unchanged for ordinary restarts. Use a new value after restoring a database
-backup so mobile devices discard cursors from the pre-restore history. Leave
-`ACTUAL_SERVER_URL` empty to start without Actual integration. When enabled,
+backup so mobile devices discard cursors from the pre-restore history. Set
+`ACTUAL_SERVER_URL` to the Actual service address. Set `ACTUAL_PUBLIC_URL` to
+the public Tandem URL to enable OpenID sign-in. When enabled,
 the server release must match
 [`docs/actual-compatibility.md`](../docs/actual-compatibility.md).
 
@@ -69,7 +60,7 @@ refuses an empty value. Do not trust all forwarded headers. Keep
 TLS termination and the Actual server's existing proxy settings in the
 existing Nginx site configuration.
 The example also limits the API to 600 requests per minute per client address
-and pairing attempts to 10 per minute. Keep the API origin private so clients
+and sign-in attempts to 10 per minute. Keep the API origin private so clients
 cannot bypass the reverse-proxy limits. The API location compresses JSON
 responses of at least 1 KiB when the client supports gzip.
 
@@ -94,16 +85,8 @@ are logged by error type, without connection strings. Neither the database nor
 API ports are published on the host. Allow resource monitoring and persistent
 volume monitoring at the Docker host level.
 
-Generate one-time device codes from the API container. Grant the narrowest
-budget scope needed; pairing codes are single-use and expire after five
-minutes.
-
-```sh
-docker compose --project-directory "$PWD" \
-  --env-file deploy/compose/.env \
-  -f deploy/compose/production.yml exec api \
-  node dist-cli/bin/pairing-cli.js --budget-id '<Actual budget sync ID>'
-```
+In Tandem, enter the public API address and sign in with the Actual account.
+Available budgets come from that account's Actual budget catalog.
 
 ## Backups and restore
 
@@ -126,7 +109,7 @@ separate from the backup files. Do not put it in `.env`, the backup directory,
 or the same storage account as the backups. Back up `deploy/compose/.env` and
 `deploy/compose/secrets/` separately in an approved secrets manager. The `.env`
 contains the change-feed epoch and secret file paths; the secret files contain
-the database and pairing credentials.
+the database password and auth encryption key.
 
 Run a backup to a protected prefix in a directory accessible only to the
 operator; output files are created with mode 600. The API is briefly stopped while its Actual

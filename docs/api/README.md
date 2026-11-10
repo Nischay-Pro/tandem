@@ -13,107 +13,90 @@ definitions and is part of `pnpm check:all`.
 
 ## Implemented endpoints
 
-| Method   | Path                                                                 | Purpose                                                  |
-| -------- | -------------------------------------------------------------------- | -------------------------------------------------------- |
-| `GET`    | `/api/v1/health/live`                                                | Liveness check for the API process.                      |
-| `GET`    | `/api/v1/health/ready`                                               | Check readiness of configured services.                  |
-| `GET`    | `/api/v1/openapi.json`                                               | Generated API contract.                                  |
-| `POST`   | `/api/v1/auth/pair`                                                  | Exchange a one-time pairing code for a device token.     |
-| `GET`    | `/api/v1/auth/me`                                                    | Return the authenticated device and its budget scope.    |
-| `GET`    | `/api/v1/devices`                                                    | List devices paired to the same principal.               |
-| `DELETE` | `/api/v1/devices/{deviceId}`                                         | Revoke a paired device token.                            |
-| `GET`    | `/api/v1/budgets`                                                    | List Actual budgets visible to the authenticated device. |
-| `GET`    | `/api/v1/budgets/{budgetId}/snapshot`                                | Refresh and read a complete budget snapshot.             |
-| `GET`    | `/api/v1/budgets/{budgetId}/changes`                                 | Read generation-aware pages of budget changes.           |
-| `GET`    | `/api/v1/budgets/{budgetId}/transactions/{transactionId}`            | Read a transaction snapshot and revision.                |
-| `POST`   | `/api/v1/budgets/{budgetId}/transactions/{transactionId}/operations` | Create, update, or delete a transaction idempotently.    |
-| `GET`    | `/api/v1/operations/{operationId}`                                   | Read operation status and conflict details.              |
+| Method   | Path                                                                 | Purpose                                                            |
+| -------- | -------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `GET`    | `/api/v1/health/live`                                                | Liveness check for the API process.                                |
+| `GET`    | `/api/v1/health/ready`                                               | Readiness check for PostgreSQL and any configured startup session. |
+| `GET`    | `/api/v1/openapi.json`                                               | Generated API contract.                                            |
+| `GET`    | `/api/v1/auth/methods`                                               | Read the Actual server's available sign-in methods.                |
+| `POST`   | `/api/v1/auth/login`                                                 | Sign in with an Actual password and create a device session.       |
+| `POST`   | `/api/v1/auth/openid/start`                                          | Start Actual OpenID sign-in in the system browser.                 |
+| `GET`    | `/api/v1/auth/actual-return/{state}/openid-cb`                       | Receive Actual's browser callback and return to the mobile app.    |
+| `POST`   | `/api/v1/auth/openid/complete`                                       | Exchange a one-use return code for the device session.             |
+| `GET`    | `/api/v1/auth/me`                                                    | Return the authenticated device and its budget scope.              |
+| `GET`    | `/api/v1/devices`                                                    | List devices visible to the authenticated device.                  |
+| `DELETE` | `/api/v1/devices/{deviceId}`                                         | Revoke an authorized device token.                                 |
+| `GET`    | `/api/v1/budgets`                                                    | List Actual budgets visible to the signed-in account.              |
+| `GET`    | `/api/v1/budgets/{budgetId}/snapshot`                                | Refresh and read a complete budget snapshot.                       |
+| `GET`    | `/api/v1/budgets/{budgetId}/changes`                                 | Read generation-aware pages of budget changes.                     |
+| `GET`    | `/api/v1/budgets/{budgetId}/transactions/{transactionId}`            | Read a transaction snapshot and revision.                          |
+| `POST`   | `/api/v1/budgets/{budgetId}/transactions/{transactionId}/operations` | Create, update, or delete a transaction idempotently.              |
+| `GET`    | `/api/v1/operations/{operationId}`                                   | Read operation status and conflict details.                        |
 
-## Device pairing and authentication
+## Sign-in and device authorization
 
-Create a one-time pairing code from an API container with database access:
+Set `ACTUAL_SERVER_URL` on the Tandem API to the Actual server address reachable
+from the API container. Tandem reads the server's active methods from
+`/account/needs-bootstrap` and supports password and OpenID sign-in. The Actual
+password is sent to `/account/login` for that request only; Tandem does not save
+it. Actual returns a session token, which Tandem validates with
+`/account/validate` to identify the account and discover its budgets.
 
-```sh
-docker compose -f docker-compose.dev.yml exec api \
-  pnpm --filter @tandem-for-actual/api pair \
-  --budget-id '<Actual budget sync ID>'
-```
+`POST /api/v1/auth/login` accepts `{"password":"…","deviceName":"…"}`.
+It returns a random device bearer token and the budgets visible to that Actual
+account. The token is shown only in this response; PostgreSQL stores only its
+SHA-256 hash. Send it as `Authorization: Bearer <token>`. Device tokens expire
+after 90 days without an authenticated request. Each successful request
+refreshes that idle window. A device can list or revoke itself; it cannot
+manage another device's credential.
 
-Use `--budget-id` more than once to scope the new device to selected budgets, or
-use `--all-budgets` to grant all budgets to that principal; a device with this
-scope can also manage other devices for that principal. The principal ID
-defaults to `owner`; `--principal-id <id>` selects another principal. The CLI
-prints a JSON object containing a five-minute, single-use code in the
-`XXXX-XXXX` format, such as `4DF7-J1M9`. The code uses eight random characters
-from a 33-symbol uppercase-letter-and-digit alphabet (about 40.36 bits of
-entropy); generators omit the look-alike
-letters `I`, `L`, and `O`, while pairing accepts lowercase input, surrounding
-whitespace, an omitted hyphen, and `I`/`L`/`O` as aliases for `1`/`1`/`0`.
-Treat the CLI output as a secret and deliver it to the mobile device over a
-trusted channel.
+Tandem stores the Actual session token server-side, encrypted in PostgreSQL with
+`AUTH_TOKEN_ENCRYPTION_KEY`. Keep that key stable and private. Changing it makes
+stored Actual sessions unreadable, so affected devices must sign in again. A
+budget password for an Actual-encrypted budget is different: mobile sends it
+only on the requests that need it, and Tandem does not persist it.
 
-`POST /api/v1/auth/pair` accepts `{"code":"…","deviceName":"…"}` and returns
-the opaque bearer token once. The short code is only a bootstrap credential;
-the resulting device token has 256 bits of random
-entropy; only its SHA-256 hash is stored in PostgreSQL. Pairing code hashes use
-HMAC with SHA-256 and the independent `PAIRING_CODE_HASH_KEY`. Set it to at
-least 32 random bytes and provide the same value to the API and pairing CLI.
-For production Compose, set `PAIRING_CODE_HASH_KEY_FILE` to the mounted secret
-path instead; the API and pairing CLI accept either setting and reject having
-both set. Production Compose uses file-based configuration for `DATABASE_URL`
-and the Actual server password by default. To use a session token, replace the
-API service's `ACTUAL_SERVER_PASSWORD_FILE` mapping with
-`ACTUAL_SESSION_TOKEN_FILE`, pointing it at the mounted Actual credential
-secret. Do not set both.
-Rotating the key invalidates pending pairing codes but does not affect paired
-devices. Device tokens expire after 90 days without an
-authenticated request; each successful request refreshes that idle window.
-Invalid pairing codes are limited to 10 per client address per minute.
-Successful pairings and other request-validation errors do not consume this
-failure limit. The in-memory limit applies separately to each API process.
-Forwarded client addresses are ignored by default. Production Compose requires
-`TRUST_PROXY`; set it to the exact proxy IP addresses or narrow CIDRs, for
-example `172.30.0.2` or `172.30.0.0/24`. Do not use
-`0.0.0.0/0`, and make the API reachable only through the trusted proxy network.
-Fastify then keys the pairing limit on the forwarded client address. The Nginx
-example also applies a per-address limit to the pairing route. When running the
-API outside production Compose, an unset `TRUST_PROXY` causes the API to warn
-when it receives `X-Forwarded-For`; requests arriving from the same proxy
-socket share the API's in-memory limit.
-The Nginx example also limits API traffic to 600 requests per minute per client
-address, with a short burst allowance. Keep the API reachable only through this
-proxy so invalid-token traffic cannot bypass that limit.
+### OpenID sign-in
 
-Invalid pairing input returns HTTP 400 with a structured `invalid_request`
-error. An unavailable, expired, or already-used pairing code returns HTTP 401.
+Set `ACTUAL_PUBLIC_URL` to the public HTTPS URL that reaches Tandem through the
+reverse proxy. The browser return URL is built from that base. If it is unset,
+Tandem does not advertise OpenID as available.
 
-Send the token as `Authorization: Bearer <token>`. `GET /api/v1/auth/me` returns
-the current device and its budget IDs. A budget-scoped device can list and
-revoke itself only. A device paired with `--all-budgets` has full device
-management within its principal and can list or revoke the principal's other
-devices. Attempts to manage an invisible device return 404. Revoked tokens stop
-authenticating immediately. The pairing response uses `Cache-Control: no-store`
-because it contains the new credential.
+1. The app calls `POST /api/v1/auth/openid/start` with its device name. Tandem
+   starts Actual's OpenID login and returns the provider redirect URL.
+2. Actual redirects the browser to
+   `/api/v1/auth/actual-return/{state}/openid-cb?token=…`. Tandem validates the
+   Actual session, associates it with the account, and redirects the app using a
+   short-lived, one-use Tandem code. The Actual token is never included in the
+   app link.
+3. The app exchanges that code through `POST /api/v1/auth/openid/complete` and
+   stores the resulting Tandem device token in the platform's secure storage.
 
-`GET /api/v1/budgets` requires a device token and returns cloud-backed budgets
-within that device's authorized scope. Each item includes its Actual sync ID,
-display name, and whether the budget is encrypted. The response does not expose
-an encryption key or password and uses `Cache-Control: no-store`.
+The state expires after five minutes and the app return code expires after 90
+seconds. Both are one-use. The callback response disables caching and referrers.
+The Nginx example disables access logging on the callback because Actual's
+callback URL includes its session token as a query parameter.
+
+Sign-in endpoints are rate-limited to 10 requests per client address per minute
+in each API process. Forwarded client addresses are ignored by default. Set
+`TRUST_PROXY` to the exact reverse-proxy IPs or narrow CIDRs, such as
+`172.30.0.2` or `172.30.0.0/24`; do not use `0.0.0.0/0`. Keep the API reachable
+only through that trusted proxy. The Nginx example applies a second request
+limit to sign-in and a broader limit to other API traffic.
+
+`GET /api/v1/budgets` requires a device token and returns budgets visible to the
+signed-in Actual account. Each item includes its Actual sync ID, display name,
+and whether the budget is encrypted. The response does not expose an encryption
+key or password and uses `Cache-Control: no-store`.
 
 ## Transaction reads and reconciliation
 
-Set `ACTUAL_SERVER_URL` and exactly one of `ACTUAL_SERVER_PASSWORD` or
-`ACTUAL_SESSION_TOKEN` on the Tandem API container to enable Actual integration.
-Use the matching `_FILE` variable for a read-only mounted secret. A session
-token lets the API connect to an Actual server configured for OpenID sign-in;
-it is an API-to-Actual credential and does not change mobile device pairing or
-sign-in. First sign in through Actual's [OpenID login flow](https://actualbudget.org/docs/config/oauth-auth/).
-Capture the session token Actual returns to its browser callback; this is the
-Actual session token, not the identity provider's access token. Keep it only in
-the API's protected secret store, and never send it to a mobile device or
-include it in logs. Session tokens can expire or be revoked. When Actual rejects
-the token, `GET /api/v1/health/ready` returns `503` with a message to replace
-the token and restart Tandem. The API does not refresh the token automatically.
+Set `ACTUAL_SERVER_URL` on the Tandem API container to enable Actual sign-in and
+budget access. A deployment may also configure `ACTUAL_SESSION_TOKEN` as an
+operator-managed startup session; it is not required for each person to sign in.
+Session tokens can expire or be revoked. When a configured startup token is
+rejected, `GET /api/v1/health/ready` returns `503` with a message to replace the
+token and restart Tandem. Tandem does not refresh it automatically.
 
 The Actual server must be the exact version supported by the API build; the API
 fails startup if it cannot verify that version. `ACTUAL_API_DATA_DIR` defaults
@@ -184,8 +167,9 @@ budget data; protect its volume and backups as financial data.
 Use `GET /api/v1/budgets/{budgetId}/transactions/{transactionId}` to obtain the
 canonical transaction snapshot and its SHA-256 `revision`. Include
 `X-Budget-Encryption-Password` only for an encrypted budget. This budget-level
-password is distinct from `ACTUAL_SERVER_PASSWORD`; the service forwards it to
-the official API for that request and does not persist it. Use HTTPS. Responses
+password is distinct from the Actual account sign-in password; the service
+forwards it to the official API for that request and does not persist it. Use
+HTTPS. Responses
 containing financial data set `Cache-Control: no-store`.
 
 Submit a write to

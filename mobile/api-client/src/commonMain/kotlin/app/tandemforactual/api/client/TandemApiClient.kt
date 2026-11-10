@@ -31,7 +31,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlin.uuid.Uuid
 
-data class PairedDevice(
+data class AuthenticatedDevice(
     val deviceId: String,
     val principalId: String,
     val budgetIds: List<String>,
@@ -41,6 +41,18 @@ data class BudgetCatalogItem(
     val budgetId: String,
     val name: String,
     val isEncrypted: Boolean,
+)
+
+data class ActualLoginMethodOption(
+    val method: String,
+    val displayName: String,
+    val active: Boolean,
+)
+
+data class ActualLoginMethods(
+    val bootstrapped: Boolean,
+    val loginMethod: String?,
+    val availableLoginMethods: List<ActualLoginMethodOption>,
 )
 
 data class StatementImportItem(
@@ -64,9 +76,10 @@ class TandemApiException(
     safeMessageOverride: String? = null,
 ) : Exception(
         safeMessageOverride ?: when {
-            errorCode == "not-paired" -> "Pair this device before loading its budgets."
-            errorCode == "invalid_pairing_code" -> "The pairing code is invalid, expired, or already used."
-            errorCode == "invalid_device_credential" -> "This device needs to be paired again."
+            errorCode == "sign_in_required" -> "Sign in to load your budgets."
+            errorCode == "sign_in_expired" -> "Sign in expired. Start again."
+            errorCode == "invalid_credentials" -> "The password didn’t match this Actual server."
+            errorCode == "invalid_device_credential" -> "Sign in again to continue."
             errorCode == "bank_sync_failed" -> "Actual couldn’t complete bank sync. Check its provider setup and try again."
             errorCode == "bank_sync_busy" -> "A bank sync is already running. Try again shortly."
             errorCode == "duplicate_imported_id" ->
@@ -98,7 +111,7 @@ class TandemApiClient(
     private val pendingMaintenanceKeys = mutableMapOf<String, String>()
     private var accessToken: String? = null
     private var serverUrl: String? = null
-    private var pairedDevice: PairedDevice? = null
+    private var authenticatedDevice: AuthenticatedDevice? = null
     private var activeAuthProvider: Auth.BearerAuth? = null
     internal val bearerAuth =
         Auth.BearerAuth {
@@ -123,7 +136,7 @@ class TandemApiClient(
     fun exportStoredSession(): String? {
         val token = accessToken ?: return null
         val server = serverUrl ?: return null
-        val device = pairedDevice ?: return null
+        val device = authenticatedDevice ?: return null
         return buildJsonObject {
             put("serverUrl", server)
             put("accessToken", token)
@@ -138,7 +151,7 @@ class TandemApiClient(
         }.toString()
     }
 
-    suspend fun restoreStoredSession(value: String): PairedDevice {
+    suspend fun restoreStoredSession(value: String): AuthenticatedDevice {
         val root =
             try {
                 Json.parseToJsonElement(value).jsonObject
@@ -151,32 +164,56 @@ class TandemApiClient(
             root["device"] as? JsonObject
                 ?: throw TandemApiProtocolException("Stored device session has no device")
         val device =
-            PairedDevice(
+            AuthenticatedDevice(
                 deviceId = deviceJson.requiredString("deviceId"),
                 principalId = deviceJson.requiredString("principalId"),
                 budgetIds = deviceJson.requiredStringArray("budgetIds"),
             )
         return sessionMutex.withLock {
             restoreSessionLocked(server, token)
-            pairedDevice = device
+            authenticatedDevice = device
             device
         }
     }
 
-    suspend fun pair(
+    suspend fun readActualLoginMethods(serverUrl: String): ActualLoginMethods =
+        sessionMutex.withLock {
+            val parsedUrl = parseServerUrl(serverUrl, allowInsecurePrivateNetwork)
+            GeneratedApiAccess.mutex.withLock {
+                GeneratedApiAccess.ensureContentEncoding()
+                clearGeneratedAuthProvider()
+                Api.baseUrl = parsedUrl
+                val payload = unwrap(AuthenticationApi.getActualLoginMethods())
+                ActualLoginMethods(
+                    bootstrapped = payload.requiredBoolean("bootstrapped"),
+                    loginMethod = payload.optionalString("loginMethod"),
+                    availableLoginMethods =
+                        (payload["availableLoginMethods"] as? JsonArray)?.mapNotNull { item ->
+                            val option = item as? JsonObject ?: return@mapNotNull null
+                            ActualLoginMethodOption(
+                                method = option.requiredString("method"),
+                                displayName = option.requiredString("displayName"),
+                                active = option.requiredBoolean("active"),
+                            )
+                        } ?: emptyList(),
+                )
+            }
+        }
+
+    suspend fun signInWithPassword(
         serverUrl: String,
-        code: String,
+        password: String,
         deviceName: String,
-    ): PairedDevice =
+    ): AuthenticatedDevice =
         sessionMutex.withLock {
             val parsedUrl = parseServerUrl(serverUrl, allowInsecurePrivateNetwork)
             this.serverUrl = parsedUrl.toString()
             accessToken = null
-            pairedDevice = null
+            authenticatedDevice = null
 
             val body =
                 buildJsonObject {
-                    put("code", code.trim())
+                    put("password", password)
                     put("deviceName", normalizeDeviceName(deviceName))
                 }.toMap()
             GeneratedApiAccess.mutex.withLock {
@@ -186,14 +223,14 @@ class TandemApiClient(
                 setGeneratedAuthProvider(bearerAuth)
                 val payload =
                     try {
-                        unwrap(AuthenticationApi.pairDevice(body))
+                        unwrap(AuthenticationApi.signInWithActualPassword(body))
                     } catch (error: TandemApiException) {
                         if (error.httpStatus == 400 && error.errorCode == "invalid_request") {
                             throw TandemApiException(
                                 error.errorCode,
                                 error.httpStatus,
                                 error,
-                                "Check the pairing code and try again.",
+                                "Check your password and try again.",
                             )
                         }
                         throw error
@@ -203,7 +240,57 @@ class TandemApiClient(
                 val budgetIds = payload.requiredStringArray("budgetIds")
                 val token = payload.requiredString("accessToken")
                 accessToken = token
-                PairedDevice(deviceId, principalId, budgetIds).also { pairedDevice = it }
+                AuthenticatedDevice(deviceId, principalId, budgetIds).also { authenticatedDevice = it }
+            }
+        }
+
+    suspend fun startActualOpenIdSignIn(
+        serverUrl: String,
+        deviceName: String,
+    ): String =
+        sessionMutex.withLock {
+            val parsedUrl = parseServerUrl(serverUrl, allowInsecurePrivateNetwork)
+            GeneratedApiAccess.mutex.withLock {
+                GeneratedApiAccess.ensureContentEncoding()
+                clearGeneratedAuthProvider()
+                Api.baseUrl = parsedUrl
+                val payload =
+                    unwrap(
+                        AuthenticationApi.startActualOpenIdSignIn(
+                            buildJsonObject {
+                                put("deviceName", normalizeDeviceName(deviceName))
+                            }.toMap(),
+                        ),
+                    )
+                payload.requiredString("redirectUrl")
+            }
+        }
+
+    suspend fun completeActualOpenIdSignIn(
+        serverUrl: String,
+        code: String,
+    ): AuthenticatedDevice =
+        sessionMutex.withLock {
+            val parsedUrl = parseServerUrl(serverUrl, allowInsecurePrivateNetwork)
+            this.serverUrl = parsedUrl.toString()
+            accessToken = null
+            authenticatedDevice = null
+            GeneratedApiAccess.mutex.withLock {
+                GeneratedApiAccess.ensureContentEncoding()
+                clearGeneratedAuthProvider()
+                Api.baseUrl = parsedUrl
+                val payload =
+                    unwrap(
+                        AuthenticationApi.completeActualOpenIdSignIn(
+                            buildJsonObject { put("code", code) }.toMap(),
+                        ),
+                    )
+                val deviceId = payload.requiredString("deviceId")
+                val principalId = payload.requiredString("principalId")
+                val budgetIds = payload.requiredStringArray("budgetIds")
+                val token = payload.requiredString("accessToken")
+                accessToken = token
+                AuthenticatedDevice(deviceId, principalId, budgetIds).also { authenticatedDevice = it }
             }
         }
 
@@ -910,7 +997,7 @@ class TandemApiClient(
     /** Revokes this device on the server while its credential is still active. */
     suspend fun revokeCurrentDevice() {
         sessionMutex.withLock {
-            val deviceId = pairedDevice?.deviceId ?: throw TandemApiException("not-paired")
+            val deviceId = authenticatedDevice?.deviceId ?: throw TandemApiException("sign_in_required")
             val parsedDeviceId =
                 try {
                     Uuid.parse(deviceId)
@@ -1010,7 +1097,7 @@ class TandemApiClient(
                 clearGeneratedAuthProvider()
                 accessToken = null
                 serverUrl = null
-                pairedDevice = null
+                authenticatedDevice = null
             }
         }
     }
@@ -1018,7 +1105,7 @@ class TandemApiClient(
     private fun configureGeneratedApi() {
         val currentServerUrl = serverUrl
         if (currentServerUrl.isNullOrBlank() || accessToken.isNullOrBlank()) {
-            throw TandemApiException("not-paired")
+            throw TandemApiException("sign_in_required")
         }
         GeneratedApiAccess.ensureContentEncoding()
         Api.baseUrl = parseServerUrl(currentServerUrl, allowInsecurePrivateNetwork)
@@ -1234,6 +1321,17 @@ private fun JsonObject.requiredString(name: String): String =
         ?.takeIf { it.isString }
         ?.contentOrNull
         ?.takeIf { it.isNotBlank() }
+        ?: throw TandemApiProtocolException("Server response is missing a valid $name")
+
+private fun JsonObject.optionalString(name: String): String? =
+    when (val value = this[name]) {
+        null, JsonNull -> null
+        is JsonPrimitive -> value.contentOrNull?.takeIf(String::isNotBlank)
+        else -> throw TandemApiProtocolException("Server response contains an invalid $name")
+    }
+
+private fun JsonObject.requiredBoolean(name: String): Boolean =
+    (this[name] as? JsonPrimitive)?.booleanOrNull
         ?: throw TandemApiProtocolException("Server response is missing a valid $name")
 
 private fun JsonObject.requiredStringArray(name: String): List<String> {

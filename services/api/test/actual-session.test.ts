@@ -7,6 +7,7 @@ import {
   type ActualApiPort,
   type ActualConnectionConfig,
 } from "../src/actual/actual-session.js";
+import { runAsActualPrincipal } from "../src/auth/actual-principal-context.js";
 
 const config: ActualConnectionConfig = {
   serverURL: "https://actual.example.test",
@@ -789,6 +790,41 @@ describe("ActualSession", () => {
     await secondSession.start();
     expect(secondFake.calls).toEqual(["init", "version"]);
     await secondSession.close();
+  });
+
+  it("switches the serialized Actual client to the requesting account token", async () => {
+    const fake = createFakeClient();
+    const session = new ActualSession(
+      fake.api,
+      { serverURL: config.serverURL, dataDir: config.dataDir },
+      undefined,
+      undefined,
+      undefined,
+      {
+        sessionToken: async (principalId) => `${principalId}-session-token`,
+        dataDir: async (principalId) => `/tmp/actual-api/${principalId}`,
+      },
+    );
+
+    await runAsActualPrincipal("actual-user-a", () =>
+      session.execute(async () => "user-a"),
+    );
+    await runAsActualPrincipal("actual-user-b", () =>
+      session.execute(async () => "user-b"),
+    );
+
+    expect(fake.api.init).toHaveBeenNthCalledWith(1, {
+      serverURL: config.serverURL,
+      dataDir: "/tmp/actual-api/actual-user-a",
+      sessionToken: "actual-user-a-session-token",
+    });
+    expect(fake.api.init).toHaveBeenNthCalledWith(2, {
+      serverURL: config.serverURL,
+      dataDir: "/tmp/actual-api/actual-user-b",
+      sessionToken: "actual-user-b-session-token",
+    });
+    expect(fake.api.shutdown).toHaveBeenCalledOnce();
+    await session.close();
   });
 
   it("reports write-sync failure without replacing a partially failed operation", async () => {

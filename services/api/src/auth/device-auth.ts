@@ -1,23 +1,7 @@
-import {
-  createHash,
-  createHmac,
-  randomBytes,
-  randomInt,
-  randomUUID,
-} from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 
-export const PAIRING_CODE_TTL_MS = 300_000;
 export const DEVICE_CREDENTIAL_IDLE_TTL_DAYS = 90;
 const SECRET_BYTES = 32;
-const PAIRING_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ0123456789";
-const PAIRING_CODE_LENGTH = 8;
-
-export interface PairingCodeRecord {
-  codeHash: string;
-  principalId: string;
-  budgetIds: string[];
-  expiresAt: Date;
-}
 
 export interface DeviceRecord {
   deviceId: string;
@@ -30,13 +14,13 @@ export interface DeviceRecord {
 }
 
 export interface DeviceAuthStore {
-  createPairingCode(record: PairingCodeRecord): Promise<void>;
-  consumePairingCode(input: {
-    codeHash: string;
+  createDevice(input: {
+    principalId: string;
+    budgetIds: string[];
     deviceId: string;
     deviceName: string;
     credentialHash: string;
-  }): Promise<DeviceRecord | undefined>;
+  }): Promise<DeviceRecord>;
   authenticate(credentialHash: string): Promise<DeviceRecord | undefined>;
   listDevices(principalId: string): Promise<DeviceRecord[]>;
   revokeDevice(principalId: string, deviceId: string): Promise<boolean>;
@@ -49,73 +33,34 @@ export class DeviceAuthInputError extends Error {
   }
 }
 
-export interface PairingCode {
-  code: string;
-  expiresAt: Date;
-  principalId: string;
-  budgetIds: string[];
-}
-
-export interface DeviceAuthorizationOptions {
-  /**
-   * A server-side key shared by the API and pairing CLI. When supplied, this
-   * prevents a database-only disclosure from enabling offline guesses of the
-   * short pairing code.
-   */
-  pairingCodeHashKey?: string;
-}
-
-export interface PairedDevice extends DeviceRecord {
+export interface SignedInDevice extends DeviceRecord {
   accessToken: string;
 }
 
 export class DeviceAuthorization {
   constructor(
     private readonly store: DeviceAuthStore,
-    private readonly now: () => Date = () => new Date(),
     private readonly makeSecret: () => Buffer = () => randomBytes(SECRET_BYTES),
     private readonly makeDeviceId: () => string = randomUUID,
-    private readonly options: DeviceAuthorizationOptions = {},
   ) {}
 
-  async createPairingCode(input: {
+  async createDevice(input: {
     principalId: string;
     budgetIds: string[];
-  }): Promise<PairingCode> {
+    deviceName: string;
+  }): Promise<SignedInDevice> {
     const principalId = validatePrincipalId(input.principalId);
     const budgetIds = validateBudgetIds(input.budgetIds);
-    const code = this.#newPairingCode();
-    const expiresAt = new Date(this.now().getTime() + PAIRING_CODE_TTL_MS);
-
-    await this.store.createPairingCode({
-      codeHash: this.#hashPairingCode(code),
+    const deviceName = validateDeviceName(input.deviceName);
+    const accessToken = this.#newSecret();
+    const device = await this.store.createDevice({
       principalId,
       budgetIds,
-      expiresAt,
-    });
-
-    return { code, expiresAt, principalId, budgetIds };
-  }
-
-  async pair(input: {
-    code: string;
-    deviceName: string;
-  }): Promise<PairedDevice | undefined> {
-    const deviceName = validateDeviceName(input.deviceName);
-    const code = normalizePairingCode(input.code);
-    if (code === undefined) {
-      return undefined;
-    }
-
-    const accessToken = this.#newSecret();
-    const device = await this.store.consumePairingCode({
-      codeHash: this.#hashPairingCode(code),
       deviceId: this.makeDeviceId(),
       deviceName,
       credentialHash: hashSecret(accessToken),
     });
-
-    return device === undefined ? undefined : { ...device, accessToken };
+    return { ...device, accessToken };
   }
 
   async authenticate(
@@ -165,43 +110,14 @@ export class DeviceAuthorization {
     }
     return secret.toString("base64url");
   }
-
-  #newPairingCode(): string {
-    const compactCode = Array.from({ length: PAIRING_CODE_LENGTH }, () =>
-      PAIRING_CODE_ALPHABET.charAt(randomInt(PAIRING_CODE_ALPHABET.length)),
-    ).join("");
-    return `${compactCode.slice(0, 4)}-${compactCode.slice(4)}`;
-  }
-
-  #hashPairingCode(code: string): string {
-    const key = this.options.pairingCodeHashKey;
-    return key === undefined ? hashSecret(code) : hashPairingCode(code, key);
-  }
 }
 
 export function hashSecret(secret: string): string {
   return createHash("sha256").update(secret, "utf8").digest("hex");
 }
 
-export function hashPairingCode(code: string, key: string): string {
-  return createHmac("sha256", key).update(code, "utf8").digest("hex");
-}
-
 function isWellFormedCredential(value: string): boolean {
   return /^[A-Za-z0-9_-]{43}$/.test(value);
-}
-
-function normalizePairingCode(value: string): string | undefined {
-  const trimmed = typeof value === "string" ? value.trim().toUpperCase() : "";
-  if (!/^[A-Z0-9]{4}-?[A-Z0-9]{4}$/.test(trimmed)) {
-    return undefined;
-  }
-  const compactCode = trimmed
-    .replaceAll("-", "")
-    .replaceAll("O", "0")
-    .replaceAll("I", "1")
-    .replaceAll("L", "1");
-  return `${compactCode.slice(0, 4)}-${compactCode.slice(4)}`;
 }
 
 function validatePrincipalId(value: string): string {
@@ -248,9 +164,9 @@ function validateDeviceId(value: string): string {
 }
 
 function validateBudgetIds(value: string[]): string[] {
-  if (!Array.isArray(value) || value.length === 0 || value.length > 100) {
+  if (!Array.isArray(value) || value.length > 100) {
     throw new DeviceAuthInputError(
-      "budgetIds must contain between 1 and 100 values",
+      "budgetIds must contain no more than 100 values",
     );
   }
   if (value.includes("*") && value.length !== 1) {

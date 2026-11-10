@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
-import { applyMigrations, type Migration } from "../src/schema/migrator.js";
+import {
+  applyMigrations,
+  MIGRATIONS,
+  type Migration,
+} from "../src/schema/migrator.js";
 
 function createFailingMigrationPool(
   primaryError: unknown,
@@ -38,6 +42,13 @@ const migration: Migration = {
   async up() {},
   async down() {},
 };
+
+describe("0.1.0 database schema", () => {
+  it("uses one consolidated initial migration", () => {
+    expect(MIGRATIONS).toHaveLength(1);
+    expect(MIGRATIONS[0]?.name).toBe("20261101000000-initial-schema");
+  });
+});
 
 describe("migration lock cleanup reporting", () => {
   it("explains when the database has migrations newer than this API", async () => {

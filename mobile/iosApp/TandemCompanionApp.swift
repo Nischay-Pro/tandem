@@ -12,6 +12,9 @@ struct TandemCompanionApp: App {
             ComposeRootView(preferredScheme: $preferredScheme)
                 .preferredColorScheme(preferredScheme)
                 .ignoresSafeArea()
+                .onOpenURL { url in
+                    AuthReturnEvents.shared.publish(uri: url.absoluteString)
+                }
         }
     }
 }

@@ -60,7 +60,7 @@ function createDevice(): DeviceRecord {
 
 function createDeviceAuth(device?: DeviceRecord) {
   return {
-    createPairingCode: vi.fn(),
+    createDevice: vi.fn(),
     pair: vi.fn(),
     authenticate: vi.fn(async (token?: string) =>
       token === accessToken ? device : undefined,

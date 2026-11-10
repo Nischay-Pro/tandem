@@ -39,7 +39,7 @@ import kotlin.uuid.Uuid
 class TandemApiClientTest {
     @Test
     fun deviceNamesAreTrimmedSanitizedAndLimitedToOneHundredCharacters() {
-        assertEquals("Pixel 10a", normalizeDeviceName("\u0000 Pixel\n10a\u007f "))
+        assertEquals("Test Phone", normalizeDeviceName("\u0000 Test\nPhone\u007f "))
         assertEquals(100, normalizeDeviceName("A".repeat(120)).length)
         val emojiName = normalizeDeviceName("😀".repeat(120))
         assertEquals(100, emojiName.codePointCount(0, emojiName.length))
@@ -144,14 +144,14 @@ class TandemApiClientTest {
         }
 
     @Test
-    fun pairingAndBudgetCatalogUseTheGeneratedApi() =
+    fun signInAndBudgetCatalogUseTheGeneratedApi() =
         runBlocking {
             val requests = mutableListOf<HttpRequestData>()
             val engine =
                 MockEngine { request ->
                     requests += request
                     when (request.url.encodedPath) {
-                        "/api/v1/auth/pair" -> respond(pairResponse(), headers = jsonHeaders())
+                        "/api/v1/auth/login" -> respond(signedInResponse(), headers = jsonHeaders())
                         "/api/v1/budgets" -> respond(budgetsResponse(), headers = jsonHeaders())
                         else -> error("Unexpected API path ${request.url.encodedPath}")
                     }
@@ -161,20 +161,20 @@ class TandemApiClientTest {
             val client = TandemApiClient()
             val cleanup = configureApi(engine, client.bearerAuth)
             try {
-                val paired = client.pair("https://tandem.example/", " 4DF7-J1M9 ", " Pixel 10a ")
+                val signedIn = client.signInWithPassword("https://tandem.example/", "  actual-test-password  ", " Test phone ")
 
-                assertEquals("device-1", paired.deviceId)
-                assertEquals("household-owner", paired.principalId)
-                assertEquals(listOf("budget-1", "budget-2"), paired.budgetIds)
+                assertEquals("device-1", signedIn.deviceId)
+                assertEquals("household-owner", signedIn.principalId)
+                assertEquals(listOf("budget-1", "budget-2"), signedIn.budgetIds)
                 assertTrue(client.isAuthenticated)
                 assertEquals("https://tandem.example", client.currentServerUrl)
                 val storedSession = client.exportStoredSession()
                 assertTrue(storedSession.orEmpty().contains("test-device-token"))
-                assertFalse(storedSession.orEmpty().contains("4DF7-J1M9"))
+                assertFalse(storedSession.orEmpty().contains("actual-test-password"))
                 assertNull(requests.first().headers[HttpHeaders.Authorization])
-                assertEquals("/api/v1/auth/pair", requests.first().url.encodedPath)
+                assertEquals("/api/v1/auth/login", requests.first().url.encodedPath)
                 assertEquals(
-                    """{"code":"4DF7-J1M9","deviceName":"Pixel 10a"}""",
+                    """{"password":"  actual-test-password  ","deviceName":"Test phone"}""",
                     (requests.first().body as TextContent).text,
                 )
 
@@ -191,11 +191,11 @@ class TandemApiClientTest {
                 client.forgetSession()
                 assertFalse(client.isAuthenticated)
                 val unauthenticated = captureApiException { client.listBudgets() }
-                assertEquals("not-paired", unauthenticated.errorCode)
-                assertEquals("Pair this device before loading its budgets.", unauthenticated.message)
+                assertEquals("sign_in_required", unauthenticated.errorCode)
+                assertEquals("Sign in to load your budgets.", unauthenticated.message)
 
                 val restored = client.restoreStoredSession(storedSession.orEmpty())
-                assertEquals(paired, restored)
+                assertEquals(signedIn, restored)
                 assertTrue(client.isAuthenticated)
                 assertEquals(2, client.listBudgets().size)
                 assertEquals("Bearer test-device-token", requests.last().headers[HttpHeaders.Authorization])
@@ -209,13 +209,62 @@ class TandemApiClientTest {
         }
 
     @Test
-    fun invalidServerAndRejectedPairingReturnSanitizedErrors() =
+    fun actualOpenIdSignInUsesBrowserRedirectAndExchangesOneUseCode() =
         runBlocking {
-            var status = HttpStatusCode.Unauthorized
-            var responseBody = """{"error":{"code":"invalid_pairing_code","message":"private server detail"}}"""
+            val requests = mutableListOf<HttpRequestData>()
             val engine =
                 MockEngine { request ->
-                    assertEquals("/api/v1/auth/pair", request.url.encodedPath)
+                    requests += request
+                    when (request.url.encodedPath) {
+                        "/api/v1/auth/openid/start" ->
+                            respond(
+                                """{"redirectUrl":"https://identity.example/sign-in"}""",
+                                headers = jsonHeaders(),
+                            )
+                        "/api/v1/auth/openid/complete" -> respond(signedInResponse(), headers = jsonHeaders())
+                        else -> error("Unexpected API path ${request.url.encodedPath}")
+                    }
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                val redirectUrl = client.startActualOpenIdSignIn("https://tandem.example", "Test phone")
+                assertEquals("https://identity.example/sign-in", redirectUrl)
+                val signedIn = client.completeActualOpenIdSignIn("https://tandem.example", "C".repeat(43))
+
+                assertEquals("device-1", signedIn.deviceId)
+                assertTrue(client.isAuthenticated)
+                assertEquals(
+                    listOf("/api/v1/auth/openid/start", "/api/v1/auth/openid/complete"),
+                    requests.map { it.url.encodedPath },
+                )
+                assertTrue(requests.all { it.headers[HttpHeaders.Authorization] == null })
+                assertEquals(
+                    """{"deviceName":"Test phone"}""",
+                    (requests[0].body as TextContent).text,
+                )
+                assertEquals(
+                    """{"code":"${"C".repeat(43)}"}""",
+                    (requests[1].body as TextContent).text,
+                )
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
+    fun invalidServerAndRejectedSignInReturnSanitizedErrors() =
+        runBlocking {
+            var status = HttpStatusCode.Unauthorized
+            var responseBody = """{"error":{"code":"invalid_credentials","message":"private server detail"}}"""
+            val engine =
+                MockEngine { request ->
+                    assertEquals("/api/v1/auth/login", request.url.encodedPath)
                     respond(responseBody, status, jsonHeaders())
                 }
             val previousClient = Api.client
@@ -223,28 +272,32 @@ class TandemApiClientTest {
             val client = TandemApiClient()
             val cleanup = configureApi(engine, client.bearerAuth)
             try {
-                val invalidUrl = captureApiException { client.pair("http://tandem.example", "4DF7-J1M9", "Phone") }
+                val invalidUrl = captureApiException { client.signInWithPassword("http://tandem.example", "actual-test-password", "Phone") }
                 assertEquals("invalid-server-url", invalidUrl.errorCode)
-                val insecureLoopbackUrl = captureApiException { client.pair("http://localhost:19753", "4DF7-J1M9", "Phone") }
+                val insecureLoopbackUrl =
+                    captureApiException { client.signInWithPassword("http://localhost:19753", "actual-test-password", "Phone") }
                 assertEquals("invalid-server-url", insecureLoopbackUrl.errorCode)
-                val unconfiguredLanUrl = captureApiException { client.pair("http://192.168.1.20", "4DF7-J1M9", "Phone") }
+                val unconfiguredLanUrl =
+                    captureApiException { client.signInWithPassword("http://192.168.1.20", "actual-test-password", "Phone") }
                 assertEquals("invalid-server-url", unconfiguredLanUrl.errorCode)
-                val malformedUrl = captureApiException { client.pair("https://tandem.example:invalid", "4DF7-J1M9", "Phone") }
+                val malformedUrl =
+                    captureApiException { client.signInWithPassword("https://tandem.example:invalid", "actual-test-password", "Phone") }
                 assertEquals("invalid-server-url", malformedUrl.errorCode)
-                val blankHostUrl = captureApiException { client.pair("https://?budget=1", "4DF7-J1M9", "Phone") }
+                val blankHostUrl = captureApiException { client.signInWithPassword("https://?budget=1", "actual-test-password", "Phone") }
                 assertEquals("invalid-server-url", blankHostUrl.errorCode)
 
-                val unauthorized = captureApiException { client.pair("https://tandem.example", "4DF7-J1M9", "Phone") }
-                assertEquals("invalid_pairing_code", unauthorized.errorCode)
+                val unauthorized =
+                    captureApiException { client.signInWithPassword("https://tandem.example", "actual-test-password", "Phone") }
+                assertEquals("invalid_credentials", unauthorized.errorCode)
                 assertEquals(401, unauthorized.httpStatus)
-                assertEquals("The pairing code is invalid, expired, or already used.", unauthorized.message)
+                assertEquals("The password didn’t match this Actual server.", unauthorized.message)
 
                 status = HttpStatusCode.BadRequest
                 responseBody = """{"error":{"code":"invalid_request","message":"private server detail"}}"""
-                val rejected = captureApiException { client.pair("https://tandem.example", "NOPE-0000", "Phone") }
+                val rejected = captureApiException { client.signInWithPassword("https://tandem.example", "wrong-test-password", "Phone") }
                 assertEquals("invalid_request", rejected.errorCode)
                 assertEquals(400, rejected.httpStatus)
-                assertEquals("Check the pairing code and try again.", rejected.message)
+                assertEquals("Check your password and try again.", rejected.message)
                 assertFalse(rejected.message.orEmpty().contains("host detail"))
                 assertFalse(client.isAuthenticated)
             } finally {
@@ -262,25 +315,25 @@ class TandemApiClientTest {
             val engine =
                 MockEngine { request ->
                     requests += request
-                    respond(pairResponse(), headers = jsonHeaders())
+                    respond(signedInResponse(), headers = jsonHeaders())
                 }
             val previousClient = Api.client
             val previousBaseUrl = Api.baseUrl
             val client = TandemApiClient(allowInsecurePrivateNetwork = true)
             val cleanup = configureApi(engine, client.bearerAuth)
             try {
-                client.pair("http://192.168.1.20:19753", "4DF7-J1M9", "Phone")
+                client.signInWithPassword("http://192.168.1.20:19753", "actual-test-password", "Phone")
                 val requestUrl = requests.last().url
                 assertEquals("192.168.1.20", requestUrl.host)
                 assertEquals("http", requestUrl.protocol.name)
-                client.pair("http://10.0.0.12:19753", "4DF7-J1M9", "Phone")
-                client.pair("http://172.31.0.8:19753", "4DF7-J1M9", "Phone")
-                client.pair("http://[fd12::1]:19753", "4DF7-J1M9", "Phone")
-                client.pair("http://[fe80::1]:19753", "4DF7-J1M9", "Phone")
-                client.pair("http://localhost:19753", "4DF7-J1M9", "Phone")
-                client.pair("http://tandem.localhost:19753", "4DF7-J1M9", "Phone")
-                client.pair("http://[fc00:0000:0000:0000:0000:0000:0000:0001]:19753", "4DF7-J1M9", "Phone")
-                client.pair("http://[fe80:0000:0000:0000:0000:0000:0000:0001]:19753", "4DF7-J1M9", "Phone")
+                client.signInWithPassword("http://10.0.0.12:19753", "actual-test-password", "Phone")
+                client.signInWithPassword("http://172.31.0.8:19753", "actual-test-password", "Phone")
+                client.signInWithPassword("http://[fd12::1]:19753", "actual-test-password", "Phone")
+                client.signInWithPassword("http://[fe80::1]:19753", "actual-test-password", "Phone")
+                client.signInWithPassword("http://localhost:19753", "actual-test-password", "Phone")
+                client.signInWithPassword("http://tandem.localhost:19753", "actual-test-password", "Phone")
+                client.signInWithPassword("http://[fc00:0000:0000:0000:0000:0000:0000:0001]:19753", "actual-test-password", "Phone")
+                client.signInWithPassword("http://[fe80:0000:0000:0000:0000:0000:0000:0001]:19753", "actual-test-password", "Phone")
 
                 listOf(
                     "http://1.1.1.1:19753",
@@ -295,7 +348,7 @@ class TandemApiClientTest {
                     "http://192.168..1:19753",
                     "http://192.168.001.1:19753",
                 ).forEach { address ->
-                    val rejected = captureApiException { client.pair(address, "4DF7-J1M9", "Phone") }
+                    val rejected = captureApiException { client.signInWithPassword(address, "actual-test-password", "Phone") }
                     assertEquals("invalid-server-url", rejected.errorCode, address)
                 }
                 assertEquals(9, requests.size)
@@ -317,7 +370,7 @@ class TandemApiClientTest {
                     respond(
                         "",
                         HttpStatusCode.Found,
-                        headersOf(HttpHeaders.Location, "http://public.example/api/v1/auth/pair"),
+                        headersOf(HttpHeaders.Location, "http://public.example/api/v1/auth/login"),
                     )
                 }
             val previousClient = Api.client
@@ -325,7 +378,7 @@ class TandemApiClientTest {
             val client = TandemApiClient()
             val cleanup = configureApi(engine, client.bearerAuth)
             try {
-                captureApiException { client.pair("https://tandem.example", "4DF7-J1M9", "Phone") }
+                captureApiException { client.signInWithPassword("https://tandem.example", "actual-test-password", "Phone") }
                 assertEquals(1, requests.size)
                 assertEquals("tandem.example", requests.single().url.host)
             } finally {
@@ -337,7 +390,7 @@ class TandemApiClientTest {
         }
 
     @Test
-    fun rejectedBudgetCatalogRequestsExplainRePairingOrAccessScope() =
+    fun rejectedBudgetCatalogRequestsExplainSignInOrAccessScope() =
         runBlocking {
             var status = HttpStatusCode.Unauthorized
             var responseBody = """{"error":{"message":"private server detail"}}"""
@@ -363,7 +416,7 @@ class TandemApiClientTest {
                 val invalidCredential = captureApiException { client.listBudgets() }
                 assertEquals("invalid_device_credential", invalidCredential.errorCode)
                 assertEquals(401, invalidCredential.httpStatus)
-                assertEquals("This device needs to be paired again.", invalidCredential.message)
+                assertEquals("Sign in again to continue.", invalidCredential.message)
                 assertFalse(invalidCredential.message.orEmpty().contains("private server detail"))
 
                 responseBody = """{"error":{"message":"private server detail"}}"""
@@ -437,10 +490,10 @@ class TandemApiClientTest {
         }
 
     @Test
-    fun malformedPairingAndBudgetPayloadsAreRejectedAsProtocolErrors() =
+    fun malformedSignInAndBudgetPayloadsAreRejectedAsProtocolErrors() =
         runBlocking {
             var response = """{"deviceId":"device-1","principalId":"owner","budgetIds":[""] ,"accessToken":"token"}"""
-            var path = "/api/v1/auth/pair"
+            var path = "/api/v1/auth/login"
             val engine =
                 MockEngine { request ->
                     assertEquals(path, request.url.encodedPath)
@@ -451,11 +504,13 @@ class TandemApiClientTest {
             val client = TandemApiClient()
             val cleanup = configureApi(engine, client.bearerAuth)
             try {
-                val badPair = captureProtocolException { client.pair("https://tandem.example", "4DF7-J1M9", "Phone") }
-                assertEquals("Server response contains an invalid budgetIds entry", badPair.message)
+                val badSignInResponse =
+                    captureProtocolException { client.signInWithPassword("https://tandem.example", "actual-test-password", "Phone") }
+                assertEquals("Server response contains an invalid budgetIds entry", badSignInResponse.message)
 
                 response = """{"deviceId":"device-1","principalId":"owner","budgetIds":"budget-1","accessToken":"token"}"""
-                val badBudgetIds = captureProtocolException { client.pair("https://tandem.example", "4DF7-J1M9", "Phone") }
+                val badBudgetIds =
+                    captureProtocolException { client.signInWithPassword("https://tandem.example", "actual-test-password", "Phone") }
                 assertEquals("Server response is missing a valid budgetIds", badBudgetIds.message)
 
                 client.restoreSession("https://tandem.example", "token")
@@ -1103,7 +1158,7 @@ class TandemApiClientTest {
 
     private fun jsonHeaders() = headersOf(HttpHeaders.ContentType, "application/json")
 
-    private fun pairResponse() =
+    private fun signedInResponse() =
         """{"deviceId":"device-1","principalId":"household-owner","budgetIds":["budget-1","budget-2"],"accessToken":"test-device-token"}"""
 
     private fun budgetsResponse() =

@@ -45,7 +45,7 @@ internal fun ServerDeviceScreen(
     onForgetDevice: () -> Unit,
     onForgetDeviceLocally: () -> Unit,
 ) {
-    val device = mobileSession.pairedDevice
+    val device = mobileSession.authenticatedDevice
     val scope = rememberCoroutineScope()
     var confirmation by rememberSaveable { mutableStateOf("") }
     PageColumn {
@@ -76,24 +76,24 @@ internal fun ServerDeviceScreen(
         SectionCard(
             "This device",
             when {
-                device == null -> "No device is paired"
+                device == null -> "No device is signed in"
                 else -> null
             },
         ) {
             ListRow(
                 "Device name",
-                if (device != null) deviceName else "Not paired",
+                if (device != null) deviceName else "Not signed in",
                 leading = RowLeading.Icon(Lucide.Smartphone),
             )
             DividerLine()
             ListRow(
                 "Budgets this device can open",
-                if (device == null) "Not paired" else "${device.budgetIds.size} available",
+                if (device == null) "Not signed in" else "${device.budgetIds.size} available",
                 leading = RowLeading.Icon(Lucide.FolderKey),
             )
             DividerLine()
             ListRow(
-                "Saved pairing",
+                "Saved sign-in",
                 if (mobileSession.isCredentialStored) "Protected on this device" else "Available until the app closes",
                 when {
                     mobileSession.isCredentialStored -> "Saved"
@@ -103,7 +103,7 @@ internal fun ServerDeviceScreen(
                 leading = RowLeading.Icon(Lucide.KeyRound),
             )
         }
-        InfoBubble("One-time pairing codes and budget passwords aren’t saved.")
+        InfoBubble("Passwords are used to sign in and aren’t saved on this device.")
         if (mobileSession.signOutError != null) {
             InfoBubble(mobileSession.signOutError.orEmpty())
         }
@@ -119,7 +119,7 @@ internal fun ServerDeviceScreen(
             onClick = { confirmation = "signout" },
         )
         if (device == null) {
-            SecondaryButton("Pair this device") { navigation.open(AppRoute.SERVER_ADDRESS) }
+            SecondaryButton("Sign in to this server") { navigation.open(AppRoute.SERVER_ADDRESS) }
         } else if (mobileSession.deviceRevocationError != null) {
             SecondaryButton(
                 "Forget on this device only",
@@ -158,7 +158,7 @@ internal fun ServerDeviceScreen(
             DestructiveConfirmationDialog(
                 title = "Remove this device?",
                 message =
-                    "This revokes this device’s access on the server and clears its saved pairing. You’ll need to pair again to connect.",
+                    "This revokes this device’s access on the server and clears its saved sign-in. You’ll need to sign in again to connect.",
                 confirmLabel = "Remove device",
                 dismissLabel = "Cancel",
                 enabled = !mobileSession.isRevokingDevice,
@@ -172,7 +172,7 @@ internal fun ServerDeviceScreen(
             DestructiveConfirmationDialog(
                 title = "Forget this device here?",
                 message =
-                    "This clears the pairing saved on this device. The server will still allow this device until it is removed there.",
+                    "This clears the sign-in saved on this device. The server will still allow this device until it is removed there.",
                 confirmLabel = "Forget here",
                 dismissLabel = "Cancel",
                 onDismissRequest = { confirmation = "" },

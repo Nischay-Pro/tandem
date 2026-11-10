@@ -11,11 +11,17 @@ import {
   DeviceAuthorization,
   DeviceAuthInputError,
 } from "./auth/device-auth.js";
-import { PairingRateLimiter } from "./auth/pairing-rate-limiter.js";
+import {
+  ActualPasswordRejectedError,
+  ActualPasswordUnavailableError,
+  type ActualPasswordGrant,
+} from "./auth/actual-password-login.js";
 import type { ActualLoginMethods } from "./auth/actual-login-methods.js";
+import type { ActualOpenIdLogin } from "./auth/actual-openid-login.js";
 import { ActualLoginMethodsCache } from "./auth/actual-login-methods-cache.js";
 import { RequestRateLimiter } from "./auth/request-rate-limiter.js";
 import { logSecurityAuditEvent } from "./security-audit.js";
+import { enterActualPrincipal } from "./auth/actual-principal-context.js";
 import type { TransactionApiPort } from "./actual/transaction-api.js";
 import {
   BudgetMaintenanceBusyError,
@@ -78,6 +84,12 @@ export interface ApiAppOptions {
   readinessTimeoutMs?: number;
   actualReadiness?: () => { ready: boolean; message?: string };
   readActualLoginMethods?: () => Promise<ActualLoginMethods>;
+  signInWithActualPassword?: (password: string) => Promise<ActualPasswordGrant>;
+  actualOpenIdLogin?: ActualOpenIdLogin;
+  persistActualSessionToken?: (
+    principalId: string,
+    sessionToken: string,
+  ) => Promise<void>;
   onClose?: () => Promise<void>;
   deviceAuth?: DeviceAuthorization;
   transactionApi?: TransactionApiPort;
@@ -101,6 +113,15 @@ export async function buildApiApp(
     logger: false,
     trustProxy: options.trustProxy ?? false,
   });
+  if (options.deviceAuth) {
+    app.addHook("onRequest", async (request) => {
+      const match = request.headers.authorization?.match(
+        /^Bearer ([A-Za-z0-9_-]{43})$/i,
+      );
+      const device = await options.deviceAuth?.authenticate(match?.[1]);
+      if (device) enterActualPrincipal(device.principalId);
+    });
+  }
 
   await app.register(swagger, {
     openapi: {
@@ -260,6 +281,9 @@ export async function buildApiApp(
       app,
       options.deviceAuth,
       options.trustProxy ?? false,
+      options.signInWithActualPassword,
+      options.persistActualSessionToken,
+      options.actualOpenIdLogin,
     );
     registerTransactionRoutes(app, options.deviceAuth, options.transactionApi);
     registerBudgetMaintenanceRoutes(
@@ -286,8 +310,14 @@ function registerDeviceAuthorizationRoutes(
   app: FastifyInstance,
   deviceAuth: DeviceAuthorization,
   trustProxy: false | string[],
+  signInWithActualPassword?: (password: string) => Promise<ActualPasswordGrant>,
+  persistActualSessionToken?: (
+    principalId: string,
+    sessionToken: string,
+  ) => Promise<void>,
+  actualOpenIdLogin?: ActualOpenIdLogin,
 ): void {
-  const rateLimiter = new PairingRateLimiter();
+  const rateLimiter = new RequestRateLimiter(10, 60_000);
   let warnedAboutIgnoredForwardedFor = false;
   const errorSchema = {
     type: "object",
@@ -327,18 +357,17 @@ function registerDeviceAuthorizationRoutes(
     ],
     additionalProperties: false,
   };
-  const pairSchema: FastifySchema = {
+  const signInSchema: FastifySchema = {
     tags: ["Authentication"],
-    operationId: "pairDevice",
-    summary: "Exchange a one-time pairing code for a device credential",
+    operationId: "signInWithActualPassword",
+    summary: "Sign in with the Actual account password",
     body: {
       type: "object",
       properties: {
-        code: {
+        password: {
           type: "string",
-          minLength: 8,
-          maxLength: 16,
-          pattern: "^\\s*[A-Za-z0-9]{4}-?[A-Za-z0-9]{4}\\s*$",
+          minLength: 1,
+          maxLength: 1024,
         },
         deviceName: {
           type: "string",
@@ -347,7 +376,7 @@ function registerDeviceAuthorizationRoutes(
           pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
         },
       },
-      required: ["code", "deviceName"],
+      required: ["password", "deviceName"],
       additionalProperties: false,
     },
     response: {
@@ -376,17 +405,19 @@ function registerDeviceAuthorizationRoutes(
       401: errorSchema,
       400: errorSchema,
       429: errorSchema,
+      503: errorSchema,
     },
   };
   app.post<{
-    Body: { code: string; deviceName: string };
+    Body: { password: string; deviceName: string };
   }>(
-    "/api/v1/auth/pair",
-    { schema: pairSchema, attachValidation: true },
+    "/api/v1/auth/login",
+    { schema: signInSchema, attachValidation: true },
     async (request, reply) => {
+      reply.header("cache-control", "no-store");
       if (request.validationError) {
         logSecurityAuditEvent({
-          event: "device.pair",
+          event: "device.sign_in",
           outcome: "rejected",
           reason: "invalid_request",
           clientAddress: request.ip,
@@ -394,7 +425,7 @@ function registerDeviceAuthorizationRoutes(
         return reply.code(400).send({
           error: {
             code: "invalid_request",
-            message: "Pairing request is invalid",
+            message: "Sign-in details are invalid",
           },
         });
       }
@@ -406,82 +437,314 @@ function registerDeviceAuthorizationRoutes(
       ) {
         warnedAboutIgnoredForwardedFor = true;
         console.warn(
-          "X-Forwarded-For is present while TRUST_PROXY is unset; pairing requests share the proxy's rate limit.",
+          "X-Forwarded-For is present while TRUST_PROXY is unset; sign-in requests share the proxy's rate limit.",
         );
       }
 
-      const attempt = rateLimiter.reserveAttempt(request.ip);
-      if (!attempt.allowed) {
+      const limit = rateLimiter.reserveRequest(request.ip);
+      if (!limit.allowed) {
         logSecurityAuditEvent({
-          event: "device.pair_rate_limited",
+          event: "device.sign_in_rate_limited",
           outcome: "rejected",
           reason: "rate_limited",
           clientAddress: request.ip,
         });
         return reply
-          .header("retry-after", String(attempt.retryAfterSeconds))
+          .header("retry-after", String(limit.retryAfterSeconds))
           .code(429)
           .send({
             error: {
               code: "rate_limited",
-              message: "Too many pairing attempts",
+              message: "Too many sign-in attempts. Try again shortly.",
             },
           });
       }
 
-      let paired;
-      try {
-        paired = await deviceAuth.pair(request.body);
-      } catch (error) {
-        attempt.complete(true);
-        if (!(error instanceof DeviceAuthInputError)) {
-          throw error;
-        }
-        logSecurityAuditEvent({
-          event: "device.pair",
-          outcome: "rejected",
-          reason: "invalid_request",
-          clientAddress: request.ip,
-        });
-        return reply.code(400).send({
-          error: { code: "invalid_request", message: error.message },
-        });
-      }
-      if (!paired) {
-        attempt.complete(false);
-        logSecurityAuditEvent({
-          event: "device.pair",
-          outcome: "rejected",
-          reason: "invalid_code",
-          clientAddress: request.ip,
-        });
-        return reply.code(401).send({
+      if (!signInWithActualPassword) {
+        return reply.code(503).send({
           error: {
-            code: "invalid_pairing_code",
-            message: "Pairing code is invalid, expired, or already used",
+            code: "actual_unavailable",
+            message:
+              "Actual sign-in is unavailable. Check the server connection.",
           },
         });
       }
-      attempt.complete(true);
+
+      let grant: ActualPasswordGrant;
+      let signedIn;
+      try {
+        grant = await signInWithActualPassword(request.body.password);
+        await persistActualSessionToken?.(
+          grant.principalId,
+          grant.sessionToken,
+        );
+        signedIn = await deviceAuth.createDevice({
+          principalId: grant.principalId,
+          budgetIds: grant.budgetIds,
+          deviceName: request.body.deviceName,
+        });
+      } catch (error) {
+        if (error instanceof ActualPasswordRejectedError) {
+          logSecurityAuditEvent({
+            event: "device.sign_in",
+            outcome: "rejected",
+            reason: "invalid_credentials",
+            clientAddress: request.ip,
+          });
+          return reply.code(401).send({
+            error: {
+              code: "invalid_credentials",
+              message: "The password didn’t match this Actual server.",
+            },
+          });
+        }
+        if (error instanceof ActualPasswordUnavailableError) {
+          return reply.code(503).send({
+            error: {
+              code: "actual_unavailable",
+              message: "Couldn’t reach the Actual server. Try again shortly.",
+            },
+          });
+        }
+        if (error instanceof DeviceAuthInputError) {
+          return reply.code(400).send({
+            error: { code: "invalid_request", message: error.message },
+          });
+        }
+        throw error;
+      }
+      if (!signedIn) {
+        return reply.code(503).send({
+          error: {
+            code: "actual_unavailable",
+            message: "Actual sign-in is unavailable. Try again shortly.",
+          },
+        });
+      }
       logSecurityAuditEvent({
-        event: "device.pair",
+        event: "device.sign_in",
         outcome: "success",
         clientAddress: request.ip,
-        deviceId: paired.deviceId,
+        deviceId: signedIn.deviceId,
       });
 
-      reply.header("cache-control", "no-store");
-      return reply.code(201).send({
-        deviceId: paired.deviceId,
-        principalId: paired.principalId,
-        name: paired.name,
-        budgetIds: paired.budgetIds,
-        accessToken: paired.accessToken,
-        tokenType: "Bearer",
-        createdAt: paired.createdAt.toISOString(),
-      });
+      return reply.code(201).send(signInResponse(signedIn));
     },
   );
+
+  if (actualOpenIdLogin) {
+    app.post<{ Body: { deviceName: string } }>(
+      "/api/v1/auth/openid/start",
+      {
+        schema: {
+          tags: ["Authentication"],
+          operationId: "startActualOpenIdSignIn",
+          summary: "Start Actual OpenID sign-in",
+          body: {
+            type: "object",
+            properties: {
+              deviceName: {
+                type: "string",
+                minLength: 1,
+                maxLength: 100,
+                pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
+              },
+            },
+            required: ["deviceName"],
+            additionalProperties: false,
+          },
+          response: {
+            200: {
+              type: "object",
+              properties: { redirectUrl: { type: "string", format: "uri" } },
+              required: ["redirectUrl"],
+              additionalProperties: false,
+            },
+            400: errorSchema,
+            429: errorSchema,
+            503: errorSchema,
+          },
+        },
+        attachValidation: true,
+      },
+      async (request, reply) => {
+        reply.header("cache-control", "no-store");
+        if (request.validationError) {
+          return reply.code(400).send({
+            error: {
+              code: "invalid_request",
+              message: "Sign-in details are invalid",
+            },
+          });
+        }
+        const limit = rateLimiter.reserveRequest(request.ip);
+        if (!limit.allowed) {
+          return reply
+            .header("retry-after", String(limit.retryAfterSeconds))
+            .code(429)
+            .send({
+              error: {
+                code: "rate_limited",
+                message: "Too many sign-in attempts. Try again shortly.",
+              },
+            });
+        }
+        try {
+          return await actualOpenIdLogin.start(request.body.deviceName);
+        } catch {
+          return reply.code(503).send({
+            error: {
+              code: "actual_unavailable",
+              message: "Couldn’t start Actual sign-in. Try again shortly.",
+            },
+          });
+        }
+      },
+    );
+
+    app.get<{
+      Params: { state: string };
+      Querystring: { token?: string };
+    }>(
+      "/api/v1/auth/actual-return/:state/openid-cb",
+      {
+        schema: {
+          tags: ["Authentication"],
+          operationId: "completeActualOpenIdReturn",
+          summary: "Receive Actual’s OpenID callback",
+          params: {
+            type: "object",
+            properties: {
+              state: { type: "string", minLength: 43, maxLength: 43 },
+            },
+            required: ["state"],
+            additionalProperties: false,
+          },
+          querystring: {
+            type: "object",
+            properties: {
+              token: { type: "string", minLength: 1, maxLength: 4096 },
+            },
+            required: ["token"],
+            additionalProperties: false,
+          },
+          response: {
+            302: { type: "null" },
+            400: errorSchema,
+            401: errorSchema,
+            503: errorSchema,
+          },
+        },
+        attachValidation: true,
+      },
+      async (request, reply) => {
+        reply.header("cache-control", "no-store");
+        reply.header("referrer-policy", "no-referrer");
+        if (request.validationError || !request.query.token) {
+          return reply.code(400).send({
+            error: {
+              code: "invalid_request",
+              message: "Sign-in callback is invalid",
+            },
+          });
+        }
+        try {
+          const returnUrl = await actualOpenIdLogin.completeCallback(
+            request.params.state,
+            request.query.token,
+          );
+          if (!returnUrl) {
+            return reply.code(401).send({
+              error: {
+                code: "sign_in_expired",
+                message: "Sign-in expired. Start again.",
+              },
+            });
+          }
+          return reply.code(302).header("location", returnUrl).send();
+        } catch {
+          return reply.code(401).send({
+            error: {
+              code: "invalid_credentials",
+              message: "Actual sign-in could not be verified.",
+            },
+          });
+        }
+      },
+    );
+
+    app.post<{ Body: { code: string } }>(
+      "/api/v1/auth/openid/complete",
+      {
+        schema: {
+          tags: ["Authentication"],
+          operationId: "completeActualOpenIdSignIn",
+          summary: "Exchange a one-use OpenID return code for a device token",
+          body: {
+            type: "object",
+            properties: {
+              code: { type: "string", minLength: 43, maxLength: 43 },
+            },
+            required: ["code"],
+            additionalProperties: false,
+          },
+          response: {
+            201: signInResponseSchema(),
+            400: errorSchema,
+            401: errorSchema,
+            503: errorSchema,
+          },
+        },
+        attachValidation: true,
+      },
+      async (request, reply) => {
+        reply.header("cache-control", "no-store");
+        if (request.validationError) {
+          return reply.code(400).send({
+            error: {
+              code: "invalid_request",
+              message: "Sign-in code is invalid",
+            },
+          });
+        }
+        const completion = actualOpenIdLogin.consume(request.body.code);
+        if (!completion) {
+          return reply.code(401).send({
+            error: {
+              code: "sign_in_expired",
+              message: "Sign-in expired. Start again.",
+            },
+          });
+        }
+        try {
+          await persistActualSessionToken?.(
+            completion.grant.principalId,
+            completion.grant.sessionToken,
+          );
+          const signedIn = await deviceAuth.createDevice({
+            principalId: completion.grant.principalId,
+            budgetIds: completion.grant.budgetIds,
+            deviceName: completion.deviceName,
+          });
+          logSecurityAuditEvent({
+            event: "device.sign_in",
+            method: "openid",
+            outcome: "success",
+            clientAddress: request.ip,
+            deviceId: signedIn.deviceId,
+          });
+          return reply.code(201).send(signInResponse(signedIn));
+        } catch {
+          return reply.code(503).send({
+            error: {
+              code: "actual_unavailable",
+              message: "Couldn’t finish Actual sign-in. Try again.",
+            },
+          });
+        }
+      },
+    );
+  }
 
   app.get(
     "/api/v1/auth/me",
@@ -4762,6 +5025,50 @@ function toDeviceResponse(device: {
     createdAt: device.createdAt.toISOString(),
     lastSeenAt: device.lastSeenAt?.toISOString() ?? null,
     revokedAt: device.revokedAt?.toISOString() ?? null,
+  };
+}
+
+function signInResponse(device: {
+  deviceId: string;
+  principalId: string;
+  name: string;
+  budgetIds: string[];
+  accessToken: string;
+  createdAt: Date;
+}) {
+  return {
+    deviceId: device.deviceId,
+    principalId: device.principalId,
+    name: device.name,
+    budgetIds: device.budgetIds,
+    accessToken: device.accessToken,
+    tokenType: "Bearer",
+    createdAt: device.createdAt.toISOString(),
+  };
+}
+
+function signInResponseSchema() {
+  return {
+    type: "object",
+    properties: {
+      deviceId: { type: "string", format: "uuid" },
+      principalId: { type: "string" },
+      name: { type: "string" },
+      budgetIds: { type: "array", items: { type: "string" } },
+      accessToken: { type: "string", minLength: 43, maxLength: 43 },
+      tokenType: { type: "string", const: "Bearer" },
+      createdAt: { type: "string", format: "date-time" },
+    },
+    required: [
+      "deviceId",
+      "principalId",
+      "name",
+      "budgetIds",
+      "accessToken",
+      "tokenType",
+      "createdAt",
+    ],
+    additionalProperties: false,
   };
 }
 

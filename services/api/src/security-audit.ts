@@ -2,8 +2,7 @@ function isSensitiveAuditField(key: string): boolean {
   const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, "");
   return (
     normalized === "authorization" ||
-    normalized === "code" ||
-    normalized.includes("pairingcode") ||
+    normalized.includes("code") ||
     normalized.includes("token") ||
     normalized.includes("password") ||
     normalized.includes("secret")
@@ -20,6 +19,6 @@ export function logSecurityAuditEvent(
     );
     if (serialized !== undefined) writeLine(serialized);
   } catch {
-    // Audit output must never interrupt authentication or pairing.
+    // Audit output must never interrupt authentication.
   }
 }

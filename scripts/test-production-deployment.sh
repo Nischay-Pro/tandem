@@ -33,14 +33,13 @@ trap cleanup EXIT
 
 test_secret="release-check-$(date +%s)-synthetic"
 test_epoch="release-check-$(date +%s)"
-pairing_key="release-check-pairing-code-hash-key-32-bytes"
+auth_key="release-check-auth-token-encryption-key-32-bytes"
 backup_passphrase_file="$secret_dir/backup_passphrase"
 printf '%s' "$test_secret" > "$secret_dir/postgres_password"
 printf 'postgresql://tandem_release_check:%s@postgres:5432/tandem_release_check' \
   "$test_secret" > "$secret_dir/database_url"
-printf '%s' "$pairing_key" > "$secret_dir/pairing_code_hash_key"
+printf '%s' "$auth_key" > "$secret_dir/auth_token_encryption_key"
 printf '%s' "release-check-gpg-passphrase-$test_epoch" > "$backup_passphrase_file"
-: > "$secret_dir/actual_server_password"
 chmod 444 "$secret_dir"/*
 chmod 600 "$backup_passphrase_file"
 cat > "$env_file" <<EOF
@@ -48,13 +47,12 @@ POSTGRES_DB=tandem_release_check
 POSTGRES_USER=tandem_release_check
 POSTGRES_PASSWORD_FILE=$secret_dir/postgres_password
 DATABASE_URL_FILE=$secret_dir/database_url
-PAIRING_CODE_HASH_KEY_FILE=$secret_dir/pairing_code_hash_key
-ACTUAL_SERVER_PASSWORD_FILE=$secret_dir/actual_server_password
+AUTH_TOKEN_ENCRYPTION_KEY_FILE=$secret_dir/auth_token_encryption_key
 CHANGE_FEED_EPOCH=$test_epoch
 TRUST_PROXY=127.0.0.1
 TANDEM_EDGE_NETWORK=$edge_network
 ACTUAL_SERVER_URL=
-ACTUAL_SERVER_PASSWORD=
+ACTUAL_PUBLIC_URL=
 EOF
 
 docker network create "$edge_network" >/dev/null
@@ -66,12 +64,12 @@ fi
 "${compose[@]}" up --build --detach
 api_id="$("${compose[@]}" ps -q api)"
 api_environment="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$api_id")"
-if [[ "$api_environment" == *"$test_secret"* || "$api_environment" == *"$pairing_key"* ]]; then
+if [[ "$api_environment" == *"$test_secret"* || "$api_environment" == *"$auth_key"* ]]; then
   echo "Production secrets were exposed in the API container environment." >&2
   exit 1
 fi
 if [[ "$api_environment" != *"DATABASE_URL_FILE=/run/secrets/database_url"* || \
-  "$api_environment" != *"PAIRING_CODE_HASH_KEY_FILE=/run/secrets/pairing_code_hash_key"* ]]; then
+  "$api_environment" != *"AUTH_TOKEN_ENCRYPTION_KEY_FILE=/run/secrets/auth_token_encryption_key"* ]]; then
   echo "The production API did not receive its secret-file paths." >&2
   exit 1
 fi
@@ -90,34 +88,34 @@ wait_for_api() {
 }
 wait_for_api
 
-pair_device() {
+create_test_device() {
   local name="$1"
-  local pairing_json code response token
-  for _ in $(seq 1 5); do
-    wait_for_api
-    pairing_json="$("${compose[@]}" exec -T api node dist-cli/bin/pairing-cli.js --all-budgets --principal-id release-check)"
-    code="$(sed -nE 's/.*"code"[[:space:]]*:[[:space:]]*"([A-Za-z0-9-]+)".*/\1/p' <<< "$pairing_json")"
-    if [[ -z "$code" ]]; then
-      echo "Production pairing CLI did not return a pairing code." >&2
-      return 1
-    fi
-    if response="$(curl --silent --fail --request POST http://127.0.0.1:19754/api/v1/auth/pair \
-      --header 'Content-Type: application/json' \
-      --data "{\"code\":\"$code\",\"deviceName\":\"$name\"}" 2>/dev/null)"; then
-      token="$(sed -nE 's/.*"accessToken"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' <<< "$response")"
-      if [[ -n "$token" ]]; then
-        printf '%s' "$token"
-        return 0
-      fi
-    fi
-    sleep 1
-  done
-  echo "Production pairing endpoint did not issue a device token for $name." >&2
-  return 1
+  local token credential_hash device_id
+  token="$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n' | cut -c1-43)"
+  credential_hash="$(printf '%s' "$token" | sha256sum | cut -d ' ' -f1)"
+  device_id="$(cat /proc/sys/kernel/random/uuid)"
+  "${compose[@]}" exec -T postgres psql -U tandem_release_check -d tandem_release_check \
+    --set=device_id="$device_id" \
+    --set=device_name="$name" \
+    --set=credential_hash="$credential_hash" >/dev/null <<'SQL'
+INSERT INTO companion_devices (
+  device_id, principal_id, device_name, credential_hash, budget_ids
+) VALUES (:'device_id'::uuid, 'release-check', :'device_name', :'credential_hash', ARRAY['*']);
+SQL
+  printf '%s' "$token"
 }
 
-phone_token="$(pair_device 'Release check phone')"
-tablet_token="$(pair_device 'Release check tablet')"
+login_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+  --request POST http://127.0.0.1:19754/api/v1/auth/login \
+  --header 'Content-Type: application/json' \
+  --data '{"password":"unused-test-password","deviceName":"Release check phone"}')"
+if [[ "$login_status" != 503 ]]; then
+  echo "Sign-in without an Actual URL returned HTTP $login_status (expected 503)." >&2
+  exit 1
+fi
+
+phone_token="$(create_test_device 'Release check phone')"
+tablet_token="$(create_test_device 'Release check tablet')"
 device_list="$(curl --silent --show-error --fail http://127.0.0.1:19754/api/v1/devices \
   --header "Authorization: Bearer $phone_token")"
 if [[ "$device_list" != *'Release check phone'* || "$device_list" != *'Release check tablet'* ]]; then
@@ -136,7 +134,7 @@ fi
 TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" \
   "$project_root/deploy/backup.sh" "$scratch_root/tandem-backup"
 wait_for_api
-third_token="$(pair_device 'Post-backup tablet')"
+third_token="$(create_test_device 'Post-backup tablet')"
 "${compose[@]}" exec -T api node --input-type=module -e \
   "import { writeFileSync } from 'node:fs'; writeFileSync('/data/actual-api/release-check.txt', 'after backup');"
 TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" \
@@ -281,7 +279,7 @@ if [[ -n "$(find "$restore_tmp_dir" -mindepth 1 -maxdepth 1 -type f -print -quit
   exit 1
 fi
 wait_for_api 15
-encrypted_post_backup_token="$(pair_device 'Post-encrypted-backup tablet')"
+encrypted_post_backup_token="$(create_test_device 'Post-encrypted-backup tablet')"
 docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml" exec -T api node --input-type=module -e "import { writeFileSync } from 'node:fs'; writeFileSync('/data/actual-api/release-check.txt', 'after encrypted backup');"
 TMPDIR="$restore_tmp_dir" TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" TANDEM_BACKUP_GPG_PASSPHRASE_FILE="$backup_passphrase_file" "$project_root/deploy/restore.sh" "$scratch_root/tandem-encrypted-backup" "$test_epoch-after-encrypted-restore"
 if [[ -n "$(find "$restore_tmp_dir" -mindepth 1 -maxdepth 1 -type f -print -quit)" ]]; then
@@ -306,7 +304,7 @@ if [[ "$encrypted_token_status" != 401 ]]; then
   exit 1
 fi
 
-# Simulate an in-container process crash after both credentials are durably stored.
+# Simulate an in-container process crash after both device records are stored.
 api_id="$("${compose[@]}" ps -q api)"
 sleep 11
 docker exec --user 0 "$api_id" /bin/sh -c 'kill -KILL 1' >/dev/null 2>&1 || true
@@ -319,4 +317,4 @@ if [[ "$device_list" != *'Release check phone'* || "$device_list" != *'Release c
   exit 1
 fi
 
-echo "Production image passed health, pairing, authorization, plaintext and encrypted backup/restore, wrong-passphrase and corrupt-restore safety, and crash-recovery checks."
+echo "Production image passed health, sign-in routing, authorization, plaintext and encrypted backup/restore, wrong-passphrase and corrupt-restore safety, and crash-recovery checks."

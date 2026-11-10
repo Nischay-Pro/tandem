@@ -180,10 +180,10 @@
         }
       }
     },
-    "/api/v1/auth/pair": {
+    "/api/v1/auth/login": {
       "post": {
-        "operationId": "pairDevice",
-        "summary": "Exchange a one-time pairing code for a device credential",
+        "operationId": "signInWithActualPassword",
+        "summary": "Sign in with the Actual account password",
         "tags": ["Authentication"],
         "requestBody": {
           "required": true,
@@ -192,11 +192,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "code": {
+                  "password": {
                     "type": "string",
-                    "minLength": 8,
-                    "maxLength": 16,
-                    "pattern": "^\\s*[A-Za-z0-9]{4}-?[A-Za-z0-9]{4}\\s*$"
+                    "minLength": 1,
+                    "maxLength": 1024
                   },
                   "deviceName": {
                     "type": "string",
@@ -205,7 +204,7 @@
                     "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$"
                   }
                 },
-                "required": ["code", "deviceName"],
+                "required": ["password", "deviceName"],
                 "additionalProperties": false
               }
             }
@@ -295,6 +294,364 @@
             }
           },
           "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/openid/start": {
+      "post": {
+        "operationId": "startActualOpenIdSignIn",
+        "summary": "Start Actual OpenID sign-in",
+        "tags": ["Authentication"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "deviceName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$"
+                  }
+                },
+                "required": ["deviceName"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "redirectUrl": { "type": "string", "format": "uri" }
+                  },
+                  "required": ["redirectUrl"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/actual-return/{state}/openid-cb": {
+      "get": {
+        "operationId": "completeActualOpenIdReturn",
+        "summary": "Receive Actual’s OpenID callback",
+        "tags": ["Authentication"],
+        "parameters": [
+          {
+            "schema": { "type": "string", "minLength": 1, "maxLength": 4096 },
+            "in": "query",
+            "name": "token",
+            "required": true
+          },
+          {
+            "schema": { "type": "string", "minLength": 43, "maxLength": 43 },
+            "in": "path",
+            "name": "state",
+            "required": true
+          }
+        ],
+        "responses": {
+          "302": { "description": "Default Response" },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/openid/complete": {
+      "post": {
+        "operationId": "completeActualOpenIdSignIn",
+        "summary": "Exchange a one-use OpenID return code for a device token",
+        "tags": ["Authentication"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": { "type": "string", "minLength": 43, "maxLength": 43 }
+                },
+                "required": ["code"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deviceId": { "type": "string", "format": "uuid" },
+                    "principalId": { "type": "string" },
+                    "name": { "type": "string" },
+                    "budgetIds": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "accessToken": {
+                      "type": "string",
+                      "minLength": 43,
+                      "maxLength": 43
+                    },
+                    "tokenType": { "type": "string", "enum": ["Bearer"] },
+                    "createdAt": { "type": "string", "format": "date-time" }
+                  },
+                  "required": [
+                    "deviceId",
+                    "principalId",
+                    "name",
+                    "budgetIds",
+                    "accessToken",
+                    "tokenType",
+                    "createdAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
             "description": "Default Response",
             "content": {
               "application/json": {

@@ -6,11 +6,11 @@ as part of Gradle compilation; generated sources stay under `mobile/api-client/b
 and are not committed. The OpenAPI drift check remains the source-of-truth gate
 for route changes.
 
-The module also contains `TandemApiClient` for one-time device pairing and the
-authorized Actual budget catalog, plus `GeneratedBudgetSyncRemote`, the
+The module also contains `TandemApiClient` for Actual password/OpenID sign-in
+and the account's Actual budget catalog, plus `GeneratedBudgetSyncRemote`, the
 handwritten adapter between generated endpoint calls and the shared data
-module's sync protocol. The Compose app calls these APIs to pair a device, list
-its authorized budgets, perform the initial local sync, and display recent
+module's sync protocol. The Compose app calls these APIs to sign in, list
+available budgets, perform the initial local sync, and display recent
 transactions from the local database. The persistence and sync lifecycle are
 documented in [`docs/mobile-sync.md`](mobile-sync.md).
 

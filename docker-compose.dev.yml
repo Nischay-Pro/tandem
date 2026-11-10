@@ -25,12 +25,12 @@ services:
       dockerfile: services/api/Dockerfile.dev
     environment:
       DATABASE_URL: postgresql://companion:${POSTGRES_PASSWORD:-development-only-password}@postgres:5432/companion
-      PAIRING_CODE_HASH_KEY: ${PAIRING_CODE_HASH_KEY:-development-only-pairing-code-hash-key}
+      AUTH_TOKEN_ENCRYPTION_KEY: ${AUTH_TOKEN_ENCRYPTION_KEY:-development-only-auth-token-encryption-key}
       HOST: 0.0.0.0
       PORT: 19753
       CHANGE_FEED_EPOCH: ${CHANGE_FEED_EPOCH:-default}
       ACTUAL_SERVER_URL: ${ACTUAL_SERVER_URL:-}
-      ACTUAL_SERVER_PASSWORD: ${ACTUAL_SERVER_PASSWORD:-}
+      ACTUAL_PUBLIC_URL: ${ACTUAL_PUBLIC_URL:-}
       ACTUAL_SESSION_TOKEN: ${ACTUAL_SESSION_TOKEN:-}
       ACTUAL_API_DATA_DIR: /data/actual-api
     depends_on:
@@ -52,7 +52,7 @@ services:
     command: ["pnpm", "check:all"]
     environment:
       DATABASE_URL: postgresql://companion:${POSTGRES_PASSWORD:-development-only-password}@postgres:5432/companion
-      PAIRING_CODE_HASH_KEY: ${PAIRING_CODE_HASH_KEY:-development-only-pairing-code-hash-key}
+      AUTH_TOKEN_ENCRYPTION_KEY: ${AUTH_TOKEN_ENCRYPTION_KEY:-development-only-auth-token-encryption-key}
     volumes:
       - ./.dev-tmp/stryker:/workspace/.dev-tmp/stryker
     depends_on:
@@ -91,9 +91,9 @@ services:
     environment:
       HOME: /home/node
       DATABASE_URL: postgresql://companion:${POSTGRES_PASSWORD:-development-only-password}@postgres:5432/companion
-      PAIRING_CODE_HASH_KEY: ${PAIRING_CODE_HASH_KEY:-development-only-pairing-code-hash-key}
+      AUTH_TOKEN_ENCRYPTION_KEY: ${AUTH_TOKEN_ENCRYPTION_KEY:-development-only-auth-token-encryption-key}
       ACTUAL_SERVER_URL: http://actual-compat-server:5006
-      ACTUAL_SERVER_PASSWORD: compatibility-test-only-password
+      ACTUAL_COMPAT_TEST_PASSWORD: compatibility-test-only-password
       ACTUAL_API_DATA_DIR: /actual-api-data/device-one
     volumes:
       - actual-compat-client-data:/actual-api-data

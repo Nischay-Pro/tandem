@@ -8,8 +8,42 @@ location = /api/v1 {
     return 308 /api/v1/;
 }
 
-location = /api/v1/auth/pair {
-    limit_req zone=tandem_pairing burst=5 nodelay;
+location ^~ /api/v1/auth/actual-return/ {
+    access_log off;
+    limit_req zone=tandem_auth burst=5 nodelay;
+    limit_req_status 429;
+    proxy_pass http://tandem_api;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    add_header Cache-Control "no-store" always;
+}
+
+location = /api/v1/auth/login {
+    limit_req zone=tandem_auth burst=5 nodelay;
+    limit_req_status 429;
+    proxy_pass http://tandem_api;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    add_header Cache-Control "no-store" always;
+}
+
+location = /api/v1/auth/openid/start {
+    limit_req zone=tandem_auth burst=5 nodelay;
+    limit_req_status 429;
+    proxy_pass http://tandem_api;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    add_header Cache-Control "no-store" always;
+}
+
+location = /api/v1/auth/openid/complete {
+    limit_req zone=tandem_auth burst=5 nodelay;
     limit_req_status 429;
     proxy_pass http://tandem_api;
     proxy_set_header Host $host;

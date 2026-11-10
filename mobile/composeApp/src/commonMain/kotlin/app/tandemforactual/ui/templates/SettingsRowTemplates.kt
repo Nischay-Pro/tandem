@@ -142,7 +142,7 @@ internal fun financeIcon(label: String): ImageVector? {
         matches("date", "calendar", "start of week", "planning period", "month", "due", "posted") -> Lucide.CalendarDays
         matches("sync", "synchronization", "cloud") -> Lucide.CloudSync
         matches("server", "connection", "api") -> Lucide.Server
-        matches("device", "phone", "paired device") -> Lucide.Smartphone
+        matches("device", "phone") -> Lucide.Smartphone
         matches("theme", "appearance", "accent", "color", "background", "motion") -> Lucide.Palette
         matches("layout", "home screen") -> Lucide.LayoutDashboard
         matches("storage", "database", "local data", "cache") -> Lucide.Database

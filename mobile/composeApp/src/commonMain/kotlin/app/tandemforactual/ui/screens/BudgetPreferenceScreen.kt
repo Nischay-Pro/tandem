@@ -58,7 +58,7 @@ internal fun SyncPreferencesScreen(
         }
     val syncDescription =
         when {
-            !hasSelectedBudget -> "Pair this device and choose an Actual budget to sync"
+            !hasSelectedBudget -> "Sign in and choose an Actual budget to sync"
             mobileSession.isSyncing -> "Reading changes from Actual"
             mobileSession.syncError != null -> mobileSession.syncError.orEmpty()
             syncState?.lastSyncedAtEpochMs != null -> "Last successful sync"

@@ -95,8 +95,8 @@ class GeneratedApiSurfaceTest {
                 assertTrue(AuthenticationApi.getActualLoginMethods().getOrNull()?.isSuccessful == true)
                 assertTrue(
                     AuthenticationApi
-                        .pairDevice(
-                            buildJsonObject { put("code", "pairing-code") },
+                        .signInWithActualPassword(
+                            buildJsonObject { put("password", "actual-password") },
                         ).getOrNull()
                         ?.isSuccessful == true,
                 )
@@ -249,7 +249,7 @@ class GeneratedApiSurfaceTest {
                         HttpMethod.Get to "/api/v1/health/ready",
                         HttpMethod.Get to "/api/v1/openapi.json",
                         HttpMethod.Get to "/api/v1/auth/methods",
-                        HttpMethod.Post to "/api/v1/auth/pair",
+                        HttpMethod.Post to "/api/v1/auth/login",
                         HttpMethod.Get to "/api/v1/auth/me",
                         HttpMethod.Get to "/api/v1/devices",
                         HttpMethod.Delete to "/api/v1/devices/$deviceId",

@@ -1,6 +1,2 @@
-# Migration apply order. Append additive migrations in deployment order.
-20261101155148-companion-schema-v2
-20261106160000-journal-retention
-20261106170000-projection-body-deduplication
-20261106180000-snapshot-keyset-order
-20261107100000-project-rules-and-schedules
+# Tandem 0.1.0 starts with one consolidated initial schema.
+20261101000000-initial-schema

@@ -15,7 +15,7 @@ internal object BudgetSystemNotifications {
     private const val SYNC_FAILURE_ID = 4101
     private const val CONFLICT_ID = 4102
     private const val REJECTED_ID = 4103
-    private const val PAIRING_REQUIRED_ID = 4104
+    private const val SIGN_IN_REQUIRED_ID = 4104
 
     fun initialize(context: Context) {
         context.applicationContext.getSystemService(NotificationManager::class.java)?.let(::createChannel)
@@ -30,12 +30,12 @@ internal object BudgetSystemNotifications {
         )
     }
 
-    fun pairingRequired(context: Context) {
+    fun signInRequired(context: Context) {
         show(
             context,
-            PAIRING_REQUIRED_ID,
-            "Device pairing needs attention",
-            "This device needs to be paired again. Open Tandem to pair it with a new pairing code.",
+            SIGN_IN_REQUIRED_ID,
+            "Sign in to Tandem",
+            "Sign in again to sync this budget.",
         )
     }
 

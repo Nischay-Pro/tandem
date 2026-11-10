@@ -1,22 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { Pool, PoolClient } from "pg";
-import { down, up } from "./migrations/20261101155148-companion-schema-v2.js";
-import {
-  down as downJournalRetention,
-  up as upJournalRetention,
-} from "./migrations/20261106160000-journal-retention.js";
-import {
-  down as downProjectionBodyDeduplication,
-  up as upProjectionBodyDeduplication,
-} from "./migrations/20261106170000-projection-body-deduplication.js";
-import {
-  down as downSnapshotKeysetOrder,
-  up as upSnapshotKeysetOrder,
-} from "./migrations/20261106180000-snapshot-keyset-order.js";
-import {
-  down as downRulesAndSchedules,
-  up as upRulesAndSchedules,
-} from "./migrations/20261107100000-project-rules-and-schedules.js";
+import { down, up } from "./migrations/20261101000000-initial-schema.js";
 import { OperatorMessageError } from "../operator-message-error.js";
 
 export interface Migration {
@@ -27,29 +11,9 @@ export interface Migration {
 
 export const MIGRATIONS: readonly Migration[] = [
   {
-    name: "20261101155148-companion-schema-v2",
+    name: "20261101000000-initial-schema",
     up,
     down,
-  },
-  {
-    name: "20261106160000-journal-retention",
-    up: upJournalRetention,
-    down: downJournalRetention,
-  },
-  {
-    name: "20261106170000-projection-body-deduplication",
-    up: upProjectionBodyDeduplication,
-    down: downProjectionBodyDeduplication,
-  },
-  {
-    name: "20261106180000-snapshot-keyset-order",
-    up: upSnapshotKeysetOrder,
-    down: downSnapshotKeysetOrder,
-  },
-  {
-    name: "20261107100000-project-rules-and-schedules",
-    up: upRulesAndSchedules,
-    down: downRulesAndSchedules,
   },
 ];
 

@@ -16,6 +16,15 @@ import kotlin.test.assertTrue
 
 class TandemMobileSessionTest {
     @Test
+    fun acceptsOnlyShortLivedTandemOpenIdReturnCodes() {
+        val code = "C".repeat(43)
+        assertEquals(code, actualOpenIdReturnCode("tandem://signin/complete?code=$code"))
+        assertNull(actualOpenIdReturnCode("https://tandem.example/signin/complete?code=$code"))
+        assertNull(actualOpenIdReturnCode("tandem://signin/complete?token=actual-session-token"))
+        assertNull(actualOpenIdReturnCode("tandem://signin/complete?code=short"))
+    }
+
+    @Test
     fun mapsServerStatusesToAppMessagesWithoutShowingServerText() {
         assertEquals(
             "Tandem is temporarily unavailable. Try again shortly.",
@@ -40,9 +49,9 @@ class TandemMobileSessionTest {
     fun commonApiErrorsExplainWhatHappenedAndGiveOneNextStep() {
         val messages =
             listOf(
-                "not-paired" to (null to "Pair this device to open a budget."),
-                "invalid_pairing_code" to (null to "The pairing code didn’t work. Request a new code."),
-                "invalid_device_credential" to (null to "Pair this device again to restore access."),
+                "sign_in_required" to (null to "Sign in to open a budget."),
+                "invalid_credentials" to (null to "The password didn’t match this Actual server."),
+                "invalid_device_credential" to (null to "Sign in again to restore access."),
                 "bank_sync_failed" to (null to "Actual couldn’t sync your bank transactions. Check the bank connection and try again."),
                 "bank_sync_busy" to (null to "Bank sync is already running. Try again shortly."),
                 "duplicate_imported_id" to (null to "Two statement rows share a reference. Choose a column with unique values."),
@@ -319,13 +328,13 @@ class TandemMobileSessionTest {
                 )
 
             session.restoreStoredSession()
-            assertTrue(session.pairedDevice != null)
+            assertTrue(session.authenticatedDevice != null)
             assertTrue(apiClient.isAuthenticated)
             assertTrue(session.isCredentialStored)
 
             session.forgetDeviceLocally()
 
-            assertNull(session.pairedDevice)
+            assertNull(session.authenticatedDevice)
             assertFalse(apiClient.isAuthenticated)
             assertNull(apiClient.currentServerUrl)
             assertFalse(session.isCredentialStored)

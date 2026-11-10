@@ -1,6 +1,7 @@
 import { Pool } from "pg";
 import { DeviceAuthorization } from "./auth/device-auth.js";
 import { PostgresDeviceAuthStore } from "./auth/postgres-device-auth-store.js";
+import { PostgresActualSessionVault } from "./auth/actual-session-vault.js";
 import { READINESS_TIMEOUT_MS } from "./config.js";
 import { withBudgetLock } from "./database/budget-lock.js";
 import { applyMigrations } from "./schema/migrator.js";
@@ -21,6 +22,10 @@ export interface ServerDatabase extends HealthDatabase {
     "enqueue" | "claim" | "markCommitted" | "markRejected" | "markUncertain"
   >;
   readonly deviceAuth: DeviceAuthorization;
+  readonly actualSessionVault?: Pick<
+    PostgresActualSessionVault,
+    "save" | "readLatest" | "read"
+  >;
   migrate(): Promise<void>;
 }
 
@@ -32,7 +37,7 @@ export interface Database extends ServerDatabase {
 
 export function createPostgresDatabase(
   connectionString: string,
-  pairingCodeHashKey: string,
+  authTokenEncryptionKey: string,
 ): Database {
   const pool = new Pool({
     connectionString,
@@ -50,12 +55,10 @@ export function createPostgresDatabase(
 
   const journal = new PostgresWriteJournal(pool);
   const budgetProjection = createPostgresBudgetProjectionStore(pool);
-  const deviceAuth = new DeviceAuthorization(
-    new PostgresDeviceAuthStore(pool),
-    undefined,
-    undefined,
-    undefined,
-    { pairingCodeHashKey },
+  const deviceAuth = new DeviceAuthorization(new PostgresDeviceAuthStore(pool));
+  const actualSessionVault = new PostgresActualSessionVault(
+    pool,
+    authTokenEncryptionKey,
   );
   let readinessCheck: Promise<void> | undefined;
 
@@ -81,6 +84,7 @@ export function createPostgresDatabase(
     maintenanceJournal: journal,
     budgetProjection,
     deviceAuth,
+    actualSessionVault,
     async withBudgetLock<T>(budgetId: string, work: () => Promise<T>) {
       return withBudgetLock(pool, budgetId, work);
     },

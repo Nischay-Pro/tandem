@@ -8,13 +8,13 @@ An independent, local-first mobile companion for Actual Budget. Tandem provides 
 
 Tandem keeps a local copy of budget data on the phone so people can open a previously synced budget without a connection. It supports budget and account views, transaction creation and editing, conflict review, and settings for appearance, layout, motion, sync, and alerts.
 
-Tandem is under active development and is not a production release. Android pairing, cached startup, transaction, and scheduled-sync flows are implemented. Android builds and Kotlin iOS frameworks compile; running and validating the iOS app still requires macOS and Xcode.
+Tandem is under active development and is not a production release. Actual password and OpenID sign-in, cached startup, transaction, and scheduled-sync flows are implemented. Android builds and Kotlin iOS frameworks compile; running and validating the iOS app still requires macOS and Xcode.
 
 ## How sync works
 
 Actual remains the source of truth. The Android and iOS apps sync through the Tandem API and keep budget snapshots in Room, so previously synced data remains readable offline. The API uses Actual's official Node.js package to read and update budgets, while PostgreSQL stores Tandem's budget projection, change-feed cursors, and write-recovery state.
 
-Tandem uses this service because Actual does not provide a budget REST API and its official programmatic API is Node.js-only. The service gives both mobile platforms one supported Actual integration and centralizes device pairing, budget access, and write reconciliation. It must be trusted with readable budget data, including when an Actual budget is end-to-end encrypted. See [Architectural design](docs/architectural-design.md) for the rationale, tradeoffs, and a side-by-side diagram of unencrypted and encrypted budget flows.
+Tandem uses this service because Actual does not provide a budget REST API and its official programmatic API is Node.js-only. The service gives both mobile platforms one supported Actual integration and centralizes sign-in, budget access, and write reconciliation. It must be trusted with readable budget data, including when an Actual budget is end-to-end encrypted. See [Architectural design](docs/architectural-design.md) for the rationale, tradeoffs, and a side-by-side diagram of unencrypted and encrypted budget flows.
 
 ## Requirements
 
@@ -29,7 +29,7 @@ Tandem uses this service because Actual does not provide a budget REST API and i
 
 ### 1. Set up Actual Budget
 
-Set up a self-hosted Actual server using the [official installation guide](https://actualbudget.org/docs/install/). Use the supported `26.11.0` server release and have the server URL, server password, and budget Sync ID ready.
+Set up a self-hosted Actual server using the [official installation guide](https://actualbudget.org/docs/install/). Use the supported `26.11.0` server release and have its address and your Actual sign-in ready.
 
 ### 2. Run the Tandem API
 
@@ -81,13 +81,13 @@ services:
       - no-new-privileges:true
     environment:
       DATABASE_URL_FILE: /run/secrets/tandem_database_url
-      PAIRING_CODE_HASH_KEY_FILE: /run/secrets/tandem_pairing_code_hash_key
+      AUTH_TOKEN_ENCRYPTION_KEY_FILE: /run/secrets/tandem_auth_token_encryption_key
       HOST: 0.0.0.0
       PORT: 19753
       CHANGE_FEED_EPOCH: ${CHANGE_FEED_EPOCH:?Set CHANGE_FEED_EPOCH in .env.tandem}
       TRUST_PROXY: ${TRUST_PROXY:?Set TRUST_PROXY to the proxy IP or narrow CIDR in .env.tandem}
       ACTUAL_SERVER_URL: ${ACTUAL_SERVER_URL:-http://actual-server:5006}
-      ACTUAL_SERVER_PASSWORD_FILE: /run/secrets/tandem_actual_server_password
+      ACTUAL_PUBLIC_URL: ${ACTUAL_PUBLIC_URL:-}
       ACTUAL_API_DATA_DIR: /data/actual-api
     depends_on:
       tandem-postgres:
@@ -101,18 +101,15 @@ services:
       - default
     secrets:
       - tandem_database_url
-      - tandem_pairing_code_hash_key
-      - tandem_actual_server_password
+      - tandem_auth_token_encryption_key
 
 secrets:
   tandem_postgres_password:
     file: ${TANDEM_POSTGRES_PASSWORD_FILE:?Set TANDEM_POSTGRES_PASSWORD_FILE in .env.tandem}
   tandem_database_url:
     file: ${TANDEM_DATABASE_URL_FILE:?Set TANDEM_DATABASE_URL_FILE in .env.tandem}
-  tandem_pairing_code_hash_key:
-    file: ${TANDEM_PAIRING_CODE_HASH_KEY_FILE:?Set TANDEM_PAIRING_CODE_HASH_KEY_FILE in .env.tandem}
-  tandem_actual_server_password:
-    file: ${TANDEM_ACTUAL_SERVER_PASSWORD_FILE:?Set TANDEM_ACTUAL_SERVER_PASSWORD_FILE in .env.tandem}
+  tandem_auth_token_encryption_key:
+    file: ${TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_FILE:?Set TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_FILE in .env.tandem}
 
 volumes:
   tandem-postgres-data:
@@ -125,29 +122,18 @@ networks:
 
 The API joins the Compose project's `default` network so it can reach Actual and a proxy in the same project. PostgreSQL is isolated on `tandem-data`. If Actual or the proxy uses a named network, replace `default` under `tandem-api` with the shared network name and ensure the Actual service and proxy join it too. `expose` makes the API available to containers on that network without publishing a host port. If the reverse proxy runs directly on the host, add `ports: ["127.0.0.1:19753:19753"]` to `tandem-api` and point the proxy at `127.0.0.1:19753`.
 
-The example mounts the Actual server password as a secret. For an Actual server using OpenID, replace `ACTUAL_SERVER_PASSWORD_FILE` in the API environment with `ACTUAL_SESSION_TOKEN_FILE`, pointing it at that mounted secret; keep only one credential configured.
+Tandem does not need a shared Actual server password. Each person signs in from the app with their Actual password or OpenID provider. Set `ACTUAL_PUBLIC_URL` to the public Tandem URL for OpenID; leave it empty if you only use password sign-in.
 
-Keep Tandem's secret files in a private directory beside your Compose file. Compose mounts them read-only at `/run/secrets`; Tandem reads the values from those files, so they do not appear in the container environment. Create the directory and generate the database password, database URL, and pairing-code key:
+Keep Tandem's secret files in a private directory beside your Compose file. Compose mounts them read-only at `/run/secrets`; Tandem reads the values from those files, so they do not appear in the container environment. Create the directory and generate the database password, database URL, and encrypted-session key:
 
 ```sh
 mkdir -m 700 -p .tandem-secrets
 tandem_db_password="$(openssl rand -hex 32)"
 printf '%s' "$tandem_db_password" > .tandem-secrets/postgres_password
 printf 'postgresql://tandem:%s@tandem-postgres:5432/tandem' "$tandem_db_password" > .tandem-secrets/database_url
-openssl rand -hex 32 > .tandem-secrets/pairing_code_hash_key
-: > .tandem-secrets/actual_server_password
+openssl rand -hex 32 > .tandem-secrets/auth_token_encryption_key
 chmod 444 .tandem-secrets/*
 unset tandem_db_password
-```
-
-If Actual requires a password, make the secret writable for the deployment account, enter the password without echoing it, then restore the read-only container mode:
-
-```sh
-chmod 600 .tandem-secrets/actual_server_password
-read -r -s -p "Actual server password: " actual_server_password
-printf '%s' "$actual_server_password" > .tandem-secrets/actual_server_password
-unset actual_server_password
-chmod 444 .tandem-secrets/actual_server_password
 ```
 
 Keep the directory private (`chmod 700 .tandem-secrets`); the files are readable inside the container because Compose file-backed secrets use the source file permissions. If Actual has no password, leave the file empty.
@@ -157,16 +143,16 @@ The separate `.env.tandem` file contains paths and non-secret settings only:
 ```dotenv
 TANDEM_POSTGRES_PASSWORD_FILE=.tandem-secrets/postgres_password
 TANDEM_DATABASE_URL_FILE=.tandem-secrets/database_url
-TANDEM_PAIRING_CODE_HASH_KEY_FILE=.tandem-secrets/pairing_code_hash_key
-TANDEM_ACTUAL_SERVER_PASSWORD_FILE=.tandem-secrets/actual_server_password
+TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_FILE=.tandem-secrets/auth_token_encryption_key
 CHANGE_FEED_EPOCH=<paste-the-generated-change-feed-value>
 ACTUAL_SERVER_URL=http://actual-server:5006
+ACTUAL_PUBLIC_URL=https://budget.example.com
 # Required when using this reverse-proxy deployment; use the proxy IP or a
 # narrow CIDR as seen by the Tandem API container.
 TRUST_PROXY=
 ```
 
-Replace the example Actual service name, URL, and password with the values for your server. Keep the pairing-code hash key file stable for the API and pairing CLI; rotating it invalidates pending pairing codes but leaves paired devices working. Restrict `.env.tandem` to the deployment account with `chmod 600 .env.tandem`. Keep `CHANGE_FEED_EPOCH` stable across normal restarts; see [deployment and restore guidance](deploy/README.md) before changing it or restoring a backup. If the existing Actual stack has an `.env` file, pass both files so its current settings remain available and Tandem's paths are added:
+Set the Actual service name and URL for your Compose network. `ACTUAL_PUBLIC_URL` is the HTTPS address that reaches Tandem through your reverse proxy. The auth encryption key protects Actual session tokens stored by Tandem; keep it stable and private. Restrict `.env.tandem` to the deployment account with `chmod 600 .env.tandem`. Keep `CHANGE_FEED_EPOCH` stable across normal restarts; see [deployment and restore guidance](deploy/README.md) before changing it or restoring a backup. If the existing Actual stack has an `.env` file, pass both files so its current settings remain available and Tandem's paths are added:
 
 ```sh
 docker compose \
@@ -192,19 +178,7 @@ Check readiness through the HTTPS address configured in the reverse proxy:
 curl --fail https://budget.example.com/api/v1/health/ready
 ```
 
-Create a one-time pairing code scoped to the Actual budget you want on the device:
-
-```sh
-docker compose \
-  --env-file .env \
-  --env-file .env.tandem \
-  -f docker-compose.yml \
-  exec tandem-api \
-  node dist-cli/bin/pairing-cli.js \
-  --budget-id '<Actual budget sync ID>'
-```
-
-The code expires after five minutes and can only be used once. Grant only the budget IDs needed by that device. The phone must use the HTTPS URL exposed by the reverse proxy. See the [API guide](docs/api/README.md) for pairing scopes.
+Open Tandem, enter the public Tandem API address, then sign in with the Actual password or OpenID option configured on your Actual server. Tandem lists the budgets available to that Actual account.
 
 #### If you do not use the same Compose project as Actual
 
@@ -214,8 +188,8 @@ You can run Tandem in its own production Compose project. Clone this repository 
 docker network create tandem-edge
 cp deploy/compose/.env.example deploy/compose/.env
 chmod 600 deploy/compose/.env
-# Edit deploy/compose/.env: set the DB credentials, pairing-code hash key,
-# stable change-feed epoch, Actual URL/password, and external network name.
+# Edit deploy/compose/.env: set the DB credentials, auth encryption key,
+# stable change-feed epoch, Actual URLs, and external network name.
 docker compose \
   --project-directory "$PWD" \
   --env-file deploy/compose/.env \
@@ -239,18 +213,18 @@ sudo -u postgres createdb --owner=tandem tandem
 sudo install -d -o tandem -g tandem -m 0700 /var/lib/tandem/actual-api
 
 export DATABASE_URL='postgresql://tandem:<url-safe-password>@127.0.0.1:5432/tandem'
-export PAIRING_CODE_HASH_KEY='<at-least-32-byte-random-value>'
+export AUTH_TOKEN_ENCRYPTION_KEY='<at-least-32-byte-random-value>'
 export CHANGE_FEED_EPOCH='<stable-random-value>'
 export HOST=127.0.0.1
 export PORT=19753
 export TRUST_PROXY=127.0.0.1
 export ACTUAL_SERVER_URL='http://127.0.0.1:5006'
-export ACTUAL_SERVER_PASSWORD='<your-Actual-server-password>'
 export ACTUAL_API_DATA_DIR='/var/lib/tandem/actual-api'
+export ACTUAL_PUBLIC_URL='https://budget.example.com'
 node services/api/dist/entrypoint.js
 ```
 
-Store these values in the supervisor's protected environment file instead of a shell history, keep `ACTUAL_API_DATA_DIR` on persistent storage, and place the API behind the HTTPS reverse proxy. For an Actual server using OpenID, use `ACTUAL_SESSION_TOKEN` or `ACTUAL_SESSION_TOKEN_FILE` in place of `ACTUAL_SERVER_PASSWORD`; keep the token in a protected secret file and never configure both. Set `ACTUAL_SERVER_URL` to an address reachable from the host process. If Nginx runs on the same host, proxy `/api/v1/` to `http://127.0.0.1:19753` and keep `HOST=127.0.0.1`. Generate pairing codes with `node services/api/dist-cli/bin/pairing-cli.js --budget-id '<Actual budget sync ID>'`. The `pnpm api:dev` command is for development only; it does not replace a production process supervisor.
+Store environment values in the supervisor's protected environment file instead of a shell history, keep `ACTUAL_API_DATA_DIR` on persistent storage, and place the API behind the HTTPS reverse proxy. Set `ACTUAL_SERVER_URL` to the Actual address reachable from the host process. Set `ACTUAL_PUBLIC_URL` to the public Tandem address when enabling OpenID sign-in. If Nginx runs on the same host, proxy `/api/v1/` to `http://127.0.0.1:19753` and keep `HOST=127.0.0.1`. The `pnpm api:dev` command is for development only; it does not replace a production process supervisor.
 
 ### 3. Build and run Android
 
@@ -269,7 +243,7 @@ adb reverse tcp:19753 tcp:19753
 adb install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk
 ```
 
-Open Tandem, enter the HTTPS API address reachable from the Android device, and pair with the one-time code. For a local development API, use `adb reverse tcp:19753 tcp:19753` and `http://127.0.0.1:19753`; for a deployment, use the HTTPS URL configured in the reverse proxy.
+Open Tandem, enter the HTTPS API address reachable from the Android device, then sign in to Actual. For a local development API, use `adb reverse tcp:19753 tcp:19753` and `http://127.0.0.1:19753`; for a deployment, use the HTTPS URL configured in the reverse proxy.
 
 ### Build iOS
 

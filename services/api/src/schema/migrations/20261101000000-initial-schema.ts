@@ -1,29 +1,25 @@
 import type { PoolClient } from "pg";
 
 export async function up(client: PoolClient): Promise<void> {
-  await client.query(`CREATE TABLE companion_pairing_codes (
-    code_hash char(64) PRIMARY KEY CHECK (code_hash ~ '^[a-f0-9]{64}$'),
-    principal_id text NOT NULL CHECK (length(principal_id) BETWEEN 1 AND 200),
-    budget_ids text[] NOT NULL CHECK (cardinality(budget_ids) BETWEEN 1 AND 100),
-    expires_at timestamptz NOT NULL,
-    consumed_at timestamptz,
-    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    CHECK (expires_at > created_at)
-  )`);
-  await client.query(`CREATE INDEX companion_pairing_codes_expiration
-    ON companion_pairing_codes (expires_at) WHERE consumed_at IS NULL`);
   await client.query(`CREATE TABLE companion_devices (
     device_id uuid PRIMARY KEY,
     principal_id text NOT NULL CHECK (length(principal_id) BETWEEN 1 AND 200),
     device_name text NOT NULL CHECK (length(device_name) BETWEEN 1 AND 100),
     credential_hash char(64) NOT NULL UNIQUE CHECK (credential_hash ~ '^[a-f0-9]{64}$'),
-    budget_ids text[] NOT NULL CHECK (cardinality(budget_ids) BETWEEN 1 AND 100),
+    budget_ids text[] NOT NULL CHECK (cardinality(budget_ids) BETWEEN 0 AND 100),
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     last_seen_at timestamptz,
     revoked_at timestamptz
   )`);
   await client.query(`CREATE INDEX companion_devices_principal_created
     ON companion_devices (principal_id, created_at, device_id)`);
+  await client.query(`CREATE TABLE companion_actual_sessions (
+    principal_id text PRIMARY KEY CHECK (length(principal_id) BETWEEN 1 AND 200),
+    token_ciphertext bytea NOT NULL,
+    token_nonce bytea NOT NULL CHECK (octet_length(token_nonce) = 12),
+    token_tag bytea NOT NULL CHECK (octet_length(token_tag) = 16),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
+  )`);
   await client.query(`CREATE TABLE companion_operations (
     operation_id uuid PRIMARY KEY,
     principal_id text NOT NULL CHECK (length(principal_id) BETWEEN 1 AND 200),
@@ -45,10 +41,14 @@ export async function up(client: PoolClient): Promise<void> {
     started_at timestamptz,
     lease_expires_at timestamptz,
     completed_at timestamptz,
+    payload_compacted_at timestamptz,
     UNIQUE (principal_id, budget_id, idempotency_key)
   )`);
   await client.query(`CREATE INDEX companion_operations_budget_status_created
     ON companion_operations (budget_id, status, created_at)`);
+  await client.query(`CREATE INDEX companion_operations_payload_retention
+    ON companion_operations (completed_at, operation_id)
+    WHERE status IN ('committed', 'rejected') AND payload_compacted_at IS NULL`);
   await client.query(`CREATE TABLE companion_operation_conflicts (
     conflict_id uuid PRIMARY KEY,
     operation_id uuid NOT NULL UNIQUE REFERENCES companion_operations(operation_id),
@@ -75,7 +75,7 @@ export async function up(client: PoolClient): Promise<void> {
     budget_id text NOT NULL REFERENCES companion_budget_sync_state(budget_id) ON DELETE CASCADE,
     entity_type text NOT NULL CHECK (entity_type IN (
       'account', 'account-group', 'category', 'category-group',
-      'payee', 'transaction', 'budget-month'
+      'payee', 'rule', 'schedule', 'transaction', 'budget-month'
     )),
     entity_id text NOT NULL CHECK (length(entity_id) BETWEEN 1 AND 500),
     revision char(64) NOT NULL CHECK (revision ~ '^[a-f0-9]{64}$'),
@@ -93,7 +93,7 @@ export async function up(client: PoolClient): Promise<void> {
     cursor bigint NOT NULL CHECK (cursor > 0),
     entity_type text NOT NULL CHECK (entity_type IN (
       'account', 'account-group', 'category', 'category-group',
-      'payee', 'transaction', 'budget-month'
+      'payee', 'rule', 'schedule', 'transaction', 'budget-month'
     )),
     entity_id text NOT NULL CHECK (length(entity_id) BETWEEN 1 AND 500),
     operation text NOT NULL CHECK (operation IN ('upsert', 'delete')),
@@ -102,8 +102,18 @@ export async function up(client: PoolClient): Promise<void> {
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     PRIMARY KEY (budget_id, cursor),
     CHECK ((operation = 'delete' AND body IS NULL)
-      OR (operation = 'upsert' AND body IS NOT NULL AND jsonb_typeof(body) = 'object'))
+      OR (operation = 'upsert'
+        AND (body IS NULL OR jsonb_typeof(body) = 'object')))
   )`);
+  await client.query(`CREATE INDEX companion_budget_records_snapshot_keyset
+    ON companion_budget_records (
+      budget_id,
+      entity_type COLLATE "C",
+      entity_id COLLATE "C"
+    ) WHERE is_deleted = false`);
+  await client.query(`CREATE INDEX companion_budget_record_tombstone_retention
+    ON companion_budget_records (budget_id, updated_cursor)
+    WHERE is_deleted = true`);
 }
 
 export async function down(client: PoolClient): Promise<void> {
@@ -112,6 +122,6 @@ export async function down(client: PoolClient): Promise<void> {
   await client.query("DROP TABLE companion_budget_sync_state");
   await client.query("DROP TABLE companion_operation_conflicts");
   await client.query("DROP TABLE companion_operations");
+  await client.query("DROP TABLE companion_actual_sessions");
   await client.query("DROP TABLE companion_devices");
-  await client.query("DROP TABLE companion_pairing_codes");
 }

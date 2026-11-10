@@ -1,6 +1,6 @@
 package app.tandemforactual.ui
 
-/** Platform-backed storage for the bearer credential returned after device pairing. */
+/** Platform-backed storage for this device's bearer credential after Actual sign-in. */
 interface DeviceCredentialStore {
     fun read(): String?
 

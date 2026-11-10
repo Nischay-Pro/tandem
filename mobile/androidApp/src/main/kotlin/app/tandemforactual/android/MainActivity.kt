@@ -23,6 +23,7 @@ import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.openTandemDatabase
 import app.tandemforactual.data.database.tandemDatabaseBuilder
 import app.tandemforactual.ui.TandemApp
+import app.tandemforactual.ui.AuthReturnEvents
 import kotlinx.coroutines.flow.MutableSharedFlow
 
 class MainActivity : ComponentActivity() {
@@ -58,6 +59,7 @@ class MainActivity : ComponentActivity() {
       !appStartupComplete && SystemClock.uptimeMillis() < splashDeadline
     }
     super.onCreate(savedInstanceState)
+    intent?.dataString?.let { AuthReturnEvents.publish(it) }
     notificationPermissionEnabled = hasNotificationPermission()
     BudgetSystemNotifications.initialize(applicationContext)
     val database = openTandemDatabase(tandemDatabaseBuilder(applicationContext))
@@ -88,6 +90,12 @@ class MainActivity : ComponentActivity() {
         networkRestoredEvents = networkRestoredEvents,
       )
     }
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    intent.dataString?.let { AuthReturnEvents.publish(it) }
   }
 
   private fun requestNotificationPermission() {

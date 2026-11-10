@@ -6,11 +6,11 @@ import { parseApiConfig as parseRawApiConfig } from "../src/config.js";
 
 const databaseUrl =
   "postgresql://companion:local-test@localhost:5432/companion";
-const testPairingCodeHashKey = "synthetic-pairing-code-hash-key-32-bytes";
+const testAuthTokenEncryptionKey = "synthetic-session-token-encryption-key-32";
 
 function parseApiConfig(environment: Record<string, string | undefined>) {
   return parseRawApiConfig({
-    PAIRING_CODE_HASH_KEY: testPairingCodeHashKey,
+    AUTH_TOKEN_ENCRYPTION_KEY: testAuthTokenEncryptionKey,
     ...environment,
   });
 }
@@ -40,7 +40,6 @@ describe("parseApiConfig", () => {
       parseApiConfig({
         DATABASE_URL: databaseUrl,
         ACTUAL_SERVER_URL: "  ",
-        ACTUAL_SERVER_PASSWORD: "",
       }).actual,
     ).toBeUndefined();
   });
@@ -48,7 +47,7 @@ describe("parseApiConfig", () => {
   it("uses safe development defaults", () => {
     expect(parseApiConfig({ DATABASE_URL: databaseUrl })).toEqual({
       databaseUrl,
-      pairingCodeHashKey: testPairingCodeHashKey,
+      authTokenEncryptionKey: testAuthTokenEncryptionKey,
       host: "0.0.0.0",
       port: 19753,
       trustProxy: false,
@@ -56,7 +55,7 @@ describe("parseApiConfig", () => {
     });
   });
 
-  it("keeps Actual integration disabled when credentials are omitted", () => {
+  it("keeps Actual integration disabled when its URL is omitted", () => {
     expect(
       parseApiConfig({ DATABASE_URL: databaseUrl }).actual,
     ).toBeUndefined();
@@ -68,24 +67,21 @@ describe("parseApiConfig", () => {
     ).toBeUndefined();
   });
 
-  it("parses a pinned Actual connection and persistent API workspace", () => {
+  it("parses an Actual URL and persistent API workspace without shared credentials", () => {
     expect(
       parseApiConfig({
         DATABASE_URL: databaseUrl,
         ACTUAL_SERVER_URL: " https://budget.example.com/ ",
-        ACTUAL_SERVER_PASSWORD: " server secret ",
         ACTUAL_API_DATA_DIR: " /srv/actual-api ",
       }).actual,
     ).toEqual({
       serverURL: "https://budget.example.com",
-      password: " server secret ",
       dataDir: "/srv/actual-api",
     });
     expect(
       parseApiConfig({
         DATABASE_URL: databaseUrl,
         ACTUAL_SERVER_URL: "http://actual:5006",
-        ACTUAL_SERVER_PASSWORD: "server-secret",
       }).actual?.dataDir,
     ).toBe("/data/actual-api");
   });
@@ -123,7 +119,7 @@ describe("parseApiConfig", () => {
     );
   });
 
-  it("rejects simultaneous Actual password and session token credentials", () => {
+  it("rejects a shared Actual server password", () => {
     expect(() =>
       parseApiConfig({
         DATABASE_URL: databaseUrl,
@@ -131,27 +127,18 @@ describe("parseApiConfig", () => {
         ACTUAL_SERVER_PASSWORD: "server-password",
         ACTUAL_SESSION_TOKEN: "browser-session-token",
       }),
-    ).toThrow(
-      "Configure either ACTUAL_SERVER_PASSWORD or ACTUAL_SESSION_TOKEN, not both",
-    );
+    ).toThrow("ACTUAL_SERVER_PASSWORD is not supported");
   });
 
-  it.each([
-    { ACTUAL_SERVER_URL: "https://actual.example.com" },
-    { ACTUAL_SERVER_PASSWORD: "server-secret" },
-    {
-      ACTUAL_SERVER_URL: "https://actual.example.com",
-      ACTUAL_SERVER_PASSWORD: "",
-    },
-    { ACTUAL_SESSION_TOKEN: "browser-session-token" },
-    {
-      ACTUAL_SERVER_URL: "https://actual.example.com",
-      ACTUAL_SESSION_TOKEN: "",
-    },
-  ])("rejects incomplete Actual connection settings", (actual) => {
+  it("requires an Actual server URL for an operator-managed session token", () => {
     expect(() =>
-      parseApiConfig({ DATABASE_URL: databaseUrl, ...actual }),
-    ).toThrow(/ACTUAL_SERVER_URL and exactly one/);
+      parseApiConfig({
+        DATABASE_URL: databaseUrl,
+        ACTUAL_SESSION_TOKEN: "browser-session-token",
+      }),
+    ).toThrow(
+      "ACTUAL_SERVER_URL is required when configuring an Actual session token",
+    );
   });
 
   it.each([
@@ -163,7 +150,6 @@ describe("parseApiConfig", () => {
       parseApiConfig({
         DATABASE_URL: databaseUrl,
         ACTUAL_SERVER_URL: serverUrl,
-        ACTUAL_SERVER_PASSWORD: "server-secret",
       }),
     ).toThrow("ACTUAL_SERVER_URL must be a valid HTTP(S) URL");
   });
@@ -173,7 +159,6 @@ describe("parseApiConfig", () => {
       parseApiConfig({
         DATABASE_URL: databaseUrl,
         ACTUAL_SERVER_URL: "http://actual:5006",
-        ACTUAL_SERVER_PASSWORD: "server-secret",
         ACTUAL_API_DATA_DIR: "actual-api",
       }),
     ).toThrow("ACTUAL_API_DATA_DIR must be an absolute path");
@@ -188,7 +173,7 @@ describe("parseApiConfig", () => {
       }),
     ).toEqual({
       databaseUrl,
-      pairingCodeHashKey: testPairingCodeHashKey,
+      authTokenEncryptionKey: testAuthTokenEncryptionKey,
       host: "127.0.0.1",
       port: 8090,
       trustProxy: false,
@@ -268,57 +253,57 @@ describe("parseApiConfig", () => {
     expect(() => parseApiConfig({})).toThrow("DATABASE_URL is required");
   });
 
-  it("requires an independent pairing-code hash key with at least 32 bytes", () => {
+  it("requires an independent auth-token encryption key with at least 32 bytes", () => {
     expect(() => parseRawApiConfig({ DATABASE_URL: databaseUrl })).toThrow(
-      "PAIRING_CODE_HASH_KEY is required",
+      "AUTH_TOKEN_ENCRYPTION_KEY is required",
     );
     expect(() =>
       parseApiConfig({
         DATABASE_URL: databaseUrl,
-        PAIRING_CODE_HASH_KEY: "x".repeat(31),
+        AUTH_TOKEN_ENCRYPTION_KEY: "x".repeat(31),
       }),
-    ).toThrow("PAIRING_CODE_HASH_KEY must contain at least 32 bytes");
+    ).toThrow("AUTH_TOKEN_ENCRYPTION_KEY must contain at least 32 bytes");
     expect(
       parseApiConfig({
         DATABASE_URL: databaseUrl,
-        PAIRING_CODE_HASH_KEY: "x".repeat(32),
-      }).pairingCodeHashKey,
+        AUTH_TOKEN_ENCRYPTION_KEY: "x".repeat(32),
+      }).authTokenEncryptionKey,
     ).toBe("x".repeat(32));
   });
 
-  it("reads the database URL and pairing key from secret files", () => {
+  it("reads the database URL and auth encryption key from secret files", () => {
     withSecretFiles(
       {
         DATABASE_URL: `${databaseUrl}\n`,
-        PAIRING_CODE_HASH_KEY: `${testPairingCodeHashKey}\n`,
+        AUTH_TOKEN_ENCRYPTION_KEY: `${testAuthTokenEncryptionKey}\n`,
       },
       (paths) => {
         expect(
           parseApiConfig({
             DATABASE_URL: undefined,
             DATABASE_URL_FILE: paths.DATABASE_URL,
-            PAIRING_CODE_HASH_KEY: undefined,
-            PAIRING_CODE_HASH_KEY_FILE: paths.PAIRING_CODE_HASH_KEY,
+            AUTH_TOKEN_ENCRYPTION_KEY: undefined,
+            AUTH_TOKEN_ENCRYPTION_KEY_FILE: paths.AUTH_TOKEN_ENCRYPTION_KEY,
           }),
         ).toMatchObject({
           databaseUrl,
-          pairingCodeHashKey: testPairingCodeHashKey,
+          authTokenEncryptionKey: testAuthTokenEncryptionKey,
         });
       },
     );
   });
 
-  it("reads the optional Actual password from a secret file", () => {
+  it("rejects the removed shared Actual password secret", () => {
     withSecretFiles(
       { ACTUAL_SERVER_PASSWORD: " server secret \n" },
       (paths) => {
-        expect(
+        expect(() =>
           parseApiConfig({
             DATABASE_URL: databaseUrl,
             ACTUAL_SERVER_URL: "https://budget.example.com",
             ACTUAL_SERVER_PASSWORD_FILE: paths.ACTUAL_SERVER_PASSWORD,
-          }).actual?.password,
-        ).toBe(" server secret ");
+          }),
+        ).toThrow("ACTUAL_SERVER_PASSWORD is not supported");
       },
     );
   });

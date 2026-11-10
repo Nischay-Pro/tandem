@@ -125,7 +125,7 @@ function createApi(
   );
   const deviceAuth = {
     authenticate,
-    createPairingCode: vi.fn(),
+    createDevice: vi.fn(),
     pair: vi.fn(),
     listDevicesForDevice: vi.fn(),
     revokeDeviceForDevice: vi.fn(),

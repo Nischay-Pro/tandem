@@ -5,6 +5,8 @@ import type { ServerDatabase } from "./database.js";
 import type { TransactionApiPort } from "./actual/transaction-api.js";
 import type { BudgetMaintenanceApiPort } from "./actual/budget-maintenance-api.js";
 import type { BudgetReadApiPort } from "./budget-projection/budget-read-api.js";
+import type { ActualPasswordGrant } from "./auth/actual-password-login.js";
+import type { ActualOpenIdLogin } from "./auth/actual-openid-login.js";
 import { WriteLeaseReaper } from "./write-journal/lease-reaper.js";
 
 export type ShutdownSignal = "SIGINT" | "SIGTERM";
@@ -22,6 +24,12 @@ export interface ApiRuntime {
   readActualLoginMethods?(): Promise<
     import("./auth/actual-login-methods.js").ActualLoginMethods
   >;
+  signInWithActualPassword?(password: string): Promise<ActualPasswordGrant>;
+  actualOpenIdLogin?: ActualOpenIdLogin;
+  persistActualSessionToken?(
+    principalId: string,
+    sessionToken: string,
+  ): Promise<void>;
   close?(): Promise<void>;
 }
 
@@ -53,6 +61,15 @@ export async function startApiServer(
       ...(runtime.readActualLoginMethods === undefined
         ? {}
         : { readActualLoginMethods: runtime.readActualLoginMethods }),
+      ...(runtime.signInWithActualPassword === undefined
+        ? {}
+        : { signInWithActualPassword: runtime.signInWithActualPassword }),
+      ...(runtime.actualOpenIdLogin === undefined
+        ? {}
+        : { actualOpenIdLogin: runtime.actualOpenIdLogin }),
+      ...(runtime.persistActualSessionToken === undefined
+        ? {}
+        : { persistActualSessionToken: runtime.persistActualSessionToken }),
       ...(runtime.transactionApi === undefined
         ? {}
         : { transactionApi: runtime.transactionApi }),

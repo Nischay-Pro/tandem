@@ -15,14 +15,14 @@ class BackgroundSyncFailureActionTest {
     }
 
     @Test
-    fun rejectedDeviceCredentialRequiresPairingAgain() {
+    fun rejectedDeviceCredentialRequiresSignInAgain() {
         val error = TandemApiException("invalid_device_credential", httpStatus = 401)
 
         assertEquals(BackgroundSyncFailureAction.PAIR_AGAIN, error.backgroundSyncFailureAction())
     }
 
     @Test
-    fun genericUnauthorizedResponseRetriesWithoutClearingPairing() {
+    fun genericUnauthorizedResponseRetriesWithoutClearingSignIn() {
         val error = TandemApiException("http-401", httpStatus = 401)
 
         assertEquals(BackgroundSyncFailureAction.RETRY, error.backgroundSyncFailureAction())

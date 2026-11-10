@@ -32,12 +32,12 @@ compilation run on the macOS CI runner with Xcode. The local-first repository,
 sync coordinator, and sync triggers are described in
 [`docs/mobile-sync.md`](mobile-sync.md). Use an Android emulator or connected
 device configured through Android Studio or the Android SDK command-line tools.
-The shared Compose app can pair through Tandem, load
-the authorized budget catalog, and sync budget data locally. Budget, account,
+The shared Compose app can sign in through Tandem, load
+the signed-in account's budget catalog, and sync budget data locally. Budget, account,
 category, and activity views read that local copy. Editing an existing
 transaction, creating transactions with stable caller-owned IDs, and reviewing
-sync conflicts use the durable local write queue. For phone-to-host debug
-pairing, use `adb reverse` to forward the app's loopback port to the local API.
+sync conflicts use the durable local write queue. For phone-to-host debugging,
+use `adb reverse` to forward the app's loopback port to the local API.
 
 ### Android preview and device debugging
 
@@ -68,17 +68,15 @@ docker compose -f docker-compose.dev.yml up --build api
 
 Then fetch `http://localhost:19753/api/v1/openapi.json`.
 
-To enable the Actual-backed budget routes, provide `ACTUAL_SERVER_URL` and
-exactly one of `ACTUAL_SERVER_PASSWORD` or `ACTUAL_SESSION_TOKEN` to Compose,
-for example in an ignored local `.env` file. Use the matching `_FILE` setting
-for a mounted secret where possible. A session token supports an Actual server
-using OpenID sign-in; it expires independently and must be replaced when
-Actual rejects it. Set `PAIRING_CODE_HASH_KEY` in that file when running the API or pairing
-CLI directly; generate it with `openssl rand -hex 32` and use the same value
-for both processes. The Docker development Compose file supplies a
-development-only default. The API accepts only the server release pinned in
+To enable the Actual-backed budget routes, set `ACTUAL_SERVER_URL` to the
+address reachable by the API. Set `ACTUAL_PUBLIC_URL` to test Actual OpenID
+sign-in; password sign-in does not need it. The Docker development Compose file
+supplies a development-only `AUTH_TOKEN_ENCRYPTION_KEY`. Production deployments
+must provide a private random key to encrypt Actual session tokens stored in
+PostgreSQL. The API accepts only the server release pinned in
 `services/api/src/actual/actual-session.ts`. The API's local Actual workspace may
-hold decrypted budget data. The server password stays in the API container. Encrypted budgets may
+hold decrypted budget data. Actual account passwords are sent only for sign-in
+and are not retained. Encrypted budgets may
 send their separate budget password per request in
 `X-Budget-Encryption-Password`; that value is never written to PostgreSQL.
 Treat the workspace, PostgreSQL data, and their backups as financial data.
@@ -89,7 +87,7 @@ snapshot; the epoch must be backed up separately from PostgreSQL.
 
 ## Code quality
 
-Run the Compose integration-test command above for the per-change gate. Running `pnpm check:all` directly also requires `DATABASE_URL` to point to a disposable PostgreSQL database and `PAIRING_CODE_HASH_KEY` to contain at least 32 bytes. Run `pnpm test:mutation` for incremental mutation testing or `pnpm test:mutation:full` to force the full configured set.
+Run the Compose integration-test command above for the per-change gate. Running `pnpm check:all` directly also requires `DATABASE_URL` to point to a disposable PostgreSQL database and `AUTH_TOKEN_ENCRYPTION_KEY` to contain at least 32 bytes. Run `pnpm test:mutation` for incremental mutation testing or `pnpm test:mutation:full` to force the full configured set.
 
 Install the local pre-commit checks once with:
 

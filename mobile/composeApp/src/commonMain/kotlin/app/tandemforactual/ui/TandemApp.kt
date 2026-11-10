@@ -51,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
@@ -115,6 +116,7 @@ fun TandemApp(
     SideEffect { mobileSession.setReadOnlyMode(state.readOnlyMode) }
     val appPreferencesStore = remember(database) { database?.let(::AppPreferencesStore) }
     val coroutineScope = rememberCoroutineScope()
+    val uriHandler = LocalUriHandler.current
     var merchantIconMatcher by remember { mutableStateOf<MerchantIconMatcherPack?>(null) }
     var merchantIconMatcherLoadError by remember { mutableStateOf<String?>(null) }
     var merchantIconCatalog by remember { mutableStateOf<MerchantIconCatalog?>(null) }
@@ -147,7 +149,6 @@ fun TandemApp(
     var queuedBackPresses by remember { mutableStateOf(0) }
     var skipNextRouteTransition by remember { mutableStateOf(false) }
     var showDiscardTransactionDialog by rememberSaveable { mutableStateOf(false) }
-    var pairingCompleted by rememberSaveable { mutableStateOf(false) }
     var transactionSheetClosing by remember { mutableStateOf(false) }
     var transactionSheetPopCount by remember { mutableStateOf(1) }
     var nextRouteEntryId by rememberSaveable { mutableStateOf(2L) }
@@ -447,7 +448,6 @@ fun TandemApp(
     val navigation =
         AppNavigation(
             open = { next ->
-                if (next == AppRoute.PAIRING_CODE) pairingCompleted = false
                 if (next == AppRoute.NEW_TRANSACTION) {
                     newTransaction(null)
                 } else {
@@ -602,7 +602,7 @@ fun TandemApp(
         }
     }
 
-    LaunchedEffect(route, mobileSession.pairedDevice?.deviceId) {
+    LaunchedEffect(route, mobileSession.authenticatedDevice?.deviceId) {
         if (
             route == AppRoute.BUDGET_CHOOSER &&
             mobileSession.isAuthenticated &&
@@ -778,25 +778,42 @@ fun TandemApp(
             }
     }
 
-    val pairDevice = {
-        if (!mobileSession.isPairing) {
+    val signIn = {
+        if (!mobileSession.isSigningIn) {
             coroutineScope.launch {
-                mobileSession.pair(state.serverUrl, state.pairingCode, deviceName)
-                if (mobileSession.pairedDevice != null) {
-                    state.pairingCode = ""
-                    pairingCompleted = true
-                    navigation.reset(AppRoute.PAIRING_CODE)
+                mobileSession.signInWithPassword(state.serverUrl, state.actualPassword, deviceName)
+                if (mobileSession.authenticatedDevice != null) {
+                    state.actualPassword = ""
+                    navigation.reset(AppRoute.BUDGET_CHOOSER)
                 }
             }
         }
     }
-    val retryStoredSession: () -> Unit = {
-        coroutineScope.launch {
-            val storedServerUrl = mobileSession.restoreStoredSession()
-            if (storedServerUrl != null) {
-                state.serverUrl = cleanServerAddress(storedServerUrl)
-                backStack.clear()
-                backStack.add(newRouteEntry(AppRoute.BUDGET_CHOOSER))
+    val startOpenIdSignIn = {
+        if (!mobileSession.isSigningIn) {
+            coroutineScope.launch {
+                val redirectUrl = mobileSession.startActualOpenIdSignIn(state.serverUrl, deviceName)
+                if (redirectUrl != null) {
+                    try {
+                        uriHandler.openUri(redirectUrl)
+                    } catch (_: Exception) {
+                        mobileSession.reportSignInError("Couldn’t open the sign-in page. Try again.")
+                    }
+                }
+            }
+        }
+    }
+    LaunchedEffect(mobileSession, state.serverUrl) {
+        AuthReturnEvents.uri.collect { returnUri ->
+            val code = returnUri?.let(::actualOpenIdReturnCode)
+            if (returnUri != null) {
+                AuthReturnEvents.clear(returnUri)
+                if (code != null) {
+                    mobileSession.completeActualOpenIdSignIn(state.serverUrl, code)
+                    if (mobileSession.authenticatedDevice != null) {
+                        navigation.reset(AppRoute.BUDGET_CHOOSER)
+                    }
+                }
             }
         }
     }
@@ -1121,9 +1138,8 @@ fun TandemApp(
                                 navigation = navigation,
                                 mobileSession = mobileSession,
                                 reportsDataCache = reportsDataCache,
-                                onPairDevice = pairDevice,
-                                onRetryStoredSession = retryStoredSession,
-                                pairingCompleted = pairingCompleted,
+                                onSignIn = signIn,
+                                onStartOpenIdSignIn = startOpenIdSignIn,
                                 onSelectBudget = selectBudget,
                                 onRefreshBudgets = refreshBudgets,
                                 onOpenSelectedBudget = openSelectedBudget,
@@ -1395,7 +1411,7 @@ internal fun AppRoute.showsBottomNavigation(): Boolean =
         AppRoute.STARTUP,
         AppRoute.WELCOME,
         AppRoute.SERVER_ADDRESS,
-        AppRoute.PAIRING_CODE,
+        AppRoute.SIGN_IN,
         AppRoute.BUDGET_CHOOSER,
         AppRoute.UNLOCK_BUDGET,
         AppRoute.FIRST_SYNC,
@@ -1408,3 +1424,15 @@ internal fun AppRoute.showsBottomNavigation(): Boolean =
     }
 
 internal fun AppRoute.isReportDetail(): Boolean = this == AppRoute.REPORT_DETAIL
+
+internal fun actualOpenIdReturnCode(uri: String): String? {
+    if (!uri.startsWith("tandem://signin/complete?")) return null
+    val code =
+        uri
+            .substringAfter('?')
+            .split('&')
+            .firstOrNull { it.startsWith("code=") }
+            ?.substringAfter('=')
+            ?: return null
+    return code.takeIf { it.matches(Regex("[A-Za-z0-9_-]{43}")) }
+}

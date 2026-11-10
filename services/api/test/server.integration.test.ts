@@ -9,12 +9,14 @@ import { startApiServer } from "../src/server.js";
 import { WRITE_LEASE_SWEEP_INTERVAL_MS } from "../src/write-journal/lease-reaper.js";
 import { ActualCompatibilityError } from "../src/actual/actual-session.js";
 
-const deviceAuth = {} as DeviceAuthorization;
-const testPairingCodeHashKey = "synthetic-pairing-code-hash-key-32-bytes";
+const deviceAuth = {
+  authenticate: vi.fn(async () => undefined),
+} as unknown as DeviceAuthorization;
+const testAuthTokenEncryptionKey = "synthetic-session-token-encryption-key-32";
 
 function parseApiConfig(environment: Environment) {
   return parseRawApiConfig({
-    PAIRING_CODE_HASH_KEY: testPairingCodeHashKey,
+    AUTH_TOKEN_ENCRYPTION_KEY: testAuthTokenEncryptionKey,
     ...environment,
   });
 }

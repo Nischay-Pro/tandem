@@ -1,10 +1,6 @@
 import type { Pool } from "pg";
 import { DEVICE_CREDENTIAL_IDLE_TTL_DAYS } from "./device-auth.js";
-import type {
-  DeviceAuthStore,
-  DeviceRecord,
-  PairingCodeRecord,
-} from "./device-auth.js";
+import type { DeviceAuthStore, DeviceRecord } from "./device-auth.js";
 
 interface DeviceRow {
   device_id: string;
@@ -20,45 +16,30 @@ interface DeviceRow {
 export class PostgresDeviceAuthStore implements DeviceAuthStore {
   constructor(private readonly pool: Pool) {}
 
-  async createPairingCode(record: PairingCodeRecord): Promise<void> {
-    await this.pool.query(
-      `WITH purged AS (
-        DELETE FROM companion_pairing_codes
-        WHERE expires_at <= clock_timestamp()
-          OR consumed_at < clock_timestamp() - interval '1 day'
-      )
-      INSERT INTO companion_pairing_codes (
-        code_hash, principal_id, budget_ids, expires_at
-      ) VALUES ($1, $2, $3, $4)`,
-      [record.codeHash, record.principalId, record.budgetIds, record.expiresAt],
-    );
-  }
-
-  async consumePairingCode(input: {
-    codeHash: string;
+  async createDevice(input: {
+    principalId: string;
+    budgetIds: string[];
     deviceId: string;
     deviceName: string;
     credentialHash: string;
-  }): Promise<DeviceRecord | undefined> {
+  }): Promise<DeviceRecord> {
     const result = await this.pool.query<DeviceRow>(
-      `WITH consumed AS (
-        UPDATE companion_pairing_codes
-        SET consumed_at = clock_timestamp()
-        WHERE code_hash = $1
-          AND consumed_at IS NULL
-          AND expires_at > clock_timestamp()
-        RETURNING principal_id, budget_ids
-      )
-      INSERT INTO companion_devices (
+      `INSERT INTO companion_devices (
         device_id, principal_id, device_name, credential_hash, budget_ids
-      )
-      SELECT $2, principal_id, $3, $4, budget_ids FROM consumed
+      ) VALUES ($1, $2, $3, $4, $5)
       RETURNING device_id, principal_id, device_name, budget_ids,
         created_at, last_seen_at, revoked_at`,
-      [input.codeHash, input.deviceId, input.deviceName, input.credentialHash],
+      [
+        input.deviceId,
+        input.principalId,
+        input.deviceName,
+        input.credentialHash,
+        input.budgetIds,
+      ],
     );
     const row = result.rows[0];
-    return row === undefined ? undefined : mapDeviceRow(row);
+    if (row === undefined) throw new Error("Device sign-in did not persist");
+    return mapDeviceRow(row);
   }
 
   async authenticate(

@@ -3,6 +3,8 @@ import { format } from "prettier";
 import { buildApiApp } from "../app.js";
 import type { TransactionApiPort } from "../actual/transaction-api.js";
 import type { DeviceAuthorization } from "../auth/device-auth.js";
+import { ActualOpenIdLogin } from "../auth/actual-openid-login.js";
+import { ActualPasswordLogin } from "../auth/actual-password-login.js";
 
 export interface OpenApiDocument {
   openapi: string;
@@ -20,6 +22,11 @@ export async function createOpenApiDocument(): Promise<OpenApiDocument> {
     {
       deviceAuth: {} as DeviceAuthorization,
       transactionApi: {} as TransactionApiPort,
+      actualOpenIdLogin: new ActualOpenIdLogin(
+        new ActualPasswordLogin("https://actual.example"),
+        "https://tandem.example",
+        async (grant) => grant,
+      ),
     },
   );
 

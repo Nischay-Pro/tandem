@@ -2,17 +2,17 @@ import { Buffer } from "node:buffer";
 import { readFileSync } from "node:fs";
 import { isIP } from "node:net";
 import { isAbsolute } from "node:path";
-import type { ActualConnectionConfig } from "./actual/actual-session.js";
+import type { ActualSessionConfig } from "./actual/actual-session.js";
 import { OperatorMessageError } from "./operator-message-error.js";
 
 export interface ApiConfig {
   databaseUrl: string;
-  pairingCodeHashKey: string;
+  authTokenEncryptionKey: string;
   host: string;
   port: number;
   trustProxy: false | string[];
   changeFeedEpoch: string;
-  actual?: ActualConnectionConfig;
+  actual?: ActualSessionConfig;
 }
 
 export type Environment = Record<string, string | undefined>;
@@ -43,16 +43,16 @@ export function parseApiConfig(environment: Environment): ApiConfig {
     );
   }
 
-  const pairingCodeHashKey = readSecret(
+  const authTokenEncryptionKey = readSecret(
     environment,
-    "PAIRING_CODE_HASH_KEY",
+    "AUTH_TOKEN_ENCRYPTION_KEY",
   )?.trim();
-  if (!pairingCodeHashKey) {
-    throw new OperatorMessageError("PAIRING_CODE_HASH_KEY is required");
+  if (!authTokenEncryptionKey) {
+    throw new OperatorMessageError("AUTH_TOKEN_ENCRYPTION_KEY is required");
   }
-  if (Buffer.byteLength(pairingCodeHashKey, "utf8") < 32) {
+  if (Buffer.byteLength(authTokenEncryptionKey, "utf8") < 32) {
     throw new OperatorMessageError(
-      "PAIRING_CODE_HASH_KEY must contain at least 32 bytes",
+      "AUTH_TOKEN_ENCRYPTION_KEY must contain at least 32 bytes",
     );
   }
 
@@ -78,7 +78,7 @@ export function parseApiConfig(environment: Environment): ApiConfig {
 
   return {
     databaseUrl,
-    pairingCodeHashKey,
+    authTokenEncryptionKey,
     host,
     port,
     trustProxy: trustedProxyAddresses,
@@ -89,23 +89,23 @@ export function parseApiConfig(environment: Environment): ApiConfig {
 
 function parseActualConnection(
   environment: Environment,
-): ActualConnectionConfig | undefined {
+): ActualSessionConfig | undefined {
   const serverUrl = environment.ACTUAL_SERVER_URL?.trim() || undefined;
   const password = readSecret(environment, "ACTUAL_SERVER_PASSWORD");
+  if (password !== undefined) {
+    throw new OperatorMessageError(
+      "ACTUAL_SERVER_PASSWORD is not supported; sign in from Tandem or configure an operator-managed ACTUAL_SESSION_TOKEN",
+    );
+  }
   const sessionToken = readSecret(environment, "ACTUAL_SESSION_TOKEN");
   const configuredDataDirectory = environment.ACTUAL_API_DATA_DIR?.trim();
 
-  if (password && sessionToken) {
-    throw new OperatorMessageError(
-      "Configure either ACTUAL_SERVER_PASSWORD or ACTUAL_SESSION_TOKEN, not both",
-    );
-  }
-  if (!serverUrl && !password && !sessionToken) {
+  if (!serverUrl && !sessionToken) {
     return undefined;
   }
-  if (!serverUrl || (!password && !sessionToken)) {
+  if (!serverUrl) {
     throw new OperatorMessageError(
-      "ACTUAL_SERVER_URL and exactly one non-empty Actual credential must be configured together",
+      "ACTUAL_SERVER_URL is required when configuring an Actual session token",
     );
   }
 
@@ -135,12 +135,35 @@ function parseActualConnection(
     );
   }
 
+  const publicURL = environment.ACTUAL_PUBLIC_URL?.trim();
+  if (publicURL) {
+    let parsedPublicURL: URL;
+    try {
+      parsedPublicURL = new URL(publicURL);
+    } catch {
+      throw new OperatorMessageError(
+        "ACTUAL_PUBLIC_URL must be a valid HTTP(S) URL",
+      );
+    }
+    if (
+      (parsedPublicURL.protocol !== "http:" &&
+        parsedPublicURL.protocol !== "https:") ||
+      parsedPublicURL.username.length > 0 ||
+      parsedPublicURL.password.length > 0
+    ) {
+      throw new OperatorMessageError(
+        "ACTUAL_PUBLIC_URL must be a valid HTTP(S) URL",
+      );
+    }
+  }
+
   return {
     serverURL: parsedServerUrl.toString().replace(/\/$/, ""),
-    ...(password === undefined
-      ? { sessionToken: sessionToken! }
-      : { password }),
+    ...(sessionToken === undefined ? {} : { sessionToken }),
     dataDir,
+    ...(publicURL === undefined
+      ? {}
+      : { publicURL: new URL(publicURL).toString().replace(/\/$/, "") }),
   };
 }
 
@@ -148,7 +171,7 @@ function readSecret(
   environment: Environment,
   name:
     | "DATABASE_URL"
-    | "PAIRING_CODE_HASH_KEY"
+    | "AUTH_TOKEN_ENCRYPTION_KEY"
     | "ACTUAL_SERVER_PASSWORD"
     | "ACTUAL_SESSION_TOKEN",
 ): string | undefined {

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
-import { applyMigrations, MIGRATIONS } from "../src/schema/migrator.js";
+import { applyMigrations } from "../src/schema/migrator.js";
 import {
   BudgetProjectionInputError,
   type BudgetEntityType,
@@ -315,114 +315,6 @@ describe.skipIf(!integrationEnabled)(
       60_000,
     );
 
-    it("upgrades, reverses, and reapplies body deduplication without losing feed bodies", async () => {
-      const connectionString = process.env.DATABASE_URL;
-      const migrationIndex = MIGRATIONS.findIndex(
-        ({ name }) => name === "20261106170000-projection-body-deduplication",
-      );
-      const migration = MIGRATIONS[migrationIndex];
-      if (!connectionString || !migration || !adminPool) {
-        throw new Error("Migration test configuration is incomplete");
-      }
-      const schemaName = `projection_body_migration_${randomUUID().replaceAll("-", "")}`;
-      await adminPool.query(`CREATE SCHEMA ${schemaName}`);
-      const migrationPool = new Pool({
-        connectionString,
-        max: 2,
-        options: `-c search_path=${schemaName}`,
-      });
-
-      try {
-        const migrationSequence = MIGRATIONS.slice(0, migrationIndex + 1);
-        const earlier = migrationSequence.slice(0, -1);
-        await applyMigrations(
-          migrationPool,
-          earlier,
-          earlier.map(({ name }) => name),
-        );
-        await migrationPool.query(
-          `INSERT INTO companion_budget_sync_state
-           (budget_id, generation, feed_epoch, cursor)
-           VALUES ('budget-legacy', $1, 'epoch', 2)`,
-          [randomUUID()],
-        );
-        await migrationPool.query(
-          `INSERT INTO companion_budget_records
-           (budget_id, entity_type, entity_id, revision, body, is_deleted, updated_cursor)
-           VALUES ('budget-legacy', 'transaction', 'txn-legacy', $1, $2::jsonb, false, 2)`,
-          ["b".repeat(64), JSON.stringify({ id: "txn-legacy", amount: -20 })],
-        );
-        await migrationPool.query(
-          `INSERT INTO companion_budget_changes
-           (budget_id, cursor, entity_type, entity_id, operation, revision, body)
-           VALUES
-             ('budget-legacy', 1, 'transaction', 'txn-legacy', 'upsert', $1, $2::jsonb),
-             ('budget-legacy', 2, 'transaction', 'txn-legacy', 'upsert', $3, $4::jsonb)`,
-          [
-            "a".repeat(64),
-            JSON.stringify({ id: "txn-legacy", amount: -10 }),
-            "b".repeat(64),
-            JSON.stringify({ id: "txn-legacy", amount: -20 }),
-          ],
-        );
-
-        await applyMigrations(
-          migrationPool,
-          migrationSequence,
-          migrationSequence.map(({ name }) => name),
-        );
-        const deduplicated = await migrationPool.query<{
-          cursor: string;
-          body: Record<string, unknown> | null;
-        }>(
-          `SELECT cursor::text, body FROM companion_budget_changes
-           WHERE budget_id = 'budget-legacy' ORDER BY cursor`,
-        );
-        expect(deduplicated.rows).toEqual([
-          { cursor: "1", body: { id: "txn-legacy", amount: -10 } },
-          { cursor: "2", body: null },
-        ]);
-
-        const client = await migrationPool.connect();
-        try {
-          await client.query("BEGIN");
-          await migration.down(client);
-          await client.query(
-            "DELETE FROM companion_migrations WHERE name = $1",
-            [migration.name],
-          );
-          await client.query("COMMIT");
-        } catch (error) {
-          await client.query("ROLLBACK");
-          throw error;
-        } finally {
-          client.release();
-        }
-        const restored = await migrationPool.query<{ body: unknown }>(
-          `SELECT body FROM companion_budget_changes
-           WHERE budget_id = 'budget-legacy' AND cursor = 2`,
-        );
-        expect(restored.rows[0]?.body).toEqual({
-          id: "txn-legacy",
-          amount: -20,
-        });
-
-        await applyMigrations(
-          migrationPool,
-          migrationSequence,
-          migrationSequence.map(({ name }) => name),
-        );
-        const reapplied = await migrationPool.query<{ body: unknown }>(
-          `SELECT body FROM companion_budget_changes
-           WHERE budget_id = 'budget-legacy' AND cursor = 2`,
-        );
-        expect(reapplied.rows[0]?.body).toBeNull();
-      } finally {
-        await migrationPool.end();
-        await adminPool.query(`DROP SCHEMA ${schemaName} CASCADE`);
-      }
-    });
-
     it("reads keyset snapshot pages from one generation and requests a reset after changes", async () => {
       const store = createPostgresBudgetProjectionStore(getPool());
       const budgetId = "budget-snapshot-pages";
@@ -549,14 +441,6 @@ describe.skipIf(!integrationEnabled)(
         expect(plan.rows.map((row) => row["QUERY PLAN"]).join("\n")).toContain(
           "companion_budget_records_snapshot_keyset",
         );
-        const keysetMigration = MIGRATIONS.find(
-          ({ name }) => name === "20261106180000-snapshot-keyset-order",
-        );
-        if (!keysetMigration) {
-          throw new Error("Snapshot keyset migration is not registered");
-        }
-        await keysetMigration.down(client);
-        await keysetMigration.up(client);
         await client.query("ROLLBACK");
       } catch (error) {
         await client.query("ROLLBACK");

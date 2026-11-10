@@ -88,7 +88,7 @@ internal class AppState {
     var selectedTransactionCategoryName by mutableStateOf("")
     var selectedConflictOperationId by mutableStateOf("")
     var serverUrl by mutableStateOf("")
-    var pairingCode by mutableStateOf("")
+    var actualPassword by mutableStateOf("")
     var encryptedPassword by mutableStateOf("")
     var transactionAmount by mutableStateOf(formatAmount(0))
     var transactionAccount by mutableStateOf("")
@@ -156,7 +156,7 @@ internal class AppState {
         selectedTransactionPayeeName = ""
         selectedTransactionCategoryName = ""
         selectedConflictOperationId = ""
-        pairingCode = ""
+        actualPassword = ""
         encryptedPassword = ""
         transactionAmount = formatAmount(0)
         transactionAccount = ""
@@ -264,7 +264,7 @@ internal class AppState {
         val Saver =
             mapSaver<AppState>(
                 save = { state ->
-                    // Pairing codes and budget passwords must stay out of saved instance state.
+                    // Actual and budget passwords must stay out of saved instance state.
                     mapOf(
                         "theme" to state.theme.name,
                         "accent" to state.accent.name,

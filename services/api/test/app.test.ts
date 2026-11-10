@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildApiApp } from "../src/app.js";
-import { DeviceAuthInputError } from "../src/auth/device-auth.js";
+import { ActualPasswordRejectedError } from "../src/auth/actual-password-login.js";
+import type { ActualOpenIdLogin } from "../src/auth/actual-openid-login.js";
 import type {
   DeviceAuthorization,
   DeviceRecord,
@@ -24,8 +25,7 @@ function createDevice(overrides: Partial<DeviceRecord> = {}): DeviceRecord {
 
 function createDeviceAuth(overrides: Record<string, unknown> = {}) {
   return {
-    createPairingCode: vi.fn(),
-    pair: vi.fn(async () => undefined),
+    createDevice: vi.fn(),
     authenticate: vi.fn(async () => undefined),
     listDevicesForDevice: vi.fn(async () => []),
     revokeDeviceForDevice: vi.fn(async () => false),
@@ -311,7 +311,7 @@ describe("health routes and OpenAPI", () => {
     expect(openApiDocument.openapi).toBe("3.1.0");
     expect(openApiDocument.paths?.["/api/v1/health/live"]).toBeDefined();
     expect(openApiDocument.paths?.["/api/v1/health/ready"]).toBeDefined();
-    expect(openApiDocument.paths?.["/api/v1/auth/pair"]).toBeDefined();
+    expect(openApiDocument.paths?.["/api/v1/auth/login"]).toBeDefined();
     expect(openApiDocument.paths?.["/api/v1/auth/me"]).toBeDefined();
     expect(openApiDocument.paths?.["/api/v1/devices/{deviceId}"]).toBeDefined();
     expect(
@@ -323,134 +323,112 @@ describe("health routes and OpenAPI", () => {
     await app.close();
   });
 
-  it("pairs a device once and returns its bearer token without cache", async () => {
+  it("signs in through Actual and returns a device credential without cache", async () => {
     const auditLog = vi.spyOn(console, "info").mockImplementation(() => {});
     const device = createDevice();
-    const auth = createDeviceAuth({
-      pair: vi.fn(async ({ code }: { code: string }) =>
-        code === " b7m2q3x9 \n"
-          ? { ...device, accessToken: testAccessToken }
-          : undefined,
-      ),
+    const createSignedInDevice = vi.fn(
+      async ({
+        principalId,
+        budgetIds,
+        deviceName,
+      }: {
+        principalId: string;
+        budgetIds: string[];
+        deviceName: string;
+      }) => ({
+        ...device,
+        principalId,
+        budgetIds,
+        name: deviceName,
+        accessToken: testAccessToken,
+      }),
+    );
+    const auth = createDeviceAuth({ createDevice: createSignedInDevice });
+    const signInWithActualPassword = vi.fn(async (password: string) => {
+      if (password !== "synthetic-password")
+        throw new ActualPasswordRejectedError();
+      return {
+        principalId: "actual-user:synthetic",
+        sessionToken: "server-side-actual-session-token",
+        budgetIds: ["synthetic-budget"],
+      };
     });
+    const persistActualSessionToken = vi.fn(async () => {});
     const app = await buildApiApp(
       { ping: vi.fn(), close: vi.fn() },
-      { deviceAuth: auth },
+      { deviceAuth: auth, signInWithActualPassword, persistActualSessionToken },
     );
 
     const response = await app.inject({
       method: "POST",
-      url: "/api/v1/auth/pair",
-      payload: { code: " b7m2q3x9 \n", deviceName: "Synthetic phone" },
+      url: "/api/v1/auth/login",
+      payload: {
+        password: "synthetic-password",
+        deviceName: "Synthetic phone",
+      },
     });
 
     expect(response.statusCode).toBe(201);
     expect(response.headers["cache-control"]).toBe("no-store");
     expect(response.json()).toMatchObject({
       deviceId: testDeviceId,
-      principalId: "owner",
+      principalId: "actual-user:synthetic",
       name: "Synthetic phone",
+      budgetIds: ["synthetic-budget"],
       accessToken: testAccessToken,
       tokenType: "Bearer",
     });
-    expect(auth.pair).toHaveBeenCalledWith({
-      code: " b7m2q3x9 \n",
+    expect(signInWithActualPassword).toHaveBeenCalledWith("synthetic-password");
+    expect(persistActualSessionToken).toHaveBeenCalledWith(
+      "actual-user:synthetic",
+      "server-side-actual-session-token",
+    );
+    expect(createSignedInDevice).toHaveBeenCalledWith({
+      principalId: "actual-user:synthetic",
+      budgetIds: ["synthetic-budget"],
       deviceName: "Synthetic phone",
     });
 
     const invalid = await app.inject({
       method: "POST",
-      url: "/api/v1/auth/pair",
-      payload: { code: "C7M2-Q3X9", deviceName: "Synthetic phone" },
+      url: "/api/v1/auth/login",
+      payload: { password: "wrong-password", deviceName: "Synthetic phone" },
     });
     expect(invalid.statusCode).toBe(401);
-    expect(invalid.json()).toEqual({
-      error: {
-        code: "invalid_pairing_code",
-        message: "Pairing code is invalid, expired, or already used",
-      },
+    expect(invalid.json()).toMatchObject({
+      error: { code: "invalid_credentials" },
     });
 
     const invalidBody = await app.inject({
       method: "POST",
-      url: "/api/v1/auth/pair",
-      payload: { code: "short", deviceName: "Synthetic phone" },
+      url: "/api/v1/auth/login",
+      payload: { password: "", deviceName: "Synthetic phone" },
     });
     expect(invalidBody.statusCode).toBe(400);
-    const events = auditLog.mock.calls.map(([line]) =>
-      JSON.parse(line as string),
-    );
-    expect(events).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ event: "device.pair", outcome: "success" }),
-        expect.objectContaining({
-          event: "device.pair",
-          outcome: "rejected",
-          reason: "invalid_code",
-        }),
-        expect.objectContaining({
-          event: "device.pair",
-          outcome: "rejected",
-          reason: "invalid_request",
-        }),
-      ]),
-    );
-    expect(auditLog.mock.calls.flat().join(" ")).not.toContain("b7m2q3x9");
-    expect(auditLog.mock.calls.flat().join(" ")).not.toContain(testAccessToken);
+    const auditText = auditLog.mock.calls.flat().join(" ");
+    expect(auditText).not.toContain("synthetic-password");
+    expect(auditText).not.toContain("server-side-actual-session-token");
+    expect(auditText).not.toContain(testAccessToken);
     auditLog.mockRestore();
     await app.close();
   });
 
-  it("maps device authorization input errors to structured HTTP 400 responses", async () => {
-    const auth = createDeviceAuth({
-      pair: vi
-        .fn()
-        .mockRejectedValueOnce(
-          new DeviceAuthInputError(
-            "deviceName must contain between 1 and 100 characters",
-          ),
-        )
-        .mockRejectedValueOnce(new Error("synthetic store failure")),
+  it("rate-limits Actual sign-in attempts by client address", async () => {
+    const signInWithActualPassword = vi.fn(async () => {
+      throw new ActualPasswordRejectedError();
     });
     const app = await buildApiApp(
       { ping: vi.fn(), close: vi.fn() },
-      { deviceAuth: auth },
-    );
-
-    const response = await app.inject({
-      method: "POST",
-      url: "/api/v1/auth/pair",
-      payload: { code: "F7M2-Q3X9", deviceName: "Synthetic phone" },
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.json()).toEqual({
-      error: {
-        code: "invalid_request",
-        message: "deviceName must contain between 1 and 100 characters",
-      },
-    });
-    const storeFailure = await app.inject({
-      method: "POST",
-      url: "/api/v1/auth/pair",
-      payload: { code: "F7M2-Q3X9", deviceName: "Synthetic phone" },
-    });
-    expect(storeFailure.statusCode).toBe(500);
-    await app.close();
-  });
-
-  it("rate-limits pairing attempts from one client address", async () => {
-    const auditLog = vi.spyOn(console, "info").mockImplementation(() => {});
-    const auth = createDeviceAuth();
-    const app = await buildApiApp(
-      { ping: vi.fn(), close: vi.fn() },
-      { deviceAuth: auth },
+      { deviceAuth: createDeviceAuth(), signInWithActualPassword },
     );
     const request = () =>
       app.inject({
         method: "POST",
-        url: "/api/v1/auth/pair",
-        payload: { code: "D7M2-Q3X9", deviceName: "Synthetic phone" },
+        url: "/api/v1/auth/login",
+        payload: {
+          password: "synthetic-password",
+          deviceName: "Synthetic phone",
+        },
       });
 
     for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -460,67 +438,115 @@ describe("health routes and OpenAPI", () => {
     expect(limited.statusCode).toBe(429);
     expect(limited.headers["retry-after"]).toBe("60");
     expect(limited.json()).toEqual({
-      error: { code: "rate_limited", message: "Too many pairing attempts" },
+      error: {
+        code: "rate_limited",
+        message: "Too many sign-in attempts. Try again shortly.",
+      },
     });
-    expect(auth.pair).toHaveBeenCalledTimes(10);
-    const events = auditLog.mock.calls.map(([line]) =>
-      JSON.parse(line as string),
-    );
-    expect(events).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          event: "device.pair_rate_limited",
-          outcome: "rejected",
-          reason: "rate_limited",
-        }),
-      ]),
-    );
-    expect(auditLog.mock.calls.flat().join(" ")).not.toContain("D7M2-Q3X9");
-    auditLog.mockRestore();
+    expect(signInWithActualPassword).toHaveBeenCalledTimes(10);
     await app.close();
   });
 
-  it("does not charge successful pairings against the failed-code limit", async () => {
-    const pair = vi.fn(async () => ({
-      ...createDevice(),
+  it("completes OpenID sign-in using a one-use Tandem code", async () => {
+    const completionCode = "C".repeat(43);
+    const device = createDevice({
+      principalId: "actual-user:synthetic",
+      budgetIds: ["synthetic-budget"],
+    });
+    const createSignedInDevice = vi.fn(async () => ({
+      ...device,
       accessToken: testAccessToken,
     }));
+    const auth = createDeviceAuth({ createDevice: createSignedInDevice });
+    const openIdLogin = {
+      start: vi.fn(async () => ({ redirectUrl: "https://idp.example/login" })),
+      completeCallback: vi.fn(
+        async () => `tandem://signin/complete?code=${completionCode}`,
+      ),
+      consume: vi.fn(() => ({
+        deviceName: "Synthetic phone",
+        grant: {
+          principalId: "actual-user:synthetic",
+          sessionToken: "server-side-actual-token",
+          budgetIds: ["synthetic-budget"],
+        },
+      })),
+    } as unknown as ActualOpenIdLogin;
+    const persistActualSessionToken = vi.fn(async () => {});
     const app = await buildApiApp(
       { ping: vi.fn(), close: vi.fn() },
-      { deviceAuth: createDeviceAuth({ pair }) },
+      {
+        deviceAuth: auth,
+        actualOpenIdLogin: openIdLogin,
+        persistActualSessionToken,
+      },
     );
 
-    try {
-      for (let attempt = 0; attempt < 12; attempt += 1) {
-        const response = await app.inject({
-          method: "POST",
-          url: "/api/v1/auth/pair",
-          payload: { code: "P7R2-A9C4", deviceName: "Synthetic phone" },
-        });
-        expect(response.statusCode).toBe(201);
-      }
-      expect(pair).toHaveBeenCalledTimes(12);
-    } finally {
-      await app.close();
-    }
+    const started = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/openid/start",
+      payload: { deviceName: "Synthetic phone" },
+    });
+    const callback = await app.inject({
+      method: "GET",
+      url:
+        "/api/v1/auth/actual-return/" +
+        "S".repeat(43) +
+        "/openid-cb?token=actual-secret",
+    });
+    const completed = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/openid/complete",
+      payload: { code: completionCode },
+    });
+
+    expect(started.statusCode).toBe(200);
+    expect(started.json()).toEqual({
+      redirectUrl: "https://idp.example/login",
+    });
+    expect(callback.statusCode).toBe(302);
+    expect(callback.headers.location).toBe(
+      `tandem://signin/complete?code=${completionCode}`,
+    );
+    expect(callback.headers["cache-control"]).toBe("no-store");
+    expect(callback.body).not.toContain("actual-secret");
+    expect(completed.statusCode).toBe(201);
+    expect(completed.json()).toMatchObject({
+      principalId: "actual-user:synthetic",
+      budgetIds: ["synthetic-budget"],
+      accessToken: testAccessToken,
+    });
+    expect(persistActualSessionToken).toHaveBeenCalledWith(
+      "actual-user:synthetic",
+      "server-side-actual-token",
+    );
+    await app.close();
   });
 
-  it("warns once when pairing arrives with forwarded addresses but no trusted proxy", async () => {
+  it("warns once when sign-in arrives with forwarded addresses but no trusted proxy", async () => {
     const warning = vi
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);
     const app = await buildApiApp(
       { ping: vi.fn(), close: vi.fn() },
-      { deviceAuth: createDeviceAuth() },
+      {
+        deviceAuth: createDeviceAuth(),
+        signInWithActualPassword: async () => {
+          throw new ActualPasswordRejectedError();
+        },
+      },
     );
 
     try {
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const response = await app.inject({
           method: "POST",
-          url: "/api/v1/auth/pair",
+          url: "/api/v1/auth/login",
           headers: { "x-forwarded-for": `198.51.100.${attempt + 1}` },
-          payload: { code: "G7G7-G7G7", deviceName: "Synthetic phone" },
+          payload: {
+            password: "synthetic-password",
+            deviceName: "Synthetic phone",
+          },
         });
         expect(response.statusCode).toBe(401);
       }
@@ -532,64 +558,6 @@ describe("health routes and OpenAPI", () => {
       await app.close();
       warning.mockRestore();
     }
-  });
-
-  it("uses forwarded client addresses only when the socket peer is trusted", async () => {
-    const pair = vi.fn(async ({ code }: { code: string }) =>
-      code === "P7R2-A9C4"
-        ? { ...createDevice(), accessToken: testAccessToken }
-        : undefined,
-    );
-    const trustedApp = await buildApiApp(
-      { ping: vi.fn(), close: vi.fn() },
-      {
-        deviceAuth: createDeviceAuth({ pair }),
-        trustProxy: ["127.0.0.1"],
-      },
-    );
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      const response = await trustedApp.inject({
-        method: "POST",
-        url: "/api/v1/auth/pair",
-        headers: { "x-forwarded-for": "198.51.100.10" },
-        payload: { code: "G7G7-G7G7", deviceName: "Synthetic phone" },
-      });
-      expect(response.statusCode).toBe(401);
-    }
-    const secondClient = await trustedApp.inject({
-      method: "POST",
-      url: "/api/v1/auth/pair",
-      headers: { "x-forwarded-for": "203.0.113.20" },
-      payload: { code: "P7R2-A9C4", deviceName: "Synthetic phone" },
-    });
-    expect(secondClient.statusCode).toBe(201);
-    expect(pair).toHaveBeenCalledTimes(11);
-    await trustedApp.close();
-
-    const untrustedApp = await buildApiApp(
-      { ping: vi.fn(), close: vi.fn() },
-      {
-        deviceAuth: createDeviceAuth({ pair }),
-        trustProxy: ["192.0.2.10"],
-      },
-    );
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      const response = await untrustedApp.inject({
-        method: "POST",
-        url: "/api/v1/auth/pair",
-        headers: { "x-forwarded-for": `198.51.100.${attempt + 1}` },
-        payload: { code: "G7G7-G7G7", deviceName: "Synthetic phone" },
-      });
-      expect(response.statusCode).toBe(401);
-    }
-    const spoofedClient = await untrustedApp.inject({
-      method: "POST",
-      url: "/api/v1/auth/pair",
-      headers: { "x-forwarded-for": "203.0.113.20" },
-      payload: { code: "P7R2-A9C4", deviceName: "Synthetic phone" },
-    });
-    expect(spoofedClient.statusCode).toBe(429);
-    await untrustedApp.close();
   });
 
   it("authenticates, scopes device listing, and returns 404 for invisible revocations", async () => {

@@ -41,8 +41,8 @@ describe("PostgreSQL connection integration", () => {
 
     const database = createPostgresDatabase(
       connectionString,
-      process.env.PAIRING_CODE_HASH_KEY ??
-        "synthetic-pairing-code-hash-key-32-bytes",
+      process.env.AUTH_TOKEN_ENCRYPTION_KEY ??
+        "synthetic-session-token-encryption-key-32",
     );
     await expect(
       Promise.all([database.ping(), database.ping()]),

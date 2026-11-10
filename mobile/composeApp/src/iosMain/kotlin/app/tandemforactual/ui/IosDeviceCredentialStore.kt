@@ -162,7 +162,7 @@ private class SecurityIosKeychainClient : IosKeychainClient {
 
     private companion object {
         const val KEYCHAIN_SERVICE = "app.tandemforactual.device-session"
-        const val KEYCHAIN_ACCOUNT = "paired-device"
+        const val KEYCHAIN_ACCOUNT = "authenticated-device"
     }
 }
 
