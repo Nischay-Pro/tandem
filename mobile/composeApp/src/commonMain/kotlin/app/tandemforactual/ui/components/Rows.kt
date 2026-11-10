@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.TandemLayout
 import app.tandemforactual.ui.TandemMotion
 import app.tandemforactual.ui.TandemShapes
 import app.tandemforactual.ui.TandemSpacing
@@ -109,6 +110,7 @@ internal fun ListRow(
 ) {
     val palette = tandemPalette
     val titleColor = if (options.muted) palette.muted else palette.text
+    val rowMinHeight = if (options.dense) TandemLayout.compactListRowMinHeight else TandemLayout.listRowMinHeight
     val stackTrailing = LocalDensity.current.fontScale >= 1.5f
     val merchantResource = (leading as? RowLeading.Merchant)?.resource
     val resolvedPainter = merchantResource?.let { painterResource(it) }
@@ -123,7 +125,7 @@ internal fun ListRow(
         modifier =
             modifier
                 .fillMaxWidth()
-                .defaultMinSize(minHeight = if (options.dense) 56.dp else 64.dp)
+                .defaultMinSize(minHeight = rowMinHeight)
                 .then(
                     if (onClick != null || onLongClick != null) {
                         Modifier.combinedClickable(
@@ -137,24 +139,23 @@ internal fun ListRow(
                         Modifier
                     },
                 ).padding(
-                    horizontal = TandemSpacing.large,
+                    horizontal = TandemLayout.listRowHorizontalInset,
                     vertical =
                         if (options.dense) {
-                            TandemSpacing.extraSmall + TandemSpacing.xxSmall
+                            TandemLayout.compactListRowVerticalInset
                         } else {
-                            TandemSpacing.small +
-                                TandemSpacing.xxSmall
+                            TandemLayout.listRowVerticalInset
                         },
                 ),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+        horizontalArrangement = Arrangement.spacedBy(TandemLayout.listRowGap),
     ) {
         if (leading != RowLeading.None) {
             Box(
                 modifier =
                     Modifier
                         .size(
-                            if (options.dense) 36.dp else 44.dp,
+                            if (options.dense) TandemLayout.compactListRowLeadingSize else TandemLayout.listRowLeadingSize,
                         ).clip(RoundedCornerShape(TandemShapes.medium))
                         .background(if (options.muted) palette.surface else palette.raised),
                 contentAlignment = Alignment.Center,
@@ -166,7 +167,7 @@ internal fun ListRow(
                             contentDescription = null,
                             modifier =
                                 Modifier
-                                    .size(if (options.dense) 28.dp else 32.dp)
+                                    .size(if (options.dense) TandemLayout.compactListRowLogoSize else TandemLayout.listRowLogoSize)
                                     .padding(TandemSpacing.xxSmall)
                                     .alpha(if (options.muted) 0.48f else 1f),
                             contentScale = ContentScale.Fit,
@@ -176,7 +177,10 @@ internal fun ListRow(
                         Icon(
                             imageVector = resolvedVector,
                             contentDescription = null,
-                            modifier = Modifier.size(if (options.dense) 24.dp else 30.dp),
+                            modifier =
+                                Modifier.size(
+                                    if (options.dense) TandemLayout.compactListRowIconSize else TandemLayout.listRowIconSize,
+                                ),
                             tint = if (options.muted) palette.muted else palette.accent,
                         )
                     }

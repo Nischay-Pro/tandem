@@ -90,6 +90,21 @@ internal object TandemSpacing {
     val screen = 20.dp
 }
 
+internal object TandemLayout {
+    val listRowMinHeight = 64.dp
+    val compactListRowMinHeight = 56.dp
+    val listRowHorizontalInset = TandemSpacing.large
+    val listRowVerticalInset = TandemSpacing.small
+    val compactListRowVerticalInset = TandemSpacing.extraSmall + TandemSpacing.xxSmall
+    val listRowGap = TandemSpacing.medium
+    val listRowLeadingSize = 44.dp
+    val compactListRowLeadingSize = 36.dp
+    val listRowIconSize = 30.dp
+    val compactListRowIconSize = 24.dp
+    val listRowLogoSize = 32.dp
+    val compactListRowLogoSize = 28.dp
+}
+
 internal data class TandemPalette(
     val background: Color,
     val surface: Color,

@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.TandemLayout
 import app.tandemforactual.ui.components.AnimatedReveal
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.ListRow
@@ -204,12 +205,12 @@ private fun AppearanceChoiceRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .heightIn(min = 64.dp)
+            .heightIn(min = TandemLayout.listRowMinHeight)
             .clickable(onClick = onClick)
             .semantics(mergeDescendants = true) {
                 contentDescription = title
                 this.selected = selected
-            }.padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
+            }.padding(horizontal = TandemLayout.listRowHorizontalInset, vertical = TandemLayout.listRowVerticalInset),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
     ) {
@@ -253,12 +254,12 @@ private fun AccentChoiceRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .heightIn(min = 64.dp)
+            .heightIn(min = TandemLayout.listRowMinHeight)
             .clickable(onClick = onClick)
             .semantics(mergeDescendants = true) {
                 contentDescription = "${accent.label} accent"
                 this.selected = selected
-            }.padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
+            }.padding(horizontal = TandemLayout.listRowHorizontalInset, vertical = TandemLayout.listRowVerticalInset),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
     ) {

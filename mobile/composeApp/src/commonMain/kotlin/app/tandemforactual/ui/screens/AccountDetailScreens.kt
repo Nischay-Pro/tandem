@@ -33,7 +33,6 @@ import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.ListRow
-import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.PrimaryButton
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SectionCard
@@ -393,7 +392,6 @@ internal fun StatementImportDialog(
                             subtitle = transaction.notes,
                             trailing = state.formatCurrency(transaction.amountMinor),
                             leading = RowLeading.Icon(Lucide.Receipt),
-                            options = ListRowOptions(dense = true),
                         )
                     }
                     TandemActionButton(

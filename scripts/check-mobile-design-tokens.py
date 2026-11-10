@@ -11,16 +11,46 @@ UI_ROOT = ROOT / "mobile/composeApp/src/commonMain/kotlin/app/tandemforactual/ui
 THEME_FILE = UI_ROOT / "TandemTheme.kt"
 RULES = {
     "numeric fontSize; use TandemTypography": re.compile(r"\bfontSize\s*=\s*\d+(?:\.\d+)?\.sp\b"),
+    "fixed list row height; use TandemLayout": re.compile(
+        r"\b(?:heightIn|defaultMinSize)\s*\(\s*min(?:Height)?\s*=\s*64\.dp\b"
+    ),
     "numeric RoundedCornerShape; use TandemShapes": re.compile(
         r"\bRoundedCornerShape\s*\(\s*\d+(?:\.\d+)?\.dp\s*\)"
     ),
     "hard-coded Color; use TandemPalette": re.compile(r"\bColor\s*\(\s*0x[0-9A-Fa-f]{6,8}\s*\)"),
 }
 DIALOG_CALL = re.compile(r"\b(?:AlertDialog|Dialog)\s*\(")
+LAYOUT_CONTRACTS = {
+    UI_ROOT / "TandemTheme.kt": (
+        re.compile(r"listRowMinHeight\s*=\s*64\.dp"),
+        re.compile(r"compactListRowMinHeight\s*=\s*56\.dp"),
+        re.compile(r"listRowHorizontalInset\s*=\s*TandemSpacing\.large"),
+        re.compile(r"listRowVerticalInset\s*=\s*TandemSpacing\.small"),
+    ),
+    UI_ROOT / "components/Rows.kt": (
+        re.compile(r"defaultMinSize\(minHeight\s*=\s*rowMinHeight\)"),
+        re.compile(r"horizontal\s*=\s*TandemLayout\.listRowHorizontalInset"),
+        re.compile(r"TandemLayout\.listRowVerticalInset"),
+        re.compile(r"TandemLayout\.compactListRowVerticalInset"),
+        re.compile(r"Arrangement\.spacedBy\(TandemLayout\.listRowGap\)"),
+    ),
+    UI_ROOT / "screens/SettingsScreen.kt": (
+        re.compile(r"heightIn\(min\s*=\s*TandemLayout\.listRowMinHeight\)"),
+        re.compile(r"horizontal\s*=\s*TandemLayout\.listRowHorizontalInset"),
+        re.compile(r"vertical\s*=\s*TandemLayout\.listRowVerticalInset"),
+    ),
+}
 
 
 def main() -> int:
     violations = []
+    for source, patterns in LAYOUT_CONTRACTS.items():
+        content = source.read_text(encoding="utf-8")
+        for pattern in patterns:
+            if not pattern.search(content):
+                relative = source.relative_to(ROOT)
+                violations.append(f"{relative}: shared row layout must use TandemLayout tokens")
+
     for source in sorted(UI_ROOT.rglob("*.kt")):
         if source == THEME_FILE:
             continue
@@ -41,7 +71,7 @@ def main() -> int:
         print("\n".join(violations), file=sys.stderr)
         return 1
 
-    print("Mobile design tokens are used outside TandemTheme.kt.")
+    print("Mobile design tokens and shared row layout are consistent.")
     return 0
 
 

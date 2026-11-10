@@ -212,7 +212,7 @@ internal fun CategoryDetailScreen(
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 64.dp)
+                            .heightIn(min = TandemLayout.listRowMinHeight)
                             .clickable(
                                 enabled = isLiveBudget && !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
                                 role = Role.Button,
