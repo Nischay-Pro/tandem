@@ -46,7 +46,6 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.BodyText
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
-import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.LabelText
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.RowLeading
@@ -358,7 +357,7 @@ internal fun CategoryDetailScreen(
                             large = true,
                         ),
                     )
-                    mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
+                    budgetActionFeedbackMessage(mobileSession)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                         TandemActionButton(
                             "Cancel",
@@ -463,7 +462,7 @@ internal fun CategoryDetailScreen(
                             large = true,
                         ),
                     )
-                    mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
+                    budgetActionFeedbackMessage(mobileSession)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                         TandemActionButton(
                             "Cancel",
@@ -623,7 +622,7 @@ internal fun CategoryDetailScreen(
                                 repeat(4 - rowChoices.size) { Spacer(Modifier.weight(1f)) }
                             }
                         }
-                        mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
+                        budgetActionFeedbackMessage(mobileSession)
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                         TandemActionButton(
@@ -787,7 +786,7 @@ internal fun CategoryDetailScreen(
                                 }
                             }
                         }
-                        mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
+                        budgetActionFeedbackMessage(mobileSession)
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                         TandemActionButton(

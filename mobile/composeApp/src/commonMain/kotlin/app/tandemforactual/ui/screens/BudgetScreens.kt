@@ -704,9 +704,7 @@ internal fun BudgetScreen(
                     color = palette.muted,
                     fontSize = TandemTypography.body,
                 )
-                mobileSession.budgetActionMessage?.let {
-                    InlineMessage(it, mobileSession.budgetActionMessageKind)
-                }
+                budgetActionFeedbackMessage(mobileSession)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     TandemActionButton(
                         "Cancel",
@@ -795,7 +793,7 @@ internal fun BudgetScreen(
                 if (currentTemplateAssignments.size > 500) {
                     InlineMessage("This plan has more than 500 categories and cannot be saved as a template.", InlineMessageKind.INFO)
                 }
-                mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
+                budgetActionFeedbackMessage(mobileSession)
                 if (currentBudgetTemplates.isEmpty()) {
                     Text("Saved templates will appear here.", color = tandemPalette.muted, fontSize = TandemTypography.body)
                 } else {
@@ -989,7 +987,7 @@ internal fun BudgetScreen(
                             },
                         )
                     }
-                    mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
+                    budgetActionFeedbackMessage(mobileSession)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                         TandemActionButton(
                             if (heldForNextMonthMinor > 0) "Reset hold" else "Close",
@@ -1051,6 +1049,8 @@ internal fun BudgetScreen(
             busy = false,
             message = mobileSession.budgetActionMessage,
             messageKind = mobileSession.budgetActionMessageKind,
+            messageActionLabel = mobileSession.budgetActionMessageActionLabel,
+            onMessageAction = if (mobileSession.budgetActionMessageActionLabel == null) null else mobileSession::retryBudgetAction,
             placeholder = "Travel & Leisure",
             isIncome = newCategoryGroupIsIncome,
             onIncomeChange = { newCategoryGroupIsIncome = it },

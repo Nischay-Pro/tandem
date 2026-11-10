@@ -22,7 +22,6 @@ import androidx.compose.ui.text.font.FontWeight
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.ui.components.BodyText
 import app.tandemforactual.ui.components.EmptyState
-import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SurfaceCard
@@ -308,7 +307,7 @@ internal fun ScreenContent(
                                     } else {
                                         EmptyState("No matches", modifier = Modifier.padding(TandemSpacing.large))
                                     }
-                                    mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
+                                    budgetActionFeedbackMessage(mobileSession)
                                 }
                             }
                         }
@@ -469,9 +468,7 @@ internal fun ScreenContent(
                                                     }
                                                 }
                                             }
-                                            mobileSession.budgetActionMessage?.let {
-                                                InlineMessage(it, mobileSession.budgetActionMessageKind)
-                                            }
+                                            budgetActionFeedbackMessage(mobileSession)
                                             TandemActionButton(
                                                 "Create \"$newName\"",
                                                 TandemActionButtonTone.PRIMARY,

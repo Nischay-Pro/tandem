@@ -1,5 +1,6 @@
 package app.tandemforactual.ui
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +29,7 @@ import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.LocalRecordProjection
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
+import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.model.LiveCategoryGroupSummary
 import app.tandemforactual.ui.model.booleanValue
@@ -82,7 +84,20 @@ internal data class BudgetActionFeedback(
     val text: String,
     val kind: InlineMessageKind,
     val ownerRoute: AppRouteEntry,
+    val actionLabel: String?,
 )
+
+@Composable
+internal fun budgetActionFeedbackMessage(mobileSession: TandemMobileSession) {
+    val message = mobileSession.budgetActionMessage ?: return
+    val actionLabel = mobileSession.budgetActionMessageActionLabel
+    InlineMessage(
+        message,
+        mobileSession.budgetActionMessageKind,
+        actionLabel = actionLabel,
+        onAction = if (actionLabel == null) null else ({ mobileSession.retryBudgetAction() }),
+    )
+}
 
 internal class BudgetActionFeedbackState {
     var currentRouteEntry by mutableStateOf<AppRouteEntry?>(null)
@@ -101,8 +116,9 @@ internal class BudgetActionFeedbackState {
         text: String,
         kind: InlineMessageKind,
         ownerRoute: AppRouteEntry?,
+        actionLabel: String? = null,
     ) {
-        if (ownerRoute != null) feedback = BudgetActionFeedback(text, kind, ownerRoute)
+        if (ownerRoute != null) feedback = BudgetActionFeedback(text, kind, ownerRoute, actionLabel)
     }
 
     fun clear() {
@@ -251,6 +267,8 @@ internal class TandemMobileSession(
         private set
 
     private val budgetActionFeedbackState = BudgetActionFeedbackState()
+    private var budgetActionRetryAction: (suspend () -> Boolean)? = null
+    private var budgetActionRetryInFlight = false
     private var suppressBudgetActionFeedback = false
     private val currentBudgetActionMessageOwner: AppRouteEntry?
         get() = if (suppressBudgetActionFeedback) null else budgetActionFeedbackState.currentRouteEntry
@@ -260,7 +278,9 @@ internal class TandemMobileSession(
         private set(value) {
             if (value == null) {
                 budgetActionFeedbackState.clear(currentBudgetActionMessageOwner)
+                budgetActionRetryAction = null
             } else {
+                budgetActionRetryAction = null
                 budgetActionFeedbackState.show(value, InlineMessageKind.ERROR, currentBudgetActionMessageOwner)
             }
         }
@@ -270,6 +290,25 @@ internal class TandemMobileSession(
             val routeEntry = budgetActionFeedbackState.currentRouteEntry
             return routeEntry?.let { budgetActionFeedbackState.messageFor(it)?.kind } ?: InlineMessageKind.ERROR
         }
+
+    val budgetActionMessageActionLabel: String?
+        get() {
+            val routeEntry = budgetActionFeedbackState.currentRouteEntry
+            return routeEntry?.let { budgetActionFeedbackState.messageFor(it)?.actionLabel }
+        }
+
+    fun retryBudgetAction() {
+        if (isPerformingBudgetAction || budgetActionRetryInFlight) return
+        val retry = budgetActionRetryAction ?: return
+        budgetActionRetryInFlight = true
+        sessionScope.launch {
+            try {
+                retry()
+            } finally {
+                budgetActionRetryInFlight = false
+            }
+        }
+    }
 
     var budgetActionWasAppliedButRefreshFailed by mutableStateOf(false)
         private set
@@ -1086,9 +1125,11 @@ internal class TandemMobileSession(
 
     fun clearBudgetActionMessage() {
         budgetActionFeedbackState.clear(budgetActionFeedbackState.currentRouteEntry)
+        budgetActionRetryAction = null
     }
 
     fun setBudgetActionRoute(routeEntry: AppRouteEntry) {
+        if (budgetActionFeedbackState.currentRouteEntry != routeEntry) budgetActionRetryAction = null
         budgetActionFeedbackState.changeRoute(routeEntry)
     }
 
@@ -1096,8 +1137,11 @@ internal class TandemMobileSession(
         text: String,
         kind: InlineMessageKind = InlineMessageKind.ERROR,
         ownerRoute: AppRouteEntry? = currentBudgetActionMessageOwner,
+        actionLabel: String? = null,
+        retryAction: (suspend () -> Boolean)? = null,
     ) {
-        budgetActionFeedbackState.show(text, kind, ownerRoute)
+        budgetActionRetryAction = retryAction
+        budgetActionFeedbackState.show(text, kind, ownerRoute, actionLabel)
     }
 
     fun clearTransactionWriteMessage() {
@@ -1951,12 +1995,17 @@ internal class TandemMobileSession(
             }
             if (synchronize(budgetId, encryptionPassword) == null) {
                 budgetActionWasAppliedButRefreshFailed = true
+                val refreshMessage = syncError ?: "Actual was updated, but this device couldn’t refresh the budget."
                 setBudgetActionMessage(
-                    syncError ?: "Actual was updated, but this device couldn’t refresh the budget.",
-                    ownerRoute = messageOwner,
+                    refreshMessage,
+                    InlineMessageKind.WARNING,
+                    messageOwner,
+                    actionLabel = "Refresh",
+                    retryAction = { retryBudgetActionRefresh(budgetId, encryptionPassword, messageOwner, refreshMessage) },
                 )
                 return false
             }
+            budgetActionRetryAction = null
             return true
         } catch (error: CancellationException) {
             throw error
@@ -1968,10 +2017,20 @@ internal class TandemMobileSession(
             isServerReachable = error.httpStatus != null && !budgetActionShouldRetry
             if (actionApplied) {
                 budgetActionWasAppliedButRefreshFailed = true
+                val refreshMessage = "Actual was updated, but this device couldn’t refresh the budget."
                 setBudgetActionMessage(
-                    "Actual was updated, but this device couldn’t refresh the budget.",
+                    refreshMessage,
                     InlineMessageKind.WARNING,
                     messageOwner,
+                    actionLabel = "Refresh",
+                    retryAction = { retryBudgetActionRefresh(budgetId, encryptionPassword, messageOwner, refreshMessage) },
+                )
+            } else if (budgetActionShouldRetry) {
+                setBudgetActionMessage(
+                    error.userFacingMessage(failureMessage),
+                    ownerRoute = messageOwner,
+                    actionLabel = "Retry",
+                    retryAction = { performBudgetAction(budgetId, encryptionPassword, failureMessage, messageOwner, action) },
                 )
             } else {
                 // Network failures are handled by the persistent queue. Do not surface the
@@ -1988,16 +2047,47 @@ internal class TandemMobileSession(
             lastBudgetActionErrorMessage = failureMessage
             if (actionApplied) {
                 budgetActionWasAppliedButRefreshFailed = true
+                val refreshMessage = "Actual was updated, but this device couldn’t refresh the budget."
                 setBudgetActionMessage(
-                    "Actual was updated, but this device couldn’t refresh the budget.",
+                    refreshMessage,
                     InlineMessageKind.WARNING,
                     messageOwner,
+                    actionLabel = "Refresh",
+                    retryAction = { retryBudgetActionRefresh(budgetId, encryptionPassword, messageOwner, refreshMessage) },
+                )
+            } else {
+                setBudgetActionMessage(
+                    failureMessage,
+                    ownerRoute = messageOwner,
+                    actionLabel = "Retry",
+                    retryAction = { performBudgetAction(budgetId, encryptionPassword, failureMessage, messageOwner, action) },
                 )
             }
             return false
         } finally {
             isPerformingBudgetAction = false
         }
+    }
+
+    private suspend fun retryBudgetActionRefresh(
+        budgetId: String,
+        encryptionPassword: String?,
+        messageOwner: AppRouteEntry?,
+        failureMessage: String,
+    ): Boolean {
+        if (synchronize(budgetId, encryptionPassword) == null) {
+            setBudgetActionMessage(
+                failureMessage,
+                InlineMessageKind.WARNING,
+                messageOwner,
+                actionLabel = "Refresh",
+                retryAction = { retryBudgetActionRefresh(budgetId, encryptionPassword, messageOwner, failureMessage) },
+            )
+            return false
+        }
+        budgetActionWasAppliedButRefreshFailed = false
+        clearBudgetActionMessage()
+        return true
     }
 
     suspend fun updateTransaction(

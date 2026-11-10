@@ -531,6 +531,8 @@ internal fun CategoryGroupScreen(
             busy = false,
             message = mobileSession.budgetActionMessage,
             messageKind = mobileSession.budgetActionMessageKind,
+            messageActionLabel = mobileSession.budgetActionMessageActionLabel,
+            onMessageAction = if (mobileSession.budgetActionMessageActionLabel == null) null else mobileSession::retryBudgetAction,
             placeholder = group.name,
             onDismiss = { showGroupDialog = false },
             onSave = {
@@ -554,6 +556,8 @@ internal fun CategoryGroupScreen(
             busy = false,
             message = mobileSession.budgetActionMessage,
             messageKind = mobileSession.budgetActionMessageKind,
+            messageActionLabel = mobileSession.budgetActionMessageActionLabel,
+            onMessageAction = if (mobileSession.budgetActionMessageActionLabel == null) null else mobileSession::retryBudgetAction,
             placeholder = "Groceries",
             onDismiss = { showCreateCategoryDialog = false },
             onSave = {
@@ -623,6 +627,8 @@ internal fun CategoryGroupNameDialog(
     busy: Boolean,
     message: String?,
     messageKind: InlineMessageKind = InlineMessageKind.ERROR,
+    messageActionLabel: String? = null,
+    onMessageAction: (() -> Unit)? = null,
     placeholder: String = "Essentials",
     isIncome: Boolean? = null,
     onIncomeChange: ((Boolean) -> Unit)? = null,
@@ -646,7 +652,7 @@ internal fun CategoryGroupNameDialog(
                 if (isIncome != null && onIncomeChange != null) {
                     ToggleRow("Income group", "For income categories", isIncome, !busy, onIncomeChange)
                 }
-                message?.let { InlineMessage(it, messageKind) }
+                message?.let { InlineMessage(it, messageKind, actionLabel = messageActionLabel, onAction = onMessageAction) }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     TandemActionButton("Cancel", TandemActionButtonTone.NEUTRAL, Modifier.weight(1f), enabled = !busy, onClick = onDismiss)
                     TandemActionButton(

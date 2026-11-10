@@ -522,9 +522,7 @@ internal fun UpcomingSchedulesScreen(
                                     ScheduleFieldError(editError.takeIf { editErrorField == "endDate" })
                                 }
                             }
-                            mobileSession.budgetActionMessage?.let {
-                                InlineMessage(it, mobileSession.budgetActionMessageKind)
-                            }
+                            budgetActionFeedbackMessage(mobileSession)
                             TandemActionButton(
                                 if (mobileSession.isPerformingBudgetAction) {
                                     "Saving…"
@@ -644,7 +642,7 @@ internal fun UpcomingSchedulesScreen(
                             ) { dialogMode = "menu" }
                         }
                         else -> {
-                            mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
+                            budgetActionFeedbackMessage(mobileSession)
                             TandemActionButton(
                                 "Post now",
                                 TandemActionButtonTone.PRIMARY,
@@ -718,6 +716,8 @@ internal fun UpcomingSchedulesScreen(
             title = "Delete schedule?",
             message = mobileSession.budgetActionMessage ?: "Remove ${selectedSchedule.name} from upcoming bills?",
             messageKind = mobileSession.budgetActionMessageKind.takeIf { mobileSession.budgetActionMessage != null },
+            messageActionLabel = mobileSession.budgetActionMessageActionLabel,
+            onMessageAction = if (mobileSession.budgetActionMessageActionLabel == null) null else mobileSession::retryBudgetAction,
             confirmLabel = if (mobileSession.isPerformingBudgetAction) "Deleting…" else "Delete",
             dismissLabel = "Keep schedule",
             enabled = !mobileSession.isPerformingBudgetAction,

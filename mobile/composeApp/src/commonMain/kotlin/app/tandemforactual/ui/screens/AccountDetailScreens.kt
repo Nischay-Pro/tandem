@@ -221,7 +221,7 @@ internal fun AccountDetailScreen(
                 )
             }
             if (!showStatementImportDialog) {
-                mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
+                budgetActionFeedbackMessage(mobileSession)
             }
             if (shownAccountActivity.isEmpty()) {
                 SurfaceCard {

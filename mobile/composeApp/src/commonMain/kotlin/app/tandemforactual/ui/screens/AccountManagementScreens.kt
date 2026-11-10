@@ -352,7 +352,7 @@ internal fun AccountOptionsScreen(
                         },
                     )
                 }
-                mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
+                budgetActionFeedbackMessage(mobileSession)
             }
         }
     }
@@ -386,7 +386,7 @@ internal fun AccountOptionsScreen(
                         )
                     }
                     TextFieldCard("Name", renameValue, { renameValue = it }, TextFieldOptions(placeholder = "Account name"))
-                    mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
+                    budgetActionFeedbackMessage(mobileSession)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                         TandemActionButton(
                             "Cancel",
@@ -445,7 +445,7 @@ internal fun AccountOptionsScreen(
                             onSelect = { transferCategoryId = it.orEmpty() },
                         )
                     }
-                    mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
+                    budgetActionFeedbackMessage(mobileSession)
                 }
             },
             onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) confirmClose = false },

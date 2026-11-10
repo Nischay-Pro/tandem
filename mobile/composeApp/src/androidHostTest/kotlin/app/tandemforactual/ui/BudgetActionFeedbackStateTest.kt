@@ -12,9 +12,10 @@ class BudgetActionFeedbackStateTest {
         val accountDetail = AppRouteEntry(AppRoute.ACCOUNT_DETAIL, 1)
         state.changeRoute(accountDetail)
 
-        state.show("Actual was updated, but this device could not refresh the budget.", InlineMessageKind.WARNING, accountDetail)
+        state.show("Actual was updated, but this device could not refresh the budget.", InlineMessageKind.WARNING, accountDetail, "Refresh")
 
         assertEquals(InlineMessageKind.WARNING, state.messageFor(accountDetail)?.kind)
+        assertEquals("Refresh", state.messageFor(accountDetail)?.actionLabel)
         assertNull(state.messageFor(AppRouteEntry(AppRoute.ACCOUNTS, 2)))
     }
 
@@ -57,5 +58,17 @@ class BudgetActionFeedbackStateTest {
         state.show("Could not rename this category.", InlineMessageKind.ERROR, firstCategory)
 
         assertNull(state.messageFor(secondCategory))
+    }
+
+    @Test
+    fun newValidationMessageDoesNotKeepAStaleRetryAction() {
+        val state = BudgetActionFeedbackState()
+        val accountDetail = AppRouteEntry(AppRoute.ACCOUNT_DETAIL, 9)
+        state.changeRoute(accountDetail)
+        state.show("Could not save the account.", InlineMessageKind.ERROR, accountDetail, "Retry")
+
+        state.show("Enter an account name.", InlineMessageKind.ERROR, accountDetail)
+
+        assertNull(state.messageFor(accountDetail)?.actionLabel)
     }
 }

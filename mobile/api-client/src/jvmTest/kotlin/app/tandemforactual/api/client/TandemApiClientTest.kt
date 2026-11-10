@@ -831,6 +831,45 @@ class TandemApiClientTest {
         }
 
     @Test
+    fun maintenanceRetryAfterTemporaryServerFailureReusesIdempotencyKey() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            var responseCount = 0
+            val engine =
+                MockEngine { request ->
+                    requests += request
+                    if (responseCount++ == 0) {
+                        respond(
+                            """{"error":{"code":"actual_operation_failed"}}""",
+                            HttpStatusCode.ServiceUnavailable,
+                            jsonHeaders(),
+                        )
+                    } else {
+                        respond("""{"status":"ok"}""", headers = jsonHeaders())
+                    }
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                client.restoreSession("https://tandem.example", "device-token")
+                assertFailsWith<TandemApiException> {
+                    client.createBudgetAccount("budget-1", "Savings", false, null, null)
+                }
+                client.createBudgetAccount("budget-1", "Savings", false, null, null)
+
+                assertEquals(2, requests.size)
+                assertEquals(requests[0].headers["Idempotency-Key"], requests[1].headers["Idempotency-Key"])
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
     fun missingContentEncodingIsInstalledBeforeGeneratedRequests() =
         runBlocking {
             val engine = MockEngine { respond(budgetsResponse(), headers = jsonHeaders()) }

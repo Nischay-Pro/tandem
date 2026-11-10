@@ -20,6 +20,8 @@ internal fun DestructiveConfirmationDialog(
     dismissLabel: String,
     enabled: Boolean = true,
     messageKind: InlineMessageKind? = null,
+    messageActionLabel: String? = null,
+    onMessageAction: (() -> Unit)? = null,
     content: @Composable (() -> Unit)? = null,
     onDismissRequest: () -> Unit,
     onConfirm: () -> Unit,
@@ -39,7 +41,7 @@ internal fun DestructiveConfirmationDialog(
                 if (messageKind == null) {
                     Text(message, color = tandemPalette.muted, fontSize = TandemTypography.body)
                 } else {
-                    InlineMessage(message, messageKind)
+                    InlineMessage(message, messageKind, actionLabel = messageActionLabel, onAction = onMessageAction)
                 }
                 content?.invoke()
             }

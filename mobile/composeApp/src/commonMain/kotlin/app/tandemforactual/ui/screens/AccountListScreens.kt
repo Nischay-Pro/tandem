@@ -33,7 +33,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
-import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.RowLeading
@@ -235,8 +234,8 @@ internal fun AccountsScreen(
         onRefresh = runBankSync.takeIf { isLiveBudget && !state.readOnlyMode },
     ) {
         if (model.isSample) item(key = "accounts-preview-banner") { SampleBanner() }
-        mobileSession.budgetActionMessage?.let { message ->
-            item(key = "account-action-message") { InlineMessage(message, mobileSession.budgetActionMessageKind) }
+        mobileSession.budgetActionMessage?.let {
+            item(key = "account-action-message") { budgetActionFeedbackMessage(mobileSession) }
         }
         if (model.groups.isEmpty()) {
             item(key = "accounts-empty") {
@@ -410,7 +409,7 @@ internal fun AccountsScreen(
                         onChange = { newAccountOffBudget = it },
                     )
                 }
-                mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
+                budgetActionFeedbackMessage(mobileSession)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     TandemActionButton(
                         "Cancel",
