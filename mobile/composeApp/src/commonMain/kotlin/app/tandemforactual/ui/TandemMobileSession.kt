@@ -92,6 +92,21 @@ internal fun blockedTransactionEditMessage(status: String): String =
         else -> "This transaction is syncing. Wait for it to finish before editing."
     }
 
+internal fun queuedTransactionEditToDiscardForNoOp(
+    pendingWrites: List<OutboxOperationEntity>,
+    editingLocalCreate: Boolean,
+): String? =
+    if (editingLocalCreate) {
+        null
+    } else {
+        pendingWrites
+            .firstOrNull {
+                it.action == LocalWriteAction.UPDATE.name &&
+                    it.status == "queued" &&
+                    it.serverOperationId == null
+            }?.operationId
+    }
+
 internal data class ConflictResolutionFeedback(
     val operationId: String,
     val message: String,
@@ -2544,6 +2559,21 @@ internal class TandemMobileSession(
                     },
             )
         if (patch.isEmpty()) {
+            val queuedEditId = queuedTransactionEditToDiscardForNoOp(pendingForRecord, editingLocalCreate)
+            if (queuedEditId != null) {
+                try {
+                    localRepository.discardWrite(queuedEditId)
+                    loadLocalRecords(budgetId)
+                    transactionWriteMessage = "Your transaction matches Actual. Removed the waiting edit."
+                    return true
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    transactionWriteMessage = "This transaction started syncing. Check Pending Changes before changing it."
+                    loadLocalRecords(budgetId)
+                    return false
+                }
+            }
             transactionWriteMessage = "There are no transaction changes to save."
             return false
         }

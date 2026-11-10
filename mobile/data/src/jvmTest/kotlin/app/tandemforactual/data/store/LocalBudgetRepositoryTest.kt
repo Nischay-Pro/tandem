@@ -1297,6 +1297,29 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
+    fun discardingAQueuedEditAfterItIsRevertedRestoresTheActualSnapshot() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val original = transaction()
+                repository.applySnapshot(BUDGET, GENERATION, "c1", listOf(original))
+                val queued = repository.enqueueWrite(updateRequest())
+
+                val discarded = repository.discardWrite(queued.operation.operationId)
+                val restored = repository.findRecord(BUDGET, "transaction", "txn-1")
+
+                assertEquals("discarded", discarded.status)
+                assertEquals(original.bodyJson, restored?.remoteJson)
+                assertNull(restored?.localJson)
+                assertEquals(listOf("discarded"), repository.readPendingWrites(BUDGET).map { it.status })
+                assertFalse(repository.hasUnresolvedWrites())
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun editAfterPreSubmissionFailureKeepsOneIdempotentQueuedWrite() =
         runBlocking {
             val database = newDatabase()

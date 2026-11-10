@@ -200,6 +200,26 @@ class TandemMobileSessionTest {
     }
 
     @Test
+    fun revertingToActualDiscardsOnlyAnUnsentQueuedUpdate() {
+        val queuedUpdate = pendingTransactionWrite()
+
+        assertEquals("operation-1", queuedTransactionEditToDiscardForNoOp(listOf(queuedUpdate), editingLocalCreate = false))
+        assertNull(queuedTransactionEditToDiscardForNoOp(listOf(queuedUpdate), editingLocalCreate = true))
+        assertNull(
+            queuedTransactionEditToDiscardForNoOp(
+                listOf(queuedUpdate.copy(serverOperationId = "server-operation-1")),
+                editingLocalCreate = false,
+            ),
+        )
+        assertNull(
+            queuedTransactionEditToDiscardForNoOp(
+                listOf(queuedUpdate.copy(status = "sending")),
+                editingLocalCreate = false,
+            ),
+        )
+    }
+
+    @Test
     fun transactionEditPatchIncludesPayeeCategoryDateAndAccountChanges() {
         val base =
             Json
@@ -460,6 +480,35 @@ class TandemMobileSessionTest {
         payeeId = null,
         amountMinor = amountMinor,
         budgetMonth = date.take(7),
+    )
+
+    private fun pendingTransactionWrite(
+        action: String = "UPDATE",
+        status: String = "queued",
+        serverOperationId: String? = null,
+    ) = OutboxOperationEntity(
+        operationId = "operation-1",
+        idempotencyKey = "key-1",
+        budgetId = "budget-1",
+        recordType = "transaction",
+        recordId = "transaction-1",
+        action = action,
+        baseRevision = "revision-1",
+        baseSnapshotJson = "{}",
+        patchJson = "{}",
+        optimisticJson = "{}",
+        optimisticRecordDate = null,
+        optimisticAccountId = null,
+        optimisticCategoryId = null,
+        optimisticPayeeId = null,
+        optimisticAmountMinor = null,
+        optimisticBudgetMonth = null,
+        status = status,
+        attemptCount = 0,
+        serverOperationId = serverOperationId,
+        lastErrorCode = null,
+        createdAtEpochMs = 1L,
+        updatedAtEpochMs = 1L,
     )
 
     private fun budgetMutationItem(move: QueuedBudgetReorder) =
