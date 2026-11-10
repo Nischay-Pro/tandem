@@ -57,16 +57,23 @@ internal fun parseStatementImport(
     filename: String,
     contents: String,
     dateOrder: StatementDateOrder = StatementDateOrder.MONTH_DAY_YEAR,
+    currencyFractionDigits: Int = 2,
+    numberFormat: String? = null,
 ): StatementParseResult {
+    if (currencyFractionDigits !in 0..9) {
+        throw StatementImportParseException("This budget’s currency format isn’t supported for statement imports.")
+    }
     val content = contents.removePrefix("\uFEFF").trim()
     if (content.isBlank()) throw StatementImportParseException("This statement is empty.")
     if (content.length > MAX_STATEMENT_IMPORT_CHARS) throw StatementImportParseException("Choose a statement smaller than 10 MB.")
     val extension = filename.substringAfterLast('.', "").lowercase()
     val parsed =
         when {
-            extension == "qif" || content.startsWith("!Type:", ignoreCase = true) -> parseQif(content, dateOrder)
-            extension == "ofx" || content.contains("<STMTTRN", ignoreCase = true) -> parseOfx(content)
-            extension == "csv" -> parseCsv(content, dateOrder)
+            extension == "qif" || content.startsWith("!Type:", ignoreCase = true) ->
+                parseQif(content, dateOrder, currencyFractionDigits, numberFormat)
+            extension == "ofx" || content.contains("<STMTTRN", ignoreCase = true) ->
+                parseOfx(content, currencyFractionDigits, numberFormat)
+            extension == "csv" -> parseCsv(content, dateOrder, currencyFractionDigits, numberFormat)
             else -> throw StatementImportParseException("Choose a CSV, QIF, or OFX statement.")
         }
     if (parsed.transactions.isEmpty()) {
@@ -83,6 +90,8 @@ private const val MAX_STATEMENT_IMPORT_ROWS = 1_000
 private fun parseCsv(
     content: String,
     dateOrder: StatementDateOrder,
+    currencyFractionDigits: Int,
+    numberFormat: String?,
 ): StatementParseResult {
     val rows = parseCsvRows(content, detectCsvDelimiter(content)).filter { row -> row.any(String::isNotBlank) }
     val header = rows.firstOrNull() ?: throw StatementImportParseException("The CSV has no header row.")
@@ -119,13 +128,13 @@ private fun parseCsv(
             val rowNumber = index + 2
             try {
                 val date = parseStatementDate(row.cell(dateColumn), dateOrder)
-                val debit = parseOptionalMoney(row.cell(debitColumn))
-                val credit = parseOptionalMoney(row.cell(creditColumn))
+                val debit = parseOptionalMoney(row.cell(debitColumn), currencyFractionDigits, numberFormat)
+                val credit = parseOptionalMoney(row.cell(creditColumn), currencyFractionDigits, numberFormat)
                 val amount =
                     if (debit != null || credit != null) {
                         kotlin.math.abs(credit ?: 0L) - kotlin.math.abs(debit ?: 0L)
                     } else {
-                        val rawAmount = parseMoney(row.cell(amountColumn))
+                        val rawAmount = parseMoney(row.cell(amountColumn), currencyFractionDigits, numberFormat)
                         val type = row.cell(typeColumn).lowercase()
                         if (type.containsAny(
                                 "debit",
@@ -172,6 +181,8 @@ private fun parseCsv(
 private fun parseQif(
     content: String,
     dateOrder: StatementDateOrder,
+    currencyFractionDigits: Int,
+    numberFormat: String?,
 ): StatementParseResult {
     val records = mutableListOf<Map<Char, String>>()
     var current = mutableMapOf<Char, String>()
@@ -195,7 +206,7 @@ private fun parseQif(
             val rowNumber = index + 1
             try {
                 val date = parseStatementDate(fields['D'].orEmpty(), dateOrder)
-                val amount = parseMoney(fields['T'].orEmpty())
+                val amount = parseMoney(fields['T'].orEmpty(), currencyFractionDigits, numberFormat)
                 if (amount == 0L) {
                     skipped++
                     if (firstSkippedReason == null) firstSkippedReason = "Row $rowNumber: Zero-value transactions are skipped."
@@ -218,7 +229,11 @@ private fun parseQif(
     return StatementParseResult(transactions, skipped, firstSkippedReason)
 }
 
-private fun parseOfx(content: String): StatementParseResult {
+private fun parseOfx(
+    content: String,
+    currencyFractionDigits: Int,
+    numberFormat: String?,
+): StatementParseResult {
     val records =
         Regex("(?is)<STMTTRN>(.*?)(?=<STMTTRN>|</BANKTRANLIST>|</STMTRS>|$)")
             .findAll(content)
@@ -240,7 +255,7 @@ private fun parseOfx(content: String): StatementParseResult {
             val rowNumber = index + 1
             try {
                 val date = parseStatementDate(ofxField(record, "DTPOSTED"), StatementDateOrder.MONTH_DAY_YEAR)
-                val amount = parseMoney(ofxField(record, "TRNAMT"))
+                val amount = parseMoney(ofxField(record, "TRNAMT"), currencyFractionDigits, numberFormat)
                 if (amount == 0L) {
                     skipped++
                     if (firstSkippedReason == null) firstSkippedReason = "Row $rowNumber: Zero-value transactions are skipped."
@@ -334,9 +349,17 @@ private fun normalizeColumn(value: String): String = value.lowercase().filter(Ch
 
 private fun List<String>.cell(index: Int?): String = index?.let { getOrNull(it)?.trim() }.orEmpty()
 
-private fun parseOptionalMoney(value: String): Long? = value.takeIf(String::isNotBlank)?.let(::parseMoney)
+private fun parseOptionalMoney(
+    value: String,
+    currencyFractionDigits: Int,
+    numberFormat: String?,
+): Long? = value.takeIf(String::isNotBlank)?.let { parseMoney(it, currencyFractionDigits, numberFormat) }
 
-private fun parseMoney(value: String): Long {
+private fun parseMoney(
+    value: String,
+    currencyFractionDigits: Int,
+    numberFormat: String?,
+): Long {
     val trimmed = value.trim()
     if (trimmed.isBlank()) throw StatementImportParseException("An amount is missing. Enter an amount for this row.")
     val currencyFree = stripCurrencyMarkers(trimmed)
@@ -369,27 +392,64 @@ private fun parseMoney(value: String): Long {
         when {
             lastSeparator < 0 -> null
             numeric.contains('.') && numeric.contains(',') -> {
-                if (fractionLength !in 1..2) throw invalidAmount(trimmed, "Check its decimal places.")
+                if (fractionLength !in 1..currencyFractionDigits) throw invalidAmount(trimmed, "Check its decimal places.")
                 numeric[lastSeparator]
             }
             separators > 1 -> {
                 if (!isGroupedInteger(numeric)) throw invalidAmount(trimmed, "Check its separators.")
                 null
             }
-            fractionLength in 1..2 -> numeric[lastSeparator]
-            fractionLength == 3 -> throw invalidAmount(trimmed, "Check its decimal places.")
+            fractionLength in 1..currencyFractionDigits -> {
+                if (fractionLength == 3 && separators == 1) {
+                    when {
+                        numeric[lastSeparator] == groupingSeparatorFor(numberFormat) && isGroupedInteger(numeric) -> null
+                        numeric[lastSeparator] == decimalSeparatorFor(numberFormat) -> numeric[lastSeparator]
+                        else -> throw invalidAmount(trimmed, "Check its separators.")
+                    }
+                } else {
+                    numeric[lastSeparator]
+                }
+            }
+            fractionLength == 3 && currencyFractionDigits == 0 -> {
+                if (!isGroupedInteger(numeric)) throw invalidAmount(trimmed, "Check its separators.")
+                null
+            }
+            fractionLength == 3 && currencyFractionDigits != 3 -> throw invalidAmount(trimmed, "Check its decimal places.")
             else -> throw invalidAmount(trimmed, "Check its decimal places.")
         }
     val split = decimalSeparator?.let(numeric::lastIndexOf) ?: -1
     val wholeText = if (split >= 0) numeric.substring(0, split) else numeric
     val wholeDigits = wholeText.filter(Char::isDigit)
     val fractionDigits = if (split >= 0) numeric.substring(split + 1).filter(Char::isDigit) else ""
-    val normalizedFraction = fractionDigits.padEnd(2, '0')
+    if (fractionDigits.length > currencyFractionDigits) throw invalidAmount(trimmed, "Check its decimal places.")
+    val scale = decimalScale(currencyFractionDigits)
+    val normalizedFraction = fractionDigits.padEnd(currencyFractionDigits, '0')
     val whole = wholeDigits.toLongOrNull() ?: throw StatementImportParseException("This amount is too large. Use a smaller amount.")
-    if (whole > (Long.MAX_VALUE - 99) / 100) throw StatementImportParseException("This amount is too large. Use a smaller amount.")
-    val cents = (whole * 100L) + (normalizedFraction.toLongOrNull() ?: 0L)
-    return if (negative) -cents else cents
+    val fraction = normalizedFraction.toLongOrNull() ?: 0L
+    if (whole > (Long.MAX_VALUE - fraction) / scale) throw StatementImportParseException("This amount is too large. Use a smaller amount.")
+    val minorUnits = (whole * scale) + fraction
+    return if (negative) -minorUnits else minorUnits
 }
+
+private fun decimalScale(fractionDigits: Int): Long {
+    var scale = 1L
+    repeat(fractionDigits) { scale *= 10L }
+    return scale
+}
+
+private fun decimalSeparatorFor(numberFormat: String?): Char? =
+    when (numberFormat) {
+        "comma-dot", "comma-dot-in", "apostrophe-dot" -> '.'
+        "dot-comma", "space-comma" -> ','
+        else -> null
+    }
+
+private fun groupingSeparatorFor(numberFormat: String?): Char? =
+    when (numberFormat) {
+        "comma-dot", "comma-dot-in" -> ','
+        "dot-comma" -> '.'
+        else -> null
+    }
 
 private fun stripCurrencyMarkers(value: String): String =
     value

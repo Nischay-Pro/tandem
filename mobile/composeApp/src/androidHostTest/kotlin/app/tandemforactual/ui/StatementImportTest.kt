@@ -1,12 +1,80 @@
 package app.tandemforactual.ui
 
 import app.tandemforactual.api.client.StatementImportSummary
+import app.tandemforactual.data.store.BudgetDisplaySettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class StatementImportTest {
+    @Test
+    fun parsesZeroDecimalCurrencyAndUsesTheSameAmountInThePreview() {
+        val parsed =
+            parseStatementImport(
+                "yen.csv",
+                "Date,Payee,Amount\n" +
+                    "11/01/2026,Market,1500\n" +
+                    "11/02/2026,Refund,\"-2,500\"\n",
+                currencyFractionDigits = 0,
+                numberFormat = "comma-dot",
+            )
+
+        assertEquals(listOf(1_500L, -2_500L), parsed.transactions.map { it.amountMinor })
+        val yenSettings =
+            BudgetDisplaySettings(
+                currencyCode = "JPY",
+                currencySymbol = "¥",
+                currencyFractionDigits = 0,
+                numberFormat = "comma-dot",
+                hideFraction = false,
+                currencySymbolPosition = "before",
+                currencySpaceBetweenAmountAndSymbol = false,
+            )
+        assertEquals("¥1,500", formatCurrency(parsed.transactions.first().amountMinor, yenSettings))
+    }
+
+    @Test
+    fun parsesThreeDecimalAmountsInCsvQifAndOfx() {
+        val csv =
+            parseStatementImport(
+                "three-decimal.csv",
+                "Date,Payee,Amount\n" +
+                    "11/01/2026,Cafe,1.234\n" +
+                    "11/02/2026,Market,-23.5\n",
+                currencyFractionDigits = 3,
+                numberFormat = "comma-dot",
+            )
+        assertEquals(listOf(1_234L, -23_500L), csv.transactions.map { it.amountMinor })
+
+        val grouped =
+            parseStatementImport(
+                "grouped.csv",
+                "Date,Payee,Amount\n11/01/2026,Market,\"1,234\"\n",
+                currencyFractionDigits = 3,
+                numberFormat = "comma-dot",
+            )
+        assertEquals(1_234_000L, grouped.transactions.single().amountMinor)
+
+        val qif =
+            parseStatementImport(
+                "three-decimal.qif",
+                "!Type:Bank\nD11/03/2026\nT-12.345\nPShop\n^\n",
+                currencyFractionDigits = 3,
+                numberFormat = "comma-dot",
+            )
+        assertEquals(-12_345L, qif.transactions.single().amountMinor)
+
+        val ofx =
+            parseStatementImport(
+                "three-decimal.ofx",
+                """<OFX><BANKTRANLIST><STMTTRN><DTPOSTED>20261104<TRNAMT>6.789<FITID>ofx-3<NAME>Shop</STMTTRN></BANKTRANLIST></OFX>""",
+                currencyFractionDigits = 3,
+                numberFormat = "comma-dot",
+            )
+        assertEquals(6_789L, ofx.transactions.single().amountMinor)
+    }
+
     @Test
     fun parsesCsvWithQuotedPayeesIdsAndDebitCreditColumns() {
         val parsed =

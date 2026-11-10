@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
@@ -92,6 +93,8 @@ internal fun AccountDetailScreen(
     var showStatementImportDialog by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(false) }
     val statementDateOrder =
         StatementDateOrder.entries.firstOrNull { it.name == statementDateOrderName } ?: StatementDateOrder.MONTH_DAY_YEAR
+    val currencyFractionDigits = mobileSession.budgetDisplaySettings?.currencyFractionDigits
+    val numberFormat = mobileSession.budgetDisplaySettings?.numberFormat
     val pickStatementFile =
         rememberStatementFilePicker { file ->
             pickedStatementFile = file
@@ -100,15 +103,20 @@ internal fun AccountDetailScreen(
                 file.errorMessage ?: if (file.contents == null) "Couldn’t read this file. Choose another statement." else null
             showStatementImportDialog = true
         }
-    LaunchedEffect(pickedStatementFile, statementDateOrder) {
+    LaunchedEffect(pickedStatementFile, statementDateOrder, currencyFractionDigits, numberFormat) {
         val file = pickedStatementFile ?: return@LaunchedEffect
         val contents = file.contents ?: return@LaunchedEffect
         statementParseResult = null
         statementParseError = null
+        val fractionDigits = currencyFractionDigits
+        if (fractionDigits == null) {
+            statementParseError = "Sync this budget to load its currency settings, then choose the statement again."
+            return@LaunchedEffect
+        }
         try {
             statementParseResult =
                 withContext(Dispatchers.Default) {
-                    parseStatementImport(file.name, contents, statementDateOrder)
+                    parseStatementImport(file.name, contents, statementDateOrder, fractionDigits, numberFormat)
                 }
         } catch (error: StatementImportParseException) {
             statementParseError = error.message ?: "Couldn’t read this statement. Choose a CSV, QIF, or OFX file."
@@ -272,6 +280,7 @@ internal fun AccountDetailScreen(
         StatementImportDialog(
             visible = showStatementImportDialog,
             state = state,
+            currencyDisplaySettings = mobileSession.budgetDisplaySettings,
             accountName = liveAccount.name,
             filename = pickedStatementFile?.name.orEmpty(),
             parseResult = statementParseResult,
@@ -317,6 +326,7 @@ internal fun AccountDetailScreen(
 internal fun StatementImportDialog(
     visible: Boolean,
     state: AppState,
+    currencyDisplaySettings: BudgetDisplaySettings?,
     accountName: String,
     filename: String,
     parseResult: StatementParseResult?,
@@ -390,7 +400,7 @@ internal fun StatementImportDialog(
                         ListRow(
                             "${transaction.date} · ${transaction.payeeName}",
                             subtitle = transaction.notes,
-                            trailing = state.formatCurrency(transaction.amountMinor),
+                            trailing = formatCurrency(transaction.amountMinor, currencyDisplaySettings),
                             leading = RowLeading.Icon(Lucide.Receipt),
                         )
                     }
