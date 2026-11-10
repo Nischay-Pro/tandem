@@ -14,7 +14,7 @@
     "api:openapi:generate": "pnpm --filter @tandem-for-actual/api openapi:generate",
     "api:openapi:check": "pnpm --filter @tandem-for-actual/api openapi:check",
     "lint": "eslint .",
-    "format:check": "python3 scripts/check-prettier-files.py node_modules/.bin/prettier --tracked",
+    "format:check": "node scripts/check-prettier-files.mjs node_modules/.bin/prettier --all",
     "typecheck": "pnpm --recursive --if-present typecheck",
     "test": "pnpm --recursive --if-present test",
     "test:coverage": "pnpm --recursive --if-present test:coverage",

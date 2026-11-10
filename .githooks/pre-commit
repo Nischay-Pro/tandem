@@ -5,9 +5,9 @@ repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
 
 if [ -x "$repo_root/node_modules/.bin/prettier" ]; then
-  python3 scripts/check-prettier-files.py "$repo_root/node_modules/.bin/prettier"
+  node scripts/check-prettier-files.mjs "$repo_root/node_modules/.bin/prettier"
 elif command -v pnpm >/dev/null 2>&1; then
-  python3 scripts/check-prettier-files.py "$(command -v pnpm)"
+  node scripts/check-prettier-files.mjs "$(command -v pnpm)"
 else
   printf '%s\n' 'Pre-commit checks need the JavaScript dependencies. Run pnpm install first.' >&2
   exit 1
