@@ -117,6 +117,14 @@ class StatementImportTest {
     }
 
     @Test
+    fun hidesUnexpectedParserDetailsBehindRowSpecificGuidance() {
+        assertEquals(
+            "Row 12: Couldn’t read this transaction. Check its date and amount.",
+            statementImportRowFailure(12, IllegalArgumentException("database stack trace: private detail")),
+        )
+    }
+
+    @Test
     fun decodesWindows1252AndFormatsImportCountsNaturally() {
         assertEquals("Café", decodeStatementBytes(byteArrayOf(67, 97, 102, 0xE9.toByte())))
         assertEquals("Café", decodeStatementBytes("Café".encodeToByteArray()))

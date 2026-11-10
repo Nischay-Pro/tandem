@@ -25,6 +25,16 @@ internal class StatementImportParseException(
     message: String,
 ) : IllegalArgumentException(message)
 
+internal fun statementImportRowFailure(
+    rowNumber: Int,
+    error: Throwable,
+): String {
+    val message =
+        (error as? StatementImportParseException)?.message
+            ?: "Couldn’t read this transaction. Check its date and amount."
+    return "Row $rowNumber: $message"
+}
+
 internal fun statementCount(
     count: Int,
     singular: String,
@@ -152,7 +162,7 @@ private fun parseCsv(
                 )
             } catch (error: IllegalArgumentException) {
                 skipped++
-                if (firstSkippedReason == null) firstSkippedReason = "Row $rowNumber: ${error.message ?: "Couldn’t read this transaction."}"
+                if (firstSkippedReason == null) firstSkippedReason = statementImportRowFailure(rowNumber, error)
                 null
             }
         }
@@ -201,7 +211,7 @@ private fun parseQif(
                 )
             } catch (error: IllegalArgumentException) {
                 skipped++
-                if (firstSkippedReason == null) firstSkippedReason = "Row $rowNumber: ${error.message ?: "Couldn’t read this transaction."}"
+                if (firstSkippedReason == null) firstSkippedReason = statementImportRowFailure(rowNumber, error)
                 null
             }
         }
@@ -247,7 +257,7 @@ private fun parseOfx(content: String): StatementParseResult {
                 )
             } catch (error: IllegalArgumentException) {
                 skipped++
-                if (firstSkippedReason == null) firstSkippedReason = "Row $rowNumber: ${error.message ?: "Couldn’t read this transaction."}"
+                if (firstSkippedReason == null) firstSkippedReason = statementImportRowFailure(rowNumber, error)
                 null
             }
         }

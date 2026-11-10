@@ -434,8 +434,6 @@ internal fun FirstSyncScreen(
         }
         val syncMessage =
             when {
-                mobileSession.isSyncing && mobileSession.syncError != null ->
-                    "Retrying · ${mobileSession.syncError}"
                 mobileSession.isSyncing -> "Syncing the budget."
                 mobileSession.syncComplete ->
                     "${mobileSession.syncedTransactionCount} transactions saved on this device."
@@ -444,7 +442,7 @@ internal fun FirstSyncScreen(
             }
         val syncMessageColor by
             animateColorAsState(
-                targetValue = if (mobileSession.syncError != null) palette.warning else palette.muted,
+                targetValue = if (mobileSession.syncError != null && !mobileSession.isSyncing) palette.warning else palette.muted,
                 animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
                 label = "first-sync-status-color",
             )

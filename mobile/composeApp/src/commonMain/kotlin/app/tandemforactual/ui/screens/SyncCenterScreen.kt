@@ -69,15 +69,18 @@ internal fun SyncCenterScreen(
                         )
                         val syncMessage =
                             when {
-                                mobileSession.isSyncing && mobileSession.syncError != null ->
-                                    "Retrying sync · ${mobileSession.syncError}"
                                 mobileSession.isSyncing -> "Sync in progress"
                                 mobileSession.syncError != null -> mobileSession.syncError.orEmpty()
                                 else -> "Local data is available offline"
                             }
                         val syncMessageColor by
                             animateColorAsState(
-                                targetValue = if (mobileSession.syncError != null) tandemPalette.warning else tandemPalette.muted,
+                                targetValue =
+                                    if (mobileSession.syncError != null && !mobileSession.isSyncing) {
+                                        tandemPalette.warning
+                                    } else {
+                                        tandemPalette.muted
+                                    },
                                 animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
                                 label = "sync-center-status-color",
                             )

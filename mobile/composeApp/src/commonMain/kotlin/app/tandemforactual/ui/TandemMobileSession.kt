@@ -2029,7 +2029,7 @@ internal class TandemMobileSession(
                 setBudgetActionMessage(
                     error.userFacingMessage(failureMessage),
                     ownerRoute = messageOwner,
-                    actionLabel = "Retry",
+                    actionLabel = "Try again",
                     retryAction = { performBudgetAction(budgetId, encryptionPassword, failureMessage, messageOwner, action) },
                 )
             } else {
@@ -2059,7 +2059,7 @@ internal class TandemMobileSession(
                 setBudgetActionMessage(
                     failureMessage,
                     ownerRoute = messageOwner,
-                    actionLabel = "Retry",
+                    actionLabel = "Try again",
                     retryAction = { performBudgetAction(budgetId, encryptionPassword, failureMessage, messageOwner, action) },
                 )
             }

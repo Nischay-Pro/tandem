@@ -51,7 +51,6 @@ internal fun SyncPreferencesScreen(
     val syncStatus =
         when {
             !hasSelectedBudget -> "No budget selected"
-            mobileSession.isSyncing && mobileSession.syncError != null -> "Retrying"
             mobileSession.isSyncing -> "Syncing"
             mobileSession.syncError != null -> "Needs attention"
             syncState?.lastSyncedAtEpochMs != null -> "Ready"
@@ -60,8 +59,8 @@ internal fun SyncPreferencesScreen(
     val syncDescription =
         when {
             !hasSelectedBudget -> "Pair this device and choose an Actual budget to sync"
-            mobileSession.syncError != null -> mobileSession.syncError.orEmpty()
             mobileSession.isSyncing -> "Reading changes from Actual"
+            mobileSession.syncError != null -> mobileSession.syncError.orEmpty()
             syncState?.lastSyncedAtEpochMs != null -> "Last successful sync"
             else -> "Open a budget and sync to save it on this device"
         }

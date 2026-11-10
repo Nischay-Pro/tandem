@@ -268,7 +268,7 @@ internal fun UncertainWriteScreen(
                         operation.status == "queued" -> "Your edit is saved on this device and is waiting to sync."
                         operation.status == "sending" && mobileSession.isSyncing -> "Syncing this edit with Actual."
                         operation.status == "sending" -> "Status unknown. Check before retrying."
-                        isNotFound -> "No matching edit is on the server. Retrying sends it once."
+                        isNotFound -> "No matching edit is on the server. Try again to send it once."
                         isChecked -> "Actual hasn’t confirmed whether it saved this edit. Check again before retrying."
                         mobileSession.isSyncing -> "Checking Actual for this edit."
                         else -> "Tandem couldn’t confirm whether Actual saved this edit. Check its status before retrying."

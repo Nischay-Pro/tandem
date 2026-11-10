@@ -67,7 +67,6 @@ internal fun LocalDataScreen(
     val syncStatus =
         when {
             !hasSelectedBudget -> "No budget selected"
-            mobileSession.isSyncing && mobileSession.syncError != null -> "Retrying"
             mobileSession.isSyncing -> "Syncing"
             mobileSession.syncError != null -> "Needs attention"
             mobileSession.localSyncState?.lastSyncedAtEpochMs != null -> "Ready"
