@@ -163,6 +163,10 @@ object BudgetSyncJson {
     fun parseOperation(payload: Map<String, JsonElement>): RemoteOperationResult {
         val root = payload.toJsonObject()
         val operation = root.requiredObject("operation")
+        val conflict =
+            root["conflict"]
+                ?.takeUnless { it == JsonNull }
+                ?.requireObject("conflict")
         val status =
             when (operation.requiredString("status")) {
                 "queued" -> RemoteOperationStatus.QUEUED
@@ -179,6 +183,8 @@ object BudgetSyncJson {
             transactionId = operation.requiredString("transactionId"),
             status = status,
             errorCode = operation.optionalString("errorCode"),
+            conflictType = conflict?.optionalString("conflictType"),
+            conflictingFields = conflict?.optionalStringArray("conflictingFields").orEmpty(),
         )
     }
 
@@ -295,6 +301,28 @@ object BudgetSyncJson {
         } catch (error: IllegalArgumentException) {
             throw BudgetSyncProtocolException("Response field $name must be an array", error)
         }
+
+    private fun JsonObject.optionalStringArray(name: String): List<String>? {
+        val value = this[name]?.takeUnless { it == JsonNull } ?: return null
+        val values =
+            try {
+                value.jsonArray
+            } catch (error: IllegalArgumentException) {
+                throw BudgetSyncProtocolException("Response field $name must be an array", error)
+            }
+        return values.map { element ->
+            val primitive =
+                try {
+                    element.jsonPrimitive
+                } catch (error: IllegalArgumentException) {
+                    throw BudgetSyncProtocolException("Response field $name must contain strings", error)
+                }
+            if (!primitive.isString) {
+                throw BudgetSyncProtocolException("Response field $name must contain strings")
+            }
+            primitive.content
+        }
+    }
 
     private fun JsonObject.requiredObject(name: String): JsonObject = this[name].requireObject(name)
 

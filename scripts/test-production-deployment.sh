@@ -98,7 +98,7 @@ create_test_device() {
     --set=device_id="$device_id" \
     --set=device_name="$name" \
     --set=credential_hash="$credential_hash" >/dev/null <<'SQL'
-INSERT INTO companion_devices (
+INSERT INTO tandem_devices (
   device_id, principal_id, device_name, credential_hash, budget_ids
 ) VALUES (:'device_id'::uuid, 'release-check', :'device_name', :'credential_hash', ARRAY['*']);
 SQL

@@ -372,11 +372,12 @@ jobs:
       - api_ios
       - data_ios
       - compose_ios
+      - quality
     if: always()
     runs-on: ubuntu-26.04
     steps:
       - name: Require all mobile checks to pass
-        if: ${{ needs.mobile_static.result != 'success' || needs.merchant_icon_pack.result != 'success' || needs.api_android_jvm.result != 'success' || needs.data_android_jvm.result != 'success' || needs.compose_android.result != 'success' || needs.android_app_unit_tests.result != 'success' || needs.android_app_release_lint.result != 'success' || needs.android_app_release.result != 'success' || needs.ios_host.result != 'success' || needs.api_ios.result != 'success' || needs.data_ios.result != 'success' || needs.compose_ios.result != 'success' }}
+        if: ${{ needs.mobile_static.result != 'success' || needs.merchant_icon_pack.result != 'success' || needs.api_android_jvm.result != 'success' || needs.data_android_jvm.result != 'success' || needs.compose_android.result != 'success' || needs.android_app_unit_tests.result != 'success' || needs.android_app_release_lint.result != 'success' || needs.android_app_release.result != 'success' || needs.ios_host.result != 'success' || needs.api_ios.result != 'success' || needs.data_ios.result != 'success' || needs.compose_ios.result != 'success' || needs.quality.result != 'success' }}
         run: exit 1
 
   quality:

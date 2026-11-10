@@ -61,7 +61,7 @@ import kotlinx.coroutines.launch
 internal data class AccountListItemUi(
     val id: String,
     val name: String,
-    val description: String,
+    val description: String?,
     val balance: String,
     val offBudget: Boolean,
     val closed: Boolean = false,
@@ -78,6 +78,17 @@ internal data class AccountListGroupUi(
 internal data class AccountListUi(
     val groups: List<AccountListGroupUi>,
 )
+
+internal fun accountListSubtitle(
+    account: LiveAccountSummary,
+    lastSyncedAtEpochMs: Long?,
+): String? =
+    when {
+        account.closed -> null
+        account.offBudget -> "Off budget"
+        lastSyncedAtEpochMs != null -> "Last synced ${formatDateAtEpochMilliseconds(lastSyncedAtEpochMs)}"
+        else -> "Not synced yet"
+    }
 
 internal fun accountTypeIcon(
     accountName: String,
@@ -103,24 +114,23 @@ internal fun accountTypeIcon(
 
 internal fun accountGroupOrder(groupName: String): Int {
     val name = groupName.trim().lowercase()
-    val type = name.substringAfter("·", "").trim()
+    val type = name.substringAfter("·", name).trim()
     val typeOrder =
         when (type) {
-            "checking" -> 0
-            "savings" -> 1
-            "credit" -> 2
-            "loan" -> 3
-            "mortgage" -> 4
-            "debt" -> 5
-            "investment" -> 6
-            "other" -> 7
-            else -> 8
+            "cash" -> 0
+            "checking" -> 1
+            "savings" -> 2
+            "credit" -> 3
+            "loan" -> 4
+            "mortgage" -> 5
+            "debt" -> 6
+            "investment" -> 7
+            "other" -> 8
+            else -> 9
         }
     return when {
         name == "closed" -> Int.MAX_VALUE
-        name.startsWith("on budget") -> typeOrder
-        name.startsWith("off budget") -> 1_000 + typeOrder
-        else -> 3_000
+        else -> typeOrder
     }
 }
 
@@ -177,12 +187,7 @@ internal fun AccountsScreen(
                                     AccountListItemUi(
                                         account.id,
                                         account.name,
-                                        when {
-                                            account.closed -> "Closed"
-                                            account.accountGroupName != null -> account.accountGroupName
-                                            account.offBudget -> "Off budget"
-                                            else -> "On budget"
-                                        },
+                                        accountListSubtitle(account, mobileSession.localSyncState?.lastSyncedAtEpochMs),
                                         account.balanceMinor?.let(state::formatCurrency) ?: "Unavailable",
                                         account.offBudget,
                                         account.closed,
@@ -248,6 +253,7 @@ internal fun AccountsScreen(
                                 SurfaceCard {
                                     ListRow(
                                         account.name,
+                                        subtitle = account.description,
                                         trailing = account.balance,
                                         leading =
                                             RowLeading.Merchant(

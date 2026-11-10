@@ -5,7 +5,8 @@ import {
 } from "../src/config.js";
 import type { ServerDatabase } from "../src/database.js";
 import type { DeviceAuthorization } from "../src/auth/device-auth.js";
-import { startApiServer } from "../src/server.js";
+import { startApiServer, startupExitCodeFor } from "../src/server.js";
+import { productionStartupExitCode } from "../src/main.js";
 import { WRITE_LEASE_SWEEP_INTERVAL_MS } from "../src/write-journal/lease-reaper.js";
 import { ActualCompatibilityError } from "../src/actual/actual-session.js";
 
@@ -220,6 +221,34 @@ describe("API server lifecycle integration", () => {
     await expect(startApiServer(config, database, vi.fn())).rejects.toBe(
       migrationError,
     );
+    expect(startupExitCodeFor(migrationError)).toBe(3);
+    expect(productionStartupExitCode(migrationError)).toBe(3);
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("does not assign startup exit codes to non-object failures", async () => {
+    const startupFailure = "synthetic non-object startup failure";
+    const close = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    const database: ServerDatabase = {
+      ping: vi.fn<() => Promise<void>>(),
+      close,
+      migrate: vi.fn<() => Promise<void>>().mockRejectedValue(startupFailure),
+      journal: {
+        expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
+      },
+      deviceAuth,
+    };
+    const config = {
+      ...parseApiConfig({ DATABASE_URL: "postgres://local/test" }),
+      port: 0,
+      host: "127.0.0.1",
+    };
+
+    await expect(startApiServer(config, database, vi.fn())).rejects.toBe(
+      startupFailure,
+    );
+    expect(startupExitCodeFor(startupFailure)).toBeUndefined();
+    expect(startupExitCodeFor(null)).toBeUndefined();
     expect(close).toHaveBeenCalledOnce();
   });
 
@@ -257,6 +286,7 @@ describe("API server lifecycle integration", () => {
         close: runtimeClose,
       }),
     ).rejects.toBe(startupError);
+    expect(startupExitCodeFor(startupError)).toBe(4);
     expect(runtimeClose).toHaveBeenCalledOnce();
     expect(consoleError).toHaveBeenCalledWith("API startup cleanup failed", {
       errorType: "Error",

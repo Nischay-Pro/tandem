@@ -478,7 +478,7 @@ describe("Actual transaction store", () => {
       "Actual did not return the created transaction",
     );
     await expect(missingReadBack.create("unstable-id", input)).rejects.toThrow(
-      "New transactions require a Companion transaction ID",
+      "New transactions require a Tandem transaction ID",
     );
   });
 
@@ -496,7 +496,7 @@ describe("Actual transaction store", () => {
     );
   });
 
-  it("resolves stable Companion IDs to Actual IDs before update or delete", async () => {
+  it("resolves stable Tandem IDs to Actual IDs before update or delete", async () => {
     const id = "tandem:8c88495a-65d9-4531-8392-93bff2c65374";
     const actual = { id: "actual-generated-id", imported_id: id };
     const fake = createClient({ data: [actual] });

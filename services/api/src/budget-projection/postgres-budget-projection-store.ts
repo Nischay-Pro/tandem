@@ -88,7 +88,7 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
     const result = await this.pool.query<{ fresh: boolean }>(
       `SELECT EXISTS (
          SELECT 1
-         FROM companion_budget_sync_state
+         FROM tandem_budget_sync_state
          WHERE budget_id = $1
            AND feed_epoch = $2
            AND refreshed_at >= clock_timestamp() - ($3::double precision * INTERVAL '1 millisecond')
@@ -146,7 +146,7 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
       await client.query("BEGIN");
       transactionOpen = true;
       await client.query(
-        `INSERT INTO companion_budget_sync_state
+        `INSERT INTO tandem_budget_sync_state
           (budget_id, generation, feed_epoch, cursor)
          VALUES ($1, $2, $3, 0)
          ON CONFLICT (budget_id) DO NOTHING`,
@@ -154,7 +154,7 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
       );
       const stateResult = await client.query<SyncStateRow>(
         `SELECT budget_id, generation, feed_epoch, cursor::text, refreshed_at
-         FROM companion_budget_sync_state
+         FROM tandem_budget_sync_state
          WHERE budget_id = $1
          FOR UPDATE`,
         [budgetId],
@@ -170,16 +170,16 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
         generation = randomUUID();
         cursor = 0n;
         await client.query(
-          `DELETE FROM companion_budget_changes WHERE budget_id = $1`,
+          `DELETE FROM tandem_budget_changes WHERE budget_id = $1`,
           [budgetId],
         );
         await client.query(
-          `DELETE FROM companion_budget_records
+          `DELETE FROM tandem_budget_records
            WHERE budget_id = $1 AND is_deleted = true`,
           [budgetId],
         );
         await client.query(
-          `UPDATE companion_budget_sync_state
+          `UPDATE tandem_budget_sync_state
            SET generation = $2, feed_epoch = $3, cursor = 0
            WHERE budget_id = $1`,
           [budgetId, generation, feedEpoch],
@@ -188,7 +188,7 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
 
       const currentResult = await client.query<CurrentRecordStateRow>(
         `SELECT entity_type, entity_id, revision, is_deleted
-         FROM companion_budget_records
+         FROM tandem_budget_records
          WHERE budget_id = $1`,
         [budgetId],
       );
@@ -239,7 +239,7 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
       await writeDeleteBatches(client, budgetId, deletions);
 
       await client.query(
-        `UPDATE companion_budget_sync_state
+        `UPDATE tandem_budget_sync_state
          SET cursor = $2::bigint, refreshed_at = clock_timestamp()
          WHERE budget_id = $1`,
         [budgetId, cursor.toString()],
@@ -247,12 +247,12 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
       const oldestRetainedCursor = cursor - BigInt(this.changeRetention);
       if (oldestRetainedCursor > 0n) {
         await client.query(
-          `DELETE FROM companion_budget_changes
+          `DELETE FROM tandem_budget_changes
            WHERE budget_id = $1 AND cursor <= $2::bigint`,
           [budgetId, oldestRetainedCursor.toString()],
         );
         await client.query(
-          `DELETE FROM companion_budget_records
+          `DELETE FROM tandem_budget_records
            WHERE budget_id = $1 AND is_deleted = true
              AND updated_cursor <= $2::bigint`,
           [budgetId, oldestRetainedCursor.toString()],
@@ -361,7 +361,7 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
       transactionOpen = true;
       const stateResult = await client.query<SyncStateRow>(
         `SELECT budget_id, generation, feed_epoch, cursor::text, refreshed_at
-         FROM companion_budget_sync_state WHERE budget_id = $1`,
+         FROM tandem_budget_sync_state WHERE budget_id = $1`,
         [input.budgetId],
       );
       const state = stateResult.rows[0];
@@ -390,7 +390,7 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
         input.afterType === undefined
           ? await client.query<CurrentRecordRow>(
               `SELECT entity_type, entity_id, revision, body, is_deleted
-               FROM companion_budget_records
+               FROM tandem_budget_records
                WHERE budget_id = $1 AND is_deleted = false
                ORDER BY entity_type COLLATE "C", entity_id COLLATE "C"
                LIMIT $2`,
@@ -398,7 +398,7 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
             )
           : await client.query<CurrentRecordRow>(
               `SELECT entity_type, entity_id, revision, body, is_deleted
-               FROM companion_budget_records
+               FROM tandem_budget_records
                WHERE budget_id = $1 AND is_deleted = false
                  AND (entity_type COLLATE "C", entity_id COLLATE "C") >
                      ($2::text COLLATE "C", $3::text COLLATE "C")
@@ -480,7 +480,7 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
       transactionOpen = true;
       const stateResult = await client.query<SyncStateRow>(
         `SELECT budget_id, generation, feed_epoch, cursor::text, refreshed_at
-         FROM companion_budget_sync_state WHERE budget_id = $1`,
+         FROM tandem_budget_sync_state WHERE budget_id = $1`,
         [input.budgetId],
       );
       const state = stateResult.rows[0];
@@ -503,7 +503,7 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
 
       const minimumResult = await client.query<{ min_cursor: string | null }>(
         `SELECT MIN(cursor)::text AS min_cursor
-         FROM companion_budget_changes WHERE budget_id = $1`,
+         FROM tandem_budget_changes WHERE budget_id = $1`,
         [input.budgetId],
       );
       const minimum = minimumResult.rows[0]?.min_cursor;
@@ -530,8 +530,8 @@ export class PostgresBudgetProjectionStore implements BudgetProjectionStore {
                     THEN current.body
                   ELSE NULL
                 END AS body
-         FROM companion_budget_changes AS change
-         LEFT JOIN companion_budget_records AS current
+         FROM tandem_budget_changes AS change
+         LEFT JOIN tandem_budget_records AS current
            ON current.budget_id = change.budget_id
           AND current.entity_type = change.entity_type
           AND current.entity_id = change.entity_id
@@ -603,7 +603,7 @@ async function writeUpsertBatches(
 
     await preserveSupersededBodies(client, budgetId, types, ids);
     await client.query(
-      `INSERT INTO companion_budget_records
+      `INSERT INTO tandem_budget_records
         (budget_id, entity_type, entity_id, revision, body, is_deleted, updated_cursor)
        SELECT $1, incoming.entity_type, incoming.entity_id, incoming.revision,
               incoming.body::jsonb, false, incoming.updated_cursor
@@ -619,7 +619,7 @@ async function writeUpsertBatches(
       [budgetId, types, ids, revisions, bodies, cursors],
     );
     await client.query(
-      `INSERT INTO companion_budget_changes
+      `INSERT INTO tandem_budget_changes
         (budget_id, cursor, entity_type, entity_id, operation, revision, body)
        SELECT $1, incoming.cursor, incoming.entity_type, incoming.entity_id,
               'upsert', incoming.revision, NULL
@@ -652,7 +652,7 @@ async function writeDeleteBatches(
 
     await preserveSupersededBodies(client, budgetId, types, ids);
     await client.query(
-      `UPDATE companion_budget_records AS existing
+      `UPDATE tandem_budget_records AS existing
        SET revision = incoming.revision,
            body = NULL,
            is_deleted = true,
@@ -667,7 +667,7 @@ async function writeDeleteBatches(
       [budgetId, types, ids, revisions, cursors],
     );
     await client.query(
-      `INSERT INTO companion_budget_changes
+      `INSERT INTO tandem_budget_changes
         (budget_id, cursor, entity_type, entity_id, operation, revision, body)
        SELECT $1, incoming.cursor, incoming.entity_type, incoming.entity_id,
               'delete', incoming.revision, NULL
@@ -686,9 +686,9 @@ async function preserveSupersededBodies(
   entityIds: readonly string[],
 ): Promise<void> {
   await client.query(
-    `UPDATE companion_budget_changes AS change
+    `UPDATE tandem_budget_changes AS change
      SET body = current.body
-     FROM companion_budget_records AS current,
+     FROM tandem_budget_records AS current,
           unnest($2::text[], $3::text[]) AS incoming(entity_type, entity_id)
      WHERE current.budget_id = $1
        AND current.entity_type = incoming.entity_type
@@ -710,7 +710,7 @@ async function readSnapshotOnClient(
 ): Promise<BudgetProjectionSnapshot | undefined> {
   const stateResult = await client.query<SyncStateRow>(
     `SELECT budget_id, generation, feed_epoch, cursor::text, refreshed_at
-     FROM companion_budget_sync_state WHERE budget_id = $1`,
+     FROM tandem_budget_sync_state WHERE budget_id = $1`,
     [budgetId],
   );
   const state = stateResult.rows[0];
@@ -733,7 +733,7 @@ async function readSnapshotRecordsOnClient(
 ): Promise<BudgetProjectionSnapshot> {
   const recordResult = await client.query<CurrentRecordRow>(
     `SELECT entity_type, entity_id, revision, body, is_deleted
-     FROM companion_budget_records
+     FROM tandem_budget_records
      WHERE budget_id = $1 AND is_deleted = false
      ORDER BY entity_type COLLATE "C", entity_id COLLATE "C"`,
     [budgetId],

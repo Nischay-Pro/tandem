@@ -1,5 +1,6 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.ui.model.LiveAccountSummary
 import com.composables.icons.lucide.CarFront
 import com.composables.icons.lucide.Carrot
 import com.composables.icons.lucide.ChartNoAxesCombined
@@ -124,8 +125,23 @@ class MerchantIconMatchingTest {
     fun closedAccountsSortAfterEveryOpenAccountGroup() {
         val closedOrder = accountGroupOrder("Closed")
 
-        assertTrue(closedOrder > accountGroupOrder("On budget · Other"))
-        assertTrue(closedOrder > accountGroupOrder("Off budget · Investment"))
+        assertTrue(closedOrder > accountGroupOrder("Other"))
+        assertTrue(closedOrder > accountGroupOrder("Investment"))
         assertTrue(closedOrder > accountGroupOrder("Unrecognized account group"))
+    }
+
+    @Test
+    fun accountSubtitleOnlyAddsTheOffBudgetTagWhenItAddsInformation() {
+        assertEquals(
+            "Off budget",
+            accountListSubtitle(LiveAccountSummary("off", "Tracking", 100, "investment", true), 0),
+        )
+        assertTrue(
+            accountListSubtitle(LiveAccountSummary("on", "Checking", 100, "checking", false), 0)
+                .orEmpty()
+                .startsWith("Last synced "),
+        )
+        assertEquals("Not synced yet", accountListSubtitle(LiveAccountSummary("on", "Checking", 100, "checking", false), null))
+        assertNull(accountListSubtitle(LiveAccountSummary("closed", "Closed", 0, "savings", false, closed = true), 0))
     }
 }

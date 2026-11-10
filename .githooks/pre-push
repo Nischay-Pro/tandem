@@ -17,13 +17,64 @@ python3 scripts/check-mobile-ui-apostrophes.py
 python3 scripts/check-mobile-design-tokens.py
 python3 scripts/check-mobile-ui-vocabulary.py
 
+if [ -z "${ANDROID_HOME:-}" ]; then
+  if [ -n "${ANDROID_SDK_ROOT:-}" ]; then
+    ANDROID_HOME=$ANDROID_SDK_ROOT
+  else
+    for android_sdk_candidate in "$HOME/Android/Sdk" "$HOME/Library/Android/sdk" /usr/lib/android-sdk; do
+      if [ -d "$android_sdk_candidate/platforms" ]; then
+        ANDROID_HOME=$android_sdk_candidate
+        break
+      fi
+    done
+  fi
+fi
+if [ -z "${ANDROID_HOME:-}" ]; then
+  printf '%s\n' 'Mobile compilation needs the Android SDK. Set ANDROID_HOME to its install directory.' >&2
+  exit 1
+fi
+export ANDROID_HOME
+ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-$ANDROID_HOME}
+export ANDROID_SDK_ROOT
+
 if [ ! -x "$repo_root/node_modules/.bin/eslint" ]; then
   printf '%s\n' 'ESLint checks need the JavaScript dependencies. Run pnpm install first.' >&2
   exit 1
 fi
 "$repo_root/node_modules/.bin/eslint" .
+if [ -x "$repo_root/node_modules/.bin/tsc" ]; then
+  "$repo_root/node_modules/.bin/tsc" --noEmit -p "$repo_root/services/api/tsconfig.json"
+  "$repo_root/node_modules/.bin/tsc" --noEmit -p "$repo_root/services/api/tsconfig.test.json"
+else
+  printf '%s\n' 'TypeScript checks need the JavaScript dependencies. Run pnpm install first.' >&2
+  exit 1
+fi
 
 (
   cd "$repo_root/mobile"
-  ./gradlew --no-daemon :api-client:ktlintCheck :data:ktlintCheck :composeApp:ktlintCheck
+  ./gradlew --no-daemon \
+    :api-client:compileAndroidMain \
+    :api-client:compileCommonMainKotlinMetadata \
+    :api-client:jvmTest \
+    :api-client:koverVerify \
+    :api-client:ktlintCheck \
+    :data:compileAndroidMain \
+    :data:compileAndroidDeviceTest \
+    :data:compileCommonMainKotlinMetadata \
+    :data:compileKotlinJvm \
+    :data:jvmTest \
+    :data:testAndroidHostTest \
+    :data:koverVerify \
+    :data:ktlintCheck \
+    :composeApp:compileAndroidMain \
+    :composeApp:testAndroidHostTest \
+    :composeApp:ktlintCheck \
+    :androidApp:testDebugUnitTest \
+    :androidApp:lintRelease \
+    :androidApp:assembleRelease \
+    :api-client:compileKotlinIosArm64 \
+    :data:compileKotlinIosArm64 \
+    :composeApp:compileKotlinIosArm64 \
+    :composeApp:compileKotlinIosSimulatorArm64 \
+    :composeApp:compileTestKotlinIosSimulatorArm64
 )

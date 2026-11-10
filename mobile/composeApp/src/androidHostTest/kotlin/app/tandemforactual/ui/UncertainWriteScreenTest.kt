@@ -57,7 +57,9 @@ class UncertainWriteScreenTest {
     }
 
     @Test
-    fun failedStatusCheckOffersOnlyAnotherCheck() {
+    fun failedStatusCheckStillOffersRetryAndWarnedRemoval() {
+        var retryRequested = false
+        var removalConfirmed = false
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
                 UncertainWriteDetailsScreen(
@@ -69,8 +71,8 @@ class UncertainWriteScreenTest {
                     checkError = "Couldn’t reach Tandem. Check the connection and try again.",
                     isSyncing = false,
                     onCheckStatus = {},
-                    onRetry = {},
-                    onDiscard = {},
+                    onRetry = { retryRequested = true },
+                    onDiscard = { removalConfirmed = true },
                     onReviewConflict = {},
                     onReviewRejected = {},
                     onDone = {},
@@ -80,8 +82,12 @@ class UncertainWriteScreenTest {
 
         composeTestRule.onNodeWithText("Couldn’t check this change").assertExists()
         composeTestRule.onNodeWithText("Check again").assertExists()
-        composeTestRule.onNodeWithText("Try again").assertDoesNotExist()
-        composeTestRule.onNodeWithText("Remove edit").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Try again").performClick()
+        assertTrue(retryRequested)
+        composeTestRule.onNodeWithText("Remove edit").performClick()
+        composeTestRule.onNodeWithText("Actual may already have saved it", substring = true).assertExists()
+        composeTestRule.onAllNodesWithText("Remove edit")[1].performClick()
+        assertTrue(removalConfirmed)
     }
 
     private fun uncertainWrite() =

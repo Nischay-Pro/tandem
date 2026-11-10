@@ -61,7 +61,7 @@ class GeneratedApiSurfaceTest {
             val auth = Auth.BearerAuth { AuthItem.Bearer("device-token") }
 
             try {
-                Api.baseUrl = Url("https://companion.example")
+                Api.baseUrl = Url("https://tandem.example")
                 Api.setAuthProvider(auth)
                 Api.updateClient(
                     createHttpClient = {

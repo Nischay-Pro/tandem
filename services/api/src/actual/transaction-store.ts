@@ -1,6 +1,6 @@
 import * as actualApi from "@actual-app/api";
 import {
-  isCompanionTransactionId,
+  isTandemTransactionId,
   type TransactionCreateInput,
   type TransactionPatch,
 } from "./transaction-reconciliation.js";
@@ -45,10 +45,10 @@ export function createActualTransactionStore(
   >();
 
   async function read(id: string): Promise<unknown | undefined> {
-    const companionId = isCompanionTransactionId(id);
+    const tandemId = isTandemTransactionId(id);
     const query = client
       .q("transactions")
-      .filter(companionId ? { imported_id: id } : { id })
+      .filter(tandemId ? { imported_id: id } : { id })
       .select("*")
       .options({ splits: "grouped" });
     const result = await client.aqlQuery(query);
@@ -64,7 +64,7 @@ export function createActualTransactionStore(
       const transaction = row as Record<string, unknown>;
       if (
         transaction.id === id ||
-        (companionId && transaction.imported_id === id)
+        (tandemId && transaction.imported_id === id)
       ) {
         matches.push(transaction);
       }
@@ -96,7 +96,7 @@ export function createActualTransactionStore(
   }
 
   async function resolveActualId(id: string): Promise<string> {
-    if (!isCompanionTransactionId(id)) {
+    if (!isTandemTransactionId(id)) {
       return id;
     }
     const transaction = await read(id);
@@ -169,8 +169,8 @@ export function createActualTransactionStore(
     read,
     validateCreateInput,
     async create(id, input) {
-      if (!isCompanionTransactionId(id)) {
-        throw new Error("New transactions require a Companion transaction ID");
+      if (!isTandemTransactionId(id)) {
+        throw new Error("New transactions require a Tandem transaction ID");
       }
       let transferPayee: boolean | undefined;
       if (input.payee !== null) {

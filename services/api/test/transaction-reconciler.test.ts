@@ -132,7 +132,7 @@ function createCreateRequest(
       date: "2026-11-01",
       payee: "payee-1",
       category: "category-1",
-      notes: "Created from Companion",
+      notes: "Created from Tandem",
       cleared: false,
     },
     ...overrides,
@@ -602,7 +602,7 @@ describe("Actual transaction reconciliation", () => {
     vi.restoreAllMocks();
   });
 
-  it("creates a transaction once using its stable Companion ID", async () => {
+  it("creates a transaction once using its stable Tandem ID", async () => {
     const request = createCreateRequest();
     const harness = createHarness(request);
 
@@ -962,13 +962,13 @@ describe("Actual transaction reconciliation", () => {
     );
   });
 
-  it("rejects create requests without a stable Companion transaction ID", async () => {
+  it("rejects create requests without a stable Tandem transaction ID", async () => {
     const request = createCreateRequest({ transactionId: "unstable-id" });
     const harness = createHarness(request);
 
     await expect(harness.reconciler.submit(request)).rejects.toMatchObject({
       name: "TransactionRequestValidationError",
-      message: "transactionId must be a stable Companion transaction ID",
+      message: "transactionId must be a stable Tandem transaction ID",
     });
     expect(harness.journal.operation).toBeUndefined();
   });

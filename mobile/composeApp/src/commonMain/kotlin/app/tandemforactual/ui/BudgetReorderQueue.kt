@@ -46,7 +46,7 @@ internal fun budgetMutationFailureDisposition(errorCode: String?): BudgetMutatio
 internal fun budgetMutationFailureMessage(errorCode: String?): String =
     when (errorCode) {
         "idempotency_key_reused" -> "Tandem matched this change to a different request. Refresh the budget, then try again."
-        "operation_in_progress" -> "The server is still processing this change. Wait a moment, then try again."
+        "operation_in_progress" -> "Tandem is still processing this change. Wait a moment, then try again."
         "operation_uncertain" -> "Tandem couldn’t confirm whether Actual saved this change. Check Actual, then try again."
         "operation_rejected" -> "Actual rejected this change earlier. Refresh the budget, then try again."
         "operation_result_unavailable" -> "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget."
@@ -73,6 +73,16 @@ internal fun budgetMutationRetryNeedsNewKey(errorCode: String?): Boolean =
 
 internal fun budgetMutationNeedsRefresh(errorCode: String?): Boolean =
     budgetMutationFailureDisposition(errorCode) == BudgetMutationFailureDisposition.RESULT_UNAVAILABLE
+
+internal fun shouldCompleteBudgetMutationAfterOutcome(
+    mutationApplied: Boolean,
+    refreshFailedAfterMutation: Boolean,
+    resultUnavailable: Boolean,
+    resultRefreshSucceeded: Boolean,
+): Boolean =
+    mutationApplied ||
+        refreshFailedAfterMutation ||
+        (resultUnavailable && resultRefreshSucceeded)
 
 internal enum class BudgetReorderKind {
     CATEGORY,
@@ -369,7 +379,7 @@ internal data class BudgetReorderQueueState(
                 refreshFailed ->
                     current.copy(
                         pendingCount = nextCount,
-                        message = message ?: "Actual was updated, but this device couldn’t refresh the budget.",
+                        message = message ?: "Actual was updated, but Tandem couldn’t refresh the budget. Sync to load the latest data.",
                         warning = true,
                     )
                 nextCount == 0 -> BudgetReorderStatus()

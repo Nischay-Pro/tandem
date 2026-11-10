@@ -3,5 +3,5 @@ import { reportProcessFailure, runProductionApi } from "./main.js";
 
 void runProductionApi(process.env, process).catch((error: unknown) => {
   reportProcessFailure("API startup failed", error);
-  process.exitCode = 1;
+  process.exitCode ??= 1;
 });

@@ -129,7 +129,7 @@ describe("PostgreSQL budget projection store failure handling", () => {
     const primaryError = new Error("synthetic write failure");
     const rollbackError = new Error("synthetic rollback failure");
     const query = vi.fn(async (sql: string) => {
-      if (sql.startsWith("INSERT INTO companion_budget_sync_state")) {
+      if (sql.startsWith("INSERT INTO tandem_budget_sync_state")) {
         throw primaryError;
       }
       if (sql === "ROLLBACK") throw rollbackError;
@@ -222,7 +222,7 @@ describe("PostgreSQL budget projection store failure handling", () => {
   it("reuses the locked synchronization state during refresh", async () => {
     let lockedStateRead = false;
     const query = vi.fn(async (sql: string) => {
-      if (sql.includes("FROM companion_budget_sync_state")) {
+      if (sql.includes("FROM tandem_budget_sync_state")) {
         if (sql.includes("FOR UPDATE")) {
           lockedStateRead = true;
           return {
@@ -239,7 +239,7 @@ describe("PostgreSQL budget projection store failure handling", () => {
         }
         return { rows: [] };
       }
-      if (sql.includes("FROM companion_budget_records")) {
+      if (sql.includes("FROM tandem_budget_records")) {
         return { rows: [] };
       }
       return { rows: [] };
@@ -262,7 +262,7 @@ describe("PostgreSQL budget projection store failure handling", () => {
     expect(lockedStateRead).toBe(true);
     expect(
       query.mock.calls.filter(([sql]) =>
-        sql.includes("FROM companion_budget_sync_state"),
+        sql.includes("FROM tandem_budget_sync_state"),
       ),
     ).toHaveLength(1);
     expect(release).toHaveBeenCalledWith(false);
@@ -273,7 +273,7 @@ describe("PostgreSQL budget projection store failure handling", () => {
       if (sql === "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY") {
         return { rows: [] };
       }
-      if (sql.includes("FROM companion_budget_sync_state")) {
+      if (sql.includes("FROM tandem_budget_sync_state")) {
         return {
           rows: [
             {
@@ -286,7 +286,7 @@ describe("PostgreSQL budget projection store failure handling", () => {
           ],
         };
       }
-      if (sql.includes("FROM companion_budget_records")) {
+      if (sql.includes("FROM tandem_budget_records")) {
         return {
           rows: [
             {
@@ -332,7 +332,7 @@ describe("PostgreSQL budget projection store failure handling", () => {
       if (sql === "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY") {
         return { rows: [] };
       }
-      if (sql.includes("FROM companion_budget_sync_state")) {
+      if (sql.includes("FROM tandem_budget_sync_state")) {
         throw primaryError;
       }
       if (sql === "ROLLBACK") {
@@ -368,7 +368,7 @@ describe("PostgreSQL budget projection store failure handling", () => {
 
   it("keeps the cursor when a change page has no events", async () => {
     const query = vi.fn(async (sql: string) => {
-      if (sql.includes("FROM companion_budget_sync_state")) {
+      if (sql.includes("FROM tandem_budget_sync_state")) {
         return {
           rows: [
             {
@@ -382,7 +382,7 @@ describe("PostgreSQL budget projection store failure handling", () => {
         };
       }
       if (sql.includes("MIN(cursor)")) return { rows: [{ min_cursor: null }] };
-      if (sql.includes("FROM companion_budget_changes")) {
+      if (sql.includes("FROM tandem_budget_changes")) {
         return { rows: [] };
       }
       return { rows: [] };

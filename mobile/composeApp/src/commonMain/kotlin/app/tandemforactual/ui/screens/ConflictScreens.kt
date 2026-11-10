@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.data.store.parseLocalWriteConflictDetails
 import app.tandemforactual.ui.components.BodyText
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
@@ -68,8 +69,10 @@ internal fun conflictPayeeTitle(
 
 internal fun canOfferUncertainWriteRecoveryActions(
     operationStatus: String,
-    statusCheckSucceeded: Boolean,
-): Boolean = statusCheckSucceeded && operationStatus in setOf("uncertain", "queued")
+    statusCheckAttempted: Boolean,
+): Boolean = statusCheckAttempted && operationStatus in setOf("uncertain", "queued")
+
+internal fun isUncertainWriteOperationNotFound(errorCode: String?): Boolean = errorCode == "operation_not_found"
 
 internal fun uncertainWriteRemovalWarning(
     payee: String,
@@ -88,6 +91,30 @@ internal fun UncertainWriteRecoveryActions(
     onRemove: () -> Unit,
 ) {
     when {
+        showCheckAgain && showRetryAndRemove -> {
+            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                SecondaryButton(
+                    "Check again",
+                    enabled = !isSyncing,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onCheckAgain,
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                    PrimaryButton(
+                        "Try again",
+                        enabled = !readOnly && !isSyncing,
+                        modifier = Modifier.weight(1f),
+                        onClick = onRetry,
+                    )
+                    SecondaryButton(
+                        "Remove edit",
+                        modifier = Modifier.weight(1f),
+                        enabled = !readOnly && !isSyncing,
+                        onClick = onRemove,
+                    )
+                }
+            }
+        }
         showCheckAgain ->
             PrimaryButton(
                 "Check again",
@@ -290,6 +317,18 @@ internal fun ConflictReviewScreen(
         }
     val deviceVersion = operation?.optimisticJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
     val actualDeleted = serverConfirmed && record?.remoteDeleted == true
+    val conflictDetails = operation?.lastErrorCode?.let(::parseLocalWriteConflictDetails)
+    val conflictReason =
+        if (serverConfirmed && operation != null) {
+            conflictReasonMessage(
+                conflictType = conflictDetails?.conflictType,
+                conflictingFields = conflictDetails?.conflictingFields.orEmpty(),
+                action = operation.action,
+                actualDeleted = actualDeleted,
+            )
+        } else {
+            null
+        }
     val actualVersion =
         if (serverConfirmed && !actualDeleted) {
             record?.remoteJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
@@ -357,11 +396,11 @@ internal fun ConflictReviewScreen(
         } else {
             Heading("Two versions differ")
             when {
-                mobileSession.isSyncing -> BodyText("Checking the latest transaction with the server…")
-                serverConfirmed -> BodyText("The server confirmed the latest Actual version.")
+                mobileSession.isSyncing -> BodyText("Checking the latest transaction with Tandem…")
+                serverConfirmed -> BodyText("Tandem confirmed the latest Actual version.")
                 else -> {
                     BodyText(
-                        "Connect to the server before choosing a version. Your edit stays on this device. " +
+                        "Connect to Tandem before choosing a version. Your edit stays on this device. " +
                             "Check the connection and try again.",
                     )
                     SecondaryButton(
@@ -384,11 +423,12 @@ internal fun ConflictReviewScreen(
                 ConflictValueCard("Your edit", deviceAmountText, Modifier.weight(1f))
                 ConflictValueCard("Actual", actualAmountText, Modifier.weight(1f))
             }
+            conflictReason?.let { BodyText(it) }
             when {
-                !serverConfirmed -> BodyText("Actual’s latest transaction details appear after the server check.")
-                actualDeleted -> BodyText("Actual no longer has this transaction.")
+                !serverConfirmed -> BodyText("Actual’s latest transaction details appear after the Tandem check.")
+                actualDeleted -> if (conflictReason == null) BodyText("Actual no longer has this transaction.")
                 actualVersion == null -> BodyText("Actual’s latest transaction details aren’t available.")
-                comparisons.isEmpty() -> BodyText("The server returned no differing transaction fields.")
+                comparisons.isEmpty() -> BodyText("Tandem returned no differing transaction fields.")
                 detailComparisons.isEmpty() -> BodyText("Amount is the only differing field.")
                 else -> ConflictComparisonCard(detailComparisons)
             }
@@ -428,7 +468,7 @@ internal fun KeepLastSyncedConflictAction(
         enabled = enabled,
     ) { confirmDiscard = true }
     Text(
-        "Discards your edit and keeps Actual’s version. The server must confirm it first.",
+        "Discards your edit and keeps Actual’s version. Tandem must confirm it first.",
         color = tandemPalette.muted,
         fontSize = TandemTypography.caption,
     )
@@ -473,7 +513,11 @@ internal fun UncertainWriteScreen(
         val operation = checkedOperation ?: pendingOperation
         val transaction = operation?.let { write -> liveTransactions.firstOrNull { it.recordId == write.recordId } }
         val isChecked = operation != null && mobileSession.checkedWriteOperationId == operation.operationId
-        val isNotFound = operation != null && isChecked && operation.status == "uncertain" && operation.lastErrorCode == "http-404"
+        val isNotFound =
+            operation != null &&
+                isChecked &&
+                operation.status == "uncertain" &&
+                isUncertainWriteOperationNotFound(operation.lastErrorCode)
         val checkError =
             operation?.let { checked ->
                 mobileSession.uncertainWriteCheckError.takeIf {
@@ -543,7 +587,7 @@ internal fun UncertainWriteDetailsScreen(
         operation != null &&
             canOfferUncertainWriteRecoveryActions(
                 operation.status,
-                isChecked && checkErrorForOperation == null,
+                isChecked,
             )
     PageColumn {
         if (operation == null) {
@@ -576,7 +620,7 @@ internal fun UncertainWriteDetailsScreen(
                     operation.status == "queued" -> "Your edit is saved on this device and is waiting to sync."
                     operation.status == "sending" && isSyncing -> "Syncing this edit with Actual."
                     operation.status == "sending" -> "Tandem couldn’t confirm the save. Check its status before trying again."
-                    isNotFound -> "Actual has no copy of this edit. Try sending it again once."
+                    isNotFound -> "Tandem has no saved status for this edit. Try again, or check Actual before removing it."
                     isChecked -> "Actual still can’t confirm whether this edit was saved. You can try again or remove it."
                     isSyncing -> "Checking Actual for this edit."
                     else -> "Tandem couldn’t confirm whether Actual saved this edit. Check its status before trying again."
@@ -607,7 +651,7 @@ internal fun UncertainWriteDetailsScreen(
                 checkErrorForOperation != null -> {
                     UncertainWriteRecoveryActions(
                         showCheckAgain = true,
-                        showRetryAndRemove = false,
+                        showRetryAndRemove = canRetryOrRemove,
                         isSyncing = isSyncing,
                         readOnly = state.readOnlyMode,
                         onCheckAgain = onCheckStatus,

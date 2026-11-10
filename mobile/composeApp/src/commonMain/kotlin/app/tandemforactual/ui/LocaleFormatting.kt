@@ -36,6 +36,8 @@ internal expect fun platformFormatDate(
     includeYear: Boolean,
 ): String
 
+internal expect fun platformFormatDateAtEpochMilliseconds(epochMilliseconds: Long): String
+
 internal expect fun platformTodayIsoDate(): String
 
 internal expect fun platformFormatMonth(
@@ -101,6 +103,8 @@ internal fun formatSignedCurrency(
 ): String = if (minorUnits > 0) "+${formatCurrency(minorUnits, displaySettings)}" else formatCurrency(minorUnits, displaySettings)
 
 internal fun formatDate(date: CalendarDate): String = platformFormatDate(date.year, date.month, date.day, includeYear = true)
+
+internal fun formatDateAtEpochMilliseconds(epochMilliseconds: Long): String = platformFormatDateAtEpochMilliseconds(epochMilliseconds)
 
 internal fun formatShortDate(date: CalendarDate): String = platformFormatDate(date.year, date.month, date.day, includeYear = false)
 

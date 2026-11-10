@@ -41,7 +41,7 @@ export async function applyMigrations(
       MIGRATION_LOCK_ID,
     ]);
     lockAcquired = true;
-    await client.query(`CREATE TABLE IF NOT EXISTS companion_migrations (
+    await client.query(`CREATE TABLE IF NOT EXISTS tandem_migrations (
       position integer PRIMARY KEY CHECK (position > 0),
       name text NOT NULL UNIQUE,
       applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
@@ -50,7 +50,7 @@ export async function applyMigrations(
     const appliedResult = await client.query<{
       position: number;
       name: string;
-    }>("SELECT position, name FROM companion_migrations ORDER BY position");
+    }>("SELECT position, name FROM tandem_migrations ORDER BY position");
     const applied = appliedResult.rows;
     for (const [index, migration] of applied.entries()) {
       if (migration.position !== index + 1) {
@@ -200,7 +200,7 @@ async function applyOneMigration(
   try {
     await migration.up(client);
     await client.query(
-      "INSERT INTO companion_migrations (position, name) VALUES ($1, $2)",
+      "INSERT INTO tandem_migrations (position, name) VALUES ($1, $2)",
       [position, migration.name],
     );
     await client.query("COMMIT");

@@ -38,6 +38,20 @@ import kotlin.uuid.Uuid
 
 class TandemApiClientTest {
     @Test
+    fun postingOrSkippingScheduleRequiresDisplayedNextDate() =
+        runBlocking {
+            val client = TandemApiClient()
+
+            assertFailsWith<IllegalArgumentException> {
+                client.manageBudgetSchedule("budget-1", "schedule-1", "post", null, null)
+            }
+            assertFailsWith<IllegalArgumentException> {
+                client.manageBudgetSchedule("budget-1", "schedule-1", "skip", null, null)
+            }
+            Unit
+        }
+
+    @Test
     fun readsActualLoginMethodsAndAvailableOptions() =
         runBlocking {
             val methods =
@@ -64,6 +78,46 @@ class TandemApiClientTest {
         }
 
     @Test
+    fun readsActualLoginMethodsFromTandemWithoutSendingCredentials() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            val engine =
+                MockEngine { request ->
+                    requests += request
+                    respond(
+                        if (request.url.encodedPath == "/api/v1/budgets") {
+                            budgetsResponse()
+                        } else {
+                            """{"bootstrapped":true,"loginMethod":"password","availableLoginMethods":[{"method":"password","displayName":"Password","active":true}]}"""
+                        },
+                        headers = jsonHeaders(),
+                    )
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                client.restoreSession("https://tandem.example", "stored-device-token")
+                client.listBudgets()
+                val methods = client.readActualLoginMethods("https://tandem.example/gateway")
+
+                assertEquals("password", methods.loginMethod)
+                assertEquals(
+                    listOf("/api/v1/budgets", "/api/v1/auth/methods"),
+                    requests.map { it.url.encodedPath },
+                )
+                assertEquals("Bearer stored-device-token", requests.first().headers[HttpHeaders.Authorization])
+                assertNull(requests.last().headers[HttpHeaders.Authorization])
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
     fun malformedActualLoginMethodFieldsAreRejected() =
         runBlocking {
             val invalidLoginMethod =
@@ -81,6 +135,195 @@ class TandemApiClientTest {
                     )
                 }
             assertEquals("Server response is missing a valid bootstrapped", invalidBootstrapFlag.message)
+        }
+
+    @Test
+    fun actualOnlyAddressIsDistinguishedFromAnUnreachableAddress() =
+        runBlocking {
+            suspend fun failureFor(responses: Map<String, Pair<String, HttpStatusCode>>): TandemApiException {
+                val requests = mutableListOf<HttpRequestData>()
+                val engine =
+                    MockEngine { request ->
+                        requests += request
+                        val (body, status) = responses[request.url.encodedPath] ?: ("" to HttpStatusCode.NotFound)
+                        respond(body, status, jsonHeaders())
+                    }
+                val previousClient = Api.client
+                val previousBaseUrl = Api.baseUrl
+                val client = TandemApiClient()
+                val cleanup = configureApi(engine, client.bearerAuth)
+                try {
+                    val failure = captureApiException { client.readActualLoginMethods("https://actual.example") }
+                    assertTrue(requests.all { it.headers[HttpHeaders.Authorization] == null })
+                    return failure
+                } finally {
+                    cleanup()
+                    Api.baseUrl = previousBaseUrl
+                    Api.client.close()
+                    previousClient.close()
+                }
+            }
+
+            val actualOnly =
+                failureFor(
+                    mapOf(
+                        "/api/v1/auth/methods" to ("<html>Not found</html>" to HttpStatusCode.NotFound),
+                        "/api/v1/health/ready" to
+                            (
+                                """{"error":{"code":"proxy_unavailable","message":"private detail"}}""" to
+                                    HttpStatusCode.InternalServerError
+                            ),
+                        "/account/needs-bootstrap" to
+                            ("""{"status":"ok","data":{"bootstrapped":true}}""" to HttpStatusCode.OK),
+                    ),
+                )
+            assertEquals("actual_only", actualOnly.errorCode)
+
+            val unreachable =
+                failureFor(
+                    mapOf(
+                        "/api/v1/auth/methods" to ("" to HttpStatusCode.NotFound),
+                        "/api/v1/health/ready" to ("" to HttpStatusCode.NotFound),
+                        "/account/needs-bootstrap" to ("" to HttpStatusCode.NotFound),
+                    ),
+                )
+            assertEquals("address_unreachable", unreachable.errorCode)
+        }
+
+    @Test
+    fun classifiesTandemReadinessAndMissingAuthRouteWithoutCallingActual() =
+        runBlocking {
+            suspend fun failureFor(
+                healthBody: String,
+                healthStatus: HttpStatusCode,
+            ): Pair<TandemApiException, List<HttpRequestData>> {
+                val requests = mutableListOf<HttpRequestData>()
+                val engine =
+                    MockEngine { request ->
+                        requests += request
+                        when (request.url.encodedPath) {
+                            "/api/v1/auth/methods" -> respond("", HttpStatusCode.NotFound, jsonHeaders())
+                            "/api/v1/health/ready" -> respond(healthBody, healthStatus, jsonHeaders())
+                            else -> respond("Unexpected request", HttpStatusCode.NotFound, jsonHeaders())
+                        }
+                    }
+                val previousClient = Api.client
+                val previousBaseUrl = Api.baseUrl
+                val client = TandemApiClient()
+                val cleanup = configureApi(engine, client.bearerAuth)
+                try {
+                    val failure = captureApiException { client.readActualLoginMethods("https://tandem.example/gateway") }
+                    assertTrue(requests.all { it.headers[HttpHeaders.Authorization] == null })
+                    return failure to requests
+                } finally {
+                    cleanup()
+                    Api.baseUrl = previousBaseUrl
+                    Api.client.close()
+                    previousClient.close()
+                }
+            }
+
+            val notReady = failureFor("""{"status":"not_ready"}""", HttpStatusCode.ServiceUnavailable)
+            assertEquals("tandem_not_ready", notReady.first.errorCode)
+            assertEquals(listOf("/api/v1/auth/methods", "/api/v1/health/ready"), notReady.second.map { it.url.encodedPath })
+
+            val routeUnavailable = failureFor("""{"status":"ok"}""", HttpStatusCode.OK)
+            assertEquals("tandem_route_unavailable", routeUnavailable.first.errorCode)
+            assertEquals(listOf("/api/v1/auth/methods", "/api/v1/health/ready"), routeUnavailable.second.map { it.url.encodedPath })
+        }
+
+    @Test
+    fun preservesTheLoginMethodErrorWhenReadinessConfirmsTandemIsHealthy() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            val engine =
+                MockEngine { request ->
+                    requests += request
+                    when (request.url.encodedPath) {
+                        "/api/v1/auth/methods" ->
+                            respond(
+                                """{"error":{"code":"login_methods_unavailable","message":"private detail"}}""",
+                                HttpStatusCode.ServiceUnavailable,
+                                jsonHeaders(),
+                            )
+                        "/api/v1/health/ready" -> respond("""{"status":"ok"}""", HttpStatusCode.OK, jsonHeaders())
+                        else -> respond("Unexpected request", HttpStatusCode.NotFound, jsonHeaders())
+                    }
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                val failure = captureApiException { client.readActualLoginMethods("https://tandem.example") }
+
+                assertEquals("login_methods_unavailable", failure.errorCode)
+                assertEquals(HttpStatusCode.ServiceUnavailable.value, failure.httpStatus)
+                assertEquals(listOf("/api/v1/auth/methods", "/api/v1/health/ready"), requests.map { it.url.encodedPath })
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
+    fun unreachableAddressIsClassifiedWithoutSendingCredentials() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            val engine =
+                MockEngine { request ->
+                    requests += request
+                    throw IllegalStateException("offline")
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                val failure = captureApiException { client.readActualLoginMethods("https://offline.example") }
+
+                assertEquals("address_unreachable", failure.errorCode)
+                assertEquals(3, requests.size)
+                assertTrue(requests.all { it.headers[HttpHeaders.Authorization] == null })
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
+    fun tandemCanReportAnActualConnectionFailureDuringLoginMethodDiscovery() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            val engine =
+                MockEngine { request ->
+                    requests += request
+                    respond(
+                        """{"error":{"code":"actual_unavailable","message":"private detail"}}""",
+                        HttpStatusCode.ServiceUnavailable,
+                        jsonHeaders(),
+                    )
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                val failure = captureApiException { client.readActualLoginMethods("https://tandem.example") }
+
+                assertEquals("actual_unavailable", failure.errorCode)
+                assertEquals(1, requests.size)
+                assertNull(requests.single().headers[HttpHeaders.Authorization])
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
         }
 
     @Test
@@ -336,7 +579,7 @@ class TandemApiClientTest {
                     captureApiException { client.signInWithPassword("https://tandem.example", "actual-test-password", "Phone") }
                 assertEquals("invalid_credentials", unauthorized.errorCode)
                 assertEquals(401, unauthorized.httpStatus)
-                assertEquals("The password didn’t match this Actual server.", unauthorized.message)
+                assertEquals("The password didn’t match this Actual server. Check it and try again.", unauthorized.message)
 
                 status = HttpStatusCode.BadRequest
                 responseBody = """{"error":{"code":"invalid_request","message":"private server detail"}}"""
@@ -455,7 +698,7 @@ class TandemApiClientTest {
                 val unauthorized = captureApiException { client.listBudgets() }
                 assertEquals("http-401", unauthorized.errorCode)
                 assertEquals(401, unauthorized.httpStatus)
-                assertEquals("The server couldn’t verify this request. Check the server address and try again.", unauthorized.message)
+                assertEquals("Tandem couldn’t verify this request. Sign in again and try again.", unauthorized.message)
                 assertFalse(unauthorized.message.orEmpty().contains("private server detail"))
 
                 responseBody = """{"error":{"code":"invalid_device_credential","message":"private server detail"}}"""
@@ -475,7 +718,7 @@ class TandemApiClientTest {
                 status = HttpStatusCode.BadGateway
                 val unavailable = captureApiException { client.listBudgets() }
                 assertEquals(502, unavailable.httpStatus)
-                assertEquals("The Tandem server couldn’t read Actual. Try again later.", unavailable.message)
+                assertEquals("Tandem is temporarily unavailable. Try again shortly.", unavailable.message)
             } finally {
                 cleanup()
                 Api.baseUrl = previousBaseUrl
@@ -623,8 +866,22 @@ class TandemApiClientTest {
                 client.moveMoneyBetweenCategories("budget-1", "2026-11", "category-1", "category-2", 12_500, "budget-password")
                 client.deleteBudgetCategory("budget-1", "category-1", null, null)
                 client.manageBudgetSchedule("budget-1", "schedule-1", "rename", "Rent", "budget-password")
-                client.manageBudgetSchedule("budget-1", "schedule-1", "skip", null, null)
-                client.manageBudgetSchedule("budget-1", "schedule-1", "post", null, null)
+                client.manageBudgetSchedule(
+                    "budget-1",
+                    "schedule-1",
+                    "skip",
+                    null,
+                    null,
+                    expectedNextDate = "2026-11-15",
+                )
+                client.manageBudgetSchedule(
+                    "budget-1",
+                    "schedule-1",
+                    "post",
+                    null,
+                    null,
+                    expectedNextDate = "2026-11-15",
+                )
                 client.manageBudgetSchedule("budget-1", "schedule-1", "delete", null, null)
                 client.manageBudgetSchedule(
                     "budget-1",
@@ -684,7 +941,11 @@ class TandemApiClientTest {
                         idempotencyKey = "direct-14",
                         budgetId = "budget-1",
                         scheduleId = "schedule-1",
-                        body = buildJsonObject { put("action", "skip") }.toMap(),
+                        body =
+                            buildJsonObject {
+                                put("action", "skip")
+                                put("expectedNextDate", "2026-11-15")
+                            }.toMap(),
                     )
                     BudgetsApi.manageBudgetPayee(
                         idempotencyKey = "direct-15",
@@ -763,7 +1024,9 @@ class TandemApiClientTest {
                 assertTrue((requests[13].body as TextContent).text.contains("\"action\":\"rename\""))
                 assertTrue((requests[13].body as TextContent).text.contains("\"name\":\"Rent\""))
                 assertTrue((requests[14].body as TextContent).text.contains("\"action\":\"skip\""))
+                assertTrue((requests[14].body as TextContent).text.contains("\"expectedNextDate\":\"2026-11-15\""))
                 assertTrue((requests[15].body as TextContent).text.contains("\"action\":\"post\""))
+                assertTrue((requests[15].body as TextContent).text.contains("\"expectedNextDate\":\"2026-11-15\""))
                 assertTrue((requests[16].body as TextContent).text.contains("\"action\":\"delete\""))
                 assertTrue((requests[17].body as TextContent).text.contains("\"action\":\"edit\""))
                 assertTrue((requests[17].body as TextContent).text.contains("\"accountId\":\"account-1\""))
@@ -800,7 +1063,7 @@ class TandemApiClientTest {
                 client.restoreSession("https://tandem.example", "device-token")
                 val failure = captureApiException { client.listBudgets() }
                 assertEquals("network-error", failure.errorCode)
-                assertEquals("Couldn’t reach the Tandem server. Check the address and connection.", failure.message)
+                assertEquals("Couldn’t reach Tandem at this address. Check the address and connection.", failure.message)
                 assertFalse(failure.message.orEmpty().contains("private transport detail"))
             } finally {
                 cleanup()
@@ -874,7 +1137,7 @@ class TandemApiClientTest {
                 responseBody = """{"error":{"message":"private detail"}}"""
                 val requestFailure = captureApiException { client.renameBudgetCategory("budget-1", "category-1", "Home", null) }
                 assertEquals("http-400", requestFailure.errorCode)
-                assertEquals("The server rejected this request. Check the details and try again.", requestFailure.message)
+                assertEquals("Tandem rejected this request. Check the details and try again.", requestFailure.message)
             } finally {
                 cleanup()
                 Api.baseUrl = previousBaseUrl
@@ -1033,7 +1296,7 @@ class TandemApiClientTest {
         val messages =
             mapOf(
                 "operation_uncertain" to "Tandem couldn’t confirm whether Actual saved this change. Check Actual, then try again.",
-                "operation_in_progress" to "The server is still processing this change. Wait a moment, then try again.",
+                "operation_in_progress" to "Tandem is still processing this change. Wait a moment, then try again.",
                 "operation_rejected" to "Actual rejected this change earlier. Refresh the budget, then try again.",
                 "idempotency_key_reused" to "Tandem matched this change to a different request. Refresh the budget, then try again.",
                 "operation_result_unavailable" to "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget.",

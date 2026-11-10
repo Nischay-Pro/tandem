@@ -32,7 +32,7 @@ export class PostgresActualSessionVault {
       cipher.final(),
     ]);
     await this.pool.query(
-      `INSERT INTO companion_actual_sessions (
+      `INSERT INTO tandem_actual_sessions (
         principal_id, token_ciphertext, token_nonce, token_tag
       ) VALUES ($1, $2, $3, $4)
       ON CONFLICT (principal_id) DO UPDATE SET
@@ -52,7 +52,7 @@ export class PostgresActualSessionVault {
       token_tag: Buffer;
     }>(
       `SELECT principal_id, token_ciphertext, token_nonce, token_tag
-       FROM companion_actual_sessions
+       FROM tandem_actual_sessions
        ORDER BY updated_at DESC, principal_id
        LIMIT 1`,
     );
@@ -82,7 +82,7 @@ export class PostgresActualSessionVault {
       token_tag: Buffer;
     }>(
       `SELECT principal_id, token_ciphertext, token_nonce, token_tag
-       FROM companion_actual_sessions
+       FROM tandem_actual_sessions
        WHERE principal_id = $1`,
       [principalId],
     );

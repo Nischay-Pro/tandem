@@ -225,6 +225,7 @@ internal class TandemMobileSession(
     private val nowEpochMillis: () -> Long,
     private val credentialStore: DeviceCredentialStore? = null,
     budgetMutationQueuePersistenceOverride: BudgetMutationQueuePersistence? = null,
+    private val currentDateIso: () -> String = ::platformTodayIsoDate,
 ) {
     private val repository = database?.let { LocalBudgetRepository(it, nowEpochMillis) }
     private val budgetMutationQueuePersistence =
@@ -1265,7 +1266,14 @@ internal class TandemMobileSession(
                             retryQueuedBudgetMutations = false,
                         ) != null
                     }
-            if (refreshFailed || moved || operationResultUnavailable) {
+            if (
+                shouldCompleteBudgetMutationAfterOutcome(
+                    mutationApplied = moved,
+                    refreshFailedAfterMutation = refreshFailed,
+                    resultUnavailable = operationResultUnavailable,
+                    resultRefreshSucceeded = resultRefreshSucceeded,
+                )
+            ) {
                 repository?.completeBudgetMutation(request.operationId)
             } else if (operationOutcomeUncertain) {
                 repository?.markBudgetMutationUncertain(
@@ -1699,9 +1707,21 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
-            signInError = error.userFacingMessage("Couldn’t check the Actual server. Check its address and try again.")
+            isServerReachable = error.indicatesTandemReachable()
+            signInError =
+                error.userFacingMessage(
+                    "Couldn’t check sign-in options. Check the address and try again.",
+                    ApiFailureContext.SIGN_IN,
+                )
         } catch (_: Exception) {
-            signInError = "Couldn’t check the Actual server. Check its address and try again."
+            isServerReachable = false
+            signInError =
+                apiFailureMessage(
+                    "network-error",
+                    null,
+                    ApiFailureContext.SIGN_IN,
+                    "Couldn’t check sign-in options. Check the address and try again.",
+                )
         } finally {
             isLoadingLoginMethods = false
         }
@@ -1724,10 +1744,22 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
-            signInError = error.userFacingMessage("Couldn’t sign in. Check the password and try again.")
+            isServerReachable = error.indicatesTandemReachable()
+            signInError =
+                error.userFacingMessage(
+                    "Couldn’t sign in. Check the address and try again.",
+                    ApiFailureContext.SIGN_IN,
+                )
             authenticatedDevice = null
-        } catch (error: Exception) {
-            signInError = "Couldn’t sign in. Check the password and try again."
+        } catch (_: Exception) {
+            isServerReachable = false
+            signInError =
+                apiFailureMessage(
+                    "network-error",
+                    null,
+                    ApiFailureContext.SIGN_IN,
+                    "Couldn’t sign in. Check the address and try again.",
+                )
             authenticatedDevice = null
         } finally {
             isSigningIn = false
@@ -1745,9 +1777,17 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
-            signInError = error.userFacingMessage("Couldn’t start sign-in. Check the connection and try again.")
+            isServerReachable = error.indicatesTandemReachable()
+            signInError = error.userFacingMessage("Couldn’t start sign-in. Check the address and connection.", ApiFailureContext.SIGN_IN)
         } catch (_: Exception) {
-            signInError = "Couldn’t start sign-in. Check the connection and try again."
+            isServerReachable = false
+            signInError =
+                apiFailureMessage(
+                    "network-error",
+                    null,
+                    ApiFailureContext.SIGN_IN,
+                    "Couldn’t start sign-in. Check the address and connection.",
+                )
         } finally {
             isSigningIn = false
         }
@@ -1774,10 +1814,22 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
-            signInError = error.userFacingMessage("Couldn’t finish sign-in. Start again.")
+            isServerReachable = error.indicatesTandemReachable()
+            signInError =
+                error.userFacingMessage(
+                    "Couldn’t finish sign-in. Check the address and connection.",
+                    ApiFailureContext.SIGN_IN,
+                )
             authenticatedDevice = null
         } catch (_: Exception) {
-            signInError = "Couldn’t finish sign-in. Start again."
+            isServerReachable = false
+            signInError =
+                apiFailureMessage(
+                    "network-error",
+                    null,
+                    ApiFailureContext.SIGN_IN,
+                    "Couldn’t finish sign-in. Check the address and connection.",
+                )
             authenticatedDevice = null
         } finally {
             isSigningIn = false
@@ -1796,7 +1848,7 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
-            isServerReachable = error.httpStatus != null
+            isServerReachable = error.indicatesTandemReachable()
             budgetError = error.userFacingMessage("Couldn’t load your budgets. Check the connection and try again.")
             if (error.errorCode == "invalid_device_credential") {
                 apiClient.forgetSession()
@@ -1807,7 +1859,13 @@ internal class TandemMobileSession(
             }
         } catch (error: Exception) {
             isServerReachable = false
-            budgetError = "Couldn’t load your budgets. Check the connection and try again."
+            budgetError =
+                apiFailureMessage(
+                    "network-error",
+                    null,
+                    ApiFailureContext.SIGN_IN,
+                    "Couldn’t load your budgets. Check the address and connection.",
+                )
         } finally {
             isLoadingBudgets = false
         }
@@ -1863,26 +1921,32 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (error: BudgetSyncRemoteException) {
-            isServerReachable = error.httpStatus != null
+            isServerReachable = error.indicatesTandemReachable()
             syncPresentation =
                 syncPresentation.failed(
-                    when (error.httpStatus) {
-                        401 -> "Sign in again to restore access."
-                        403 -> "This device can’t open this budget. Ask the budget owner for access."
-                        404 -> "This budget is no longer available. Choose another budget."
-                        400, 422 -> "That password didn’t unlock this budget. Check it and try again."
-                        in 500..599 -> "The server couldn’t open this budget. Try again later."
-                        else -> "Couldn’t sync this budget. Check the connection and try again."
-                    },
+                    apiFailureMessage(
+                        errorCode = error.errorCode,
+                        httpStatus = error.httpStatus,
+                        context = ApiFailureContext.SYNC,
+                        fallback = "Tandem couldn’t sync this budget. Try again shortly.",
+                    ),
                 )
             return null
         } catch (error: BudgetSyncProtocolException) {
             isServerReachable = true
-            syncPresentation = syncPresentation.failed("Tandem couldn’t read this budget. Check the server and try again.")
+            syncPresentation = syncPresentation.failed("Tandem couldn’t read this budget. Check the Tandem API address and try again.")
             return null
         } catch (error: Exception) {
             isServerReachable = false
-            syncPresentation = syncPresentation.failed("Couldn’t sync this budget. Your saved copy is still available.")
+            syncPresentation =
+                syncPresentation.failed(
+                    apiFailureMessage(
+                        errorCode = "network-error",
+                        httpStatus = null,
+                        context = ApiFailureContext.SYNC,
+                        fallback = "Tandem couldn’t sync this budget. Your saved copy is still available.",
+                    ),
+                )
             return null
         } finally {
             if (syncPresentation.isSyncing) syncPresentation = syncPresentation.stopped()
@@ -2217,7 +2281,7 @@ internal class TandemMobileSession(
             val payeeId = apiClient.withExclusiveSession { apiClient.createBudgetPayee(budgetId, cleanName, encryptionPassword) }
             if (synchronize(budgetId, encryptionPassword) == null) {
                 setBudgetActionMessage(
-                    "The payee was created, but this device couldn’t refresh the budget.",
+                    "Actual saved the payee, but Tandem couldn’t refresh the budget. Sync to load the latest data.",
                     InlineMessageKind.WARNING,
                     messageOwner,
                 )
@@ -2302,7 +2366,8 @@ internal class TandemMobileSession(
                 }
             if (synchronize(budgetId, encryptionPassword) == null) {
                 setBudgetActionMessage(
-                    syncError ?: "Actual imported the statement, but this device couldn’t refresh the budget.",
+                    syncError
+                        ?: "Actual imported the statement, but Tandem couldn’t refresh it. Sync to check the imported transactions.",
                     InlineMessageKind.WARNING,
                     messageOwner,
                 )
@@ -2394,6 +2459,7 @@ internal class TandemMobileSession(
         name: String?,
         encryptionPassword: String?,
         fields: JsonObject? = null,
+        expectedNextDate: String? = null,
     ): Boolean {
         val cleanName = name?.trim()
         if (action == "rename" && cleanName.isNullOrBlank()) {
@@ -2404,6 +2470,10 @@ internal class TandemMobileSession(
             budgetActionMessage = "Schedule names can be up to 100 characters."
             return false
         }
+        if (action in setOf("post", "skip") && expectedNextDate.isNullOrBlank()) {
+            budgetActionMessage = "Refresh the schedule before posting or skipping it."
+            return false
+        }
         return performBudgetAction(budgetId, encryptionPassword, "Couldn’t update this schedule. Try again.") {
             apiClient.manageBudgetSchedule(
                 budgetId,
@@ -2412,6 +2482,7 @@ internal class TandemMobileSession(
                 cleanName,
                 encryptionPassword,
                 fields,
+                expectedNextDate,
             )
         }
     }
@@ -2481,7 +2552,8 @@ internal class TandemMobileSession(
             }
             if (synchronize(budgetId, encryptionPassword) == null) {
                 budgetActionWasAppliedButRefreshFailed = true
-                val refreshMessage = syncError ?: "Actual was updated, but this device couldn’t refresh the budget."
+                val refreshMessage =
+                    syncError ?: "Actual was updated, but Tandem couldn’t refresh the budget. Sync to load the latest data."
                 setBudgetActionMessage(
                     refreshMessage,
                     InlineMessageKind.WARNING,
@@ -2502,7 +2574,7 @@ internal class TandemMobileSession(
             isServerReachable = error.httpStatus != null && !budgetActionShouldRetry
             if (actionApplied) {
                 budgetActionWasAppliedButRefreshFailed = true
-                val refreshMessage = "Actual was updated, but this device couldn’t refresh the budget."
+                val refreshMessage = "Actual was updated, but Tandem couldn’t refresh the budget. Sync to load the latest data."
                 setBudgetActionMessage(
                     refreshMessage,
                     InlineMessageKind.WARNING,
@@ -2531,7 +2603,7 @@ internal class TandemMobileSession(
             lastBudgetActionErrorCode = "network-error"
             if (actionApplied) {
                 budgetActionWasAppliedButRefreshFailed = true
-                val refreshMessage = "Actual was updated, but this device couldn’t refresh the budget."
+                val refreshMessage = "Actual was updated, but Tandem couldn’t refresh the budget. Sync to load the latest data."
                 setBudgetActionMessage(
                     refreshMessage,
                     InlineMessageKind.WARNING,
@@ -2587,6 +2659,7 @@ internal class TandemMobileSession(
         categoryId: String? = null,
         date: String? = null,
         updateDetails: Boolean = false,
+        confirmedFutureDate: String? = null,
     ): Boolean {
         transactionWriteMessage = null
         if (refuseWriteInReadOnlyMode()) return false
@@ -2603,6 +2676,17 @@ internal class TandemMobileSession(
             transactionWriteMessage = "Largest amount is ${formatCurrency(MAX_TRANSACTION_AMOUNT_MINOR_UNITS, displaySettings)}."
             return false
         }
+        val dateValidation =
+            if (updateDetails) {
+                validateTransactionDate(date.orEmpty(), currentDateIso(), confirmedFutureDate)
+            } else {
+                null
+            }
+        if (dateValidation != null && dateValidation.status != TransactionDateValidationStatus.VALID) {
+            transactionWriteMessage = transactionDateValidationMessage(dateValidation)
+            return false
+        }
+        val requestedDate = dateValidation?.date
         val localRepository = repository
         if (localRepository == null) {
             transactionWriteMessage = "Budget data isn’t available on this device. Reopen the budget and try again."
@@ -2631,7 +2715,6 @@ internal class TandemMobileSession(
             transactionWriteMessage = "Tandem couldn’t open this transaction. Sync the budget before editing."
             return false
         }
-        val requestedDate = if (updateDetails) normalizeTransactionDate(date.orEmpty()) else null
         val requestedAccountId = if (updateDetails) accountId?.takeIf(String::isNotBlank) else null
         if (updateDetails && requestedAccountId == null) {
             transactionWriteMessage = "Choose an account from this budget before saving."
@@ -2655,14 +2738,6 @@ internal class TandemMobileSession(
         }
         if (updateDetails && categoryId != null && categoryRecords.none { it.recordId == categoryId }) {
             transactionWriteMessage = "Choose a category from this budget before saving."
-            return false
-        }
-        if (updateDetails && requestedDate == null) {
-            transactionWriteMessage = "Choose a valid transaction date."
-            return false
-        }
-        if (requestedDate != null && requestedDate < "1995-01-01") {
-            transactionWriteMessage = "Choose a date on or after ${formatDate(CalendarDate(1995, 1, 1))}."
             return false
         }
         val signedAmount = if (transactionType == "Income") enteredAmount else -enteredAmount
@@ -2832,6 +2907,7 @@ internal class TandemMobileSession(
         encryptionPassword: String?,
         displaySettings: BudgetDisplaySettings? = null,
         isTransfer: Boolean = false,
+        confirmedFutureDate: String? = null,
     ): Boolean {
         transactionWriteMessage = null
         if (refuseWriteInReadOnlyMode()) return false
@@ -2852,11 +2928,12 @@ internal class TandemMobileSession(
             transactionWriteMessage = "Largest amount is ${formatCurrency(MAX_TRANSACTION_AMOUNT_MINOR_UNITS, displaySettings)}."
             return false
         }
-        val date = normalizeTransactionDate(dateText)
-        if (date == null) {
-            transactionWriteMessage = "Enter the transaction date as year, month, and day."
+        val dateValidation = validateTransactionDate(dateText, currentDateIso(), confirmedFutureDate)
+        if (dateValidation.status != TransactionDateValidationStatus.VALID) {
+            transactionWriteMessage = transactionDateValidationMessage(dateValidation)
             return false
         }
+        val date = checkNotNull(dateValidation.date)
         val localRepository = repository
         val coordinator = syncCoordinator
         if (localRepository == null || coordinator == null) {
@@ -3056,7 +3133,7 @@ internal class TandemMobileSession(
         } catch (_: Exception) {
             reportConflictResolution(
                 operationId,
-                "The server hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again.",
+                "Tandem hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again.",
             )
             loadLocalRecords(budgetId)
         } finally {
@@ -3083,7 +3160,7 @@ internal class TandemMobileSession(
             retryQueuedBudgetReorders()
         }
         loadLocalRecords(budgetId)
-        transactionWriteMessage = "Your edit was discarded. Actual wasn’t changed."
+        transactionWriteMessage = discardedPendingWriteMessage(operation?.status)
     }
 
     suspend fun retryUncertainWrite(
@@ -3130,15 +3207,14 @@ internal class TandemMobileSession(
         }
 
         checkedWriteOperationId = operationId
-        if (summary.operationStatusErrorCode != null && summary.operationStatusErrorCode != "http-404") {
+        summary.operationStatusErrorCode?.takeIf { it != "operation_not_found" }?.let { statusErrorCode ->
             uncertainWriteCheckError =
-                when (summary.operationStatusErrorCode) {
-                    "http-401" -> "Sign in again to check the status."
-                    "http-403" -> "This device can’t open this budget."
-                    "http-503" -> "Tandem is temporarily unavailable. Try again shortly."
-                    "network-error" -> "Couldn’t reach Tandem. Check the connection and try again."
-                    else -> "Couldn’t confirm the server status. Try again."
-                }
+                apiFailureMessage(
+                    errorCode = statusErrorCode,
+                    httpStatus = apiFailureHttpStatus(statusErrorCode, null),
+                    context = ApiFailureContext.SYNC,
+                    fallback = "Tandem couldn’t confirm this change’s status. Check the connection, then try again.",
+                )
             uncertainWriteCheckErrorOperationId = operationId
         }
         try {
@@ -3430,39 +3506,23 @@ internal class TandemMobileSession(
     }
 }
 
-internal fun TandemApiException.userFacingMessage(fallback: String): String = budgetApiErrorMessage(errorCode, httpStatus, fallback)
+internal fun discardedPendingWriteMessage(operationStatus: String?): String =
+    if (operationStatus == "uncertain") {
+        "This pending change was removed from this device. Actual may already have saved it; removing it here doesn’t undo it."
+    } else {
+        "Your edit was discarded. Actual wasn’t changed."
+    }
+
+internal fun TandemApiException.userFacingMessage(
+    fallback: String,
+    context: ApiFailureContext = ApiFailureContext.GENERAL,
+): String = apiFailureMessage(errorCode, httpStatus, context, fallback)
 
 internal fun budgetApiErrorMessage(
     errorCode: String,
     httpStatus: Int?,
     fallback: String,
-): String =
-    when (errorCode) {
-        "sign_in_required" -> "Sign in to open a budget."
-        "invalid_credentials" -> "The password didn’t match this Actual server."
-        "invalid_device_credential" -> "Sign in again to restore access."
-        "bank_sync_failed" -> "Actual couldn’t sync your bank transactions. Check the bank connection and try again."
-        "bank_sync_busy" -> "Bank sync is already running. Try again shortly."
-        "duplicate_imported_id" -> "Two statement rows share a reference. Choose a column with unique values."
-        "actual_operation_failed" -> "Actual couldn’t save this change. Check the details and try again."
-        "operation_uncertain" -> "Tandem couldn’t confirm whether Actual saved this change. Check Actual, then try again."
-        "operation_in_progress" -> "The server is still processing this change. Wait a moment, then try again."
-        "operation_rejected" -> "Actual rejected this change earlier. Refresh the budget, then try again."
-        "idempotency_key_reused" -> "Tandem matched this change to a different request. Refresh the budget, then try again."
-        "operation_result_unavailable" -> "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget."
-        "invalid_request" -> "Check the details and try again."
-        else ->
-            when (httpStatus) {
-                400, 422 -> "Check the details and try again."
-                401 -> "Sign in again to restore access."
-                403 -> "Ask the budget owner to let this device change the budget."
-                404 -> "This item is no longer available. Refresh the budget and try again."
-                408, 425, 429 -> "Tandem is temporarily unavailable. Try again shortly."
-                409 -> "The budget changed on the server. Refresh the budget and try again."
-                in 500..599 -> "Tandem is temporarily unavailable. Try again shortly."
-                else -> fallback
-            }
-    }
+): String = apiFailureMessage(errorCode, httpStatus, ApiFailureContext.GENERAL, fallback)
 
 private const val ACTIVITY_TRANSACTION_PAGE_SIZE = 50
 private const val ACTIVITY_TRANSACTION_REFRESH_LIMIT = 200
@@ -3506,20 +3566,3 @@ internal fun JsonObject.toProjection(): LocalRecordProjection =
         amountMinor = longValue("amount"),
         budgetMonth = stringValue("month"),
     )
-
-private fun normalizeTransactionDate(value: String): String? {
-    val text = value.trim()
-    if (!Regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}$").matches(text)) return null
-    val year = text.substring(0, 4).toIntOrNull() ?: return null
-    val month = text.substring(5, 7).toIntOrNull() ?: return null
-    val day = text.substring(8, 10).toIntOrNull() ?: return null
-    if (year == 0 || month !in 1..12) return null
-    val leapYear = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
-    val daysInMonth =
-        when (month) {
-            2 -> if (leapYear) 29 else 28
-            4, 6, 9, 11 -> 30
-            else -> 31
-        }
-    return text.takeIf { day in 1..daysInMonth }
-}

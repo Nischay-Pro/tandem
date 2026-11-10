@@ -121,11 +121,11 @@ internal fun liveAccountGroupLabel(account: LiveAccountSummary): String {
             "mortgage" -> "Mortgage"
             "debt" -> "Debt"
             "investment" -> "Investment"
+            "cash" -> "Cash"
             "other" -> "Other"
             else -> "Other"
         }
-    val budgetScope = if (account.offBudget) "Off budget" else "On budget"
-    return "$budgetScope · $typeLabel"
+    return typeLabel
 }
 
 internal fun liveBudgetMonthSummary(

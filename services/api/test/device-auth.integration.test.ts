@@ -59,7 +59,7 @@ describe("PostgreSQL authentication integration", () => {
       credential_hash: string;
       device_name: string;
     }>(
-      "SELECT credential_hash, device_name FROM companion_devices WHERE device_id = $1",
+      "SELECT credential_hash, device_name FROM tandem_devices WHERE device_id = $1",
       [device.deviceId],
     );
     expect(deviceRow.rows[0]).toEqual({
@@ -85,7 +85,7 @@ describe("PostgreSQL authentication integration", () => {
     await vault.save(credential);
 
     const stored = await pool!.query<{ token_ciphertext: Buffer }>(
-      "SELECT token_ciphertext FROM companion_actual_sessions WHERE principal_id = $1",
+      "SELECT token_ciphertext FROM tandem_actual_sessions WHERE principal_id = $1",
       [credential.principalId],
     );
     expect(stored.rows[0]?.token_ciphertext.toString("utf8")).not.toContain(
@@ -102,18 +102,18 @@ describe("PostgreSQL authentication integration", () => {
 
   it("creates only the consolidated initial database schema", async () => {
     const migrations = await pool!.query<{ count: string }>(
-      "SELECT count(*)::text AS count FROM companion_migrations",
+      "SELECT count(*)::text AS count FROM tandem_migrations",
     );
     expect(migrations.rows[0]?.count).toBe("1");
     const tables = await pool!.query<{
       devices: string | null;
       actual_sessions: string | null;
     }>(`SELECT
-      to_regclass('companion_devices') AS devices,
-      to_regclass('companion_actual_sessions') AS actual_sessions`);
+      to_regclass('tandem_devices') AS devices,
+      to_regclass('tandem_actual_sessions') AS actual_sessions`);
     expect(tables.rows[0]).toEqual({
-      devices: "companion_devices",
-      actual_sessions: "companion_actual_sessions",
+      devices: "tandem_devices",
+      actual_sessions: "tandem_actual_sessions",
     });
   });
 });

@@ -1,7 +1,7 @@
 import type { PoolClient } from "pg";
 
 export async function up(client: PoolClient): Promise<void> {
-  await client.query(`CREATE TABLE companion_devices (
+  await client.query(`CREATE TABLE tandem_devices (
     device_id uuid PRIMARY KEY,
     principal_id text NOT NULL CHECK (length(principal_id) BETWEEN 1 AND 200),
     device_name text NOT NULL CHECK (length(device_name) BETWEEN 1 AND 100),
@@ -11,16 +11,16 @@ export async function up(client: PoolClient): Promise<void> {
     last_seen_at timestamptz,
     revoked_at timestamptz
   )`);
-  await client.query(`CREATE INDEX companion_devices_principal_created
-    ON companion_devices (principal_id, created_at, device_id)`);
-  await client.query(`CREATE TABLE companion_actual_sessions (
+  await client.query(`CREATE INDEX tandem_devices_principal_created
+    ON tandem_devices (principal_id, created_at, device_id)`);
+  await client.query(`CREATE TABLE tandem_actual_sessions (
     principal_id text PRIMARY KEY CHECK (length(principal_id) BETWEEN 1 AND 200),
     token_ciphertext bytea NOT NULL,
     token_nonce bytea NOT NULL CHECK (octet_length(token_nonce) = 12),
     token_tag bytea NOT NULL CHECK (octet_length(token_tag) = 16),
     updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
   )`);
-  await client.query(`CREATE TABLE companion_operations (
+  await client.query(`CREATE TABLE tandem_operations (
     operation_id uuid PRIMARY KEY,
     principal_id text NOT NULL CHECK (length(principal_id) BETWEEN 1 AND 200),
     budget_id text NOT NULL CHECK (length(budget_id) BETWEEN 1 AND 500),
@@ -44,14 +44,14 @@ export async function up(client: PoolClient): Promise<void> {
     payload_compacted_at timestamptz,
     UNIQUE (principal_id, budget_id, idempotency_key)
   )`);
-  await client.query(`CREATE INDEX companion_operations_budget_status_created
-    ON companion_operations (budget_id, status, created_at)`);
-  await client.query(`CREATE INDEX companion_operations_payload_retention
-    ON companion_operations (completed_at, operation_id)
+  await client.query(`CREATE INDEX tandem_operations_budget_status_created
+    ON tandem_operations (budget_id, status, created_at)`);
+  await client.query(`CREATE INDEX tandem_operations_payload_retention
+    ON tandem_operations (completed_at, operation_id)
     WHERE status IN ('committed', 'rejected') AND payload_compacted_at IS NULL`);
-  await client.query(`CREATE TABLE companion_operation_conflicts (
+  await client.query(`CREATE TABLE tandem_operation_conflicts (
     conflict_id uuid PRIMARY KEY,
-    operation_id uuid NOT NULL UNIQUE REFERENCES companion_operations(operation_id),
+    operation_id uuid NOT NULL UNIQUE REFERENCES tandem_operations(operation_id),
     conflict_type text NOT NULL CHECK (length(conflict_type) BETWEEN 1 AND 100),
     base_snapshot jsonb NOT NULL,
     local_patch jsonb NOT NULL CHECK (jsonb_typeof(local_patch) = 'object'),
@@ -64,15 +64,15 @@ export async function up(client: PoolClient): Promise<void> {
     CHECK ((resolution_state = 'unresolved' AND resolution IS NULL AND resolved_at IS NULL)
       OR (resolution_state = 'resolved' AND resolution IS NOT NULL AND resolved_at IS NOT NULL))
   )`);
-  await client.query(`CREATE TABLE companion_budget_sync_state (
+  await client.query(`CREATE TABLE tandem_budget_sync_state (
     budget_id text PRIMARY KEY CHECK (length(budget_id) BETWEEN 1 AND 500),
     generation uuid NOT NULL,
     feed_epoch text NOT NULL CHECK (length(feed_epoch) BETWEEN 1 AND 100),
     cursor bigint NOT NULL DEFAULT 0 CHECK (cursor >= 0),
     refreshed_at timestamptz NOT NULL DEFAULT clock_timestamp()
   )`);
-  await client.query(`CREATE TABLE companion_budget_records (
-    budget_id text NOT NULL REFERENCES companion_budget_sync_state(budget_id) ON DELETE CASCADE,
+  await client.query(`CREATE TABLE tandem_budget_records (
+    budget_id text NOT NULL REFERENCES tandem_budget_sync_state(budget_id) ON DELETE CASCADE,
     entity_type text NOT NULL CHECK (entity_type IN (
       'account', 'account-group', 'category', 'category-group',
       'payee', 'rule', 'schedule', 'transaction', 'budget-month'
@@ -88,8 +88,8 @@ export async function up(client: PoolClient): Promise<void> {
     CHECK ((is_deleted AND body IS NULL)
       OR (NOT is_deleted AND body IS NOT NULL AND jsonb_typeof(body) = 'object'))
   )`);
-  await client.query(`CREATE TABLE companion_budget_changes (
-    budget_id text NOT NULL REFERENCES companion_budget_sync_state(budget_id) ON DELETE CASCADE,
+  await client.query(`CREATE TABLE tandem_budget_changes (
+    budget_id text NOT NULL REFERENCES tandem_budget_sync_state(budget_id) ON DELETE CASCADE,
     cursor bigint NOT NULL CHECK (cursor > 0),
     entity_type text NOT NULL CHECK (entity_type IN (
       'account', 'account-group', 'category', 'category-group',
@@ -105,23 +105,23 @@ export async function up(client: PoolClient): Promise<void> {
       OR (operation = 'upsert'
         AND (body IS NULL OR jsonb_typeof(body) = 'object')))
   )`);
-  await client.query(`CREATE INDEX companion_budget_records_snapshot_keyset
-    ON companion_budget_records (
+  await client.query(`CREATE INDEX tandem_budget_records_snapshot_keyset
+    ON tandem_budget_records (
       budget_id,
       entity_type COLLATE "C",
       entity_id COLLATE "C"
     ) WHERE is_deleted = false`);
-  await client.query(`CREATE INDEX companion_budget_record_tombstone_retention
-    ON companion_budget_records (budget_id, updated_cursor)
+  await client.query(`CREATE INDEX tandem_budget_record_tombstone_retention
+    ON tandem_budget_records (budget_id, updated_cursor)
     WHERE is_deleted = true`);
 }
 
 export async function down(client: PoolClient): Promise<void> {
-  await client.query("DROP TABLE companion_budget_changes");
-  await client.query("DROP TABLE companion_budget_records");
-  await client.query("DROP TABLE companion_budget_sync_state");
-  await client.query("DROP TABLE companion_operation_conflicts");
-  await client.query("DROP TABLE companion_operations");
-  await client.query("DROP TABLE companion_actual_sessions");
-  await client.query("DROP TABLE companion_devices");
+  await client.query("DROP TABLE tandem_budget_changes");
+  await client.query("DROP TABLE tandem_budget_records");
+  await client.query("DROP TABLE tandem_budget_sync_state");
+  await client.query("DROP TABLE tandem_operation_conflicts");
+  await client.query("DROP TABLE tandem_operations");
+  await client.query("DROP TABLE tandem_actual_sessions");
+  await client.query("DROP TABLE tandem_devices");
 }

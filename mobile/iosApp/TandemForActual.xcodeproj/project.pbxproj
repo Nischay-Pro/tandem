@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A10000000000000000000001 /* TandemCompanionApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* TandemCompanionApp.swift */; };
+		A10000000000000000000001 /* TandemApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* TandemApp.swift */; };
 		A10000000000000000000002 /* IosBackgroundSyncScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* IosBackgroundSyncScheduler.swift */; };
 		A10000000000000000000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* Assets.xcassets */; };
 		A10000000000000000000004 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* LaunchScreen.storyboard */; };
@@ -16,7 +16,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		A20000000000000000000001 /* TandemCompanionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemCompanionApp.swift; sourceTree = "<group>"; };
+		A20000000000000000000001 /* TandemApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemApp.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* IosBackgroundSyncScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosBackgroundSyncScheduler.swift; sourceTree = "<group>"; };
 		A20000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000000000000000000004 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -41,7 +41,7 @@
 		A40000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
-				A20000000000000000000001 /* TandemCompanionApp.swift */,
+				A20000000000000000000001 /* TandemApp.swift */,
 				A20000000000000000000002 /* IosBackgroundSyncScheduler.swift */,
 				A20000000000000000000008 /* IosBudgetNotifications.swift */,
 				A20000000000000000000003 /* Info.plist */,
@@ -139,7 +139,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A10000000000000000000001 /* TandemCompanionApp.swift in Sources */,
+				A10000000000000000000001 /* TandemApp.swift in Sources */,
 				A10000000000000000000002 /* IosBackgroundSyncScheduler.swift in Sources */,
 				A10000000000000000000006 /* IosBudgetNotifications.swift in Sources */,
 			);

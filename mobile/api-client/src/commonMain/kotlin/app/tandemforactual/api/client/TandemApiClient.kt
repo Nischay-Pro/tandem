@@ -13,7 +13,9 @@ import com.kroegerama.openapi.kmp.gen.companion.HttpCallException
 import com.kroegerama.openapi.kmp.gen.companion.HttpCallResponse
 import io.ktor.client.plugins.compression.ContentEncoding
 import io.ktor.client.plugins.pluginOrNull
+import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.URLBuilder
 import io.ktor.http.Url
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
@@ -28,6 +30,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlin.uuid.Uuid
 
@@ -76,9 +79,17 @@ class TandemApiException(
     safeMessageOverride: String? = null,
 ) : Exception(
         safeMessageOverride ?: when {
+            errorCode == "actual_only" ->
+                "Actual is running at this address, but Tandem isn’t. Check that Tandem is running and that the proxy sends /api/v1/ to it."
+            errorCode == "address_unreachable" -> "Couldn’t reach Tandem at this address. Check the address and connection."
+            errorCode == "actual_unavailable" -> "Tandem can’t reach Actual. Check the Actual connection, then try again."
+            errorCode == "tandem_not_ready" -> "Tandem isn’t ready yet. Check its connection to Actual, then try again."
+            errorCode == "tandem_route_unavailable" ->
+                "Tandem’s sign-in route isn’t available. Check the Tandem API address and the proxy’s /api/v1/ route."
+            errorCode == "invalid_budget_password" -> "That budget password didn’t unlock this budget. Check it and try again."
             errorCode == "sign_in_required" -> "Sign in to load your budgets."
             errorCode == "sign_in_expired" -> "Sign in expired. Start again."
-            errorCode == "invalid_credentials" -> "The password didn’t match this Actual server."
+            errorCode == "invalid_credentials" -> "The password didn’t match this Actual server. Check it and try again."
             errorCode == "invalid_device_credential" -> "Sign in again to continue."
             errorCode == "bank_sync_failed" -> "Actual couldn’t complete bank sync. Check its provider setup and try again."
             errorCode == "bank_sync_busy" -> "A bank sync is already running. Try again shortly."
@@ -87,18 +98,19 @@ class TandemApiException(
                     "Choose a unique reference column and try again."
             errorCode == "actual_operation_failed" -> "Actual couldn’t complete this change. Check the budget and try again."
             errorCode == "operation_uncertain" -> "Tandem couldn’t confirm whether Actual saved this change. Check Actual, then try again."
-            errorCode == "operation_in_progress" -> "The server is still processing this change. Wait a moment, then try again."
+            errorCode == "operation_in_progress" -> "Tandem is still processing this change. Wait a moment, then try again."
             errorCode == "operation_rejected" -> "Actual rejected this change earlier. Refresh the budget, then try again."
             errorCode == "idempotency_key_reused" ->
                 "Tandem matched this change to a different request. Refresh the budget, then try again."
             errorCode == "operation_result_unavailable" ->
                 "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget."
             errorCode == "invalid_request" -> "Check the details and try again."
-            httpStatus == 400 -> "The server rejected this request. Check the details and try again."
-            httpStatus == 401 -> "The server couldn’t verify this request. Check the server address and try again."
+            httpStatus == 400 -> "Tandem rejected this request. Check the details and try again."
+            httpStatus == 404 -> "Tandem’s API route couldn’t be reached. Check the address and the proxy’s /api/v1/ route."
+            httpStatus == 401 -> "Tandem couldn’t verify this request. Sign in again and try again."
             httpStatus == 403 -> "This device can’t open that budget."
-            httpStatus in 500..599 -> "The Tandem server couldn’t read Actual. Try again later."
-            else -> "Couldn’t reach the Tandem server. Check the address and connection."
+            httpStatus in 500..599 -> "Tandem is temporarily unavailable. Try again shortly."
+            else -> "Couldn’t reach Tandem at this address. Check the address and connection."
         },
         cause,
     )
@@ -188,7 +200,14 @@ class TandemApiClient(
                 GeneratedApiAccess.ensureContentEncoding()
                 clearGeneratedAuthProvider()
                 Api.baseUrl = parsedUrl
-                val payload = unwrap(AuthenticationApi.getActualLoginMethods())
+                val payload =
+                    try {
+                        unwrap(AuthenticationApi.getActualLoginMethods())
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: TandemApiException) {
+                        throw diagnoseLoginMethodsFailure(parsedUrl, error)
+                    }
                 ActualLoginMethods(
                     bootstrapped = payload.requiredBoolean("bootstrapped"),
                     loginMethod = payload.optionalString("loginMethod"),
@@ -204,6 +223,59 @@ class TandemApiClient(
                 )
             }
         }
+
+    private suspend fun diagnoseLoginMethodsFailure(
+        baseUrl: Url,
+        original: TandemApiException,
+    ): TandemApiException {
+        if (original.errorCode == "actual_unavailable") return original
+
+        val readiness = probeEndpoint(baseUrl, "/api/v1/health/ready")
+        if (readiness?.isTandemResponse() == true) {
+            if (readiness.isTandemNotReady()) {
+                return TandemApiException("tandem_not_ready", readiness.status, original)
+            }
+            return if (original.httpStatus == 404) {
+                TandemApiException("tandem_route_unavailable", 404, original)
+            } else {
+                original
+            }
+        }
+
+        val actualResponse = probeEndpoint(baseUrl, "/account/needs-bootstrap")
+        return if (actualResponse?.isActualLoginEndpoint() == true) {
+            TandemApiException("actual_only", original.httpStatus, original)
+        } else {
+            TandemApiException("address_unreachable", original.httpStatus, original)
+        }
+    }
+
+    private suspend fun probeEndpoint(
+        baseUrl: Url,
+        path: String,
+    ): EndpointProbe? =
+        try {
+            val endpoint = endpointUrl(baseUrl, path)
+            val response = Api.client.get(endpoint)
+            EndpointProbe(response.status.value, response.bodyAsText())
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+
+    private fun endpointUrl(
+        baseUrl: Url,
+        path: String,
+    ): String =
+        URLBuilder(baseUrl)
+            .apply {
+                // Generated API routes are rooted at `/api/v1`, even when the configured URL has a path.
+                encodedPathSegments = path.trim('/').split('/')
+                parameters.clear()
+                fragment = ""
+            }.build()
+            .toString()
 
     suspend fun signInWithPassword(
         serverUrl: String,
@@ -942,9 +1014,13 @@ class TandemApiClient(
         name: String?,
         encryptionPassword: String?,
         fields: JsonObject? = null,
+        expectedNextDate: String? = null,
     ) {
+        require(action !in setOf("post", "skip") || !expectedNextDate.isNullOrBlank()) {
+            "Posting or skipping a schedule requires its displayed next date"
+        }
         withMaintenanceOperation(
-            maintenanceSignature("schedule-$action", budgetId, scheduleId, name),
+            maintenanceSignature("schedule-$action", budgetId, scheduleId, name, expectedNextDate),
         ) { idempotencyKey ->
             withGeneratedApi {
                 requireOk(
@@ -958,6 +1034,7 @@ class TandemApiClient(
                                 put("action", action)
                                 name?.let { put("name", it) }
                                 fields?.forEach { (key, value) -> put(key, value) }
+                                expectedNextDate?.let { put("expectedNextDate", it) }
                             }.toMap(),
                     ),
                 )
@@ -1268,6 +1345,33 @@ private fun parseServerUrl(
     }
     return url
 }
+
+private data class EndpointProbe(
+    val status: Int,
+    val body: String,
+) {
+    private val json: JsonObject?
+        get() =
+            try {
+                Json.parseToJsonElement(body) as? JsonObject
+            } catch (_: Exception) {
+                null
+            }
+
+    fun isTandemResponse(): Boolean =
+        (status == 200 && json?.stringValue("status") == "ok") ||
+            isTandemNotReady()
+
+    fun isTandemNotReady(): Boolean = status == 503 && json?.stringValue("status") == "not_ready"
+
+    fun isActualLoginEndpoint(): Boolean {
+        if (status != 200) return false
+        val data = json?.get("data") as? JsonObject ?: return false
+        return json?.stringValue("status") == "ok" && data["bootstrapped"]?.jsonPrimitive?.booleanOrNull != null
+    }
+}
+
+private fun JsonObject.stringValue(name: String): String? = (this[name] as? JsonPrimitive)?.contentOrNull
 
 /** Allows cleartext only for loopback names and validated private-network IP literals. */
 fun isLocalHttpHost(value: String): Boolean {

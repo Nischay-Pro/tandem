@@ -109,7 +109,7 @@ internal fun ServerDeviceScreen(
         }
         mobileSession.deviceRevocationError?.let { message ->
             AttentionBanner("Couldn’t remove this device", message, "Try again", onForgetDevice)
-            InfoBubble("The server still trusts this device until its owner removes it there.")
+            InfoBubble("Tandem still trusts this device until its owner removes it there.")
         }
         AnimatedPreviewNote(mobileSession.credentialStorageError)
         InfoBubble("Sign out clears all cached budgets from this device. Your budgets on the server stay unchanged.")
@@ -172,7 +172,7 @@ internal fun ServerDeviceScreen(
             DestructiveConfirmationDialog(
                 title = "Forget this device here?",
                 message =
-                    "This clears the sign-in saved on this device. The server will still allow this device until it is removed there.",
+                    "This clears the sign-in saved on this device. Tandem will still allow it until its owner removes it there.",
                 confirmLabel = "Forget here",
                 dismissLabel = "Cancel",
                 onDismissRequest = { confirmation = "" },

@@ -130,7 +130,7 @@ describe("transaction snapshots and merge planning", () => {
     });
   });
 
-  it("exposes Companion-created transactions by their stable imported ID", () => {
+  it("exposes Tandem-created transactions by their stable imported ID", () => {
     const stableId = "tandem:8c88495a-65d9-4531-8392-93bff2c65374";
     expect(
       snapshotActualTransaction({

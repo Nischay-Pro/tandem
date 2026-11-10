@@ -1,8 +1,11 @@
 import swagger from "@fastify/swagger";
 import { createHash, randomUUID } from "node:crypto";
+import { performance } from "node:perf_hooks";
 import Fastify, {
+  LogController,
   type FastifyInstance,
   type FastifyRequest,
+  type FastifyServerOptions,
   type FastifySchema,
 } from "fastify";
 import { READINESS_TIMEOUT_MS } from "./config.js";
@@ -26,6 +29,7 @@ import type { TransactionApiPort } from "./actual/transaction-api.js";
 import {
   BudgetMaintenanceBusyError,
   BudgetMaintenanceInputError,
+  BudgetScheduleChangedError,
   MAX_BUDGET_AMOUNT_MINOR,
   type BudgetTemplateAssignment,
   type BudgetMaintenanceApiPort,
@@ -100,6 +104,7 @@ export interface ApiAppOptions {
   >;
   budgetReadApi?: BudgetReadApiPort;
   trustProxy?: false | string[];
+  logger?: FastifyServerOptions["logger"];
 }
 
 export async function buildApiApp(
@@ -109,9 +114,72 @@ export async function buildApiApp(
   const readinessTimeoutMs = options.readinessTimeoutMs ?? READINESS_TIMEOUT_MS;
   const actualLoginMethodsCache = new ActualLoginMethodsCache(45_000);
   const actualLoginMethodsRateLimiter = new RequestRateLimiter(60, 60_000);
+  const requestErrors = new WeakMap<FastifyRequest, unknown>();
+  const responseErrorCodes = new WeakMap<FastifyRequest, string>();
+  const requestStartedAt = new WeakMap<FastifyRequest, number>();
   const app = Fastify({
-    logger: false,
+    logger: options.logger ?? false,
+    logController: new LogController({ disableRequestLogging: true }),
+    requestIdHeader: false,
+    genReqId: () => randomUUID(),
     trustProxy: options.trustProxy ?? false,
+  });
+  app.removeContentTypeParser("text/plain");
+  app.addHook("onRequest", async (request, reply) => {
+    requestStartedAt.set(request, performance.now());
+    reply.header("x-request-id", request.id);
+  });
+  app.setErrorHandler((error, request, reply) => {
+    const statusCode = safeHttpStatus(frameworkErrorStatus(error));
+    requestErrors.set(request, error);
+    const response = safeFrameworkErrorResponse(
+      statusCode,
+      frameworkErrorCode(error),
+    );
+    reply.code(statusCode).send({ error: response });
+  });
+  app.setNotFoundHandler((_request, reply) => {
+    reply.code(404).send({
+      error: {
+        code: "route_not_found",
+        message:
+          "Tandem API route was not found. Check the address and /api/v1/ proxy route.",
+      },
+    });
+  });
+  app.addHook("onSend", async (request, reply, payload) => {
+    const statusCode = reply.statusCode;
+    if (statusCode === 409 || statusCode >= 500) {
+      const errorCode = errorCodeFromPayload(payload) ?? `http_${statusCode}`;
+      responseErrorCodes.set(request, errorCode);
+    }
+    return payload;
+  });
+  app.addHook("onResponse", async (request, reply) => {
+    const statusCode = reply.statusCode;
+    const route = request.routeOptions.url ?? "unmatched";
+    const logFields = {
+      requestId: request.id,
+      method: request.method,
+      route,
+      statusCode,
+      durationMs: Math.round(
+        performance.now() - requestStartedAt.get(request)!,
+      ),
+      ...(responseErrorCodes.has(request)
+        ? { errorCode: responseErrorCodes.get(request) }
+        : {}),
+    };
+    const hasThrownError = requestErrors.has(request);
+    const thrownError = requestErrors.get(request);
+    if (hasThrownError || statusCode === 409 || statusCode >= 500) {
+      request.log.error(
+        { ...logFields, ...(hasThrownError ? { err: thrownError } : {}) },
+        "API request failed",
+      );
+    } else {
+      request.log.info(logFields, "API request completed");
+    }
   });
   if (options.deviceAuth) {
     app.addHook("onRequest", async (request) => {
@@ -1487,6 +1555,7 @@ interface BudgetCategoryDeleteBody {
 
 interface BudgetScheduleActionBody extends BudgetScheduleEdit {
   action: "rename" | "edit" | "post" | "skip" | "delete";
+  expectedNextDate?: string;
 }
 
 interface BudgetChangeQuery {
@@ -4023,6 +4092,13 @@ function registerBudgetMaintenanceRoutes(
               additionalProperties: false,
             },
             amountOp: { type: "string", enum: ["is", "isapprox", "isbetween"] },
+            expectedNextDate: {
+              type: "string",
+              format: "date",
+              pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+              description:
+                "For post and skip, the exact next date shown by the client.",
+            },
             date: {
               oneOf: [
                 {
@@ -4108,6 +4184,7 @@ function registerBudgetMaintenanceRoutes(
       if (!journal) return actualNotConfigured(reply);
       const body = request.body as BudgetScheduleActionBody;
       const { action } = body;
+      const needsExpectedNextDate = action === "post" || action === "skip";
       const name = body.name?.trim();
       const edit: BudgetScheduleEdit = {
         ...(name === undefined ? {} : { name }),
@@ -4128,12 +4205,17 @@ function registerBudgetMaintenanceRoutes(
         (action === "rename" &&
           Object.keys(edit).some((field) => field !== "name")) ||
         (action === "edit" && !hasEditFields) ||
+        (needsExpectedNextDate && body.expectedNextDate === undefined) ||
+        (!needsExpectedNextDate && body.expectedNextDate !== undefined) ||
         (!(["rename", "edit"] as string[]).includes(action) && hasEditFields)
       ) {
         return invalidBudgetRequest(reply);
       }
       try {
         const patch: { [key: string]: JsonValue } = { action };
+        if (needsExpectedNextDate) {
+          patch.expectedNextDate = body.expectedNextDate!;
+        }
         if (action === "rename") patch.name = name!;
         if (action === "edit") {
           for (const [field, value] of Object.entries(edit)) {
@@ -4171,6 +4253,7 @@ function registerBudgetMaintenanceRoutes(
                 await maintenanceApi.postSchedule(
                   request.params.budgetId,
                   request.params.scheduleId,
+                  body.expectedNextDate!,
                   password,
                 );
                 break;
@@ -4178,6 +4261,7 @@ function registerBudgetMaintenanceRoutes(
                 await maintenanceApi.skipSchedule(
                   request.params.budgetId,
                   request.params.scheduleId,
+                  body.expectedNextDate!,
                   password,
                 );
                 break;
@@ -4214,14 +4298,19 @@ function registerBudgetMaintenanceRoutes(
           );
           return reply
             .code(
-              error instanceof MaintenanceOperationConflictError ? 409 : 400,
+              error instanceof MaintenanceOperationConflictError ||
+                error instanceof BudgetScheduleChangedError
+                ? 409
+                : 400,
             )
             .send({
               error: {
                 code:
                   error instanceof MaintenanceOperationConflictError
                     ? error.code
-                    : "invalid_request",
+                    : error instanceof BudgetScheduleChangedError
+                      ? error.code
+                      : "invalid_request",
                 message: error.message,
               },
             });
@@ -4248,7 +4337,8 @@ class MaintenanceOperationConflictError extends BudgetMaintenanceInputError {
       | "operation_in_progress"
       | "operation_uncertain"
       | "operation_rejected"
-      | "operation_result_unavailable",
+      | "operation_result_unavailable"
+      | "schedule_changed",
     message: string,
   ) {
     super(message);
@@ -4321,6 +4411,10 @@ async function runMaintenanceOperation<T extends JsonValue>(
           await journal.markRejected(operation.operationId, "bank-sync-busy");
           throw error;
         }
+        if (error instanceof BudgetScheduleChangedError) {
+          await journal.markRejected(operation.operationId, error.code);
+          throw error;
+        }
         if (error instanceof BudgetMaintenanceInputError) {
           await journal.markRejected(operation.operationId, "invalid-request");
           throw error;
@@ -4347,6 +4441,12 @@ async function runMaintenanceOperation<T extends JsonValue>(
     );
   }
   if (operation.status === "rejected") {
+    if (operation.errorCode === "schedule_changed") {
+      throw new MaintenanceOperationConflictError(
+        "schedule_changed",
+        "This schedule changed in Actual. Refresh it before trying again.",
+      );
+    }
     throw new MaintenanceOperationConflictError(
       "operation_rejected",
       "This change was rejected earlier. Correct it and submit it again with a new request.",
@@ -4882,6 +4982,100 @@ function registerBudgetReadRoutes(
       }
     },
   );
+}
+
+function safeHttpStatus(statusCode: number | undefined): number {
+  return Number.isInteger(statusCode) &&
+    statusCode !== undefined &&
+    statusCode >= 400 &&
+    statusCode <= 599
+    ? statusCode
+    : 500;
+}
+
+export function frameworkErrorStatus(error: unknown): number | undefined {
+  if (typeof error !== "object" || error === null || !("statusCode" in error)) {
+    return undefined;
+  }
+  const statusCode = (error as { statusCode?: unknown }).statusCode;
+  return typeof statusCode === "number" ? statusCode : undefined;
+}
+
+export function frameworkErrorCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null || !("code" in error)) {
+    return undefined;
+  }
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
+}
+
+export function safeFrameworkErrorResponse(
+  statusCode: number,
+  frameworkCode?: string,
+) {
+  if (
+    frameworkCode === "FST_ERR_CTP_INVALID_MEDIA_TYPE" ||
+    statusCode === 415
+  ) {
+    return {
+      code: "unsupported_media_type",
+      message: "Send this request as application/json.",
+    };
+  }
+  if (frameworkCode === "FST_ERR_CTP_BODY_TOO_LARGE" || statusCode === 413) {
+    return {
+      code: "request_too_large",
+      message: "This request is too large. Reduce it and try again.",
+    };
+  }
+  switch (statusCode) {
+    case 400:
+    case 422:
+      return {
+        code: "invalid_request",
+        message: "Check the request details and try again.",
+      };
+    case 404:
+      return {
+        code: "route_not_found",
+        message:
+          "Tandem API route was not found. Check the address and /api/v1/ proxy route.",
+      };
+    case 409:
+      return {
+        code: "request_conflict",
+        message:
+          "This request conflicts with the latest budget. Refresh, then try again.",
+      };
+    case 429:
+      return {
+        code: "rate_limited",
+        message: "Too many requests. Wait a moment, then try again.",
+      };
+    default:
+      return {
+        code: "internal_error",
+        message: "Tandem couldn’t complete the request. Try again shortly.",
+      };
+  }
+}
+
+export function errorCodeFromPayload(payload: unknown): string | undefined {
+  if (typeof payload !== "string") return undefined;
+  try {
+    const value: unknown = JSON.parse(payload);
+    if (typeof value !== "object" || value === null || !("error" in value))
+      return undefined;
+    const error = (value as { error?: unknown }).error;
+    if (typeof error !== "object" || error === null || !("code" in error))
+      return undefined;
+    const code = (error as { code?: unknown }).code;
+    return typeof code === "string" && /^[a-z0-9_-]{1,80}$/i.test(code)
+      ? code
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function invalidBudgetRequest(reply: import("fastify").FastifyReply) {

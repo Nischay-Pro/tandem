@@ -140,6 +140,9 @@ internal actual fun platformFormatDate(
             Locale.getDefault(),
         ).format(calendarDate(year, month, day))
 
+internal actual fun platformFormatDateAtEpochMilliseconds(epochMilliseconds: Long): String =
+    DateFormat.getDateInstance(DateFormat.MEDIUM, Locale.getDefault()).format(Date(epochMilliseconds))
+
 internal actual fun platformTodayIsoDate(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
 internal actual fun platformFormatMonth(

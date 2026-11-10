@@ -1066,7 +1066,7 @@ class LocalBudgetRepositoryTest {
     @Test
     fun pendingWritesSurviveDatabaseReopenAndSendingWritesBecomeUncertain() =
         runBlocking {
-            val databaseFile = File.createTempFile("companion-budget-", ".db")
+            val databaseFile = File.createTempFile("tandem-budget-", ".db")
             databaseFile.delete()
             try {
                 val firstDatabase = persistentDatabase(databaseFile.absolutePath)

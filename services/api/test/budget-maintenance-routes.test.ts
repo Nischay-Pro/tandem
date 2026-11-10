@@ -4,6 +4,7 @@ import { buildApiApp } from "../src/app.js";
 import type { BudgetMaintenanceApiPort } from "../src/actual/budget-maintenance-api.js";
 import { BudgetMaintenanceInputError } from "../src/actual/budget-maintenance-api.js";
 import { BudgetMaintenanceBusyError } from "../src/actual/budget-maintenance-api.js";
+import { BudgetScheduleChangedError } from "../src/actual/budget-maintenance-api.js";
 import type {
   DeviceAuthorization,
   DeviceRecord,
@@ -289,7 +290,7 @@ const maintenanceRouteCases = (routeBudgetId = budgetId) => [
   {
     method: "POST" as const,
     url: `/api/v1/budgets/${routeBudgetId}/schedules/schedule-1/actions`,
-    payload: { action: "post" },
+    payload: { action: "post", expectedNextDate: "2026-11-15" },
   },
 ];
 
@@ -1631,13 +1632,13 @@ describe("budget maintenance routes", () => {
       method: "POST",
       url: path,
       headers: testHeaders(),
-      payload: { action: "skip" },
+      payload: { action: "skip", expectedNextDate: "2026-11-15" },
     });
     const post = await fake.app.inject({
       method: "POST",
       url: path,
       headers: testHeaders(),
-      payload: { action: "post" },
+      payload: { action: "post", expectedNextDate: "2026-11-15" },
     });
     const deleted = await fake.app.inject({
       method: "POST",
@@ -1661,7 +1662,11 @@ describe("budget maintenance routes", () => {
       method: "POST",
       url: path,
       headers: testHeaders(),
-      payload: { action: "skip", name: "Should not be accepted" },
+      payload: {
+        action: "skip",
+        expectedNextDate: "2026-11-15",
+        name: "Should not be accepted",
+      },
     });
 
     expect([
@@ -1698,7 +1703,19 @@ describe("budget maintenance routes", () => {
       undefined,
     );
     expect(fake.budgetMaintenanceApi.skipSchedule).toHaveBeenCalledOnce();
+    expect(fake.budgetMaintenanceApi.skipSchedule).toHaveBeenCalledWith(
+      budgetId,
+      "schedule-1",
+      "2026-11-15",
+      undefined,
+    );
     expect(fake.budgetMaintenanceApi.postSchedule).toHaveBeenCalledOnce();
+    expect(fake.budgetMaintenanceApi.postSchedule).toHaveBeenCalledWith(
+      budgetId,
+      "schedule-1",
+      "2026-11-15",
+      undefined,
+    );
     expect(fake.budgetMaintenanceApi.deleteSchedule).toHaveBeenCalledOnce();
     expect([...fake.operations.values()].map(({ action }) => action)).toEqual([
       "schedule-rename",
@@ -1707,6 +1724,11 @@ describe("budget maintenance routes", () => {
       "schedule-post",
       "schedule-delete",
     ]);
+    expect(
+      [...fake.operations.values()].find(
+        ({ action }) => action === "schedule-post",
+      )?.patch,
+    ).toMatchObject({ expectedNextDate: "2026-11-15" });
     await fake.app.close();
   });
 
@@ -1733,6 +1755,63 @@ describe("budget maintenance routes", () => {
       },
       undefined,
     );
+    await fake.app.close();
+  });
+
+  it("returns schedule_changed when a schedule mutation has a stale date", async () => {
+    const fake = await createApi();
+    vi.mocked(fake.budgetMaintenanceApi.postSchedule).mockRejectedValueOnce(
+      new BudgetScheduleChangedError(),
+    );
+    const request = {
+      method: "POST" as const,
+      url: `/api/v1/budgets/${budgetId}/schedules/schedule-1/actions`,
+      headers: { ...testHeaders(), "idempotency-key": "stale-schedule-post" },
+      payload: { action: "post", expectedNextDate: "2026-11-15" },
+    };
+    const response = await fake.app.inject(request);
+    const replay = await fake.app.inject(request);
+
+    expect(response.statusCode).toBe(409);
+    expect(replay.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      error: {
+        code: "schedule_changed",
+        message:
+          "This schedule changed in Actual. Refresh it before trying again.",
+      },
+    });
+    expect(replay.json()).toEqual(response.json());
+    expect(fake.budgetMaintenanceApi.postSchedule).toHaveBeenCalledOnce();
+    expect(fake.budgetMaintenanceApi.postSchedule).toHaveBeenCalledWith(
+      budgetId,
+      "schedule-1",
+      "2026-11-15",
+      undefined,
+    );
+    await fake.app.close();
+  });
+
+  it("requires a valid expected date for post and skip actions", async () => {
+    const fake = await createApi();
+    const path = `/api/v1/budgets/${budgetId}/schedules/schedule-1/actions`;
+    const post = await fake.app.inject({
+      method: "POST",
+      url: path,
+      headers: testHeaders(),
+      payload: { action: "post" },
+    });
+    const skip = await fake.app.inject({
+      method: "POST",
+      url: path,
+      headers: testHeaders(),
+      payload: { action: "skip", expectedNextDate: "2026-02-30" },
+    });
+
+    expect(post.statusCode).toBe(400);
+    expect(skip.statusCode).toBe(400);
+    expect(fake.budgetMaintenanceApi.postSchedule).not.toHaveBeenCalled();
+    expect(fake.budgetMaintenanceApi.skipSchedule).not.toHaveBeenCalled();
     await fake.app.close();
   });
 
@@ -1869,7 +1948,7 @@ describe("budget maintenance routes", () => {
       method: "POST",
       url,
       headers: testHeaders(),
-      payload: { action: "skip" },
+      payload: { action: "skip", expectedNextDate: "2026-11-15" },
     });
     vi.mocked(fake.budgetMaintenanceApi.postSchedule).mockRejectedValueOnce(
       new Error("private Actual schedule details"),
@@ -1878,7 +1957,7 @@ describe("budget maintenance routes", () => {
       method: "POST",
       url,
       headers: testHeaders(),
-      payload: { action: "post" },
+      payload: { action: "post", expectedNextDate: "2026-11-15" },
     });
 
     expect(rejected.statusCode).toBe(400);

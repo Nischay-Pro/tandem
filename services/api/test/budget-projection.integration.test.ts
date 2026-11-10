@@ -193,7 +193,7 @@ describe.skipIf(!integrationEnabled)(
         cursor: string;
         body: Record<string, unknown> | null;
       }>(
-        `SELECT cursor::text, body FROM companion_budget_changes
+        `SELECT cursor::text, body FROM tandem_budget_changes
          WHERE budget_id = $1 ORDER BY cursor`,
         [budgetId],
       );
@@ -229,7 +229,7 @@ describe.skipIf(!integrationEnabled)(
         cursor: string;
         body: Record<string, unknown> | null;
       }>(
-        `SELECT cursor::text, body FROM companion_budget_changes
+        `SELECT cursor::text, body FROM tandem_budget_changes
          WHERE budget_id = $1 ORDER BY cursor`,
         [budgetId],
       );
@@ -248,13 +248,13 @@ describe.skipIf(!integrationEnabled)(
         const budgetId = `budget-body-size-${randomUUID()}`;
         const recordCount = 100_000;
         await scopedPool.query(
-          `INSERT INTO companion_budget_sync_state
+          `INSERT INTO tandem_budget_sync_state
          (budget_id, generation, feed_epoch, cursor)
          VALUES ($1, $2, 'epoch', $3)`,
           [budgetId, randomUUID(), recordCount],
         );
         await scopedPool.query(
-          `INSERT INTO companion_budget_records
+          `INSERT INTO tandem_budget_records
          (budget_id, entity_type, entity_id, revision, body, is_deleted, updated_cursor)
          SELECT $1, 'transaction', 'txn-' || item.id, repeat('a', 64),
                 jsonb_build_object(
@@ -269,7 +269,7 @@ describe.skipIf(!integrationEnabled)(
           [budgetId, recordCount],
         );
         await scopedPool.query(
-          `INSERT INTO companion_budget_changes
+          `INSERT INTO tandem_budget_changes
          (budget_id, cursor, entity_type, entity_id, operation, revision, body)
          SELECT $1, item.id, 'transaction', 'txn-' || item.id,
                 'upsert', repeat('a', 64), NULL
@@ -278,15 +278,15 @@ describe.skipIf(!integrationEnabled)(
         );
         await scopedPool.query(
           `CREATE TABLE legacy_change_body_benchmark
-         (LIKE companion_budget_changes INCLUDING ALL)`,
+         (LIKE tandem_budget_changes INCLUDING ALL)`,
         );
         await scopedPool.query(
           `INSERT INTO legacy_change_body_benchmark
          (budget_id, cursor, entity_type, entity_id, operation, revision, body)
          SELECT change.budget_id, change.cursor, change.entity_type,
                 change.entity_id, change.operation, change.revision, record.body
-         FROM companion_budget_changes AS change
-         JOIN companion_budget_records AS record
+         FROM tandem_budget_changes AS change
+         JOIN tandem_budget_records AS record
            ON record.budget_id = change.budget_id
           AND record.entity_type = change.entity_type
           AND record.entity_id = change.entity_id
@@ -294,13 +294,13 @@ describe.skipIf(!integrationEnabled)(
           [budgetId],
         );
         await scopedPool.query(
-          `VACUUM (ANALYZE) companion_budget_changes, legacy_change_body_benchmark`,
+          `VACUUM (ANALYZE) tandem_budget_changes, legacy_change_body_benchmark`,
         );
         const sizes = await scopedPool.query<{
           compact_bytes: string;
           duplicate_bytes: string;
         }>(
-          `SELECT pg_total_relation_size('companion_budget_changes')::text AS compact_bytes,
+          `SELECT pg_total_relation_size('tandem_budget_changes')::text AS compact_bytes,
                 pg_total_relation_size('legacy_change_body_benchmark')::text AS duplicate_bytes`,
         );
         const compactBytes = Number(sizes.rows[0]?.compact_bytes);
@@ -430,7 +430,7 @@ describe.skipIf(!integrationEnabled)(
         const plan = await client.query<{ "QUERY PLAN": string }>(
           `EXPLAIN (COSTS OFF)
            SELECT entity_type, entity_id, revision, body, is_deleted
-           FROM companion_budget_records
+           FROM tandem_budget_records
            WHERE budget_id = $1 AND is_deleted = false
              AND (entity_type COLLATE "C", entity_id COLLATE "C") >
                  ($2::text COLLATE "C", $3::text COLLATE "C")
@@ -439,7 +439,7 @@ describe.skipIf(!integrationEnabled)(
           [budgetId, "transaction", "B"],
         );
         expect(plan.rows.map((row) => row["QUERY PLAN"]).join("\n")).toContain(
-          "companion_budget_records_snapshot_keyset",
+          "tandem_budget_records_snapshot_keyset",
         );
         await client.query("ROLLBACK");
       } catch (error) {
@@ -508,7 +508,7 @@ describe.skipIf(!integrationEnabled)(
       ).resolves.toBe(false);
 
       await getPool().query(
-        `UPDATE companion_budget_sync_state
+        `UPDATE tandem_budget_sync_state
          SET refreshed_at = clock_timestamp() - INTERVAL '16 seconds'
          WHERE budget_id = $1`,
         ["budget-freshness"],
@@ -553,17 +553,17 @@ describe.skipIf(!integrationEnabled)(
 
       const currentRecordRead = statements.find((statement) =>
         statement.startsWith(
-          "SELECT entity_type, entity_id, revision, is_deleted FROM companion_budget_records",
+          "SELECT entity_type, entity_id, revision, is_deleted FROM tandem_budget_records",
         ),
       );
       expect(currentRecordRead).toBe(
-        "SELECT entity_type, entity_id, revision, is_deleted FROM companion_budget_records WHERE budget_id = $1",
+        "SELECT entity_type, entity_id, revision, is_deleted FROM tandem_budget_records WHERE budget_id = $1",
       );
       expect(currentRecordRead).not.toMatch(/ORDER BY|FOR UPDATE/);
       expect(
         statements.some((statement) =>
           statement.startsWith(
-            "SELECT entity_type, entity_id, revision, body, is_deleted FROM companion_budget_records",
+            "SELECT entity_type, entity_id, revision, body, is_deleted FROM tandem_budget_records",
           ),
         ),
       ).toBe(false);
@@ -580,15 +580,15 @@ describe.skipIf(!integrationEnabled)(
                 return (queryText: string, ...args: unknown[]) => {
                   const normalized = queryText.replace(/\s+/g, " ").trim();
                   const statement = normalized.startsWith(
-                    "INSERT INTO companion_budget_records",
+                    "INSERT INTO tandem_budget_records",
                   )
                     ? "record-upsert"
                     : normalized.startsWith(
-                          "UPDATE companion_budget_records AS existing",
+                          "UPDATE tandem_budget_records AS existing",
                         )
                       ? "record-delete"
                       : normalized.startsWith(
-                            "INSERT INTO companion_budget_changes",
+                            "INSERT INTO tandem_budget_changes",
                           )
                         ? "change"
                         : undefined;
@@ -752,7 +752,7 @@ describe.skipIf(!integrationEnabled)(
       ]);
       await store.applySnapshot(budgetId, "epoch-a", [keeper(100)]);
       const retainedTombstone = await getPool().query<{ count: string }>(
-        `SELECT count(*)::text AS count FROM companion_budget_records
+        `SELECT count(*)::text AS count FROM tandem_budget_records
          WHERE budget_id = $1 AND entity_type = 'payee' AND is_deleted = true`,
         [budgetId],
       );
@@ -760,7 +760,7 @@ describe.skipIf(!integrationEnabled)(
 
       await store.applySnapshot(budgetId, "epoch-a", [keeper(200)]);
       const stillRetainedTombstone = await getPool().query<{ count: string }>(
-        `SELECT count(*)::text AS count FROM companion_budget_records
+        `SELECT count(*)::text AS count FROM tandem_budget_records
          WHERE budget_id = $1 AND entity_type = 'payee' AND is_deleted = true`,
         [budgetId],
       );
@@ -768,7 +768,7 @@ describe.skipIf(!integrationEnabled)(
 
       await store.applySnapshot(budgetId, "epoch-a", [keeper(300)]);
       const purgedTombstone = await getPool().query<{ count: string }>(
-        `SELECT count(*)::text AS count FROM companion_budget_records
+        `SELECT count(*)::text AS count FROM tandem_budget_records
          WHERE budget_id = $1 AND entity_type = 'payee' AND is_deleted = true`,
         [budgetId],
       );
@@ -788,7 +788,7 @@ describe.skipIf(!integrationEnabled)(
       ]);
       await store.applySnapshot(budgetId, "epoch-a", [keeper(300)]);
       const beforeEpochReset = await getPool().query<{ count: string }>(
-        `SELECT count(*)::text AS count FROM companion_budget_records
+        `SELECT count(*)::text AS count FROM tandem_budget_records
          WHERE budget_id = $1 AND is_deleted = true`,
         [budgetId],
       );
@@ -798,7 +798,7 @@ describe.skipIf(!integrationEnabled)(
         keeper(300),
       ]);
       const afterEpochReset = await getPool().query<{ count: string }>(
-        `SELECT count(*)::text AS count FROM companion_budget_records
+        `SELECT count(*)::text AS count FROM tandem_budget_records
          WHERE budget_id = $1 AND is_deleted = true`,
         [budgetId],
       );
@@ -821,7 +821,7 @@ describe.skipIf(!integrationEnabled)(
     `);
       await scoped.query(`
       CREATE TRIGGER reject_budget_projection_change
-      BEFORE INSERT ON companion_budget_changes
+      BEFORE INSERT ON tandem_budget_changes
       FOR EACH ROW EXECUTE FUNCTION reject_budget_projection_change()
     `);
       const store = createPostgresBudgetProjectionStore(scoped);
@@ -836,7 +836,7 @@ describe.skipIf(!integrationEnabled)(
       ).resolves.toBeUndefined();
 
       await scoped.query(
-        "DROP TRIGGER reject_budget_projection_change ON companion_budget_changes",
+        "DROP TRIGGER reject_budget_projection_change ON tandem_budget_changes",
       );
       await scoped.query("DROP FUNCTION reject_budget_projection_change()");
     });

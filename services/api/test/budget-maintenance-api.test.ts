@@ -55,6 +55,7 @@ function createFake() {
     name?: string;
     completed?: boolean;
     account?: string;
+    next_date?: string;
     date: string | { frequency: string; start: string };
   }> = [
     {
@@ -62,6 +63,7 @@ function createFake() {
       name: "Rent",
       completed: false,
       account: "checking",
+      next_date: "2026-11-15",
       date: { frequency: "monthly", start: "2026-01-01" },
     },
     {
@@ -69,6 +71,7 @@ function createFake() {
       name: "One time",
       completed: false,
       account: "checking",
+      next_date: "2026-12-01",
       date: "2026-12-01",
     },
     {
@@ -76,6 +79,7 @@ function createFake() {
       name: "Completed",
       completed: true,
       account: "checking",
+      next_date: "2026-11-15",
       date: { frequency: "monthly", start: "2026-01-01" },
     },
   ];
@@ -1296,8 +1300,8 @@ describe("Actual budget maintenance API", () => {
   it("uses Actual schedule handlers to skip and post scheduled transactions", async () => {
     const fake = createFake();
 
-    await fake.api.skipSchedule("budget-1", "monthly-rent");
-    await fake.api.postSchedule("budget-1", "monthly-rent");
+    await fake.api.skipSchedule("budget-1", "monthly-rent", "2026-11-15");
+    await fake.api.postSchedule("budget-1", "monthly-rent", "2026-11-15");
 
     expect(fake.client.internal.send).toHaveBeenNthCalledWith(
       1,
@@ -1313,16 +1317,69 @@ describe("Actual budget maintenance API", () => {
       [{ synchronizeAfterWrite: true }, { synchronizeAfterWrite: true }],
     );
 
-    await expect(fake.api.skipSchedule("budget-1", "one-time")).rejects.toThrow(
-      "A one-time schedule has no next date to skip",
-    );
-    await expect(fake.api.postSchedule("budget-1", "missing")).rejects.toThrow(
-      "Choose an active schedule in this budget",
-    );
     await expect(
-      fake.api.skipSchedule("budget-1", "completed"),
-    ).rejects.toThrow("Choose an active schedule in this budget");
+      fake.api.skipSchedule("budget-1", "one-time", "2026-12-01"),
+    ).rejects.toThrow("A one-time schedule has no next date to skip");
+    await expect(
+      fake.api.postSchedule("budget-1", "missing", "2026-11-15"),
+    ).rejects.toMatchObject({ code: "schedule_changed" });
+    await expect(
+      fake.api.skipSchedule("budget-1", "completed", "2026-11-15"),
+    ).rejects.toMatchObject({ code: "schedule_changed" });
     expect(fake.client.internal.send).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects a second post from a stale copy after Actual advances the schedule", async () => {
+    const fake = createFake();
+    fake.client.getSchedules
+      .mockResolvedValueOnce([
+        {
+          id: "monthly-rent",
+          completed: false,
+          account: "checking",
+          next_date: "2026-11-15",
+          date: { frequency: "monthly", start: "2026-01-01" },
+        },
+      ] as never)
+      .mockResolvedValueOnce([
+        {
+          id: "monthly-rent",
+          completed: false,
+          account: "checking",
+          next_date: "2026-12-15",
+          date: { frequency: "monthly", start: "2026-01-01" },
+        },
+      ] as never);
+
+    await fake.api.postSchedule("budget-1", "monthly-rent", "2026-11-15");
+    await expect(
+      fake.api.postSchedule("budget-1", "monthly-rent", "2026-11-15"),
+    ).rejects.toMatchObject({ code: "schedule_changed" });
+
+    expect(fake.client.internal.send).toHaveBeenCalledOnce();
+    expect(fake.client.internal.send).toHaveBeenCalledWith(
+      "schedule/post-transaction",
+      { id: "monthly-rent" },
+    );
+  });
+
+  it("rejects skipping a date already posted by another client", async () => {
+    const fake = createFake();
+    fake.client.getSchedules.mockResolvedValueOnce([
+      {
+        id: "monthly-rent",
+        completed: false,
+        account: "checking",
+        next_date: "2026-12-15",
+        date: { frequency: "monthly", start: "2026-01-01" },
+      },
+    ] as never);
+
+    await expect(
+      fake.api.skipSchedule("budget-1", "monthly-rent", "2026-11-15"),
+    ).rejects.toMatchObject({ code: "schedule_changed" });
+
+    expect(fake.client.internal.send).not.toHaveBeenCalled();
   });
 
   it("reports when this Actual client does not expose schedule handlers", async () => {
@@ -1330,10 +1387,10 @@ describe("Actual budget maintenance API", () => {
     Object.assign(fake.client, { internal: undefined });
 
     await expect(
-      fake.api.skipSchedule("budget-1", "monthly-rent"),
+      fake.api.skipSchedule("budget-1", "monthly-rent", "2026-11-15"),
     ).rejects.toThrow("Actual schedule actions are unavailable");
     await expect(
-      fake.api.postSchedule("budget-1", "monthly-rent"),
+      fake.api.postSchedule("budget-1", "monthly-rent", "2026-11-15"),
     ).rejects.toThrow("Actual schedule actions are unavailable");
   });
 
@@ -1344,11 +1401,12 @@ describe("Actual budget maintenance API", () => {
         id: "no-account",
         date: "2026-12-01",
         name: "No account",
+        next_date: "2026-12-01",
       },
     ] as never);
 
     await expect(
-      fake.api.postSchedule("budget-1", "no-account"),
+      fake.api.postSchedule("budget-1", "no-account", "2026-12-01"),
     ).rejects.toThrow("Choose an account before posting this schedule");
     await fake.api.deleteSchedule("budget-1", "monthly-rent");
     await expect(

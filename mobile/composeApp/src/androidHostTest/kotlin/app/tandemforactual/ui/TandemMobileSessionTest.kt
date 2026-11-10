@@ -4,6 +4,7 @@ import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.data.store.BudgetSyncRemoteException
 import app.tandemforactual.data.store.LocalBudgetMutationOutboxItem
 import app.tandemforactual.data.store.LocalBudgetMutationQueueSnapshot
 import kotlinx.coroutines.runBlocking
@@ -34,7 +35,7 @@ class TandemMobileSessionTest {
             TandemApiException("database trace: private detail", httpStatus = 503).userFacingMessage("fallback"),
         )
         assertEquals(
-            "Check the details and try again.",
+            "Tandem rejected the request. Check the details and try again.",
             TandemApiException("raw validation detail", httpStatus = 422).userFacingMessage("fallback"),
         )
         assertEquals(
@@ -53,15 +54,16 @@ class TandemMobileSessionTest {
         val messages =
             listOf(
                 "sign_in_required" to (null to "Sign in to open a budget."),
-                "invalid_credentials" to (null to "The password didn’t match this Actual server."),
+                "invalid_credentials" to (null to "The password didn’t match this Actual server. Check it and try again."),
                 "invalid_device_credential" to (null to "Sign in again to restore access."),
                 "bank_sync_failed" to (null to "Actual couldn’t sync your bank transactions. Check the bank connection and try again."),
                 "bank_sync_busy" to (null to "Bank sync is already running. Try again shortly."),
                 "duplicate_imported_id" to (null to "Two statement rows share a reference. Choose a column with unique values."),
-                "actual_operation_failed" to (null to "Actual couldn’t save this change. Check the details and try again."),
+                "actual_operation_failed" to (null to "Actual couldn’t complete this change. Check the Actual connection and try again."),
                 "operation_uncertain" to
                     (null to "Tandem couldn’t confirm whether Actual saved this change. Check Actual, then try again."),
-                "operation_in_progress" to (null to "The server is still processing this change. Wait a moment, then try again."),
+                "operation_in_progress" to (null to "Tandem is still processing this change. Wait a moment, then try again."),
+                "schedule_changed" to (409 to "The scheduled transaction changed in Actual. Refresh the schedule, then try again."),
                 "operation_rejected" to (null to "Actual rejected this change earlier. Refresh the budget, then try again."),
                 "idempotency_key_reused" to
                     (null to "Tandem matched this change to a different request. Refresh the budget, then try again."),
@@ -81,13 +83,93 @@ class TandemMobileSessionTest {
     }
 
     @Test
+    fun signInAndSyncShareOutageMessagesAndOnlyNamePasswordsForCredentialFailures() {
+        val fallback = "fallback"
+        val sharedOutages =
+            listOf(
+                "network-error" to (null to "Couldn’t reach Tandem at this address. Check the address and connection."),
+                "http-404" to (404 to "Tandem’s API route couldn’t be reached. Check the address and the proxy’s /api/v1/ route."),
+                "http-400" to (400 to "Tandem rejected the request. Check the details and try again."),
+                "http-422" to (422 to "Tandem rejected the request. Check the details and try again."),
+                "http-408" to (408 to "Tandem couldn’t complete the request. Wait a moment, then try again."),
+                "http-429" to (429 to "Tandem couldn’t complete the request. Wait a moment, then try again."),
+                "http-500" to (500 to "Tandem is temporarily unavailable. Try again shortly."),
+                "http-502" to (502 to "Tandem is temporarily unavailable. Try again shortly."),
+                "http-503" to (503 to "Tandem is temporarily unavailable. Try again shortly."),
+                "http-504" to (504 to "Tandem is temporarily unavailable. Try again shortly."),
+                "actual_unavailable" to (503 to "Tandem can’t reach Actual. Check the Actual connection, then try again."),
+            )
+
+        sharedOutages.forEach { (code, expected) ->
+            val signIn = apiFailureMessage(code, expected.first, ApiFailureContext.SIGN_IN, fallback)
+            val sync = apiFailureMessage(code, expected.first, ApiFailureContext.SYNC, fallback)
+            assertEquals(expected.second, signIn, "sign-in: $code")
+            assertEquals(signIn, sync, "sync: $code")
+            assertFalse(signIn.contains("password", ignoreCase = true), code)
+        }
+        assertEquals(
+            "Tandem is temporarily unavailable. Try again shortly.",
+            apiFailureMessage("http-503", null, ApiFailureContext.SYNC, fallback),
+        )
+
+        val thrownNetwork =
+            TandemApiException("network-error", cause = IllegalStateException("private host details"))
+                .userFacingMessage(fallback, ApiFailureContext.SIGN_IN)
+        assertEquals("Couldn’t reach Tandem at this address. Check the address and connection.", thrownNetwork)
+        assertFalse(thrownNetwork.contains("private host details"))
+
+        val unauthorizedSignIn = apiFailureMessage("http-401", 401, ApiFailureContext.SIGN_IN, fallback)
+        val unauthorizedSync = apiFailureMessage("http-401", 401, ApiFailureContext.SYNC, fallback)
+        assertTrue(unauthorizedSignIn.contains("Sign in again"))
+        assertTrue(unauthorizedSync.contains("Sign in again"))
+        assertFalse(unauthorizedSignIn.contains("password", ignoreCase = true))
+        assertFalse(unauthorizedSync.contains("password", ignoreCase = true))
+
+        val forbiddenSignIn = apiFailureMessage("http-403", 403, ApiFailureContext.SIGN_IN, fallback)
+        val forbiddenSync = apiFailureMessage("http-403", 403, ApiFailureContext.SYNC, fallback)
+        assertTrue(forbiddenSignIn.contains("Ask the budget owner"))
+        assertTrue(forbiddenSync.contains("Ask the budget owner"))
+        assertFalse(forbiddenSignIn.contains("password", ignoreCase = true))
+        assertFalse(forbiddenSync.contains("password", ignoreCase = true))
+
+        assertEquals(
+            "This budget is no longer available. Choose another budget.",
+            apiFailureMessage("not_found", 404, ApiFailureContext.SYNC, fallback),
+        )
+        assertEquals(
+            "This item is no longer available. Refresh the budget and try again.",
+            apiFailureMessage("not_found", 404, ApiFailureContext.GENERAL, fallback),
+        )
+        assertEquals(
+            "Tandem has no saved status for this edit. Try again, or check Actual before removing it.",
+            apiFailureMessage("operation_not_found", 404, ApiFailureContext.SYNC, fallback),
+        )
+        assertFalse(TandemApiException("http-404", 404).indicatesTandemReachable())
+        assertTrue(TandemApiException("not_found", 404).indicatesTandemReachable())
+        assertFalse(BudgetSyncRemoteException("http-404", 404).indicatesTandemReachable())
+        assertTrue(BudgetSyncRemoteException("not_found", 404).indicatesTandemReachable())
+
+        assertEquals(
+            "The password didn’t match this Actual server. Check it and try again.",
+            apiFailureMessage("invalid_credentials", 401, ApiFailureContext.SIGN_IN, fallback),
+        )
+        assertEquals(
+            "That budget password didn’t unlock this budget. Check it and try again.",
+            apiFailureMessage("invalid_budget_password", 422, ApiFailureContext.SYNC, fallback),
+        )
+        assertFalse(
+            apiFailureMessage("http-422", 422, ApiFailureContext.SYNC, fallback).contains("password", ignoreCase = true),
+        )
+    }
+
+    @Test
     fun mapsEveryBudgetMutationConflictCodeToItsRecoveryActionAndMessage() {
         val cases =
             mapOf(
                 "operation_in_progress" to
                     (
                         BudgetMutationFailureDisposition.OPERATION_IN_PROGRESS to
-                            "The server is still processing this change. Wait a moment, then try again."
+                            "Tandem is still processing this change. Wait a moment, then try again."
                     ),
                 "operation_uncertain" to
                     (
@@ -171,15 +253,28 @@ class TandemMobileSessionTest {
 
     @Test
     fun uncertainWriteScreenOffersRecoveryActionsOnlyAfterASettledStatusResponse() {
-        assertFalse(canOfferUncertainWriteRecoveryActions("uncertain", statusCheckSucceeded = false))
-        assertTrue(canOfferUncertainWriteRecoveryActions("uncertain", statusCheckSucceeded = true))
-        assertTrue(canOfferUncertainWriteRecoveryActions("queued", statusCheckSucceeded = true))
-        assertFalse(canOfferUncertainWriteRecoveryActions("committed", statusCheckSucceeded = true))
-        assertFalse(canOfferUncertainWriteRecoveryActions("conflict", statusCheckSucceeded = true))
+        assertFalse(canOfferUncertainWriteRecoveryActions("uncertain", statusCheckAttempted = false))
+        assertTrue(canOfferUncertainWriteRecoveryActions("uncertain", statusCheckAttempted = true))
+        assertTrue(canOfferUncertainWriteRecoveryActions("queued", statusCheckAttempted = true))
+        assertFalse(canOfferUncertainWriteRecoveryActions("committed", statusCheckAttempted = true))
+        assertFalse(canOfferUncertainWriteRecoveryActions("conflict", statusCheckAttempted = true))
+        assertTrue(isUncertainWriteOperationNotFound("operation_not_found"))
+        assertFalse(isUncertainWriteOperationNotFound("http-404"))
 
         val warning = uncertainWriteRemovalWarning("Walgreens", "$108.14")
         assertTrue(warning.contains("Actual may already have saved it"))
         assertTrue(warning.contains("won’t undo a change already stored there"))
+    }
+
+    @Test
+    fun discardingAnUncertainWriteDoesNotClaimActualWasUnchanged() {
+        val message = discardedPendingWriteMessage("uncertain")
+
+        assertTrue(message.contains("removed from this device"))
+        assertTrue(message.contains("Actual may already have saved it"))
+        assertTrue(message.contains("doesn’t undo it"))
+        assertFalse(message.contains("Actual wasn’t changed"))
+        assertTrue(discardedPendingWriteMessage("queued").contains("Actual wasn’t changed"))
     }
 
     @Test
@@ -370,6 +465,145 @@ class TandemMobileSessionTest {
                 ),
             )
             assertTrue(session.transactionWriteMessage.orEmpty().startsWith("Largest amount is"))
+        }
+
+    @Test
+    fun newAndEditedTransactionWritesShareDateBoundsBeforeStorageAccess() =
+        runBlocking {
+            val session =
+                TandemMobileSession(
+                    apiClient = TandemApiClient(),
+                    database = null,
+                    nowEpochMillis = { 0L },
+                    currentDateIso = { "2026-11-10" },
+                )
+
+            assertFalse(
+                session.createTransaction(
+                    "budget-1",
+                    "account-1",
+                    null,
+                    null,
+                    "1.00",
+                    "1990-01-01",
+                    "note",
+                    null,
+                ),
+            )
+            assertEquals("Choose a date on or after ${displayTransactionDate("1995-01-01")}.", session.transactionWriteMessage)
+
+            assertFalse(
+                session.updateTransaction(
+                    budgetId = "budget-1",
+                    transactionId = "transaction-1",
+                    amountText = "1.00",
+                    notes = "note",
+                    originalAmountMinor = -100,
+                    transactionType = "Spending",
+                    accountId = "account-1",
+                    date = "1990-01-01",
+                    updateDetails = true,
+                ),
+            )
+            assertEquals("Choose a date on or after ${displayTransactionDate("1995-01-01")}.", session.transactionWriteMessage)
+
+            assertFalse(
+                session.createTransaction(
+                    "budget-1",
+                    "account-1",
+                    null,
+                    null,
+                    "1.00",
+                    "2031-11-11",
+                    "note",
+                    null,
+                ),
+            )
+            assertEquals(
+                "Choose a date within five years of today. Later dates are blocked to catch year typos.",
+                session.transactionWriteMessage,
+            )
+
+            assertFalse(
+                session.updateTransaction(
+                    budgetId = "budget-1",
+                    transactionId = "transaction-1",
+                    amountText = "1.00",
+                    notes = "note",
+                    originalAmountMinor = -100,
+                    transactionType = "Spending",
+                    accountId = "account-1",
+                    date = "2031-11-11",
+                    updateDetails = true,
+                ),
+            )
+            assertEquals(
+                "Choose a date within five years of today. Later dates are blocked to catch year typos.",
+                session.transactionWriteMessage,
+            )
+
+            for (create in listOf(true, false)) {
+                if (create) {
+                    assertFalse(
+                        session.createTransaction(
+                            "budget-1",
+                            "account-1",
+                            null,
+                            null,
+                            "1.00",
+                            "2027-11-11",
+                            "note",
+                            null,
+                        ),
+                    )
+                } else {
+                    assertFalse(
+                        session.updateTransaction(
+                            budgetId = "budget-1",
+                            transactionId = "transaction-1",
+                            amountText = "1.00",
+                            notes = "note",
+                            originalAmountMinor = -100,
+                            transactionType = "Spending",
+                            accountId = "account-1",
+                            date = "2027-11-11",
+                            updateDetails = true,
+                        ),
+                    )
+                }
+                assertEquals("Confirm this future date before saving.", session.transactionWriteMessage)
+            }
+
+            assertFalse(
+                session.createTransaction(
+                    "budget-1",
+                    "account-1",
+                    null,
+                    null,
+                    "1.00",
+                    "2027-11-11",
+                    "note",
+                    null,
+                    confirmedFutureDate = "2027-11-11",
+                ),
+            )
+            assertEquals("Budget data isn’t available on this device. Reopen the budget and try again.", session.transactionWriteMessage)
+
+            assertFalse(
+                session.updateTransaction(
+                    budgetId = "budget-1",
+                    transactionId = "transaction-1",
+                    amountText = "1.00",
+                    notes = "note",
+                    originalAmountMinor = -100,
+                    transactionType = "Spending",
+                    accountId = "account-1",
+                    date = "2027-11-11",
+                    updateDetails = true,
+                    confirmedFutureDate = "2027-11-11",
+                ),
+            )
+            assertEquals("Budget data isn’t available on this device. Reopen the budget and try again.", session.transactionWriteMessage)
         }
 
     @Test

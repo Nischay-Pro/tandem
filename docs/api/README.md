@@ -107,9 +107,21 @@ projection of budget records, including records from encrypted budgets. Device
 Room caches also contain readable data. Neither the Actual password nor session
 token is sent to mobile devices.
 
-Startup logs include application-controlled configuration and migration-history
-messages. PostgreSQL driver errors and other unexpected failures log only their
-error type, so connection strings and credentials are not copied into logs.
+Each API response includes an `X-Request-ID`. The API writes one JSON request log
+with that ID, the method, route template, status, and duration. It does not log
+request headers, query values, or bodies. Direct `409` and `5xx` responses add
+their structured error code; unexpected exceptions also include their message
+and stack in the server log. Protect server logs as operational data and do not
+publish them with user-facing diagnostics.
+
+Startup failures use distinct process exit codes:
+
+| Exit code | Meaning                                                              |
+| --------- | -------------------------------------------------------------------- |
+| `1`       | Unexpected API startup, listener, or shutdown failure.               |
+| `2`       | Invalid configuration.                                               |
+| `3`       | PostgreSQL connection, migration, or write-journal recovery failure. |
+| `4`       | Actual Budget session startup failure.                               |
 
 The budget snapshot and change endpoints use the same device scope and may also
 receive `X-Budget-Encryption-Password` for an encrypted budget. Actual's public

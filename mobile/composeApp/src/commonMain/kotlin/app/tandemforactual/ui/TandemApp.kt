@@ -891,7 +891,7 @@ fun TandemApp(
             }
         }
     }
-    val saveTransaction: ((Boolean) -> Unit) -> Unit = { onComplete ->
+    val saveTransaction: (String?, (Boolean) -> Unit) -> Unit = { confirmedFutureDate, onComplete ->
         val transactionId = state.selectedTransactionRecordId
         val originalAmount = state.selectedTransactionAmountMinor
         if (!state.readOnlyMode && transactionId.isNotBlank() && originalAmount != null && !mobileSession.isSavingTransaction) {
@@ -910,6 +910,7 @@ fun TandemApp(
                         transactionType = state.transactionType,
                         displaySettings = state.budgetDisplaySettings,
                         updateDetails = true,
+                        confirmedFutureDate = confirmedFutureDate,
                     )
                 if (saved) {
                     val amount = state.parseAmountMinorUnits(state.transactionAmount) ?: kotlin.math.abs(originalAmount)
@@ -939,7 +940,7 @@ fun TandemApp(
             onComplete(false)
         }
     }
-    val createTransaction: () -> Unit = {
+    val createTransaction: (String?) -> Unit = { confirmedFutureDate ->
         if (!state.readOnlyMode && !mobileSession.isSavingTransaction) {
             val enteredAmount = state.parseAmountMinorUnits(state.transactionAmount)
             val signedAmountText =
@@ -960,6 +961,7 @@ fun TandemApp(
                         encryptionPassword = state.encryptedPassword.takeIf { it.isNotBlank() },
                         displaySettings = state.budgetDisplaySettings,
                         isTransfer = state.transactionType == "Transfer",
+                        confirmedFutureDate = confirmedFutureDate,
                     )
                 if (created) {
                     restoreTransactionFormBaseline(state, AppRoute.NEW_TRANSACTION)

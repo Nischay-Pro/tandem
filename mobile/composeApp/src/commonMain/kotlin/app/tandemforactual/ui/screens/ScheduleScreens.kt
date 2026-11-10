@@ -626,6 +626,7 @@ internal fun UpcomingSchedulesScreen(
                                             "post",
                                             null,
                                             state.encryptedPassword.takeIf { it.isNotBlank() },
+                                            expectedNextDate = selectedSchedule.nextDate,
                                         )
                                     if (posted) showScheduleEditor = false
                                 }
@@ -647,6 +648,7 @@ internal fun UpcomingSchedulesScreen(
                                                 "skip",
                                                 null,
                                                 state.encryptedPassword.takeIf { it.isNotBlank() },
+                                                expectedNextDate = selectedSchedule.nextDate,
                                             )
                                         if (skipped) showScheduleEditor = false
                                     }

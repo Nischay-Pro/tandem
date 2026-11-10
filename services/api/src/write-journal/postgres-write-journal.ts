@@ -76,7 +76,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
 
     return withTransaction(this.pool, async (client) => {
       const inserted = await client.query<OperationRow>(
-        `INSERT INTO companion_operations (
+        `INSERT INTO tandem_operations (
           operation_id, principal_id, budget_id, idempotency_key, request_hash,
           entity_type, action, entity_id, base_revision, base_snapshot, patch, status
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb, 'queued')
@@ -102,7 +102,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
       }
 
       const matches = await client.query<OperationRow>(
-        `SELECT * FROM companion_operations
+        `SELECT * FROM tandem_operations
         WHERE (principal_id = $1 AND budget_id = $2 AND idempotency_key = $3)
           OR operation_id = $4
         FOR UPDATE`,
@@ -148,7 +148,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
   async get(operationId: string): Promise<WriteOperation | undefined> {
     validateUuid("operationId", operationId);
     const result = await this.pool.query<OperationRow>(
-      "SELECT * FROM companion_operations WHERE operation_id = $1",
+      "SELECT * FROM tandem_operations WHERE operation_id = $1",
       [operationId],
     );
     const row = result.rows[0];
@@ -160,7 +160,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
   ): Promise<OperationConflict | undefined> {
     validateUuid("operationId", operationId);
     const result = await this.pool.query<ConflictRow>(
-      "SELECT * FROM companion_operation_conflicts WHERE operation_id = $1",
+      "SELECT * FROM tandem_operation_conflicts WHERE operation_id = $1",
       [operationId],
     );
     const row = result.rows[0];
@@ -171,7 +171,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
     validateUuid("operationId", operationId);
     return withTransaction(this.pool, async (client) => {
       const result = await client.query<OperationRow>(
-        `UPDATE companion_operations
+        `UPDATE tandem_operations
         SET status = 'applying',
             attempt_count = attempt_count + 1,
             error_code = NULL,
@@ -198,7 +198,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
   async renewLease(operationId: string): Promise<boolean> {
     validateUuid("operationId", operationId);
     const result = await this.pool.query(
-      `UPDATE companion_operations
+      `UPDATE tandem_operations
       SET lease_expires_at = clock_timestamp() + ($2 * interval '1 second'),
           updated_at = clock_timestamp()
       WHERE operation_id = $1 AND status = 'applying'
@@ -216,7 +216,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
     validateErrorCode(errorCode);
     return withTransaction(this.pool, async (client) => {
       const result = await client.query<OperationRow>(
-        `UPDATE companion_operations
+        `UPDATE tandem_operations
         SET status = 'queued', error_code = $2, completed_at = NULL,
             lease_expires_at = NULL, updated_at = clock_timestamp()
         WHERE operation_id = $1 AND status = 'applying'
@@ -255,7 +255,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
       "rejected",
       async (client) => {
         const result = await client.query<OperationRow>(
-          `UPDATE companion_operations
+          `UPDATE tandem_operations
           SET status = 'rejected', error_code = $2,
               actual_result = NULL, completed_at = clock_timestamp(),
               updated_at = clock_timestamp(), lease_expires_at = NULL
@@ -280,7 +280,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
       "committed",
       async (client) => {
         const result = await client.query<OperationRow>(
-          `UPDATE companion_operations
+          `UPDATE tandem_operations
         SET status = 'committed', actual_result = $2::jsonb,
             error_code = NULL, completed_at = clock_timestamp(),
             updated_at = clock_timestamp(), lease_expires_at = NULL
@@ -308,7 +308,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
       "uncertain",
       async (client) => {
         const result = await client.query<OperationRow>(
-          `UPDATE companion_operations
+          `UPDATE tandem_operations
         SET status = 'uncertain', error_code = $2,
             actual_result = COALESCE($3::jsonb, actual_result),
             completed_at = clock_timestamp(), updated_at = clock_timestamp(),
@@ -337,7 +337,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
         : canonicalJson(verifiedWriteEvidence);
     return withTransaction(this.pool, async (client) => {
       const result = await client.query<OperationRow>(
-        `UPDATE companion_operations
+        `UPDATE tandem_operations
         SET status = 'queued', error_code = 'actual-readback-not-applied',
             actual_result = NULL,
             completed_at = NULL, lease_expires_at = NULL,
@@ -407,7 +407,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
           }
         }
         const result = await client.query<OperationRow>(
-          `UPDATE companion_operations
+          `UPDATE tandem_operations
           SET status = 'committed', actual_result = $2::jsonb,
               error_code = NULL, completed_at = clock_timestamp(),
               updated_at = clock_timestamp(), lease_expires_at = NULL
@@ -443,7 +443,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
 
       if (operation.status === "applying") {
         await client.query(
-          `INSERT INTO companion_operation_conflicts (
+          `INSERT INTO tandem_operation_conflicts (
             conflict_id, operation_id, conflict_type, base_snapshot,
             local_patch, remote_snapshot, conflicting_fields
           ) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7)
@@ -461,7 +461,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
       }
 
       const conflictResult = await client.query<ConflictRow>(
-        "SELECT * FROM companion_operation_conflicts WHERE operation_id = $1 FOR UPDATE",
+        "SELECT * FROM tandem_operation_conflicts WHERE operation_id = $1 FOR UPDATE",
         [operationId],
       );
       const storedConflict = conflictResult.rows[0];
@@ -474,7 +474,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
 
       if (operation.status === "applying") {
         await client.query(
-          `UPDATE companion_operations
+          `UPDATE tandem_operations
           SET status = 'conflict', error_code = 'conflict-detected',
               completed_at = clock_timestamp(), updated_at = clock_timestamp(),
               lease_expires_at = NULL
@@ -488,7 +488,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
 
   async expireLeases(): Promise<number> {
     const result = await this.pool.query(
-      `UPDATE companion_operations
+      `UPDATE tandem_operations
       SET status = 'uncertain', error_code = 'claim-lease-expired',
           completed_at = clock_timestamp(), updated_at = clock_timestamp(),
           lease_expires_at = NULL
@@ -507,7 +507,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
       const result = await this.pool.query(
         `WITH expired AS (
           SELECT operation_id
-          FROM companion_operations
+          FROM tandem_operations
           WHERE status IN ('committed', 'rejected')
             AND entity_type <> 'budget-maintenance'
             AND completed_at <= clock_timestamp() - ($1 * interval '1 day')
@@ -516,7 +516,7 @@ export class PostgresWriteJournal implements DurableWriteJournal {
           LIMIT $2
           FOR UPDATE SKIP LOCKED
         )
-        UPDATE companion_operations AS operation
+        UPDATE tandem_operations AS operation
         SET base_snapshot = '{}'::jsonb,
             patch = '{}'::jsonb,
             actual_result = NULL,
@@ -607,7 +607,7 @@ async function selectOperation(
   forUpdate = false,
 ): Promise<OperationRow | undefined> {
   const result = await client.query<OperationRow>(
-    `SELECT * FROM companion_operations WHERE operation_id = $1${forUpdate ? " FOR UPDATE" : ""}`,
+    `SELECT * FROM tandem_operations WHERE operation_id = $1${forUpdate ? " FOR UPDATE" : ""}`,
     [operationId],
   );
   return result.rows[0];

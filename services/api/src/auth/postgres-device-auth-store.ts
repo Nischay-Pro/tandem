@@ -24,7 +24,7 @@ export class PostgresDeviceAuthStore implements DeviceAuthStore {
     credentialHash: string;
   }): Promise<DeviceRecord> {
     const result = await this.pool.query<DeviceRow>(
-      `INSERT INTO companion_devices (
+      `INSERT INTO tandem_devices (
         device_id, principal_id, device_name, credential_hash, budget_ids
       ) VALUES ($1, $2, $3, $4, $5)
       RETURNING device_id, principal_id, device_name, budget_ids,
@@ -50,7 +50,7 @@ export class PostgresDeviceAuthStore implements DeviceAuthStore {
         created_at, last_seen_at, revoked_at,
         (last_seen_at IS NULL OR last_seen_at <=
           clock_timestamp() - interval '1 minute') AS should_refresh_last_seen
-      FROM companion_devices
+      FROM tandem_devices
       WHERE credential_hash = $1 AND revoked_at IS NULL
         AND COALESCE(last_seen_at, created_at) >
           clock_timestamp() - ($2::int * interval '1 day')`,
@@ -61,7 +61,7 @@ export class PostgresDeviceAuthStore implements DeviceAuthStore {
     if (!row.should_refresh_last_seen) return mapDeviceRow(row);
 
     const refreshed = await this.pool.query<DeviceRow>(
-      `UPDATE companion_devices
+      `UPDATE tandem_devices
       SET last_seen_at = clock_timestamp()
       WHERE device_id = $1 AND credential_hash = $2 AND revoked_at IS NULL
         AND COALESCE(last_seen_at, created_at) >
@@ -80,7 +80,7 @@ export class PostgresDeviceAuthStore implements DeviceAuthStore {
     const current = await this.pool.query<DeviceRow>(
       `SELECT device_id, principal_id, device_name, budget_ids,
         created_at, last_seen_at, revoked_at
-      FROM companion_devices
+      FROM tandem_devices
       WHERE device_id = $1 AND credential_hash = $2 AND revoked_at IS NULL
         AND COALESCE(last_seen_at, created_at) >
           clock_timestamp() - ($3::int * interval '1 day')`,
@@ -94,7 +94,7 @@ export class PostgresDeviceAuthStore implements DeviceAuthStore {
     const result = await this.pool.query<DeviceRow>(
       `SELECT device_id, principal_id, device_name, budget_ids,
         created_at, last_seen_at, revoked_at
-      FROM companion_devices
+      FROM tandem_devices
       WHERE principal_id = $1
       ORDER BY created_at, device_id`,
       [principalId],
@@ -104,7 +104,7 @@ export class PostgresDeviceAuthStore implements DeviceAuthStore {
 
   async revokeDevice(principalId: string, deviceId: string): Promise<boolean> {
     const result = await this.pool.query(
-      `UPDATE companion_devices
+      `UPDATE tandem_devices
       SET revoked_at = clock_timestamp()
       WHERE principal_id = $1 AND device_id = $2 AND revoked_at IS NULL
       RETURNING device_id`,

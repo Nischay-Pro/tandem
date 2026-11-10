@@ -480,12 +480,12 @@ describe.skipIf(!compatibilityTestEnabled)(
         const authorizationHeaders = {
           authorization: `Bearer ${compatibilityToken}`,
         };
-        const companionTransactionId = `tandem:${randomUUID()}`;
+        const tandemTransactionId = `tandem:${randomUUID()}`;
         const maxAmountTransactionId = `tandem:${randomUUID()}`;
         const followupTransactionId = `tandem:${randomUUID()}`;
         const minimumDateTransactionId = `tandem:${randomUUID()}`;
         const createOperationId = randomUUID();
-        const companionTransactionPath = `/api/v1/budgets/${budget.groupId}/transactions/${encodeURIComponent(companionTransactionId)}`;
+        const tandemTransactionPath = `/api/v1/budgets/${budget.groupId}/transactions/${encodeURIComponent(tandemTransactionId)}`;
         try {
           const scheduleEditResponse = await reconciliationApp.inject({
             method: "POST",
@@ -540,10 +540,10 @@ describe.skipIf(!compatibilityTestEnabled)(
               ...authorizationHeaders,
               "idempotency-key": `compat-category-group-create-${randomUUID()}`,
             },
-            payload: { name: "ABC companion category group", isIncome: false },
+            payload: { name: "ABC tandem category group", isIncome: false },
           });
           expect(createGroupResponse.statusCode).toBe(200);
-          const companionGroupId = createGroupResponse.json()
+          const tandemGroupId = createGroupResponse.json()
             .categoryGroupId as string;
           const destinationGroupResponse = await reconciliationApp.inject({
             method: "POST",
@@ -553,7 +553,7 @@ describe.skipIf(!compatibilityTestEnabled)(
               "idempotency-key": `compat-category-group-destination-${randomUUID()}`,
             },
             payload: {
-              name: "ABC companion destination group",
+              name: "ABC tandem destination group",
               isIncome: false,
             },
           });
@@ -568,21 +568,21 @@ describe.skipIf(!compatibilityTestEnabled)(
               "idempotency-key": `compat-category-create-${randomUUID()}`,
             },
             payload: {
-              name: "ABC companion category",
-              categoryGroupId: companionGroupId,
+              name: "ABC tandem category",
+              categoryGroupId: tandemGroupId,
             },
           });
           expect(createCategoryResponse.statusCode).toBe(200);
-          const companionCategoryId = createCategoryResponse.json()
+          const tandemCategoryId = createCategoryResponse.json()
             .categoryId as string;
           const renameGroupResponse = await reconciliationApp.inject({
             method: "PATCH",
-            url: `/api/v1/budgets/${budget.groupId}/category-groups/${encodeURIComponent(companionGroupId)}`,
+            url: `/api/v1/budgets/${budget.groupId}/category-groups/${encodeURIComponent(tandemGroupId)}`,
             headers: {
               ...authorizationHeaders,
               "idempotency-key": `compat-category-group-rename-${randomUUID()}`,
             },
-            payload: { action: "rename", name: "ABC companion group renamed" },
+            payload: { action: "rename", name: "ABC tandem group renamed" },
           });
           expect(
             renameGroupResponse.statusCode,
@@ -590,7 +590,7 @@ describe.skipIf(!compatibilityTestEnabled)(
           ).toBe(200);
           const moveGroupResponse = await reconciliationApp.inject({
             method: "PATCH",
-            url: `/api/v1/budgets/${budget.groupId}/category-groups/${encodeURIComponent(companionGroupId)}`,
+            url: `/api/v1/budgets/${budget.groupId}/category-groups/${encodeURIComponent(tandemGroupId)}`,
             headers: {
               ...authorizationHeaders,
               "idempotency-key": `compat-category-group-move-${randomUUID()}`,
@@ -600,7 +600,7 @@ describe.skipIf(!compatibilityTestEnabled)(
           expect(moveGroupResponse.statusCode).toBe(200);
           const moveCategoryResponse = await reconciliationApp.inject({
             method: "POST",
-            url: `/api/v1/budgets/${budget.groupId}/categories/${encodeURIComponent(companionCategoryId)}/actions`,
+            url: `/api/v1/budgets/${budget.groupId}/categories/${encodeURIComponent(tandemCategoryId)}/actions`,
             headers: {
               ...authorizationHeaders,
               "idempotency-key": `compat-category-move-${randomUUID()}`,
@@ -610,7 +610,7 @@ describe.skipIf(!compatibilityTestEnabled)(
           expect(moveCategoryResponse.statusCode).toBe(200);
           const moveAcrossGroupsResponse = await reconciliationApp.inject({
             method: "POST",
-            url: `/api/v1/budgets/${budget.groupId}/categories/${encodeURIComponent(companionCategoryId)}/actions`,
+            url: `/api/v1/budgets/${budget.groupId}/categories/${encodeURIComponent(tandemCategoryId)}/actions`,
             headers: {
               ...authorizationHeaders,
               "idempotency-key": `compat-category-move-group-${randomUUID()}`,
@@ -627,7 +627,7 @@ describe.skipIf(!compatibilityTestEnabled)(
           ]) {
             const response = await reconciliationApp.inject({
               method: "POST",
-              url: `/api/v1/budgets/${budget.groupId}/categories/${encodeURIComponent(companionCategoryId)}/actions`,
+              url: `/api/v1/budgets/${budget.groupId}/categories/${encodeURIComponent(tandemCategoryId)}/actions`,
               headers: {
                 ...authorizationHeaders,
                 "idempotency-key": idempotencyKey,
@@ -642,7 +642,7 @@ describe.skipIf(!compatibilityTestEnabled)(
           ]) {
             const response = await reconciliationApp.inject({
               method: "PATCH",
-              url: `/api/v1/budgets/${budget.groupId}/category-groups/${encodeURIComponent(companionGroupId)}`,
+              url: `/api/v1/budgets/${budget.groupId}/category-groups/${encodeURIComponent(tandemGroupId)}`,
               headers: {
                 ...authorizationHeaders,
                 "idempotency-key": idempotencyKey,
@@ -651,24 +651,24 @@ describe.skipIf(!compatibilityTestEnabled)(
             });
             expect(response.statusCode).toBe(200);
           }
-          const companionGroup = await firstDevice.runBudget(
+          const tandemGroup = await firstDevice.runBudget(
             budget.groupId,
             async () =>
               (await Actual.getCategoryGroups()).find(
-                ({ id }) => id === companionGroupId,
+                ({ id }) => id === tandemGroupId,
               ),
           );
-          const companionCategory = await firstDevice.runBudget(
+          const tandemCategory = await firstDevice.runBudget(
             budget.groupId,
             async () =>
               (await Actual.getCategories()).find(
-                ({ id }) => id === companionCategoryId,
+                ({ id }) => id === tandemCategoryId,
               ),
           );
-          expect(companionGroup?.name).toBe("ABC companion group renamed");
-          expect(companionGroup?.hidden).toBe(false);
-          expect(companionCategory?.hidden).toBe(false);
-          expect(companionCategory?.group_id).toBe(destinationGroupId);
+          expect(tandemGroup?.name).toBe("ABC tandem group renamed");
+          expect(tandemGroup?.hidden).toBe(false);
+          expect(tandemCategory?.hidden).toBe(false);
+          expect(tandemCategory?.group_id).toBe(destinationGroupId);
           const defaultCategoryResponse = await reconciliationApp.inject({
             method: "POST",
             url: `/api/v1/budgets/${budget.groupId}/payees/${encodeURIComponent(schedulePayeeId)}/actions`,
@@ -783,7 +783,7 @@ describe.skipIf(!compatibilityTestEnabled)(
 
           const createResponse = await reconciliationApp.inject({
             method: "POST",
-            url: `${companionTransactionPath}/operations`,
+            url: `${tandemTransactionPath}/operations`,
             headers: {
               authorization: `Bearer ${compatibilityToken}`,
               "idempotency-key": `compat-create-${createOperationId}`,
@@ -797,7 +797,7 @@ describe.skipIf(!compatibilityTestEnabled)(
                 date: transactionDate,
                 payee: null,
                 category: categoryId,
-                notes: "Created through Companion",
+                notes: "Created through Tandem",
                 cleared: false,
               },
             },
@@ -805,23 +805,23 @@ describe.skipIf(!compatibilityTestEnabled)(
           expect(createResponse.statusCode).toBe(200);
           expect(createResponse.json().operation).toMatchObject({
             action: "create",
-            transactionId: companionTransactionId,
+            transactionId: tandemTransactionId,
             status: "committed",
           });
 
-          const companionRead = await reconciliationApp.inject({
+          const tandemRead = await reconciliationApp.inject({
             method: "GET",
-            url: companionTransactionPath,
+            url: tandemTransactionPath,
             headers: authorizationHeaders,
           });
-          expect(companionRead.statusCode).toBe(200);
-          expect(companionRead.json().transaction).toMatchObject({
-            id: companionTransactionId,
+          expect(tandemRead.statusCode).toBe(200);
+          expect(tandemRead.json().transaction).toMatchObject({
+            id: tandemTransactionId,
             account: initialData.accountId,
             amount: -777,
             date: transactionDate,
             category: categoryId,
-            notes: "Created through Companion",
+            notes: "Created through Tandem",
             importedId: null,
           });
 
@@ -840,12 +840,12 @@ describe.skipIf(!compatibilityTestEnabled)(
               .records.find(
                 (record: { type: string; id: string }) =>
                   record.type === "transaction" &&
-                  record.id === companionTransactionId,
+                  record.id === tandemTransactionId,
               ),
           ).toMatchObject({
             type: "transaction",
-            id: companionTransactionId,
-            body: { id: companionTransactionId, importedId: null },
+            id: tandemTransactionId,
+            body: { id: tandemTransactionId, importedId: null },
           });
 
           const submitCreate = async (
@@ -1010,7 +1010,7 @@ describe.skipIf(!compatibilityTestEnabled)(
               budget.groupId,
               async () => {
                 for (const stableId of [
-                  companionTransactionId,
+                  tandemTransactionId,
                   maxAmountTransactionId,
                   followupTransactionId,
                   minimumDateTransactionId,

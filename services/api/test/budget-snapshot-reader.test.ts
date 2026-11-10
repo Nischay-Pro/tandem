@@ -364,7 +364,7 @@ describe("Actual budget snapshot reader", () => {
     expect(monthRecords.map(({ id }) => id).sort()).toEqual([...months].sort());
   });
 
-  it("publishes Companion-created rows with their stable ID, not Actual's random ID", async () => {
+  it("publishes Tandem-created rows with their stable ID, not Actual's random ID", async () => {
     const stableId = "tandem:8c88495a-65d9-4531-8392-93bff2c65374";
     const fake = createApi({
       aqlQuery: vi.fn(async () => ({

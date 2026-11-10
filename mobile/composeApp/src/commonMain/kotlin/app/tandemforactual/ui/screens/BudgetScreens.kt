@@ -244,7 +244,7 @@ internal fun BudgetScreen(
                     AnimatedReveal(visible = unknownStatusCount > 0) {
                         AttentionBanner(
                             "Status unknown",
-                            "The server hasn’t confirmed these edits. Check their status.",
+                            "Tandem hasn’t confirmed these edits. Check their status.",
                             "Check status",
                         ) {
                             state.selectedConflictOperationId =

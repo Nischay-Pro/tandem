@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { Writable } from "node:stream";
 import { buildApiApp } from "../src/app.js";
 import {
   ActualPasswordRejectedError,
@@ -38,6 +39,136 @@ function createDeviceAuth(overrides: Record<string, unknown> = {}) {
 }
 
 describe("health routes and OpenAPI", () => {
+  it("returns safe structured framework errors and a request id", async () => {
+    const app = await buildApiApp(
+      {
+        ping: vi.fn<() => Promise<void>>(),
+        close: vi.fn<() => Promise<void>>(),
+      },
+      {
+        deviceAuth: createDeviceAuth(),
+      },
+    );
+
+    const missingRoute = await app.inject({
+      method: "GET",
+      url: "/api/v1/not-a-route",
+    });
+    const unsupportedMedia = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      headers: { "content-type": "text/plain" },
+      payload: "not json",
+    });
+    const malformedJson = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      headers: { "content-type": "application/json" },
+      payload: '{"private":"malformed',
+    });
+    const oversizedBody = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      headers: { "content-type": "application/json" },
+      payload: `{"private":"${"x".repeat(1024 * 1024)}"}`,
+    });
+
+    expect(missingRoute.statusCode).toBe(404);
+    expect(missingRoute.headers["x-request-id"]).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(missingRoute.json()).toEqual({
+      error: {
+        code: "route_not_found",
+        message:
+          "Tandem API route was not found. Check the address and /api/v1/ proxy route.",
+      },
+    });
+    expect(unsupportedMedia.statusCode).toBe(415);
+    expect(unsupportedMedia.json()).toEqual({
+      error: {
+        code: "unsupported_media_type",
+        message: "Send this request as application/json.",
+      },
+    });
+    expect(malformedJson.statusCode).toBe(400);
+    expect(malformedJson.json()).toEqual({
+      error: {
+        code: "invalid_request",
+        message: "Check the request details and try again.",
+      },
+    });
+    expect(malformedJson.body).not.toContain("private");
+    expect(oversizedBody.statusCode).toBe(413);
+    expect(oversizedBody.json()).toEqual({
+      error: {
+        code: "request_too_large",
+        message: "This request is too large. Reduce it and try again.",
+      },
+    });
+    expect(oversizedBody.body).not.toContain("private");
+    await app.close();
+  });
+
+  it("logs an unexpected error once with a request id and never sends its details", async () => {
+    const lines: string[] = [];
+    const stream = new Writable({
+      write(chunk, _encoding, callback) {
+        lines.push(String(chunk));
+        callback();
+      },
+    });
+    const app = await buildApiApp(
+      {
+        ping: vi.fn<() => Promise<void>>(),
+        close: vi.fn<() => Promise<void>>(),
+      },
+      {
+        logger: { level: "info", stream },
+        deviceAuth: createDeviceAuth({
+          authenticate: vi.fn(async () => {
+            throw new Error(
+              "synthetic db host 10.1.2.3 password=private-value",
+            );
+          }),
+        }),
+      },
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/budgets?access_token=must-not-be-logged",
+      headers: { authorization: `Bearer ${testAccessToken}` },
+    });
+    const entries = lines.map(
+      (line) => JSON.parse(line) as Record<string, unknown>,
+    );
+
+    expect(response.statusCode).toBe(500);
+    expect(response.headers["x-request-id"]).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(response.json()).toEqual({
+      error: {
+        code: "internal_error",
+        message: "Tandem couldn’t complete the request. Try again shortly.",
+      },
+    });
+    expect(response.body).not.toContain("10.1.2.3");
+    expect(response.body).not.toContain("private-value");
+    expect(lines).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      requestId: response.headers["x-request-id"],
+      method: "GET",
+      route: "/api/v1/budgets",
+      statusCode: 500,
+      msg: "API request failed",
+    });
+    expect(entries[0]?.durationMs).toEqual(expect.any(Number));
+    expect(lines[0]).toContain(
+      "synthetic db host 10.1.2.3 password=private-value",
+    );
+    expect(lines[0]).not.toContain("must-not-be-logged");
+    expect(lines[0]).not.toContain(testAccessToken);
+    await app.close();
+  });
+
   it("caches Actual sign-in methods briefly without caching the HTTP response", async () => {
     const readActualLoginMethods = vi.fn(async () => ({
       bootstrapped: true,

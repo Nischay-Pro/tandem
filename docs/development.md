@@ -97,9 +97,14 @@ Install the local pre-commit checks once with:
 
 The pre-commit hook checks Prettier formatting and the mobile UI text and
 design-token rules. It runs ESLint when JavaScript or TypeScript files are
-staged, and KtLint when Kotlin files are staged. The pre-push hook runs full
-repository ESLint, formatting, mobile source rules, and KtLint checks. CI
-remains the full verification gate.
+staged. When Kotlin files are staged, it runs KtLint and compiles the shared
+Android sources with `:composeApp:compileAndroidMain` and
+`:composeApp:compileAndroidHostTest`. The pre-push hook runs full repository
+ESLint, TypeScript checks, formatting, mobile source rules, mobile tests and
+coverage gates, Android lint and release assembly, and Kotlin compilation for
+Android and iOS targets. CI on macOS remains responsible for the Xcode app
+build and iOS simulator tests. The hooks detect common Android SDK install
+locations; set `ANDROID_HOME` if yours is elsewhere.
 
 ## Database migrations
 

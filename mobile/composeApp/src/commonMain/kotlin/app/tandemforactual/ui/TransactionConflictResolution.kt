@@ -83,30 +83,30 @@ internal class TransactionConflictResolution(
                 return "This change no longer needs review. Sync the budget to check its latest status."
             }
             if (!sync.confirmConflictWithServer(budgetId, operationId, encryptionPassword)) {
-                return "The server hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."
+                return "Tandem hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."
             }
             val confirmedOperation =
                 store
                     .readPendingWrites(budgetId)
                     .firstOrNull { it.operationId == operationId }
                     ?.takeIf { it.status == "conflict" }
-                    ?: return "The server confirmed the latest budget, but this change no longer needs review. " +
+                    ?: return "Tandem confirmed the latest budget, but this change no longer needs review. " +
                         "Sync the budget to check its status."
 
             if (!keepDeviceVersion) {
                 store.discardWrite(operationId)
-                return "The server confirmed Actual’s latest version. Tandem kept that version and removed your edit."
+                return "Tandem confirmed Actual’s latest version. Tandem kept that version and removed your edit."
             }
 
             val current = store.findRecord(budgetId, confirmedOperation.recordType, confirmedOperation.recordId)
             if (current?.remoteDeleted == true && confirmedOperation.action == LocalWriteAction.DELETE.name) {
                 store.discardWrite(operationId)
-                return "The server confirmed the transaction was deleted. Tandem removed the waiting deletion."
+                return "Tandem confirmed the transaction was deleted. Tandem removed the waiting deletion."
             }
             val baseJson = current?.remoteJson
             val revision = current?.remoteRevision
             if (current == null || current.remoteDeleted || baseJson == null || revision.isNullOrBlank()) {
-                return "The server didn’t return the latest transaction. Your edit remains on this device. Sync the budget and try again."
+                return "Tandem didn’t return the latest transaction. Your edit remains on this device. Sync the budget and try again."
             }
             val base =
                 runCatching { Json.parseToJsonElement(baseJson).jsonObject }.getOrNull()
@@ -150,9 +150,9 @@ internal class TransactionConflictResolution(
             throw error
         } catch (_: Exception) {
             return if (replacementOperationId == null) {
-                "The server hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."
+                "Tandem hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."
             } else {
-                "The server hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."
+                "Tandem hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."
             }
         }
     }
@@ -165,14 +165,14 @@ internal class TransactionConflictResolution(
         when (resolvedWrite?.status) {
             "committed" ->
                 if (action == LocalWriteAction.DELETE) {
-                    "The server confirmed the deletion in Actual."
+                    "Tandem confirmed the deletion in Actual."
                 } else {
-                    "The server confirmed your edit in Actual."
+                    "Tandem confirmed your edit in Actual."
                 }
-            "queued" -> "The server hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."
-            "conflict" -> "The server found another difference. Your edit remains on this device. Review the versions again."
+            "queued" -> "Tandem hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."
+            "conflict" -> "Tandem found another difference. Your edit remains on this device. Review the versions again."
             "uncertain", "sending" ->
-                "The server hasn’t confirmed your choice. Your edit remains on this device. Check its status before trying again."
+                "Tandem hasn’t confirmed your choice. Your edit remains on this device. Check its status before trying again."
             "rejected" ->
                 if (resolvedWrite.lastErrorCode == "split-child-field-not-editable") {
                     "Actual manages this part through the full transaction. Your edit remains on this device. Update the full transaction in Actual."
@@ -181,9 +181,9 @@ internal class TransactionConflictResolution(
                 }
             else ->
                 if (summary == null) {
-                    "The server hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."
+                    "Tandem hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."
                 } else {
-                    "The server hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."
+                    "Tandem hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."
                 }
         }
 }

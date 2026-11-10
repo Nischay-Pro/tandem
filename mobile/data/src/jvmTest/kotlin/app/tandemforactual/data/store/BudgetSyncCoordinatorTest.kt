@@ -406,7 +406,7 @@ class BudgetSyncCoordinatorTest {
     @Test
     fun interruptedSendIsRecoveredAndPolledAfterDatabaseReopen() =
         runBlocking {
-            val file = File.createTempFile("companion-sync-", ".db")
+            val file = File.createTempFile("tandem-sync-", ".db")
             file.delete()
             val firstDatabase = persistentDatabase(file.absolutePath)
             var firstDatabaseClosed = false
@@ -496,13 +496,28 @@ class BudgetSyncCoordinatorTest {
                 val request = updateRequest()
                 repository.enqueueWrite(request)
                 remote.submitHandler =
-                    { operation -> operationResult(operation.operationId, RemoteOperationStatus.CONFLICT, "field-conflict") }
+                    { operation ->
+                        RemoteOperationResult(
+                            operationId = operation.operationId,
+                            budgetId = BUDGET,
+                            transactionId = operation.recordId,
+                            status = RemoteOperationStatus.CONFLICT,
+                            errorCode = "field-conflict",
+                            conflictType = "same-field-edit",
+                            conflictingFields = listOf("amount", "category"),
+                        )
+                    }
                 remote.transactionHandler = { _, transactionId, _ -> remoteTransaction(transactionId, "revision-2", 1500L) }
 
                 val result = coordinator.synchronize(BUDGET)
 
                 assertEquals(1, result.writesConflicted)
-                assertEquals("conflict", database.outboxDao().find(request.operationId)?.status)
+                val conflictedWrite = database.outboxDao().find(request.operationId)
+                assertEquals("conflict", conflictedWrite?.status)
+                assertEquals(
+                    LocalWriteConflictDetails("field-conflict", "same-field-edit", listOf("amount", "category")),
+                    parseLocalWriteConflictDetails(conflictedWrite?.lastErrorCode),
+                )
                 assertEquals(request.optimisticJson, repository.findRecord(BUDGET, "transaction", TXN)?.localJson)
                 assertEquals("revision-2", repository.findRecord(BUDGET, "transaction", TXN)?.remoteRevision)
             } finally {

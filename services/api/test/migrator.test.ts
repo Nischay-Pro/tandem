@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import {
   applyMigrations,
   MIGRATIONS,
@@ -19,7 +19,7 @@ function createFailingMigrationPool(
       if (sql.includes("pg_advisory_lock")) {
         return { rows: [{ pg_advisory_lock: null }], rowCount: 1 };
       }
-      if (sql.includes("CREATE TABLE IF NOT EXISTS companion_migrations")) {
+      if (sql.includes("CREATE TABLE IF NOT EXISTS tandem_migrations")) {
         throw primaryError;
       }
       if (sql.includes("pg_advisory_unlock")) {
@@ -48,6 +48,32 @@ describe("0.1.0 database schema", () => {
     expect(MIGRATIONS).toHaveLength(1);
     expect(MIGRATIONS[0]?.name).toBe("20261101000000-initial-schema");
   });
+
+  it("creates Tandem-named tables and indexes in the single initial migration", async () => {
+    const statements: string[] = [];
+    const client = {
+      async query(sql: string) {
+        statements.push(sql);
+        return { rows: [], rowCount: 0 };
+      },
+    } as unknown as PoolClient;
+
+    await MIGRATIONS[0]!.up(client);
+
+    expect(statements.filter((sql) => sql.includes("CREATE TABLE"))).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("CREATE TABLE tandem_devices"),
+        expect.stringContaining("CREATE TABLE tandem_actual_sessions"),
+        expect.stringContaining("CREATE TABLE tandem_operations"),
+        expect.stringContaining("CREATE TABLE tandem_operation_conflicts"),
+        expect.stringContaining("CREATE TABLE tandem_budget_sync_state"),
+        expect.stringContaining("CREATE TABLE tandem_budget_records"),
+        expect.stringContaining("CREATE TABLE tandem_budget_changes"),
+      ]),
+    );
+    const previousName = "com" + "panion";
+    expect(statements.join("\n")).not.toMatch(new RegExp(previousName, "i"));
+  });
 });
 
 describe("migration lock cleanup reporting", () => {
@@ -56,10 +82,10 @@ describe("migration lock cleanup reporting", () => {
       if (sql.includes("pg_advisory_lock")) {
         return { rows: [], rowCount: 1 };
       }
-      if (sql.includes("CREATE TABLE IF NOT EXISTS companion_migrations")) {
+      if (sql.includes("CREATE TABLE IF NOT EXISTS tandem_migrations")) {
         return { rows: [], rowCount: 0 };
       }
-      if (sql.includes("SELECT position, name FROM companion_migrations")) {
+      if (sql.includes("SELECT position, name FROM tandem_migrations")) {
         return {
           rows: [
             { position: 1, name: migration.name },
@@ -128,10 +154,10 @@ describe("migration lock cleanup reporting", () => {
       if (sql.includes("pg_advisory_lock")) {
         return { rows: [], rowCount: 1 };
       }
-      if (sql.includes("CREATE TABLE IF NOT EXISTS companion_migrations")) {
+      if (sql.includes("CREATE TABLE IF NOT EXISTS tandem_migrations")) {
         return { rows: [], rowCount: 0 };
       }
-      if (sql.includes("SELECT position, name FROM companion_migrations")) {
+      if (sql.includes("SELECT position, name FROM tandem_migrations")) {
         return { rows: [], rowCount: 0 };
       }
       if (sql === "BEGIN") {

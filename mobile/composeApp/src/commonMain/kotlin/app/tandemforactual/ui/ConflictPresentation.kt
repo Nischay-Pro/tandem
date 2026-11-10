@@ -51,6 +51,64 @@ internal fun conflictFieldComparisons(
     }
 }
 
+internal fun conflictReasonMessage(
+    conflictType: String?,
+    conflictingFields: List<String>,
+    action: String,
+    actualDeleted: Boolean,
+): String? {
+    if (actualDeleted || conflictType in setOf("deleted-remotely", "deleted-during-write", "delete-not-visible-after-sync")) {
+        return "Actual deleted this transaction while your edit was waiting."
+    }
+    return when (conflictType) {
+        "delete-versus-edit" -> "Actual changed this transaction while you were deleting it."
+        "same-field-edit", "changed-during-write", "stale-conflict" ->
+            changedFieldReason(conflictingFields)
+        "transaction-structure-changed-during-write" ->
+            "The transaction’s structure changed in Actual while your edit was waiting."
+        "transfer-pair-changed", "transfer-pair-changed-after-write" ->
+            "The linked transfer changed in Actual while your edit was waiting."
+        "transfer-pair-incomplete", "transfer-pair-incomplete-after-write" ->
+            "The other side of this transfer is missing in Actual."
+        "transaction-id-already-exists" -> "This transaction already exists in Actual."
+        else ->
+            if (action == "DELETE" && conflictingFields.isNotEmpty()) {
+                "Actual changed this transaction while you were deleting it."
+            } else if (conflictingFields.isNotEmpty()) {
+                changedFieldReason(conflictingFields)
+            } else {
+                null
+            }
+    }
+}
+
+private fun changedFieldReason(conflictingFields: List<String>): String {
+    val labels =
+        conflictingFields
+            .mapNotNull { field ->
+                when (field) {
+                    "amount" -> "amount"
+                    "payee" -> "payee"
+                    "category" -> "category"
+                    "date" -> "date"
+                    "account" -> "account"
+                    "notes" -> "notes"
+                    "cleared", "reconciled" -> "cleared status"
+                    "transferId" -> "linked transfer"
+                    "isParent", "isChild", "parentId", "subtransactions" -> "transaction structure"
+                    else -> null
+                }
+            }.distinct()
+    if (labels.isEmpty()) return "Actual changed the same details while your edit was waiting."
+    val details =
+        when (labels.size) {
+            1 -> labels.single()
+            2 -> "${labels[0]} and ${labels[1]}"
+            else -> labels.dropLast(1).joinToString(", ") + ", and ${labels.last()}"
+        }
+    return "Actual changed the $details while your edit was waiting."
+}
+
 private fun conflictFieldValues(
     snapshot: JsonObject,
     names: ConflictFieldNameLookup,

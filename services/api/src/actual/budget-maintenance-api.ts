@@ -380,11 +380,13 @@ export interface BudgetMaintenanceApiPort {
   skipSchedule(
     budgetId: string,
     scheduleId: string,
+    expectedNextDate: string,
     encryptionPassword?: string,
   ): Promise<void>;
   postSchedule(
     budgetId: string,
     scheduleId: string,
+    expectedNextDate: string,
     encryptionPassword?: string,
   ): Promise<void>;
   deleteSchedule(
@@ -406,6 +408,15 @@ export class BudgetMaintenanceInputError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "BudgetMaintenanceInputError";
+  }
+}
+
+export class BudgetScheduleChangedError extends BudgetMaintenanceInputError {
+  readonly code = "schedule_changed";
+
+  constructor() {
+    super("This schedule changed in Actual. Refresh it before trying again.");
+    this.name = "BudgetScheduleChangedError";
   }
 }
 
@@ -1767,7 +1778,7 @@ export function createBudgetMaintenanceApi(
         ),
       );
     },
-    skipSchedule(budgetId, scheduleId, encryptionPassword) {
+    skipSchedule(budgetId, scheduleId, expectedNextDate, encryptionPassword) {
       return locks.withBudgetLock(budgetId, () =>
         session.runBudget(
           budgetId,
@@ -1776,9 +1787,7 @@ export function createBudgetMaintenanceApi(
               (candidate) => candidate.id === scheduleId,
             );
             if (!schedule || schedule.completed) {
-              throw new BudgetMaintenanceInputError(
-                "Choose an active schedule in this budget",
-              );
+              throw new BudgetScheduleChangedError();
             }
             if (
               typeof schedule.date !== "object" ||
@@ -1788,6 +1797,9 @@ export function createBudgetMaintenanceApi(
               throw new BudgetMaintenanceInputError(
                 "A one-time schedule has no next date to skip",
               );
+            }
+            if (schedule.next_date !== expectedNextDate) {
+              throw new BudgetScheduleChangedError();
             }
             const internal = client.internal;
             if (!internal) {
@@ -1799,7 +1811,7 @@ export function createBudgetMaintenanceApi(
         ),
       );
     },
-    postSchedule(budgetId, scheduleId, encryptionPassword) {
+    postSchedule(budgetId, scheduleId, expectedNextDate, encryptionPassword) {
       return locks.withBudgetLock(budgetId, () =>
         session.runBudget(
           budgetId,
@@ -1808,9 +1820,10 @@ export function createBudgetMaintenanceApi(
               (candidate) => candidate.id === scheduleId,
             );
             if (!schedule || schedule.completed) {
-              throw new BudgetMaintenanceInputError(
-                "Choose an active schedule in this budget",
-              );
+              throw new BudgetScheduleChangedError();
+            }
+            if (schedule.next_date !== expectedNextDate) {
+              throw new BudgetScheduleChangedError();
             }
             if (!schedule.account) {
               throw new BudgetMaintenanceInputError(

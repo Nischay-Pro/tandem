@@ -81,16 +81,16 @@ class LiveBudgetModelsTest {
 
         assertEquals("Everyday", accounts.first().accountGroupName)
         assertEquals("daily", accounts.first().accountGroupId)
-        assertEquals("On budget · Other", liveAccountGroupLabel(accounts[0]))
-        assertEquals("On budget · Credit", liveAccountGroupLabel(accounts[1]))
-        assertEquals("Off budget · Mortgage", liveAccountGroupLabel(accounts[2]))
-        assertEquals("Off budget · Investment", liveAccountGroupLabel(accounts[3]))
+        assertEquals("Other", liveAccountGroupLabel(accounts[0]))
+        assertEquals("Credit", liveAccountGroupLabel(accounts[1]))
+        assertEquals("Mortgage", liveAccountGroupLabel(accounts[2]))
+        assertEquals("Investment", liveAccountGroupLabel(accounts[3]))
         assertEquals("Closed", liveAccountGroupLabel(accounts[4]))
         assertEquals(true, accounts[4].closed)
     }
 
     @Test
-    fun groupsAccountsByActualTypeAndBudgetScopeWithoutReadingNames() {
+    fun groupsAccountsByActualTypeWithoutReadingNamesOrRepeatingBudgetScope() {
         val accounts =
             liveAccountSummaries(
                 listOf(
@@ -121,10 +121,12 @@ class LiveBudgetModelsTest {
                 ),
             )
 
-        assertEquals("On budget · Checking", liveAccountGroupLabel(accounts[0]))
+        assertEquals("Checking", liveAccountGroupLabel(accounts[0]))
         assertEquals(liveAccountGroupLabel(accounts[0]), liveAccountGroupLabel(accounts[1]))
-        assertEquals("On budget · Savings", liveAccountGroupLabel(accounts[2]))
-        assertEquals("Off budget · Savings", liveAccountGroupLabel(accounts[3]))
+        assertEquals("Savings", liveAccountGroupLabel(accounts[2]))
+        assertEquals(liveAccountGroupLabel(accounts[2]), liveAccountGroupLabel(accounts[3]))
+        assertFalse(accounts[2].offBudget)
+        assertTrue(accounts[3].offBudget)
     }
 
     @Test

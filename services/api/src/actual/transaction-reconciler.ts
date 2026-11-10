@@ -6,7 +6,7 @@ import {
 import type { ActualTransactionStore } from "./transaction-store.js";
 import {
   createTransactionRevision,
-  isCompanionTransactionId,
+  isTandemTransactionId,
   parseTransactionCreateInput,
   parseTransactionPatch,
   parseTransactionSnapshot,
@@ -958,10 +958,8 @@ function prepareCreateRequest(
         `idempotencyKey must contain between 1 and ${IDEMPOTENCY_KEY_MAX_LENGTH} characters`,
       );
     }
-    if (!isCompanionTransactionId(request.transactionId)) {
-      throw new Error(
-        "transactionId must be a stable Companion transaction ID",
-      );
+    if (!isTandemTransactionId(request.transactionId)) {
+      throw new Error("transactionId must be a stable Tandem transaction ID");
     }
     const input = parseTransactionCreateInput(request.patch);
     const operationInput: WriteOperationInput = {

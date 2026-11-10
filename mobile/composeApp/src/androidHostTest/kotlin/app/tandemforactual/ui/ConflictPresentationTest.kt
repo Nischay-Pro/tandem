@@ -12,6 +12,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -96,6 +97,22 @@ class ConflictPresentationTest {
     }
 
     @Test
+    fun conflictReasonExplainsDeletionAndChangedFieldsInPlainLanguage() {
+        assertEquals(
+            "Actual changed this transaction while you were deleting it.",
+            conflictReasonMessage("delete-versus-edit", listOf("amount"), "DELETE", actualDeleted = false),
+        )
+        assertEquals(
+            "Actual deleted this transaction while your edit was waiting.",
+            conflictReasonMessage("deleted-remotely", listOf("\$entity"), "UPDATE", actualDeleted = false),
+        )
+        assertEquals(
+            "Actual changed the amount and category while your edit was waiting.",
+            conflictReasonMessage("same-field-edit", listOf("amount", "category"), "UPDATE", actualDeleted = false),
+        )
+    }
+
+    @Test
     fun conflictDetailsShowBothVersionsForEachChangedField() {
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
@@ -134,5 +151,27 @@ class ConflictPresentationTest {
 
         composeTestRule.onNodeWithText("Discard your edit?").assertDoesNotExist()
         assertFalse(editDiscarded)
+    }
+
+    @Test
+    fun confirmingKeepActualDiscardsTheEditOnlyAfterConfirmation() {
+        var editDiscarded = false
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                KeepLastSyncedConflictAction(
+                    operationId = "conflicted-edit",
+                    enabled = true,
+                    onResolveConflict = { _, keepYourEdit ->
+                        if (!keepYourEdit) editDiscarded = true
+                    },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Keep Actual’s version").performClick()
+        assertFalse(editDiscarded)
+        composeTestRule.onNodeWithText("Discard edit").performClick()
+
+        assertTrue(editDiscarded)
     }
 }

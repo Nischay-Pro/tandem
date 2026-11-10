@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { Writable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
+import type { FastifyServerOptions } from "fastify";
 import { buildApiApp } from "../src/app.js";
 import type { TransactionApiPort } from "../src/actual/transaction-api.js";
 import type { TransactionSnapshot } from "../src/actual/transaction-reconciliation.js";
@@ -100,6 +102,7 @@ function createApi(
     getOperation?: TransactionApiPort["getOperation"];
     authenticatedDevice?: DeviceRecord | undefined;
   } = {},
+  logger?: FastifyServerOptions["logger"],
 ) {
   const readTransaction = vi.fn(
     overrides.readTransaction ??
@@ -144,6 +147,7 @@ function createApi(
         {
           deviceAuth,
           ...(withTransactionApi ? { transactionApi } : {}),
+          ...(logger === undefined ? {} : { logger }),
         },
       ),
   };
@@ -544,6 +548,68 @@ describe("transaction REST routes", () => {
       await app.close();
     },
   );
+
+  it("logs direct conflict and Actual failure responses with their error codes", async () => {
+    const lines: string[] = [];
+    const stream = new Writable({
+      write(chunk, _encoding, callback) {
+        lines.push(String(chunk));
+        callback();
+      },
+    });
+    const fake = createApi(
+      {
+        submit: async ({ idempotencyKey }) => {
+          if (idempotencyKey === "request-1") {
+            throw new IdempotencyKeyReuseError();
+          }
+          throw new Error("secret Actual failure");
+        },
+      },
+      { level: "info", stream },
+    );
+    const app = await fake.buildApp();
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const conflict = await app.inject({
+      method: "POST",
+      url: `${transactionUrl}/operations`,
+      headers: { ...authHeaders, "idempotency-key": "request-1" },
+      payload: requestBody,
+    });
+    const actualFailure = await app.inject({
+      method: "POST",
+      url: `${transactionUrl}/operations`,
+      headers: { ...authHeaders, "idempotency-key": "request-2" },
+      payload: requestBody,
+    });
+
+    expect(conflict.statusCode).toBe(409);
+    expect(actualFailure.statusCode).toBe(502);
+    expect(actualFailure.body).not.toContain("secret Actual failure");
+    const entries = lines.map(
+      (line) => JSON.parse(line) as Record<string, unknown>,
+    );
+    expect(entries).toHaveLength(2);
+    expect(entries.map((entry) => entry.errorCode)).toEqual([
+      "idempotency_key_reused",
+      "actual_operation_failed",
+    ]);
+    expect(entries.map((entry) => entry.statusCode)).toEqual([409, 502]);
+    expect(entries.map((entry) => entry.requestId)).toEqual([
+      conflict.headers["x-request-id"],
+      actualFailure.headers["x-request-id"],
+    ]);
+    expect(entries.every((entry) => typeof entry.durationMs === "number")).toBe(
+      true,
+    );
+    expect(lines.join("\n")).not.toContain("request-1");
+    expect(lines.join("\n")).not.toContain("secret Actual failure");
+    consoleError.mockRestore();
+    await app.close();
+  });
 
   it.each([
     [new TransactionRequestValidationError("bad base revision"), 400],

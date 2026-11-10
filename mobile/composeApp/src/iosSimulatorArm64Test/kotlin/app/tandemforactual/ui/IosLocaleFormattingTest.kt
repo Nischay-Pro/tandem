@@ -1,6 +1,7 @@
 package app.tandemforactual.ui
 
 import app.tandemforactual.data.store.BudgetDisplaySettings
+import app.tandemforactual.ui.model.LiveAccountSummary
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -74,8 +75,21 @@ class IosLocaleFormattingTest {
         assertFalse(month.isBlank())
         assertEquals(month, platformFormatMonth(2026, 11, abbreviated = false))
         assertEquals(platformFormatDate(2026, 11, 7, includeYear = true), platformFormatDate(2026, 11, 7, includeYear = true))
+        assertFalse(platformFormatDateAtEpochMilliseconds(1_794_087_360_000).isBlank())
         assertFalse(platformFormatReportPercentage(0.125).isBlank())
         assertFalse(platformFormatReportCurrency(123_456, "USD", 2).isBlank())
+    }
+
+    @Test
+    fun accountCardKeepsItsSyncSubtitleOnIos() {
+        val checking = LiveAccountSummary("checking", "Checking", 12_300, "checking", offBudget = false)
+        val closed = LiveAccountSummary("closed", "Closed", 0, "savings", offBudget = false, closed = true)
+        val offBudget = LiveAccountSummary("tracking", "Tracking", 4_500, "investment", offBudget = true)
+
+        assertTrue(accountListSubtitle(checking, 1_794_087_360_000)?.startsWith("Last synced ") == true)
+        assertEquals("Not synced yet", accountListSubtitle(checking, null))
+        assertEquals("Off budget", accountListSubtitle(offBudget, 1_794_087_360_000))
+        assertNull(accountListSubtitle(closed, 1_794_087_360_000))
     }
 
     private fun settings(numberFormat: String) =

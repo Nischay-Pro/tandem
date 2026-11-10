@@ -113,7 +113,7 @@ describe("durable write journal integration", () => {
     await database.migrate();
     const order = await readMigrationOrder();
     const result = await inspectionPool.query<{ count: string }>(
-      "SELECT count(*)::text AS count FROM companion_migrations",
+      "SELECT count(*)::text AS count FROM tandem_migrations",
     );
     expect(order).toHaveLength(MIGRATIONS.length);
     expect(order).toEqual(MIGRATIONS.map(({ name }) => name));
@@ -123,7 +123,7 @@ describe("durable write journal integration", () => {
     }>(
       `SELECT column_name AS found_column FROM information_schema.columns
        WHERE table_schema = current_schema()
-         AND table_name = 'companion_operations'
+         AND table_name = 'tandem_operations'
          AND column_name = 'payload_compacted_at'`,
     );
     expect(retentionColumn.rows[0]?.found_column).toBe("payload_compacted_at");
@@ -143,13 +143,13 @@ describe("durable write journal integration", () => {
     });
 
     try {
-      await isolatedPool.query(`CREATE TABLE companion_migrations (
+      await isolatedPool.query(`CREATE TABLE tandem_migrations (
         position integer PRIMARY KEY CHECK (position > 0),
         name text NOT NULL UNIQUE,
         applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
       )`);
       await isolatedPool.query(
-        "INSERT INTO companion_migrations (position, name) VALUES (1, $1)",
+        "INSERT INTO tandem_migrations (position, name) VALUES (1, $1)",
         ["20261031120000-durable-write-journal"],
       );
 
@@ -159,8 +159,8 @@ describe("durable write journal integration", () => {
       const tables = await isolatedPool.query<{
         devices: string | null;
         operations: string | null;
-      }>(`SELECT to_regclass('companion_devices') AS devices,
-        to_regclass('companion_operations') AS operations`);
+      }>(`SELECT to_regclass('tandem_devices') AS devices,
+        to_regclass('tandem_operations') AS operations`);
       expect(tables.rows[0]).toEqual({
         devices: null,
         operations: null,
@@ -208,9 +208,7 @@ describe("durable write journal integration", () => {
     const brokenMigration: Migration = {
       name: "20261031120001-synthetic-rollback-probe",
       async up(client) {
-        await client.query(
-          "CREATE TABLE companion_rollback_probe (id integer)",
-        );
+        await client.query("CREATE TABLE tandem_rollback_probe (id integer)");
         throw new Error("synthetic migration failure");
       },
       async down() {
@@ -227,11 +225,11 @@ describe("durable write journal integration", () => {
         ),
       ).rejects.toThrow("synthetic migration failure");
       const result = await isolatedPool.query<{ relation: string | null }>(
-        "SELECT to_regclass('companion_rollback_probe') AS relation",
+        "SELECT to_regclass('tandem_rollback_probe') AS relation",
       );
       expect(result.rows[0]?.relation).toBeNull();
       const history = await isolatedPool.query<{ count: string }>(
-        "SELECT count(*)::text AS count FROM companion_migrations",
+        "SELECT count(*)::text AS count FROM tandem_migrations",
       );
       expect(history.rows[0]?.count).toBe("0");
     } finally {
@@ -257,25 +255,25 @@ describe("durable write journal integration", () => {
     try {
       await applyMigrations(isolatedPool, [migration], [migration.name]);
       const before = await isolatedPool.query<{ relation: string | null }>(
-        "SELECT to_regclass('companion_operations') AS relation",
+        "SELECT to_regclass('tandem_operations') AS relation",
       );
-      expect(before.rows[0]?.relation).toBe("companion_operations");
+      expect(before.rows[0]?.relation).toBe("tandem_operations");
       const deviceTable = await isolatedPool.query<{
         relation: string | null;
-      }>("SELECT to_regclass('companion_devices') AS relation");
+      }>("SELECT to_regclass('tandem_devices') AS relation");
       const actualSessionTable = await isolatedPool.query<{
         relation: string | null;
-      }>("SELECT to_regclass('companion_actual_sessions') AS relation");
-      expect(deviceTable.rows[0]?.relation).toBe("companion_devices");
+      }>("SELECT to_regclass('tandem_actual_sessions') AS relation");
+      expect(deviceTable.rows[0]?.relation).toBe("tandem_devices");
       expect(actualSessionTable.rows[0]?.relation).toBe(
-        "companion_actual_sessions",
+        "tandem_actual_sessions",
       );
 
       const client = await isolatedPool.connect();
       try {
         await client.query("BEGIN");
         await migration.down(client);
-        await client.query("DELETE FROM companion_migrations WHERE name = $1", [
+        await client.query("DELETE FROM tandem_migrations WHERE name = $1", [
           migration.name,
         ]);
         await client.query("COMMIT");
@@ -287,22 +285,22 @@ describe("durable write journal integration", () => {
       }
 
       const after = await isolatedPool.query<{ relation: string | null }>(
-        "SELECT to_regclass('companion_operations') AS relation",
+        "SELECT to_regclass('tandem_operations') AS relation",
       );
       expect(after.rows[0]?.relation).toBeNull();
       const afterDevice = await isolatedPool.query<{
         relation: string | null;
-      }>("SELECT to_regclass('companion_devices') AS relation");
+      }>("SELECT to_regclass('tandem_devices') AS relation");
       const afterActualSession = await isolatedPool.query<{
         relation: string | null;
-      }>("SELECT to_regclass('companion_actual_sessions') AS relation");
+      }>("SELECT to_regclass('tandem_actual_sessions') AS relation");
       expect(afterDevice.rows[0]?.relation).toBeNull();
       expect(afterActualSession.rows[0]?.relation).toBeNull();
       await applyMigrations(isolatedPool, [migration], [migration.name]);
       const reapplied = await isolatedPool.query<{ relation: string | null }>(
-        "SELECT to_regclass('companion_operations') AS relation",
+        "SELECT to_regclass('tandem_operations') AS relation",
       );
-      expect(reapplied.rows[0]?.relation).toBe("companion_operations");
+      expect(reapplied.rows[0]?.relation).toBe("tandem_operations");
     } finally {
       await isolatedPool.end();
       await inspectionPool.query(`DROP SCHEMA ${schemaName} CASCADE`);
@@ -326,13 +324,13 @@ describe("durable write journal integration", () => {
     try {
       await applyMigrations(isolatedPool, [migration], [migration.name]);
       await isolatedPool.query(
-        "UPDATE companion_migrations SET name = 'unexpected-migration'",
+        "UPDATE tandem_migrations SET name = 'unexpected-migration'",
       );
       await expect(
         applyMigrations(isolatedPool, [migration], [migration.name]),
       ).rejects.toThrow("Tandem migration history mismatch");
 
-      await isolatedPool.query("UPDATE companion_migrations SET name = $1", [
+      await isolatedPool.query("UPDATE tandem_migrations SET name = $1", [
         "sensitive migration name",
       ]);
       await expect(
@@ -340,23 +338,23 @@ describe("durable write journal integration", () => {
       ).rejects.toThrow("found [invalid migration name]");
 
       await isolatedPool.query(
-        "UPDATE companion_migrations SET name = $1, position = 2",
+        "UPDATE tandem_migrations SET name = $1, position = 2",
         [migration.name],
       );
       await expect(
         applyMigrations(isolatedPool, [migration], [migration.name]),
       ).rejects.toThrow("Corrupted migrations");
 
-      await isolatedPool.query("UPDATE companion_migrations SET position = 1");
+      await isolatedPool.query("UPDATE tandem_migrations SET position = 1");
       await isolatedPool.query(
-        "INSERT INTO companion_migrations (position, name) VALUES (2, 'stale-migration')",
+        "INSERT INTO tandem_migrations (position, name) VALUES (2, 'stale-migration')",
       );
       await expect(
         applyMigrations(isolatedPool, [migration], [migration.name]),
       ).rejects.toThrow("Tandem database has migrations newer than this API");
 
       await isolatedPool.query(
-        "UPDATE companion_migrations SET position = 3 WHERE name = 'stale-migration'",
+        "UPDATE tandem_migrations SET position = 3 WHERE name = 'stale-migration'",
       );
       await expect(
         applyMigrations(isolatedPool, [migration], [migration.name]),
@@ -585,7 +583,7 @@ describe("durable write journal integration", () => {
     );
 
     await inspectionPool.query(
-      `UPDATE companion_operations
+      `UPDATE tandem_operations
        SET created_at = clock_timestamp() - interval '91 days',
            completed_at = clock_timestamp() - interval '91 days'
        WHERE operation_id = ANY($1::uuid[])`,
@@ -894,7 +892,7 @@ describe("durable write journal integration", () => {
     await database.journal.claim(input.operationId);
     await database.journal.markUncertain(input.operationId, "actual-timeout");
     await inspectionPool.query(
-      "UPDATE companion_operations SET actual_result = $2::jsonb WHERE operation_id = $1",
+      "UPDATE tandem_operations SET actual_result = $2::jsonb WHERE operation_id = $1",
       [input.operationId, JSON.stringify(unknownResult)],
     );
 
@@ -1114,7 +1112,7 @@ describe("durable write journal integration", () => {
       completed_at: null,
     };
     const query = vi.fn().mockImplementation(async (sql: string) => {
-      if (sql.includes("FROM companion_operations")) {
+      if (sql.includes("FROM tandem_operations")) {
         return { rows: [operationRow], rowCount: 1 };
       }
       return { rows: [], rowCount: 0 };
@@ -1161,7 +1159,7 @@ describe("durable write journal integration", () => {
     await database.journal.enqueue(input);
     await database.journal.claim(input.operationId);
     await inspectionPool.query(
-      `UPDATE companion_operations
+      `UPDATE tandem_operations
       SET lease_expires_at = clock_timestamp() - interval '1 second'
       WHERE operation_id = $1`,
       [input.operationId],
@@ -1191,7 +1189,7 @@ describe("durable write journal integration", () => {
     await database.journal.enqueue(input);
     await database.journal.claim(input.operationId);
     await inspectionPool.query(
-      `UPDATE companion_operations
+      `UPDATE tandem_operations
       SET lease_expires_at = clock_timestamp() - interval '1 second'
       WHERE operation_id = $1`,
       [input.operationId],
@@ -1272,7 +1270,7 @@ describe("durable write journal integration", () => {
         actualWrites += 1;
         actual = { ...actual, ...fields };
         await inspectionPool.query(
-          `UPDATE companion_operations
+          `UPDATE tandem_operations
           SET lease_expires_at = clock_timestamp() - interval '1 second'
           WHERE operation_id = $1`,
           [request.operationId],

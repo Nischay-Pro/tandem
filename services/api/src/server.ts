@@ -15,6 +15,14 @@ export type SignalRegistrar = (
   handler: () => Promise<void>,
 ) => void;
 
+const startupExitCodes = new WeakMap<object, number>();
+
+export function startupExitCodeFor(error: unknown): number | undefined {
+  return typeof error === "object" && error !== null
+    ? startupExitCodes.get(error)
+    : undefined;
+}
+
 export interface ApiRuntime {
   transactionApi?: TransactionApiPort;
   budgetMaintenanceApi?: BudgetMaintenanceApiPort;
@@ -40,12 +48,15 @@ export async function startApiServer(
   runtime: ApiRuntime = {},
 ): Promise<FastifyInstance> {
   let app: FastifyInstance | undefined;
+  let startupPhase: "database" | "actual" | "api" = "database";
   const leaseReaper = new WriteLeaseReaper(database.journal);
 
   try {
     await database.migrate();
     await leaseReaper.start();
+    startupPhase = "actual";
     await runtime.start?.();
+    startupPhase = "api";
     app = await buildApiApp(database, {
       onClose: async () => {
         try {
@@ -83,6 +94,7 @@ export async function startApiServer(
         ? {}
         : { budgetReadApi: runtime.budgetReadApi }),
       trustProxy: config.trustProxy,
+      logger: true,
     });
     await app.listen({ host: config.host, port: config.port });
   } catch (error) {
@@ -108,6 +120,10 @@ export async function startApiServer(
     }
     for (const cleanupError of cleanupErrors) {
       reportCleanupFailure(cleanupError);
+    }
+    if (typeof error === "object" && error !== null) {
+      if (startupPhase === "database") startupExitCodes.set(error, 3);
+      if (startupPhase === "actual") startupExitCodes.set(error, 4);
     }
     throw error;
   }

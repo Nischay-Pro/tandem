@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 
 @main
-struct TandemCompanionApp: App {
+struct TandemApp: App {
     @UIApplicationDelegateAdaptor(TandemAppDelegate.self) private var appDelegate
     @State private var preferredScheme: ColorScheme?
 

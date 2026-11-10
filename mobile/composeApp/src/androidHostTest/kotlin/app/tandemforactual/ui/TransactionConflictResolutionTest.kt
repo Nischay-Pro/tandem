@@ -28,7 +28,7 @@ class TransactionConflictResolutionTest {
             assertEquals("discarded", store.writes[CONFLICT_ID]?.status)
             assertTrue(store.requests.isEmpty())
             assertEquals(0, sync.syncCalls)
-            assertEquals("The server confirmed Actual’s latest version. Tandem kept that version and removed your edit.", message)
+            assertEquals("Tandem confirmed Actual’s latest version. Tandem kept that version and removed your edit.", message)
         }
 
     @Test
@@ -42,7 +42,7 @@ class TransactionConflictResolutionTest {
             assertEquals("conflict", store.writes[CONFLICT_ID]?.status)
             assertTrue(store.requests.isEmpty())
             assertEquals(0, sync.syncCalls)
-            assertTrue(message.contains("The server hasn’t confirmed your choice"))
+            assertTrue(message.contains("Tandem hasn’t confirmed your choice"))
             assertTrue(message.contains("Your edit remains on this device"))
             assertTrue(message.contains("Check the connection and try again"))
         }
@@ -65,7 +65,7 @@ class TransactionConflictResolutionTest {
             assertEquals(CONFLICT_ID, request.supersedesConflictOperationId)
             assertEquals("superseded", store.writes[CONFLICT_ID]?.status)
             assertEquals("committed", store.writes[REPLACEMENT_ID]?.status)
-            assertEquals("The server confirmed your edit in Actual.", message)
+            assertEquals("Tandem confirmed your edit in Actual.", message)
         }
 
     @Test
@@ -81,7 +81,7 @@ class TransactionConflictResolutionTest {
             assertEquals("revision-latest", request.baseRevision)
             assertEquals("{}", request.patchJson)
             assertEquals(store.record.remoteJson, request.optimisticJson)
-            assertEquals("The server confirmed the deletion in Actual.", message)
+            assertEquals("Tandem confirmed the deletion in Actual.", message)
         }
 
     @Test

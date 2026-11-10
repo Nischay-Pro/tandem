@@ -408,13 +408,13 @@ describe("API bootstrap integration", () => {
       .mockImplementation(() => {});
 
     try {
-      await isolatedPool.query(`CREATE TABLE companion_migrations (
+      await isolatedPool.query(`CREATE TABLE tandem_migrations (
         position integer PRIMARY KEY CHECK (position > 0),
         name text NOT NULL UNIQUE,
         applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
       )`);
       await isolatedPool.query(
-        "INSERT INTO companion_migrations (position, name) VALUES (1, $1)",
+        "INSERT INTO tandem_migrations (position, name) VALUES (1, $1)",
         ["20261101000000-older-schema"],
       );
 

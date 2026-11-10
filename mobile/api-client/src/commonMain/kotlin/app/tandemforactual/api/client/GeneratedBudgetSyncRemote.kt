@@ -16,8 +16,14 @@ import arrow.core.Either
 import com.kroegerama.openapi.kmp.gen.companion.CallException
 import com.kroegerama.openapi.kmp.gen.companion.HttpCallException
 import com.kroegerama.openapi.kmp.gen.companion.HttpCallResponse
+import io.ktor.client.statement.bodyAsText
+import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 import kotlin.uuid.Uuid
 
@@ -143,16 +149,23 @@ class GeneratedBudgetSyncRemote(
             } catch (error: IllegalArgumentException) {
                 throw BudgetSyncProtocolException("Outbox operation ID is not a UUID", error)
             }
-        return BudgetSyncJson.parseOperation(
-            unwrap(
-                withApiRequest {
-                    TransactionsApi.getTransactionOperation(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        operationId = parsedId,
-                    )
-                },
-            ),
-        )
+        return try {
+            BudgetSyncJson.parseOperation(
+                unwrap(
+                    withApiRequest {
+                        TransactionsApi.getTransactionOperation(
+                            xBudgetEncryptionPassword = encryptionPassword,
+                            operationId = parsedId,
+                        )
+                    },
+                ),
+            )
+        } catch (error: BudgetSyncRemoteException) {
+            if (error.errorCode == "not_found" && error.httpStatus == 404) {
+                throw BudgetSyncRemoteException("operation_not_found", 404, error)
+            }
+            throw error
+        }
     }
 
     override suspend fun readTransaction(
@@ -178,7 +191,7 @@ class GeneratedBudgetSyncRemote(
         return BudgetSyncJson.parseTransaction(payload, transactionId)
     }
 
-    private fun unwrap(result: Either<CallException, HttpCallResponse<Map<String, JsonElement>>>): Map<String, JsonElement> {
+    private suspend fun unwrap(result: Either<CallException, HttpCallResponse<Map<String, JsonElement>>>): Map<String, JsonElement> {
         val error = result.swap().getOrNull()
         if (error != null) throw error.toBudgetSyncException()
         return result.getOrNull()!!.data
@@ -198,9 +211,20 @@ class GeneratedBudgetSyncRemote(
             else -> throw BudgetSyncProtocolException("Snapshot continuation type is invalid")
         }
 
-    private fun CallException.toBudgetSyncException(): BudgetSyncRemoteException =
+    private suspend fun CallException.toBudgetSyncException(): BudgetSyncRemoteException =
         when (this) {
-            is HttpCallException -> BudgetSyncRemoteException("http-$code", code, this)
+            is HttpCallException -> BudgetSyncRemoteException(apiErrorCode() ?: "http-$code", code, this)
             else -> BudgetSyncRemoteException("network-error", cause = this)
+        }
+
+    private suspend fun HttpCallException.apiErrorCode(): String? =
+        try {
+            val root = Json.parseToJsonElement(raw.bodyAsText()) as? JsonObject
+            val error = root?.get("error") as? JsonObject
+            (error?.get("code") as? JsonPrimitive)?.contentOrNull
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
         }
 }

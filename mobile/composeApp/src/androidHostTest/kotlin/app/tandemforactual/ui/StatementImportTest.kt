@@ -143,13 +143,13 @@ class StatementImportTest {
     fun repeatedReferenceValuesFallBackToDistinctStableImportIds() {
         val statement =
             "Date,Payee,Amount,Reference\n" +
-                "11/01/2026,Market,12.00,SO-1\n" +
-                "11/01/2026,Market,12.00,SO-1\n"
+                "11/01/2026,Market,12.00,statement_1\n" +
+                "11/01/2026,Market,12.00,statement_1\n"
         val first = parseStatementImport("references.csv", statement).transactions.map { it.importedId }
         val retry = parseStatementImport("references.csv", statement).transactions.map { it.importedId }
 
         assertEquals(2, first.distinct().size)
-        assertNotEquals("SO-1", first[0])
+        assertNotEquals("statement_1", first[0])
         assertEquals(first, retry)
     }
 

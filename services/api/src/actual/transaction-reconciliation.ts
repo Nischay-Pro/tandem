@@ -39,7 +39,7 @@ export const MAX_TRANSACTION_AMOUNT = 1_000_000_000;
 // Actual 26.11.0 silently drops transactions dated before 1995-01-01.
 export const MIN_TRANSACTION_DATE = "1995-01-01";
 
-export function isCompanionTransactionId(value: string): boolean {
+export function isTandemTransactionId(value: string): boolean {
   return /^tandem:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(
     value,
   );
@@ -124,10 +124,10 @@ const DELETION_COMPARISON_FIELDS: readonly (keyof TransactionSnapshot)[] = [
 export function snapshotActualTransaction(value: unknown): TransactionSnapshot {
   const record = asRecord(value, "Actual transaction");
   const importedId = optionalString(record.imported_id, "imported_id");
-  const companionId =
-    importedId && isCompanionTransactionId(importedId) ? importedId : null;
+  const tandemId =
+    importedId && isTandemTransactionId(importedId) ? importedId : null;
   return {
-    id: companionId ?? requiredString(record.id, "id"),
+    id: tandemId ?? requiredString(record.id, "id"),
     account: requiredString(record.account, "account"),
     amount: requiredInteger(record.amount, "amount"),
     date: requiredDate(record.date),
@@ -136,7 +136,7 @@ export function snapshotActualTransaction(value: unknown): TransactionSnapshot {
     notes: normalizeEmptyNote(optionalText(record.notes, "notes")),
     cleared: optionalBoolean(record.cleared, "cleared"),
     reconciled: optionalBoolean(record.reconciled, "reconciled"),
-    importedId: companionId === null ? importedId : null,
+    importedId: tandemId === null ? importedId : null,
     importedPayee: optionalText(record.imported_payee, "imported_payee"),
     startingBalance: optionalBoolean(
       record.starting_balance_flag,

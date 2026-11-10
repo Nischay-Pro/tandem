@@ -205,6 +205,24 @@ class GeneratedBudgetSyncRemoteTest {
                 MockEngine {
                     when (mode) {
                         "http" -> respond("{}", status = HttpStatusCode.BadGateway, headers = jsonHeaders())
+                        "structured" ->
+                            respond(
+                                """{"error":{"code":"actual_unavailable","message":"private host detail"}}""",
+                                status = HttpStatusCode.ServiceUnavailable,
+                                headers = jsonHeaders(),
+                            )
+                        "budget-not-found" ->
+                            respond(
+                                """{"error":{"code":"not_found","message":"private host detail"}}""",
+                                status = HttpStatusCode.NotFound,
+                                headers = jsonHeaders(),
+                            )
+                        "operation-not-found" ->
+                            respond(
+                                """{"error":{"code":"not_found","message":"private host detail"}}""",
+                                status = HttpStatusCode.NotFound,
+                                headers = jsonHeaders(),
+                            )
                         "io" -> throw java.io.IOException("private host detail")
                         else -> respond(snapshotJson(), headers = jsonHeaders())
                     }
@@ -217,6 +235,22 @@ class GeneratedBudgetSyncRemoteTest {
                 assertEquals("http-502", httpError.errorCode)
                 assertEquals(502, httpError.httpStatus)
                 assertTrue(!httpError.message.orEmpty().contains("private host detail"))
+
+                mode = "structured"
+                val structuredError = captureSyncException { remote.readSnapshot(BUDGET, null) }
+                assertEquals("actual_unavailable", structuredError.errorCode)
+                assertEquals(503, structuredError.httpStatus)
+                assertTrue(!structuredError.message.orEmpty().contains("private host detail"))
+
+                mode = "budget-not-found"
+                val missingBudget = captureSyncException { remote.readSnapshot(BUDGET, null) }
+                assertEquals("not_found", missingBudget.errorCode)
+                assertEquals(404, missingBudget.httpStatus)
+
+                mode = "operation-not-found"
+                val missingOperation = captureSyncException { remote.readOperation(OPERATION_ID) }
+                assertEquals("operation_not_found", missingOperation.errorCode)
+                assertEquals(404, missingOperation.httpStatus)
 
                 mode = "io"
                 val transportError = captureSyncException { remote.readSnapshot(BUDGET, null) }
@@ -333,6 +367,29 @@ class GeneratedBudgetSyncRemoteTest {
             RemoteOperationStatus.CONFLICT,
             BudgetSyncJson.parseOperation(Json.parseToJsonElement(operationJson("conflict")).jsonObject).status,
         )
+        val conflictPayload =
+            operationJson("conflict").replace(
+                "\"conflict\":null",
+                "\"conflict\":{" +
+                    "\"conflictId\":\"9c8d6c9d-9bf4-449c-85ad-4989706d8893\"," +
+                    "\"conflictType\":\"same-field-edit\"," +
+                    "\"baseSnapshot\":{},\"localPatch\":{},\"remoteSnapshot\":{}," +
+                    "\"conflictingFields\":[\"amount\",\"category\"]," +
+                    "\"createdAt\":\"2026-11-10T12:00:00Z\"}",
+            )
+        val parsedConflict = BudgetSyncJson.parseOperation(Json.parseToJsonElement(conflictPayload).jsonObject)
+        assertEquals("same-field-edit", parsedConflict.conflictType)
+        assertEquals(listOf("amount", "category"), parsedConflict.conflictingFields)
+
+        val invalidConflictFields =
+            conflictPayload.replace("\"conflictingFields\":[\"amount\",\"category\"]", "\"conflictingFields\":[1]")
+        assertProtocolException { BudgetSyncJson.parseOperation(Json.parseToJsonElement(invalidConflictFields).jsonObject) }
+        val objectConflictFields =
+            conflictPayload.replace("\"conflictingFields\":[\"amount\",\"category\"]", "\"conflictingFields\":{}")
+        assertProtocolException { BudgetSyncJson.parseOperation(Json.parseToJsonElement(objectConflictFields).jsonObject) }
+        val objectConflictField =
+            conflictPayload.replace("\"conflictingFields\":[\"amount\",\"category\"]", "\"conflictingFields\":[{}]")
+        assertProtocolException { BudgetSyncJson.parseOperation(Json.parseToJsonElement(objectConflictField).jsonObject) }
         assertEquals(
             RemoteOperationStatus.UNCERTAIN,
             BudgetSyncJson.parseOperation(Json.parseToJsonElement(operationJson("uncertain")).jsonObject).status,
@@ -344,7 +401,7 @@ class GeneratedBudgetSyncRemoteTest {
 
         val blankStatus = Json.parseToJsonElement(operationJson("queued").replace("queued", " ")).jsonObject
         assertProtocolException { BudgetSyncJson.parseOperation(blankStatus) }
-        val nonStringError = Json.parseToJsonElement(operationJson("queued").replace("null", "123")).jsonObject
+        val nonStringError = Json.parseToJsonElement(operationJson("queued").replace("\"errorCode\":null", "\"errorCode\":123")).jsonObject
         assertProtocolException { BudgetSyncJson.parseOperation(nonStringError) }
         val invalidBoolean =
             Json
@@ -474,7 +531,7 @@ class GeneratedBudgetSyncRemoteTest {
         val previousClient = Api.client
         val previousBaseUrl = Api.baseUrl
         val auth = Auth.BearerAuth { AuthItem.Bearer("sync-test-token") }
-        Api.baseUrl = Url("https://companion.example")
+        Api.baseUrl = Url("https://tandem.example")
         Api.setAuthProvider(auth)
         Api.updateClient(
             createHttpClient = {
@@ -501,7 +558,7 @@ class GeneratedBudgetSyncRemoteTest {
 
     private suspend fun testApiClient(): TandemApiClient =
         TandemApiClient().apply {
-            restoreSession("https://companion.example", "sync-test-token")
+            restoreSession("https://tandem.example", "sync-test-token")
         }
 
     private fun outboxOperation(action: String) =

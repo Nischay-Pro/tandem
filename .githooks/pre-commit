@@ -28,8 +28,32 @@ fi
 
 staged_mobile_kotlin=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^mobile/.*\.(kt|kts)$' || true)
 if [ -n "$staged_mobile_kotlin" ]; then
+  if [ -z "${ANDROID_HOME:-}" ]; then
+    if [ -n "${ANDROID_SDK_ROOT:-}" ]; then
+      ANDROID_HOME=$ANDROID_SDK_ROOT
+    else
+      for android_sdk_candidate in "$HOME/Android/Sdk" "$HOME/Library/Android/sdk" /usr/lib/android-sdk; do
+        if [ -d "$android_sdk_candidate/platforms" ]; then
+          ANDROID_HOME=$android_sdk_candidate
+          break
+        fi
+      done
+    fi
+  fi
+  if [ -z "${ANDROID_HOME:-}" ]; then
+    printf '%s\n' 'Android compilation needs the SDK. Set ANDROID_HOME to its install directory.' >&2
+    exit 1
+  fi
+  export ANDROID_HOME
+  ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-$ANDROID_HOME}
+  export ANDROID_SDK_ROOT
   (
     cd "$repo_root/mobile"
-    ./gradlew --no-daemon :api-client:ktlintCheck :data:ktlintCheck :composeApp:ktlintCheck
+    ./gradlew --no-daemon \
+      :api-client:ktlintCheck \
+      :data:ktlintCheck \
+      :composeApp:ktlintCheck \
+      :composeApp:compileAndroidMain \
+      :composeApp:compileAndroidHostTest
   )
 fi

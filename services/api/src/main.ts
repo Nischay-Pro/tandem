@@ -5,7 +5,11 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createPostgresDatabase, type Database } from "./database.js";
 import { parseApiConfig, type ApiConfig, type Environment } from "./config.js";
-import { startApiServer, type ApiRuntime } from "./server.js";
+import {
+  startApiServer,
+  startupExitCodeFor,
+  type ApiRuntime,
+} from "./server.js";
 import type { SignalRegistrar } from "./server.js";
 import { ActualSession } from "./actual/actual-session.js";
 import { createTransactionApi } from "./actual/transaction-api.js";
@@ -181,7 +185,15 @@ export function runProductionApi(
         signals.exitCode = 1;
       }
     });
+  }).catch((error: unknown) => {
+    signals.exitCode = productionStartupExitCode(error);
+    throw error;
   });
+}
+
+export function productionStartupExitCode(error: unknown): number {
+  if (error instanceof OperatorMessageError) return 2;
+  return startupExitCodeFor(error) ?? 1;
 }
 
 export function reportProcessFailure(

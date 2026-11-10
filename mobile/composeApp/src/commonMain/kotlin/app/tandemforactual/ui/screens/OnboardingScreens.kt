@@ -257,12 +257,19 @@ internal fun SignInScreen(
                     mobileSession.signInError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
                     mobileSession.credentialStorageError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
                     if (!passwordActive && !openIdActive) {
-                        InlineMessage("This Actual server’s sign-in method isn’t supported yet.", InlineMessageKind.INFO)
+                        InlineMessage(
+                            "Tandem can’t use this Actual sign-in method. Change it to password or OpenID in Actual, then try again.",
+                            InlineMessageKind.INFO,
+                        )
                     }
                 }
                 mobileSession.signInError != null ->
                     InlineMessage(mobileSession.signInError.orEmpty(), InlineMessageKind.ERROR)
-                else -> InlineMessage("This Actual server’s sign-in method isn’t supported yet.", InlineMessageKind.INFO)
+                else ->
+                    InlineMessage(
+                        "Tandem can’t use this Actual sign-in method. Change it to password or OpenID in Actual, then try again.",
+                        InlineMessageKind.INFO,
+                    )
             }
         },
         actions = {
@@ -325,7 +332,7 @@ internal fun BudgetChooserScreen(
         )
         when {
             usingCachedCatalog || (mobileSession.budgets.isEmpty() && cachedCatalog.isNotEmpty()) -> {
-                BodyText("Saved budgets are available while the server is offline.")
+                BodyText("Saved budgets are available while Tandem is offline.")
                 selectableBudgets.forEach { budget ->
                     ChoiceRow(
                         budget.name,

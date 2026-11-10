@@ -20,6 +20,8 @@ import platform.Foundation.currentLocale
 import kotlin.math.abs
 import kotlin.math.pow
 
+private const val APPLE_REFERENCE_DATE_UNIX_SECONDS = 978_307_200.0
+
 internal actual fun platformFormatCurrency(
     minorUnits: Long,
     displaySettings: BudgetDisplaySettings?,
@@ -158,6 +160,17 @@ internal actual fun platformFormatDate(
             dateStyle = if (includeYear) NSDateFormatterMediumStyle else NSDateFormatterShortStyle
         }
     }) { it.stringFromDate(calendarDate(year, month, day)) }
+}
+
+internal actual fun platformFormatDateAtEpochMilliseconds(epochMilliseconds: Long): String {
+    val locale = NSLocale.currentLocale
+    val date = NSDate(timeIntervalSinceReferenceDate = epochMilliseconds.toDouble() / 1_000.0 - APPLE_REFERENCE_DATE_UNIX_SECONDS)
+    return withDateFormatter("date:$locale:medium", {
+        NSDateFormatter().apply {
+            this.locale = locale
+            dateStyle = NSDateFormatterMediumStyle
+        }
+    }) { it.stringFromDate(date) }
 }
 
 internal actual fun platformTodayIsoDate(): String {

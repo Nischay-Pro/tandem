@@ -1,6 +1,6 @@
 # Tandem for Actual Budget
 
-An independent, local-first mobile companion for Actual Budget. Tandem provides Android and iOS apps while Actual remains the authoritative budget engine and data store.
+A local-first app for Actual Budget. Tandem provides Android and iOS apps while Actual remains the authoritative budget engine and data store.
 
 **Tandem is not affiliated with, endorsed by, or supported by Actual Budget.** Actual Budget is a trademark of its respective owners.
 
@@ -265,10 +265,16 @@ Install the local Git hooks once after cloning the repository:
 ./scripts/install-git-hooks.sh
 ```
 
-The pre-commit hook checks staged formatting and mobile source rules, and runs
-ESLint when JavaScript or TypeScript files are staged. The pre-push hook runs
-repository ESLint, formatting checks, mobile source rules, and Kotlin lint.
-Install project dependencies before running the hooks.
+The pre-commit hook checks formatting and mobile source rules. When Kotlin
+files are staged, it runs KtLint and compiles the shared Android sources with
+`:composeApp:compileAndroidMain` and `:composeApp:compileAndroidHostTest`. It
+runs ESLint when JavaScript or TypeScript files are staged. Before a push, the
+hook runs TypeScript checks, mobile tests and coverage gates, Android lint and
+release assembly, and Kotlin compilation for Android and iOS targets. The
+hooks find a standard Android SDK location automatically; set `ANDROID_HOME`
+when yours is installed elsewhere. CI on macOS remains responsible for the
+Xcode app build and iOS simulator tests. Install project dependencies before
+running the hooks.
 
 Run the API checks in the disposable Docker environment:
 

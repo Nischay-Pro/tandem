@@ -260,7 +260,7 @@ internal fun AboutScreen(
                 Text("Tandem", color = tandemPalette.text, fontSize = TandemTypography.pageTitle, fontWeight = FontWeight.Bold)
                 Badge("Version 0.1.0")
                 Text(
-                    "Your budget stays on this device and remains available when the server is offline.",
+                    "Your budget stays on this device and remains available when Tandem is offline.",
                     color = tandemPalette.muted,
                     fontSize = TandemTypography.compactBody,
                     lineHeight = TandemTypography.bodyLineHeight,

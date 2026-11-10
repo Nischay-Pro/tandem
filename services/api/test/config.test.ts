@@ -4,8 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseApiConfig as parseRawApiConfig } from "../src/config.js";
 
-const databaseUrl =
-  "postgresql://companion:local-test@localhost:5432/companion";
+const databaseUrl = "postgresql://tandem:local-test@localhost:5432/tandem";
 const testAuthTokenEncryptionKey = "synthetic-session-token-encryption-key-32";
 
 function parseApiConfig(environment: Record<string, string | undefined>) {

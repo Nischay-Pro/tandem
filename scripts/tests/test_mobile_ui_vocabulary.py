@@ -19,6 +19,7 @@ class MobileUiVocabularyTests(unittest.TestCase):
         self,
         messages: list[str],
         suffix: str = ".kt",
+        documentation: list[str] | None = None,
     ) -> subprocess.CompletedProcess[str]:
         with tempfile.TemporaryDirectory() as temporary_directory:
             source_root = Path(temporary_directory) / "source"
@@ -31,8 +32,21 @@ class MobileUiVocabularyTests(unittest.TestCase):
                 f"{ 'package test' if suffix == '.kt' else '' }\n{declarations}\n",
                 encoding="utf-8",
             )
+            documentation_root = Path(temporary_directory) / "docs"
+            documentation_root.mkdir()
+            for index, content in enumerate(documentation or ["Public docs are clean."]):
+                (documentation_root / f"doc-{index}.md").write_text(
+                    content, encoding="utf-8"
+                )
             return subprocess.run(
-                [sys.executable, str(CHECKER), "--source-root", str(source_root)],
+                [
+                    sys.executable,
+                    str(CHECKER),
+                    "--source-root",
+                    str(source_root),
+                    "--documentation-root",
+                    str(documentation_root),
+                ],
                 cwd=ROOT,
                 check=False,
                 capture_output=True,
@@ -81,6 +95,24 @@ class MobileUiVocabularyTests(unittest.TestCase):
         result = self.run_checker(["This edit is uncertain."], suffix=".swift")
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("avoid ‘conflict’ or ‘uncertain’", result.stderr)
+
+    def test_checker_rejects_old_product_name_in_public_docs(self) -> None:
+        product_name = "mobile " + "com" + "panion"
+        result = self.run_checker([], documentation=[f"The {product_name} is ready."])
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("old product name", result.stderr)
+
+    def test_checker_rejects_internal_ticket_identifiers_in_public_docs(self) -> None:
+        identifier = "ABC" + "-" + "42"
+        result = self.run_checker([], documentation=[f"See {identifier} for the change."])
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("internal ticket identifiers", result.stderr)
+
+    def test_checker_accepts_public_product_wording(self) -> None:
+        result = self.run_checker(
+            [], documentation=["Tandem is a local-first app for Actual Budget."]
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

@@ -469,7 +469,12 @@ class BudgetSyncCoordinator(
                 val transaction = remote.readTransaction(local.budgetId, local.recordId, encryptionPassword)
                 repository.markWriteConflict(
                     operationId = local.operationId,
-                    errorCode = remoteResult.errorCode?.safeCode() ?: "remote-conflict",
+                    errorCode =
+                        encodeLocalWriteConflictDetails(
+                            errorCode = remoteResult.errorCode?.safeCode() ?: "remote-conflict",
+                            conflictType = remoteResult.conflictType,
+                            conflictingFields = remoteResult.conflictingFields,
+                        ),
                     remoteRecord = transaction?.toRemoteRecord(local.budgetId, generation),
                 )
                 WriteOutcome.CONFLICTED
