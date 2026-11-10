@@ -406,6 +406,7 @@ function registerDeviceAuthorizationRoutes(
       400: errorSchema,
       429: errorSchema,
       503: errorSchema,
+      500: errorSchema,
     },
   };
   app.post<{
@@ -511,7 +512,18 @@ function registerDeviceAuthorizationRoutes(
             error: { code: "invalid_request", message: error.message },
           });
         }
-        throw error;
+        logSecurityAuditEvent({
+          event: "device.sign_in",
+          outcome: "failed",
+          reason: "internal_error",
+          clientAddress: request.ip,
+        });
+        return reply.code(500).send({
+          error: {
+            code: "internal_error",
+            message: "Could not complete sign-in. Try again shortly.",
+          },
+        });
       }
       if (!signedIn) {
         return reply.code(503).send({
@@ -1337,8 +1349,9 @@ function registerTransactionRoutes(
                 request.params.operationId,
                 encryptionPassword,
               );
-        if (
-          !result ||
+        if (!result) {
+          return transactionNotFound(reply);
+        } else if (
           !DeviceAuthorization.canAccessBudget(
             device,
             result.operation.budgetId,

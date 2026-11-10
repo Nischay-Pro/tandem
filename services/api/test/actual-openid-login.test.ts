@@ -10,6 +10,98 @@ function jsonResponse(value: unknown): Response {
 }
 
 describe("Actual OpenID sign-in handoff", () => {
+  it("uses the default clock and code generator for a complete handoff", async () => {
+    const startOpenIdSignIn = vi.fn(async (returnUrl: string) =>
+      new URL(returnUrl).protocol === "https:"
+        ? "https://idp.example/authorize"
+        : "https://idp.example/insecure",
+    );
+    const passwordLogin = {
+      startOpenIdSignIn,
+      identifySessionToken: vi.fn(async () => "actual-user:synthetic"),
+    } as unknown as ActualPasswordLogin;
+    const prepareGrant = vi.fn(async (grant) => grant);
+    const openId = new ActualOpenIdLogin(
+      passwordLogin,
+      "https://tandem.example",
+      prepareGrant,
+    );
+
+    const started = await openId.start("Synthetic phone");
+    const callbackUrl = new URL(startOpenIdSignIn.mock.calls[0]?.[0] ?? "");
+    const state = callbackUrl.pathname.split("/").at(-2);
+    const returnUrl = await openId.completeCallback(
+      state ?? "",
+      "synthetic-session-token",
+    );
+    const code = new URL(returnUrl ?? "").searchParams.get("code");
+
+    expect(started.redirectUrl).toBe("https://idp.example/authorize");
+    expect(state).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(code).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(prepareGrant).toHaveBeenCalledWith({
+      principalId: "actual-user:synthetic",
+      sessionToken: "synthetic-session-token",
+      budgetIds: [],
+    });
+    expect(openId.consume(code ?? "")).toMatchObject({
+      deviceName: "Synthetic phone",
+      grant: { principalId: "actual-user:synthetic" },
+    });
+  });
+
+  it.each(["", "  ", "x".repeat(101)])(
+    "rejects an invalid device name: %s",
+    async (deviceName) => {
+      const startOpenIdSignIn = vi.fn(async (returnUrl: string) =>
+        new URL(returnUrl).protocol === "https:"
+          ? "https://idp.example/authorize"
+          : "https://idp.example/insecure",
+      );
+      const passwordLogin = {
+        startOpenIdSignIn,
+      } as unknown as ActualPasswordLogin;
+      const openId = new ActualOpenIdLogin(
+        passwordLogin,
+        "https://tandem.example",
+        async (grant) => grant,
+      );
+
+      await expect(openId.start(deviceName)).rejects.toThrow(
+        "Device name is invalid",
+      );
+      expect(startOpenIdSignIn).not.toHaveBeenCalled();
+    },
+  );
+
+  it("refuses new pending logins when the state store is full", async () => {
+    const startOpenIdSignIn = vi.fn(async (returnUrl: string) =>
+      new URL(returnUrl).protocol === "https:"
+        ? "https://idp.example/authorize"
+        : "https://idp.example/insecure",
+    );
+    const passwordLogin = {
+      startOpenIdSignIn,
+    } as unknown as ActualPasswordLogin;
+    let codeIndex = 0;
+    const openId = new ActualOpenIdLogin(
+      passwordLogin,
+      "https://tandem.example",
+      async (grant) => grant,
+      () => 0,
+      () => String(++codeIndex).padStart(43, "0"),
+    );
+
+    for (let index = 0; index < 1_000; index += 1) {
+      await openId.start("Synthetic phone");
+    }
+
+    await expect(openId.start("Synthetic phone")).rejects.toThrow(
+      "OpenID sign-in is temporarily busy",
+    );
+    expect(startOpenIdSignIn).toHaveBeenCalledTimes(1_000);
+  });
+
   it("keeps the Actual token server-side and exchanges a one-use Tandem code", async () => {
     const requests: Array<{ url: string; body?: string }> = [];
     const fetchRequest = vi.fn<typeof fetch>(async (input, init) => {
@@ -108,5 +200,45 @@ describe("Actual OpenID sign-in handoff", () => {
       ),
     ).resolves.toBeUndefined();
     expect(fetchRequest).toHaveBeenCalledOnce();
+  });
+
+  it("expires a completed handoff and rejects unknown state and code values", async () => {
+    let now = 1_000;
+    const fetchRequest = vi.fn<typeof fetch>(async (input) =>
+      input.toString().endsWith("/account/login")
+        ? jsonResponse({ returnUrl: "https://idp.example/authorize" })
+        : jsonResponse({ status: "ok", data: { userId: "owner" } }),
+    );
+    let codeIndex = 0;
+    const login = new ActualPasswordLogin(
+      "https://actual.example",
+      fetchRequest,
+    );
+    const openId = new ActualOpenIdLogin(
+      login,
+      "https://actual.example",
+      async (grant) => grant,
+      () => now,
+      () => String(++codeIndex).padStart(43, "0"),
+    );
+
+    await expect(
+      openId.completeCallback("Z".repeat(43), "unused-token"),
+    ).resolves.toBeUndefined();
+    expect(openId.consume("Z".repeat(43))).toBeUndefined();
+
+    await openId.start("Synthetic phone");
+    const request = JSON.parse(
+      String(fetchRequest.mock.calls[0]?.[1]?.body),
+    ) as { returnUrl: string };
+    const state = new URL(request.returnUrl).pathname.split("/").at(-2);
+    const returnUrl = await openId.completeCallback(
+      state ?? "",
+      "synthetic-session-token",
+    );
+    const code = new URL(returnUrl ?? "").searchParams.get("code");
+
+    now += 90_000;
+    expect(openId.consume(code ?? "")).toBeUndefined();
   });
 });

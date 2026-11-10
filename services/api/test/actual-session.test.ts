@@ -145,6 +145,20 @@ describe("ActualSession", () => {
     await session.close();
   });
 
+  it("skips startup when no Actual credential is configured", async () => {
+    const fake = createFakeClient();
+    const session = new ActualSession(fake.api, {
+      serverURL: config.serverURL,
+      dataDir: config.dataDir,
+    });
+
+    await session.start();
+
+    expect(fake.calls).toEqual([]);
+    expect(session.isReady).toBe(false);
+    await session.close();
+  });
+
   it("marks a rejected session token unready and logs only a safe instruction", async () => {
     const fake = createFakeClient();
     fake.failInit(Object.assign(new Error("unauthorized"), { status: 401 }));
@@ -827,6 +841,166 @@ describe("ActualSession", () => {
     await session.close();
   });
 
+  it("restores the base session config when an operation has no principal", async () => {
+    const fake = createFakeClient();
+    const session = new ActualSession(
+      fake.api,
+      { serverURL: config.serverURL, dataDir: config.dataDir },
+      undefined,
+      undefined,
+      undefined,
+      {
+        sessionToken: async (principalId) => `${principalId}-session-token`,
+        dataDir: async (principalId) => `/tmp/actual-api/${principalId}`,
+      },
+    );
+
+    await runAsActualPrincipal("actual-user-a", () =>
+      session.execute(async () => "user operation"),
+    );
+    expect(session.isReady).toBe(true);
+
+    await expect(
+      session.execute(async () => "anonymous operation"),
+    ).resolves.toBe("anonymous operation");
+    expect(session.isReady).toBe(false);
+    expect(session.readinessMessage).toBe("Sign in to Actual to load budgets.");
+    expect(fake.api.shutdown).toHaveBeenCalledOnce();
+
+    await runAsActualPrincipal("actual-user-a", () =>
+      session.execute(async () => "user operation again"),
+    );
+    expect(session.isReady).toBe(true);
+    expect(fake.api.init).toHaveBeenCalledTimes(2);
+    await session.close();
+  });
+
+  it("keeps the selected principal when the same account runs another operation", async () => {
+    const fake = createFakeClient();
+    const session = new ActualSession(
+      fake.api,
+      { serverURL: config.serverURL, dataDir: config.dataDir },
+      undefined,
+      undefined,
+      undefined,
+      {
+        sessionToken: async (principalId) => `${principalId}-session-token`,
+        dataDir: async (principalId) => `/tmp/actual-api/${principalId}`,
+      },
+    );
+
+    await runAsActualPrincipal("actual-user-a", () =>
+      session.execute(async () => "first operation"),
+    );
+    await runAsActualPrincipal("actual-user-a", () =>
+      session.execute(async () => "same principal"),
+    );
+
+    expect(fake.api.init).toHaveBeenCalledOnce();
+    expect(fake.api.shutdown).not.toHaveBeenCalled();
+    await session.close();
+  });
+
+  it("rejects a principal without a stored token or data directory", async () => {
+    const fake = createFakeClient();
+    const session = new ActualSession(
+      fake.api,
+      { serverURL: config.serverURL, dataDir: config.dataDir },
+      undefined,
+      undefined,
+      undefined,
+      {
+        sessionToken: async () => undefined,
+        dataDir: async () => "/tmp/actual-api/actual-user-a",
+      },
+    );
+
+    await expect(
+      runAsActualPrincipal("actual-user-a", () =>
+        session.execute(async () => "unreachable"),
+      ),
+    ).rejects.toThrow(
+      "Actual rejected ACTUAL_SESSION_TOKEN. Replace the token and restart Tandem.",
+    );
+    expect(fake.calls).toEqual([]);
+    await session.close();
+  });
+
+  it("can replace the session token on an active or closed session", async () => {
+    const fake = createFakeClient();
+    const session = new ActualSession(fake.api, {
+      serverURL: config.serverURL,
+      dataDir: config.dataDir,
+      verbose: true,
+      sessionToken: "initial-session-token",
+    });
+
+    await session.start();
+    await expect(session.useSessionToken("  ")).rejects.toThrow(
+      "Actual session token must not be empty",
+    );
+    await session.useSessionToken("replacement-session-token");
+    expect(fake.api.init).toHaveBeenNthCalledWith(2, {
+      serverURL: config.serverURL,
+      dataDir: config.dataDir,
+      verbose: true,
+      sessionToken: "replacement-session-token",
+    });
+
+    await session.close();
+    await session.useSessionToken("reopened-session-token");
+    expect(fake.api.init).toHaveBeenNthCalledWith(3, {
+      serverURL: config.serverURL,
+      dataDir: config.dataDir,
+      verbose: true,
+      sessionToken: "reopened-session-token",
+    });
+    await session.close();
+  });
+
+  it("omits verbose config when replacing a token without verbose mode", async () => {
+    const fake = createFakeClient();
+    const session = new ActualSession(fake.api, {
+      serverURL: config.serverURL,
+      dataDir: config.dataDir,
+      sessionToken: "initial-session-token",
+    });
+
+    await session.start();
+    await session.useSessionToken("replacement-session-token");
+
+    expect(fake.api.init).toHaveBeenNthCalledWith(2, {
+      serverURL: config.serverURL,
+      dataDir: config.dataDir,
+      sessionToken: "replacement-session-token",
+    });
+    await session.close();
+  });
+
+  it("preserves verbose mode in a password connection", async () => {
+    const fake = createFakeClient();
+    const session = new ActualSession(fake.api, { ...config, verbose: true });
+
+    await session.start();
+
+    expect(fake.api.init).toHaveBeenCalledWith({ ...config, verbose: true });
+    await session.close();
+  });
+
+  it("rejects a client configuration that mixes password and session token", async () => {
+    const fake = createFakeClient();
+    const session = new ActualSession(fake.api, {
+      ...config,
+      sessionToken: "session-token",
+    });
+
+    await expect(session.start()).rejects.toThrow(
+      "Actual sign-in is required before accessing budgets",
+    );
+    expect(fake.calls).toEqual(["shutdown"]);
+    await session.close();
+  });
+
   it("reports write-sync failure without replacing a partially failed operation", async () => {
     const fake = createFakeClient();
     const primaryError = new Error("write failed");
@@ -932,6 +1106,11 @@ describe("ActualSession", () => {
 
     expect(fake.calls).not.toContain("queued-operation");
     await expect(session.execute(async () => undefined)).rejects.toThrow(
+      "Actual session is unavailable after an operation timed out; restart the API process",
+    );
+    await expect(
+      session.useSessionToken("recovery-session-token"),
+    ).rejects.toThrow(
       "Actual session is unavailable after an operation timed out; restart the API process",
     );
     const close = session.close();

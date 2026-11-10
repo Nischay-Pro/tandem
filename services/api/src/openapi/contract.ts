@@ -3,8 +3,7 @@ import { format } from "prettier";
 import { buildApiApp } from "../app.js";
 import type { TransactionApiPort } from "../actual/transaction-api.js";
 import type { DeviceAuthorization } from "../auth/device-auth.js";
-import { ActualOpenIdLogin } from "../auth/actual-openid-login.js";
-import { ActualPasswordLogin } from "../auth/actual-password-login.js";
+import type { ActualOpenIdLogin } from "../auth/actual-openid-login.js";
 
 export interface OpenApiDocument {
   openapi: string;
@@ -20,18 +19,21 @@ export async function createOpenApiDocument(): Promise<OpenApiDocument> {
       async close() {},
     },
     {
-      deviceAuth: {} as DeviceAuthorization,
+      deviceAuth: {
+        async authenticate() {
+          return undefined;
+        },
+      } as unknown as DeviceAuthorization,
       transactionApi: {} as TransactionApiPort,
-      actualOpenIdLogin: new ActualOpenIdLogin(
-        new ActualPasswordLogin("https://actual.example"),
-        "https://tandem.example",
-        async (grant) => grant,
-      ),
+      actualOpenIdLogin: {} as ActualOpenIdLogin,
     },
   );
 
   try {
-    await app.inject({ method: "GET", url: "/api/v1/health/ready" });
+    await app.inject({
+      method: "GET",
+      url: "/api/v1/health/ready",
+    });
     return app.swagger() as OpenApiDocument;
   } finally {
     await app.close();

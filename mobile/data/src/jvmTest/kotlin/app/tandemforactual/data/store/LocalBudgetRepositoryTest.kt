@@ -2,6 +2,7 @@ package app.tandemforactual.data.store
 
 import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import app.tandemforactual.data.database.AppPreferenceEntity
 import app.tandemforactual.data.database.BudgetRecordDisplayMetadataMigration
 import app.tandemforactual.data.database.BudgetRecordParentMetadataMigration
 import app.tandemforactual.data.database.BudgetRecordSearchMetadataMigration
@@ -22,6 +23,130 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 
 class LocalBudgetRepositoryTest {
+    @Test
+    fun unresolvedWriteGuardTracksQueuedWritesUntilTheyAreDiscarded() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 200L }
+                repository.applySnapshot(BUDGET, GENERATION, "c1", listOf(transaction()))
+
+                assertFalse(repository.hasUnresolvedWrites())
+                val queued = repository.enqueueWrite(updateRequest())
+                assertTrue(repository.hasUnresolvedWrites())
+                repository.discardWrite(queued.operation.operationId)
+                assertFalse(repository.hasUnresolvedWrites())
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun clearingLocalDataRemovesInternalPreferencesAndPreservesUserPreferences() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 200L }
+                val preferences = database.appPreferenceDao()
+                preferences.putAll(
+                    listOf(
+                        AppPreferenceEntity(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY, "queued-reorders"),
+                    ),
+                )
+                repository.clearAllLocalData()
+                assertTrue(preferences.readAll().isEmpty())
+
+                preferences.putAll(
+                    listOf(
+                        AppPreferenceEntity("theme", "dark"),
+                        AppPreferenceEntity(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY, "queued-reorders"),
+                    ),
+                )
+                repository.clearAllLocalData()
+                assertEquals(listOf(AppPreferenceEntity("theme", "dark")), preferences.readAll())
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun queuedDeletesConsolidateAndUnknownQueuedActionsAreRejected() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 200L }
+                repository.applySnapshot(BUDGET, GENERATION, "c1", listOf(transaction()))
+                val firstDelete =
+                    repository.enqueueWrite(
+                        updateRequest(
+                            operationId = "delete-1",
+                            idempotencyKey = "delete-key-1",
+                            action = LocalWriteAction.DELETE,
+                            patch = "{}",
+                            optimistic = null,
+                            projection = null,
+                        ),
+                    )
+                val mergedDelete =
+                    repository.enqueueWrite(
+                        updateRequest(
+                            operationId = "delete-2",
+                            idempotencyKey = "delete-key-2",
+                            action = LocalWriteAction.DELETE,
+                            patch = "{}",
+                            optimistic = null,
+                            projection = null,
+                        ),
+                    )
+
+                assertEquals(firstDelete.operation.operationId, mergedDelete.operation.operationId)
+                assertTrue(mergedDelete.replacedUnsent)
+                assertEquals(1, repository.readPendingWrites(BUDGET).size)
+            } finally {
+                database.close()
+            }
+
+            val unknownActionDatabase = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(unknownActionDatabase) { 200L }
+                repository.applySnapshot(BUDGET, GENERATION, "c1", listOf(transaction()))
+                val first = repository.enqueueWrite(updateRequest())
+                unknownActionDatabase.outboxDao().put(first.operation.copy(action = "unknown"))
+
+                assertFails<LocalOperationConflictException> {
+                    repository.enqueueWrite(
+                        updateRequest(
+                            operationId = "after-unknown-action",
+                            idempotencyKey = "after-unknown-action-key",
+                        ),
+                    )
+                }
+            } finally {
+                unknownActionDatabase.close()
+            }
+        }
+
+    @Test
+    fun writeCannotClaimToSupersedeAConflictThatDoesNotExist() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 200L }
+                repository.applySnapshot(BUDGET, GENERATION, "c1", listOf(transaction()))
+
+                assertFails<LocalOperationConflictException> {
+                    repository.enqueueWrite(
+                        updateRequest(
+                            supersedesConflictOperationId = "missing-conflict",
+                        ),
+                    )
+                }
+                assertTrue(repository.readPendingWrites(BUDGET).isEmpty())
+            } finally {
+                database.close()
+            }
+        }
+
     @Test
     fun budgetMutationQueueUsesTheRoomOutboxAndIsNotClaimedAsATransaction() =
         runBlocking {

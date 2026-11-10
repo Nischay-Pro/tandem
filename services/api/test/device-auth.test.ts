@@ -116,6 +116,106 @@ describe("device authorization", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  it("rejects overlong and control-character identifiers without storing them", async () => {
+    const { store } = createStore();
+    const create = vi.spyOn(store, "createDevice");
+    const authorization = new DeviceAuthorization(store);
+    const valid = {
+      principalId: "owner",
+      budgetIds: ["budget"],
+      deviceName: "Phone",
+    };
+
+    await expect(
+      authorization.createDevice({ ...valid, principalId: "" }),
+    ).rejects.toBeInstanceOf(DeviceAuthInputError);
+    await expect(
+      authorization.createDevice({ ...valid, principalId: "x".repeat(201) }),
+    ).rejects.toBeInstanceOf(DeviceAuthInputError);
+    await expect(
+      authorization.createDevice({ ...valid, principalId: "owner\nid" }),
+    ).rejects.toBeInstanceOf(DeviceAuthInputError);
+    await expect(
+      authorization.createDevice({ ...valid, deviceName: `Phone\u007f` }),
+    ).rejects.toBeInstanceOf(DeviceAuthInputError);
+    await expect(
+      authorization.createDevice({ ...valid, deviceName: "x".repeat(101) }),
+    ).rejects.toBeInstanceOf(DeviceAuthInputError);
+    await expect(
+      authorization.createDevice({ ...valid, budgetIds: ["budget\nname"] }),
+    ).rejects.toBeInstanceOf(DeviceAuthInputError);
+    await expect(
+      authorization.createDevice({
+        ...valid,
+        budgetIds: ["x".repeat(501)],
+      }),
+    ).rejects.toBeInstanceOf(DeviceAuthInputError);
+    await expect(
+      authorization.createDevice({
+        ...valid,
+        budgetIds: Array.from({ length: 101 }, (_, index) => `budget-${index}`),
+      }),
+    ).rejects.toBeInstanceOf(DeviceAuthInputError);
+    await expect(
+      authorization.createDevice({ ...valid, budgetIds: ["same", "same"] }),
+    ).rejects.toBeInstanceOf(DeviceAuthInputError);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-string principal and device names at runtime", async () => {
+    const { store } = createStore();
+    const create = vi.spyOn(store, "createDevice");
+    const authorization = new DeviceAuthorization(store);
+    const valid = {
+      principalId: "owner",
+      budgetIds: ["budget"],
+      deviceName: "Phone",
+    };
+
+    await expect(
+      authorization.createDevice({
+        ...valid,
+        principalId: 42 as unknown as string,
+      }),
+    ).rejects.toBeInstanceOf(DeviceAuthInputError);
+    await expect(
+      authorization.createDevice({
+        ...valid,
+        deviceName: 42 as unknown as string,
+      }),
+    ).rejects.toBeInstanceOf(DeviceAuthInputError);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid secret generators and invalid revoke targets", async () => {
+    const { store } = createStore();
+    const authorization = new DeviceAuthorization(store, () =>
+      Buffer.alloc(31),
+    );
+    await expect(
+      authorization.createDevice({
+        principalId: "owner",
+        budgetIds: [],
+        deviceName: "Phone",
+      }),
+    ).rejects.toThrow("Secure token generator returned an invalid secret");
+
+    await expect(
+      authorization.revokeDeviceForDevice(
+        {
+          deviceId: validUuid,
+          principalId: "owner",
+          name: "Phone",
+          budgetIds: ["budget"],
+          createdAt: new Date(),
+          lastSeenAt: null,
+          revokedAt: null,
+        },
+        "not-a-uuid",
+      ),
+    ).rejects.toBeInstanceOf(DeviceAuthInputError);
+  });
+
   it("accepts only well-formed credentials and resolves the hashed token", async () => {
     const { store } = createStore();
     const authenticate = vi.spyOn(store, "authenticate");
@@ -162,5 +262,15 @@ describe("device authorization", () => {
     ).resolves.toEqual([owner, second]);
     expect(DeviceAuthorization.canAccessBudget(owner, "budget-one")).toBe(true);
     expect(DeviceAuthorization.canAccessBudget(owner, "other")).toBe(false);
+    expect(DeviceAuthorization.canAccessBudget(owner, "")).toBe(false);
+    expect(
+      DeviceAuthorization.canAccessBudget(
+        { ...owner, budgetIds: ["*"] },
+        "other",
+      ),
+    ).toBe(true);
+    await expect(
+      authorization.revokeDeviceForDevice(owner, second.deviceId),
+    ).resolves.toBe(false);
   });
 });

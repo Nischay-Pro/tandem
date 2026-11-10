@@ -16,6 +16,15 @@ fi
 python3 scripts/check-mobile-ui-apostrophes.py
 python3 scripts/check-mobile-design-tokens.py
 
+staged_javascript=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(cjs|js|jsx|mjs|cts|mts|ts|tsx)$' || true)
+if [ -n "$staged_javascript" ]; then
+  if [ ! -x "$repo_root/node_modules/.bin/eslint" ]; then
+    printf '%s\n' 'ESLint checks need the JavaScript dependencies. Run pnpm install first.' >&2
+    exit 1
+  fi
+  "$repo_root/node_modules/.bin/eslint" .
+fi
+
 staged_mobile_kotlin=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^mobile/.*\.(kt|kts)$' || true)
 if [ -n "$staged_mobile_kotlin" ]; then
   (

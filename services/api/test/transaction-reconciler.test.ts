@@ -139,6 +139,24 @@ function createCreateRequest(
   };
 }
 
+function operationInputFor(
+  request: TransactionReconciliationRequest,
+): WriteOperationInput {
+  const isCreate = request.action === "create";
+  return {
+    operationId: request.operationId,
+    principalId: request.principalId,
+    budgetId: request.budgetId,
+    idempotencyKey: request.idempotencyKey,
+    entityType: "transaction",
+    action: request.action,
+    entityId: request.transactionId,
+    baseRevision: isCreate ? null : request.baseRevision,
+    baseSnapshot: isCreate ? {} : request.baseSnapshot,
+    patch: request.patch as { [key: string]: JsonValue },
+  };
+}
+
 function createOperation(
   input: WriteOperationInput,
   status: OperationStatus,
@@ -327,9 +345,12 @@ class MemoryWriteJournal implements DurableWriteJournal {
     return this.operation;
   }
 
-  async requeueUncertain(_operationId: string): Promise<WriteOperation> {
+  async requeueUncertain(operationId: string): Promise<WriteOperation> {
     this.#throwIfFailed("requeueUncertain");
     const operation = this.#requireOperation();
+    if (operation.operationId !== operationId) {
+      throw new Error("Cannot requeue a different uncertain operation");
+    }
     if (operation.status !== "uncertain" || operation.writeEvidence !== null) {
       throw new Error("Cannot requeue this uncertain operation");
     }
@@ -2318,6 +2339,381 @@ describe("Actual transaction reconciliation", () => {
       errorCode: "actual-readback-not-applied",
     });
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it("returns no status when an operation is missing", async () => {
+    const request = createRequest();
+    const harness = createHarness(request);
+    harness.journal.missingOnGet = true;
+
+    await expect(
+      harness.reconciler.checkOperationStatus(request.operationId),
+    ).resolves.toBeUndefined();
+  });
+
+  it("returns a settled status without reading Actual", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, { initialStatus: "committed" });
+    await harness.journal.enqueue(operationInputFor(request));
+
+    const result = await harness.reconciler.checkOperationStatus(
+      request.operationId,
+    );
+
+    expect(result?.operation.status).toBe("committed");
+    expect(harness.sessionCalls).toHaveLength(0);
+  });
+
+  it("returns no status if an uncertain operation disappears before its locked read", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const operation = createOperation(operationInputFor(request), "uncertain");
+    vi.spyOn(harness.journal, "get")
+      .mockResolvedValueOnce(operation)
+      .mockResolvedValueOnce(undefined);
+
+    await expect(
+      harness.reconciler.checkOperationStatus(request.operationId),
+    ).resolves.toBeUndefined();
+  });
+
+  it("uses the latest journal state when another worker settles the operation", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const operation = createOperation(operationInputFor(request), "uncertain");
+    const committed = { ...operation, status: "committed" as const };
+    vi.spyOn(harness.journal, "get")
+      .mockResolvedValueOnce(operation)
+      .mockResolvedValueOnce(committed);
+
+    const result = await harness.reconciler.checkOperationStatus(
+      request.operationId,
+    );
+
+    expect(result?.operation.status).toBe("committed");
+    expect(harness.sessionCalls).toHaveLength(0);
+  });
+
+  it("keeps an uncertain operation when its stored references are invalid", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const operation = createOperation(
+      {
+        ...operationInputFor(request),
+        entityId: null,
+        baseRevision: null,
+      },
+      "uncertain",
+    );
+    harness.journal.operation = operation;
+
+    const result = await harness.reconciler.checkOperationStatus(
+      request.operationId,
+    );
+
+    expect(result?.operation).toEqual(operation);
+    expect(harness.sessionCalls).toHaveLength(0);
+  });
+
+  it("returns an uncertain operation with an unsupported journal action", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const operation = createOperation(
+      { ...operationInputFor(request), action: "archive" },
+      "uncertain",
+    );
+    harness.journal.operation = operation;
+
+    const result = await harness.reconciler.checkOperationStatus(
+      request.operationId,
+    );
+
+    expect(result?.operation).toEqual(operation);
+    expect(harness.sessionCalls).toHaveLength(0);
+  });
+
+  it("recovers a matching uncertain create from its status check", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const operation = createOperation(operationInputFor(request), "uncertain");
+    harness.journal.operation = operation;
+    harness.actual = {
+      id: request.transactionId,
+      account: "account-1",
+      amount: -1250,
+      date: "2026-11-01",
+      imported_id: request.transactionId,
+    };
+
+    const result = await harness.reconciler.checkOperationStatus(
+      request.operationId,
+      "budget-password",
+    );
+
+    expect(result?.operation).toMatchObject({
+      status: "committed",
+      actualResult: {
+        transactionId: request.transactionId,
+        created: true,
+        recoveredByReadback: true,
+      },
+    });
+    expect(harness.journal.resolveCalls).toBe(1);
+    expect(harness.sessionCalls).toEqual([
+      {
+        syncId: request.budgetId,
+        options: { encryptionPassword: "budget-password" },
+      },
+    ]);
+  });
+
+  it("keeps an uncertain create when its stored transaction ID is missing", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const operation = createOperation(
+      { ...operationInputFor(request), entityId: null },
+      "uncertain",
+    );
+    harness.journal.operation = operation;
+
+    const result = await harness.reconciler.checkOperationStatus(
+      request.operationId,
+    );
+
+    expect(result?.operation).toEqual(operation);
+    expect(harness.sessionCalls).toHaveLength(0);
+  });
+
+  it("passes stored update write evidence through verified recovery", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: updateEvidence,
+    });
+    harness.actual = actualFrom(createSnapshot({ amount: 1200 }));
+    const resolve = vi.spyOn(harness.journal, "resolveUncertainAsCommitted");
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation.status).toBe("committed");
+    expect(resolve).toHaveBeenCalledWith(
+      request.operationId,
+      expect.objectContaining({
+        transactionId: request.transactionId,
+        recoveredByReadback: true,
+      }),
+      updateEvidence,
+    );
+  });
+
+  it("leaves an uncertain create unresolved when its read-back is missing despite write evidence", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: { kind: "transaction-create-returned" },
+    });
+    const operation = createOperation(operationInputFor(request), "uncertain", {
+      kind: "transaction-create-returned",
+    });
+    harness.journal.operation = operation;
+
+    const result = await harness.reconciler.checkOperationStatus(
+      request.operationId,
+    );
+
+    expect(result?.operation).toEqual(operation);
+    expect(harness.journal.resolveCalls).toBe(0);
+  });
+
+  it("does not resolve a create if its stored write evidence describes another action", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const operation = createOperation(
+      operationInputFor(request),
+      "uncertain",
+      updateEvidence,
+    );
+    harness.journal.operation = operation;
+    harness.actual = {
+      id: request.transactionId,
+      account: "account-1",
+      amount: -1250,
+      date: "2026-11-01",
+      imported_id: request.transactionId,
+    };
+
+    const result = await harness.reconciler.checkOperationStatus(
+      request.operationId,
+    );
+
+    expect(result?.operation).toEqual(operation);
+    expect(harness.journal.resolveCalls).toBe(0);
+  });
+
+  it("does not recover an update from write evidence for a different action", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const operation = createOperation(
+      operationInputFor(request),
+      "uncertain",
+      deleteEvidence,
+    );
+    harness.journal.operation = operation;
+    harness.actual = actualFrom(createSnapshot({ amount: 1200 }));
+
+    const result = await harness.reconciler.checkOperationStatus(
+      request.operationId,
+    );
+
+    expect(result?.operation).toEqual(operation);
+    expect(harness.journal.resolveCalls).toBe(0);
+  });
+
+  it("does not read Actual when uncertain update evidence says the create already returned", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const operation = createOperation(operationInputFor(request), "uncertain", {
+      kind: "transaction-create-returned",
+    });
+    harness.journal.operation = operation;
+    const read = vi.spyOn(harness.store, "read");
+
+    const result = await harness.reconciler.checkOperationStatus(
+      request.operationId,
+    );
+
+    expect(result?.operation).toEqual(operation);
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it("preserves unexpected errors while checking uncertain operation state", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const error = new Error("journal operation could not be read");
+    const operation = createOperation(operationInputFor(request), "uncertain");
+    Object.defineProperty(operation, "action", {
+      get() {
+        throw error;
+      },
+    });
+    harness.journal.operation = operation;
+
+    await expect(
+      harness.reconciler.checkOperationStatus(request.operationId),
+    ).rejects.toBe(error);
+  });
+
+  it("returns the queued update after read-back when another worker wins the claim", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      claimAllowed: false,
+    });
+    harness.actual = actualFrom(createSnapshot());
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      status: "queued",
+      errorCode: "actual-readback-not-applied",
+    });
+    expect(harness.sessionCalls).toHaveLength(1);
+  });
+
+  it("returns the queued create after read-back when another worker wins the claim", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      claimAllowed: false,
+    });
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      action: "create",
+      status: "queued",
+      errorCode: "actual-readback-not-applied",
+    });
+    expect(harness.sessionCalls).toHaveLength(1);
+  });
+
+  it("keeps an uncertain delete when the read-back cannot be requeued", async () => {
+    const request = createRequest({ action: "delete", patch: {} });
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    harness.actual = actualFrom(createSnapshot());
+    harness.journal.failures.set(
+      "requeueUncertain",
+      new Error("journal unavailable"),
+    );
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      status: "uncertain",
+      errorCode: "actual-outcome-uncertain",
+    });
+  });
+
+  it("requeues a delete only when read-back still matches its base", async () => {
+    const request = createRequest({ action: "delete", patch: {} });
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    harness.actual = actualFrom(createSnapshot());
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation.status).toBe("committed");
+    expect(harness.actual).toBeUndefined();
+  });
+
+  it("does not retry an uncertain delete after the base fields changed remotely", async () => {
+    const request = createRequest({ action: "delete", patch: {} });
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    harness.actual = actualFrom(createSnapshot({ amount: 1800 }));
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation.status).toBe("uncertain");
+    expect(harness.journal.operation?.status).toBe("uncertain");
+  });
+
+  it("treats blank and null Actual notes as the same unchanged base value", async () => {
+    const base = createSnapshot({ notes: null });
+    const request = createRequest({
+      baseSnapshot: base as unknown as JsonValue,
+      baseRevision: createTransactionRevision(base),
+      patch: { amount: 1200, notes: "" },
+    });
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    harness.actual = actualFrom(createSnapshot({ notes: "" }));
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation.status).toBe("committed");
+    expect(harness.actual).toMatchObject({ amount: 1200, notes: "" });
+  });
+
+  it("rejects edits to unsupported split-child fields before writing", async () => {
+    const base = createSnapshot({
+      id: "transaction-child",
+      isChild: true,
+      parentId: "transaction-1",
+    });
+    const request = createRequest({
+      transactionId: base.id,
+      patch: { date: "2026-11-02" },
+      baseSnapshot: base as unknown as JsonValue,
+      baseRevision: createTransactionRevision(base),
+    });
+    const harness = createHarness(request);
+    harness.actual = actualFrom(base);
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      status: "rejected",
+      errorCode: "split-child-field-not-editable",
+    });
+    expect(harness.actual).toEqual(actualFrom(base));
   });
 
   it("recovers a write when a no-op requested field changed remotely", async () => {

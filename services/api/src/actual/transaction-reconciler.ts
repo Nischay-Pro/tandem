@@ -708,7 +708,7 @@ export class TransactionReconciler {
       return this.#existingResult(operation);
     }
 
-    let recoveredEvidence: ActualWriteEvidence | null = null;
+    let recoveredEvidence: ActualWriteEvidence;
     let actualResult: JsonValue;
     if (operation.action === "delete") {
       if (evidence?.kind === "transaction-delete-returned") {
@@ -779,7 +779,7 @@ export class TransactionReconciler {
       const committed = await this.journal.resolveUncertainAsCommitted(
         operation.operationId,
         actualResult,
-        recoveredEvidence ?? undefined,
+        recoveredEvidence,
       );
       return { operation: committed, conflict: null };
     } catch {
@@ -1074,17 +1074,13 @@ function transactionMatchesBaseFields(
   return Object.keys(patch).every((field) => {
     const key = field as keyof TransactionPatch;
     if (key === "notes") {
-      return normalizedNotes(snapshot.notes) === normalizedNotes(base.notes);
+      return snapshot.notes === base.notes;
     }
     return Object.is(
       snapshot[key as keyof TransactionSnapshot],
       base[key as keyof TransactionSnapshot],
     );
   });
-}
-
-function normalizedNotes(value: string | null): string | null {
-  return value === "" ? null : value;
 }
 
 function structuredFields(

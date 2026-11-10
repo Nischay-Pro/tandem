@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildApiApp } from "../src/app.js";
-import { ActualPasswordRejectedError } from "../src/auth/actual-password-login.js";
+import {
+  ActualPasswordRejectedError,
+  ActualPasswordUnavailableError,
+} from "../src/auth/actual-password-login.js";
 import type { ActualOpenIdLogin } from "../src/auth/actual-openid-login.js";
+import { DeviceAuthInputError } from "../src/auth/device-auth.js";
 import type {
   DeviceAuthorization,
   DeviceRecord,
@@ -413,6 +417,91 @@ describe("health routes and OpenAPI", () => {
     await app.close();
   });
 
+  it("returns safe errors when Actual or device creation cannot complete sign-in", async () => {
+    const login = () =>
+      ({
+        method: "POST" as const,
+        url: "/api/v1/auth/login",
+        payload: {
+          password: "synthetic-password",
+          deviceName: "Synthetic phone",
+        },
+      }) as const;
+    const database = () => ({ ping: vi.fn(), close: vi.fn() });
+
+    const unconfigured = await buildApiApp(database(), {
+      deviceAuth: createDeviceAuth(),
+    });
+    const noActual = await unconfigured.inject(login());
+    expect(noActual.statusCode).toBe(503);
+    expect(noActual.json().error.code).toBe("actual_unavailable");
+    await unconfigured.close();
+
+    const unavailable = await buildApiApp(database(), {
+      deviceAuth: createDeviceAuth(),
+      signInWithActualPassword: async () => {
+        throw new ActualPasswordUnavailableError();
+      },
+    });
+    const noConnection = await unavailable.inject(login());
+    expect(noConnection.statusCode).toBe(503);
+    expect(noConnection.json().error.code).toBe("actual_unavailable");
+    expect(noConnection.body).not.toContain("Actual sign-in is unavailable");
+    await unavailable.close();
+
+    const failedProvider = await buildApiApp(database(), {
+      deviceAuth: createDeviceAuth(),
+      signInWithActualPassword: async () => {
+        throw new Error("private credential store failure");
+      },
+    });
+    const providerFailure = await failedProvider.inject(login());
+    expect(providerFailure.statusCode).toBe(500);
+    expect(providerFailure.json().error).toEqual({
+      code: "internal_error",
+      message: "Could not complete sign-in. Try again shortly.",
+    });
+    expect(providerFailure.body).not.toContain(
+      "private credential store failure",
+    );
+    await failedProvider.close();
+
+    const rejectedDevice = await buildApiApp(database(), {
+      deviceAuth: createDeviceAuth({
+        createDevice: vi.fn(async () => {
+          throw new DeviceAuthInputError("invalid local device input");
+        }),
+      }),
+      signInWithActualPassword: async () => ({
+        principalId: "actual-user:synthetic",
+        sessionToken: "actual-session-token",
+        budgetIds: ["synthetic-budget"],
+      }),
+    });
+    const invalidDevice = await rejectedDevice.inject(login());
+    expect(invalidDevice.statusCode).toBe(400);
+    expect(invalidDevice.json().error).toMatchObject({
+      code: "invalid_request",
+      message: "invalid local device input",
+    });
+    await rejectedDevice.close();
+
+    const noDevice = await buildApiApp(database(), {
+      deviceAuth: createDeviceAuth({
+        createDevice: vi.fn(async () => undefined),
+      }),
+      signInWithActualPassword: async () => ({
+        principalId: "actual-user:synthetic",
+        sessionToken: "actual-session-token",
+        budgetIds: ["synthetic-budget"],
+      }),
+    });
+    const notCreated = await noDevice.inject(login());
+    expect(notCreated.statusCode).toBe(503);
+    expect(notCreated.json().error.code).toBe("actual_unavailable");
+    await noDevice.close();
+  });
+
   it("rate-limits Actual sign-in attempts by client address", async () => {
     const signInWithActualPassword = vi.fn(async () => {
       throw new ActualPasswordRejectedError();
@@ -520,6 +609,113 @@ describe("health routes and OpenAPI", () => {
       "actual-user:synthetic",
       "server-side-actual-token",
     );
+    await app.close();
+  });
+
+  it("handles invalid, expired, rate-limited, and failed OpenID sign-in steps", async () => {
+    const completion = {
+      deviceName: "Synthetic phone",
+      grant: {
+        principalId: "actual-user:synthetic",
+        sessionToken: "server-side-session-token",
+        budgetIds: ["synthetic-budget"],
+      },
+    };
+    const openIdLogin = {
+      start: vi.fn(async () => {
+        throw new Error("private identity provider error");
+      }),
+      completeCallback: vi.fn(async (_state: string, token: string) => {
+        if (token === "expired") return undefined;
+        throw new Error("private Actual callback error");
+      }),
+      consume: vi.fn((code: string) =>
+        code === "E".repeat(43) ? undefined : completion,
+      ),
+    } as unknown as ActualOpenIdLogin;
+    const app = await buildApiApp(
+      { ping: vi.fn(), close: vi.fn() },
+      {
+        deviceAuth: createDeviceAuth({
+          createDevice: vi.fn(async () => {
+            throw new Error("private device store error");
+          }),
+        }),
+        actualOpenIdLogin: openIdLogin,
+      },
+    );
+
+    const invalidStart = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/openid/start",
+      payload: { deviceName: " " },
+    });
+    expect(invalidStart.statusCode).toBe(400);
+
+    const firstStart = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/openid/start",
+      payload: { deviceName: "Synthetic phone" },
+    });
+    expect(firstStart.statusCode).toBe(503);
+    expect(firstStart.body).not.toContain("private identity provider error");
+    for (let attempt = 1; attempt < 10; attempt += 1) {
+      expect(
+        (
+          await app.inject({
+            method: "POST",
+            url: "/api/v1/auth/openid/start",
+            payload: { deviceName: "Synthetic phone" },
+          })
+        ).statusCode,
+      ).toBe(503);
+    }
+    const limitedStart = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/openid/start",
+      payload: { deviceName: "Synthetic phone" },
+    });
+    expect(limitedStart.statusCode).toBe(429);
+    expect(limitedStart.headers["retry-after"]).toBe("60");
+
+    const state = "S".repeat(43);
+    const invalidCallback = await app.inject({
+      method: "GET",
+      url: `/api/v1/auth/actual-return/${state}/openid-cb`,
+    });
+    expect(invalidCallback.statusCode).toBe(400);
+    const expiredCallback = await app.inject({
+      method: "GET",
+      url: `/api/v1/auth/actual-return/${state}/openid-cb?token=expired`,
+    });
+    expect(expiredCallback.statusCode).toBe(401);
+    expect(expiredCallback.json().error.code).toBe("sign_in_expired");
+    const failedCallback = await app.inject({
+      method: "GET",
+      url: `/api/v1/auth/actual-return/${state}/openid-cb?token=invalid`,
+    });
+    expect(failedCallback.statusCode).toBe(401);
+    expect(failedCallback.body).not.toContain("private Actual callback error");
+
+    const invalidCompletion = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/openid/complete",
+      payload: { code: "" },
+    });
+    expect(invalidCompletion.statusCode).toBe(400);
+    const expiredCompletion = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/openid/complete",
+      payload: { code: "E".repeat(43) },
+    });
+    expect(expiredCompletion.statusCode).toBe(401);
+    const failedCompletion = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/openid/complete",
+      payload: { code: "C".repeat(43) },
+    });
+    expect(failedCompletion.statusCode).toBe(503);
+    expect(failedCompletion.body).not.toContain("private device store error");
     await app.close();
   });
 

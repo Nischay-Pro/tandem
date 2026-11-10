@@ -88,6 +88,9 @@ kover {
         classes(
           "app.tandemforactual.data.database.*_Impl*",
           "app.tandemforactual.data.database.TandemDatabaseConstructor*",
+          // Kover attributes the tested default method's signature-only line to its synthetic bridge.
+          "app.tandemforactual.data.store.BudgetSyncRemote",
+          "app.tandemforactual.data.store.BudgetSyncRemote\$*",
           "app.tandemforactual.data.store.LocalBudgetRepository$*",
         )
       }

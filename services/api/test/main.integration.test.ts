@@ -202,6 +202,192 @@ describe("API bootstrap integration", () => {
     }
   });
 
+  it("completes hosted OpenID sign-in and loads the account's Actual budgets", async () => {
+    const port = await findAvailablePort();
+    const actualSessionToken = "synthetic-oidc-session-token";
+    const fetchRequest = vi.fn<typeof fetch>(async (input) => {
+      const endpoint = new URL(input.toString());
+      if (endpoint.pathname === "/account/login") {
+        return new Response(
+          JSON.stringify({ returnUrl: "https://idp.example/authorize" }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      expect(endpoint.pathname).toBe("/account/validate");
+      expect(fetchRequest).toHaveBeenCalledWith(
+        new URL("http://actual.example/account/validate"),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            "X-ACTUAL-TOKEN": actualSessionToken,
+          }),
+        }),
+      );
+      return new Response(
+        JSON.stringify({ status: "ok", data: { userId: "oidc-owner" } }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchRequest);
+    actualApi.init.mockClear();
+    actualApi.getBudgets.mockClear();
+    actualApi.shutdown.mockClear();
+    const app = await runApi(
+      {
+        DATABASE_URL: isolatedDatabaseUrl,
+        AUTH_TOKEN_ENCRYPTION_KEY: testAuthTokenEncryptionKey,
+        HOST: "127.0.0.1",
+        PORT: String(port),
+        ACTUAL_SERVER_URL: "http://actual.example",
+        ACTUAL_PUBLIC_URL: "https://tandem.example",
+        ACTUAL_API_DATA_DIR: `/tmp/tandem-openid-${randomUUID()}`,
+      },
+      createPostgresDatabase,
+      () => {},
+    );
+
+    try {
+      const started = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/openid/start",
+        payload: { deviceName: "Synthetic OpenID phone" },
+      });
+      expect(started.statusCode).toBe(200);
+      expect(started.json()).toEqual({
+        redirectUrl: "https://idp.example/authorize",
+      });
+
+      const loginRequest = JSON.parse(
+        String(fetchRequest.mock.calls[0]?.[1]?.body),
+      ) as { returnUrl: string };
+      const state = new URL(loginRequest.returnUrl).pathname.split("/").at(-2);
+      expect(state).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+      const callback = await app.inject({
+        method: "GET",
+        url: `/api/v1/auth/actual-return/${state}/openid-cb?token=${actualSessionToken}`,
+      });
+      expect(callback.statusCode).toBe(302);
+      const completionCode = new URL(
+        callback.headers.location ?? "",
+      ).searchParams.get("code");
+      expect(completionCode).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+      const completed = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/openid/complete",
+        payload: { code: completionCode },
+      });
+      expect(completed.statusCode).toBe(201);
+      expect(completed.json()).toMatchObject({
+        principalId: expect.stringMatching(/^actual-user:[a-f0-9]{64}$/),
+        budgetIds: ["synthetic-catalog-budget"],
+      });
+      expect(actualApi.getBudgets).toHaveBeenCalledOnce();
+      expect(actualApi.init).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionToken: actualSessionToken }),
+      );
+    } finally {
+      await app.close();
+      vi.unstubAllGlobals();
+    }
+    expect(actualApi.shutdown).toHaveBeenCalledOnce();
+  });
+
+  it("filters OpenID from login methods when no public callback URL is configured", async () => {
+    const scenarios = [
+      {
+        methods: {
+          bootstrapped: true,
+          loginMethod: "openid",
+          availableLoginMethods: [
+            { method: "openid", displayName: "Household SSO", active: true },
+            { method: "password", displayName: "Password", active: true },
+          ],
+        },
+        expectedLoginMethod: "password",
+        expectedMethods: [
+          { method: "password", displayName: "Password", active: true },
+        ],
+      },
+      {
+        methods: {
+          bootstrapped: true,
+          loginMethod: "openid",
+          availableLoginMethods: [
+            { method: "openid", displayName: "Household SSO", active: true },
+            { method: "password", displayName: "Password", active: false },
+          ],
+        },
+        expectedLoginMethod: "unsupported",
+        expectedMethods: [
+          { method: "password", displayName: "Password", active: false },
+        ],
+      },
+      {
+        methods: {
+          bootstrapped: true,
+          loginMethod: "password",
+          availableLoginMethods: [
+            { method: "password", displayName: "Password", active: true },
+          ],
+        },
+        expectedLoginMethod: "password",
+        expectedMethods: [
+          { method: "password", displayName: "Password", active: true },
+        ],
+      },
+    ];
+
+    for (const [index, scenario] of scenarios.entries()) {
+      const port = await findAvailablePort();
+      const database = {
+        ping: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+        close: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+        migrate: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+        journal: {
+          expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
+        },
+        deviceAuth: { authenticate: async () => undefined },
+      } as unknown as Database;
+      const fetchRequest = vi.fn<typeof fetch>(
+        async () =>
+          new Response(
+            JSON.stringify({ status: "ok", data: scenario.methods }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+      );
+      vi.stubGlobal("fetch", fetchRequest);
+      const app = await runApi(
+        {
+          DATABASE_URL: "postgres://local/test",
+          AUTH_TOKEN_ENCRYPTION_KEY: testAuthTokenEncryptionKey,
+          HOST: "127.0.0.1",
+          PORT: String(port),
+          ACTUAL_SERVER_URL: "http://actual.example",
+          ACTUAL_API_DATA_DIR: `/tmp/tandem-login-methods-${index}`,
+        },
+        () => database,
+        () => {},
+      );
+
+      try {
+        const response = await app.inject({
+          method: "GET",
+          url: "/api/v1/auth/methods",
+        });
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toEqual({
+          bootstrapped: true,
+          loginMethod: scenario.expectedLoginMethod,
+          availableLoginMethods: scenario.expectedMethods,
+        });
+      } finally {
+        await app.close();
+        vi.unstubAllGlobals();
+      }
+    }
+  });
+
   it("logs the safe migration-history diagnostic from a production startup failure", async () => {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) {

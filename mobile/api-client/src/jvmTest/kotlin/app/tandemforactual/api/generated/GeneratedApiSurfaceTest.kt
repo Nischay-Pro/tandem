@@ -93,6 +93,13 @@ class GeneratedApiSurfaceTest {
                 assertEquals("""{"status":"ok"}""", Api.json.encodeToString(readiness))
                 assertTrue(DefaultApi.getApiV1OpenapiJson().getOrNull()?.isSuccessful == true)
                 assertTrue(AuthenticationApi.getActualLoginMethods().getOrNull()?.isSuccessful == true)
+                assertTrue(AuthenticationApi.completeActualOpenIdReturn("state-1", "token-1").getOrNull()?.isSuccessful == true)
+                assertTrue(
+                    AuthenticationApi
+                        .completeActualOpenIdSignIn(buildJsonObject { put("code", "C".repeat(43)) })
+                        .getOrNull()
+                        ?.isSuccessful == true,
+                )
                 assertTrue(
                     AuthenticationApi
                         .signInWithActualPassword(
@@ -172,6 +179,7 @@ class GeneratedApiSurfaceTest {
                         ).getOrNull()
                         ?.isSuccessful == true,
                 )
+                assertTrue(TransactionsApi.getTransactionOperation(operationId = operationId).getOrNull()?.isSuccessful == true)
                 assertTrue(
                     TransactionsApi
                         .getBudgetTransaction(
@@ -254,6 +262,8 @@ class GeneratedApiSurfaceTest {
                         HttpMethod.Get to "/api/v1/health/ready",
                         HttpMethod.Get to "/api/v1/openapi.json",
                         HttpMethod.Get to "/api/v1/auth/methods",
+                        HttpMethod.Get to "/api/v1/auth/actual-return/state-1/openid-cb",
+                        HttpMethod.Post to "/api/v1/auth/openid/complete",
                         HttpMethod.Post to "/api/v1/auth/login",
                         HttpMethod.Get to "/api/v1/auth/me",
                         HttpMethod.Get to "/api/v1/devices",
@@ -264,6 +274,7 @@ class GeneratedApiSurfaceTest {
                         HttpMethod.Get to "/api/v1/budgets/budget-2/changes",
                         HttpMethod.Get to "/api/v1/budgets/budget-1/transactions/transaction-1",
                         HttpMethod.Post to "/api/v1/budgets/budget-1/transactions/transaction-1/operations",
+                        HttpMethod.Get to "/api/v1/operations/$operationId",
                         HttpMethod.Get to "/api/v1/operations/$operationId",
                         HttpMethod.Get to "/api/v1/budgets/budget-2/transactions/transaction-2",
                         HttpMethod.Post to "/api/v1/budgets/budget-2/transactions/transaction-2/operations",
@@ -281,32 +292,33 @@ class GeneratedApiSurfaceTest {
                 )
 
                 capturedRequests.forEachIndexed { index, request ->
-                    if (index >= 5) {
+                    if (index >= 7) {
                         assertEquals("Bearer device-token", request.headers[HttpHeaders.Authorization])
                     } else {
                         assertNull(request.headers[HttpHeaders.Authorization])
                     }
                 }
-                assertEquals("budget-secret", capturedRequests[8].headers["x-budget-encryption-password"])
-                assertNull(capturedRequests[9].headers["x-budget-encryption-password"])
                 assertEquals("budget-secret", capturedRequests[10].headers["x-budget-encryption-password"])
                 assertNull(capturedRequests[11].headers["x-budget-encryption-password"])
-                assertEquals("d9d69fa5-45fb-48ee-9a8c-99bf49f873bd", capturedRequests[10].url.parameters["generation"])
-                assertEquals("12", capturedRequests[10].url.parameters["cursor"])
-                assertEquals("20", capturedRequests[10].url.parameters["throughCursor"])
-                assertEquals("50", capturedRequests[10].url.parameters["limit"])
-                assertEquals("0", capturedRequests[11].url.parameters["cursor"])
-                assertNull(capturedRequests[11].url.parameters["throughCursor"])
-                assertNull(capturedRequests[11].url.parameters["limit"])
                 assertEquals("budget-secret", capturedRequests[12].headers["x-budget-encryption-password"])
-                assertEquals("budget-secret", capturedRequests[13].headers["x-budget-encryption-password"])
-                assertEquals("operation-key-1", capturedRequests[13].headers["idempotency-key"])
+                assertNull(capturedRequests[13].headers["x-budget-encryption-password"])
+                assertEquals("d9d69fa5-45fb-48ee-9a8c-99bf49f873bd", capturedRequests[12].url.parameters["generation"])
+                assertEquals("12", capturedRequests[12].url.parameters["cursor"])
+                assertEquals("20", capturedRequests[12].url.parameters["throughCursor"])
+                assertEquals("50", capturedRequests[12].url.parameters["limit"])
+                assertEquals("0", capturedRequests[13].url.parameters["cursor"])
+                assertNull(capturedRequests[13].url.parameters["throughCursor"])
+                assertNull(capturedRequests[13].url.parameters["limit"])
                 assertEquals("budget-secret", capturedRequests[14].headers["x-budget-encryption-password"])
-                assertNull(capturedRequests[15].headers["x-budget-encryption-password"])
-                assertNull(capturedRequests[16].headers["x-budget-encryption-password"])
-                assertEquals("operation-key-defaults", capturedRequests[16].headers["idempotency-key"])
-                assertNotNull(capturedRequests[4].body)
-                assertNotNull(capturedRequests[13].body)
+                assertEquals("budget-secret", capturedRequests[15].headers["x-budget-encryption-password"])
+                assertEquals("operation-key-1", capturedRequests[15].headers["idempotency-key"])
+                assertEquals("budget-secret", capturedRequests[16].headers["x-budget-encryption-password"])
+                assertNull(capturedRequests[17].headers["x-budget-encryption-password"])
+                assertNull(capturedRequests[18].headers["x-budget-encryption-password"])
+                assertNull(capturedRequests[19].headers["x-budget-encryption-password"])
+                assertEquals("operation-key-defaults", capturedRequests[19].headers["idempotency-key"])
+                assertNotNull(capturedRequests[6].body)
+                assertNotNull(capturedRequests[15].body)
                 Unit
             } finally {
                 Api.clearAuthProvider(auth)

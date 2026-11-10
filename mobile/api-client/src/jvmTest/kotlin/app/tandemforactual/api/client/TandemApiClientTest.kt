@@ -38,6 +38,52 @@ import kotlin.uuid.Uuid
 
 class TandemApiClientTest {
     @Test
+    fun readsActualLoginMethodsAndAvailableOptions() =
+        runBlocking {
+            val methods =
+                readActualLoginMethods(
+                    """{"bootstrapped":true,"loginMethod":"password","availableLoginMethods":[null,{"method":"password","displayName":"Password","active":true}]}""",
+                )
+
+            assertTrue(methods.bootstrapped)
+            assertEquals("password", methods.loginMethod)
+            assertEquals(
+                listOf(ActualLoginMethodOption("password", "Password", true)),
+                methods.availableLoginMethods,
+            )
+        }
+
+    @Test
+    fun absentActualLoginMethodFieldsUseEmptyDefaults() =
+        runBlocking {
+            val methods = readActualLoginMethods("""{"bootstrapped":false,"loginMethod":null}""")
+
+            assertFalse(methods.bootstrapped)
+            assertNull(methods.loginMethod)
+            assertTrue(methods.availableLoginMethods.isEmpty())
+        }
+
+    @Test
+    fun malformedActualLoginMethodFieldsAreRejected() =
+        runBlocking {
+            val invalidLoginMethod =
+                captureProtocolException {
+                    readActualLoginMethods(
+                        """{"bootstrapped":true,"loginMethod":[],"availableLoginMethods":[]}""",
+                    )
+                }
+            assertEquals("Server response contains an invalid loginMethod", invalidLoginMethod.message)
+
+            val invalidBootstrapFlag =
+                captureProtocolException {
+                    readActualLoginMethods(
+                        """{"bootstrapped":"yes","availableLoginMethods":[]}""",
+                    )
+                }
+            assertEquals("Server response is missing a valid bootstrapped", invalidBootstrapFlag.message)
+        }
+
+    @Test
     fun deviceNamesAreTrimmedSanitizedAndLimitedToOneHundredCharacters() {
         assertEquals("Test Phone", normalizeDeviceName("\u0000 Test\nPhone\u007f "))
         assertEquals(100, normalizeDeviceName("A".repeat(120)).length)
@@ -1138,6 +1184,22 @@ class TandemApiClientTest {
             },
         )
         return { Api.clearAuthProvider(auth) }
+    }
+
+    private suspend fun readActualLoginMethods(responseBody: String): ActualLoginMethods {
+        val engine = MockEngine { respond(responseBody, headers = jsonHeaders()) }
+        val previousClient = Api.client
+        val previousBaseUrl = Api.baseUrl
+        val client = TandemApiClient()
+        val cleanup = configureApi(engine, client.bearerAuth)
+        return try {
+            client.readActualLoginMethods("https://actual.example")
+        } finally {
+            cleanup()
+            Api.baseUrl = previousBaseUrl
+            Api.client.close()
+            previousClient.close()
+        }
     }
 
     private suspend fun captureApiException(block: suspend () -> Any?): TandemApiException =

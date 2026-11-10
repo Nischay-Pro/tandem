@@ -594,6 +594,28 @@ describe("transaction REST routes", () => {
     await app.close();
   });
 
+  it("passes an encrypted budget password only to the operation lookup", async () => {
+    const fake = createApi();
+    const app = await fake.buildApp();
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/operations/${operationId}`,
+      headers: {
+        ...authHeaders,
+        "x-budget-encryption-password": "synthetic-budget-password",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(fake.getOperation).toHaveBeenCalledWith(
+      "owner",
+      operationId,
+      "synthetic-budget-password",
+    );
+    expect(response.body).not.toContain("synthetic-budget-password");
+    await app.close();
+  });
+
   it("serializes queued operations with null optional fields", async () => {
     const fake = createApi({
       getOperation: async () => ({

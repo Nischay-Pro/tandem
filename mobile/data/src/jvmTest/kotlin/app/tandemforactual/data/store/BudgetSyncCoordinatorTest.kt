@@ -844,6 +844,37 @@ class BudgetSyncCoordinatorTest {
         }
 
     @Test
+    fun statusCheckRequeuesAnUncertainWriteWhenTheServerStillReportsQueued() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val remote = FakeBudgetSyncRemote(snapshot(records = listOf(transaction())))
+                val coordinator = BudgetSyncCoordinator(repository, remote)
+                coordinator.synchronize(BUDGET, sendQueuedWrites = false)
+                val request = updateRequest()
+                repository.enqueueWrite(request)
+                repository.claimNextWrite(BUDGET)
+                repository.markWriteUncertain(request.operationId, "status-check-needed")
+                remote.operationHandler = { operationId -> operationResult(operationId, RemoteOperationStatus.QUEUED) }
+
+                val result =
+                    coordinator.synchronize(
+                        BUDGET,
+                        sendQueuedWrites = false,
+                        reconcileUncertainOperationId = request.operationId,
+                    )
+
+                assertEquals("queued", repository.findWrite(request.operationId)?.status)
+                assertEquals(0, remote.submitCount)
+                assertEquals(1, remote.operationPolls)
+                assertEquals(0, result.writesUncertain)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun rejectedWriteAndCommittedDeleteReachTheirTerminalStates() =
         runBlocking {
             val database = newDatabase()

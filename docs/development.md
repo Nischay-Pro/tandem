@@ -95,9 +95,11 @@ Install the local pre-commit checks once with:
 ./scripts/install-git-hooks.sh
 ```
 
-The hook checks Prettier formatting and the mobile UI text and design-token
-rules. When staged files include Kotlin, it also runs KtLint for the API
-client, data, and Compose modules. CI remains the full verification gate.
+The pre-commit hook checks Prettier formatting and the mobile UI text and
+design-token rules. It runs ESLint when JavaScript or TypeScript files are
+staged, and KtLint when Kotlin files are staged. The pre-push hook runs full
+repository ESLint, formatting, mobile source rules, and KtLint checks. CI
+remains the full verification gate.
 
 ## Database migrations
 

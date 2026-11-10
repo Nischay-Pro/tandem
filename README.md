@@ -265,7 +265,10 @@ Install the local Git hooks once after cloning the repository:
 ./scripts/install-git-hooks.sh
 ```
 
-The pre-commit hook checks staged formatting and mobile source rules. The pre-push hook checks repository formatting and Kotlin lint before pushing. Install project dependencies before running the hooks.
+The pre-commit hook checks staged formatting and mobile source rules, and runs
+ESLint when JavaScript or TypeScript files are staged. The pre-push hook runs
+repository ESLint, formatting checks, mobile source rules, and Kotlin lint.
+Install project dependencies before running the hooks.
 
 Run the API checks in the disposable Docker environment:
 

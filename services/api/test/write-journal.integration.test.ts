@@ -786,6 +786,36 @@ describe("durable write journal integration", () => {
     );
   });
 
+  it("returns the queued operation when read-back requeue is retried", async () => {
+    const input = createOperation();
+    await database.journal.enqueue(input);
+    await database.journal.claim(input.operationId);
+    await database.journal.markUncertain(
+      input.operationId,
+      "claim-lease-expired",
+    );
+
+    const first = await database.journal.requeueUncertain(input.operationId);
+    const retry = await database.journal.requeueUncertain(input.operationId);
+
+    expect(retry).toEqual(first);
+    expect(retry).toMatchObject({
+      status: "queued",
+      errorCode: "actual-readback-not-applied",
+    });
+  });
+
+  it("reports a missing operation when asked to requeue it", async () => {
+    const operationId = randomUUID();
+
+    await expect(
+      database.journal.requeueUncertain(operationId),
+    ).rejects.toMatchObject({
+      name: "OperationNotFoundError",
+      message: `Operation ${operationId} does not exist`,
+    });
+  });
+
   it("rejects uncertain resolution when write completion was never acknowledged", async () => {
     const input = createOperation();
     const result = { transactionId: input.entityId, amount: 1200 };

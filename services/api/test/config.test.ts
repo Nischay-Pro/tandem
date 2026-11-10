@@ -164,6 +164,31 @@ describe("parseApiConfig", () => {
     ).toThrow("ACTUAL_API_DATA_DIR must be an absolute path");
   });
 
+  it.each([
+    "not-a-url",
+    "ftp://tandem.example",
+    "https://user@tandem.example",
+    "https://:secret@tandem.example",
+  ])("rejects an unsafe public callback URL %s", (publicURL) => {
+    expect(() =>
+      parseApiConfig({
+        DATABASE_URL: databaseUrl,
+        ACTUAL_SERVER_URL: "https://budget.example.com",
+        ACTUAL_PUBLIC_URL: publicURL,
+      }),
+    ).toThrow("ACTUAL_PUBLIC_URL must be a valid HTTP(S) URL");
+  });
+
+  it("normalizes an explicit HTTPS public callback URL", () => {
+    expect(
+      parseApiConfig({
+        DATABASE_URL: databaseUrl,
+        ACTUAL_SERVER_URL: "https://budget.example.com",
+        ACTUAL_PUBLIC_URL: "https://tandem.example/",
+      }).actual?.publicURL,
+    ).toBe("https://tandem.example");
+  });
+
   it("accepts explicit host and port", () => {
     expect(
       parseApiConfig({

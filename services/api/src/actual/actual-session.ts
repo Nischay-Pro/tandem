@@ -511,7 +511,6 @@ export class ActualSession {
   }
 
   async #shutdownActivePrincipal(): Promise<void> {
-    if (activeActualSession !== this.#sessionId) return;
     await this.#withTimeout(() => this.client.shutdown());
     activeActualSession = undefined;
     this.#activePrincipalId = undefined;
