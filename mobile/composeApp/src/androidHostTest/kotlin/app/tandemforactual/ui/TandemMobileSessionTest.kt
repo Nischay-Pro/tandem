@@ -22,7 +22,7 @@ class TandemMobileSessionTest {
             TandemApiException("database trace: private detail", httpStatus = 503).userFacingMessage("fallback"),
         )
         assertEquals(
-            "Check the information and try again.",
+            "Check the details and try again.",
             TandemApiException("raw validation detail", httpStatus = 422).userFacingMessage("fallback"),
         )
         assertEquals(
@@ -30,10 +30,36 @@ class TandemMobileSessionTest {
             TandemApiException("raw transport detail").userFacingMessage("fallback"),
         )
         assertEquals(
-            "This statement has repeated reference values. Choose a unique reference column.",
+            "Two statement rows share a reference. Choose a column with unique values.",
             TandemApiException("duplicate_imported_id", httpStatus = 400, safeMessageOverride = "untrusted server text")
                 .userFacingMessage("fallback"),
         )
+    }
+
+    @Test
+    fun commonApiErrorsExplainWhatHappenedAndGiveOneNextStep() {
+        val messages =
+            listOf(
+                "not-paired" to (null to "Pair this device to open a budget."),
+                "invalid_pairing_code" to (null to "The pairing code didn’t work. Request a new code."),
+                "invalid_device_credential" to (null to "Pair this device again to restore access."),
+                "bank_sync_failed" to (null to "Actual couldn’t sync your bank transactions. Check the bank connection and try again."),
+                "bank_sync_busy" to (null to "Bank sync is already running. Try again shortly."),
+                "duplicate_imported_id" to (null to "Two statement rows share a reference. Choose a column with unique values."),
+                "actual_operation_failed" to (null to "Actual couldn’t save this change. Check the details and try again."),
+                "operation_uncertain" to (null to "Tandem couldn’t confirm this change. Check Actual before trying again."),
+                "operation_rejected" to (null to "Actual didn’t accept this change. Review the details and try again."),
+                "invalid_request" to (null to "Check the details and try again."),
+                "server-error" to (503 to "Tandem is temporarily unavailable. Try again shortly."),
+            )
+
+        messages.forEach { (code, expected) ->
+            val message = budgetApiErrorMessage(code, expected.first, "fallback")
+            assertEquals(expected.second, message, code)
+            assertFalse(message.contains("invalid", ignoreCase = true), message)
+            assertFalse(message.contains("failed", ignoreCase = true), message)
+            assertFalse(message.contains("error", ignoreCase = true), message)
+        }
     }
 
     @Test

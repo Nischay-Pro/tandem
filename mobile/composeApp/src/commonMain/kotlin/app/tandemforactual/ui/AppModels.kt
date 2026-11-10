@@ -180,7 +180,7 @@ internal fun writeStatusLabel(status: String): String =
     when (status) {
         "queued" -> "Waiting to sync"
         "sending" -> "Syncing"
-        "uncertain" -> "Status unknown"
+        "uncertain" -> "Needs confirmation"
         "conflict" -> "Needs review"
         "rejected" -> "Not applied"
         "committed" -> "Saved"

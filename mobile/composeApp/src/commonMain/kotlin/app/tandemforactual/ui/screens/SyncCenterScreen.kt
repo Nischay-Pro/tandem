@@ -178,7 +178,7 @@ internal fun SyncCenterScreen(
                         ListRow(
                             title,
                             when (operation.status) {
-                                "uncertain" -> "Status unknown · Check Actual before trying again"
+                                "uncertain" -> "Needs confirmation · Check Actual before trying again"
                                 "conflict" -> "Needs review · The budget changed in Actual"
                                 else -> "Change not applied · Review it before trying again"
                             },

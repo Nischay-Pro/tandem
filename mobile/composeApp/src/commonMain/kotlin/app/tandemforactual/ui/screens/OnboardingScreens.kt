@@ -102,13 +102,13 @@ internal fun WelcomeScreen(navigation: AppNavigation) {
     ) {
         Spacer(Modifier.height(14.dp))
         TandemBrandMark(Modifier.size(72.dp))
-        Heading("Tandem for Actual Budget", "A phone companion for your own Actual Budget server.")
+        Heading("Tandem for Actual Budget", "Connect to your own Actual Budget server.")
         SurfaceCard {
             Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 Text("Before you start", color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
-                BodyText("Have the address where Tandem is running ready.")
+                BodyText("Have your server address ready.")
                 Text(
-                    "Your budget data stays between your phone and your server.",
+                    "Your budget data stays between this device and your server.",
                     color = palette.text,
                     fontSize = TandemTypography.compactBody,
                     lineHeight = TandemTypography.bodyLineHeight,
@@ -135,7 +135,7 @@ internal fun ServerAddressScreen(
             { state.serverUrl = it },
             TextFieldOptions(placeholder = "https://"),
         )
-        InfoBubble("Enter your Tandem server address. Use HTTPS over the internet; use HTTP only on a trusted local network.")
+        InfoBubble("Enter the web address for your Tandem server.")
         if (serverAddressMayBeInsecure(state.serverUrl)) {
             val palette = tandemPalette
             Row(
@@ -150,7 +150,7 @@ internal fun ServerAddressScreen(
             ) {
                 Icon(Lucide.CircleAlert, contentDescription = null, modifier = Modifier.size(23.dp), tint = palette.warning)
                 Text(
-                    "This address may not be secure on a public network. Use HTTPS over the internet.",
+                    "Use HTTPS to protect budget data on public networks.",
                     color = palette.text,
                     fontSize = TandemTypography.compactBody,
                     lineHeight = TandemTypography.bodyLineHeight,
@@ -268,7 +268,7 @@ internal fun PairingCodeScreen(
                     textAlign = TextAlign.Center,
                 ),
             )
-            InfoBubble("This pairing code expires after five minutes. Tandem doesn’t save it or your budget password.")
+            InfoBubble("This one-time code expires in five minutes and isn’t saved.")
             mobileSession.pairingError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
             mobileSession.credentialStorageError?.let { error ->
                 InlineMessage(error, InlineMessageKind.ERROR)
@@ -317,16 +317,16 @@ internal fun BudgetChooserScreen(
                 "Choose a budget"
             },
             if (usingCachedCatalog) {
-                "Open a budget already saved on this device. You can sync again when the server is available."
+                "Choose a saved budget to open on this device."
             } else if (hasCachedOnlyBudgets) {
-                "Choose a server budget or open one of the saved copies on this device."
+                "Choose a server or saved budget to open."
             } else {
-                "Choose a budget this device can open."
+                "Choose a budget to open."
             },
         )
         when {
             usingCachedCatalog || (mobileSession.budgets.isEmpty() && cachedCatalog.isNotEmpty()) -> {
-                BodyText("The server budget list is unavailable. Saved copies stay on this device.")
+                BodyText("Saved budgets are available while the server is offline.")
                 selectableBudgets.forEach { budget ->
                     ChoiceRow(
                         budget.name,
@@ -354,14 +354,14 @@ internal fun BudgetChooserScreen(
             mobileSession.budgets.isEmpty() && mobileSession.isAuthenticated -> {
                 mobileSession.budgetError?.let { error ->
                     InlineMessage(error, InlineMessageKind.ERROR)
-                } ?: EmptyState("No budgets available", "This paired device has no budget access.")
+                } ?: EmptyState("No budgets available", "Ask the budget owner to give this device access.")
                 SecondaryButton("Try again", onClick = onRefreshBudgets)
             }
             mobileSession.budgets.isEmpty() -> {
                 SurfaceCard {
                     Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                         LabelText("Pair this device first")
-                        BodyText("The budget list comes from the server after a device is paired.")
+                        BodyText("Connect this device to your Tandem server to choose a budget.")
                     }
                 }
                 SecondaryButton("Pair a device") { navigation.open(AppRoute.SERVER_ADDRESS) }
@@ -394,7 +394,7 @@ internal fun UnlockBudgetScreen(
             { state.encryptedPassword = it },
             TextFieldOptions(placeholder = "Enter password", isSecret = true),
         )
-        InfoBubble("Tandem uses this password only to unlock the encrypted budget. It’s cleared after the first sync and never saved.")
+        InfoBubble("Tandem never saves this password and clears it after the first sync.")
         PrimaryButton("Unlock budget", enabled = state.encryptedPassword.isNotBlank()) { navigation.replaceTop(AppRoute.FIRST_SYNC) }
     }
 }

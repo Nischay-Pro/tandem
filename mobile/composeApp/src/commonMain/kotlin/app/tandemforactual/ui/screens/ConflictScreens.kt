@@ -227,18 +227,18 @@ internal fun UncertainWriteScreen(
                     }
                 val heading =
                     when {
-                        checkError != null -> "Couldn’t check status"
+                        checkError != null -> "Couldn’t check this change"
                         operation.status == "committed" -> "Saved to Actual"
                         operation.status == "conflict" -> "Needs review"
                         operation.status == "rejected" -> "Change not applied"
                         operation.status == "discarded" -> "Change discarded"
                         operation.status == "queued" -> "Waiting to sync"
                         operation.status == "sending" -> "Syncing"
-                        operation.status == "uncertain" -> "Status unknown"
-                        isNotFound -> "No server record found"
-                        isChecked -> "Status unknown"
+                        operation.status == "uncertain" -> "Needs confirmation"
+                        isNotFound -> "Ready to try again"
+                        isChecked -> "Still unconfirmed"
                         mobileSession.isSyncing -> "Checking status"
-                        else -> "Status unknown"
+                        else -> "Needs confirmation"
                     }
                 val message =
                     when {
@@ -249,11 +249,11 @@ internal fun UncertainWriteScreen(
                         operation.status == "discarded" -> "Your edit was removed."
                         operation.status == "queued" -> "Your edit is saved on this device and is waiting to sync."
                         operation.status == "sending" && mobileSession.isSyncing -> "Syncing this edit with Actual."
-                        operation.status == "sending" -> "Status unknown. Check before retrying."
-                        isNotFound -> "No matching edit is on the server. Try again to send it once."
-                        isChecked -> "Actual hasn’t confirmed whether it saved this edit. Check again before retrying."
+                        operation.status == "sending" -> "Tandem couldn’t confirm the save. Check its status before trying again."
+                        isNotFound -> "Actual has no copy of this edit. Try sending it again once."
+                        isChecked -> "Actual still hasn’t confirmed this edit. Check again before trying it."
                         mobileSession.isSyncing -> "Checking Actual for this edit."
-                        else -> "Tandem couldn’t confirm whether Actual saved this edit. Check its status before retrying."
+                        else -> "Tandem couldn’t confirm whether Actual saved this edit. Check its status before trying again."
                     }
                 Heading(heading)
                 SectionCard(
@@ -377,7 +377,7 @@ internal fun BudgetMutationReviewScreen(
             "conflict" -> Heading("Needs review")
             "rejected" -> Heading("Change not applied")
             "queued" -> Heading("Waiting to sync")
-            else -> Heading("Status unknown")
+            else -> Heading("Needs confirmation")
         }
         if (operation == null) {
             InfoBubble("This budget change no longer needs review.")

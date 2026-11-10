@@ -271,7 +271,7 @@ class CategoryReorderingTest {
                 desiredOrder = listOf("internet"),
                 encryptionPassword = null,
             )
-        val message = "Status unknown. Check Actual before trying again."
+        val message = "Tandem couldn’t confirm this change. Check Actual before trying again."
         val held = BudgetReorderQueueState().enqueue(hide).holdForReview(hide, message)
 
         assertEquals(listOf(hide), held.moves)

@@ -847,7 +847,7 @@ internal class TandemMobileSession(
                 val stored = repository?.readPendingWrites(request.budgetId)?.firstOrNull { it.operationId == request.operationId }
                 val stateMessage =
                     when (stored?.status) {
-                        "uncertain" -> "Status unknown. Check Actual before trying again."
+                        "uncertain" -> "Tandem couldn’t confirm this change. Check Actual before trying again."
                         "conflict" -> "Needs review. The budget changed in Actual."
                         "rejected" -> "This change was rejected. Review it in Actual."
                         "discarded", "committed" -> "This change is no longer pending."
@@ -1079,7 +1079,7 @@ internal class TandemMobileSession(
                 budgetReorderQueue =
                     budgetReorderQueue.holdForReview(
                         request,
-                        "Status unknown. Check Actual before trying again.",
+                        "Tandem couldn’t confirm this change. Check Actual before trying again.",
                     )
             } else if (lastBudgetActionHttpStatus == 409) {
                 withoutBudgetActionFeedback { synchronize(request.budgetId, request.encryptionPassword) }
@@ -1262,7 +1262,7 @@ internal class TandemMobileSession(
                     apiClient.forgetSession()
                     pairedDevice = null
                     budgets = emptyList()
-                    credentialStorageError = "This device’s saved pairing is invalid. Pair this device again."
+                    credentialStorageError = "This device’s saved access no longer works. Pair this device again."
                     clearStoredCredential()
                     return null
                 }
@@ -1409,10 +1409,10 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
-            pairingError = error.userFacingMessage("Couldn’t pair this device. Check the server and pairing code.")
+            pairingError = error.userFacingMessage("Couldn’t pair this device. Check the server address and pairing code, then try again.")
             pairedDevice = null
         } catch (error: Exception) {
-            pairingError = "Couldn’t pair this device. Check the server address and connection."
+            pairingError = "Couldn’t pair this device. Check the server address and pairing code, then try again."
             pairedDevice = null
         } finally {
             isPairing = false
@@ -1432,17 +1432,17 @@ internal class TandemMobileSession(
             throw error
         } catch (error: TandemApiException) {
             isServerReachable = error.httpStatus != null
-            budgetError = error.userFacingMessage("Couldn’t load budgets from this server.")
+            budgetError = error.userFacingMessage("Couldn’t load your budgets. Check the connection and try again.")
             if (error.errorCode == "invalid_device_credential") {
                 apiClient.forgetSession()
                 pairedDevice = null
                 budgets = emptyList()
-                credentialStorageError = "This device pairing is no longer valid. Pair this device again."
+                credentialStorageError = "Pair this device again to restore access."
                 clearStoredCredential()
             }
         } catch (error: Exception) {
             isServerReachable = false
-            budgetError = "Couldn’t load budgets from this server. Check the connection and try again."
+            budgetError = "Couldn’t load your budgets. Check the connection and try again."
         } finally {
             isLoadingBudgets = false
         }
@@ -1463,7 +1463,7 @@ internal class TandemMobileSession(
         val coordinator = syncCoordinator
         val localRepository = repository
         if (coordinator == null || localRepository == null) {
-            syncPresentation = syncPresentation.failed("Local storage is unavailable. Restart the app and try again.")
+            syncPresentation = syncPresentation.failed("Tandem can’t save this budget on your device. Restart the app and try again.")
             return null
         }
 
@@ -1497,11 +1497,11 @@ internal class TandemMobileSession(
             syncPresentation =
                 syncPresentation.failed(
                     when (error.httpStatus) {
-                        401 -> "This device needs to be paired again."
-                        403 -> "This device can’t open that budget."
-                        404 -> "The budget is no longer available on the server."
-                        400, 422 -> "Check the budget password and try again."
-                        in 500..599 -> "The server couldn’t read this budget. Try again later."
+                        401 -> "Pair this device again to restore access."
+                        403 -> "This device can’t open this budget. Ask the budget owner for access."
+                        404 -> "This budget is no longer available. Choose another budget."
+                        400, 422 -> "That password didn’t unlock this budget. Check it and try again."
+                        in 500..599 -> "The server couldn’t open this budget. Try again later."
                         else -> "Couldn’t sync this budget. Check the connection and try again."
                     },
                 )
@@ -1512,7 +1512,7 @@ internal class TandemMobileSession(
             return null
         } catch (error: Exception) {
             isServerReachable = false
-            syncPresentation = syncPresentation.failed("Couldn’t sync this budget. Your saved data is still available.")
+            syncPresentation = syncPresentation.failed("Couldn’t sync this budget. Your saved copy is still available.")
             return null
         } finally {
             if (syncPresentation.isSyncing) syncPresentation = syncPresentation.stopped()
@@ -2215,19 +2215,19 @@ internal class TandemMobileSession(
         }
         val localRepository = repository
         if (localRepository == null) {
-            transactionWriteMessage = "Local budget storage is unavailable. Reopen the budget and try again."
+            transactionWriteMessage = "Budget data isn’t available on this device. Reopen the budget and try again."
             return false
         }
         val current = localRepository.findRecord(budgetId, "transaction", transactionId)
         val baseJson = current?.remoteJson
         val revision = current?.remoteRevision
         if (current == null || current.remoteDeleted || baseJson == null || revision.isNullOrBlank()) {
-            transactionWriteMessage = "The latest Actual transaction is unavailable. Sync the budget before editing."
+            transactionWriteMessage = "This transaction isn’t up to date. Sync the budget before editing."
             return false
         }
         val base = runCatching { Json.parseToJsonElement(baseJson).jsonObject }.getOrNull()
         if (base == null) {
-            transactionWriteMessage = "Couldn’t read this transaction. Sync the budget before editing."
+            transactionWriteMessage = "Tandem couldn’t open this transaction. Sync the budget before editing."
             return false
         }
         val requestedDate = if (updateDetails) normalizeTransactionDate(date.orEmpty()) else null
@@ -2315,7 +2315,7 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            transactionWriteMessage = "Couldn’t save this edit on this device. Try again."
+            transactionWriteMessage = "Tandem couldn’t save your edit. Check the budget and try again."
             loadLocalRecords(budgetId)
             return false
         } finally {
@@ -2331,7 +2331,7 @@ internal class TandemMobileSession(
         if (refuseWriteInReadOnlyMode()) return false
         val localRepository = repository
         if (localRepository == null) {
-            transactionWriteMessage = "Local budget storage is unavailable. Reopen the budget and try again."
+            transactionWriteMessage = "Budget data isn’t available on this device. Reopen the budget and try again."
             return false
         }
         val pendingForRecord =
@@ -2349,7 +2349,7 @@ internal class TandemMobileSession(
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                transactionWriteMessage = "Couldn’t remove this transaction. Review pending changes."
+                transactionWriteMessage = "Tandem couldn’t remove this transaction. Open Pending Changes to check it."
                 loadLocalRecords(budgetId)
                 return false
             } finally {
@@ -2357,14 +2357,14 @@ internal class TandemMobileSession(
             }
         }
         if (pendingForRecord != null && pendingForRecord.status != "queued") {
-            transactionWriteMessage = "Review this transaction in Pending Changes before deleting it."
+            transactionWriteMessage = "Open Pending Changes to review this transaction before deleting it."
             return false
         }
         val current = localRepository.findRecord(budgetId, "transaction", transactionId)
         val baseJson = current?.remoteJson
         val revision = current?.remoteRevision
         if (current == null || current.remoteDeleted || baseJson == null || revision.isNullOrBlank()) {
-            transactionWriteMessage = "The latest Actual transaction is unavailable. Sync the budget before deleting it."
+            transactionWriteMessage = "This transaction isn’t up to date. Sync the budget before deleting it."
             return false
         }
 
@@ -2393,7 +2393,7 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            transactionWriteMessage = "Couldn’t delete this transaction. Review pending changes."
+            transactionWriteMessage = "Tandem couldn’t delete this transaction. Open Pending Changes to check it."
             loadLocalRecords(budgetId)
             return false
         } finally {
@@ -2426,13 +2426,13 @@ internal class TandemMobileSession(
         }
         val date = normalizeTransactionDate(dateText)
         if (date == null) {
-            transactionWriteMessage = "Enter the date as YYYY-MM-DD."
+            transactionWriteMessage = "Enter the transaction date as year, month, and day."
             return false
         }
         val localRepository = repository
         val coordinator = syncCoordinator
         if (localRepository == null || coordinator == null) {
-            transactionWriteMessage = "Local budget storage is unavailable. Reopen the budget and try again."
+            transactionWriteMessage = "Budget data isn’t available on this device. Reopen the budget and try again."
             return false
         }
         val account = accountRecords.firstOrNull { it.recordId == accountId }
@@ -2543,12 +2543,12 @@ internal class TandemMobileSession(
                 when (savedWrite?.status) {
                     "committed" -> "Transaction added to Actual."
                     "queued" -> "Saved on this device and waiting to sync."
-                    "conflict" -> "This transaction is already in Actual. Sync and try again."
-                    "uncertain", "sending" -> "Status unknown. Check before retrying."
-                    "rejected" -> "Actual didn’t add this transaction. The previous value was kept."
+                    "conflict" -> "This transaction is already in Actual. Sync the budget to check it."
+                    "uncertain", "sending" -> "Tandem couldn’t confirm the save. Check Activity before adding it again."
+                    "rejected" -> "Actual didn’t add this transaction. Review the details and try again."
                     else ->
                         if (summary == null) {
-                            "Saved on this device. Status unknown; check before retrying."
+                            "Tandem couldn’t confirm the save. Check Activity before adding it again."
                         } else {
                             "The transaction is saved on this device and is waiting to sync."
                         }
@@ -2558,7 +2558,7 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            transactionWriteMessage = "The transaction is saved on this device. Status unknown; check before retrying."
+            transactionWriteMessage = "Tandem couldn’t confirm the save. Check Activity before adding it again."
             loadLocalRecords(budgetId)
             return false
         } finally {
@@ -2576,7 +2576,7 @@ internal class TandemMobileSession(
         if (refuseWriteInReadOnlyMode()) return
         val localRepository = repository
         if (localRepository == null) {
-            transactionWriteMessage = "Local storage is unavailable. Restart the app and try again."
+            transactionWriteMessage = "Budget data isn’t available on this device. Restart the app and try again."
             return
         }
         val operation = localRepository.readPendingWrites(budgetId).firstOrNull { it.operationId == operationId }
@@ -2627,18 +2627,20 @@ internal class TandemMobileSession(
             val summary = synchronize(budgetId, encryptionPassword)
             transactionWriteMessage =
                 when {
-                    summary == null -> "Your edit is saved on this device. Status unknown; check before retrying."
+                    summary == null ->
+                        "Your edit is saved on this device, but Tandem couldn’t confirm it. " +
+                            "Check Activity before editing again."
                     summary.writesCommitted > 0 -> "Your edit was synced to Actual."
                     summary.writesConflicted > 0 -> "Actual changed this transaction again. Review the latest versions."
-                    summary.writesUncertain > 0 -> "Status unknown. Check before retrying."
-                    summary.writesRejected > 0 -> "Actual didn’t apply your edit. The previous value was restored."
+                    summary.writesUncertain > 0 -> "Tandem couldn’t confirm the save. Check Activity before editing again."
+                    summary.writesRejected > 0 -> "Actual didn’t apply your edit, so the previous value remains. Review it and try again."
                     else -> "Your edit is waiting to sync."
                 }
             loadLocalRecords(budgetId)
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            transactionWriteMessage = "Your edit is saved on this device. Status unknown; check before retrying."
+            transactionWriteMessage = "Your edit is saved here, but not confirmed. Check Activity before editing again."
             loadLocalRecords(budgetId)
         } finally {
             isSavingTransaction = false
@@ -2693,7 +2695,7 @@ internal class TandemMobileSession(
                 reconcileUncertainOperationId = operationId,
             )
         if (summary == null) {
-            uncertainWriteCheckError = syncError ?: "Couldn’t check the server. Try again."
+            uncertainWriteCheckError = syncError ?: "Tandem couldn’t check this change. Try again."
             uncertainWriteCheckErrorOperationId = operationId
             return
         }
@@ -2987,24 +2989,24 @@ internal fun budgetApiErrorMessage(
     fallback: String,
 ): String =
     when (errorCode) {
-        "not-paired" -> "Pair this device before opening a budget."
-        "invalid_pairing_code" -> "This pairing code is invalid or expired. Request a new code."
-        "invalid_device_credential" -> "Pair this device again to continue."
-        "bank_sync_failed" -> "Actual couldn’t complete bank sync. Check its provider setup and try again."
-        "bank_sync_busy" -> "A bank sync is already running. Try again shortly."
-        "duplicate_imported_id" -> "This statement has repeated reference values. Choose a unique reference column."
-        "actual_operation_failed" -> "Actual couldn’t complete this change. Check the budget and try again."
-        "operation_uncertain" -> "Tandem couldn’t confirm this change. Check Actual before submitting it again."
-        "operation_rejected" -> "This change was rejected. Correct it before submitting again."
-        "invalid_request" -> "Check the information and try again."
+        "not-paired" -> "Pair this device to open a budget."
+        "invalid_pairing_code" -> "The pairing code didn’t work. Request a new code."
+        "invalid_device_credential" -> "Pair this device again to restore access."
+        "bank_sync_failed" -> "Actual couldn’t sync your bank transactions. Check the bank connection and try again."
+        "bank_sync_busy" -> "Bank sync is already running. Try again shortly."
+        "duplicate_imported_id" -> "Two statement rows share a reference. Choose a column with unique values."
+        "actual_operation_failed" -> "Actual couldn’t save this change. Check the details and try again."
+        "operation_uncertain" -> "Tandem couldn’t confirm this change. Check Actual before trying again."
+        "operation_rejected" -> "Actual didn’t accept this change. Review the details and try again."
+        "invalid_request" -> "Check the details and try again."
         else ->
             when (httpStatus) {
-                400, 422 -> "Check the information and try again."
-                401 -> "Pair this device again to continue."
-                403 -> "This device can’t change this budget."
-                404 -> "This item is no longer available. Refresh the budget."
+                400, 422 -> "Check the details and try again."
+                401 -> "Pair this device again to restore access."
+                403 -> "Ask the budget owner to let this device change the budget."
+                404 -> "This item is no longer available. Refresh the budget and try again."
                 408, 425, 429 -> "Tandem is temporarily unavailable. Try again shortly."
-                409 -> "The budget changed on the server. Refresh it and try again."
+                409 -> "The budget changed on the server. Refresh the budget and try again."
                 in 500..599 -> "Tandem is temporarily unavailable. Try again shortly."
                 else -> fallback
             }
