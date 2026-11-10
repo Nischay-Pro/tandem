@@ -34,7 +34,7 @@ function createDeviceAuth(overrides: Record<string, unknown> = {}) {
 }
 
 describe("health routes and OpenAPI", () => {
-  it("returns Actual sign-in methods without caching them", async () => {
+  it("caches Actual sign-in methods briefly without caching the HTTP response", async () => {
     const readActualLoginMethods = vi.fn(async () => ({
       bootstrapped: true,
       loginMethod: "password" as const,
@@ -64,6 +64,49 @@ describe("health routes and OpenAPI", () => {
         { method: "password", displayName: "Password", active: true },
       ],
     });
+    const cachedResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/auth/methods",
+    });
+    expect(cachedResponse.statusCode).toBe(200);
+    expect(cachedResponse.headers["cache-control"]).toBe("no-store");
+    expect(readActualLoginMethods).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
+  it("rate limits repeated sign-in method checks by client address", async () => {
+    const readActualLoginMethods = vi.fn(async () => ({
+      bootstrapped: true,
+      loginMethod: "password" as const,
+      availableLoginMethods: [],
+    }));
+    const app = await buildApiApp(
+      {
+        ping: vi.fn<() => Promise<void>>(),
+        close: vi.fn<() => Promise<void>>(),
+      },
+      { readActualLoginMethods },
+    );
+
+    let lastResponse;
+    for (let attempt = 0; attempt < 61; attempt += 1) {
+      lastResponse = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/methods",
+        remoteAddress: "192.0.2.10",
+      });
+    }
+
+    expect(lastResponse?.statusCode).toBe(429);
+    expect(lastResponse?.headers["retry-after"]).toBe("60");
+    expect(lastResponse?.headers["cache-control"]).toBe("no-store");
+    expect(lastResponse?.json()).toEqual({
+      error: {
+        code: "rate_limited",
+        message: "Too many sign-in checks. Try again shortly.",
+      },
+    });
+    expect(readActualLoginMethods).toHaveBeenCalledOnce();
     await app.close();
   });
 

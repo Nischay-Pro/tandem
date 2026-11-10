@@ -2,13 +2,12 @@
   <uses-permission android:name="android.permission.INTERNET" />
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-  <!-- TandemApiClient blocks public HTTP URLs and disables redirects. -->
   <application
     android:allowBackup="false"
     android:label="Tandem"
     android:icon="@mipmap/ic_launcher"
     android:roundIcon="@mipmap/ic_launcher_round"
-    android:usesCleartextTraffic="true"
+    android:networkSecurityConfig="@xml/network_security_config"
     android:theme="@style/Theme.Tandem">
     <activity
       android:name=".MainActivity"

@@ -13,6 +13,8 @@ import {
 } from "./auth/device-auth.js";
 import { PairingRateLimiter } from "./auth/pairing-rate-limiter.js";
 import type { ActualLoginMethods } from "./auth/actual-login-methods.js";
+import { ActualLoginMethodsCache } from "./auth/actual-login-methods-cache.js";
+import { RequestRateLimiter } from "./auth/request-rate-limiter.js";
 import { logSecurityAuditEvent } from "./security-audit.js";
 import type { TransactionApiPort } from "./actual/transaction-api.js";
 import {
@@ -93,6 +95,8 @@ export async function buildApiApp(
   options: ApiAppOptions = {},
 ): Promise<FastifyInstance> {
   const readinessTimeoutMs = options.readinessTimeoutMs ?? READINESS_TIMEOUT_MS;
+  const actualLoginMethodsCache = new ActualLoginMethodsCache(45_000);
+  const actualLoginMethodsRateLimiter = new RequestRateLimiter(60, 60_000);
   const app = Fastify({
     logger: false,
     trustProxy: options.trustProxy ?? false,
@@ -204,17 +208,47 @@ export async function buildApiApp(
             required: ["error"],
             additionalProperties: false,
           },
+          429: {
+            type: "object",
+            properties: {
+              error: {
+                type: "object",
+                properties: {
+                  code: { type: "string", const: "rate_limited" },
+                  message: { type: "string" },
+                },
+                required: ["code", "message"],
+                additionalProperties: false,
+              },
+            },
+            required: ["error"],
+            additionalProperties: false,
+          },
         },
       },
     },
-    async (_request, reply) => {
+    async (request, reply) => {
       reply.header("cache-control", "no-store");
+      const limit = actualLoginMethodsRateLimiter.reserveRequest(request.ip);
+      if (!limit.allowed) {
+        return reply
+          .header("retry-after", String(limit.retryAfterSeconds))
+          .code(429)
+          .send({
+            error: {
+              code: "rate_limited",
+              message: "Too many sign-in checks. Try again shortly.",
+            },
+          });
+      }
       if (!options.readActualLoginMethods) {
         return reply.code(503).send(actualLoginMethodsUnavailable());
       }
 
       try {
-        return await options.readActualLoginMethods();
+        return await actualLoginMethodsCache.read(
+          options.readActualLoginMethods,
+        );
       } catch {
         return reply.code(503).send(actualLoginMethodsUnavailable());
       }

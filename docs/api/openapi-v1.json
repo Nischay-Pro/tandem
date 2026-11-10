@@ -128,6 +128,29 @@
               }
             }
           },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string", "enum": ["rate_limited"] },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "503": {
             "description": "Default Response",
             "content": {
