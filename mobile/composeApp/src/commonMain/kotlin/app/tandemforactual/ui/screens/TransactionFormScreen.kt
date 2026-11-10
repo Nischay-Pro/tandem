@@ -34,6 +34,7 @@ import app.tandemforactual.ui.components.BodyText
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
+import app.tandemforactual.ui.components.FutureTransactionDateConfirmationDialog
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.SecondaryButton
@@ -55,9 +56,9 @@ internal fun TransactionFormScreen(
     navigation: AppNavigation,
     mobileSession: TandemMobileSession,
     liveAccounts: List<LiveAccountSummary>,
-    onSaveTransaction: ((Boolean) -> Unit) -> Unit,
+    onSaveTransaction: (String?, (Boolean) -> Unit) -> Unit,
     onDeleteTransaction: ((Boolean) -> Unit) -> Unit,
-    onCreateTransaction: () -> Unit,
+    onCreateTransaction: (String?) -> Unit,
 ) {
     if (state.readOnlyMode) {
         PageColumn {
@@ -78,6 +79,9 @@ internal fun TransactionFormScreen(
             var enterNewOperand by rememberSaveable { mutableStateOf(false) }
             var amountEntryMessage by rememberSaveable { mutableStateOf<String?>(null) }
             var confirmAmount by rememberSaveable { mutableStateOf(false) }
+            var confirmFutureDate by rememberSaveable { mutableStateOf(false) }
+            var futureDateConfirmationTarget by rememberSaveable { mutableStateOf("") }
+            var confirmedFutureDateForAmount by rememberSaveable { mutableStateOf("") }
             var notesFocused by remember { mutableStateOf(false) }
             val focusManager = LocalFocusManager.current
             val routeScrollState = LocalRouteScrollState.current
@@ -198,12 +202,25 @@ internal fun TransactionFormScreen(
                 softwareKeyboard?.hide()
             }
 
-            fun requestCreateTransaction() {
-                dismissKeypad()
+            fun continueCreateTransaction(confirmedFutureDate: String?) {
+                confirmedFutureDateForAmount = confirmedFutureDate.orEmpty()
                 if (budgetAmountPreview != null) {
                     confirmAmount = true
                 } else {
-                    onCreateTransaction()
+                    onCreateTransaction(confirmedFutureDate)
+                }
+            }
+
+            fun requestCreateTransaction() {
+                dismissKeypad()
+                val dateValidation = validateTransactionDate(state.transactionDate, platformTodayIsoDate())
+                when {
+                    dateValidation.status == TransactionDateValidationStatus.CONFIRMATION_REQUIRED -> {
+                        futureDateConfirmationTarget = dateValidation.date.orEmpty()
+                        confirmFutureDate = true
+                    }
+                    dateValidation.status != TransactionDateValidationStatus.VALID -> onCreateTransaction(null)
+                    else -> continueCreateTransaction(null)
                 }
             }
 
@@ -387,10 +404,29 @@ internal fun TransactionFormScreen(
             AmountConfirmationDialog(
                 visible = confirmAmount,
                 formattedAmount = budgetAmountPreview.orEmpty(),
-                onDismissRequest = { confirmAmount = false },
+                onDismissRequest = {
+                    confirmAmount = false
+                    confirmedFutureDateForAmount = ""
+                },
                 onConfirm = {
                     confirmAmount = false
-                    onCreateTransaction()
+                    val confirmedDate = confirmedFutureDateForAmount.takeIf(String::isNotBlank)
+                    confirmedFutureDateForAmount = ""
+                    onCreateTransaction(confirmedDate)
+                },
+            )
+            FutureTransactionDateConfirmationDialog(
+                visible = confirmFutureDate,
+                formattedDate = displayTransactionDate(futureDateConfirmationTarget),
+                onDismissRequest = {
+                    confirmFutureDate = false
+                    futureDateConfirmationTarget = ""
+                },
+                onConfirm = {
+                    val confirmedDate = futureDateConfirmationTarget
+                    confirmFutureDate = false
+                    futureDateConfirmationTarget = ""
+                    continueCreateTransaction(confirmedDate)
                 },
             )
             return
@@ -404,6 +440,9 @@ internal fun TransactionFormScreen(
         var savedFeedback by remember(state.selectedTransactionRecordId) { mutableStateOf(false) }
         var confirmDelete by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf(false) }
         var confirmAmount by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf(false) }
+        var confirmFutureDate by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf(false) }
+        var futureDateConfirmationTarget by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf("") }
+        var confirmedFutureDateForAmount by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf("") }
         var keypadVisible by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf(false) }
         var notesFocused by remember { mutableStateOf(false) }
         var calculatorAccumulator by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf<Long?>(null) }
@@ -498,8 +537,8 @@ internal fun TransactionFormScreen(
             softwareKeyboard?.hide()
         }
 
-        fun saveEditTransaction() {
-            onSaveTransaction { saved ->
+        fun saveEditTransaction(confirmedFutureDate: String? = null) {
+            onSaveTransaction(confirmedFutureDate) { saved ->
                 if (saved) {
                     originalAmountMinor = state.selectedTransactionAmountMinor
                     originalTransactionType = state.transactionType
@@ -509,12 +548,25 @@ internal fun TransactionFormScreen(
             }
         }
 
-        fun requestEditSave() {
-            dismissEditKeypad()
+        fun continueEditTransactionSave(confirmedFutureDate: String?) {
+            confirmedFutureDateForAmount = confirmedFutureDate.orEmpty()
             if (budgetAmountPreview != null) {
                 confirmAmount = true
             } else {
-                saveEditTransaction()
+                saveEditTransaction(confirmedFutureDate)
+            }
+        }
+
+        fun requestEditSave() {
+            dismissEditKeypad()
+            val dateValidation = validateTransactionDate(state.transactionDate, platformTodayIsoDate())
+            when {
+                dateValidation.status == TransactionDateValidationStatus.CONFIRMATION_REQUIRED -> {
+                    futureDateConfirmationTarget = dateValidation.date.orEmpty()
+                    confirmFutureDate = true
+                }
+                dateValidation.status != TransactionDateValidationStatus.VALID -> saveEditTransaction()
+                else -> continueEditTransactionSave(null)
             }
         }
 
@@ -688,10 +740,29 @@ internal fun TransactionFormScreen(
         AmountConfirmationDialog(
             visible = confirmAmount,
             formattedAmount = budgetAmountPreview.orEmpty(),
-            onDismissRequest = { confirmAmount = false },
+            onDismissRequest = {
+                confirmAmount = false
+                confirmedFutureDateForAmount = ""
+            },
             onConfirm = {
                 confirmAmount = false
-                saveEditTransaction()
+                val confirmedDate = confirmedFutureDateForAmount.takeIf(String::isNotBlank)
+                confirmedFutureDateForAmount = ""
+                saveEditTransaction(confirmedDate)
+            },
+        )
+        FutureTransactionDateConfirmationDialog(
+            visible = confirmFutureDate,
+            formattedDate = displayTransactionDate(futureDateConfirmationTarget),
+            onDismissRequest = {
+                confirmFutureDate = false
+                futureDateConfirmationTarget = ""
+            },
+            onConfirm = {
+                val confirmedDate = futureDateConfirmationTarget
+                confirmFutureDate = false
+                futureDateConfirmationTarget = ""
+                continueEditTransactionSave(confirmedDate)
             },
         )
         if (confirmDelete) {
