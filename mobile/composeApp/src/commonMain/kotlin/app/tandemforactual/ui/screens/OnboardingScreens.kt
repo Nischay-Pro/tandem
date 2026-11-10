@@ -14,9 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -85,36 +83,35 @@ internal fun StartupScreen() {
 internal fun WelcomeScreen(navigation: AppNavigation) {
     val palette = tandemPalette
     val uriHandler = LocalUriHandler.current
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(
-                    rememberScrollState(),
-                ).padding(horizontal = TandemSpacing.extraLarge, vertical = TandemSpacing.extraLarge),
-        verticalArrangement = Arrangement.spacedBy(TandemSpacing.large),
-    ) {
-        Spacer(Modifier.height(14.dp))
-        TandemBrandMark(Modifier.size(72.dp))
-        Heading("Tandem for Actual Budget", "Connect to your own Actual Budget server.")
-        SurfaceCard {
-            Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                Text("Before you start", color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
-                BodyText("Have your server address ready.")
-                Text(
-                    "Your budget data stays between this device and your server.",
-                    color = palette.text,
-                    fontSize = TandemTypography.compactBody,
-                    lineHeight = TandemTypography.bodyLineHeight,
-                )
+    OnboardingLayout(
+        horizontalPadding = TandemSpacing.extraLarge,
+        content = {
+            Spacer(Modifier.height(14.dp))
+            TandemBrandMark(Modifier.size(72.dp))
+            Heading("Tandem for Actual Budget", "Connect to your own Actual Budget server.")
+            SurfaceCard {
+                Column(
+                    Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                ) {
+                    Text("Before you start", color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
+                    BodyText("Have your server address ready.")
+                    Text(
+                        "Your budget data stays between this device and your server.",
+                        color = palette.text,
+                        fontSize = TandemTypography.compactBody,
+                        lineHeight = TandemTypography.bodyLineHeight,
+                    )
+                }
             }
-        }
-        SecondaryButton("How to set up a server", modifier = Modifier.fillMaxWidth()) {
-            uriHandler.openUri("https://github.com/Nischay-Pro/tandem#readme")
-        }
-        Spacer(Modifier.weight(1f, fill = false))
-        PrimaryButton("Get started") { navigation.open(AppRoute.SERVER_ADDRESS) }
-    }
+            SecondaryButton("How to set up a server", modifier = Modifier.fillMaxWidth()) {
+                uriHandler.openUri("https://github.com/Nischay-Pro/tandem#readme")
+            }
+        },
+        actions = {
+            PrimaryButton("Get started", modifier = Modifier.fillMaxWidth()) { navigation.open(AppRoute.SERVER_ADDRESS) }
+        },
+    )
 }
 
 @Composable
@@ -122,37 +119,43 @@ internal fun ServerAddressScreen(
     state: AppState,
     navigation: AppNavigation,
 ) {
-    PageColumn {
-        TextFieldCard(
-            "Server URL",
-            state.serverUrl,
-            { state.serverUrl = it },
-            TextFieldOptions(placeholder = "https://"),
-        )
-        InfoBubble("Enter the web address for your Tandem server.")
-        if (serverAddressMayBeInsecure(state.serverUrl)) {
-            val palette = tandemPalette
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(TandemShapes.medium))
-                    .background(palette.warning.copy(alpha = 0.12f))
-                    .border(1.dp, palette.warning.copy(alpha = 0.38f), RoundedCornerShape(TandemShapes.medium))
-                    .padding(TandemSpacing.large),
-                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Lucide.CircleAlert, contentDescription = null, modifier = Modifier.size(23.dp), tint = palette.warning)
-                Text(
-                    "Use HTTPS to protect budget data on public networks.",
-                    color = palette.text,
-                    fontSize = TandemTypography.compactBody,
-                    lineHeight = TandemTypography.bodyLineHeight,
-                )
+    OnboardingLayout(
+        content = {
+            TextFieldCard(
+                "Server URL",
+                state.serverUrl,
+                { state.serverUrl = it },
+                TextFieldOptions(placeholder = "https://"),
+            )
+            InfoBubble("Enter the web address for your Tandem server.")
+            if (serverAddressMayBeInsecure(state.serverUrl)) {
+                val palette = tandemPalette
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(TandemShapes.medium))
+                        .background(palette.warning.copy(alpha = 0.12f))
+                        .border(1.dp, palette.warning.copy(alpha = 0.38f), RoundedCornerShape(TandemShapes.medium))
+                        .padding(TandemSpacing.large),
+                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Lucide.CircleAlert, contentDescription = null, modifier = Modifier.size(23.dp), tint = palette.warning)
+                    Text(
+                        "Use HTTPS to protect budget data on public networks.",
+                        color = palette.text,
+                        fontSize = TandemTypography.compactBody,
+                        lineHeight = TandemTypography.bodyLineHeight,
+                    )
+                }
             }
-        }
-        PrimaryButton("Continue", enabled = serverAddressIsValid(state.serverUrl)) { navigation.open(AppRoute.SIGN_IN) }
-    }
+        },
+        actions = {
+            PrimaryButton("Continue", modifier = Modifier.fillMaxWidth(), enabled = serverAddressIsValid(state.serverUrl)) {
+                navigation.open(AppRoute.SIGN_IN)
+            }
+        },
+    )
 }
 
 internal fun cleanServerAddress(value: String): String =
@@ -226,56 +229,61 @@ internal fun SignInScreen(
         state.actualPassword = ""
         mobileSession.loadActualLoginMethods(state.serverUrl)
     }
-    PageColumn {
-        Heading("Sign in to Actual")
-        when {
-            mobileSession.isLoadingLoginMethods -> {
-                TandemLoadingIndicator(Modifier.size(24.dp), color = tandemPalette.accent, strokeWidth = 2.dp)
-            }
-            mobileSession.actualLoginMethods?.bootstrapped == false -> {
-                InlineMessage("Set up your Actual server before signing in.", InlineMessageKind.INFO)
-            }
-            mobileSession.actualLoginMethods != null -> {
-                val loginMethods = mobileSession.actualLoginMethods
-                val passwordActive =
-                    loginMethods?.availableLoginMethods?.any { it.method == "password" && it.active }
-                        ?: (loginMethods?.loginMethod == "password")
-                val openIdActive =
-                    loginMethods?.availableLoginMethods?.any { it.method == "openid" && it.active }
-                        ?: (loginMethods?.loginMethod == "openid")
-                if (passwordActive) {
-                    TextFieldCard(
-                        "Actual password",
-                        state.actualPassword,
-                        { state.actualPassword = it },
-                        TextFieldOptions(placeholder = "Password", isSecret = true),
-                    )
-                    InfoBubble("Your password is used to sign in and isn’t saved on this device.")
-                    PrimaryButton(
-                        if (mobileSession.isSigningIn) "Signing in" else "Sign in",
-                        enabled = !mobileSession.isSigningIn && state.actualPassword.isNotBlank(),
-                        onClick = onSignIn,
-                    )
+    val loginMethods = mobileSession.actualLoginMethods
+    val passwordActive =
+        loginMethods?.availableLoginMethods?.any { it.method == "password" && it.active } ?: (loginMethods?.loginMethod == "password")
+    val openIdActive =
+        loginMethods?.availableLoginMethods?.any { it.method == "openid" && it.active } ?: (loginMethods?.loginMethod == "openid")
+    OnboardingLayout(
+        content = {
+            Heading("Sign in to Actual")
+            when {
+                mobileSession.isLoadingLoginMethods -> {
+                    TandemLoadingIndicator(Modifier.size(24.dp), color = tandemPalette.accent, strokeWidth = 2.dp)
                 }
-                if (openIdActive) {
-                    SecondaryButton(
-                        if (mobileSession.isSigningIn) "Opening sign-in" else "Continue with OpenID",
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !mobileSession.isSigningIn,
-                        onClick = onStartOpenIdSignIn,
-                    )
+                mobileSession.actualLoginMethods?.bootstrapped == false -> {
+                    InlineMessage("Set up your Actual server before signing in.", InlineMessageKind.INFO)
                 }
-                mobileSession.signInError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
-                mobileSession.credentialStorageError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
-                if (!passwordActive && !openIdActive) {
-                    InlineMessage("This Actual server’s sign-in method isn’t supported yet.", InlineMessageKind.INFO)
+                mobileSession.actualLoginMethods != null -> {
+                    if (passwordActive) {
+                        TextFieldCard(
+                            "Actual password",
+                            state.actualPassword,
+                            { state.actualPassword = it },
+                            TextFieldOptions(placeholder = "Password", isSecret = true),
+                        )
+                        InfoBubble("Your password is used to sign in and isn’t saved on this device.")
+                    }
+                    mobileSession.signInError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
+                    mobileSession.credentialStorageError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
+                    if (!passwordActive && !openIdActive) {
+                        InlineMessage("This Actual server’s sign-in method isn’t supported yet.", InlineMessageKind.INFO)
+                    }
                 }
+                mobileSession.signInError != null ->
+                    InlineMessage(mobileSession.signInError.orEmpty(), InlineMessageKind.ERROR)
+                else -> InlineMessage("This Actual server’s sign-in method isn’t supported yet.", InlineMessageKind.INFO)
             }
-            mobileSession.signInError != null ->
-                InlineMessage(mobileSession.signInError.orEmpty(), InlineMessageKind.ERROR)
-            else -> InlineMessage("This Actual server’s sign-in method isn’t supported yet.", InlineMessageKind.INFO)
-        }
-    }
+        },
+        actions = {
+            if (passwordActive) {
+                PrimaryButton(
+                    if (mobileSession.isSigningIn) "Signing in" else "Sign in",
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !mobileSession.isSigningIn && state.actualPassword.isNotBlank(),
+                    onClick = onSignIn,
+                )
+            }
+            if (openIdActive) {
+                SecondaryButton(
+                    if (mobileSession.isSigningIn) "Opening sign-in" else "Continue with OpenID",
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !mobileSession.isSigningIn,
+                    onClick = onStartOpenIdSignIn,
+                )
+            }
+        },
+    )
 }
 
 @Composable

@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -67,6 +69,37 @@ internal fun PageColumn(
         verticalArrangement = Arrangement.spacedBy(verticalSpacing),
         content = content,
     )
+}
+
+@Composable
+internal fun OnboardingLayout(
+    modifier: Modifier = Modifier,
+    verticalSpacing: androidx.compose.ui.unit.Dp = TandemSpacing.large,
+    horizontalPadding: androidx.compose.ui.unit.Dp = TandemSpacing.screen,
+    content: @Composable ColumnScope.() -> Unit,
+    actions: @Composable ColumnScope.() -> Unit,
+) {
+    val scrollState = LocalRouteScrollState.current ?: rememberScrollState()
+    Column(modifier.fillMaxSize().imePadding()) {
+        Column(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = horizontalPadding, vertical = TandemSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(verticalSpacing),
+            content = content,
+        )
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = horizontalPadding, vertical = TandemSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(verticalSpacing),
+            content = actions,
+        )
+    }
 }
 
 @Composable
