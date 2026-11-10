@@ -107,6 +107,13 @@ internal fun queuedTransactionEditToDiscardForNoOp(
             }?.operationId
     }
 
+internal fun queuedTransactionCreateToEdit(pendingWrites: List<OutboxOperationEntity>): OutboxOperationEntity? =
+    pendingWrites.firstOrNull {
+        it.action == LocalWriteAction.CREATE.name &&
+            it.status == "queued" &&
+            it.serverOperationId == null
+    }
+
 internal data class ConflictResolutionFeedback(
     val operationId: String,
     val message: String,
@@ -2487,12 +2494,7 @@ internal class TandemMobileSession(
             return false
         }
         val current = localRepository.findRecord(budgetId, "transaction", transactionId)
-        val queuedCreate =
-            pendingForRecord.firstOrNull {
-                it.action == LocalWriteAction.CREATE.name &&
-                    it.status == "queued" &&
-                    it.serverOperationId == null
-            }
+        val queuedCreate = queuedTransactionCreateToEdit(pendingForRecord)
         val editingLocalCreate = queuedCreate != null
         val baseJson = if (editingLocalCreate) current?.localJson else current?.remoteJson
         val revision = if (editingLocalCreate) null else current?.remoteRevision

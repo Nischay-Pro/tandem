@@ -1297,6 +1297,64 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
+    fun queuedCreateCanBeEditedAfterFailedSendWithoutChangingItsDuplicateGuardId() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val first = repository.enqueueWrite(createRequest())
+                val sending = assertNotNull(repository.claimNextWrite(BUDGET))
+                repository.returnWriteToQueue(sending.operationId, "offline-before-send")
+
+                val replacement =
+                    createRequest(
+                        operationId = "create-op-2",
+                        idempotencyKey = "create-key-2",
+                        optimistic = """{"id":"txn-local","amount":1450,"notes":"corrected"}""",
+                        amountMinor = 1450L,
+                    )
+                val merged = repository.enqueueWrite(replacement)
+
+                assertTrue(merged.replacedUnsent)
+                assertEquals(first.operation.operationId, merged.operation.operationId)
+                assertEquals(first.operation.idempotencyKey, merged.operation.idempotencyKey)
+                assertEquals(1, merged.operation.attemptCount)
+                assertEquals("queued", merged.operation.status)
+                assertEquals(replacement.optimisticJson, merged.operation.patchJson)
+                assertEquals(replacement.optimisticJson, repository.findRecord(BUDGET, "transaction", "txn-local")?.localJson)
+                assertEquals(listOf(first.operation.operationId), repository.readPendingWrites(BUDGET).map { it.operationId })
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun createCannotBeEditedWhileItsFirstSendIsInFlightOrUncertain() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val first = repository.enqueueWrite(createRequest())
+                val sending = assertNotNull(repository.claimNextWrite(BUDGET))
+                assertEquals(first.operation.operationId, sending.operationId)
+
+                assertFails<LocalOperationConflictException> {
+                    repository.enqueueWrite(createRequest("create-op-2", "create-key-2"))
+                }
+                repository.returnWriteToQueue(sending.operationId, "offline-before-send")
+                repository.claimNextWrite(BUDGET)
+                repository.markWriteUncertain(sending.operationId, "operation-uncertain")
+
+                assertFails<LocalOperationConflictException> {
+                    repository.enqueueWrite(createRequest("create-op-3", "create-key-3"))
+                }
+                assertEquals("uncertain", repository.findWrite(sending.operationId)?.status)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun discardingAQueuedEditAfterItIsRevertedRestoresTheActualSnapshot() =
         runBlocking {
             val database = newDatabase()
@@ -2516,6 +2574,32 @@ class LocalBudgetRepositoryTest {
             optimisticProjection = projection,
             createdAtEpochMs = 100L,
             supersedesConflictOperationId = supersedesConflictOperationId,
+        )
+
+    private fun createRequest(
+        operationId: String = "create-op-1",
+        idempotencyKey: String = "create-key-1",
+        optimistic: String = """{"id":"txn-local","amount":1200}""",
+        amountMinor: Long = 1200L,
+    ): LocalWriteRequest =
+        updateRequest(
+            operationId = operationId,
+            idempotencyKey = idempotencyKey,
+            recordId = "txn-local",
+            action = LocalWriteAction.CREATE,
+            baseRevision = null,
+            baseSnapshot = null,
+            patch = optimistic,
+            optimistic = optimistic,
+            projection =
+                LocalRecordProjection(
+                    recordDate = "2026-10-01",
+                    accountId = "checking",
+                    categoryId = "food",
+                    payeeId = "market",
+                    amountMinor = amountMinor,
+                    budgetMonth = null,
+                ),
         )
 
     private suspend inline fun <reified T : Throwable> assertFails(noinline block: suspend () -> Any?) {

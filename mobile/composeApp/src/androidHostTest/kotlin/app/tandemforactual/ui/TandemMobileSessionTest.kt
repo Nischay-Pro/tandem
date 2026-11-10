@@ -220,6 +220,18 @@ class TandemMobileSessionTest {
     }
 
     @Test
+    fun localCreateCanBeEditedAfterPreSubmissionFailureButNotWhileSentOrUncertain() {
+        val queuedCreate = pendingTransactionWrite(action = "CREATE").copy(attemptCount = 1)
+
+        assertEquals(queuedCreate.operationId, queuedTransactionCreateToEdit(listOf(queuedCreate))?.operationId)
+        assertNull(queuedTransactionCreateToEdit(listOf(queuedCreate.copy(status = "sending"))))
+        assertNull(queuedTransactionCreateToEdit(listOf(queuedCreate.copy(status = "uncertain"))))
+        assertNull(
+            queuedTransactionCreateToEdit(listOf(queuedCreate.copy(serverOperationId = "server-operation-1"))),
+        )
+    }
+
+    @Test
     fun transactionEditPatchIncludesPayeeCategoryDateAndAccountChanges() {
         val base =
             Json
