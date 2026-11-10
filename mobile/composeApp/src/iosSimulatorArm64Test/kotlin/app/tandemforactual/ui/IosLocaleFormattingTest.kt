@@ -35,7 +35,7 @@ class IosLocaleFormattingTest {
                 "dot-comma" to ("12.50" to "12.34,56"),
                 "space-comma" to ("12.50" to "12\u202f34,56"),
                 "apostrophe-dot" to ("12,50" to "12’34.56"),
-                "comma-dot-in" to ("12,50" to "1,234,567.89"),
+                "comma-dot-in" to ("12,50" to "123,45,678.89"),
             )
 
         formats.forEach { (numberFormat, invalidInputs) ->
@@ -44,6 +44,9 @@ class IosLocaleFormattingTest {
             assertEquals(123_456_789L, platformParseDecimalMinorUnits(formatted, settings), numberFormat)
             assertNull(platformParseDecimalMinorUnits(invalidInputs.first, settings), "$numberFormat decimal mark")
             assertNull(platformParseDecimalMinorUnits(invalidInputs.second, settings), "$numberFormat grouping")
+            if (numberFormat == "comma-dot-in") {
+                assertEquals(123_456_789L, platformParseDecimalMinorUnits("1,234,567.89", settings), "western grouping")
+            }
         }
     }
 
