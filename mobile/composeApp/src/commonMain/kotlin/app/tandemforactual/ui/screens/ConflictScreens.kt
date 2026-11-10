@@ -80,6 +80,42 @@ internal fun uncertainWriteRemovalWarning(
     "Remove the pending edit for $payee ($amount)? Actual may already have saved it; removing it here won’t undo a change already stored there."
 
 @Composable
+internal fun UncertainWriteRecoveryActions(
+    showCheckAgain: Boolean,
+    showRetryAndRemove: Boolean,
+    isSyncing: Boolean,
+    readOnly: Boolean,
+    onCheckAgain: () -> Unit,
+    onRetry: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    when {
+        showCheckAgain ->
+            PrimaryButton(
+                "Check again",
+                enabled = !isSyncing,
+                loading = isSyncing,
+                onClick = onCheckAgain,
+            )
+        showRetryAndRemove ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                PrimaryButton(
+                    "Try again",
+                    enabled = !readOnly && !isSyncing,
+                    modifier = Modifier.weight(1f),
+                    onClick = onRetry,
+                )
+                SecondaryButton(
+                    "Remove edit",
+                    modifier = Modifier.weight(1f),
+                    enabled = !readOnly && !isSyncing,
+                    onClick = onRemove,
+                )
+            }
+    }
+}
+
+@Composable
 internal fun ConflictInboxScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
@@ -439,25 +475,26 @@ internal fun UncertainWriteScreen(
                 InfoBubble(message)
                 when {
                     checkError != null -> {
-                        PrimaryButton(
-                            "Check again",
-                            enabled = !mobileSession.isSyncing,
-                            loading = mobileSession.isSyncing,
-                        ) { onCheckStatus(operation.operationId) }
+                        UncertainWriteRecoveryActions(
+                            showCheckAgain = true,
+                            showRetryAndRemove = false,
+                            isSyncing = mobileSession.isSyncing,
+                            readOnly = state.readOnlyMode,
+                            onCheckAgain = { onCheckStatus(operation.operationId) },
+                            onRetry = { onRetry(operation.operationId) },
+                            onRemove = { confirmDiscard = true },
+                        )
                     }
                     canRetryOrRemove -> {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                            PrimaryButton(
-                                "Try again",
-                                enabled = !state.readOnlyMode && !mobileSession.isSyncing,
-                                modifier = Modifier.weight(1f),
-                            ) { onRetry(operation.operationId) }
-                            SecondaryButton(
-                                "Remove edit",
-                                modifier = Modifier.weight(1f),
-                                enabled = !state.readOnlyMode && !mobileSession.isSyncing,
-                            ) { confirmDiscard = true }
-                        }
+                        UncertainWriteRecoveryActions(
+                            showCheckAgain = false,
+                            showRetryAndRemove = true,
+                            isSyncing = mobileSession.isSyncing,
+                            readOnly = state.readOnlyMode,
+                            onCheckAgain = { onCheckStatus(operation.operationId) },
+                            onRetry = { onRetry(operation.operationId) },
+                            onRemove = { confirmDiscard = true },
+                        )
                     }
                     operation.status == "uncertain" -> {
                         PrimaryButton(

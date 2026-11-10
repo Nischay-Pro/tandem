@@ -59,6 +59,8 @@ workRuntimeKtx = { module = "androidx.work:work-runtime-ktx", version.ref = "wor
 junit = { module = "junit:junit", version.ref = "junit" }
 composeRuntimeAndroid = { module = "androidx.compose.runtime:runtime", version.ref = "jetpackCompose" }
 composeUiAndroid = { module = "androidx.compose.ui:ui", version.ref = "jetpackCompose" }
+composeUiTestJunit4 = { module = "androidx.compose.ui:ui-test-junit4", version.ref = "jetpackCompose" }
+composeUiTestManifest = { module = "androidx.compose.ui:ui-test-manifest", version.ref = "jetpackCompose" }
 composeFoundationAndroid = { module = "androidx.compose.foundation:foundation", version.ref = "jetpackCompose" }
 composeMaterialAndroid = { module = "androidx.compose.material:material", version.ref = "jetpackCompose" }
 composeAnimation = { module = "org.jetbrains.compose.animation:animation", version.ref = "composeMultiplatform" }

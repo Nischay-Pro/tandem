@@ -100,6 +100,9 @@ kotlin {
     getByName("androidHostTest") {
       dependencies {
         implementation(kotlin("test"))
+        implementation(libs.composeUiTestJunit4)
+        implementation(libs.composeUiTestManifest)
+        implementation(libs.robolectric)
       }
     }
   }
@@ -110,6 +113,10 @@ ktlint {
     exclude { element -> element.file.path.contains("/build/generated/") }
     include("**/src/**/*.kt", "**/*.kts")
   }
+}
+
+tasks.withType<Test>().configureEach {
+  jvmArgs("--add-opens=java.base/jdk.internal.access=ALL-UNNAMED")
 }
 
 compose.resources {
