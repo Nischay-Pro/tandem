@@ -102,6 +102,7 @@ internal fun ListRow(
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
+    trailingContent: (@Composable () -> Unit)? = null,
 ) {
     val palette = tandemPalette
     val stackTrailing = LocalDensity.current.fontScale >= 1.5f
@@ -218,6 +219,11 @@ internal fun ListRow(
                     )
                 }
             }
+            if (stackTrailing && trailingContent != null) {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                    trailingContent()
+                }
+            }
             if (stackTrailing && trailing != null) {
                 if (options.animateChanges) {
                     AnimatedStatusText(
@@ -238,7 +244,9 @@ internal fun ListRow(
                 }
             }
         }
-        if (trailing != null && !stackTrailing) {
+        if (!stackTrailing && trailingContent != null) {
+            trailingContent()
+        } else if (trailing != null && !stackTrailing) {
             val effectiveColor = options.trailingColor ?: palette.muted
             if (options.animateChanges) {
                 AnimatedStatusText(
@@ -257,7 +265,7 @@ internal fun ListRow(
                     maxLines = 2,
                 )
             }
-        } else if (onClick != null && options.showChevron) {
+        } else if (trailingContent == null && onClick != null && options.showChevron) {
             Icon(
                 Lucide.ChevronRight,
                 contentDescription = null,

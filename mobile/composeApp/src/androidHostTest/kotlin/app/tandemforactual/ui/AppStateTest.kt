@@ -8,6 +8,11 @@ import kotlin.test.assertTrue
 
 class AppStateTest {
     @Test
+    fun newInstallFollowsTheSystemAppearanceByDefault() {
+        assertEquals(ThemeMode.SYSTEM, AppState().theme)
+    }
+
+    @Test
     fun accountActionButtonsStackWhenSystemTextNeedsMoreWidth() {
         assertFalse(shouldStackActionButtons(1.0f))
         assertFalse(shouldStackActionButtons(1.19f))

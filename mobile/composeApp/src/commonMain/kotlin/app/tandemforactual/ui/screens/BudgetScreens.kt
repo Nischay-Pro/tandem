@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.AnimatedReveal
+import app.tandemforactual.ui.components.AvailableAmountPill
 import app.tandemforactual.ui.components.CollapsibleSectionCard
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
@@ -350,11 +351,7 @@ internal fun BudgetScreen(
                         Column {
                             CollapsibleSectionCard(
                                 "${state.selectedMonth} summary",
-                                if (isLiveBudget) {
-                                    "${categoryCountLabel(groups.sumOf { it.categories.size })} · ${assignmentPresentation.label}"
-                                } else {
-                                    "Ready to assign"
-                                },
+                                "${categoryCountLabel(groups.sumOf { it.categories.size })} · ${assignmentPresentation.label}",
                                 state.formatCurrency(displayedAssignmentMinor),
                                 actionColor = readyToAssignColor,
                                 expanded = summaryExpanded,
@@ -368,7 +365,7 @@ internal fun BudgetScreen(
                                 SurfaceCard(Modifier.padding(top = sectionSpacing)) {
                                     Column {
                                         ListRow(
-                                            if (isLiveBudget) assignmentPresentation.label else "Available this month",
+                                            assignmentPresentation.label,
                                             if (isLiveBudget) state.selectedMonth else "On track",
                                             state.formatCurrency(displayedAssignmentMinor),
                                             leading = RowLeading.Icon(Lucide.WalletCards),
@@ -544,20 +541,24 @@ internal fun BudgetScreen(
                             SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
                                 ListRow(
                                     category.name,
-                                    "Spent ${state.formatCurrency(
+                                    "Assigned ${state.formatCurrency(category.assignedMinor)} · spent ${state.formatCurrency(
                                         kotlin.math.abs(category.activityMinor),
-                                    )} · ${state.formatCurrency(category.balanceMinor)} available",
-                                    state.formatCurrency(category.assignedMinor),
+                                    )}",
                                     leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
                                     options =
                                         ListRowOptions(
-                                            trailingColor = if (category.balanceMinor >= 0) palette.positive else palette.warning,
                                             dense = compact,
                                         ),
                                     onClick = {
                                         state.selectedCategoryGroupId = group.id
                                         state.selectedCategoryId = category.id
                                         navigation.open(AppRoute.CATEGORY_DETAIL)
+                                    },
+                                    trailingContent = {
+                                        AvailableAmountPill(
+                                            state.formatCurrency(category.balanceMinor),
+                                            isOverdrawn = category.balanceMinor < 0,
+                                        )
                                     },
                                 )
                             }

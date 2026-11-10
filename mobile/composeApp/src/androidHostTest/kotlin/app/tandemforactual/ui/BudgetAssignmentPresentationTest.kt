@@ -7,7 +7,7 @@ class BudgetAssignmentPresentationTest {
     @Test
     fun positiveAmountUsesToBudgetLabelAndMagnitude() {
         assertEquals(
-            BudgetAssignmentPresentation("To budget", 12_400, BudgetAssignmentKind.TO_BUDGET),
+            BudgetAssignmentPresentation("To Budget", 12_400, BudgetAssignmentKind.TO_BUDGET),
             presentBudgetAssignment(12_400),
         )
     }

@@ -5,6 +5,7 @@ package app.tandemforactual.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -138,6 +140,7 @@ internal fun SettingsScreen(
 
 @Composable
 internal fun AppearanceScreen(state: AppState) {
+    val isDark = isDarkTheme(state.theme, isSystemInDarkTheme())
     PageColumn {
         SectionCard("Theme") {
             ThemeMode.entries.forEachIndexed { index, mode ->
@@ -152,7 +155,7 @@ internal fun AppearanceScreen(state: AppState) {
         SectionCard("Accent color") {
             AccentChoice.entries.forEachIndexed { index, accent ->
                 if (index > 0) DividerLine()
-                AccentChoiceRow(accent, selected = state.accent == accent) { state.accent = accent }
+                AccentChoiceRow(accent, accent.colorFor(isDark), selected = state.accent == accent) { state.accent = accent }
             }
         }
         SectionCard("Background and motion") {
@@ -242,6 +245,7 @@ private fun AppearanceSelectionIndicator(selected: Boolean) {
 @Composable
 private fun AccentChoiceRow(
     accent: AccentChoice,
+    color: Color,
     selected: Boolean,
     onClick: () -> Unit,
 ) {
@@ -258,7 +262,7 @@ private fun AccentChoiceRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
     ) {
-        Box(Modifier.size(22.dp).clip(CircleShape).background(accent.color))
+        Box(Modifier.size(22.dp).clip(CircleShape).background(color))
         Text(
             accent.label,
             modifier = Modifier.weight(1f),

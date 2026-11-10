@@ -12,6 +12,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,15 +28,18 @@ internal enum class ThemeMode(
 
 internal enum class AccentChoice(
     val label: String,
-    val color: Color,
+    val lightColor: Color,
+    val darkColor: Color,
 ) {
-    ACTUAL_PURPLE("Actual purple", Color(0xFF8719E0)),
-    TEAL("Lagoon", Color(0xFF31D4C7)),
-    BLUE("Cobalt", Color(0xFF73A7FF)),
-    VIOLET("Orchid", Color(0xFFB49AFF)),
-    AMBER("Saffron", Color(0xFFFFC56E)),
-    ROSE("Rose", Color(0xFFFF91A9)),
+    ACTUAL_PURPLE("Actual purple", Color(0xFF8719E0), Color(0xFFC9B1FF)),
+    TEAL("Lagoon", Color(0xFF006C70), Color(0xFF54D7CE)),
+    BLUE("Cobalt", Color(0xFF0055A4), Color(0xFF85C1FF)),
+    VIOLET("Orchid", Color(0xFF6941A5), Color(0xFFC6AAFF)),
+    AMBER("Saffron", Color(0xFF8A4C00), Color(0xFFFFD08A)),
+    ROSE("Rose", Color(0xFFB22650), Color(0xFFFFABC1)),
 }
+
+internal fun AccentChoice.colorFor(isDark: Boolean): Color = if (isDark) darkColor else lightColor
 
 internal object TandemTypography {
     val indicator = 9.sp
@@ -111,16 +115,85 @@ private val LocalTandemPalette =
             border = Color(0xFF36536B),
             text = Color(0xFFF7FAFC),
             muted = Color(0xFFB0C4D6),
-            accent = Color(0xFFA368FC),
-            accentContent = Color.White,
-            accentSurface = Color(0xFF2B2440),
+            accent = Color(0xFFC9B1FF),
+            accentContent = Color(0xFF111827),
+            accentSurface = Color(0xFF384B6C),
             positive = Color(0xFF73D9A4),
             syncing = Color(0xFF73B7FF),
-            warning = Color(0xFFFFC56E),
-            negative = Color(0xFFFF8C98),
+            warning = Color(0xFFFFD18A),
+            negative = Color(0xFFFF9CA5),
         )
     }
 private val LocalReduceMotion = staticCompositionLocalOf { false }
+
+internal fun wcagContrastRatio(
+    foreground: Color,
+    background: Color,
+): Float {
+    val (lighter, darker) = listOf(foreground.luminance(), background.luminance()).sortedDescending()
+    return (lighter + 0.05f) / (darker + 0.05f)
+}
+
+internal fun isDarkTheme(
+    mode: ThemeMode,
+    systemIsDark: Boolean,
+): Boolean = mode == ThemeMode.DARK || mode == ThemeMode.PURE_BLACK || (mode == ThemeMode.SYSTEM && systemIsDark)
+
+internal fun tandemPaletteFor(
+    mode: ThemeMode,
+    systemIsDark: Boolean,
+    accent: AccentChoice,
+): TandemPalette {
+    val dark = isDarkTheme(mode, systemIsDark)
+    val black = mode == ThemeMode.PURE_BLACK
+    val selectedAccent = accent.colorFor(dark)
+    val darkContent = Color(0xFF111827)
+    val lightContent = Color.White
+    val accentContent =
+        if (wcagContrastRatio(darkContent, selectedAccent) >= wcagContrastRatio(lightContent, selectedAccent)) {
+            darkContent
+        } else {
+            lightContent
+        }
+
+    return if (dark) {
+        val background = if (black) Color.Black else Color(0xFF102A43)
+        val surface = if (black) Color(0xFF101216) else Color(0xFF18344C)
+        TandemPalette(
+            background = background,
+            surface = surface,
+            raised = if (black) Color(0xFF1B1F25) else Color(0xFF23435C),
+            border = if (black) Color(0xFF2C323C) else Color(0xFF36536B),
+            text = Color(0xFFF7FAFC),
+            muted = Color(0xFFB0C4D6),
+            accent = selectedAccent,
+            accentContent = accentContent,
+            accentSurface = selectedAccent.copy(alpha = 0.18f).compositeOver(surface),
+            positive = Color(0xFF73D9A4),
+            syncing = Color(0xFF73B7FF),
+            warning = Color(0xFFFFD18A),
+            negative = Color(0xFFFF9CA5),
+        )
+    } else {
+        val background = Color(0xFFE8ECF0)
+        val surface = Color.White
+        TandemPalette(
+            background = background,
+            surface = surface,
+            raised = Color(0xFFF7FAFC),
+            border = Color(0xFFD2DAE2),
+            text = Color(0xFF272630),
+            muted = Color(0xFF42586D),
+            accent = selectedAccent,
+            accentContent = accentContent,
+            accentSurface = selectedAccent.copy(alpha = 0.10f).compositeOver(surface),
+            positive = Color(0xFF0E6F4F),
+            syncing = Color(0xFF174EA6),
+            warning = Color(0xFF7A4B00),
+            negative = Color(0xFFB3261E),
+        )
+    }
+}
 
 @Composable
 internal fun TandemTheme(
@@ -130,49 +203,9 @@ internal fun TandemTheme(
     animateThemeChanges: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    val dark = mode == ThemeMode.DARK || mode == ThemeMode.PURE_BLACK || (mode == ThemeMode.SYSTEM && isSystemInDarkTheme())
-    val black = mode == ThemeMode.PURE_BLACK
-    val selectedAccent =
-        when {
-            accent == AccentChoice.ACTUAL_PURPLE && dark -> Color(0xFFA368FC)
-            accent == AccentChoice.TEAL && !dark -> Color(0xFF079AA2)
-            else -> accent.color
-        }
-    val accentContent = if (selectedAccent.luminance() > 0.58f) Color(0xFF272630) else Color.White
-    val palette =
-        if (dark) {
-            TandemPalette(
-                background = if (black) Color.Black else Color(0xFF102A43),
-                surface = if (black) Color(0xFF101216) else Color(0xFF18344C),
-                raised = if (black) Color(0xFF1B1F25) else Color(0xFF23435C),
-                border = if (black) Color(0xFF2C323C) else Color(0xFF36536B),
-                text = Color(0xFFF7FAFC),
-                muted = Color(0xFFB0C4D6),
-                accent = selectedAccent,
-                accentContent = accentContent,
-                accentSurface = selectedAccent.copy(alpha = 0.18f),
-                positive = Color(0xFF73D9A4),
-                syncing = Color(0xFF73B7FF),
-                warning = Color(0xFFFFC56E),
-                negative = Color(0xFFFF8C98),
-            )
-        } else {
-            TandemPalette(
-                background = Color(0xFFE8ECF0),
-                surface = Color.White,
-                raised = Color(0xFFF7FAFC),
-                border = Color(0xFFE8ECF0),
-                text = Color(0xFF272630),
-                muted = Color(0xFF627D98),
-                accent = selectedAccent,
-                accentContent = accentContent,
-                accentSurface = selectedAccent.copy(alpha = 0.10f),
-                positive = Color(0xFF147D64),
-                syncing = Color(0xFF1557B0),
-                warning = Color(0xFFB88115),
-                negative = Color(0xFFE12D39),
-            )
-        }
+    val systemIsDark = isSystemInDarkTheme()
+    val dark = isDarkTheme(mode, systemIsDark)
+    val palette = tandemPaletteFor(mode, systemIsDark, accent)
 
     val colorSpec =
         tandemMotionSpec<Color>(

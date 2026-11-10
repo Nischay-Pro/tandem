@@ -22,7 +22,7 @@ internal fun presentBudgetAssignment(amountMinor: Long): BudgetAssignmentPresent
             )
         amountMinor > 0 ->
             BudgetAssignmentPresentation(
-                label = "To budget",
+                label = "To Budget",
                 amountMinor = amountMinor,
                 kind = BudgetAssignmentKind.TO_BUDGET,
             )

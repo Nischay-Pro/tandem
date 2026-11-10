@@ -49,7 +49,7 @@ internal fun normalizeHomeLayoutName(layout: String): String =
     }
 
 internal class AppState {
-    var theme by mutableStateOf(ThemeMode.DARK)
+    var theme by mutableStateOf(ThemeMode.SYSTEM)
     var accent by mutableStateOf(AccentChoice.ACTUAL_PURPLE)
     var selectedBudget by mutableStateOf("")
     var selectedBudgetId by mutableStateOf("")
