@@ -2279,7 +2279,7 @@ describe("Actual transaction reconciliation", () => {
     expect(update).toHaveBeenCalledTimes(1);
   });
 
-  it("recovers an uncertain operation during a status check", async () => {
+  it("recovers a lease-expired operation during a status check", async () => {
     const request = createRequest();
     const harness = createHarness(request, { initialStatus: "uncertain" });
     harness.actual = actualFrom(createSnapshot({ amount: 1200 }));
@@ -2296,6 +2296,10 @@ describe("Actual transaction reconciliation", () => {
       baseSnapshot: request.baseSnapshot,
       patch: request.patch as { [key: string]: JsonValue },
     });
+    harness.journal.operation = {
+      ...harness.journal.operation!,
+      errorCode: "claim-lease-expired",
+    };
 
     const result = await harness.reconciler.checkOperationStatus(
       request.operationId,
@@ -2309,6 +2313,50 @@ describe("Actual transaction reconciliation", () => {
         options: { encryptionPassword: "budget-password" },
       },
     ]);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("retries a lease-expired operation only after read-back confirms the base value", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    harness.actual = actualFrom(createSnapshot());
+    const update = vi.spyOn(harness.store, "update");
+    await harness.journal.enqueue(operationInputFor(request));
+    harness.journal.operation = {
+      ...harness.journal.operation!,
+      errorCode: "claim-lease-expired",
+    };
+
+    const checked = await harness.reconciler.checkOperationStatus(
+      request.operationId,
+    );
+    const retried = await harness.reconciler.submit(request);
+
+    expect(checked?.operation).toMatchObject({
+      status: "queued",
+      errorCode: "actual-readback-not-applied",
+    });
+    expect(retried.operation.status).toBe("committed");
+    expect(harness.actual).toMatchObject({ amount: 1200 });
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a lease-expired operation uncertain when the patched value has a third value", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    harness.actual = actualFrom(createSnapshot({ amount: 1300 }));
+    const update = vi.spyOn(harness.store, "update");
+    await harness.journal.enqueue(operationInputFor(request));
+    harness.journal.operation = {
+      ...harness.journal.operation!,
+      errorCode: "claim-lease-expired",
+    };
+
+    const result = await harness.reconciler.checkOperationStatus(
+      request.operationId,
+    );
+
+    expect(result?.operation.status).toBe("uncertain");
     expect(update).not.toHaveBeenCalled();
   });
 
