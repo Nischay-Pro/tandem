@@ -258,6 +258,9 @@ internal class TandemMobileSession(
     var pendingWrites by mutableStateOf<List<OutboxOperationEntity>>(emptyList())
         private set
 
+    var conflictRecordsByRecordId by mutableStateOf<Map<String, BudgetRecordEntity>>(emptyMap())
+        private set
+
     var checkedWriteOperation by mutableStateOf<OutboxOperationEntity?>(null)
         private set
 
@@ -1378,6 +1381,7 @@ internal class TandemMobileSession(
             scheduleRecords = emptyList()
             ruleRecords = emptyList()
             pendingWrites = emptyList()
+            conflictRecordsByRecordId = emptyMap()
             cachedTransactionCount = 0
             syncedTransactionCount = 0
             checkedWriteOperation = null
@@ -2673,7 +2677,52 @@ internal class TandemMobileSession(
         }
         val base = runCatching { Json.parseToJsonElement(baseJson).jsonObject }.getOrNull()
         val patch = runCatching { Json.parseToJsonElement(operation.patchJson).jsonObject }.getOrNull()
-        if (base == null || patch == null || operation.action != "UPDATE") {
+        if (base == null) {
+            transactionWriteMessage = "This edit can’t be applied to the latest Actual version. Keep Actual and discard your edit."
+            return
+        }
+        if (operation.action == LocalWriteAction.DELETE.name) {
+            isSavingTransaction = true
+            try {
+                val newOperationId = Uuid.random().toString()
+                localRepository.enqueueWrite(
+                    LocalWriteRequest(
+                        operationId = newOperationId,
+                        idempotencyKey = newOperationId,
+                        budgetId = budgetId,
+                        recordType = operation.recordType,
+                        recordId = operation.recordId,
+                        action = LocalWriteAction.DELETE,
+                        baseRevision = revision,
+                        baseSnapshotJson = baseJson,
+                        patchJson = "{}",
+                        optimisticJson = null,
+                        createdAtEpochMs = nowEpochMillis(),
+                        optimisticProjection = null,
+                    ),
+                )
+                val summary = synchronize(budgetId, encryptionPassword)
+                transactionWriteMessage =
+                    when {
+                        summary == null -> "Your deletion is saved on this device and will sync when you reconnect."
+                        summary.writesCommitted > 0 -> "The transaction was deleted in Actual."
+                        summary.writesConflicted > 0 -> "Actual changed this transaction again. Review the latest versions."
+                        summary.writesUncertain > 0 -> "Tandem couldn’t confirm the deletion. Check Activity before trying again."
+                        summary.writesRejected > 0 -> "Actual didn’t apply the deletion. Review the transaction and try again."
+                        else -> "Your deletion is waiting to sync."
+                    }
+                loadLocalRecords(budgetId)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                transactionWriteMessage = "Your deletion is saved here, but not confirmed. Check Activity before trying again."
+                loadLocalRecords(budgetId)
+            } finally {
+                isSavingTransaction = false
+            }
+            return
+        }
+        if (patch == null || operation.action != LocalWriteAction.UPDATE.name) {
             transactionWriteMessage = "This edit can’t be applied to the latest Actual version. Keep Actual and discard your edit."
             return
         }
@@ -2700,9 +2749,7 @@ internal class TandemMobileSession(
             val summary = synchronize(budgetId, encryptionPassword)
             transactionWriteMessage =
                 when {
-                    summary == null ->
-                        "Your edit is saved on this device, but Tandem couldn’t confirm it. " +
-                            "Check Activity before editing again."
+                    summary == null -> "Your edit is saved on this device and will sync when you reconnect."
                     summary.writesCommitted > 0 -> "Your edit was synced to Actual."
                     summary.writesConflicted > 0 -> "Actual changed this transaction again. Review the latest versions."
                     summary.writesUncertain > 0 -> "Tandem couldn’t confirm the save. Check Activity before editing again."
@@ -2826,6 +2873,21 @@ internal class TandemMobileSession(
         budgetMonthIds = localRepository.findRecordIds(budgetId, "budget-month")
         selectedBudgetMonthRecord = null
         pendingWrites = localRepository.readPendingWrites(budgetId)
+        conflictRecordsByRecordId = findConflictRecords(budgetId, pendingWrites)
+    }
+
+    private suspend fun findConflictRecords(
+        budgetId: String,
+        writes: List<OutboxOperationEntity>,
+    ): Map<String, BudgetRecordEntity> {
+        val localRepository = repository ?: return emptyMap()
+        val records = mutableMapOf<String, BudgetRecordEntity>()
+        writes.filter { it.status == "conflict" }.forEach { operation ->
+            localRepository.findRecord(budgetId, operation.recordType, operation.recordId)?.let { record ->
+                records[operation.recordId] = record
+            }
+        }
+        return records
     }
 
     suspend fun loadMoreActivityTransactions(
@@ -2968,7 +3030,12 @@ internal class TandemMobileSession(
             launch { localRepository.observeRecords(budgetId, "category").collect { categoryRecords = it } }
             launch { localRepository.observeRecords(budgetId, "category-group").collect { categoryGroupRecords = it } }
             launch { localRepository.observeRecordIds(budgetId, "budget-month").collect { budgetMonthIds = it } }
-            launch { localRepository.observePendingWrites(budgetId).collect { pendingWrites = it } }
+            launch {
+                localRepository.observePendingWrites(budgetId).collect { writes ->
+                    pendingWrites = writes
+                    conflictRecordsByRecordId = findConflictRecords(budgetId, writes)
+                }
+            }
             launch { localRepository.observeSyncState(budgetId).collect { localSyncState = it } }
         }
     }

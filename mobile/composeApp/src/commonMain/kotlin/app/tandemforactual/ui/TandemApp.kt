@@ -1046,15 +1046,14 @@ fun TandemApp(
             )
         val renderHeader: @Composable (AppRoute) -> Unit = { headerRoute ->
             if (headerRoute != AppRoute.WELCOME && headerRoute != AppRoute.STARTUP) {
-                val conflictRecordId =
+                val conflictOperation =
                     if (headerRoute == AppRoute.CONFLICT_REVIEW) {
                         mobileSession.pendingWrites
-                            .firstOrNull { it.operationId == state.selectedConflictOperationId }
-                            ?.recordId
+                            .firstOrNull { it.operationId == state.selectedConflictOperationId && it.status == "conflict" }
                     } else {
                         null
                     }
-                val conflictTitle = liveTransactions.firstOrNull { it.recordId == conflictRecordId }?.payee
+                val conflictTitle = conflictPayeeTitle(conflictOperation, liveTransactions, mobileSession)
                 AppHeader(
                     route = headerRoute,
                     state = state,

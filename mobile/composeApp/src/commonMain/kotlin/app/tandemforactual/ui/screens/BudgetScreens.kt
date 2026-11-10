@@ -210,7 +210,10 @@ internal fun BudgetScreen(
                             "$conflictCount change${if (conflictCount == 1) "" else "s"} need${if (conflictCount == 1) "s" else ""} review",
                             "Choose which version of the edit to keep.",
                             "Review",
-                        ) { navigation.open(AppRoute.CONFLICT_INBOX) }
+                        ) {
+                            state.selectedConflictOperationId = ""
+                            navigation.open(AppRoute.CONFLICT_INBOX)
+                        }
                     }
                 }
                 item(key = "budget-rejected-alert") {

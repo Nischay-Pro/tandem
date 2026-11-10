@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.ui.components.BodyText
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
@@ -36,8 +37,29 @@ import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.model.longValue
+import app.tandemforactual.ui.model.recordName
+import app.tandemforactual.ui.model.stringValue
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
+
+internal fun conflictSnapshot(operation: OutboxOperationEntity?): JsonObject? =
+    (operation?.optimisticJson ?: operation?.baseSnapshotJson)
+        ?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
+
+internal fun conflictPayeeTitle(
+    operation: OutboxOperationEntity?,
+    liveTransactions: List<TransactionItem>,
+    mobileSession: TandemMobileSession,
+): String? {
+    val transaction = operation?.let { write -> liveTransactions.firstOrNull { it.recordId == write.recordId } }
+    if (transaction != null) return transaction.payee
+    val snapshot = conflictSnapshot(operation) ?: return null
+    return snapshot.stringValue("importedPayee")?.takeIf(String::isNotBlank)
+        ?: snapshot.stringValue("payee")?.let { payeeId ->
+            mobileSession.payeeRecords.firstOrNull { it.recordId == payeeId }?.recordName()
+        }
+}
 
 @Composable
 internal fun ConflictInboxScreen(
@@ -63,10 +85,18 @@ internal fun ConflictInboxScreen(
             .filter { it.status == "conflict" }
             .map { operation ->
                 val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
+                val snapshot = conflictSnapshot(operation)
+                val categoryId = snapshot?.stringValue("category")
+                val categoryName =
+                    transaction?.category
+                        ?: categoryId?.let { id ->
+                            mobileSession.categoryRecords.firstOrNull { it.recordId == id }?.recordName()
+                        }
+                        ?: "Uncategorized"
                 ConflictInboxItemUi(
                     operation.operationId,
-                    transaction?.payee ?: "Deleted transaction",
-                    "${transaction?.dateLabel ?: "Actual changed"} · ${transaction?.category ?: "Transaction"}",
+                    conflictPayeeTitle(operation, liveTransactions, mobileSession) ?: "Transaction",
+                    "${transaction?.dateLabel ?: formatLiveDate(snapshot?.stringValue("date"))} · $categoryName",
                 )
             }
     PageLazyColumn {
@@ -147,17 +177,35 @@ internal fun ConflictReviewScreen(
         mobileSession.pendingWrites.firstOrNull {
             it.operationId == state.selectedConflictOperationId && it.status == "conflict"
         }
-    val record = operation?.let { item -> mobileSession.transactionRecords.firstOrNull { it.recordId == item.recordId } }
+    val record =
+        operation?.let { item ->
+            mobileSession.conflictRecordsByRecordId[item.recordId]
+                ?: mobileSession.transactionRecords.firstOrNull { it.recordId == item.recordId }
+        }
     val deviceVersion = operation?.optimisticJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
     val actualVersion = record?.remoteJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
+    val baseVersion = operation?.baseSnapshotJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
+    val detailVersion = actualVersion ?: baseVersion ?: deviceVersion
     val deviceAmount = deviceVersion?.longValue("amount")
     val actualAmount = actualVersion?.longValue("amount")
     val transaction = operation?.let { conflict -> liveTransactions.firstOrNull { it.recordId == conflict.recordId } }
     val deviceAmountText = deviceAmount?.let(::formatSignedCurrency) ?: "Deleted"
     val actualAmountText = actualAmount?.let(::formatSignedCurrency) ?: "Deleted"
-    val accountName = transaction?.account ?: "Unavailable"
-    val categoryName = transaction?.category ?: "Unavailable"
-    val dateLabel = transaction?.dateLabel ?: "Unavailable"
+    val accountName =
+        transaction?.account
+            ?: detailVersion?.stringValue("account")?.let { id ->
+                mobileSession.accountRecords.firstOrNull { it.recordId == id }?.recordName()
+            }
+            ?: "Unavailable"
+    val categoryId = detailVersion?.stringValue("category")
+    val categoryName =
+        transaction?.category
+            ?: categoryId?.let { id -> mobileSession.categoryRecords.firstOrNull { it.recordId == id }?.recordName() }
+            ?: if (detailVersion != null && categoryId == null) "Uncategorized" else "Unavailable"
+    val dateLabel =
+        transaction?.dateLabel
+            ?: detailVersion?.stringValue("date")?.let(::formatLiveDate)
+            ?: "Unavailable"
     PageColumn {
         if (operation == null) {
             EmptyState("No change to review", "This change no longer needs attention.")
@@ -176,7 +224,7 @@ internal fun ConflictReviewScreen(
             }
             mobileSession.transactionWriteMessage?.let { BodyText(it) }
             PrimaryButton(
-                "Keep your edit",
+                if (operation.action == "DELETE") "Keep deletion" else "Keep your edit",
                 enabled = !state.readOnlyMode && !mobileSession.isSavingTransaction && record?.remoteDeleted != true,
             ) { onResolveConflict(operation.operationId, true) }
             SecondaryButton("Keep Actual", enabled = !state.readOnlyMode && !mobileSession.isSavingTransaction) {
