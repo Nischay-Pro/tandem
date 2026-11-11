@@ -477,4 +477,79 @@ class CategoryReorderingTest {
         assertEquals("Food", resumed.moves.single().name)
         assertEquals(1, resumed.statusFor("budget", "category-groceries").pendingCount)
     }
+
+    @Test
+    fun correctedRejectedRenameKeepsItsQueuePositionAndRefreshRequirement() {
+        val rejectedRename =
+            QueuedBudgetReorder(
+                budgetId = "budget",
+                scopeId = "category-groceries",
+                kind = BudgetReorderKind.RENAME_CATEGORY,
+                itemId = "groceries",
+                targetId = null,
+                desiredOrder = emptyList(),
+                encryptionPassword = null,
+                name = "Household",
+                operationId = "rejected-rename",
+            )
+        val laterMove =
+            QueuedBudgetReorder(
+                budgetId = "budget",
+                scopeId = "category-groups",
+                kind = BudgetReorderKind.CATEGORY_GROUP,
+                itemId = "group-2",
+                targetId = null,
+                desiredOrder = listOf("group-1", "group-2"),
+                encryptionPassword = null,
+                operationId = "later-move",
+            )
+        val afterRejection =
+            BudgetReorderQueueState()
+                .enqueue(rejectedRename)
+                .enqueue(laterMove)
+                .failHead(rejectedRename, "Actual rejected the name.")
+        val correction =
+            rejectedRename.copy(
+                operationId = "corrected-rename",
+                name = "Home",
+                refreshBeforeSend = true,
+            )
+
+        val updated = afterRejection.replaceRejectedOperation(rejectedRename.operationId, correction)
+        val restored = decodeBudgetReorderQueue(encodeBudgetReorderQueue(updated))
+
+        assertEquals(listOf("corrected-rename", "later-move"), updated.moves.map { it.operationId })
+        assertEquals("Home", updated.categoryNameOverridesFor("budget")["groceries"])
+        assertEquals(listOf("corrected-rename", "later-move"), restored.moves.map { it.operationId })
+        assertEquals(true, restored.moves.first().refreshBeforeSend)
+        assertEquals(laterMove, restored.moves.last())
+    }
+
+    @Test
+    fun correctedRejectedRenameKeepsTheLaterNameOverrideForTheSameCategory() {
+        val rejectedRename =
+            QueuedBudgetReorder(
+                budgetId = "budget",
+                scopeId = "category-groceries",
+                kind = BudgetReorderKind.RENAME_CATEGORY,
+                itemId = "groceries",
+                targetId = null,
+                desiredOrder = emptyList(),
+                encryptionPassword = null,
+                name = "Household",
+                operationId = "rejected-rename",
+            )
+        val laterRename = rejectedRename.copy(operationId = "later-rename", name = "Groceries & Household")
+        val afterRejection =
+            BudgetReorderQueueState()
+                .enqueue(rejectedRename)
+                .enqueue(laterRename)
+                .failHead(rejectedRename, "Actual rejected the name.")
+        val correction = rejectedRename.copy(operationId = "corrected-rename", name = "Home", refreshBeforeSend = true)
+
+        val updated = afterRejection.replaceRejectedOperation(rejectedRename.operationId, correction)
+
+        assertEquals(listOf("corrected-rename", "later-rename"), updated.moves.map { it.operationId })
+        assertEquals("Groceries & Household", updated.categoryNameOverridesFor("budget")["groceries"])
+    }
 }

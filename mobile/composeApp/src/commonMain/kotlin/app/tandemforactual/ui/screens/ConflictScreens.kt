@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -33,6 +34,8 @@ import app.tandemforactual.ui.components.BodyText
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
+import app.tandemforactual.ui.components.InlineMessage
+import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.PrimaryButton
@@ -44,6 +47,7 @@ import app.tandemforactual.ui.model.recordName
 import app.tandemforactual.ui.model.stringValue
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Receipt
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -791,6 +795,10 @@ internal fun BudgetMutationReviewScreen(
     val itemName = mutation?.name ?: "budget item"
     val title = operation?.let { budgetMutationTitle(it.action, itemName) } ?: "Budget change"
     val statusLabel = operation?.let { budgetMutationStatusLabel(it.status) } ?: "Pending"
+    val scope = rememberCoroutineScope()
+    var showRenameCorrection by rememberSaveable(operation?.operationId) { mutableStateOf(false) }
+    var correctedName by rememberSaveable(operation?.operationId) { mutableStateOf(mutation?.name.orEmpty()) }
+    val isRejectedCategoryRename = operation?.status == "rejected" && operation.action == "RENAME_CATEGORY"
     var confirmDiscard by rememberSaveable(operation?.operationId) { mutableStateOf(false) }
 
     PageColumn {
@@ -854,7 +862,71 @@ internal fun BudgetMutationReviewScreen(
                     }
                 }
                 "rejected" -> {
-                    if (budgetMutationCanRetry(operation.lastErrorCode)) {
+                    if (isRejectedCategoryRename && mutation != null) {
+                        if (showRenameCorrection) {
+                            TextFieldCard(
+                                "Category name",
+                                correctedName,
+                                { correctedName = it },
+                                TextFieldOptions(placeholder = itemName),
+                            )
+                            mobileSession.budgetMutationCorrectionMessage?.let {
+                                InlineMessage(it, InlineMessageKind.ERROR)
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                                PrimaryButton(
+                                    if (mobileSession.isCorrectingBudgetMutation) "Saving" else "Save correction",
+                                    enabled =
+                                        !state.readOnlyMode &&
+                                            !mobileSession.isCorrectingBudgetMutation &&
+                                            correctedName.trim().isNotBlank() &&
+                                            correctedName.trim() != mutation.name &&
+                                            (mutation.requiresEncryptionPassword.not() || state.encryptedPassword.isNotBlank()),
+                                    modifier = Modifier.weight(1f),
+                                    loading = mobileSession.isCorrectingBudgetMutation,
+                                ) {
+                                    scope.launch {
+                                        val saved =
+                                            mobileSession.correctRejectedCategoryRename(
+                                                budgetId = operation.budgetId,
+                                                operationId = operation.operationId,
+                                                correctedName = correctedName,
+                                                encryptionPassword = state.encryptedPassword.takeIf(String::isNotBlank),
+                                            )
+                                        if (saved) navigation.back()
+                                    }
+                                }
+                                SecondaryButton(
+                                    "Cancel",
+                                    modifier = Modifier.weight(1f),
+                                    enabled = !mobileSession.isCorrectingBudgetMutation,
+                                    onClick = {
+                                        showRenameCorrection = false
+                                        mobileSession.clearBudgetMutationCorrectionMessage()
+                                    },
+                                )
+                            }
+                        } else {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                                PrimaryButton(
+                                    "Correct name",
+                                    modifier = Modifier.weight(1f),
+                                    enabled =
+                                        !state.readOnlyMode &&
+                                            (!mutation.requiresEncryptionPassword || state.encryptedPassword.isNotBlank()),
+                                ) {
+                                    correctedName = mutation.name.orEmpty()
+                                    mobileSession.clearBudgetMutationCorrectionMessage()
+                                    showRenameCorrection = true
+                                }
+                                SecondaryButton(
+                                    "Discard change",
+                                    modifier = Modifier.weight(1f),
+                                    enabled = !state.readOnlyMode,
+                                ) { confirmDiscard = true }
+                            }
+                        }
+                    } else if (budgetMutationCanRetry(operation.lastErrorCode)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                             PrimaryButton(
                                 "Try again",

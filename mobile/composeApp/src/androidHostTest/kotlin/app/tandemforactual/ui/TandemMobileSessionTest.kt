@@ -504,6 +504,74 @@ class TandemMobileSessionTest {
         }
 
     @Test
+    fun rejectedCategoryRenameCanBeCorrectedAndQueuedWithoutAConnection() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val rejectedRename =
+                    QueuedBudgetReorder(
+                        budgetId = "budget-1",
+                        scopeId = "category-groceries",
+                        kind = BudgetReorderKind.RENAME_CATEGORY,
+                        itemId = "groceries",
+                        targetId = null,
+                        desiredOrder = emptyList(),
+                        encryptionPassword = null,
+                        name = "Household",
+                        operationId = "rejected-rename",
+                    )
+                val laterChange =
+                    QueuedBudgetReorder(
+                        budgetId = "budget-1",
+                        scopeId = "utilities",
+                        kind = BudgetReorderKind.HIDE_CATEGORY,
+                        itemId = "phone",
+                        targetId = null,
+                        desiredOrder = listOf("phone"),
+                        encryptionPassword = null,
+                        operationId = "later-change",
+                    )
+                val initialQueue = BudgetReorderQueueState().enqueue(rejectedRename).enqueue(laterChange)
+                repository.replaceBudgetMutationQueue(
+                    listOf(budgetMutationItem(rejectedRename), budgetMutationItem(laterChange)),
+                    encodeBudgetReorderQueueMetadata(initialQueue),
+                )
+                assertTrue(repository.beginBudgetMutation(rejectedRename.operationId))
+                repository.markBudgetMutationRejected(rejectedRename.operationId, "operation_rejected")
+                val afterRejection = initialQueue.failHead(rejectedRename, "Actual rejected the name.")
+                repository.replaceBudgetMutationQueue(
+                    listOf(budgetMutationItem(laterChange).copy(createdAtEpochMs = 101L)),
+                    encodeBudgetReorderQueueMetadata(afterRejection),
+                )
+                val session = TandemMobileSession(TandemApiClient(), database, { 200L })
+
+                assertTrue(
+                    session.correctRejectedCategoryRename(
+                        budgetId = "budget-1",
+                        operationId = rejectedRename.operationId,
+                        correctedName = "Home",
+                        encryptionPassword = null,
+                    ),
+                )
+
+                val pending = repository.readPendingWrites("budget-1")
+                val replacement = pending.single { it.status == "queued" && it.action == "RENAME_CATEGORY" }
+                val corrected = decodeBudgetReorderQueue(replacement.patchJson).moves.single()
+                assertEquals("superseded", pending.single { it.operationId == rejectedRename.operationId }.status)
+                assertEquals("Home", corrected.name)
+                assertTrue(corrected.refreshBeforeSend)
+                assertTrue(replacement.operationId != rejectedRename.operationId)
+                assertEquals(
+                    listOf(replacement.operationId, laterChange.operationId),
+                    session.pendingBudgetMutationsFor("budget-1").map { it.operationId },
+                )
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun waitingTransactionEditUsesTheSpecificSyncMessage() {
         assertEquals(
             "This transaction is waiting to sync. Try again after it syncs.",

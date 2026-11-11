@@ -416,6 +416,10 @@ internal class TandemMobileSession(
     private var budgetReorderQueueState by mutableStateOf(BudgetReorderQueueState())
     var isPersistingBudgetMutation by mutableStateOf(false)
         private set
+    var isCorrectingBudgetMutation by mutableStateOf(false)
+        private set
+    var budgetMutationCorrectionMessage by mutableStateOf<String?>(null)
+        private set
     private var budgetReorderQueue: BudgetReorderQueueState
         get() = budgetReorderQueueState
         set(value) {
@@ -533,7 +537,7 @@ internal class TandemMobileSession(
                 )
             }
         persistence.replace(items, encodeBudgetReorderQueueMetadata(state), supersededOperationIds)
-        preferencesStore?.putValue(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY, "")
+        runCatching { preferencesStore?.putValue(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY, "") }
     }
 
     private suspend fun persistBudgetReorderQueueMutation(transform: (BudgetReorderQueueState) -> BudgetReorderQueueState): Boolean {
@@ -641,6 +645,7 @@ internal class TandemMobileSession(
         }
 
     fun retryBudgetMutation(operationId: String) {
+        if (isCorrectingBudgetMutation) return
         sessionScope.launch {
             val localRepository = repository ?: return@launch
             val operation = pendingWrites.firstOrNull { it.operationId == operationId } ?: return@launch
@@ -728,6 +733,94 @@ internal class TandemMobileSession(
             pendingWrites = localRepository.readPendingWrites(operation.budgetId)
             retryQueuedBudgetReorders()
         }
+    }
+
+    suspend fun correctRejectedCategoryRename(
+        budgetId: String,
+        operationId: String,
+        correctedName: String,
+        encryptionPassword: String?,
+    ): Boolean {
+        budgetMutationCorrectionMessage = null
+        if (refuseWriteInReadOnlyMode()) {
+            budgetMutationCorrectionMessage = transactionWriteMessage ?: "Read-only mode is on."
+            return false
+        }
+        if (isPersistingBudgetMutation || isCorrectingBudgetMutation) {
+            budgetMutationCorrectionMessage = "Another category change is being saved. Try again in a moment."
+            return false
+        }
+        val localRepository = repository
+        if (localRepository == null) {
+            budgetMutationCorrectionMessage = "Budget data isn’t available on this device. Reopen the budget and try again."
+            return false
+        }
+        if (!restoreBudgetReorderQueue()) {
+            budgetMutationCorrectionMessage = BUDGET_QUEUE_RESTORE_ERROR
+            return false
+        }
+        val operation = localRepository.findWrite(operationId)
+        if (
+            operation == null ||
+            operation.budgetId != budgetId ||
+            operation.status != "rejected" ||
+            operation.action != "RENAME_CATEGORY"
+        ) {
+            budgetMutationCorrectionMessage = "This rejected category rename is no longer available. Refresh Pending Changes."
+            return false
+        }
+        val request = decodeBudgetReorderQueue(operation.patchJson).moves.singleOrNull()
+        if (request == null || request.kind != BudgetReorderKind.RENAME_CATEGORY || request.itemId != operation.recordId) {
+            budgetMutationCorrectionMessage = "Tandem couldn’t read this category rename. The rejected change is still available to review."
+            return false
+        }
+        val cleanName = correctedName.trim()
+        if (cleanName.isBlank() || cleanName.length > 100) {
+            budgetMutationCorrectionMessage = "Enter a category name up to 100 characters."
+            return false
+        }
+        if (cleanName == request.name) {
+            budgetMutationCorrectionMessage = "Enter a different category name before trying again."
+            return false
+        }
+        val password = encryptionPassword?.takeIf(String::isNotBlank) ?: request.encryptionPassword
+        if (request.requiresEncryptionPassword && password.isNullOrBlank()) {
+            budgetMutationCorrectionMessage = "Unlock this encrypted budget before trying again."
+            return false
+        }
+
+        val replacement =
+            request.copy(
+                name = cleanName,
+                operationId = Uuid.random().toString(),
+                encryptionPassword = password,
+                refreshBeforeSend = true,
+            )
+        isCorrectingBudgetMutation = true
+        isPersistingBudgetMutation = true
+        return try {
+            budgetQueuePersistenceMutex.withLock {
+                val next = budgetReorderQueueState.replaceRejectedOperation(operationId, replacement)
+                persistBudgetReorderQueueNow(next, setOf(operationId))
+                budgetReorderQueueState = next
+            }
+            runCatching { localRepository.readPendingWrites(budgetId) }.onSuccess { pendingWrites = it }
+            retryQueuedBudgetReorders()
+            true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            budgetMutationCorrectionMessage =
+                "Couldn’t save the corrected rename on this device. The rejected change is still available to review."
+            false
+        } finally {
+            isPersistingBudgetMutation = false
+            isCorrectingBudgetMutation = false
+        }
+    }
+
+    fun clearBudgetMutationCorrectionMessage() {
+        budgetMutationCorrectionMessage = null
     }
 
     private fun completeAppliedBudgetMutationAfterRefresh(request: QueuedBudgetReorder): BudgetReorderQueueState {
@@ -1083,7 +1176,9 @@ internal class TandemMobileSession(
         if (isSigningOut) return
         var observedRetrySignal = budgetReorderRetrySignal
         while (true) {
-            val request = snapshotFlow { budgetReorderQueue.moves.firstOrNull() }.first { it != null } ?: continue
+            var request = snapshotFlow { budgetReorderQueue.moves.firstOrNull() }.first { it != null } ?: continue
+            snapshotFlow { isCorrectingBudgetMutation }.first { !it }
+            if (budgetReorderQueue.moves.firstOrNull() != request) continue
             persistCurrentBudgetReorderQueue()
             if (request.requiresEncryptionPassword && request.encryptionPassword.isNullOrBlank()) {
                 observedRetrySignal = snapshotFlow { budgetReorderRetrySignal }.first { it != observedRetrySignal }
@@ -1105,8 +1200,53 @@ internal class TandemMobileSession(
                 budgetReorderQueue = budgetReorderQueue.resumeAfterConnection()
                 continue
             }
-            snapshotFlow { isPerformingBudgetAction }.first { !it }
+            snapshotFlow { isCorrectingBudgetMutation || isPerformingBudgetAction || isSyncing }.first { !it }
             if (budgetReorderQueue.moves.firstOrNull() != request) continue
+
+            if (request.refreshBeforeSend) {
+                val refreshed =
+                    synchronize(
+                        budgetId = request.budgetId,
+                        encryptionPassword = request.encryptionPassword,
+                        sendQueuedWrites = false,
+                        retryQueuedBudgetMutations = false,
+                    )
+                if (refreshed == null) {
+                    budgetReorderQueue =
+                        budgetReorderQueue.waitForConnection(
+                            request,
+                            "Saved on this device. Waiting to refresh Actual before trying again.",
+                        )
+                    persistCurrentBudgetReorderQueue()
+                    continue
+                }
+                val refreshedRequest = budgetReorderQueue.moves.firstOrNull { it.operationId == request.operationId } ?: continue
+                val readyRequest = refreshedRequest.copy(refreshBeforeSend = false)
+                try {
+                    budgetQueuePersistenceMutex.withLock {
+                        val next =
+                            budgetReorderQueueState.copy(
+                                moves =
+                                    budgetReorderQueueState.moves.map { move ->
+                                        if (move.operationId == request.operationId) readyRequest else move
+                                    },
+                            )
+                        persistBudgetReorderQueueNow(next)
+                        budgetReorderQueueState = next
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    budgetReorderQueue =
+                        budgetReorderQueue.waitForConnection(
+                            request,
+                            "Saved on this device. Tandem couldn’t save the refreshed change before retrying.",
+                        )
+                    persistCurrentBudgetReorderQueue()
+                    continue
+                }
+                request = readyRequest
+            }
 
             var mutationStarted = repository?.beginBudgetMutation(request.operationId) == true
             if (!mutationStarted) {

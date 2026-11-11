@@ -141,6 +141,7 @@ internal data class QueuedBudgetReorder(
     val isIncome: Boolean = false,
     val parentGroupId: String? = null,
     val refreshOnly: Boolean = false,
+    val refreshBeforeSend: Boolean = false,
     val requiresEncryptionPassword: Boolean = false,
     val operationId: String = Uuid.random().toString(),
 )
@@ -359,6 +360,45 @@ internal data class BudgetReorderQueueState(
                     if (move.operationId == currentOperationId) move.copy(operationId = newOperationId) else move
                 },
         )
+
+    fun replaceRejectedOperation(
+        rejectedOperationId: String,
+        replacement: QueuedBudgetReorder,
+    ): BudgetReorderQueueState {
+        val rejectedIndex = moves.indexOfFirst { it.operationId == rejectedOperationId }
+        val next =
+            if (rejectedIndex < 0) {
+                enqueue(replacement).copy(moves = listOf(replacement) + moves)
+            } else {
+                val rejected = moves[rejectedIndex]
+                val key = budgetReorderStatusKey(rejected.budgetId, rejected.scopeId)
+                val status = statusFor(rejected.budgetId, rejected.scopeId)
+                val withoutRejected =
+                    copy(
+                        moves = moves.filterNot { it.operationId == rejectedOperationId },
+                        statuses = statuses + (key to status.copy(pendingCount = (status.pendingCount - 1).coerceAtLeast(0))),
+                    )
+                val enqueued = withoutRejected.enqueue(replacement)
+                val remaining = enqueued.moves.filterNot { it.operationId == replacement.operationId }.toMutableList()
+                remaining.add(rejectedIndex.coerceAtMost(remaining.size), replacement)
+                enqueued.copy(moves = remaining)
+            }
+        val categoryNameOverrides =
+            if (replacement.kind in setOf(BudgetReorderKind.RENAME_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_RENAME)) {
+                val key = categoryVisibilityKey(replacement.budgetId, replacement.itemId)
+                val latestName =
+                    next.moves
+                        .lastOrNull {
+                            it.budgetId == replacement.budgetId &&
+                                it.itemId == replacement.itemId &&
+                                it.kind in setOf(BudgetReorderKind.RENAME_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_RENAME)
+                        }?.name
+                if (latestName == null) next.categoryNameOverrides - key else next.categoryNameOverrides + (key to latestName)
+            } else {
+                next.categoryNameOverrides
+            }
+        return next.copy(categoryNameOverrides = categoryNameOverrides)
+    }
 
     fun complete(
         move: QueuedBudgetReorder,
@@ -996,6 +1036,7 @@ internal fun encodeBudgetReorderQueue(state: BudgetReorderQueueState): String =
                             put("isIncome", move.isIncome)
                             put("parentGroupId", move.parentGroupId?.let(::JsonPrimitive) ?: JsonNull)
                             put("refreshOnly", move.refreshOnly)
+                            put("refreshBeforeSend", move.refreshBeforeSend)
                             put("requiresEncryptionPassword", move.requiresEncryptionPassword || move.encryptionPassword != null)
                         },
                     )
@@ -1072,6 +1113,7 @@ internal fun decodeBudgetReorderQueue(encoded: String?): BudgetReorderQueueState
                     isIncome = move["isIncome"]?.let { (it as? JsonPrimitive)?.booleanOrNull } ?: false,
                     parentGroupId = move.queueString("parentGroupId"),
                     refreshOnly = move["refreshOnly"]?.let { (it as? JsonPrimitive)?.booleanOrNull } ?: false,
+                    refreshBeforeSend = move["refreshBeforeSend"]?.let { (it as? JsonPrimitive)?.booleanOrNull } ?: false,
                     requiresEncryptionPassword = move["requiresEncryptionPassword"]?.let { (it as? JsonPrimitive)?.booleanOrNull } ?: false,
                     operationId = move.queueString("operationId") ?: Uuid.random().toString(),
                 )

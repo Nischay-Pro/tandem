@@ -274,23 +274,6 @@ class LocalBudgetRepository(
             val outbox = database.outboxDao()
             val existing = outbox.findByRecordType(BUDGET_MUTATION_RECORD_TYPE)
             val requestedIds = items.mapTo(mutableSetOf()) { it.operationId }
-            existing.filterNot { it.operationId in requestedIds }.forEach { previous ->
-                if (previous.operationId in supersededOperationIds) {
-                    require(previous.status in setOf("conflict", "rejected", "uncertain")) {
-                        "Only a reviewed budget mutation can be superseded"
-                    }
-                    outbox.put(
-                        previous.copy(
-                            status = LocalWriteStatus.SUPERSEDED.name.lowercase(),
-                            lastErrorCode = null,
-                            updatedAtEpochMs = now(),
-                        ),
-                    )
-                } else {
-                    outbox.deleteQueuedOperation(previous.operationId)
-                }
-            }
-
             items.forEach { item ->
                 val previous = outbox.find(item.operationId)
                 val operation =
@@ -320,6 +303,23 @@ class LocalBudgetRepository(
                     )
                 if (previous == null || previous.status == LocalWriteStatus.QUEUED.name.lowercase()) {
                     outbox.put(operation)
+                }
+            }
+
+            existing.filterNot { it.operationId in requestedIds }.forEach { previous ->
+                if (previous.operationId in supersededOperationIds) {
+                    require(previous.status in setOf("conflict", "rejected", "uncertain")) {
+                        "Only a reviewed budget mutation can be superseded"
+                    }
+                    outbox.put(
+                        previous.copy(
+                            status = LocalWriteStatus.SUPERSEDED.name.lowercase(),
+                            lastErrorCode = null,
+                            updatedAtEpochMs = now(),
+                        ),
+                    )
+                } else {
+                    outbox.deleteQueuedOperation(previous.operationId)
                 }
             }
 

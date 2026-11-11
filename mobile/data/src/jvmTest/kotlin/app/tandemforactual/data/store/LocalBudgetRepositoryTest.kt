@@ -299,6 +299,70 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
+    fun failedBudgetMutationReplacementKeepsRejectedRowAndUnrelatedQueueEntries() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 500L }
+                val rejected =
+                    LocalBudgetMutationOutboxItem(
+                        operationId = "rename-rejected",
+                        budgetId = BUDGET,
+                        action = "RENAME_CATEGORY",
+                        recordId = "category-1",
+                        patchJson = """{"name":"Original"}""",
+                        createdAtEpochMs = 100L,
+                    )
+                val unrelated =
+                    LocalBudgetMutationOutboxItem(
+                        operationId = "later-change",
+                        budgetId = BUDGET,
+                        action = "HIDE_CATEGORY",
+                        recordId = "category-2",
+                        patchJson = """{"hidden":true}""",
+                        createdAtEpochMs = 101L,
+                    )
+                val laterQueued =
+                    LocalBudgetMutationOutboxItem(
+                        operationId = "another-later-change",
+                        budgetId = BUDGET,
+                        action = "HIDE_CATEGORY",
+                        recordId = "category-3",
+                        patchJson = """{"hidden":true}""",
+                        createdAtEpochMs = 102L,
+                    )
+                repository.replaceBudgetMutationQueue(listOf(rejected, unrelated, laterQueued), "{}")
+                assertTrue(repository.beginBudgetMutation(rejected.operationId))
+                repository.markBudgetMutationRejected(rejected.operationId, "operation_rejected")
+                repository.replaceBudgetMutationQueue(listOf(unrelated, laterQueued), "{}")
+
+                assertFails<IllegalArgumentException> {
+                    repository.replaceBudgetMutationQueue(
+                        items =
+                            listOf(
+                                unrelated.copy(
+                                    operationId = "rename-correction",
+                                    patchJson = """{"name":"Corrected"}""",
+                                    createdAtEpochMs = 100L,
+                                ),
+                                unrelated,
+                            ),
+                        metadataJson = "{}",
+                        supersededOperationIds = setOf(rejected.operationId, laterQueued.operationId),
+                    )
+                }
+
+                assertEquals("rejected", database.outboxDao().find(rejected.operationId)?.status)
+                assertEquals("queued", database.outboxDao().find(unrelated.operationId)?.status)
+                assertEquals(unrelated.patchJson, database.outboxDao().find(unrelated.operationId)?.patchJson)
+                assertEquals("queued", database.outboxDao().find(laterQueued.operationId)?.status)
+                assertNull(database.outboxDao().find("rename-correction"))
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun serverConfirmationCompletesAnUncertainBudgetMutation() =
         runBlocking {
             val database = newDatabase()
