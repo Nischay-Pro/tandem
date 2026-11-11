@@ -1,6 +1,7 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.ui.components.BodyText
@@ -83,9 +85,13 @@ internal fun ScreenContent(
     onToggleNotificationPermission: ((Boolean) -> Unit)?,
 ) {
     val scope = rememberCoroutineScope()
+    val uriHandler = LocalUriHandler.current
     when (route) {
         AppRoute.STARTUP -> StartupScreen()
-        AppRoute.WELCOME -> WelcomeScreen(navigation, mobileSession.signOutNotice)
+        AppRoute.WELCOME ->
+            WelcomeScreen(navigation, mobileSession.signOutNotice) {
+                uriHandler.openUri("https://github.com/Nischay-Pro/tandem#getting-started")
+            }
         AppRoute.SERVER_ADDRESS -> ServerAddressScreen(state, navigation)
         AppRoute.SIGN_IN -> SignInScreen(state, mobileSession, onSignIn, onStartOpenIdSignIn)
         AppRoute.BUDGET_CHOOSER ->

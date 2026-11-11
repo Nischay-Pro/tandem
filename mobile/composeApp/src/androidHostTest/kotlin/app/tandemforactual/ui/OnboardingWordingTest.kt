@@ -6,9 +6,9 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -25,25 +25,29 @@ class OnboardingWordingTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun welcomeExplainsBenefitsAndShowsTheSetupSteps() {
+    fun welcomeMatchesTheGettingStartedFlowAndOpensItsActions() {
         var openedRoute: AppRoute? = null
+        var openedSetupGuide = false
         val navigation = noOpNavigation().copy(open = { openedRoute = it })
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                WelcomeScreen(navigation)
+                WelcomeScreen(navigation, onOpenSetupGuide = { openedSetupGuide = true })
             }
         }
 
-        composeTestRule.onNodeWithText("Use your budget with confidence.").assertExists()
-        composeTestRule.onNodeWithText("Use your budget offline").assertExists()
-        composeTestRule.onNodeWithText("Edits wait on this device until they sync").assertExists()
-        composeTestRule.onNodeWithText("Nothing is lost silently").assertExists()
+        composeTestRule.onNodeWithText("Connect to your own Actual Budget server.").assertExists()
+        composeTestRule.onNodeWithText("Before you start").assertExists()
+        composeTestRule.onNodeWithText("Have your server address ready.").assertExists()
+        composeTestRule.onNodeWithText("Your budget data stays between this device and your server.").assertExists()
         listOf("Server", "Sign in", "Budget", "First sync").forEach { step ->
-            composeTestRule.onNodeWithText(step).assertExists()
+            composeTestRule.onNodeWithText(step).assertDoesNotExist()
         }
-        composeTestRule.onNodeWithContentDescription("Step 1 of 4: Server").assertExists()
-        composeTestRule.onNodeWithText("Before you start").assertDoesNotExist()
-        composeTestRule.onNodeWithText("How to set up a server").assertDoesNotExist()
+        composeTestRule
+            .onNodeWithText("How to set up a server")
+            .performScrollTo()
+            .performClick()
+        composeTestRule.waitForIdle()
+        assertTrue(openedSetupGuide)
         composeTestRule.onAllNodesWithText("Get started").assertCountEquals(1)
         composeTestRule.onNodeWithText("Get started").performClick()
         assertEquals(AppRoute.SIGN_IN, openedRoute)

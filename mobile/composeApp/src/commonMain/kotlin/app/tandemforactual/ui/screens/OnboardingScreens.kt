@@ -27,11 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.isLocalHttpHost
@@ -86,21 +82,35 @@ internal fun StartupScreen() {
 internal fun WelcomeScreen(
     navigation: AppNavigation,
     signOutNotice: String? = null,
+    onOpenSetupGuide: () -> Unit,
 ) {
     OnboardingLayout(
+        verticalSpacing = TandemSpacing.large,
         horizontalPadding = TandemSpacing.extraLarge,
         content = {
-            Spacer(Modifier.height(14.dp))
             TandemBrandMark(Modifier.size(72.dp))
-            Heading("Tandem for Actual Budget", "Use your budget with confidence.")
-            SetupProgressIndicator()
-            SurfaceCard {
-                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                    WelcomeBenefit("Use your budget offline")
-                    WelcomeBenefit("Edits wait on this device until they sync")
-                    WelcomeBenefit("Nothing is lost silently")
+            Heading("Tandem for Actual Budget", "Connect to your own Actual Budget server.")
+            SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(TandemSpacing.large),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                ) {
+                    Text(
+                        "Before you start",
+                        color = tandemPalette.text,
+                        fontSize = TandemTypography.cardTitle,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        "Have your server address ready.",
+                        color = tandemPalette.muted,
+                        fontSize = TandemTypography.body,
+                        lineHeight = TandemTypography.bodyLineHeight,
+                    )
+                    BodyText("Your budget data stays between this device and your server.")
                 }
             }
+            SecondaryButton("How to set up a server", modifier = Modifier.fillMaxWidth(), onClick = onOpenSetupGuide)
             signOutNotice?.let { InfoBubble(it) }
         },
         actions = {
@@ -594,74 +604,6 @@ internal fun finishNotificationOnboarding(
     state.hasCompletedNotificationOnboarding = true
     onRequestPermission?.invoke()
     navigation.selectTab(AppRoute.BUDGET)
-}
-
-@Composable
-private fun SetupProgressIndicator() {
-    val palette = tandemPalette
-    val steps = listOf("Server", "Sign in", "Budget", "First sync")
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
-        verticalAlignment = Alignment.Top,
-    ) {
-        steps.forEachIndexed { index, step ->
-            Column(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .semantics(mergeDescendants = true) {
-                            contentDescription = "Step ${index + 1} of ${steps.size}: $step"
-                        },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
-            ) {
-                Box(
-                    Modifier
-                        .size(24.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(if (index == 0) palette.accent else palette.raised),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        "${index + 1}",
-                        color = if (index == 0) palette.accentContent else palette.muted,
-                        fontSize = TandemTypography.micro,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-                Text(
-                    step,
-                    color = palette.muted,
-                    fontSize = TandemTypography.micro,
-                    lineHeight = TandemTypography.microLineHeight,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun WelcomeBenefit(text: String) {
-    val palette = tandemPalette
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier
-                .size(24.dp)
-                .clip(RoundedCornerShape(50))
-                .background(palette.positive.copy(alpha = 0.14f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("✓", color = palette.positive, fontSize = TandemTypography.micro, fontWeight = FontWeight.Bold)
-        }
-        BodyText(text)
-    }
 }
 
 internal fun selectLatestCachedMonth(
