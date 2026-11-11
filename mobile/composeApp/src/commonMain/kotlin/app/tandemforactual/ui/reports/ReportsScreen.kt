@@ -93,6 +93,7 @@ import app.tandemforactual.ui.reports.incomeSpendingSummary
 import app.tandemforactual.ui.reports.netWorthSummary
 import app.tandemforactual.ui.reports.reportMonthAxisLabel
 import app.tandemforactual.ui.reports.reportMonthLabel
+import app.tandemforactual.ui.reports.reportMonthRangeLabel
 import app.tandemforactual.ui.reports.roundedReportAxisValues
 import app.tandemforactual.ui.reports.shiftReportMonthId
 import app.tandemforactual.ui.reports.spendingOverTimeSummary
@@ -135,7 +136,7 @@ internal fun ReportsScreen(
             ?: ReportPeriodMode.MONTH
     val rangePreset = ReportRangePreset.entries.firstOrNull { it.name == state.reportsRangePreset } ?: ReportRangePreset.LAST_6_MONTHS
     val today = platformTodayIsoDate()
-    val window = createReportWindow(state.reportsMonthId, periodMode, rangePreset, today)
+    val window = createReportWindow(state.reportsMonthId, periodMode, rangePreset, today, mobileSession.budgetMonthIds)
     if (state.selectedBudgetId.isBlank()) {
         PageColumn {
             EmptyState(
@@ -167,6 +168,7 @@ internal fun ReportsScreen(
                 monthId = state.reportsMonthId,
                 mode = periodMode,
                 rangePreset = rangePreset,
+                availableMonthIds = mobileSession.budgetMonthIds,
                 onMonthChange = { state.reportsMonthId = it },
                 onModeChange = { state.reportsPeriodMode = it.name },
                 onRangePresetChange = {
@@ -206,7 +208,7 @@ internal fun ReportDetailScreen(
             ?: ReportPeriodMode.MONTH
     val rangePreset = ReportRangePreset.entries.firstOrNull { it.name == state.reportsRangePreset } ?: ReportRangePreset.LAST_6_MONTHS
     val today = platformTodayIsoDate()
-    val window = createReportWindow(state.reportsMonthId, periodMode, rangePreset, today)
+    val window = createReportWindow(state.reportsMonthId, periodMode, rangePreset, today, mobileSession.budgetMonthIds)
     if (state.selectedBudgetId.isBlank()) {
         Column(Modifier.fillMaxSize().padding(TandemSpacing.screen)) {
             EmptyState(
@@ -239,6 +241,7 @@ internal fun ReportDetailScreen(
                     monthId = state.reportsMonthId,
                     mode = periodMode,
                     rangePreset = rangePreset,
+                    availableMonthIds = mobileSession.budgetMonthIds,
                     onMonthChange = { state.reportsMonthId = it },
                     onModeChange = { state.reportsPeriodMode = it.name },
                     onRangePresetChange = {
@@ -387,6 +390,7 @@ private fun ReportPeriodSelector(
     monthId: String,
     mode: ReportPeriodMode,
     rangePreset: ReportRangePreset,
+    availableMonthIds: List<String>,
     onMonthChange: (String) -> Unit,
     onModeChange: (ReportPeriodMode) -> Unit,
     onRangePresetChange: (ReportRangePreset) -> Unit,
@@ -402,11 +406,12 @@ private fun ReportPeriodSelector(
             ) { index -> onModeChange(if (index == 0) ReportPeriodMode.MONTH else ReportPeriodMode.RANGE) }
             if (mode == ReportPeriodMode.RANGE) {
                 ReportRangePresetDropdown(rangePreset, onRangePresetChange)
-                val rangeWindow = createReportWindow(monthId, mode, rangePreset, platformTodayIsoDate())
+                val rangeWindow = createReportWindow(monthId, mode, rangePreset, platformTodayIsoDate(), availableMonthIds)
                 when (rangePreset) {
                     ReportRangePreset.LAST_3_MONTHS,
                     ReportRangePreset.LAST_6_MONTHS,
                     ReportRangePreset.LAST_12_MONTHS,
+                    ReportRangePreset.LAST_3_YEARS,
                     -> {
                         Text(
                             "End month",
@@ -423,7 +428,7 @@ private fun ReportPeriodSelector(
                         )
                         rangeWindow?.let { window ->
                             Text(
-                                "${reportMonthLabel(window.startMonthId)} – ${reportMonthLabel(window.endMonthId)}",
+                                reportMonthRangeLabel(window.startMonthId, window.endMonthId),
                                 modifier = Modifier.fillMaxWidth(),
                                 color = tandemPalette.muted,
                                 fontSize = TandemTypography.caption,
@@ -431,22 +436,20 @@ private fun ReportPeriodSelector(
                             )
                         }
                     }
-                    ReportRangePreset.YEAR_TO_DATE ->
-                        Text(
-                            "January ${platformTodayIsoDate().take(4)} – ${reportMonthLabel(platformTodayIsoDate().take(7))}",
-                            modifier = Modifier.fillMaxWidth(),
-                            color = tandemPalette.muted,
-                            fontSize = TandemTypography.caption,
-                            textAlign = TextAlign.Center,
-                        )
-                    ReportRangePreset.LAST_YEAR ->
-                        Text(
-                            "January – December ${platformTodayIsoDate().take(4).toIntOrNull()?.minus(1) ?: ""}",
-                            modifier = Modifier.fillMaxWidth(),
-                            color = tandemPalette.muted,
-                            fontSize = TandemTypography.caption,
-                            textAlign = TextAlign.Center,
-                        )
+                    ReportRangePreset.YEAR_TO_DATE,
+                    ReportRangePreset.LAST_YEAR,
+                    -> {
+                        rangeWindow?.let { window ->
+                            Text(
+                                reportMonthRangeLabel(window.startMonthId, window.endMonthId),
+                                modifier = Modifier.fillMaxWidth(),
+                                color = tandemPalette.muted,
+                                fontSize = TandemTypography.caption,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                    ReportRangePreset.ALL_TIME -> Unit
                 }
             } else {
                 PeriodStepper(

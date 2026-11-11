@@ -80,9 +80,10 @@ internal fun LazyListScope.budgetPendingChangeBannerItems(
     navigation: AppNavigation,
     pendingWrites: List<OutboxOperationEntity>,
 ) {
-    val conflictCount = pendingWrites.count { it.status == "conflict" }
-    val rejectedWrites = pendingWrites.filter { it.status == "rejected" }
-    val uncertainWrites = pendingWrites.filter { it.status == "uncertain" }
+    val reviewableWrites = pendingWrites.filter { it.recordType in setOf("transaction", "budget-mutation") }
+    val conflictCount = reviewableWrites.count { it.status == "conflict" }
+    val rejectedWrites = reviewableWrites.filter { it.status == "rejected" }
+    val uncertainWrites = reviewableWrites.filter { it.status == "uncertain" }
 
     item(key = "budget-conflict-alert") {
         AnimatedReveal(visible = conflictCount > 0) {

@@ -122,10 +122,13 @@ internal fun UpcomingSchedulesScreen(
     accounts: List<LiveAccountSummary>,
     payeeRecords: List<BudgetRecordEntity>,
 ) {
-    var selectedScheduleId by rememberSaveable(state.selectedBudgetId) { mutableStateOf<String?>(null) }
-    var showScheduleEditor by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
-    var showDeleteScheduleConfirmation by rememberSaveable(state.selectedBudgetId, selectedScheduleId) { mutableStateOf(false) }
-    var dialogMode by rememberSaveable(state.selectedBudgetId, selectedScheduleId) { mutableStateOf("menu") }
+    // A dismissed action sheet must stay dismissed when this route is restored from the
+    // navigation stack. Persisting this transient visibility state can reopen the sheet
+    // after Back returns to an earlier Upcoming bills route entry.
+    var selectedScheduleId by remember(state.selectedBudgetId) { mutableStateOf<String?>(null) }
+    var showScheduleEditor by remember(state.selectedBudgetId) { mutableStateOf(false) }
+    var showDeleteScheduleConfirmation by remember(state.selectedBudgetId, selectedScheduleId) { mutableStateOf(false) }
+    var dialogMode by remember(state.selectedBudgetId, selectedScheduleId) { mutableStateOf("menu") }
     LaunchedEffect(state.pendingScheduleToOpenId, schedules) {
         val requestedId = state.pendingScheduleToOpenId ?: return@LaunchedEffect
         if (schedules.any { it.id == requestedId }) {
@@ -156,6 +159,10 @@ internal fun UpcomingSchedulesScreen(
         mutableStateOf(schedules.firstOrNull { it.id == selectedScheduleId }?.payeeId.orEmpty())
     }
     val selectedSchedule = schedules.firstOrNull { it.id == selectedScheduleId }
+    val pendingScheduleAction = selectedSchedule?.let { mobileSession.pendingScheduleActionFor(state.selectedBudgetId, it.id) }
+    val pendingActionBlocksChoice =
+        pendingScheduleAction != null &&
+            !mobileSession.scheduleActionCanBeReplaced(pendingScheduleAction, selectedSchedule.nextDate)
     val dateValue =
         remember(selectedSchedule?.id, selectedSchedule?.dateValueJson) {
             selectedSchedule?.dateValueJson?.let { runCatching { Json.parseToJsonElement(it) }.getOrNull() }
@@ -226,7 +233,26 @@ internal fun UpcomingSchedulesScreen(
         } else {
             items(schedules.size, key = { index -> schedules[index].id }) { index ->
                 val schedule = schedules[index]
+                val pendingAction = mobileSession.pendingScheduleActionFor(state.selectedBudgetId, schedule.id)
                 SurfaceCard {
+                    if (pendingAction != null) {
+                        InlineMessage(
+                            text = mobileSession.scheduleActionStatusMessage(pendingAction),
+                            kind =
+                                if (pendingAction.status in setOf("uncertain", "conflict", "rejected")) {
+                                    InlineMessageKind.WARNING
+                                } else {
+                                    InlineMessageKind.INFO
+                                },
+                            actionLabel = if (pendingAction.status == "uncertain") "Check status" else null,
+                            onAction =
+                                if (pendingAction.status == "uncertain") {
+                                    { mobileSession.retryScheduleActionStatus(pendingAction.operationId) }
+                                } else {
+                                    null
+                                },
+                        )
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         ListRow(
                             schedule.name,
@@ -264,11 +290,17 @@ internal fun UpcomingSchedulesScreen(
 
     TandemTaskSheet(
         visible = showScheduleEditor && selectedSchedule != null,
-        onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showScheduleEditor = false },
+        onDismissRequest = {
+            if (!mobileSession.isPerformingBudgetAction) {
+                showScheduleEditor = false
+                state.pendingScheduleToOpenId = null
+            }
+        },
         onDismissed = {
             showDeleteScheduleConfirmation = false
             selectedScheduleId = null
             dialogMode = "menu"
+            state.pendingScheduleToOpenId = null
         },
     ) {
         if (selectedSchedule != null) {
@@ -313,6 +345,7 @@ internal fun UpcomingSchedulesScreen(
                             enabled = !mobileSession.isPerformingBudgetAction,
                         ) {
                             showScheduleEditor = false
+                            state.pendingScheduleToOpenId = null
                             dialogMode = "menu"
                         }
                     }
@@ -614,12 +647,25 @@ internal fun UpcomingSchedulesScreen(
                         }
                         else -> {
                             budgetActionFeedbackMessage(mobileSession)
+                            pendingScheduleAction?.let { pending ->
+                                InlineMessage(
+                                    text = mobileSession.scheduleActionStatusMessage(pending),
+                                    kind = InlineMessageKind.WARNING,
+                                    actionLabel = if (pending.status == "uncertain") "Check status" else null,
+                                    onAction =
+                                        if (pending.status == "uncertain") {
+                                            { mobileSession.retryScheduleActionStatus(pending.operationId) }
+                                        } else {
+                                            null
+                                        },
+                                )
+                            }
                             TandemActionButton(
                                 "Post now",
                                 TandemActionButtonTone.PRIMARY,
                                 modifier = Modifier.fillMaxWidth(),
                                 icon = Lucide.CalendarDays,
-                                enabled = !mobileSession.isPerformingBudgetAction,
+                                enabled = !mobileSession.isPerformingBudgetAction && !pendingActionBlocksChoice,
                                 loading = mobileSession.isPerformingBudgetAction,
                             ) {
                                 scope.launch {
@@ -641,7 +687,7 @@ internal fun UpcomingSchedulesScreen(
                                     TandemActionButtonTone.NEUTRAL,
                                     modifier = Modifier.fillMaxWidth(),
                                     icon = Lucide.CalendarDays,
-                                    enabled = !mobileSession.isPerformingBudgetAction,
+                                    enabled = !mobileSession.isPerformingBudgetAction && !pendingActionBlocksChoice,
                                     loading = mobileSession.isPerformingBudgetAction,
                                 ) {
                                     scope.launch {

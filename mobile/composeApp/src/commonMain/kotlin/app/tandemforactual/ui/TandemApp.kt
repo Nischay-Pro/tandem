@@ -130,6 +130,9 @@ fun TandemApp(
         mobileSession.processQueuedBudgetReorders()
     }
     LaunchedEffect(mobileSession) {
+        mobileSession.processQueuedScheduleActions()
+    }
+    LaunchedEffect(mobileSession) {
         mobileSession.scheduleOpenIdProofExpiry()
     }
     SideEffect { mobileSession.setReadOnlyMode(state.readOnlyMode) }
@@ -631,12 +634,14 @@ fun TandemApp(
         appResumeEvents.collect {
             accessibilitySettingsRevision += 1
             mobileSession.retryQueuedBudgetReorders()
+            mobileSession.retryQueuedScheduleActions()
             automaticSyncRequest.value()
         }
     }
     LaunchedEffect(networkRestoredEvents) {
         networkRestoredEvents.collect {
             mobileSession.retryQueuedBudgetReorders()
+            mobileSession.retryQueuedScheduleActions()
             if (lastAutomaticSyncBudgetId == state.selectedBudgetId) lastAutomaticSyncAtEpochMillis = null
             automaticSyncRequest.value()
         }

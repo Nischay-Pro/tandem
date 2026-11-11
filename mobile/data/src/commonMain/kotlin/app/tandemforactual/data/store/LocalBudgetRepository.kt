@@ -27,6 +27,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
@@ -48,12 +49,22 @@ enum class LocalWriteStatus {
 }
 
 private const val BUDGET_MUTATION_RECORD_TYPE = "budget-mutation"
+private const val SCHEDULE_ACTION_RECORD_TYPE = "schedule-action"
 private const val BUDGET_MUTATION_METADATA_RECORD_TYPE = "budget-mutation-metadata"
 private const val BUDGET_MUTATION_METADATA_OPERATION_ID = "tandem-budget-mutation-metadata"
 private const val BUDGET_MUTATION_METADATA_IDEMPOTENCY_KEY = "tandem-budget-mutation-metadata-v1"
 private const val BUDGET_MUTATION_METADATA_BUDGET_ID = "tandem-internal"
 private const val BUDGET_MUTATION_METADATA_RECORD_ID = "category-queue"
 internal const val TERMINAL_OUTBOX_RETENTION_MILLIS = 90L * 24 * 60 * 60 * 1_000
+
+private fun scheduleActionExpectedDate(payloadJson: String): String? =
+    runCatching {
+        Json
+            .parseToJsonElement(payloadJson)
+            .jsonObject["expectedNextDate"]
+            ?.jsonPrimitive
+            ?.contentOrNull
+    }.getOrNull()
 
 enum class BudgetSyncStatus {
     IDLE,
@@ -204,6 +215,15 @@ data class LocalBudgetMutationOutboxItem(
     val createdAtEpochMs: Long,
 )
 
+data class LocalScheduleActionOutboxItem(
+    val operationId: String,
+    val budgetId: String,
+    val scheduleId: String,
+    val action: String,
+    val payloadJson: String,
+    val createdAtEpochMs: Long,
+)
+
 data class LocalBudgetMutationQueueSnapshot(
     val items: List<OutboxOperationEntity>,
     val metadataJson: String?,
@@ -239,6 +259,132 @@ class LocalBudgetRepository(
     private val database: TandemDatabase,
     private val now: () -> Long,
 ) {
+    suspend fun readScheduleActionQueue(): List<OutboxOperationEntity> {
+        pruneTerminalWrites()
+        return database
+            .outboxDao()
+            .findByRecordType(SCHEDULE_ACTION_RECORD_TYPE)
+            .filter { it.status in setOf("queued", "sending", "uncertain", "conflict", "rejected") }
+    }
+
+    suspend fun enqueueScheduleAction(item: LocalScheduleActionOutboxItem): OutboxOperationEntity =
+        database.withWriteTransaction {
+            requireIdentifier(item.operationId, "operationId")
+            requireIdentifier(item.budgetId, "budgetId")
+            requireIdentifier(item.scheduleId, "scheduleId")
+            requireIdentifier(item.action, "action")
+            val outbox = database.outboxDao()
+            val existing =
+                outbox
+                    .findByRecordType(SCHEDULE_ACTION_RECORD_TYPE)
+                    .firstOrNull {
+                        it.budgetId == item.budgetId &&
+                            it.recordId == item.scheduleId &&
+                            it.status in setOf("queued", "sending", "uncertain", "conflict", "rejected")
+                    }
+            if (existing != null) {
+                if (existing.status == "queued" && existing.action == item.action && existing.patchJson == item.payloadJson) {
+                    return@withWriteTransaction existing
+                }
+                if (existing.status == "conflict" && existing.lastErrorCode == "schedule_changed") {
+                    val oldDate = scheduleActionExpectedDate(existing.patchJson)
+                    val refreshedDate = scheduleActionExpectedDate(item.payloadJson)
+                    if (oldDate.isNullOrBlank() || refreshedDate.isNullOrBlank() || oldDate == refreshedDate) {
+                        throw LocalOperationConflictException()
+                    }
+                    outbox.put(existing.copy(status = "discarded", updatedAtEpochMs = now()))
+                } else {
+                    throw LocalOperationConflictException()
+                }
+            }
+            val operation =
+                OutboxOperationEntity(
+                    operationId = item.operationId,
+                    idempotencyKey = "schedule-action:${item.operationId}",
+                    budgetId = item.budgetId,
+                    recordType = SCHEDULE_ACTION_RECORD_TYPE,
+                    recordId = item.scheduleId,
+                    action = item.action,
+                    baseRevision = null,
+                    baseSnapshotJson = null,
+                    patchJson = item.payloadJson,
+                    optimisticJson = null,
+                    optimisticRecordDate = null,
+                    optimisticAccountId = null,
+                    optimisticCategoryId = null,
+                    optimisticPayeeId = null,
+                    optimisticAmountMinor = null,
+                    optimisticBudgetMonth = null,
+                    status = LocalWriteStatus.QUEUED.name.lowercase(),
+                    attemptCount = 0,
+                    serverOperationId = null,
+                    lastErrorCode = null,
+                    createdAtEpochMs = item.createdAtEpochMs,
+                    updatedAtEpochMs = now(),
+                )
+            outbox.insert(operation)
+            operation
+        }
+
+    suspend fun beginScheduleAction(operationId: String): Boolean =
+        database.withWriteTransaction {
+            val outbox = database.outboxDao()
+            val operation = outbox.find(operationId) ?: return@withWriteTransaction false
+            if (operation.recordType != SCHEDULE_ACTION_RECORD_TYPE || operation.status != "queued") {
+                return@withWriteTransaction false
+            }
+            outbox.markSending(operationId, now()) == 1
+        }
+
+    suspend fun completeScheduleAction(operationId: String): OutboxOperationEntity =
+        updateScheduleActionStatus(operationId, setOf("sending", "uncertain"), LocalWriteStatus.COMMITTED)
+
+    suspend fun returnScheduleActionToQueue(
+        operationId: String,
+        errorCode: String,
+    ): OutboxOperationEntity = updateScheduleActionStatus(operationId, setOf("sending"), LocalWriteStatus.QUEUED, errorCode)
+
+    suspend fun markScheduleActionUncertain(
+        operationId: String,
+        errorCode: String,
+    ): OutboxOperationEntity = updateScheduleActionStatus(operationId, setOf("sending"), LocalWriteStatus.UNCERTAIN, errorCode)
+
+    suspend fun markScheduleActionConflict(
+        operationId: String,
+        errorCode: String,
+    ): OutboxOperationEntity = updateScheduleActionStatus(operationId, setOf("sending"), LocalWriteStatus.CONFLICT, errorCode)
+
+    suspend fun markScheduleActionRejected(
+        operationId: String,
+        errorCode: String,
+    ): OutboxOperationEntity = updateScheduleActionStatus(operationId, setOf("queued", "sending"), LocalWriteStatus.REJECTED, errorCode)
+
+    suspend fun retryScheduleActionCheck(operationId: String): OutboxOperationEntity =
+        updateScheduleActionStatus(operationId, setOf("uncertain"), LocalWriteStatus.QUEUED)
+
+    private suspend fun updateScheduleActionStatus(
+        operationId: String,
+        fromStatuses: Set<String>,
+        status: LocalWriteStatus,
+        errorCode: String? = null,
+    ): OutboxOperationEntity =
+        database.withWriteTransaction {
+            val outbox = database.outboxDao()
+            val operation = outbox.find(operationId) ?: throw NoSuchElementException("Schedule action not found")
+            if (operation.recordType != SCHEDULE_ACTION_RECORD_TYPE || operation.status !in fromStatuses) {
+                throw InvalidLocalWriteException("This schedule action cannot move to the requested state")
+            }
+            val updated =
+                operation.copy(
+                    status = status.name.lowercase(),
+                    serverOperationId = if (status == LocalWriteStatus.COMMITTED) operation.operationId else operation.serverOperationId,
+                    lastErrorCode = errorCode,
+                    updatedAtEpochMs = now(),
+                )
+            outbox.put(updated)
+            updated
+        }
+
     suspend fun readBudgetMutationQueue(): LocalBudgetMutationQueueSnapshot {
         pruneTerminalWrites()
         val outbox = database.outboxDao()

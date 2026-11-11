@@ -31,6 +31,7 @@ import app.tandemforactual.data.store.LocalBudgetMutationQueueSnapshot
 import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.LocalOperationConflictException
 import app.tandemforactual.data.store.LocalRecordProjection
+import app.tandemforactual.data.store.LocalScheduleActionOutboxItem
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
 import app.tandemforactual.ui.components.InlineMessage
@@ -54,14 +55,17 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import kotlin.uuid.Uuid
@@ -429,6 +433,245 @@ internal class TandemMobileSession(
             persistBudgetReorderQueue()
         }
     private var budgetReorderRetrySignal by mutableStateOf(0)
+    private var scheduleActionRetrySignal by mutableStateOf(0)
+    private val scheduleActionQueueMutex = Mutex()
+    private val scheduleActionEncryptionPasswords = mutableMapOf<String, String>()
+    private var scheduleActionQueueLoaded = false
+    var pendingScheduleActions by mutableStateOf<List<OutboxOperationEntity>>(emptyList())
+        private set
+
+    fun pendingScheduleActionFor(
+        budgetId: String,
+        scheduleId: String,
+    ): OutboxOperationEntity? = pendingScheduleActions.firstOrNull { it.budgetId == budgetId && it.recordId == scheduleId }
+
+    fun scheduleActionStatusMessage(operation: OutboxOperationEntity): String {
+        val actionLabel = if (operation.action == "skip") "Skip" else "Post"
+        return when (operation.status) {
+            "queued" ->
+                if (operation.lastErrorCode in setOf("invalid_device_credential", "sign_in_required", "sign_in_expired")) {
+                    "Sign in again to send this scheduled action to Actual."
+                } else {
+                    "$actionLabel saved on this device. Waiting for a connection to Tandem."
+                }
+            "sending" -> "$actionLabel is being sent to Actual."
+            "uncertain" -> "Tandem couldn’t confirm this $actionLabel. Check Actual, then check the status here."
+            "conflict" -> "The schedule changed in Actual. Refresh it before choosing an action."
+            "rejected" -> "Actual rejected this $actionLabel. Check the schedule in Actual."
+            else -> ""
+        }
+    }
+
+    fun scheduleActionCanBeReplaced(
+        operation: OutboxOperationEntity,
+        currentNextDate: String,
+    ): Boolean {
+        if (operation.status != "conflict" || operation.lastErrorCode != "schedule_changed") return false
+        val pendingDate =
+            runCatching {
+                Json
+                    .parseToJsonElement(operation.patchJson)
+                    .jsonObject["expectedNextDate"]
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+            }.getOrNull()
+        return !pendingDate.isNullOrBlank() && pendingDate != currentNextDate
+    }
+
+    fun retryScheduleActionStatus(operationId: String) {
+        sessionScope.launch {
+            val operation = repository?.findWrite(operationId) ?: return@launch
+            if (operation.recordType != "schedule-action" || operation.status != "uncertain") return@launch
+            runCatching { repository.retryScheduleActionCheck(operationId) }
+            refreshScheduleActionQueue(operation.budgetId)
+            scheduleActionRetrySignal += 1
+        }
+    }
+
+    private suspend fun restoreScheduleActionQueue(): Boolean =
+        scheduleActionQueueMutex.withLock {
+            if (scheduleActionQueueLoaded) return@withLock true
+            val localRepository = repository
+            if (localRepository == null) {
+                scheduleActionQueueLoaded = true
+                return@withLock true
+            }
+            return@withLock try {
+                localRepository.recoverInterruptedWrites()
+                pendingScheduleActions = localRepository.readScheduleActionQueue()
+                scheduleActionQueueLoaded = true
+                true
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+    private suspend fun refreshScheduleActionQueue(budgetId: String? = null) {
+        val localRepository = repository ?: return
+        scheduleActionQueueMutex.withLock {
+            pendingScheduleActions = localRepository.readScheduleActionQueue()
+            scheduleActionQueueLoaded = true
+            if (!budgetId.isNullOrBlank()) pendingWrites = localRepository.readPendingWrites(budgetId)
+        }
+    }
+
+    fun retryQueuedScheduleActions() {
+        scheduleActionRetrySignal += 1
+    }
+
+    /** Sends durable Post/Skip requests after a connection is available. */
+    suspend fun processQueuedScheduleActions() {
+        if (!restoreScheduleActionQueue()) {
+            while (!restoreScheduleActionQueue()) delay(1_000)
+        }
+        var observedRetrySignal = scheduleActionRetrySignal
+        var pauseUntilRetrySignal = false
+        while (true) {
+            if (pauseUntilRetrySignal) {
+                observedRetrySignal =
+                    withTimeoutOrNull(SCHEDULE_ACTION_RETRY_INTERVAL_MILLIS) {
+                        snapshotFlow { scheduleActionRetrySignal }.first { it != observedRetrySignal }
+                    } ?: scheduleActionRetrySignal
+                pauseUntilRetrySignal = false
+            }
+            val request = pendingScheduleActions.firstOrNull { it.status == "queued" }
+            if (request == null) {
+                observedRetrySignal = snapshotFlow { scheduleActionRetrySignal }.first { it != observedRetrySignal }
+                refreshScheduleActionQueue()
+                continue
+            }
+            snapshotFlow {
+                !isSigningOut && authenticatedDevice != null && !isSyncing && !isPerformingBudgetAction
+            }.first { it }
+            if (!isCurrentIdentityCacheOwner()) {
+                observedRetrySignal = snapshotFlow { scheduleActionRetrySignal }.first { it != observedRetrySignal }
+                continue
+            }
+            val payload = runCatching { Json.parseToJsonElement(request.patchJson).jsonObject }.getOrNull()
+            val expectedOwner = payload?.get("cacheOwner")?.jsonPrimitive?.contentOrNull
+            val activeOwner = activeBudgetCacheOwner()
+            if (payload == null || expectedOwner.isNullOrBlank() || expectedOwner != activeOwner) {
+                observedRetrySignal = snapshotFlow { scheduleActionRetrySignal }.first { it != observedRetrySignal }
+                continue
+            }
+            val encryptionPassword = scheduleActionEncryptionPasswords[request.budgetId]
+            val requiresPassword = payload["encrypted"]?.jsonPrimitive?.booleanOrNull == true
+            if (requiresPassword && encryptionPassword.isNullOrBlank()) {
+                observedRetrySignal = snapshotFlow { scheduleActionRetrySignal }.first { it != observedRetrySignal }
+                continue
+            }
+            val expectedNextDate = payload["expectedNextDate"]?.jsonPrimitive?.contentOrNull
+            if (expectedNextDate.isNullOrBlank() || request.action !in setOf("post", "skip")) {
+                repository?.markScheduleActionRejected(request.operationId, "invalid-queued-action")
+                refreshScheduleActionQueue(request.budgetId)
+                continue
+            }
+            val localRepository = repository ?: continue
+            if (!localRepository.beginScheduleAction(request.operationId)) {
+                refreshScheduleActionQueue(request.budgetId)
+                continue
+            }
+            refreshScheduleActionQueue(request.budgetId)
+            isPerformingBudgetAction = true
+            try {
+                apiClient.withExclusiveSession {
+                    apiClient.manageBudgetSchedule(
+                        budgetId = request.budgetId,
+                        scheduleId = request.recordId,
+                        action = request.action,
+                        name = null,
+                        encryptionPassword = encryptionPassword,
+                        expectedNextDate = expectedNextDate,
+                        idempotencyKeyOverride = request.operationId,
+                    )
+                }
+                localRepository.completeScheduleAction(request.operationId)
+                refreshScheduleActionQueue(request.budgetId)
+                val scheduleRoute = budgetActionFeedbackState.currentRouteEntry
+                if (scheduleRoute?.route == AppRoute.SCHEDULES) {
+                    val confirmationMessage =
+                        if (request.action == "skip") {
+                            "Next date skipped in Actual."
+                        } else {
+                            "Schedule posted in Actual."
+                        }
+                    setBudgetActionMessage(confirmationMessage, InlineMessageKind.SUCCESS, scheduleRoute)
+                }
+                withoutBudgetActionFeedback {
+                    synchronize(request.budgetId, encryptionPassword, retryQueuedBudgetMutations = false)
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: TandemApiException) {
+                when {
+                    error.errorCode == "schedule_changed" -> {
+                        localRepository.markScheduleActionConflict(request.operationId, "schedule_changed")
+                        refreshScheduleActionQueue(request.budgetId)
+                    }
+                    error.errorCode in setOf("invalid_device_credential", "sign_in_required", "sign_in_expired") -> {
+                        localRepository.returnScheduleActionToQueue(request.operationId, error.errorCode)
+                        refreshScheduleActionQueue(request.budgetId)
+                        setBudgetActionMessage(
+                            "Sign in again to send this scheduled action to Actual.",
+                            InlineMessageKind.INFO,
+                        )
+                        observedRetrySignal = scheduleActionRetrySignal
+                        pauseUntilRetrySignal = true
+                    }
+                    error.errorCode in setOf("operation_uncertain", "operation_in_progress", "operation_result_unavailable") -> {
+                        localRepository.markScheduleActionUncertain(request.operationId, error.errorCode)
+                        refreshScheduleActionQueue(request.budgetId)
+                    }
+                    shouldKeepBudgetMutationQueued(error.httpStatus) -> {
+                        localRepository.returnScheduleActionToQueue(request.operationId, error.errorCode)
+                        isServerReachable = error.indicatesTandemReachable()
+                        refreshScheduleActionQueue(request.budgetId)
+                        setBudgetActionMessage(
+                            "Saved on this device. Waiting for a connection to Tandem.",
+                            InlineMessageKind.INFO,
+                            actionLabel = "Try again",
+                            retryAction = {
+                                retryQueuedScheduleActions()
+                                true
+                            },
+                        )
+                        observedRetrySignal = scheduleActionRetrySignal
+                        pauseUntilRetrySignal = true
+                    }
+                    else -> {
+                        localRepository.markScheduleActionRejected(request.operationId, error.errorCode)
+                        refreshScheduleActionQueue(request.budgetId)
+                    }
+                }
+            } catch (error: Exception) {
+                localRepository.returnScheduleActionToQueue(request.operationId, "network-error")
+                isServerReachable = false
+                refreshScheduleActionQueue(request.budgetId)
+                setBudgetActionMessage(
+                    "Saved on this device. Waiting for a connection to Tandem.",
+                    InlineMessageKind.INFO,
+                    actionLabel = "Try again",
+                    retryAction = {
+                        retryQueuedScheduleActions()
+                        true
+                    },
+                )
+                observedRetrySignal = scheduleActionRetrySignal
+                pauseUntilRetrySignal = true
+            } finally {
+                isPerformingBudgetAction = false
+            }
+            observedRetrySignal = scheduleActionRetrySignal
+        }
+    }
+
+    private suspend fun activeBudgetCacheOwner(): String? {
+        val device = authenticatedDevice ?: return null
+        val serverUrl = apiClient.currentServerUrl ?: return null
+        return budgetCacheOwner(serverUrl, device.principalId)
+    }
 
     internal suspend fun restoreBudgetReorderQueue(): Boolean =
         budgetQueueRestoreMutex.withLock {
@@ -2181,6 +2424,7 @@ internal class TandemMobileSession(
             budgetCatalogVersion += 1
             isServerReachable = true
             retryQueuedBudgetReorders()
+            retryQueuedScheduleActions()
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
@@ -2215,6 +2459,7 @@ internal class TandemMobileSession(
         retryQueuedBudgetMutations: Boolean = true,
     ): BudgetSyncSummary? {
         if (isSigningOut) return null
+        if (!encryptionPassword.isNullOrBlank()) scheduleActionEncryptionPasswords[budgetId] = encryptionPassword
         if (!isCurrentIdentityCacheOwner()) {
             syncPresentation =
                 syncPresentation.failed(
@@ -2249,6 +2494,7 @@ internal class TandemMobileSession(
                     )
                 }
             isServerReachable = true
+            retryQueuedScheduleActions()
             lastSyncSummary = summary
             loadLocalRecords(budgetId)
             syncedTransactionCount =
@@ -2829,6 +3075,15 @@ internal class TandemMobileSession(
             budgetActionMessage = "Refresh the schedule before posting or skipping it."
             return false
         }
+        if (action in setOf("post", "skip")) {
+            return enqueueScheduleAction(
+                budgetId = budgetId,
+                scheduleId = scheduleId,
+                action = action,
+                expectedNextDate = expectedNextDate!!,
+                encryptionPassword = encryptionPassword,
+            )
+        }
         return performBudgetAction(budgetId, encryptionPassword, "Couldn’t update this schedule. Try again.") {
             apiClient.manageBudgetSchedule(
                 budgetId,
@@ -2839,6 +3094,70 @@ internal class TandemMobileSession(
                 fields,
                 expectedNextDate,
             )
+        }
+    }
+
+    private suspend fun enqueueScheduleAction(
+        budgetId: String,
+        scheduleId: String,
+        action: String,
+        expectedNextDate: String,
+        encryptionPassword: String?,
+    ): Boolean {
+        val localRepository = repository
+        if (refuseWriteInReadOnlyMode()) {
+            budgetActionMessage = transactionWriteMessage
+            return false
+        }
+        if (localRepository == null) {
+            budgetActionMessage = "Tandem can’t save this action on this device."
+            return false
+        }
+        if (budgetId.isBlank() || !apiClient.isAuthenticated) {
+            budgetActionMessage = "Sign in and open a budget before changing it."
+            return false
+        }
+        val cacheOwner = activeBudgetCacheOwner()
+        if (cacheOwner.isNullOrBlank() || !isCurrentIdentityCacheOwner()) {
+            budgetActionMessage = "Sign in to the server and account that own this budget before changing it."
+            return false
+        }
+        if (!restoreScheduleActionQueue()) {
+            budgetActionMessage = "Couldn’t load saved schedule actions. Try again."
+            return false
+        }
+        val operationId = Uuid.random().toString()
+        val payload =
+            buildJsonObject {
+                put("expectedNextDate", expectedNextDate)
+                put("cacheOwner", cacheOwner)
+                put("encrypted", !encryptionPassword.isNullOrBlank())
+            }.toString()
+        return try {
+            val operation =
+                localRepository.enqueueScheduleAction(
+                    LocalScheduleActionOutboxItem(
+                        operationId = operationId,
+                        budgetId = budgetId,
+                        scheduleId = scheduleId,
+                        action = action,
+                        payloadJson = payload,
+                        createdAtEpochMs = nowEpochMillis(),
+                    ),
+                )
+            if (!encryptionPassword.isNullOrBlank()) scheduleActionEncryptionPasswords[budgetId] = encryptionPassword
+            refreshScheduleActionQueue(budgetId)
+            budgetActionMessage = null
+            scheduleActionRetrySignal += 1
+            operation.status in setOf("queued", "sending", "committed")
+        } catch (error: LocalOperationConflictException) {
+            budgetActionMessage = "This schedule already has an action waiting to sync or review."
+            false
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            budgetActionMessage = "Couldn’t save this action on this device. Try again."
+            false
         }
     }
 
@@ -4118,6 +4437,7 @@ internal fun budgetApiErrorMessage(
 
 private const val ACTIVITY_TRANSACTION_PAGE_SIZE = 50
 private const val ACTIVITY_TRANSACTION_REFRESH_LIMIT = 200
+private const val SCHEDULE_ACTION_RETRY_INTERVAL_MILLIS = 30_000L
 private const val BUDGET_QUEUE_RESTORE_ERROR = "Couldn’t load saved category changes. Try again before editing categories."
 private const val BUDGET_CACHE_OWNER_KEY = "internal:budget-cache-owner-v1"
 

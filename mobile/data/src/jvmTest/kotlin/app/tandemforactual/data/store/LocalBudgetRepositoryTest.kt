@@ -19,7 +19,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFails
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -27,6 +27,110 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 
 class LocalBudgetRepositoryTest {
+    @Test
+    fun scheduleActionsPersistIdempotentlyAndRejectCompetingActionsUntilReview() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 200L }
+                val post =
+                    LocalScheduleActionOutboxItem(
+                        operationId = "schedule-post-1",
+                        budgetId = BUDGET,
+                        scheduleId = "schedule-1",
+                        action = "post",
+                        payloadJson = "{\"expectedNextDate\":\"2026-11-15\"}",
+                        createdAtEpochMs = 100L,
+                    )
+                val created = repository.enqueueScheduleAction(post)
+                val duplicate = repository.enqueueScheduleAction(post.copy(operationId = "schedule-post-duplicate"))
+
+                assertEquals(created.operationId, duplicate.operationId)
+                assertEquals("queued", repository.readScheduleActionQueue().single().status)
+                assertFailsWith<LocalOperationConflictException> {
+                    repository.enqueueScheduleAction(
+                        post.copy(operationId = "schedule-skip-2", action = "skip"),
+                    )
+                    Unit
+                }
+
+                assertTrue(repository.beginScheduleAction(created.operationId))
+                repository.markScheduleActionConflict(created.operationId, "schedule_changed")
+                val conflicted = assertNotNull(database.outboxDao().find(created.operationId))
+                database.outboxDao().put(conflicted.copy(patchJson = "not-json"))
+                assertFailsWith<LocalOperationConflictException> {
+                    repository.enqueueScheduleAction(
+                        post.copy(
+                            operationId = "schedule-post-invalid-stale-date",
+                            payloadJson = "{\"expectedNextDate\":\"2026-12-15\"}",
+                        ),
+                    )
+                    Unit
+                }
+                database.outboxDao().put(conflicted)
+                assertFailsWith<LocalOperationConflictException> {
+                    repository.enqueueScheduleAction(post.copy(operationId = "schedule-post-same-stale-date"))
+                    Unit
+                }
+                val refreshedPost =
+                    repository.enqueueScheduleAction(
+                        post.copy(
+                            operationId = "schedule-post-refreshed",
+                            payloadJson = "{\"expectedNextDate\":\"2026-12-15\"}",
+                        ),
+                    )
+
+                assertEquals("schedule-post-refreshed", refreshedPost.operationId)
+                assertEquals("discarded", database.outboxDao().find(created.operationId)?.status)
+                assertEquals(listOf(refreshedPost.operationId), repository.readScheduleActionQueue().map { it.operationId })
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun scheduleActionOutboxTracksRetriesUncertaintyRejectionAndServerConfirmation() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 200L }
+                val post =
+                    repository.enqueueScheduleAction(
+                        LocalScheduleActionOutboxItem(
+                            operationId = "schedule-outbox-post",
+                            budgetId = BUDGET,
+                            scheduleId = "schedule-outbox-1",
+                            action = "post",
+                            payloadJson = "{\"expectedNextDate\":\"2026-11-15\"}",
+                            createdAtEpochMs = 100L,
+                        ),
+                    )
+
+                assertTrue(repository.beginScheduleAction(post.operationId))
+                assertEquals("queued", repository.returnScheduleActionToQueue(post.operationId, "network-error").status)
+                assertTrue(repository.beginScheduleAction(post.operationId))
+                assertEquals("uncertain", repository.markScheduleActionUncertain(post.operationId, "operation_uncertain").status)
+                assertEquals("queued", repository.retryScheduleActionCheck(post.operationId).status)
+                assertTrue(repository.beginScheduleAction(post.operationId))
+                assertEquals("committed", repository.completeScheduleAction(post.operationId).status)
+
+                val rejected =
+                    repository.enqueueScheduleAction(
+                        LocalScheduleActionOutboxItem(
+                            operationId = "schedule-outbox-rejected",
+                            budgetId = BUDGET,
+                            scheduleId = "schedule-outbox-2",
+                            action = "skip",
+                            payloadJson = "{\"expectedNextDate\":\"2026-11-16\"}",
+                            createdAtEpochMs = 100L,
+                        ),
+                    )
+                assertEquals("rejected", repository.markScheduleActionRejected(rejected.operationId, "invalid-schedule").status)
+            } finally {
+                database.close()
+            }
+        }
+
     @Test
     fun localBudgetDataGuardDetectsCachedSnapshotState() =
         runBlocking {

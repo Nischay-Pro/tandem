@@ -916,6 +916,7 @@ class TandemApiClientTest {
                     null,
                     null,
                     expectedNextDate = "2026-11-15",
+                    idempotencyKeyOverride = "00000000-0000-4000-8000-000000000001",
                 )
                 client.manageBudgetSchedule(
                     "budget-1",
@@ -924,6 +925,7 @@ class TandemApiClientTest {
                     null,
                     null,
                     expectedNextDate = "2026-11-15",
+                    idempotencyKeyOverride = "00000000-0000-4000-8000-000000000002",
                 )
                 client.manageBudgetSchedule("budget-1", "schedule-1", "delete", null, null)
                 client.manageBudgetSchedule(
@@ -1068,8 +1070,10 @@ class TandemApiClientTest {
                 assertTrue((requests[13].body as TextContent).text.contains("\"name\":\"Rent\""))
                 assertTrue((requests[14].body as TextContent).text.contains("\"action\":\"skip\""))
                 assertTrue((requests[14].body as TextContent).text.contains("\"expectedNextDate\":\"2026-11-15\""))
+                assertEquals("00000000-0000-4000-8000-000000000001", requests[14].headers["Idempotency-Key"])
                 assertTrue((requests[15].body as TextContent).text.contains("\"action\":\"post\""))
                 assertTrue((requests[15].body as TextContent).text.contains("\"expectedNextDate\":\"2026-11-15\""))
+                assertEquals("00000000-0000-4000-8000-000000000002", requests[15].headers["Idempotency-Key"])
                 assertTrue((requests[16].body as TextContent).text.contains("\"action\":\"delete\""))
                 assertTrue((requests[17].body as TextContent).text.contains("\"action\":\"edit\""))
                 assertTrue((requests[17].body as TextContent).text.contains("\"accountId\":\"account-1\""))

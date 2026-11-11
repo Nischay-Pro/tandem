@@ -50,7 +50,13 @@ internal fun SyncCenterScreen(
             }
         val budgetMutations = mobileSession.pendingBudgetMutationsFor(state.selectedBudgetId)
         val budgetMutationReviews = mobileSession.budgetMutationReviewsFor(state.selectedBudgetId)
-        val pendingCount = attention.size + budgetMutations.size + budgetMutationReviews.size
+        val scheduleActions =
+            mobileSession.pendingWrites.filter {
+                it.budgetId == state.selectedBudgetId &&
+                    it.recordType == "schedule-action" &&
+                    it.status in setOf("queued", "sending", "uncertain", "conflict", "rejected")
+            }
+        val pendingCount = attention.size + budgetMutations.size + budgetMutationReviews.size + scheduleActions.size
         PageLazyColumn {
             item(key = "sync-center-budget-summary") {
                 SurfaceCard {
@@ -92,7 +98,7 @@ internal fun SyncCenterScreen(
                 }
             }
             item(key = "pending-changes-title") {
-                SectionCard("Pending Changes", "$pendingCount edits", animateDetail = true) {}
+                SectionCard("Pending Changes", "$pendingCount changes", animateDetail = true) {}
             }
             if (pendingCount == 0) {
                 item(key = "pending-changes-empty") {
@@ -139,6 +145,40 @@ internal fun SyncCenterScreen(
                                     },
                                 )
                             },
+                        )
+                    }
+                }
+                items(scheduleActions, key = { "schedule-action:${it.operationId}" }) { operation ->
+                    val actionName = if (operation.action == "skip") "Skip scheduled transaction" else "Post scheduled transaction"
+                    val statusMessage = mobileSession.scheduleActionStatusMessage(operation)
+                    SurfaceCard {
+                        ListRow(
+                            actionName,
+                            statusMessage,
+                            if (operation.status == "uncertain") "Check status" else "Pending",
+                            leading =
+                                RowLeading.Icon(
+                                    if (operation.status in setOf("uncertain", "conflict", "rejected")) {
+                                        Lucide.CloudAlert
+                                    } else {
+                                        Lucide.CloudSync
+                                    },
+                                ),
+                            options =
+                                ListRowOptions(
+                                    trailingColor =
+                                        if (operation.status in setOf("uncertain", "conflict", "rejected")) {
+                                            tandemPalette.warning
+                                        } else {
+                                            tandemPalette.syncing
+                                        },
+                                ),
+                            onClick =
+                                if (operation.status == "uncertain") {
+                                    { mobileSession.retryScheduleActionStatus(operation.operationId) }
+                                } else {
+                                    null
+                                },
                         )
                     }
                 }

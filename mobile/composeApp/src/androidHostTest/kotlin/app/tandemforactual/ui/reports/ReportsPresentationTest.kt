@@ -32,10 +32,46 @@ class ReportsPresentationTest {
         assertEquals("2024-03-15", yearToDate?.throughDate)
         assertEquals(listOf("2024-01", "2024-02", "2024-03"), yearToDate?.monthIds)
 
-        val lastYear = createReportWindow("2024-03", ReportPeriodMode.RANGE, ReportRangePreset.LAST_YEAR, "2024-03-15")
-        assertEquals("2023-01-01", lastYear?.startDate)
-        assertEquals("2023-12-31", lastYear?.throughDate)
-        assertEquals(12, lastYear?.monthCount)
+        val lastYear = createReportWindow("2024-03", ReportPeriodMode.RANGE, ReportRangePreset.LAST_YEAR, "2024-03-15")!!
+        assertEquals("2023-01-01", lastYear.startDate)
+        assertEquals("2023-12-31", lastYear.throughDate)
+        assertEquals(12, lastYear.monthCount)
+        val original = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.US)
+            assertEquals("Jan 2023 – Dec 2023", reportMonthRangeLabel(lastYear.startMonthId, lastYear.endMonthId))
+        } finally {
+            Locale.setDefault(original)
+        }
+    }
+
+    @Test
+    fun reportRangesSupportThreeYearsAndAllTime() {
+        val threeYears =
+            createReportWindow(
+                "2026-11",
+                ReportPeriodMode.RANGE,
+                ReportRangePreset.LAST_3_YEARS,
+                "2026-11-11",
+            )
+        assertEquals(36, threeYears?.monthCount)
+        assertEquals("2023-12", threeYears?.startMonthId)
+        assertEquals("2026-11", threeYears?.endMonthId)
+
+        val allTime =
+            createReportWindow(
+                "2026-11",
+                ReportPeriodMode.RANGE,
+                ReportRangePreset.ALL_TIME,
+                "2026-11-11",
+                listOf("2023-05", "2024-12", "2026-01"),
+            )!!
+        assertTrue(allTime.allDates)
+        assertEquals("2023-05", allTime.startMonthId)
+        assertEquals("2026-11", allTime.endMonthId)
+        assertEquals("2023-05-01", allTime.startDate)
+        assertEquals("2026-11-11", allTime.throughDate)
+        assertEquals(43, allTime.monthCount)
     }
 
     @Test

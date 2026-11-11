@@ -1074,12 +1074,14 @@ class TandemApiClient(
         encryptionPassword: String?,
         fields: JsonObject? = null,
         expectedNextDate: String? = null,
+        idempotencyKeyOverride: String? = null,
     ) {
         require(action !in setOf("post", "skip") || !expectedNextDate.isNullOrBlank()) {
             "Posting or skipping a schedule requires its displayed next date"
         }
         withMaintenanceOperation(
             maintenanceSignature("schedule-$action", budgetId, scheduleId, name, expectedNextDate),
+            idempotencyKeyOverride,
         ) { idempotencyKey ->
             withGeneratedApi {
                 requireOk(

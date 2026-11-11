@@ -41,8 +41,10 @@ internal enum class ReportRangePreset(
     LAST_3_MONTHS("Last 3 months", 3),
     LAST_6_MONTHS("Last 6 months", 6),
     LAST_12_MONTHS("Last 12 months", 12),
+    LAST_3_YEARS("Last 3 years", 36),
     YEAR_TO_DATE("Year to date", null),
     LAST_YEAR("Last year", null),
+    ALL_TIME("All time", null),
 }
 
 internal fun roundedReportAxisValues(
@@ -156,7 +158,7 @@ internal fun createReportWindow(
     rangeMonths: Int,
 ): ReportWindow? {
     val end = parseReportMonth(endMonthId) ?: return null
-    val count = if (mode == ReportPeriodMode.MONTH) 1 else rangeMonths.coerceIn(3, 12)
+    val count = if (mode == ReportPeriodMode.MONTH) 1 else rangeMonths.coerceIn(3, 36)
     val months = (count - 1 downTo 0).map { offset -> reportMonthId(shiftReportMonth(end, -offset)) }
     val start = parseReportMonth(months.first()) ?: return null
     val firstDate = "${months.first()}-01"
@@ -170,6 +172,7 @@ internal fun createReportWindow(
     mode: ReportPeriodMode,
     rangePreset: ReportRangePreset,
     todayIsoDate: String,
+    availableMonthIds: List<String> = emptyList(),
 ): ReportWindow? {
     if (mode == ReportPeriodMode.MONTH) return createReportWindow(endMonthId, mode, 1)
     rangePreset.monthCount?.let { count -> return createReportWindow(endMonthId, ReportPeriodMode.RANGE, count) }
@@ -200,6 +203,7 @@ internal fun createReportWindow(
                 reportMonthsBetween(firstMonth, lastMonth),
             )
         }
+        ReportRangePreset.ALL_TIME -> createReportHistoryWindow(availableMonthIds, today)
         else -> createReportWindow(endMonthId, ReportPeriodMode.RANGE, 6)
     }
 }
@@ -248,6 +252,14 @@ internal fun shiftReportMonthId(
 ): String? = parseReportMonth(monthId)?.let { reportMonthId(shiftReportMonth(it, offset)) }
 
 internal fun reportMonthLabel(monthId: String): String = parseReportMonth(monthId)?.let { formatMonth(it.year, it.month) } ?: monthId
+
+internal fun reportMonthRangeLabel(
+    startMonthId: String,
+    endMonthId: String,
+): String = "${reportMonthLabelShort(startMonthId)} – ${reportMonthLabelShort(endMonthId)}"
+
+private fun reportMonthLabelShort(monthId: String): String =
+    parseReportMonth(monthId)?.let { formatShortMonth(it.year, it.month) } ?: monthId
 
 internal fun reportMonthAxisLabel(monthId: String): String =
     parseReportMonth(monthId)?.let { formatShortMonth(it.year, it.month).substringBeforeLast(' ') } ?: monthId
