@@ -1326,6 +1326,7 @@ class TandemApiClientTest {
                 "invalid_device_credential" to "Your sign-in is no longer active. Sign in again.",
                 "bank_sync_failed" to "Actual couldn’t sync bank transactions. Check the bank connection.",
                 "bank_sync_busy" to "Bank sync is already running. Wait a moment.",
+                "statement_preview_failed" to "Tandem couldn’t check which statement rows are already in Actual. Check your connection.",
             )
 
         messages.forEach { (errorCode, message) ->
@@ -1487,7 +1488,45 @@ class TandemApiClientTest {
                 assertFailsWith<TandemApiProtocolException> {
                     client.previewBudgetAccountStatementImport("budget-1", "account-1", listOf("ref-new"), null)
                 }
+                responseBody = """{"status":"ok"}"""
+                assertFailsWith<TandemApiProtocolException> {
+                    client.previewBudgetAccountStatementImport("budget-1", "account-1", listOf("ref-new"), null)
+                }
                 Unit
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
+    fun generatedStatementPreviewUsesOptionalRequestDefaults() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            val engine =
+                MockEngine { request ->
+                    requests += request
+                    respond("""{"status":"ok","existingImportedIds":[]}""", headers = jsonHeaders())
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                TransactionsApi.previewBudgetAccountStatementImport(
+                    budgetId = "budget-1",
+                    accountId = "account-1",
+                )
+
+                assertEquals(1, requests.size)
+                assertEquals(
+                    "/api/v1/budgets/budget-1/accounts/account-1/transactions/import/preview",
+                    requests.single().url.encodedPath,
+                )
+                assertEquals(null, requests.single().headers["x-budget-encryption-password"])
+                assertEquals("{}", (requests.single().body as TextContent).text)
             } finally {
                 cleanup()
                 Api.baseUrl = previousBaseUrl
