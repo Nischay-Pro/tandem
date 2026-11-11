@@ -197,6 +197,15 @@ describe("Actual transaction store", () => {
 
   it.each([
     [
+      "a removed account",
+      { account: "removed-account" },
+      {
+        code: "account-not-found",
+        message: "Account does not exist in this budget",
+      },
+      { accounts: [] },
+    ],
+    [
       "a closed account",
       { account: "account-1" },
       {
@@ -267,6 +276,33 @@ describe("Actual transaction store", () => {
       store.validateUpdateInput({ amount: -250 }),
     ).resolves.toBeUndefined();
     expect(fake.client.getAccounts).not.toHaveBeenCalled();
+    expect(fake.client.getPayees).not.toHaveBeenCalled();
+    expect(fake.client.getCategories).not.toHaveBeenCalled();
+  });
+
+  it("accepts open accounts and existing payees and visible categories in an update", async () => {
+    const fake = createClient({ data: [] });
+    const store = createActualTransactionStore(fake.client);
+
+    await expect(
+      store.validateUpdateInput({
+        account: "account-1",
+        payee: "payee-1",
+        category: "category-1",
+      }),
+    ).resolves.toBeUndefined();
+    expect(fake.client.getAccounts).toHaveBeenCalledOnce();
+    expect(fake.client.getPayees).toHaveBeenCalledOnce();
+    expect(fake.client.getCategories).toHaveBeenCalledOnce();
+  });
+
+  it("accepts null payee and category references in an update", async () => {
+    const fake = createClient({ data: [] });
+    const store = createActualTransactionStore(fake.client);
+
+    await expect(
+      store.validateUpdateInput({ payee: null, category: null }),
+    ).resolves.toBeUndefined();
     expect(fake.client.getPayees).not.toHaveBeenCalled();
     expect(fake.client.getCategories).not.toHaveBeenCalled();
   });

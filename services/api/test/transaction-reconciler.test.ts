@@ -935,6 +935,47 @@ describe("Actual transaction reconciliation", () => {
     },
   );
 
+  it("keeps an uncertain create unresolved when its new conflict cannot be read back", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: { kind: "transaction-create-returned" },
+    });
+    harness.actual = actualCreateFrom(request, { amount: -1300 });
+    harness.journal.missingOnGet = true;
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      status: "uncertain",
+      writeEvidence: { kind: "transaction-create-returned" },
+    });
+    expect(result.conflict).toBeNull();
+  });
+
+  it("compares an empty create note with Actual's null note value", async () => {
+    const request = createCreateRequest();
+    request.patch = {
+      account: "account-1",
+      amount: -1250,
+      date: "2026-11-01",
+      payee: "payee-1",
+      category: "category-1",
+      notes: "",
+      cleared: false,
+    };
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: { kind: "transaction-create-returned" },
+    });
+    harness.actual = actualCreateFrom(request, { notes: "Edited in Actual" });
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation.status).toBe("conflict");
+    expect(result.conflict?.conflictingFields).toContain("notes");
+  });
+
   it("keeps a mismatched uncertain create unresolved if conflict persistence fails", async () => {
     const request = createCreateRequest();
     const harness = createHarness(request, {
