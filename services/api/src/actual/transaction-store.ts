@@ -216,6 +216,7 @@ export function createActualTransactionStore(
     const accountChanged = fields.account !== undefined;
     const effectivePayeeId = payeeChanged ? fields.payee : current.payee;
     const effectiveAccountId = fields.account ?? current.account;
+    let transferDestinationIssue: TransactionCreateValidationIssue | undefined;
     if (
       (payeeChanged && fields.payee !== null) ||
       (accountChanged && current.payee !== null)
@@ -232,20 +233,21 @@ export function createActualTransactionStore(
       }
       if (payee?.transfer_acct) {
         accounts ??= await client.getAccounts();
-        const transferDestinationIssue = validateTransferDestination(
+        transferDestinationIssue = validateTransferDestination(
           effectiveAccountId,
           payee.transfer_acct,
           accounts,
         );
-        if (transferDestinationIssue) return transferDestinationIssue;
       }
     }
 
-    if (fields.category !== undefined && fields.category !== null) {
+    if (transferDestinationIssue) {
+      return transferDestinationIssue;
+    } else if (fields.category !== undefined && fields.category !== null) {
       return validateCategoryReference(fields.category);
+    } else {
+      return undefined;
     }
-
-    return undefined;
   }
 
   return {

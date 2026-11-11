@@ -523,6 +523,36 @@ describe("Actual transaction store", () => {
     expect(fake.client.updateTransaction).not.toHaveBeenCalled();
   });
 
+  it("accepts a transfer payee when its destination account is open", async () => {
+    const fake = createClient(
+      { data: [] },
+      {
+        accounts: [
+          { id: "account-1", name: "Checking", closed: false },
+          { id: "account-2", name: "Savings", closed: false },
+          { id: "account-3", name: "Cash", closed: false },
+        ],
+        payees: [
+          {
+            id: "transfer-payee",
+            name: "Transfer: Savings",
+            transfer_acct: "account-2",
+          },
+        ],
+      },
+    );
+    const store = createActualTransactionStore(fake.client);
+
+    await expect(
+      store.validateUpdateInput(
+        { payee: "transfer-payee" },
+        { account: "account-1", payee: null },
+      ),
+    ).resolves.toBeUndefined();
+    expect(fake.client.getAccounts).toHaveBeenCalledOnce();
+    expect(fake.client.getPayees).toHaveBeenCalledOnce();
+  });
+
   it("reads by stable ID with grouped split data through public AQL", async () => {
     const transaction = {
       id: "transaction-1",
