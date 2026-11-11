@@ -99,7 +99,7 @@ internal fun WelcomeScreen(
         horizontalPadding = TandemSpacing.extraLarge,
         content = {
             TandemBrandMark(Modifier.size(72.dp))
-            Heading("Tandem for Actual Budget", "Connect your Actual Budget server.")
+            Heading("Tandem for Actual Budget", "Connect Tandem to your existing Actual Budget.")
             SetupProgressIndicator()
             SurfaceCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
@@ -123,7 +123,7 @@ internal fun WelcomeScreen(
                     )
                 }
             }
-            SecondaryButton("How to set up a server", modifier = Modifier.fillMaxWidth(), onClick = onOpenSetupGuide)
+            SecondaryButton("Set up the Tandem API Gateway", modifier = Modifier.fillMaxWidth(), onClick = onOpenSetupGuide)
             signOutNotice?.let { InfoBubble(it) }
         },
         actions = {
@@ -387,7 +387,7 @@ internal fun SignInScreen(
                     TandemLoadingIndicator(Modifier.size(24.dp), color = tandemPalette.accent, strokeWidth = 2.dp)
                 }
                 mobileSession.actualLoginMethods?.bootstrapped == false -> {
-                    InlineMessage("Set up your Actual server before signing in.", InlineMessageKind.INFO)
+                    InlineMessage("This Actual server has no budget yet. Create one in Actual, then try again.", InlineMessageKind.INFO)
                 }
                 mobileSession.actualLoginMethods != null -> {
                     if (passwordActive) {

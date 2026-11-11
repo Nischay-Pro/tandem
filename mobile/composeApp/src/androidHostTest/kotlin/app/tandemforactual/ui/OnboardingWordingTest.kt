@@ -36,7 +36,7 @@ class OnboardingWordingTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Connect your Actual Budget server.").assertExists()
+        composeTestRule.onNodeWithText("Connect Tandem to your existing Actual Budget.").assertExists()
         composeTestRule
             .onNodeWithContentDescription("Setup progress. Step 1 of 4: Server. Next: Sign in, Budget, First sync.")
             .assertExists()
@@ -49,7 +49,7 @@ class OnboardingWordingTest {
             "Seamlessly sync your changes with Actual Budget when you’re back online.",
         ).forEach { benefit -> composeTestRule.onNodeWithText(benefit).assertExists() }
         composeTestRule
-            .onNodeWithText("How to set up a server")
+            .onNodeWithText("Set up the Tandem API Gateway")
             .performScrollTo()
             .performClick()
         composeTestRule.waitForIdle()
