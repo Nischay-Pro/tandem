@@ -103,8 +103,11 @@ Android sources with `:composeApp:compileAndroidMain` and
 ESLint, TypeScript checks, formatting, mobile source rules, mobile tests and
 coverage gates, Android lint and release assembly, and Kotlin compilation for
 Android and iOS targets. CI on macOS remains responsible for the Xcode app
-build and iOS simulator tests. The hooks detect common Android SDK install
-locations; set `ANDROID_HOME` if yours is elsewhere.
+build and iOS simulator tests. When mobile code is staged, pre-commit refuses
+to compile against unstaged or untracked mobile files. Pre-push requires a
+clean `mobile/` tree so its compilation checks match the source in the pushed
+commit. The hooks detect common Android SDK install locations; set
+`ANDROID_HOME` if yours is elsewhere.
 
 ## Database migrations
 

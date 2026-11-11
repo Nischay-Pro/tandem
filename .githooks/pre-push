@@ -4,6 +4,14 @@ set -eu
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
 
+uncommitted_mobile=$(git status --porcelain --untracked-files=all -- mobile)
+if [ -n "$uncommitted_mobile" ]; then
+  printf '%s\n' 'Refusing to push while mobile source differs from the commit being pushed.' >&2
+  printf '%s\n' 'The local compile could pass using files that CI will not receive.' >&2
+  printf '%s\n' 'Commit or discard all mobile changes, then push again.' >&2
+  exit 1
+fi
+
 if [ -x "$repo_root/node_modules/.bin/prettier" ]; then
   node scripts/check-prettier-files.mjs "$repo_root/node_modules/.bin/prettier" --tracked
 elif command -v pnpm >/dev/null 2>&1; then

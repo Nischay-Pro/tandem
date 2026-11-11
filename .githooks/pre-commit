@@ -28,6 +28,14 @@ fi
 
 staged_mobile_kotlin=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^mobile/.*\.(kt|kts)$' || true)
 if [ -n "$staged_mobile_kotlin" ]; then
+  unstaged_mobile=$(git diff --name-only -- mobile)
+  untracked_mobile=$(git ls-files --others --exclude-standard -- mobile)
+  if [ -n "$unstaged_mobile$untracked_mobile" ]; then
+    printf '%s\n' 'Refusing to commit mobile Kotlin changes while other mobile files are unstaged or untracked.' >&2
+    printf '%s\n' 'Stage the complete mobile change so the compile check matches the commit.' >&2
+    exit 1
+  fi
+
   if [ -z "${ANDROID_HOME:-}" ]; then
     if [ -n "${ANDROID_SDK_ROOT:-}" ]; then
       ANDROID_HOME=$ANDROID_SDK_ROOT

@@ -273,8 +273,11 @@ hook runs TypeScript checks, mobile tests and coverage gates, Android lint and
 release assembly, and Kotlin compilation for Android and iOS targets. The
 hooks find a standard Android SDK location automatically; set `ANDROID_HOME`
 when yours is installed elsewhere. CI on macOS remains responsible for the
-Xcode app build and iOS simulator tests. Install project dependencies before
-running the hooks.
+Xcode app build and iOS simulator tests. When mobile code is staged, the
+pre-commit hook refuses to compile against other unstaged or untracked mobile
+files. The pre-push hook requires a clean `mobile/` tree, so its compilation
+checks match the source in the pushed commit. Install project dependencies
+before running the hooks.
 
 Run the API checks in the disposable Docker environment:
 
