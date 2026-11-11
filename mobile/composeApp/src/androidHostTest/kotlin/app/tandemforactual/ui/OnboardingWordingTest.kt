@@ -41,9 +41,12 @@ class OnboardingWordingTest {
             .onNodeWithContentDescription("Setup progress. Step 1 of 4: Server. Next: Sign in, Budget, First sync.")
             .assertExists()
         listOf(
-            "Open your saved budget offline",
-            "Edits wait here until they sync",
-            "Changes marked “Needs review” stay on this device",
+            "Your budget, everywhere.",
+            "Access your Actual Budget finances wherever life takes you.",
+            "Offline by design.",
+            "Track transactions anytime, even without an internet connection.",
+            "Always in sync.",
+            "Seamlessly sync your changes with Actual Budget when you’re back online.",
         ).forEach { benefit -> composeTestRule.onNodeWithText(benefit).assertExists() }
         composeTestRule
             .onNodeWithText("How to set up a server")

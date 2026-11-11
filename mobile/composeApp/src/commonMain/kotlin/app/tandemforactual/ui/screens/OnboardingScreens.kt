@@ -106,9 +106,21 @@ internal fun WelcomeScreen(
                     modifier = Modifier.padding(TandemSpacing.large),
                     verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
                 ) {
-                    WelcomeBenefit(Lucide.Cloud, "Open your saved budget offline")
-                    WelcomeBenefit(Lucide.CloudSync, "Edits wait here until they sync")
-                    WelcomeBenefit(Lucide.ShieldCheck, "Changes marked “Needs review” stay on this device")
+                    WelcomeBenefit(
+                        Lucide.Cloud,
+                        heading = "Your budget, everywhere.",
+                        supportingText = "Access your Actual Budget finances wherever life takes you.",
+                    )
+                    WelcomeBenefit(
+                        Lucide.CloudSync,
+                        heading = "Offline by design.",
+                        supportingText = "Track transactions anytime, even without an internet connection.",
+                    )
+                    WelcomeBenefit(
+                        Lucide.ShieldCheck,
+                        heading = "Always in sync.",
+                        supportingText = "Seamlessly sync your changes with Actual Budget when you’re back online.",
+                    )
                 }
             }
             SecondaryButton("How to set up a server", modifier = Modifier.fillMaxWidth(), onClick = onOpenSetupGuide)
@@ -172,19 +184,34 @@ private fun SetupProgressIndicator() {
 @Composable
 private fun WelcomeBenefit(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    text: String,
+    heading: String,
+    supportingText: String,
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
     ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp), tint = tandemPalette.accent)
-        Text(
-            text,
-            color = tandemPalette.text,
-            fontSize = TandemTypography.compactBody,
-            lineHeight = TandemTypography.bodyLineHeight,
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.padding(top = 2.dp).size(22.dp),
+            tint = tandemPalette.accent,
         )
+        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+            Text(
+                heading,
+                color = tandemPalette.text,
+                fontSize = TandemTypography.compactBody,
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = TandemTypography.bodyLineHeight,
+            )
+            Text(
+                supportingText,
+                color = tandemPalette.muted,
+                fontSize = TandemTypography.compactBody,
+                lineHeight = TandemTypography.bodyLineHeight,
+            )
+        }
     }
 }
 
