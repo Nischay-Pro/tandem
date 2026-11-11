@@ -543,6 +543,9 @@ function createHarness(
     async validateCreateInput() {
       return undefined;
     },
+    async validateUpdateInput() {
+      return undefined;
+    },
     async create(id, input) {
       actual = {
         id: randomUUID(),
@@ -1369,6 +1372,27 @@ describe("Actual transaction reconciliation", () => {
       actualResult: { appliedPatch: { notes: "Updated note" } },
     });
     expect(harness.actual).toMatchObject({ notes: "Updated note" });
+  });
+
+  it("rejects an edit whose changed reference no longer exists without writing", async () => {
+    const request = createRequest({ patch: { category: "removed-category" } });
+    const harness = createHarness(request);
+    const update = vi.spyOn(harness.store, "update");
+    const actualBefore = harness.actual;
+    vi.spyOn(harness.store, "validateUpdateInput").mockResolvedValue({
+      code: "category-not-found",
+      message: "Category does not exist in this budget",
+    });
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      status: "rejected",
+      errorCode: "category-not-found",
+    });
+    expect(result.conflict).toBeNull();
+    expect(update).not.toHaveBeenCalled();
+    expect(harness.actual).toEqual(actualBefore);
   });
 
   it("records an update conflict when Actual deleted the transaction", async () => {

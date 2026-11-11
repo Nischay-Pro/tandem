@@ -195,6 +195,82 @@ describe("Actual transaction store", () => {
     expect(fake.client.getCategories).not.toHaveBeenCalled();
   });
 
+  it.each([
+    [
+      "a closed account",
+      { account: "account-1" },
+      {
+        code: "account-closed",
+        message: "Choose an open account for this transaction",
+      },
+      { accounts: [{ id: "account-1", name: "Closed", closed: true }] },
+    ],
+    [
+      "a removed payee",
+      { payee: "removed-payee" },
+      {
+        code: "payee-not-found",
+        message: "Payee does not exist in this budget",
+      },
+      { payees: [] },
+    ],
+    [
+      "a removed category",
+      { category: "removed-category" },
+      {
+        code: "category-not-found",
+        message: "Category does not exist in this budget",
+      },
+      { categories: [], hiddenCategories: [] },
+    ],
+    [
+      "a hidden category",
+      { category: "hidden-category" },
+      {
+        code: "category-hidden",
+        message: "Choose a visible category for this transaction",
+      },
+      {
+        categories: [],
+        hiddenCategories: [
+          {
+            id: "hidden-category",
+            name: "Hidden",
+            is_income: false,
+            hidden: true,
+            group_id: "category-group-1",
+          },
+        ],
+      },
+    ],
+  ])(
+    "validates only changed references and rejects %s",
+    async (_label, patch, issue, references) => {
+      const fake = createClient({ data: [] }, references as never);
+      const store = createActualTransactionStore(fake.client);
+
+      await expect(
+        store.validateUpdateInput(patch as TransactionPatch),
+      ).resolves.toEqual(issue);
+      expect(fake.client.updateTransaction).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not revalidate references omitted from an update patch", async () => {
+    const fake = createClient(
+      { data: [] },
+      { accounts: [], payees: [], categories: [] },
+    );
+    const store = createActualTransactionStore(fake.client);
+
+    await expect(
+      store.validateUpdateInput({ amount: -250 }),
+    ).resolves.toBeUndefined();
+    expect(fake.client.getAccounts).not.toHaveBeenCalled();
+    expect(fake.client.getPayees).not.toHaveBeenCalled();
+    expect(fake.client.getCategories).not.toHaveBeenCalled();
+  });
+
   it("reads by stable ID with grouped split data through public AQL", async () => {
     const transaction = {
       id: "transaction-1",

@@ -82,6 +82,18 @@ internal fun conflictReasonMessage(
     }
 }
 
+internal fun rejectedTransactionReferenceMessage(errorCode: String?): String =
+    when (errorCode) {
+        "account-not-found" -> "This account no longer exists in Actual. Choose another account and try again."
+        "account-closed" -> "This account is closed in Actual. Choose another account and try again."
+        "payee-not-found" -> "This payee no longer exists in Actual. Choose another payee and try again."
+        "category-not-found" -> "This category no longer exists in Actual. Choose another category and try again."
+        "category-hidden" -> "This category is hidden in Actual. Choose another category and try again."
+        "split-child-field-not-editable" ->
+            "Actual manages this part through the full transaction. Update the full transaction in Actual."
+        else -> "Actual kept the previous value. Review the edit and try again."
+    }
+
 private fun changedFieldReason(conflictingFields: List<String>): String {
     val labels =
         conflictingFields

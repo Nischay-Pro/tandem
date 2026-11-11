@@ -505,6 +505,7 @@ describe("transaction REST routes", () => {
     ["account-closed", "Choose an open account for this transaction"],
     ["payee-not-found", "Payee does not exist in this budget"],
     ["category-not-found", "Category does not exist in this budget"],
+    ["category-hidden", "Choose a visible category for this transaction"],
     ["unknown-rejection", "Transaction request is invalid"],
     [null, "Transaction request is invalid"],
   ])(

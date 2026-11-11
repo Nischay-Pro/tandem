@@ -113,6 +113,26 @@ class ConflictPresentationTest {
     }
 
     @Test
+    fun rejectedTransactionReferencesExplainWhatToChooseAgain() {
+        assertEquals(
+            "This category no longer exists in Actual. Choose another category and try again.",
+            rejectedTransactionReferenceMessage("category-not-found"),
+        )
+        assertEquals(
+            "This category is hidden in Actual. Choose another category and try again.",
+            rejectedTransactionReferenceMessage("category-hidden"),
+        )
+        assertEquals(
+            "This payee no longer exists in Actual. Choose another payee and try again.",
+            rejectedTransactionReferenceMessage("payee-not-found"),
+        )
+        assertEquals(
+            "This account is closed in Actual. Choose another account and try again.",
+            rejectedTransactionReferenceMessage("account-closed"),
+        )
+    }
+
+    @Test
     fun conflictDetailsShowBothVersionsForEachChangedField() {
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {

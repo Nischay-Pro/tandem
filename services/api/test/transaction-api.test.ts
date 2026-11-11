@@ -93,6 +93,7 @@ function createApi(
   const transactions: ActualTransactionStore = {
     read,
     validateCreateInput: vi.fn(async () => undefined),
+    validateUpdateInput: vi.fn(async () => undefined),
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),

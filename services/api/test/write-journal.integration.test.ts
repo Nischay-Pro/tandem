@@ -1323,6 +1323,9 @@ describe("durable write journal integration", () => {
       async validateCreateInput() {
         throw new Error("This test does not validate creates");
       },
+      async validateUpdateInput() {
+        return undefined;
+      },
       async create() {
         throw new Error("This test does not create transactions");
       },

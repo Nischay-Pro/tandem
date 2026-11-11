@@ -840,6 +840,7 @@ internal fun RejectedWriteScreen(
                         trailing = operationAmountText,
                     )
                 }
+                InfoBubble(rejectedTransactionReferenceMessage(operation.lastErrorCode))
                 PrimaryButton("Remove edit", enabled = !state.readOnlyMode) { confirmDismiss = true }
             }
         }

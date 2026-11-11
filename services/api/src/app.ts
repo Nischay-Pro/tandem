@@ -5116,6 +5116,8 @@ function rejectedTransactionMessage(errorCode: string): string {
       return "Payee does not exist in this budget";
     case "category-not-found":
       return "Category does not exist in this budget";
+    case "category-hidden":
+      return "Choose a visible category for this transaction";
     default:
       return "Transaction request is invalid";
   }

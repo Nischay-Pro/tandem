@@ -10,6 +10,9 @@ export interface ActualTransactionStore {
   validateCreateInput(
     input: TransactionCreateInput,
   ): Promise<TransactionCreateValidationIssue | undefined>;
+  validateUpdateInput(
+    fields: TransactionPatch,
+  ): Promise<TransactionCreateValidationIssue | undefined>;
   create(id: string, input: TransactionCreateInput): Promise<unknown>;
   update(id: string, fields: TransactionPatch): Promise<unknown>;
   delete(id: string): Promise<unknown>;
@@ -32,7 +35,8 @@ export interface TransactionCreateValidationIssue {
     | "account-not-found"
     | "account-closed"
     | "payee-not-found"
-    | "category-not-found";
+    | "category-not-found"
+    | "category-hidden";
   message: string;
 }
 
@@ -165,9 +169,65 @@ export function createActualTransactionStore(
     return undefined;
   }
 
+  async function validateUpdateInput(
+    fields: TransactionPatch,
+  ): Promise<TransactionCreateValidationIssue | undefined> {
+    if (fields.account !== undefined) {
+      const accounts = await client.getAccounts();
+      const account = accounts.find(
+        (candidate) => candidate.id === fields.account,
+      );
+      if (!account) {
+        return {
+          code: "account-not-found",
+          message: "Account does not exist in this budget",
+        };
+      }
+      if (account.closed) {
+        return {
+          code: "account-closed",
+          message: "Choose an open account for this transaction",
+        };
+      }
+    }
+
+    if (fields.payee !== undefined && fields.payee !== null) {
+      const payees = await client.getPayees();
+      if (!payees.some((candidate) => candidate.id === fields.payee)) {
+        return {
+          code: "payee-not-found",
+          message: "Payee does not exist in this budget",
+        };
+      }
+    }
+
+    if (fields.category !== undefined && fields.category !== null) {
+      const categories = await client.getCategories();
+      if (categories.some((candidate) => candidate.id === fields.category)) {
+        return undefined;
+      }
+      const hiddenCategories = await client.getCategories({ hidden: true });
+      if (
+        hiddenCategories.some((candidate) => candidate.id === fields.category)
+      ) {
+        return {
+          code: "category-hidden",
+          message: "Choose a visible category for this transaction",
+        };
+      }
+      return {
+        code: "category-not-found",
+        message: "Category does not exist in this budget",
+      };
+    }
+
+    return undefined;
+  }
+
   return {
     read,
     validateCreateInput,
+    validateUpdateInput,
     async create(id, input) {
       if (!isTandemTransactionId(id)) {
         throw new Error("New transactions require a Tandem transaction ID");

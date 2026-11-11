@@ -494,6 +494,12 @@ export class TransactionReconciler {
             if (updatePlan.kind === "unchanged") {
               return { kind: "unchanged", remoteSnapshot: latest };
             }
+            const validationIssue = await this.transactions.validateUpdateInput(
+              updatePlan.patch,
+            );
+            if (validationIssue) {
+              return { kind: "rejected", errorCode: validationIssue.code };
+            }
             mutationStarted = true;
             await this.transactions.update(
               prepared.request.transactionId,

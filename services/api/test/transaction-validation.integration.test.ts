@@ -83,10 +83,23 @@ describe("transaction request validation integration", () => {
             | "account-not-found"
             | "account-closed"
             | "payee-not-found"
-            | "category-not-found";
+            | "category-not-found"
+            | "category-hidden";
           message: string;
         }
       | undefined;
+    let updateReferenceIssue:
+      | {
+          code:
+            | "account-not-found"
+            | "account-closed"
+            | "payee-not-found"
+            | "category-not-found"
+            | "category-hidden";
+          message: string;
+        }
+      | undefined;
+    let updateAttempts = 0;
     const transactions: ActualTransactionStore = {
       async read(id: string) {
         actualReads += 1;
@@ -95,11 +108,15 @@ describe("transaction request validation integration", () => {
       async validateCreateInput() {
         return referenceIssue;
       },
+      async validateUpdateInput() {
+        return updateReferenceIssue;
+      },
       async create() {
         createAttempts += 1;
         throw new Error("Invalid requests must not create in Actual");
       },
       async update() {
+        updateAttempts += 1;
         throw new Error("Invalid requests must not update Actual");
       },
       async delete() {
@@ -187,6 +204,10 @@ describe("transaction request validation integration", () => {
           code: "category-not-found",
           message: "Category does not exist in this budget",
         },
+        {
+          code: "category-hidden",
+          message: "Choose a visible category for this transaction",
+        },
       ] as const;
       for (const [index, issue] of referenceIssues.entries()) {
         referenceIssue = issue;
@@ -227,6 +248,65 @@ describe("transaction request validation integration", () => {
         });
       }
       expect(createAttempts).toBe(0);
+
+      const updateReferenceCases = [
+        {
+          issue: {
+            code: "account-closed",
+            message: "Choose an open account for this transaction",
+          },
+          patch: { account: "closed-account" },
+        },
+        {
+          issue: {
+            code: "payee-not-found",
+            message: "Payee does not exist in this budget",
+          },
+          patch: { payee: "removed-payee" },
+        },
+        {
+          issue: {
+            code: "category-not-found",
+            message: "Category does not exist in this budget",
+          },
+          patch: { category: "removed-category" },
+        },
+        {
+          issue: {
+            code: "category-hidden",
+            message: "Choose a visible category for this transaction",
+          },
+          patch: { category: "hidden-category" },
+        },
+      ] as const;
+      for (const [index, testCase] of updateReferenceCases.entries()) {
+        updateReferenceIssue = testCase.issue;
+        const operationId = randomUUID();
+        const updateRequest = {
+          method: "POST" as const,
+          url: "/api/v1/budgets/synthetic-budget/transactions/synthetic-transaction/operations",
+          headers: {
+            authorization: `Bearer ${signedInDevice.accessToken}`,
+            "idempotency-key": `invalid-update-reference-${index}`,
+          },
+          payload: {
+            operationId,
+            action: "update",
+            baseRevision: createTransactionRevision(baseSnapshot),
+            baseSnapshot,
+            patch: testCase.patch,
+          },
+        };
+        const rejectedUpdate = await app.inject(updateRequest);
+        expect(rejectedUpdate.statusCode).toBe(400);
+        expect(rejectedUpdate.json()).toMatchObject({
+          error: testCase.issue,
+        });
+        await expect(database!.journal.get(operationId)).resolves.toMatchObject(
+          { status: "rejected", errorCode: testCase.issue.code },
+        );
+      }
+      expect(updateAttempts).toBe(0);
       expect(report).not.toHaveBeenCalled();
     } finally {
       report.mockRestore();
