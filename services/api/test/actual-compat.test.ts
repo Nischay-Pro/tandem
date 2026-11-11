@@ -210,6 +210,7 @@ describe.skipIf(!compatibilityTestEnabled)(
         dataDir: firstDataDir,
         password: serverPassword,
       });
+      let closeRuntimeApp: (() => Promise<void>) | undefined;
 
       const budgetName = `ABC synthetic compatibility budget ${randomUUID()}`;
       const accountName = "ABC synthetic checking";
@@ -1465,14 +1466,6 @@ describe.skipIf(!compatibilityTestEnabled)(
         if (!compatibilityDatabaseUrl) {
           throw new Error("Isolated database URL was not initialized");
         }
-        const runtimeDevice = await database.deviceAuth.createDevice({
-          principalId: "actual-production-runtime-owner",
-          budgetIds: [budget.groupId],
-          deviceName: "Synthetic runtime client",
-        });
-        const runtimeAuthorizationHeaders = {
-          authorization: `Bearer ${runtimeDevice.accessToken}`,
-        };
         const runtimeDataDir = path.join(firstDataDir, "api-runtime");
         await mkdir(runtimeDataDir, { recursive: true });
         const signalHandlers = new Map<ShutdownSignal, () => Promise<void>>();
@@ -1481,7 +1474,6 @@ describe.skipIf(!compatibilityTestEnabled)(
             DATABASE_URL: compatibilityDatabaseUrl,
             AUTH_TOKEN_ENCRYPTION_KEY: authTokenEncryptionKey,
             ACTUAL_SERVER_URL: serverURL,
-            ACTUAL_SESSION_TOKEN: sessionToken,
             ACTUAL_API_DATA_DIR: runtimeDataDir,
             HOST: "127.0.0.1",
             PORT: String(await findAvailablePort()),
@@ -1489,6 +1481,28 @@ describe.skipIf(!compatibilityTestEnabled)(
           createPostgresDatabase,
           (signal, handler) => signalHandlers.set(signal, handler),
         );
+        let productionAppClosed = false;
+        const closeProductionApp = async () => {
+          if (productionAppClosed) return;
+          await signalHandlers.get("SIGTERM")?.();
+          productionAppClosed = true;
+        };
+        closeRuntimeApp = closeProductionApp;
+        const runtimeSignInResponse = await productionApp.inject({
+          method: "POST",
+          url: "/api/v1/auth/login",
+          payload: {
+            password: serverPassword,
+            deviceName: "Synthetic runtime client",
+          },
+        });
+        expect(runtimeSignInResponse.statusCode).toBe(201);
+        const runtimeSignIn = runtimeSignInResponse.json() as {
+          accessToken: string;
+        };
+        const runtimeAuthorizationHeaders = {
+          authorization: `Bearer ${runtimeSignIn.accessToken}`,
+        };
         const runtimeCatalogResponse = await productionApp.inject({
           method: "GET",
           url: "/api/v1/budgets",
@@ -1591,7 +1605,7 @@ describe.skipIf(!compatibilityTestEnabled)(
         });
         expect(nextChangePageResponse.statusCode).toBe(200);
         expect(nextChangePageResponse.json().resetRequired).toBe(false);
-        await signalHandlers.get("SIGTERM")?.();
+        await closeProductionApp();
 
         const secondDataDir = path.join(firstDataDir, "device-two");
         await mkdir(secondDataDir, { recursive: true });
@@ -1662,6 +1676,7 @@ describe.skipIf(!compatibilityTestEnabled)(
           transactionId: splitParent.id,
         };
       } finally {
+        await closeRuntimeApp?.();
         await firstDevice.close();
       }
     }, 60_000);
@@ -1762,33 +1777,8 @@ describe.skipIf(!compatibilityTestEnabled)(
         await owner.close();
       }
 
-      const principalId = `uncertain-restart-${randomUUID()}`;
-      const device = await database.deviceAuth.createDevice({
-        principalId,
-        budgetIds: [budgetId],
-        deviceName: "Synthetic restart test",
-      });
       const operationId = randomUUID();
       const idempotencyKey = randomUUID();
-      await database.journal.enqueue({
-        operationId,
-        principalId,
-        budgetId,
-        idempotencyKey,
-        entityType: "transaction",
-        action: "update",
-        entityId: transactionId,
-        baseRevision: createTransactionRevision(baseSnapshot),
-        baseSnapshot: baseSnapshot as unknown as JsonValue,
-        patch: { amount: -1200 },
-      });
-      expect((await database.journal.claim(operationId)).claimed).toBe(true);
-      await database.journal.markUncertain(operationId, "claim-lease-expired");
-
-      const sessionToken = await loginCompatibilitySessionToken(
-        serverURL,
-        serverPassword,
-      );
       const startApi = async () => {
         const signalHandlers = new Map<ShutdownSignal, () => Promise<void>>();
         const app = await runApi(
@@ -1796,7 +1786,6 @@ describe.skipIf(!compatibilityTestEnabled)(
             DATABASE_URL: compatibilityDatabaseUrl,
             AUTH_TOKEN_ENCRYPTION_KEY: authTokenEncryptionKey,
             ACTUAL_SERVER_URL: serverURL,
-            ACTUAL_SESSION_TOKEN: sessionToken,
             ACTUAL_API_DATA_DIR: runtimeDataDir,
             HOST: "127.0.0.1",
             PORT: String(await findAvailablePort()),
@@ -1815,13 +1804,43 @@ describe.skipIf(!compatibilityTestEnabled)(
       let runtime: Awaited<ReturnType<typeof startApi>> | undefined;
       try {
         runtime = await startApi();
+        const signInResponse = await runtime.app.inject({
+          method: "POST",
+          url: "/api/v1/auth/login",
+          payload: {
+            password: serverPassword,
+            deviceName: "Synthetic restart test",
+          },
+        });
+        expect(signInResponse.statusCode).toBe(201);
+        const signedIn = signInResponse.json() as {
+          principalId: string;
+          accessToken: string;
+        };
+        await database.journal.enqueue({
+          operationId,
+          principalId: signedIn.principalId,
+          budgetId,
+          idempotencyKey,
+          entityType: "transaction",
+          action: "update",
+          entityId: transactionId,
+          baseRevision: createTransactionRevision(baseSnapshot),
+          baseSnapshot: baseSnapshot as unknown as JsonValue,
+          patch: { amount: -1200 },
+        });
+        expect((await database.journal.claim(operationId)).claimed).toBe(true);
+        await database.journal.markUncertain(
+          operationId,
+          "claim-lease-expired",
+        );
         await runtime.stop();
         runtime = await startApi();
 
         const response = await runtime.app.inject({
           method: "GET",
           url: `/api/v1/operations/${operationId}`,
-          headers: { authorization: `Bearer ${device.accessToken}` },
+          headers: { authorization: `Bearer ${signedIn.accessToken}` },
         });
         expect(response.statusCode).toBe(200);
         expect(response.json().operation.status).toBe("committed");
@@ -1832,7 +1851,7 @@ describe.skipIf(!compatibilityTestEnabled)(
         const transactionResponse = await runtime.app.inject({
           method: "GET",
           url: `/api/v1/budgets/${budgetId}/transactions/${transactionId}`,
-          headers: { authorization: `Bearer ${device.accessToken}` },
+          headers: { authorization: `Bearer ${signedIn.accessToken}` },
         });
         expect(transactionResponse.statusCode).toBe(200);
         expect(transactionResponse.json().transaction).toMatchObject({
@@ -2165,19 +2184,9 @@ describe.skipIf(!compatibilityTestEnabled)(
         throw new Error("Encrypted Actual budget ID is unavailable");
       }
 
-      const device = await database.deviceAuth.createDevice({
-        principalId: `encrypted-owner-${randomUUID()}`,
-        budgetIds: [encryptedBudgetId],
-        deviceName: "Synthetic encrypted compatibility client",
-      });
-
       const apiDataDir = path.join(
         firstDataDir,
         `encrypted-api-${randomUUID()}`,
-      );
-      const sessionToken = await loginCompatibilitySessionToken(
-        serverURL,
-        serverPassword,
       );
       await mkdir(apiDataDir, { recursive: true });
       const encryptedApp = await runApi(
@@ -2185,7 +2194,6 @@ describe.skipIf(!compatibilityTestEnabled)(
           DATABASE_URL: compatibilityDatabaseUrl,
           AUTH_TOKEN_ENCRYPTION_KEY: authTokenEncryptionKey,
           ACTUAL_SERVER_URL: serverURL,
-          ACTUAL_SESSION_TOKEN: sessionToken,
           ACTUAL_API_DATA_DIR: apiDataDir,
           HOST: "127.0.0.1",
           PORT: String(await findAvailablePort()),
@@ -2195,8 +2203,18 @@ describe.skipIf(!compatibilityTestEnabled)(
       );
 
       try {
+        const signInResponse = await encryptedApp.inject({
+          method: "POST",
+          url: "/api/v1/auth/login",
+          payload: {
+            password: serverPassword,
+            deviceName: "Synthetic encrypted compatibility client",
+          },
+        });
+        expect(signInResponse.statusCode).toBe(201);
+        const signedIn = signInResponse.json() as { accessToken: string };
         const authorizationHeaders = {
-          authorization: `Bearer ${device.accessToken}`,
+          authorization: `Bearer ${signedIn.accessToken}`,
         };
         const catalog = await encryptedApp.inject({
           method: "GET",
@@ -2204,13 +2222,13 @@ describe.skipIf(!compatibilityTestEnabled)(
           headers: authorizationHeaders,
         });
         expect(catalog.statusCode).toBe(200);
-        expect(catalog.json().budgets).toMatchObject([
-          {
+        expect(catalog.json().budgets).toContainEqual(
+          expect.objectContaining({
             budgetId: encryptedBudgetId,
             name: fixture.budgetName,
             isEncrypted: true,
-          },
-        ]);
+          }),
+        );
 
         const snapshotPath = `/api/v1/budgets/${encryptedBudgetId}/snapshot`;
         const missingPassword = await encryptedApp.inject({
