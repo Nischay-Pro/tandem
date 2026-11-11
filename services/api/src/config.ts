@@ -182,7 +182,7 @@ function parseActualConnection(
     );
   }
 
-  const publicURL = environment.ACTUAL_PUBLIC_URL?.trim();
+  const publicURL = environment.ACTUAL_PUBLIC_URL?.trim() || undefined;
   if (publicURL) {
     let parsedPublicURL: URL;
     try {

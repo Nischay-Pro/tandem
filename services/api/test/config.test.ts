@@ -86,6 +86,19 @@ describe("parseApiConfig", () => {
     ).toBe("/data/actual-api");
   });
 
+  it("treats a blank Actual public URL as unset when password login is configured", () => {
+    expect(
+      parseApiConfig({
+        DATABASE_URL: databaseUrl,
+        ACTUAL_SERVER_URL: "http://actual:5006",
+        ACTUAL_PUBLIC_URL: "  ",
+      }).actual,
+    ).toEqual({
+      serverURL: "http://actual:5006",
+      dataDir: "/data/actual-api",
+    });
+  });
+
   it("accepts an Actual session token instead of a server password", () => {
     expect(
       parseApiConfig({
