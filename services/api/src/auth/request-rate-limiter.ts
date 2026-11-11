@@ -61,7 +61,7 @@ export class RequestRateLimiter {
 }
 
 function normalizeClientKey(clientKey: string): string {
-  const address = clientKey.split("%", 1)[0] ?? clientKey;
+  const address = clientKey.split("%", 1)[0]!;
   const version = isIP(address);
   if (version === 4) return `ipv4:${address}`;
   if (version !== 6) return clientKey;
@@ -69,8 +69,7 @@ function normalizeClientKey(clientKey: string): string {
   const words = expandIPv6Address(address);
   if (!words) return clientKey;
   if (isIPv4MappedAddress(words)) {
-    const [first, second] = words.slice(6);
-    if (first === undefined || second === undefined) return clientKey;
+    const [first, second] = words.slice(6) as [number, number];
     return `ipv4:${first >> 8}.${first & 0xff}.${second >> 8}.${second & 0xff}`;
   }
 
@@ -94,8 +93,8 @@ function expandIPv6Address(address: string): number[] | undefined {
     ) {
       return undefined;
     }
-    const firstWord = ((octets[0] ?? 0) << 8) | (octets[1] ?? 0);
-    const secondWord = ((octets[2] ?? 0) << 8) | (octets[3] ?? 0);
+    const firstWord = (octets[0]! << 8) | octets[1]!;
+    const secondWord = (octets[2]! << 8) | octets[3]!;
     expandedInput = `${address.slice(0, finalColon)}:${firstWord.toString(16)}:${secondWord.toString(16)}`;
   }
 

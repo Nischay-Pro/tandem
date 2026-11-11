@@ -143,7 +143,7 @@ describe("API bootstrap integration", () => {
     await handlers.get("SIGTERM")?.();
   });
 
-  it("wires the Actual budget catalog into authenticated runtime reads", async () => {
+  it("wires the budget catalog and preserves generic vault read failures", async () => {
     const port = await findAvailablePort();
     const environment = {
       DATABASE_URL: isolatedDatabaseUrl,
@@ -153,12 +153,33 @@ describe("API bootstrap integration", () => {
       ACTUAL_SERVER_URL: "http://actual.example",
       ACTUAL_API_DATA_DIR: `/tmp/tandem-main-${randomUUID()}`,
     };
+    let vaultReadError: Error | undefined;
+    const createDatabase = (
+      connectionString: string,
+      encryptionKey: string,
+      previousEncryptionKey?: string,
+    ): Database => {
+      const database = createPostgresDatabase(
+        connectionString,
+        encryptionKey,
+        previousEncryptionKey,
+      );
+      const vault = database.actualSessionVault;
+      if (!vault) throw new Error("Actual session vault is unavailable");
+      const originalRead = vault.read.bind(vault);
+      vi.spyOn(vault, "read").mockImplementation(async (principalId) => {
+        if (vaultReadError) throw vaultReadError;
+        return originalRead(principalId);
+      });
+      return database;
+    };
     actualApi.getBudgets.mockClear();
+    let actualUserId = "synthetic-actual-user";
     const actualFetch = vi.fn(async (input: RequestInfo | URL) => {
       const endpoint = new URL(input.toString());
       const body =
         endpoint.pathname === "/account/validate"
-          ? { status: "ok", data: { userId: "synthetic-actual-user" } }
+          ? { status: "ok", data: { userId: actualUserId } }
           : { status: "ok", data: { token: "synthetic-actual-session-token" } };
       return new Response(JSON.stringify(body), {
         status: 200,
@@ -166,7 +187,7 @@ describe("API bootstrap integration", () => {
       });
     });
     vi.stubGlobal("fetch", actualFetch);
-    const app = await runApi(environment, createPostgresDatabase, () => {});
+    const app = await runApi(environment, createDatabase, () => {});
 
     try {
       const signInResponse = await app.inject({
@@ -197,6 +218,34 @@ describe("API bootstrap integration", () => {
         ],
       });
       expect(actualApi.getBudgets).toHaveBeenCalledTimes(2);
+
+      actualUserId = "synthetic-second-actual-user";
+      const secondSignInResponse = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/login",
+        payload: {
+          password: "synthetic-actual-server-password",
+          deviceName: "Synthetic second phone",
+        },
+      });
+      expect(secondSignInResponse.statusCode).toBe(201);
+      expect(actualApi.getBudgets).toHaveBeenCalledTimes(3);
+
+      vaultReadError = new Error("synthetic database query failure");
+      const failedVaultRead = await app.inject({
+        method: "GET",
+        url: "/api/v1/budgets",
+        headers: { authorization: `Bearer ${signedIn.accessToken}` },
+      });
+      expect(failedVaultRead.statusCode).toBe(502);
+      expect(failedVaultRead.json().error).toEqual({
+        code: "budget_sync_failed",
+        message: "The budget projection could not be refreshed",
+      });
+      expect(JSON.stringify(failedVaultRead.json())).not.toContain(
+        "synthetic database",
+      );
+      expect(actualApi.getBudgets).toHaveBeenCalledTimes(3);
     } finally {
       await app.close();
       vi.unstubAllGlobals();

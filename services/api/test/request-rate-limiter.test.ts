@@ -1,5 +1,23 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { RequestRateLimiter } from "../src/auth/request-rate-limiter.js";
+
+vi.mock("node:net", async (importOriginal) => {
+  const original = await importOriginal<typeof import("node:net")>();
+  const malformedIpv6Addresses = new Set([
+    "2001:db8::999.1.1.1",
+    "2001:db8::gggg",
+    "2001:db8:1:2:3:4:5",
+    "1:2:3:4:5:6:7:8::",
+    "2:2:3:4:5:6:7:8::",
+  ]);
+  return {
+    ...original,
+    isIP: (address: string) => {
+      if (malformedIpv6Addresses.has(address)) return 6;
+      return original.isIP(address);
+    },
+  };
+});
 
 describe("RequestRateLimiter", () => {
   it("allows requests up to the per-client limit and returns a retry delay", () => {
@@ -80,4 +98,27 @@ describe("RequestRateLimiter", () => {
     expect(limiter.reserveRequest("192.0.2.1").allowed).toBe(true);
     expect(limiter.reserveRequest("192.0.2.2").allowed).toBe(true);
   });
+
+  it("falls back to the original key for malformed IPv6 forms", () => {
+    const limiter = new RequestRateLimiter(1, 1_000, 10, () => 10);
+
+    expect(limiter.reserveRequest("2001:db8::999.1.1.1").allowed).toBe(true);
+    expect(limiter.reserveRequest("2001:db8::999.1.1.1").allowed).toBe(false);
+    expect(limiter.reserveRequest("2001:db8::gggg").allowed).toBe(true);
+    expect(limiter.reserveRequest("2001:db8::gggg").allowed).toBe(false);
+  });
+
+  it.each([
+    ["2001:db8:1:2:3:4:5", "2001:db8:1:2:3:4:6"],
+    ["1:2:3:4:5:6:7:8::", "2:2:3:4:5:6:7:8::"],
+  ])(
+    "keeps invalid compressed or uncompressed IPv6 keys distinct",
+    (first, second) => {
+      const limiter = new RequestRateLimiter(1, 1_000, 10, () => 10);
+
+      expect(limiter.reserveRequest(first).allowed).toBe(true);
+      expect(limiter.reserveRequest(second).allowed).toBe(true);
+      expect(limiter.reserveRequest(first).allowed).toBe(false);
+    },
+  );
 });

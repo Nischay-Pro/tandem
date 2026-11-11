@@ -4,6 +4,7 @@ import {
   MAX_TRANSACTION_AMOUNT,
   MIN_TRANSACTION_DATE,
   createTransactionRevision,
+  matchesTransactionRevision,
   parseTransactionCreateInput,
   parseTransactionPatch,
   parseTransactionSnapshot,
@@ -533,6 +534,47 @@ describe("transaction snapshots and merge planning", () => {
     expect(() => parseTransactionSnapshot(null)).toThrow(
       "baseSnapshot must be an object",
     );
+  });
+
+  it("defaults omitted legacy snapshot string and text fields to null", () => {
+    const legacySnapshot: Partial<TransactionSnapshot> = {
+      ...createSnapshot(),
+    };
+    delete legacySnapshot.payee;
+    delete legacySnapshot.category;
+    delete legacySnapshot.notes;
+    delete legacySnapshot.importedId;
+    delete legacySnapshot.importedPayee;
+    delete legacySnapshot.schedule;
+    delete legacySnapshot.transferId;
+
+    expect(
+      parseTransactionSnapshot(legacySnapshot as unknown as JsonValue),
+    ).toMatchObject({
+      payee: null,
+      category: null,
+      notes: null,
+      importedId: null,
+      importedPayee: null,
+      schedule: null,
+      transferId: null,
+    });
+  });
+
+  it("rejects a malformed split shape while matching a legacy snapshot revision", () => {
+    const snapshot = createSnapshot();
+    const malformedLegacySnapshot = {
+      ...snapshot,
+      subtransactions: {},
+    } as unknown as JsonValue;
+
+    expect(() =>
+      matchesTransactionRevision(
+        malformedLegacySnapshot,
+        snapshot,
+        "legacy-revision-that-does-not-match",
+      ),
+    ).toThrow("baseSnapshot.subtransactions must be an array");
   });
 
   it.each([

@@ -31,11 +31,14 @@ function cloneStoredSession(row: StoredSession): StoredSession {
 function createVaultPool() {
   const rows = new Map<string, StoredSession>();
   let transactionSnapshot: Map<string, StoredSession> | undefined;
+  let failRollback = false;
+  let failBegin = false;
 
   const query = async (sql: string, parameters: readonly unknown[] = []) => {
     const normalizedSql = sql.replace(/\s+/g, " ").trim().toUpperCase();
 
     if (normalizedSql === "BEGIN") {
+      if (failBegin) throw new Error("synthetic begin failure");
       transactionSnapshot = new Map(
         [...rows].map(([id, row]) => [id, cloneStoredSession(row)]),
       );
@@ -46,6 +49,7 @@ function createVaultPool() {
       return { rows: [], rowCount: null };
     }
     if (normalizedSql === "ROLLBACK") {
+      if (failRollback) throw new Error("synthetic rollback failure");
       if (transactionSnapshot !== undefined) {
         rows.clear();
         for (const [id, row] of transactionSnapshot) {
@@ -137,7 +141,17 @@ function createVaultPool() {
     query: vi.fn(query),
     connect: vi.fn(async () => client),
   } as unknown as Pool;
-  return { pool, rows, client };
+  return {
+    pool,
+    rows,
+    client,
+    failBegin: () => {
+      failBegin = true;
+    },
+    failRollback: () => {
+      failRollback = true;
+    },
+  };
 }
 
 describe("PostgresActualSessionVault", () => {
@@ -182,6 +196,9 @@ describe("PostgresActualSessionVault", () => {
     await new PostgresActualSessionVault(store.pool, currentKey).save(
       currentCredential,
     );
+    await expect(
+      new PostgresActualSessionVault(store.pool, previousKey).readLatest(),
+    ).resolves.toEqual(legacyCredential);
     const legacyCiphertextBefore = Buffer.from(
       store.rows.get(legacyCredential.principalId)!.token_ciphertext,
     );
@@ -249,6 +266,48 @@ describe("PostgresActualSessionVault", () => {
     expect(store.rows).toEqual(rowsBefore);
     expect(store.client.query).toHaveBeenCalledWith("ROLLBACK");
     expect(store.client.query).not.toHaveBeenCalledWith("COMMIT");
+  });
+
+  it("destroys the database client when rollback itself fails", async () => {
+    const store = createVaultPool();
+    await new PostgresActualSessionVault(store.pool, previousKey).save({
+      principalId: "actual-user:legacy",
+      sessionToken: "legacy-session-token",
+    });
+    await new PostgresActualSessionVault(store.pool, unrelatedKey).save({
+      principalId: "actual-user:unrecognized",
+      sessionToken: "unrecognized-session-token",
+    });
+    store.failRollback();
+
+    await expect(
+      new PostgresActualSessionVault(
+        store.pool,
+        currentKey,
+        previousKey,
+      ).reencryptStoredTokensWithCurrentKey(),
+    ).rejects.toThrow("Could not rotate stored Actual sessions");
+
+    expect(store.client.query).toHaveBeenCalledWith("ROLLBACK");
+    expect(store.client.release).toHaveBeenCalledWith(true);
+  });
+
+  it("does not roll back or destroy the client when beginning fails", async () => {
+    const store = createVaultPool();
+    store.failBegin();
+
+    await expect(
+      new PostgresActualSessionVault(
+        store.pool,
+        currentKey,
+        previousKey,
+      ).reencryptStoredTokensWithCurrentKey(),
+    ).rejects.toThrow("synthetic begin failure");
+
+    expect(store.client.query).toHaveBeenCalledWith("BEGIN");
+    expect(store.client.query).not.toHaveBeenCalledWith("ROLLBACK");
+    expect(store.client.release).toHaveBeenCalledOnce();
+    expect(store.client.release).toHaveBeenCalledWith(undefined);
   });
 
   it("does no database work at startup when no previous key is configured", async () => {

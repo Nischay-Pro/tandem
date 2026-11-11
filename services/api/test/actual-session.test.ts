@@ -926,6 +926,30 @@ describe("ActualSession", () => {
     await session.close();
   });
 
+  it("rejects a principal when its account data directory is missing", async () => {
+    const fake = createFakeClient();
+    const session = new ActualSession(
+      fake.api,
+      { serverURL: config.serverURL, dataDir: config.dataDir },
+      undefined,
+      undefined,
+      undefined,
+      {
+        sessionToken: async () => "actual-user-a-session-token",
+        dataDir: async () => "",
+      },
+    );
+
+    await expect(
+      runAsActualPrincipal("actual-user-a", () =>
+        session.execute(async () => "unreachable"),
+      ),
+    ).rejects.toThrow("Actual account data directory is missing");
+    expect(fake.calls).toEqual([]);
+    expect(session.readinessMessage).toBeUndefined();
+    await session.close();
+  });
+
   it("does not turn a rejected principal token into a process readiness failure", async () => {
     const fake = createFakeClient();
     fake.failInit(Object.assign(new Error("unauthorized"), { status: 401 }));

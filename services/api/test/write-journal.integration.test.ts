@@ -1845,121 +1845,226 @@ describe("durable write journal integration", () => {
     });
   });
 
-  it("serializes same-transaction edits from concurrent device principals", async () => {
-    const base: TransactionSnapshot = {
-      id: "transaction-concurrent-devices",
-      account: "checking-account",
-      amount: 1500,
-      date: "2026-11-01",
-      payee: null,
-      category: null,
-      notes: null,
-      cleared: null,
-      reconciled: null,
-      importedId: null,
-      importedPayee: null,
-      startingBalance: null,
-      schedule: null,
-      transferId: null,
-      isParent: false,
-      isChild: false,
-      parentId: null,
-      subtransactions: [],
-    };
-    const budgetId = `budget-${randomUUID()}`;
-    const makeRequest = (principalId: string, amount: number) => ({
-      operationId: randomUUID(),
-      principalId,
-      budgetId,
-      idempotencyKey: randomUUID(),
-      transactionId: base.id,
-      baseRevision: createTransactionRevision(base),
-      baseSnapshot: base as unknown as JsonValue,
-      action: "update" as const,
-      patch: { amount },
-    });
-    const firstRequest = makeRequest("device-one", 1700);
-    const secondRequest = makeRequest("device-two", 1900);
-    const firstReadEntered = deferred();
-    const releaseFirstRead = deferred();
-    let lockCalls = 0;
-    let readCount = 0;
-    let actual: Record<string, unknown> = {
-      id: base.id,
-      account: base.account,
-      amount: base.amount,
-      date: base.date,
-      payee: null,
-      category: null,
-      notes: null,
-      cleared: null,
-      reconciled: null,
-    };
-    let writeCount = 0;
-    const transactions: ActualTransactionStore = {
-      async read() {
-        readCount += 1;
-        if (readCount === 1) {
-          firstReadEntered.resolve();
-          await releaseFirstRead.promise;
-        }
-        return { ...actual };
+  it.each([
+    {
+      description: "same-field updates conflict",
+      firstAction: "update",
+      firstPatch: { amount: 1700 },
+      secondAction: "update",
+      secondPatch: { amount: 1900 },
+      expectedStatus: "conflict",
+      expectedActual: { amount: 1700, notes: null },
+      expectedUpdateCount: 1,
+      expectedDeleteCount: 0,
+      expectedConflict: {
+        conflictType: "same-field-edit",
+        conflictingFields: ["amount"],
       },
-      async validateCreateInput() {
-        throw new Error("This test does not validate creates");
+    },
+    {
+      description: "different-field edits merge",
+      firstAction: "update",
+      firstPatch: { amount: 1700 },
+      secondAction: "update",
+      secondPatch: { notes: "Updated from device two" },
+      expectedStatus: "committed",
+      expectedActual: { amount: 1700, notes: "Updated from device two" },
+      expectedUpdateCount: 2,
+      expectedDeleteCount: 0,
+      expectedConflict: null,
+    },
+    {
+      description: "a queued deletion conflicts with an earlier edit",
+      firstAction: "update",
+      firstPatch: { amount: 1700 },
+      secondAction: "delete",
+      secondPatch: {},
+      expectedStatus: "conflict",
+      expectedActual: { amount: 1700, notes: null },
+      expectedUpdateCount: 1,
+      expectedDeleteCount: 0,
+      expectedConflict: {
+        conflictType: "delete-versus-edit",
+        conflictingFields: ["amount"],
       },
-      async validateUpdateInput() {
-        return undefined;
+    },
+    {
+      description: "an edit conflicts with an earlier deletion",
+      firstAction: "delete",
+      firstPatch: {},
+      secondAction: "update",
+      secondPatch: { amount: 1700 },
+      expectedStatus: "conflict",
+      expectedActual: null,
+      expectedUpdateCount: 0,
+      expectedDeleteCount: 1,
+      expectedConflict: {
+        conflictType: "deleted-remotely",
+        conflictingFields: ["$entity"],
       },
-      async create() {
-        throw new Error("This test does not create transactions");
-      },
-      async update(_id, fields) {
-        writeCount += 1;
-        actual = { ...actual, ...fields };
-        return actual;
-      },
-      async delete() {
-        throw new Error("This test does not delete transactions");
-      },
-    };
-    const session: ActualBudgetSessionPort = {
-      async runBudget<T>(_syncId: string, operation: () => Promise<T>) {
-        return operation();
-      },
-    };
-    const locks: BudgetLockPort = {
-      async withBudgetLock<T>(lockedBudgetId: string, work: () => Promise<T>) {
-        lockCalls += 1;
-        return database.withBudgetLock(lockedBudgetId, work);
-      },
-    };
-    const reconciler = new TransactionReconciler(
-      locks,
-      database.journal,
-      session,
-      transactions,
-    );
+    },
+    {
+      description: "two deletions commit only once",
+      firstAction: "delete",
+      firstPatch: {},
+      secondAction: "delete",
+      secondPatch: {},
+      expectedStatus: "committed",
+      expectedActual: null,
+      expectedUpdateCount: 0,
+      expectedDeleteCount: 1,
+      expectedConflict: null,
+    },
+  ] as const)(
+    "serializes concurrent operations from different device principals: $description",
+    async ({
+      firstAction,
+      firstPatch,
+      secondAction,
+      secondPatch,
+      expectedStatus,
+      expectedActual,
+      expectedUpdateCount,
+      expectedDeleteCount,
+      expectedConflict,
+    }) => {
+      const base: TransactionSnapshot = {
+        id: "transaction-concurrent-devices",
+        account: "checking-account",
+        amount: 1500,
+        date: "2026-11-01",
+        payee: null,
+        category: null,
+        notes: null,
+        cleared: null,
+        reconciled: null,
+        importedId: null,
+        importedPayee: null,
+        startingBalance: null,
+        schedule: null,
+        transferId: null,
+        isParent: false,
+        isChild: false,
+        parentId: null,
+        subtransactions: [],
+      };
+      const budgetId = `budget-${randomUUID()}`;
+      const makeRequest = (
+        principalId: string,
+        action: "update" | "delete",
+        patch: JsonValue,
+      ) => ({
+        operationId: randomUUID(),
+        principalId,
+        budgetId,
+        idempotencyKey: randomUUID(),
+        transactionId: base.id,
+        baseRevision: createTransactionRevision(base),
+        baseSnapshot: base as unknown as JsonValue,
+        action,
+        patch,
+      });
+      const firstRequest = makeRequest("device-one", firstAction, firstPatch);
+      const secondRequest = makeRequest(
+        "device-two",
+        secondAction,
+        secondPatch,
+      );
+      const firstReadEntered = deferred();
+      const releaseFirstRead = deferred();
+      let lockCalls = 0;
+      let readCount = 0;
+      let actual: Record<string, unknown> | undefined = {
+        id: base.id,
+        account: base.account,
+        amount: base.amount,
+        date: base.date,
+        payee: null,
+        category: null,
+        notes: null,
+        cleared: null,
+        reconciled: null,
+      };
+      let updateCount = 0;
+      let deleteCount = 0;
+      const transactions: ActualTransactionStore = {
+        async read() {
+          readCount += 1;
+          if (readCount === 1) {
+            firstReadEntered.resolve();
+            await releaseFirstRead.promise;
+          }
+          return actual === undefined ? undefined : { ...actual };
+        },
+        async validateCreateInput() {
+          throw new Error("This test does not validate creates");
+        },
+        async validateUpdateInput() {
+          return undefined;
+        },
+        async create() {
+          throw new Error("This test does not create transactions");
+        },
+        async update(_id, fields) {
+          updateCount += 1;
+          if (actual === undefined) {
+            throw new Error("A missing transaction cannot be updated");
+          }
+          actual = { ...actual, ...fields };
+          return actual;
+        },
+        async delete() {
+          deleteCount += 1;
+          actual = undefined;
+        },
+      };
+      const session: ActualBudgetSessionPort = {
+        async runBudget<T>(_syncId: string, operation: () => Promise<T>) {
+          return operation();
+        },
+      };
+      const locks: BudgetLockPort = {
+        async withBudgetLock<T>(
+          lockedBudgetId: string,
+          work: () => Promise<T>,
+        ) {
+          lockCalls += 1;
+          return database.withBudgetLock(lockedBudgetId, work);
+        },
+      };
+      const reconciler = new TransactionReconciler(
+        locks,
+        database.journal,
+        session,
+        transactions,
+      );
 
-    const firstSubmit = reconciler.submit(firstRequest);
-    await firstReadEntered.promise;
-    const secondSubmit = reconciler.submit(secondRequest);
-    await vi.waitFor(() => expect(lockCalls).toBe(2));
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(readCount).toBe(1);
+      const firstSubmit = reconciler.submit(firstRequest);
+      await firstReadEntered.promise;
+      const secondSubmit = reconciler.submit(secondRequest);
+      await vi.waitFor(() => expect(lockCalls).toBe(2));
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(readCount).toBe(1);
 
-    releaseFirstRead.resolve();
-    const [first, second] = await Promise.all([firstSubmit, secondSubmit]);
+      releaseFirstRead.resolve();
+      const [first, second] = await Promise.all([firstSubmit, secondSubmit]);
 
-    expect(first.operation.status).toBe("committed");
-    expect(second.operation.status).toBe("conflict");
-    expect(second.conflict).toMatchObject({
-      conflictType: "same-field-edit",
-      conflictingFields: ["amount"],
-    });
-    expect(writeCount).toBe(1);
-    expect(actual.amount).toBe(1700);
-  });
+      expect(first.operation.status).toBe("committed");
+      expect(second.operation.status).toBe(expectedStatus);
+      if (expectedConflict) {
+        expect(second.conflict).toMatchObject(expectedConflict);
+      } else {
+        expect(second.conflict).toBeNull();
+      }
+      expect(updateCount).toBe(expectedUpdateCount);
+      expect(deleteCount).toBe(expectedDeleteCount);
+      if (expectedActual === null) {
+        expect(actual).toBeUndefined();
+      } else {
+        expect(actual).toMatchObject(expectedActual);
+      }
+    },
+  );
 
   it("serializes the same budget across PostgreSQL connections and releases locks after failure", async () => {
     const budgetId = `lock-budget-${randomUUID()}`;
