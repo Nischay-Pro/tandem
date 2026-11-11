@@ -424,13 +424,13 @@ class ActivitySearchTest {
     }
 
     @Test
-    fun signInTransportWarningCoversEveryHttpServerAndKeepsHttpUsable() {
-        val warning = "HTTP does not encrypt passwords or session tokens. Use it only on trusted local networks."
+    fun signInTransportWarningMatchesThePublicHostPolicy() {
+        val warning = "Data may not be secure over this public HTTP connection. Use HTTPS."
 
-        assertEquals(warning, signInHttpTransportWarning("http://192.168.1.40:5006"))
-        assertEquals(warning, signInHttpTransportWarning("http://10.0.0.12"))
-        assertEquals(warning, signInHttpTransportWarning("http://[fd12::1]:19753"))
-        assertEquals(warning, signInHttpTransportWarning("http://localhost:19753"))
+        assertEquals(null, signInHttpTransportWarning("http://192.168.1.40:5006"))
+        assertEquals(null, signInHttpTransportWarning("http://10.0.0.12"))
+        assertEquals(null, signInHttpTransportWarning("http://[fd12::1]:19753"))
+        assertEquals(null, signInHttpTransportWarning("http://localhost:19753"))
         assertEquals(warning, signInHttpTransportWarning("http://budget.example.com"))
         assertEquals(warning, signInHttpTransportWarning("http://tandem.home"))
         assertEquals(warning, signInHttpTransportWarning(" HTTP://1.1.1.1:5006 "))

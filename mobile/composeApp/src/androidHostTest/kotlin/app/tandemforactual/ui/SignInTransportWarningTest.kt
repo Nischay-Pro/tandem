@@ -15,7 +15,21 @@ class SignInTransportWarningTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun httpWarningIsVisibleForSharedPasswordAndOpenIdSignInScreen() {
+    fun publicHttpWarningIsVisibleForSharedPasswordAndOpenIdSignInScreen() {
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                SignInTransportWarning("http://budget.example.com")
+            }
+        }
+
+        composeTestRule
+            .onNodeWithText(
+                "Data may not be secure over this public HTTP connection. Use HTTPS.",
+            ).assertExists()
+    }
+
+    @Test
+    fun localHttpDoesNotShowThePublicAddressWarning() {
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
                 SignInTransportWarning("http://127.0.0.1:19753")
@@ -23,9 +37,8 @@ class SignInTransportWarningTest {
         }
 
         composeTestRule
-            .onNodeWithText(
-                "HTTP does not encrypt passwords or session tokens. Use it only on trusted local networks.",
-            ).assertExists()
+            .onNodeWithText("Data may not be secure over this public HTTP connection. Use HTTPS.")
+            .assertDoesNotExist()
     }
 
     @Test
@@ -37,8 +50,7 @@ class SignInTransportWarningTest {
         }
 
         composeTestRule
-            .onNodeWithText(
-                "HTTP does not encrypt passwords or session tokens. Use it only on trusted local networks.",
-            ).assertDoesNotExist()
+            .onNodeWithText("Data may not be secure over this public HTTP connection. Use HTTPS.")
+            .assertDoesNotExist()
     }
 }

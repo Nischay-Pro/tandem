@@ -23,23 +23,27 @@ class OnboardingWordingTest {
 
     @Test
     fun welcomeExplainsBenefitsAndShowsTheSetupSteps() {
+        var openedRoute: AppRoute? = null
+        val navigation = noOpNavigation().copy(open = { openedRoute = it })
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                WelcomeScreen(noOpNavigation())
+                WelcomeScreen(navigation)
             }
         }
 
         composeTestRule.onNodeWithText("Use your budget with confidence.").assertExists()
         composeTestRule.onNodeWithText("Use your budget offline").assertExists()
         composeTestRule.onNodeWithText("Edits wait on this device until they sync").assertExists()
-        composeTestRule.onNodeWithText("Changes that need attention stay visible").assertExists()
-        listOf("Server", "Sign in", "Budget", "First sync").forEach { step ->
+        composeTestRule.onNodeWithText("Nothing is lost silently").assertExists()
+        listOf("Connect", "Budget", "Sync").forEach { step ->
             composeTestRule.onNodeWithText(step).assertExists()
         }
-        composeTestRule.onNodeWithContentDescription("Step 1 of 4: Server").assertExists()
+        composeTestRule.onNodeWithContentDescription("Step 1 of 3: Connect").assertExists()
         composeTestRule.onNodeWithText("Before you start").assertDoesNotExist()
         composeTestRule.onNodeWithText("How to set up a server").assertDoesNotExist()
         composeTestRule.onAllNodesWithText("Get started").assertCountEquals(1)
+        composeTestRule.onNodeWithText("Get started").performClick()
+        assertEquals(AppRoute.SIGN_IN, openedRoute)
     }
 
     @Test
@@ -55,56 +59,86 @@ class OnboardingWordingTest {
     }
 
     @Test
-    fun notificationPromptIsOfferedOnceAndOnlyAfterTap() {
+    fun notificationPromptAppearsInlineOnlyAfterSuccessfulFirstSync() {
         val state = AppState()
         var permissionRequests = 0
-        var selectedTab: AppRoute? = null
-        val navigation = noOpNavigation().copy(selectTab = { selectedTab = it })
+
+        assertFalse(shouldShowFirstSyncNotificationPrompt(syncComplete = false, alreadyCompleted = false, permissionEnabled = false))
+        assertTrue(shouldShowFirstSyncNotificationPrompt(syncComplete = true, alreadyCompleted = false, permissionEnabled = false))
 
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                NotificationOnboardingScreen(state, navigation) { permissionRequests += 1 }
+                FirstSyncNotificationPrompt(
+                    onEnable = { finishNotificationOnboarding(state) { permissionRequests += 1 } },
+                    onNotNow = { finishNotificationOnboarding(state, onRequestPermission = null) },
+                )
             }
         }
 
-        composeTestRule
-            .onNodeWithText("Tandem can alert you when an edit needs review, is rejected, or has an unknown status.")
-            .assertExists()
-        composeTestRule.onNodeWithText("You can change this later in Settings.").assertExists()
-        composeTestRule.onNodeWithText("Allow notifications").performClick()
+        assertEquals(0, permissionRequests)
+        composeTestRule.onNodeWithText("Notifications").assertExists()
+        composeTestRule.onNodeWithText("Get alerts when a change needs your attention.").assertExists()
+        composeTestRule.onNodeWithText("Turn on").performClick()
 
         assertEquals(1, permissionRequests)
         assertTrue(state.hasCompletedNotificationOnboarding)
-        assertEquals(AppRoute.BUDGET, selectedTab)
     }
 
     @Test
     fun notNowContinuesWithoutRequestingPermissionAndPersistsChoice() {
         val state = AppState()
         var permissionRequests = 0
-        var selectedTab: AppRoute? = null
-        val navigation = noOpNavigation().copy(selectTab = { selectedTab = it })
 
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                NotificationOnboardingScreen(state, navigation) { permissionRequests += 1 }
+                FirstSyncNotificationPrompt(
+                    onEnable = { finishNotificationOnboarding(state) { permissionRequests += 1 } },
+                    onNotNow = { finishNotificationOnboarding(state, onRequestPermission = null) },
+                )
             }
         }
         composeTestRule.onNodeWithText("Not now").performClick()
 
         assertEquals(0, permissionRequests)
         assertTrue(state.hasCompletedNotificationOnboarding)
-        assertEquals(AppRoute.BUDGET, selectedTab)
         val restoredState = AppState().apply { restorePersistentSettings(state.persistentSettings()) }
         assertTrue(restoredState.hasCompletedNotificationOnboarding)
     }
 
     @Test
-    fun alreadyAllowedOrCompletedNotificationStepIsSkipped() {
-        assertFalse(shouldShowNotificationOnboarding(alreadyCompleted = false, permissionEnabled = true))
-        assertFalse(shouldShowNotificationOnboarding(alreadyCompleted = true, permissionEnabled = false))
-        assertTrue(shouldShowNotificationOnboarding(alreadyCompleted = false, permissionEnabled = false))
-        assertTrue(shouldShowNotificationOnboarding(alreadyCompleted = false, permissionEnabled = null))
+    fun notificationPermissionOrPreviousChoiceSkipsOnboarding() {
+        assertFalse(shouldShowFirstSyncNotificationPrompt(syncComplete = true, alreadyCompleted = false, permissionEnabled = true))
+        assertFalse(shouldShowFirstSyncNotificationPrompt(syncComplete = true, alreadyCompleted = true, permissionEnabled = false))
+        assertTrue(shouldShowFirstSyncNotificationPrompt(syncComplete = true, alreadyCompleted = false, permissionEnabled = null))
+        assertFalse(firstSyncCanFinish(syncComplete = true, alreadyCompleted = false, permissionEnabled = false))
+        assertTrue(firstSyncCanFinish(syncComplete = true, alreadyCompleted = true, permissionEnabled = false))
+        assertTrue(firstSyncCanFinish(syncComplete = true, alreadyCompleted = false, permissionEnabled = true))
+        assertFalse(firstSyncCanFinish(syncComplete = false, alreadyCompleted = true, permissionEnabled = true))
+    }
+
+    @Test
+    fun encryptedBudgetPasswordStaysOnTheChooserStep() {
+        assertTrue(budgetPasswordRequired(isEncrypted = true, hasCachedSnapshot = false))
+        assertFalse(budgetPasswordRequired(isEncrypted = true, hasCachedSnapshot = true))
+        assertFalse(budgetPasswordRequired(isEncrypted = false, hasCachedSnapshot = false))
+        assertFalse(
+            budgetOpenButtonEnabled(
+                selectedBudgetAvailable = true,
+                loadingBudgets = false,
+                hasCachedSnapshot = false,
+                passwordRequired = true,
+                budgetPassword = "",
+            ),
+        )
+        assertTrue(
+            budgetOpenButtonEnabled(
+                selectedBudgetAvailable = true,
+                loadingBudgets = false,
+                hasCachedSnapshot = false,
+                passwordRequired = true,
+                budgetPassword = "budget password",
+            ),
+        )
     }
 
     private fun noOpNavigation() =

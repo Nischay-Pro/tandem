@@ -890,8 +890,7 @@ fun TandemApp(
                 val isCached = mobileSession.hasCachedBudgetSnapshot(selected.budgetId)
                 when {
                     isCached -> navigation.reset(AppRoute.BUDGET)
-                    selected.isEncrypted && state.encryptedPassword.isBlank() -> navigation.reset(AppRoute.UNLOCK_BUDGET)
-                    else -> navigation.reset(AppRoute.FIRST_SYNC)
+                    !selected.isEncrypted || state.encryptedPassword.isNotBlank() -> navigation.reset(AppRoute.FIRST_SYNC)
                 }
             }
         }
@@ -1517,9 +1516,7 @@ internal fun AppRoute.showsBottomNavigation(): Boolean =
         AppRoute.SERVER_ADDRESS,
         AppRoute.SIGN_IN,
         AppRoute.BUDGET_CHOOSER,
-        AppRoute.UNLOCK_BUDGET,
         AppRoute.FIRST_SYNC,
-        AppRoute.NOTIFICATION_ONBOARDING,
         AppRoute.NEW_TRANSACTION,
         AppRoute.EDIT_TRANSACTION,
         AppRoute.CHOOSE_PAYEE,

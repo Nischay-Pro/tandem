@@ -98,13 +98,13 @@ internal fun WelcomeScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                     WelcomeBenefit("Use your budget offline")
                     WelcomeBenefit("Edits wait on this device until they sync")
-                    WelcomeBenefit("Changes that need attention stay visible")
+                    WelcomeBenefit("Nothing is lost silently")
                 }
             }
             signOutNotice?.let { InfoBubble(it) }
         },
         actions = {
-            PrimaryButton("Get started", modifier = Modifier.fillMaxWidth()) { navigation.open(AppRoute.SERVER_ADDRESS) }
+            PrimaryButton("Get started", modifier = Modifier.fillMaxWidth()) { navigation.open(AppRoute.SIGN_IN) }
         },
     )
 }
@@ -214,8 +214,8 @@ internal fun serverAddressMayBeInsecure(value: String): Boolean {
 }
 
 internal fun signInHttpTransportWarning(serverUrl: String): String? =
-    if (serverUrl.trim().startsWith("http://", ignoreCase = true)) {
-        "HTTP does not encrypt passwords or session tokens. Use it only on trusted local networks."
+    if (serverAddressMayBeInsecure(serverUrl)) {
+        "Data may not be secure over this public HTTP connection. Use HTTPS."
     } else {
         null
     }
@@ -236,7 +236,11 @@ internal fun SignInScreen(
 ) {
     LaunchedEffect(state.serverUrl) {
         state.actualPassword = ""
-        mobileSession.loadActualLoginMethods(state.serverUrl)
+        mobileSession.clearActualLoginMethodState()
+        if (serverAddressIsValid(state.serverUrl)) {
+            delay(300)
+            mobileSession.loadActualLoginMethods(state.serverUrl)
+        }
     }
     val loginMethods = mobileSession.actualLoginMethods
     val passwordActive =
@@ -246,9 +250,21 @@ internal fun SignInScreen(
     OnboardingLayout(
         content = {
             Heading("Sign in to Actual")
-            SignInTransportWarning(state.serverUrl)
+            TextFieldCard(
+                "Server URL",
+                state.serverUrl,
+                { state.serverUrl = it },
+                TextFieldOptions(placeholder = "https://"),
+            )
+            if (serverAddressIsValid(state.serverUrl)) SignInTransportWarning(state.serverUrl)
             when {
+                !serverAddressIsValid(state.serverUrl) -> {
+                    InfoBubble("Enter your server address to see sign-in options.")
+                }
                 mobileSession.isLoadingLoginMethods -> {
+                    TandemLoadingIndicator(Modifier.size(24.dp), color = tandemPalette.accent, strokeWidth = 2.dp)
+                }
+                mobileSession.actualLoginMethods == null && mobileSession.signInError == null -> {
                     TandemLoadingIndicator(Modifier.size(24.dp), color = tandemPalette.accent, strokeWidth = 2.dp)
                 }
                 mobileSession.actualLoginMethods?.bootstrapped == false -> {
@@ -283,7 +299,7 @@ internal fun SignInScreen(
             }
         },
         actions = {
-            if (passwordActive) {
+            if (serverAddressIsValid(state.serverUrl) && passwordActive) {
                 PrimaryButton(
                     if (mobileSession.isSigningIn) "Signing in" else "Sign in",
                     modifier = Modifier.fillMaxWidth(),
@@ -291,7 +307,7 @@ internal fun SignInScreen(
                     onClick = onSignIn,
                 )
             }
-            if (openIdActive) {
+            if (serverAddressIsValid(state.serverUrl) && openIdActive) {
                 SecondaryButton(
                     if (mobileSession.isSigningIn) "Opening sign-in" else "Continue with OpenID",
                     modifier = Modifier.fillMaxWidth(),
@@ -325,6 +341,7 @@ internal fun BudgetChooserScreen(
     val hasCachedOnlyBudgets = cachedCatalog.any { cached -> mobileSession.budgets.none { it.budgetId == cached.budgetId } }
     val cachedBudgetSelected = cachedCatalog.any { it.budgetId == state.selectedBudgetId }
     val selectedBudgetIsAvailable = selectableBudgets.any { it.budgetId == state.selectedBudgetId }
+    val needsEncryptionPassword = budgetPasswordRequired(state.selectedBudgetEncrypted, cachedBudgetSelected)
     PageColumn {
         Heading(
             if (usingCachedCatalog || (mobileSession.budgets.isEmpty() && cachedCatalog.isNotEmpty())) {
@@ -379,38 +396,33 @@ internal fun BudgetChooserScreen(
                         BodyText("Connect this device to your Tandem server to choose a budget.")
                     }
                 }
-                SecondaryButton("Sign in") { navigation.open(AppRoute.SERVER_ADDRESS) }
+                SecondaryButton("Sign in") { navigation.open(AppRoute.SIGN_IN) }
             }
         }
         mobileSession.budgetError?.takeIf { selectableBudgets.isNotEmpty() }?.let { error ->
             InlineMessage(error, InlineMessageKind.ERROR)
         }
+        if (needsEncryptionPassword) {
+            TextFieldCard(
+                "Budget password",
+                state.encryptedPassword,
+                { state.encryptedPassword = it },
+                TextFieldOptions(placeholder = "Enter password", isSecret = true),
+            )
+            InfoBubble("Used to unlock this budget. Cleared after the first sync.")
+        }
         PrimaryButton(
-            if (state.selectedBudgetEncrypted && state.encryptedPassword.isBlank() && !cachedBudgetSelected) {
-                "Unlock and open"
-            } else {
-                "Open budget"
-            },
-            enabled = selectedBudgetIsAvailable && (!mobileSession.isLoadingBudgets || cachedBudgetSelected),
+            "Open budget",
+            enabled =
+                budgetOpenButtonEnabled(
+                    selectedBudgetIsAvailable,
+                    mobileSession.isLoadingBudgets,
+                    cachedBudgetSelected,
+                    needsEncryptionPassword,
+                    state.encryptedPassword,
+                ),
             onClick = onOpenSelectedBudget,
         )
-    }
-}
-
-@Composable
-internal fun UnlockBudgetScreen(
-    state: AppState,
-    navigation: AppNavigation,
-) {
-    PageColumn {
-        TextFieldCard(
-            "Budget password",
-            state.encryptedPassword,
-            { state.encryptedPassword = it },
-            TextFieldOptions(placeholder = "Enter password", isSecret = true),
-        )
-        InfoBubble("Tandem never saves this password and clears it after the first sync.")
-        PrimaryButton("Unlock budget", enabled = state.encryptedPassword.isNotBlank()) { navigation.replaceTop(AppRoute.FIRST_SYNC) }
     }
 }
 
@@ -420,6 +432,7 @@ internal fun FirstSyncScreen(
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
     onRetrySync: () -> Unit,
+    onRequestNotificationPermission: (() -> Unit)?,
     notificationPermissionEnabled: Boolean?,
 ) {
     val palette = tandemPalette
@@ -485,75 +498,98 @@ internal fun FirstSyncScreen(
                 }
             }
         }
-        PrimaryButton("Done", enabled = mobileSession.syncComplete) {
+        AnimatedReveal(
+            visible =
+                shouldShowFirstSyncNotificationPrompt(
+                    mobileSession.syncComplete,
+                    state.hasCompletedNotificationOnboarding,
+                    notificationPermissionEnabled,
+                ),
+        ) {
+            FirstSyncNotificationPrompt(
+                onEnable = { finishNotificationOnboarding(state, onRequestNotificationPermission) },
+                onNotNow = { finishNotificationOnboarding(state, onRequestPermission = null) },
+            )
+        }
+        PrimaryButton(
+            "Done",
+            enabled =
+                firstSyncCanFinish(
+                    mobileSession.syncComplete,
+                    state.hasCompletedNotificationOnboarding,
+                    notificationPermissionEnabled,
+                ),
+        ) {
+            state.hasCompletedNotificationOnboarding = true
             selectLatestCachedMonth(state, mobileSession.budgetMonthIds, mobileSession.transactionRecords)
-            if (shouldShowNotificationOnboarding(state.hasCompletedNotificationOnboarding, notificationPermissionEnabled)) {
-                navigation.open(AppRoute.NOTIFICATION_ONBOARDING)
-            } else {
-                state.hasCompletedNotificationOnboarding = true
-                navigation.selectTab(AppRoute.BUDGET)
+            navigation.selectTab(AppRoute.BUDGET)
+        }
+    }
+}
+
+internal fun shouldShowFirstSyncNotificationPrompt(
+    syncComplete: Boolean,
+    alreadyCompleted: Boolean,
+    permissionEnabled: Boolean?,
+): Boolean = syncComplete && !alreadyCompleted && permissionEnabled != true
+
+internal fun firstSyncCanFinish(
+    syncComplete: Boolean,
+    alreadyCompleted: Boolean,
+    permissionEnabled: Boolean?,
+): Boolean = syncComplete && (alreadyCompleted || permissionEnabled == true)
+
+internal fun budgetPasswordRequired(
+    isEncrypted: Boolean,
+    hasCachedSnapshot: Boolean,
+): Boolean = isEncrypted && !hasCachedSnapshot
+
+internal fun budgetOpenButtonEnabled(
+    selectedBudgetAvailable: Boolean,
+    loadingBudgets: Boolean,
+    hasCachedSnapshot: Boolean,
+    passwordRequired: Boolean,
+    budgetPassword: String,
+): Boolean =
+    selectedBudgetAvailable &&
+        (!loadingBudgets || hasCachedSnapshot) &&
+        (!passwordRequired || budgetPassword.isNotBlank())
+
+@Composable
+internal fun FirstSyncNotificationPrompt(
+    onEnable: () -> Unit,
+    onNotNow: () -> Unit,
+) {
+    SurfaceCard {
+        Column(
+            Modifier.padding(TandemSpacing.large),
+            verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Lucide.Bell, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
+                LabelText("Notifications")
+            }
+            BodyText("Get alerts when a change needs your attention.")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                SecondaryButton("Not now", modifier = Modifier.weight(1f), onClick = onNotNow)
+                PrimaryButton("Turn on", modifier = Modifier.weight(1f), onClick = onEnable)
             }
         }
     }
 }
 
-internal fun shouldShowNotificationOnboarding(
-    alreadyCompleted: Boolean,
-    permissionEnabled: Boolean?,
-): Boolean = !alreadyCompleted && permissionEnabled != true
-
-@Composable
-internal fun NotificationOnboardingScreen(
-    state: AppState,
-    navigation: AppNavigation,
-    onRequestNotificationPermission: (() -> Unit)?,
-) {
-    OnboardingLayout(
-        horizontalPadding = TandemSpacing.extraLarge,
-        content = {
-            Spacer(Modifier.height(14.dp))
-            Box(
-                Modifier
-                    .size(64.dp)
-                    .clip(RoundedCornerShape(TandemShapes.large))
-                    .background(tandemPalette.accent.copy(alpha = 0.14f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Lucide.Bell, contentDescription = null, modifier = Modifier.size(30.dp), tint = tandemPalette.accent)
-            }
-            Heading("Stay in the loop", "Get an alert when a change needs your attention.")
-            SurfaceCard {
-                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    BodyText("Tandem can alert you when an edit needs review, is rejected, or has an unknown status.")
-                    BodyText("You can change this later in Settings.")
-                }
-            }
-        },
-        actions = {
-            PrimaryButton("Allow notifications", modifier = Modifier.fillMaxWidth()) {
-                finishNotificationOnboarding(state, navigation, onRequestNotificationPermission)
-            }
-            SecondaryButton("Not now", modifier = Modifier.fillMaxWidth()) {
-                finishNotificationOnboarding(state, navigation, onRequestPermission = null)
-            }
-        },
-    )
-}
-
 internal fun finishNotificationOnboarding(
     state: AppState,
-    navigation: AppNavigation,
     onRequestPermission: (() -> Unit)?,
 ) {
     state.hasCompletedNotificationOnboarding = true
     onRequestPermission?.invoke()
-    navigation.selectTab(AppRoute.BUDGET)
 }
 
 @Composable
 private fun SetupProgressIndicator() {
     val palette = tandemPalette
-    val steps = listOf("Server", "Sign in", "Budget", "First sync")
+    val steps = listOf("Connect", "Budget", "Sync")
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),

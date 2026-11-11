@@ -1979,6 +1979,7 @@ internal class TandemMobileSession(
     }
 
     suspend fun loadActualLoginMethods(serverUrl: String) {
+        actualLoginMethods = null
         isLoadingLoginMethods = true
         signInError = null
         try {
@@ -2005,6 +2006,13 @@ internal class TandemMobileSession(
         } finally {
             isLoadingLoginMethods = false
         }
+    }
+
+    fun clearActualLoginMethodState() {
+        actualLoginMethods = null
+        signInError = null
+        isLoadingLoginMethods = false
+        credentialStorageError = null
     }
 
     suspend fun signInWithPassword(
