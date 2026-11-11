@@ -1048,4 +1048,58 @@ describe("health routes and OpenAPI", () => {
     auditLog.mockRestore();
     await app.close();
   });
+
+  it("rejects the same device credential after online sign-out revokes it", async () => {
+    const device = createDevice();
+    let revoked = false;
+    const auth = createDeviceAuth({
+      authenticate: vi.fn(async (token?: string) =>
+        token === testAccessToken && !revoked ? device : undefined,
+      ),
+      revokeDeviceForDevice: vi.fn(
+        async (_device: DeviceRecord, id: string) => {
+          if (id !== testDeviceId || revoked) return false;
+          revoked = true;
+          return true;
+        },
+      ),
+    });
+    const app = await buildApiApp(
+      { ping: vi.fn(), close: vi.fn() },
+      { deviceAuth: auth },
+    );
+
+    try {
+      const authorization = { authorization: `Bearer ${testAccessToken}` };
+      const beforeSignOut = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/me",
+        headers: authorization,
+      });
+      expect(beforeSignOut.statusCode).toBe(200);
+
+      const signOut = await app.inject({
+        method: "DELETE",
+        url: `/api/v1/devices/${testDeviceId}`,
+        headers: authorization,
+      });
+      expect(signOut.statusCode).toBe(204);
+
+      const staleCredential = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/me",
+        headers: authorization,
+      });
+      expect(staleCredential.statusCode).toBe(401);
+      expect(staleCredential.json().error.code).toBe(
+        "invalid_device_credential",
+      );
+      expect(auth.revokeDeviceForDevice).toHaveBeenCalledWith(
+        device,
+        testDeviceId,
+      );
+    } finally {
+      await app.close();
+    }
+  });
 });
