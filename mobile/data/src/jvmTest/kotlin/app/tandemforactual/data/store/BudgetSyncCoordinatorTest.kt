@@ -80,6 +80,39 @@ class BudgetSyncCoordinatorTest {
         }
 
     @Test
+    fun synchronizePrunesExpiredTerminalHistoryAndPreservesUncertainWrites() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val nowEpochMs = 20_000_000_000L
+                val repository = LocalBudgetRepository(database) { nowEpochMs }
+                val remote = FakeBudgetSyncRemote(snapshot(records = listOf(transaction(), transaction("txn-2"))))
+                val coordinator = BudgetSyncCoordinator(repository, remote)
+                coordinator.synchronize(BUDGET, sendQueuedWrites = false)
+
+                val committed = repository.enqueueWrite(updateRequest(operationId = "old-committed", idempotencyKey = "old-key"))
+                val uncertain =
+                    repository.enqueueWrite(
+                        updateRequest(
+                            operationId = "uncertain-write",
+                            idempotencyKey = "uncertain-key",
+                            recordId = "txn-2",
+                        ),
+                    )
+                val oldTimestamp = nowEpochMs - TERMINAL_OUTBOX_RETENTION_MILLIS - 1L
+                database.outboxDao().put(committed.operation.copy(status = "committed", updatedAtEpochMs = oldTimestamp))
+                database.outboxDao().put(uncertain.operation.copy(status = "uncertain", updatedAtEpochMs = oldTimestamp))
+
+                coordinator.synchronize(BUDGET, sendQueuedWrites = false)
+
+                assertNull(database.outboxDao().find(committed.operation.operationId))
+                assertEquals("uncertain", database.outboxDao().find(uncertain.operation.operationId)?.status)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun snapshotPagesAreStagedIndividuallyAndAppliedTogether() =
         runBlocking {
             val database = newDatabase()

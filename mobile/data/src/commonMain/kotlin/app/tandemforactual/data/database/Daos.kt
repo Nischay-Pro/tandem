@@ -460,6 +460,11 @@ interface OutboxDao {
     suspend fun deleteQueuedOperation(operationId: String): Int
 
     @Query(
+        "DELETE FROM sync_outbox WHERE recordType != 'budget-mutation-metadata' AND status IN ('committed', 'discarded', 'superseded') AND updatedAtEpochMs < :cutoffEpochMs",
+    )
+    suspend fun deleteExpiredTerminalWrites(cutoffEpochMs: Long): Int
+
+    @Query(
         "SELECT * FROM sync_outbox WHERE budgetId = :budgetId AND recordType = :recordType AND recordId = :recordId AND status = 'queued' AND serverOperationId IS NULL ORDER BY createdAtEpochMs DESC LIMIT 1",
     )
     suspend fun findMergeableQueuedForRecord(

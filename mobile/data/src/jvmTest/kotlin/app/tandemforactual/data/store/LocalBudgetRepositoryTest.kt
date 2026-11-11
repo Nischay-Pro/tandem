@@ -945,6 +945,64 @@ class LocalBudgetRepositoryTest {
     }
 
     @Test
+    fun terminalWriteRetentionPrunesOnlyExpiredHistoryAndKeepsUnresolvedWrites() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val nowEpochMs = 20_000_000_000L
+                val repository = LocalBudgetRepository(database) { nowEpochMs }
+                val cutoff = nowEpochMs - TERMINAL_OUTBOX_RETENTION_MILLIS
+                val expiredTerminalStatuses =
+                    listOf(
+                        "expired-committed" to LocalWriteStatus.COMMITTED,
+                        "expired-discarded" to LocalWriteStatus.DISCARDED,
+                        "expired-superseded" to LocalWriteStatus.SUPERSEDED,
+                    )
+                val retainedStatuses =
+                    listOf(
+                        "boundary-committed" to LocalWriteStatus.COMMITTED,
+                        "recent-committed" to LocalWriteStatus.COMMITTED,
+                        "queued" to LocalWriteStatus.QUEUED,
+                        "sending" to LocalWriteStatus.SENDING,
+                        "uncertain" to LocalWriteStatus.UNCERTAIN,
+                        "conflict" to LocalWriteStatus.CONFLICT,
+                        "rejected" to LocalWriteStatus.REJECTED,
+                    )
+
+                for ((id, status) in expiredTerminalStatuses + retainedStatuses) {
+                    val recordId = "txn-$id"
+                    repository.enqueueWrite(createRequest(operationId = id, idempotencyKey = "key-$id", recordId = recordId))
+                    val queued = assertNotNull(database.outboxDao().find(id))
+                    val updatedAtEpochMs =
+                        when {
+                            id.startsWith("expired-") -> cutoff - 1L
+                            id == "boundary-committed" -> cutoff
+                            id == "recent-committed" -> nowEpochMs
+                            else -> cutoff - 1L
+                        }
+                    database.outboxDao().put(
+                        queued.copy(status = status.name.lowercase(), updatedAtEpochMs = updatedAtEpochMs),
+                    )
+                }
+                repository.replaceBudgetMutationQueue(emptyList(), "{\"sequence\":9}")
+                val metadata = database.outboxDao().findByRecordType("budget-mutation-metadata").single()
+                database.outboxDao().put(metadata.copy(updatedAtEpochMs = cutoff - 1L))
+
+                assertEquals(3, repository.pruneTerminalWrites(nowEpochMs))
+                for ((id, _) in expiredTerminalStatuses) {
+                    assertNull(database.outboxDao().find(id), "$id should be pruned")
+                }
+                for ((id, _) in retainedStatuses) {
+                    assertNotNull(database.outboxDao().find(id), "$id should be preserved")
+                }
+                assertNotNull(database.outboxDao().find(metadata.operationId), "budget queue metadata should be preserved")
+                Unit
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun unsentCreateCanBeEditedWithoutCreatingAnotherOutboxEntry() =
         runBlocking {
             val database = newDatabase()
@@ -2724,13 +2782,14 @@ class LocalBudgetRepositoryTest {
     private fun createRequest(
         operationId: String = "create-op-1",
         idempotencyKey: String = "create-key-1",
-        optimistic: String = """{"id":"txn-local","amount":1200}""",
+        recordId: String = "txn-local",
+        optimistic: String = """{"id":"$recordId","amount":1200}""",
         amountMinor: Long = 1200L,
     ): LocalWriteRequest =
         updateRequest(
             operationId = operationId,
             idempotencyKey = idempotencyKey,
-            recordId = "txn-local",
+            recordId = recordId,
             action = LocalWriteAction.CREATE,
             baseRevision = null,
             baseSnapshot = null,

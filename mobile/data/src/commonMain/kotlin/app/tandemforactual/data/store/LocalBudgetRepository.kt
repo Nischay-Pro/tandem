@@ -53,6 +53,7 @@ private const val BUDGET_MUTATION_METADATA_OPERATION_ID = "tandem-budget-mutatio
 private const val BUDGET_MUTATION_METADATA_IDEMPOTENCY_KEY = "tandem-budget-mutation-metadata-v1"
 private const val BUDGET_MUTATION_METADATA_BUDGET_ID = "tandem-internal"
 private const val BUDGET_MUTATION_METADATA_RECORD_ID = "category-queue"
+internal const val TERMINAL_OUTBOX_RETENTION_MILLIS = 90L * 24 * 60 * 60 * 1_000
 
 enum class BudgetSyncStatus {
     IDLE,
@@ -239,6 +240,7 @@ class LocalBudgetRepository(
     private val now: () -> Long,
 ) {
     suspend fun readBudgetMutationQueue(): LocalBudgetMutationQueueSnapshot {
+        pruneTerminalWrites()
         val outbox = database.outboxDao()
         val rows = outbox.findByRecordType(BUDGET_MUTATION_RECORD_TYPE)
         val metadata = outbox.find(BUDGET_MUTATION_METADATA_OPERATION_ID)?.patchJson
@@ -638,7 +640,14 @@ class LocalBudgetRepository(
         return database.budgetSyncStateDao().find(budgetId)?.let { BudgetSyncCheckpoint(it.generation, it.cursor) }
     }
 
-    suspend fun readPendingWrites(budgetId: String): List<OutboxOperationEntity> = database.outboxDao().findPending(budgetId)
+    suspend fun readPendingWrites(budgetId: String): List<OutboxOperationEntity> {
+        pruneTerminalWrites()
+        return database.outboxDao().findPending(budgetId)
+    }
+
+    /** Removes old terminal history while preserving writes that still need a user or server decision. */
+    suspend fun pruneTerminalWrites(nowEpochMs: Long = now()): Int =
+        database.outboxDao().deleteExpiredTerminalWrites(nowEpochMs - TERMINAL_OUTBOX_RETENTION_MILLIS)
 
     suspend fun hasUnresolvedWrites(): Boolean = database.outboxDao().hasUnresolvedWrites()
 

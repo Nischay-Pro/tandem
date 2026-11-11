@@ -43,6 +43,7 @@ class BudgetSyncCoordinator(
                     "A status-only check cannot send queued writes"
                 }
                 repository.recoverInterruptedWrites()
+                repository.pruneTerminalWrites()
                 val isOperationStatusCheck = reconcileUncertainOperationId != null
                 if (!isOperationStatusCheck) repository.markSyncStarted(budgetId)
                 // Verify current budget access before treating an operation 404 as safe to retry.
