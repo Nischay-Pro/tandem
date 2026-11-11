@@ -42,8 +42,8 @@ required setup steps: Server, Sign in, Budget, and First sync. After a
 successful first sync, Tandem offers one optional “Stay in the loop” screen.
 The notification permission request happens only after “Allow notifications”
 is tapped; “Not now” continues directly to the budget. Tandem does not repeat
-the onboarding prompt after either choice. If the system permission was already
-denied, the platform action opens notification settings.
+the onboarding prompt after either choice. If the system permission was denied
+and can no longer be requested, the platform action opens notification settings.
 
 | Idea                                      | Use                                                                                      | Avoid                                         |
 | ----------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------- |

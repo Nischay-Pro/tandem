@@ -3,6 +3,7 @@ package app.tandemforactual.ui
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import org.junit.Assert.assertEquals
@@ -21,7 +22,7 @@ class OnboardingWordingTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun welcomeUsesOneShortInstructionAndOnePrimaryAction() {
+    fun welcomeExplainsBenefitsAndShowsTheSetupSteps() {
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
                 WelcomeScreen(noOpNavigation())
@@ -35,6 +36,7 @@ class OnboardingWordingTest {
         listOf("Server", "Sign in", "Budget", "First sync").forEach { step ->
             composeTestRule.onNodeWithText(step).assertExists()
         }
+        composeTestRule.onNodeWithContentDescription("Step 1 of 4: Server").assertExists()
         composeTestRule.onNodeWithText("Before you start").assertDoesNotExist()
         composeTestRule.onNodeWithText("How to set up a server").assertDoesNotExist()
         composeTestRule.onAllNodesWithText("Get started").assertCountEquals(1)
