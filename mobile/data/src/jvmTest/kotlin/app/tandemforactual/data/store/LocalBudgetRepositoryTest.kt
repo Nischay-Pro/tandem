@@ -1156,6 +1156,72 @@ class LocalBudgetRepositoryTest {
     }
 
     @Test
+    fun outboxStatusesSurviveReopenAndOnlyReviewableWritesCanBeDiscarded() =
+        runBlocking {
+            val databaseFile = File.createTempFile("tandem-outbox-statuses-", ".db")
+            databaseFile.delete()
+            val persistedStatuses =
+                listOf(
+                    "queued" to "queued",
+                    "sending" to "sending",
+                    "uncertain" to "uncertain",
+                    "conflict" to "conflict",
+                    "rejected" to "rejected",
+                    "committed" to "committed",
+                    "discarded" to "discarded",
+                    "superseded" to "superseded",
+                )
+            try {
+                val firstDatabase = persistentDatabase(databaseFile.absolutePath)
+                try {
+                    persistedStatuses.forEach { (operationId, status) ->
+                        firstDatabase.outboxDao().put(
+                            outboxOperation(
+                                operationId = "op-$operationId",
+                                idempotencyKey = "key-$operationId",
+                                recordId = "txn-$operationId",
+                                status = status,
+                                attemptCount = if (status == "queued") 0 else 1,
+                            ),
+                        )
+                    }
+                } finally {
+                    firstDatabase.close()
+                }
+
+                val reopenedDatabase = persistentDatabase(databaseFile.absolutePath)
+                try {
+                    val repository = LocalBudgetRepository(reopenedDatabase) { 200L }
+
+                    for ((operationId, status) in persistedStatuses) {
+                        assertEquals(
+                            status,
+                            repository.findWrite("op-$operationId")?.status,
+                            "$operationId status after reopen",
+                        )
+                    }
+
+                    val discardableStatuses = setOf("queued", "uncertain", "conflict", "rejected")
+                    for ((operationId, status) in persistedStatuses) {
+                        val id = "op-$operationId"
+                        if (status in discardableStatuses) {
+                            assertEquals("discarded", repository.discardWrite(id).status, id)
+                        } else {
+                            assertFails<InvalidLocalWriteException> { repository.discardWrite(id) }
+                            assertEquals(status, repository.findWrite(id)?.status, "$id must remain unchanged")
+                        }
+                    }
+                } finally {
+                    reopenedDatabase.close()
+                }
+            } finally {
+                File(databaseFile.absolutePath + "-wal").delete()
+                File(databaseFile.absolutePath + "-shm").delete()
+                databaseFile.delete()
+            }
+        }
+
+    @Test
     fun terminalWriteRetentionPrunesOnlyExpiredHistoryAndKeepsUnresolvedWrites() =
         runBlocking {
             val database = newDatabase()
