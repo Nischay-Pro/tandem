@@ -52,9 +52,8 @@ internal fun ScreenContent(
     reportsDataCache: ReportsDataCache,
     onSignIn: () -> Unit,
     onStartOpenIdSignIn: () -> Unit,
-    onSelectBudget: (BudgetCatalogItem) -> Unit,
     onRefreshBudgets: () -> Unit,
-    onOpenSelectedBudget: () -> Unit,
+    onOpenSelectedBudget: (BudgetCatalogItem) -> Unit,
     onRetrySync: () -> Unit,
     backgroundSyncSupported: Boolean,
     merchantIconMatcher: MerchantIconMatcherPack?,
@@ -95,7 +94,7 @@ internal fun ScreenContent(
         AppRoute.SERVER_ADDRESS -> ServerAddressScreen(state, navigation)
         AppRoute.SIGN_IN -> SignInScreen(state, mobileSession, onSignIn, onStartOpenIdSignIn)
         AppRoute.BUDGET_CHOOSER ->
-            BudgetChooserScreen(state, mobileSession, navigation, onSelectBudget, onRefreshBudgets, onOpenSelectedBudget)
+            BudgetChooserScreen(state, mobileSession, navigation, onRefreshBudgets, onOpenSelectedBudget)
         AppRoute.FIRST_SYNC ->
             FirstSyncScreen(
                 state = state,

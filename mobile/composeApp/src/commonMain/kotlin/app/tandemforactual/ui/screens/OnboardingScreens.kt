@@ -26,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -443,9 +444,8 @@ internal fun BudgetChooserScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
-    onSelectBudget: (BudgetCatalogItem) -> Unit,
     onRefreshBudgets: () -> Unit,
-    onOpenSelectedBudget: () -> Unit,
+    onOpenSelectedBudget: (BudgetCatalogItem) -> Unit,
 ) {
     val cachedCatalog =
         remember(state.cachedBudgetCatalogJson, mobileSession.cachedBudgets) {
@@ -458,9 +458,24 @@ internal fun BudgetChooserScreen(
         budgetChoicesForSelection(mobileSession.budgets, cachedCatalog, mobileSession.budgetCatalogLoaded)
     val usingCachedCatalog = !mobileSession.budgetCatalogLoaded && cachedCatalog.isNotEmpty()
     val hasCachedOnlyBudgets = cachedCatalog.any { cached -> mobileSession.budgets.none { it.budgetId == cached.budgetId } }
-    val cachedBudgetSelected = cachedCatalog.any { it.budgetId == state.selectedBudgetId }
-    val selectedBudgetIsAvailable = selectableBudgets.any { it.budgetId == state.selectedBudgetId }
-    val needsEncryptionPassword = budgetPasswordRequired(state.selectedBudgetEncrypted, cachedBudgetSelected)
+    var chooserSelectedBudgetId by rememberSaveable(state.selectedBudgetId) { mutableStateOf(state.selectedBudgetId) }
+    LaunchedEffect(selectableBudgets, state.selectedBudgetId) {
+        if (selectableBudgets.none { it.budgetId == chooserSelectedBudgetId }) {
+            chooserSelectedBudgetId =
+                selectableBudgets.firstOrNull { it.budgetId == state.selectedBudgetId }?.budgetId
+                    ?: selectableBudgets.firstOrNull()?.budgetId.orEmpty()
+        }
+    }
+    val selectedBudget = selectableBudgets.firstOrNull { it.budgetId == chooserSelectedBudgetId }
+    val cachedBudgetSelected = selectedBudget?.let { budget -> cachedCatalog.any { it.budgetId == budget.budgetId } } == true
+    val selectedBudgetIsAvailable = selectedBudget != null
+    val needsEncryptionPassword = budgetPasswordRequired(selectedBudget?.isEncrypted == true, cachedBudgetSelected)
+
+    fun chooseBudget(budget: BudgetCatalogItem) {
+        if (chooserSelectedBudgetId != budget.budgetId) state.encryptedPassword = ""
+        chooserSelectedBudgetId = budget.budgetId
+    }
+
     PageColumn {
         Heading(
             if (usingCachedCatalog || (mobileSession.budgets.isEmpty() && cachedCatalog.isNotEmpty())) {
@@ -482,8 +497,8 @@ internal fun BudgetChooserScreen(
                     ChoiceRow(
                         budget.name,
                         if (budget.isEncrypted) "Encrypted budget · saved on this device" else "Saved on this device",
-                        selected = state.selectedBudgetId == budget.budgetId,
-                    ) { onSelectBudget(budget) }
+                        selected = chooserSelectedBudgetId == budget.budgetId,
+                    ) { chooseBudget(budget) }
                 }
             }
             selectableBudgets.isNotEmpty() -> {
@@ -496,9 +511,7 @@ internal fun BudgetChooserScreen(
                             budget.isEncrypted -> "Encrypted Actual budget"
                             else -> "Available on this server"
                         }
-                    ChoiceRow(budget.name, detail, selected = state.selectedBudgetId == budget.budgetId) {
-                        onSelectBudget(budget)
-                    }
+                    ChoiceRow(budget.name, detail, selected = chooserSelectedBudgetId == budget.budgetId) { chooseBudget(budget) }
                 }
             }
             mobileSession.isLoadingBudgets -> BodyText("Loading budgets")
@@ -540,7 +553,7 @@ internal fun BudgetChooserScreen(
                     needsEncryptionPassword,
                     state.encryptedPassword,
                 ),
-            onClick = onOpenSelectedBudget,
+            onClick = { selectedBudget?.let(onOpenSelectedBudget) },
         )
     }
 }
@@ -610,6 +623,7 @@ internal fun FirstSyncScreen(
                 if (mobileSession.cachedSnapshotBudgetId == state.selectedBudgetId && mobileSession.hasCachedSnapshot) {
                     BodyText("The last saved copy is still available on this device.")
                     SecondaryButton("Open saved copy") {
+                        state.pendingBudgetSelectionOrigin = null
                         selectLatestCachedMonth(state, mobileSession.budgetMonthIds, mobileSession.transactionRecords)
                         navigation.selectTab(AppRoute.BUDGET)
                     }
@@ -636,6 +650,7 @@ internal fun FirstSyncCompletionAction(
     onComplete: () -> Unit,
 ) {
     PrimaryButton("Done", enabled = syncComplete) {
+        state.pendingBudgetSelectionOrigin = null
         onComplete()
         if (shouldShowNotificationOnboarding(state.hasCompletedNotificationOnboarding, notificationPermissionEnabled)) {
             navigation.open(AppRoute.NOTIFICATION_ONBOARDING)

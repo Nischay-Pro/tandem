@@ -481,6 +481,7 @@ fun TandemApp(
                 transactionSheetClosing = true
             }
         } else {
+            if (currentRoute == AppRoute.FIRST_SYNC) state.restorePendingBudgetSelectionOrigin()
             performBack()
         }
     }
@@ -659,15 +660,6 @@ fun TandemApp(
     }
     LaunchedEffect(route) {
         mobileSession.clearBudgetActionMessage()
-    }
-    LaunchedEffect(route, state.selectedBudgetId, availableBudgets) {
-        if (route == AppRoute.BUDGET_CHOOSER && state.selectedBudgetId.isBlank()) {
-            availableBudgets.firstOrNull()?.let { budget ->
-                state.selectedBudget = budget.name
-                state.selectedBudgetId = budget.budgetId
-                state.selectedBudgetEncrypted = budget.isEncrypted
-            }
-        }
     }
     LaunchedEffect(route, state.selectedBudgetId, syncRetryCounter) {
         if (route == AppRoute.FIRST_SYNC && state.selectedBudgetId.isNotBlank()) {
@@ -878,19 +870,32 @@ fun TandemApp(
             }
         }
     }
-    val openSelectedBudget: () -> Unit = {
-        val selected = availableBudgets.firstOrNull { it.budgetId == state.selectedBudgetId }
-        if (selected == null) {
-            // Keep a visible message in the chooser when neither cache nor server has a catalog.
-            coroutineScope.launch {
-                mobileSession.loadBudgets()
-            }
-        } else {
-            coroutineScope.launch {
-                val isCached = mobileSession.hasCachedBudgetSnapshot(selected.budgetId)
-                when {
-                    isCached -> navigation.reset(AppRoute.BUDGET)
-                    !selected.isEncrypted || state.encryptedPassword.isNotBlank() -> navigation.reset(AppRoute.FIRST_SYNC)
+    val openSelectedBudget: (BudgetCatalogItem) -> Unit = { selected ->
+        val previousSelection =
+            BudgetSelectionSnapshot(
+                budgetId = state.selectedBudgetId,
+                name = state.selectedBudget,
+                isEncrypted = state.selectedBudgetEncrypted,
+            )
+        if (state.selectedBudgetId != selected.budgetId) state.budgetDisplaySettings = null
+        state.selectedBudget = selected.name
+        state.selectedBudgetId = selected.budgetId
+        state.selectedBudgetEncrypted = selected.isEncrypted
+        coroutineScope.launch {
+            val isCached = mobileSession.hasCachedBudgetSnapshot(selected.budgetId)
+            when {
+                isCached -> {
+                    state.pendingBudgetSelectionOrigin = null
+                    val previousRoute = backStack.getOrNull(backStack.lastIndex - 1)?.route
+                    if (previousRoute?.isTab() == true) {
+                        navigation.back()
+                    } else {
+                        navigation.reset(AppRoute.BUDGET)
+                    }
+                }
+                !selected.isEncrypted || state.encryptedPassword.isNotBlank() -> {
+                    state.pendingBudgetSelectionOrigin = previousSelection
+                    navigation.replaceTop(AppRoute.FIRST_SYNC)
                 }
             }
         }
@@ -1208,7 +1213,6 @@ fun TandemApp(
                                 reportsDataCache = reportsDataCache,
                                 onSignIn = signIn,
                                 onStartOpenIdSignIn = startOpenIdSignIn,
-                                onSelectBudget = selectBudget,
                                 onRefreshBudgets = refreshBudgets,
                                 onOpenSelectedBudget = openSelectedBudget,
                                 onRetrySync = { syncRetryCounter += 1 },

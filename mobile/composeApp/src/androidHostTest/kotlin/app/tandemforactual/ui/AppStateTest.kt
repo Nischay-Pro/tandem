@@ -273,6 +273,26 @@ class AppStateTest {
     }
 
     @Test
+    fun cancellingAnOfflineBudgetOpenRestoresThePreviouslyOpenBudget() {
+        val state =
+            AppState().apply {
+                selectedBudget = "Household"
+                selectedBudgetId = "household-id"
+                selectedBudgetEncrypted = true
+                encryptedPassword = "temporary password"
+                pendingBudgetSelectionOrigin = BudgetSelectionSnapshot("travel-id", "Travel", false)
+            }
+
+        assertTrue(state.restorePendingBudgetSelectionOrigin())
+        assertEquals("Travel", state.selectedBudget)
+        assertEquals("travel-id", state.selectedBudgetId)
+        assertFalse(state.selectedBudgetEncrypted)
+        assertEquals("", state.encryptedPassword)
+        assertEquals(null, state.pendingBudgetSelectionOrigin)
+        assertFalse(state.restorePendingBudgetSelectionOrigin())
+    }
+
+    @Test
     fun serverChoicesKeepCachedBudgetsAvailableForLocalViewing() {
         val server = listOf(BudgetCatalogItem("remote", "Travel", false), BudgetCatalogItem("cached", "Household", true))
         val cached = listOf(BudgetCatalogItem("cached", "Household", true), BudgetCatalogItem("offline", "Saved budget · USD", false))

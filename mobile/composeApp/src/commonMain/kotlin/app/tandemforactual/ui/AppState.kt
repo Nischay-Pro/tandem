@@ -48,12 +48,30 @@ internal fun normalizeHomeLayoutName(layout: String): String =
         else -> layout
     }
 
+internal data class BudgetSelectionSnapshot(
+    val budgetId: String,
+    val name: String,
+    val isEncrypted: Boolean,
+)
+
+internal fun AppState.restorePendingBudgetSelectionOrigin(): Boolean {
+    val origin = pendingBudgetSelectionOrigin ?: return false
+    selectedBudget = origin.name
+    selectedBudgetId = origin.budgetId
+    selectedBudgetEncrypted = origin.isEncrypted
+    encryptedPassword = ""
+    budgetDisplaySettings = null
+    pendingBudgetSelectionOrigin = null
+    return true
+}
+
 internal class AppState {
     var theme by mutableStateOf(ThemeMode.SYSTEM)
     var accent by mutableStateOf(AccentChoice.ACTUAL_PURPLE)
     var selectedBudget by mutableStateOf("")
     var selectedBudgetId by mutableStateOf("")
     var selectedBudgetEncrypted by mutableStateOf(false)
+    var pendingBudgetSelectionOrigin by mutableStateOf<BudgetSelectionSnapshot?>(null)
     var cachedBudgetCatalogJson by mutableStateOf("")
     var budgetDisplaySettings by mutableStateOf<BudgetDisplaySettings?>(null)
     var selectedMonth by mutableStateOf(currentMonthLabel())
