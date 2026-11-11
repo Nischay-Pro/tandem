@@ -1480,10 +1480,11 @@ class TandemApiClientTest {
         runBlocking {
             val requests = mutableListOf<HttpRequestData>()
             var responseBody = """{"status":"ok","existingImportedIds":["ref-existing"]}"""
+            var responseStatus = HttpStatusCode.OK
             val engine =
                 MockEngine { request ->
                     requests += request
-                    respond(responseBody, headers = jsonHeaders())
+                    respond(responseBody, status = responseStatus, headers = jsonHeaders())
                 }
             val previousClient = Api.client
             val previousBaseUrl = Api.baseUrl
@@ -1523,9 +1524,22 @@ class TandemApiClientTest {
                     client.previewBudgetAccountStatementImport("budget-1", "account-1", listOf("ref-new"), null)
                 }
                 responseBody = """{"status":"ok"}"""
-                assertFailsWith<TandemApiProtocolException> {
-                    client.previewBudgetAccountStatementImport("budget-1", "account-1", listOf("ref-new"), null)
-                }
+                val missingReferences =
+                    assertFailsWith<TandemApiProtocolException> {
+                        client.previewBudgetAccountStatementImport("budget-1", "account-1", listOf("ref-new"), null)
+                    }
+                assertEquals("Statement preview response is missing its references", missingReferences.message)
+
+                responseBody = """{"error":{"code":"statement_preview_failed"}}"""
+                responseStatus = HttpStatusCode.ServiceUnavailable
+                val previewFailure =
+                    assertFailsWith<TandemApiException> {
+                        client.previewBudgetAccountStatementImport("budget-1", "account-1", listOf("ref-new"), null)
+                    }
+                assertEquals(
+                    "Tandem couldn’t check which statement rows are already in Actual. Check your connection.",
+                    previewFailure.message,
+                )
                 Unit
             } finally {
                 cleanup()
