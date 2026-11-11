@@ -540,6 +540,21 @@ class GeneratedBudgetSyncRemoteTest {
         }
     }
 
+    @Test
+    fun snapshotPageUsesScheduleNextDateInsteadOfRecurrenceObject() {
+        val schedulePage =
+            Json
+                .parseToJsonElement(
+                    """{"budgetId":"$BUDGET","generation":"$GENERATION","cursor":"0","records":[{"type":"schedule","id":"schedule-1","revision":"revision-1","body":{"id":"schedule-1","date":{"start":"2026-11-15","endMode":"never","interval":1,"frequency":"monthly"},"next_date":"2026-11-15","account":"checking","amount":6700,"name":"Monthly pet insurance"}}],"hasMore":false,"resetRequired":false,"nextAfterType":null,"nextAfterId":null,"displaySettings":null}""",
+                ).jsonObject
+
+        val page = BudgetSyncJson.parseSnapshotPage(schedulePage, BUDGET)
+
+        assertEquals("2026-11-15", page.records.single().recordDate)
+        assertEquals("checking", page.records.single().accountId)
+        assertEquals(6700L, page.records.single().amountMinor)
+    }
+
     private fun configureApi(engine: MockEngine): () -> Unit {
         val previousClient = Api.client
         val previousBaseUrl = Api.baseUrl

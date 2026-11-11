@@ -363,7 +363,12 @@ object BudgetSyncJson {
             revision = revision,
             bodyJson = toString(),
             generation = generation,
-            recordDate = firstString("date", "recordDate"),
+            recordDate =
+                if (recordType == "schedule") {
+                    optionalString("next_date")
+                } else {
+                    firstString("date", "recordDate")
+                },
             accountId = firstString("account", "accountId"),
             categoryId = firstString("category", "categoryId"),
             payeeId = firstString("payee", "payeeId"),
