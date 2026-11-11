@@ -813,11 +813,12 @@ describe("health routes and OpenAPI", () => {
     );
     expect(callback.statusCode).toBe(302);
     expect(callback.headers.location).toMatch(
-      /^app\.tandemforactual:\/signin\/complete\?code=[A-Za-z0-9_-]{43}&state=[A-Za-z0-9_-]{43}$/u,
+      /^app\.tandemforactual:\/\/signin\/complete\?code=[A-Za-z0-9_-]{43}&state=[A-Za-z0-9_-]{43}$/u,
     );
     expect(callback.headers["cache-control"]).toBe("no-store");
     expect(callback.body).not.toContain("actual-secret");
     expect(tandemReturn.protocol).toBe("app.tandemforactual:");
+    expect(tandemReturn.host).toBe("signin");
     expect(tandemReturn.searchParams.get("state")).toBe(callbackState);
     expect(completionCode).toMatch(/^[A-Za-z0-9_-]{43}$/u);
     expect(callback.headers.location).not.toContain(codeVerifier);

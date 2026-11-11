@@ -204,7 +204,7 @@ describe("Actual OpenID sign-in handoff", () => {
       "synthetic-actual-session-token",
     );
     expect(returnUrl).toBe(
-      `app.tandemforactual:/signin/complete?code=0000000000000000000000000000000000000000002&state=${TEST_CALLBACK_STATE}`,
+      `app.tandemforactual://signin/complete?code=0000000000000000000000000000000000000000002&state=${TEST_CALLBACK_STATE}`,
     );
     expect(returnUrl).not.toContain("synthetic-actual-session-token");
     expect(requests[1]?.url).toBe("https://actual.example/account/validate");

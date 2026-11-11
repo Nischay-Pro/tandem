@@ -85,7 +85,7 @@ Tandem does not advertise OpenID as available.
 2. Actual redirects the browser to
    `/api/v1/auth/actual-return/{state}/openid-cb?token=…`. Tandem validates the
    Actual session, associates it with the account, and redirects the app to its
-   `app.tandemforactual:/signin/complete` handler with a short-lived, one-use
+   `app.tandemforactual://signin/complete` handler with a short-lived, one-use
    Tandem code and the `callbackState`. The app checks that state against its
    pending login before exchanging the code. The Actual token is never included
    in the app return link; the code alone cannot be exchanged for a device

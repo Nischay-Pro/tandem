@@ -99,16 +99,17 @@ class TandemMobileSessionTest {
     fun acceptsOnlyShortLivedTandemOpenIdReturnsWithMatchingState() {
         val code = "C".repeat(43)
         val callbackState = "S".repeat(43)
-        val validUri = "app.tandemforactual:/signin/complete?code=$code&state=$callbackState"
+        val validUri = "app.tandemforactual://signin/complete?code=$code&state=$callbackState"
         assertEquals(ActualOpenIdReturn(code, callbackState), actualOpenIdReturn(validUri))
         assertNull(actualOpenIdReturn("https://tandem.example/signin/complete?code=$code&state=$callbackState"))
-        assertNull(actualOpenIdReturn("app.tandemforactual://signin/complete?code=$code&state=$callbackState"))
-        assertNull(actualOpenIdReturn("app.tandemforactual:/wrong-path?code=$code&state=$callbackState"))
-        assertNull(actualOpenIdReturn("app.tandemforactual:/signin/complete?code=$code"))
-        assertNull(actualOpenIdReturn("app.tandemforactual:/signin/complete?token=actual-session-token&state=$callbackState"))
-        assertNull(actualOpenIdReturn("app.tandemforactual:/signin/complete?code=short&state=$callbackState"))
-        assertNull(actualOpenIdReturn("app.tandemforactual:/signin/complete?code=$code&code=$code"))
-        assertNull(actualOpenIdReturn("app.tandemforactual:/signin/complete?code=$code&state=$callbackState#fragment"))
+        assertNull(actualOpenIdReturn("app.tandemforactual:/signin/complete?code=$code&state=$callbackState"))
+        assertNull(actualOpenIdReturn("app.tandemforactual://other/complete?code=$code&state=$callbackState"))
+        assertNull(actualOpenIdReturn("app.tandemforactual://signin/wrong-path?code=$code&state=$callbackState"))
+        assertNull(actualOpenIdReturn("app.tandemforactual://signin/complete?code=$code"))
+        assertNull(actualOpenIdReturn("app.tandemforactual://signin/complete?token=actual-session-token&state=$callbackState"))
+        assertNull(actualOpenIdReturn("app.tandemforactual://signin/complete?code=short&state=$callbackState"))
+        assertNull(actualOpenIdReturn("app.tandemforactual://signin/complete?code=$code&code=$code"))
+        assertNull(actualOpenIdReturn("app.tandemforactual://signin/complete?code=$code&state=$callbackState#fragment"))
     }
 
     @Test

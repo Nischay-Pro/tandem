@@ -7,7 +7,7 @@ import {
 const STATE_TTL_MS = 5 * 60_000;
 const COMPLETION_TTL_MS = 90_000;
 const MAX_PENDING_LOGINS = 1_000;
-const MOBILE_SIGN_IN_RETURN_URI = "app.tandemforactual:/signin/complete";
+const MOBILE_SIGN_IN_RETURN_URI = "app.tandemforactual://signin/complete";
 
 interface PendingLogin {
   deviceName: string;

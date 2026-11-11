@@ -1,6 +1,6 @@
 package app.tandemforactual.ui
 
-private const val OPEN_ID_CALLBACK_URI = "app.tandemforactual:/signin/complete"
+private const val OPEN_ID_CALLBACK_URI = "app.tandemforactual://signin/complete"
 
 internal data class ActualOpenIdReturn(
     val code: String,
