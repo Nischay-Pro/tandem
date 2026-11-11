@@ -29,6 +29,8 @@
   <string>0.1.0</string>
   <key>CFBundleVersion</key>
   <string>1</string>
+  <key>CADisableMinimumFrameDurationOnPhone</key>
+  <true/>
   <key>ITSAppUsesNonExemptEncryption</key>
   <false/>
   <key>BGTaskSchedulerPermittedIdentifiers</key>
