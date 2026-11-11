@@ -82,4 +82,11 @@ class BottomNavigationVisibilityTest {
         assertFalse(AppRoute.CHOOSE_PAYEE.showsBottomNavigation())
         assertFalse(AppRoute.CHOOSE_CATEGORY.showsBottomNavigation())
     }
+
+    @Test
+    fun landscapeUsesSideRailWhilePortraitAndSquareUseBottomNavigation() {
+        assertTrue(isLandscapeViewport(widthPx = 1_920, heightPx = 1_080))
+        assertFalse(isLandscapeViewport(widthPx = 1_080, heightPx = 1_920))
+        assertFalse(isLandscapeViewport(widthPx = 1_000, heightPx = 1_000))
+    }
 }

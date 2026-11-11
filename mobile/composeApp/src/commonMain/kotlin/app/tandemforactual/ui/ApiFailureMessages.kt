@@ -17,53 +17,50 @@ internal fun apiFailureMessage(
 ): String {
     val effectiveStatus = apiFailureHttpStatus(errorCode, httpStatus)
     return when (errorCode) {
-        "actual_only" ->
-            "Actual is running at this address, but Tandem isn’t. Check that Tandem is running and that the proxy sends /api/v1/ to it."
-        "address_unreachable", "network-error" -> "Couldn’t reach Tandem at this address. Check the address and connection."
-        "actual_unavailable" -> "Tandem can’t reach Actual. Check the Actual connection, then try again."
-        "tandem_not_ready" -> "Tandem isn’t ready yet. Check its connection to Actual, then try again."
+        "actual_only" -> "Actual is responding at this address. Enter the address of your Tandem server."
+        "address_unreachable", "network-error" -> "Tandem isn’t responding at this address. Check the server address."
+        "actual_unavailable" -> "Tandem can’t connect to Actual. Check that the Actual server is running."
+        "tandem_not_ready" -> "Tandem is starting up. Try again in a moment."
         "tandem_route_unavailable" ->
-            "Tandem’s sign-in route isn’t available. Check the Tandem API address and the proxy’s /api/v1/ route."
-        "invalid_credentials" -> "The password didn’t match this Actual server. Check it and try again."
-        "invalid_budget_password" -> "That budget password didn’t unlock this budget. Check it and try again."
-        "invalid_device_credential", "sign_in_expired" -> "Sign in again to restore access."
-        "sign_in_required" -> "Sign in to open a budget."
-        "bank_sync_failed" -> "Actual couldn’t sync your bank transactions. Check the bank connection and try again."
-        "bank_sync_busy" -> "Bank sync is already running. Try again shortly."
-        "duplicate_imported_id" -> "Two statement rows share a reference. Choose a column with unique values."
-        "actual_operation_failed" -> "Actual couldn’t complete this change. Check the Actual connection and try again."
-        "budget_sync_failed" -> "Tandem couldn’t refresh this budget from Actual. Check the Actual connection and try again."
-        "operation_uncertain" -> "Tandem couldn’t confirm whether Actual saved this change. Check Actual, then try again."
-        "operation_in_progress" -> "Tandem is still processing this change. Wait a moment, then try again."
-        "operation_not_found" -> "Tandem has no saved status for this edit. Try again, or check Actual before removing it."
-        "schedule_changed" -> "The scheduled transaction changed in Actual. Refresh the schedule, then try again."
-        "operation_rejected" -> "Actual rejected this change earlier. Refresh the budget, then try again."
-        "idempotency_key_reused" -> "Tandem matched this change to a different request. Refresh the budget, then try again."
+            "Tandem’s sign-in route isn’t available. Check that your proxy sends /api/v1/ to Tandem."
+        "invalid_credentials" -> "That password doesn’t match this Actual server. Check the password."
+        "invalid_budget_password" -> "That password didn’t unlock this encrypted budget. Check the budget password."
+        "invalid_device_credential", "sign_in_expired" -> "Your sign-in is no longer active. Sign in again."
+        "sign_in_required" -> "Sign in to open your budgets."
+        "bank_sync_failed" -> "Actual couldn’t sync bank transactions. Check the bank connection."
+        "bank_sync_busy" -> "Bank sync is already running. Wait a moment."
+        "duplicate_imported_id" -> "Statement rows share a reference. Map a column with unique values."
+        "statement_preview_failed" -> "Tandem couldn’t check which statement rows are already in Actual. Check your connection."
+        "actual_operation_failed" -> "Actual couldn’t save this change. Refresh the budget before trying again."
+        "budget_sync_failed" -> "Tandem couldn’t refresh this budget from Actual. Check the Actual connection."
+        "operation_uncertain" -> "Tandem can’t confirm whether Actual saved this change. Check Actual before changing it again."
+        "operation_in_progress" -> "Tandem is still processing this change. Wait for it to finish."
+        "operation_not_found" -> "Tandem has no saved status for this edit. Check Actual before removing it."
+        "schedule_changed" -> "This scheduled transaction changed in Actual. Refresh the schedule before trying again."
+        "operation_rejected" -> "Actual rejected this change earlier. Refresh the budget before trying again."
+        "idempotency_key_reused" -> "This change is linked to a different request. Refresh the budget before trying again."
         "operation_result_unavailable" -> "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget."
-        "invalid_request" -> "Check the details and try again."
+        "invalid_request" ->
+            if (context == ApiFailureContext.SIGN_IN) {
+                "Tandem couldn’t start sign-in. Check the Actual password."
+            } else {
+                "Tandem couldn’t use those details. Check the form."
+            }
         "not_found" ->
             if (context == ApiFailureContext.SYNC) {
                 "This budget is no longer available. Choose another budget."
             } else {
-                "This item is no longer available. Refresh the budget and try again."
+                "This item is no longer available. Refresh the budget."
             }
         else ->
             when (effectiveStatus) {
-                400, 422 -> "Tandem rejected the request. Check the details and try again."
+                400, 422 -> "Tandem couldn’t accept this request. Check the details."
                 401 ->
-                    if (context == ApiFailureContext.SYNC) {
-                        "Tandem couldn’t verify this device. Sign in again, then sync."
-                    } else {
-                        "Tandem couldn’t verify this request. Sign in again and try again."
-                    }
+                    "Tandem can’t verify this device. Sign in again."
                 403 ->
-                    if (context == ApiFailureContext.SYNC) {
-                        "This device can’t open this budget. Ask the budget owner for access."
-                    } else {
-                        "This device can’t open that budget. Ask the budget owner for access."
-                    }
-                404, 405 -> "Tandem’s API route isn’t available. Check the address and the proxy’s /api/v1/ route."
-                408, 425, 429 -> "Tandem couldn’t complete the request. Wait a moment, then try again."
+                    "This device doesn’t have access to this budget. Ask the budget owner to grant access."
+                404, 405 -> "Tandem’s API route isn’t available. Check that your proxy sends /api/v1/ to Tandem."
+                408, 425, 429 -> "Tandem couldn’t complete the request. Wait a moment before trying again."
                 in 500..599 -> "Tandem is temporarily unavailable. Try again shortly."
                 else -> fallback
             }

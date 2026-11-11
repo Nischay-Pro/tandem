@@ -39,67 +39,76 @@ class TandemMobileSessionTest {
     fun openIdVerifierSurvivesBackgroundTimeButIsBoundToServerAndExpires() {
         var now = 1_000L
         val state = OpenIdLoginProofState { now }
-        val challenge = state.begin("https://tandem.example")
+        val requestProof = state.begin("https://tandem.example")
 
-        assertEquals(43, challenge.length)
-        assertNotNull(state.takeVerifierForCallback("https://tandem.example"))
-        assertNull(state.takeVerifierForCallback("https://tandem.example"))
+        assertEquals(43, requestProof.codeChallenge.length)
+        assertEquals(43, requestProof.callbackState.length)
+        assertNull(state.takeVerifierForCallback("https://tandem.example", "X".repeat(43)))
+        assertNotNull(state.takeVerifierForCallback("https://tandem.example", requestProof.callbackState))
+        assertNull(state.takeVerifierForCallback("https://tandem.example", requestProof.callbackState))
 
         now += 60_000L
-        state.begin("https://tandem.example")
-        assertNull(state.takeVerifierForCallback("https://other.example"))
-        assertNull(state.takeVerifierForCallback("https://tandem.example"))
+        val nextProof = state.begin("https://tandem.example")
+        assertNull(state.takeVerifierForCallback("https://other.example", nextProof.callbackState))
+        assertNull(state.takeVerifierForCallback("https://tandem.example", nextProof.callbackState))
 
-        state.begin("https://tandem.example")
+        val expiringProof = state.begin("https://tandem.example")
         now += OPEN_ID_PROOF_TTL_MILLIS
-        assertNull(state.takeVerifierForCallback("https://tandem.example"))
+        assertNull(state.takeVerifierForCallback("https://tandem.example", expiringProof.callbackState))
     }
 
     @Test
     fun openIdTransientVerifierRestoresForCompletionThenExpiresOnRestore() {
         var now = 1_000L
         val original = OpenIdLoginProofState { now }
-        original.begin("https://tandem.example")
+        val requestProof = original.begin("https://tandem.example")
         val snapshot = original.saveTransientSnapshot()
 
         val restored = OpenIdLoginProofState.restoreTransientSnapshot(snapshot, { now })
-        assertNotNull(restored.takeVerifierForCallback("https://tandem.example"))
-        assertNull(restored.takeVerifierForCallback("https://tandem.example"))
+        assertNotNull(restored.takeVerifierForCallback("https://tandem.example", requestProof.callbackState))
+        assertNull(restored.takeVerifierForCallback("https://tandem.example", requestProof.callbackState))
 
         now += OPEN_ID_PROOF_TTL_MILLIS
         val expired = OpenIdLoginProofState.restoreTransientSnapshot(snapshot, { now })
-        assertNull(expired.takeVerifierForCallback("https://tandem.example"))
+        assertNull(expired.takeVerifierForCallback("https://tandem.example", requestProof.callbackState))
         val overlong =
             OpenIdLoginProofState.restoreTransientSnapshot(
-                listOf("verifier", "https://tandem.example", (now + OPEN_ID_PROOF_TTL_MILLIS * 2).toString()),
+                listOf("verifier", "https://tandem.example", requestProof.callbackState, (now + OPEN_ID_PROOF_TTL_MILLIS * 2).toString()),
                 { now },
             )
-        assertNull(overlong.takeVerifierForCallback("https://tandem.example"))
+        assertNull(overlong.takeVerifierForCallback("https://tandem.example", requestProof.callbackState))
         original.clear()
-        assertNull(original.takeVerifierForCallback("https://tandem.example"))
-        assertEquals(listOf("", "", "0"), original.saveTransientSnapshot())
+        assertNull(original.takeVerifierForCallback("https://tandem.example", requestProof.callbackState))
+        assertEquals(listOf("", "", "", "0"), original.saveTransientSnapshot())
     }
 
     @Test
     fun cancellingOpenIdSignInClearsTheTransientVerifier() {
         val now = 1_000L
         val state = OpenIdLoginProofState { now }
-        state.begin("https://tandem.example")
+        val requestProof = state.begin("https://tandem.example")
         val session = TandemMobileSession(TandemApiClient(), null, { now }, openIdLoginProofState = state)
 
         session.cancelActualOpenIdSignIn()
 
-        assertNull(state.takeVerifierForCallback("https://tandem.example"))
-        assertEquals(listOf("", "", "0"), state.saveTransientSnapshot())
+        assertNull(state.takeVerifierForCallback("https://tandem.example", requestProof.callbackState))
+        assertEquals(listOf("", "", "", "0"), state.saveTransientSnapshot())
     }
 
     @Test
-    fun acceptsOnlyShortLivedTandemOpenIdReturnCodes() {
+    fun acceptsOnlyShortLivedTandemOpenIdReturnsWithMatchingState() {
         val code = "C".repeat(43)
-        assertEquals(code, actualOpenIdReturnCode("tandem://signin/complete?code=$code"))
-        assertNull(actualOpenIdReturnCode("https://tandem.example/signin/complete?code=$code"))
-        assertNull(actualOpenIdReturnCode("tandem://signin/complete?token=actual-session-token"))
-        assertNull(actualOpenIdReturnCode("tandem://signin/complete?code=short"))
+        val callbackState = "S".repeat(43)
+        val validUri = "app.tandemforactual:/signin/complete?code=$code&state=$callbackState"
+        assertEquals(ActualOpenIdReturn(code, callbackState), actualOpenIdReturn(validUri))
+        assertNull(actualOpenIdReturn("https://tandem.example/signin/complete?code=$code&state=$callbackState"))
+        assertNull(actualOpenIdReturn("app.tandemforactual://signin/complete?code=$code&state=$callbackState"))
+        assertNull(actualOpenIdReturn("app.tandemforactual:/wrong-path?code=$code&state=$callbackState"))
+        assertNull(actualOpenIdReturn("app.tandemforactual:/signin/complete?code=$code"))
+        assertNull(actualOpenIdReturn("app.tandemforactual:/signin/complete?token=actual-session-token&state=$callbackState"))
+        assertNull(actualOpenIdReturn("app.tandemforactual:/signin/complete?code=short&state=$callbackState"))
+        assertNull(actualOpenIdReturn("app.tandemforactual:/signin/complete?code=$code&code=$code"))
+        assertNull(actualOpenIdReturn("app.tandemforactual:/signin/complete?code=$code&state=$callbackState#fragment"))
     }
 
     @Test
@@ -109,7 +118,7 @@ class TandemMobileSessionTest {
             TandemApiException("database trace: private detail", httpStatus = 503).userFacingMessage("fallback"),
         )
         assertEquals(
-            "Tandem rejected the request. Check the details and try again.",
+            "Tandem couldn’t accept this request. Check the details.",
             TandemApiException("raw validation detail", httpStatus = 422).userFacingMessage("fallback"),
         )
         assertEquals(
@@ -117,7 +126,7 @@ class TandemMobileSessionTest {
             TandemApiException("raw transport detail").userFacingMessage("fallback"),
         )
         assertEquals(
-            "Two statement rows share a reference. Choose a column with unique values.",
+            "Statement rows share a reference. Map a column with unique values.",
             TandemApiException("duplicate_imported_id", httpStatus = 400, safeMessageOverride = "untrusted server text")
                 .userFacingMessage("fallback"),
         )
@@ -127,23 +136,33 @@ class TandemMobileSessionTest {
     fun commonApiErrorsExplainWhatHappenedAndGiveOneNextStep() {
         val messages =
             listOf(
-                "sign_in_required" to (null to "Sign in to open a budget."),
-                "invalid_credentials" to (null to "The password didn’t match this Actual server. Check it and try again."),
-                "invalid_device_credential" to (null to "Sign in again to restore access."),
-                "bank_sync_failed" to (null to "Actual couldn’t sync your bank transactions. Check the bank connection and try again."),
-                "bank_sync_busy" to (null to "Bank sync is already running. Try again shortly."),
-                "duplicate_imported_id" to (null to "Two statement rows share a reference. Choose a column with unique values."),
-                "actual_operation_failed" to (null to "Actual couldn’t complete this change. Check the Actual connection and try again."),
+                "actual_only" to (null to "Actual is responding at this address. Enter the address of your Tandem server."),
+                "address_unreachable" to (null to "Tandem isn’t responding at this address. Check the server address."),
+                "actual_unavailable" to (null to "Tandem can’t connect to Actual. Check that the Actual server is running."),
+                "tandem_not_ready" to (null to "Tandem is starting up. Try again in a moment."),
+                "tandem_route_unavailable" to
+                    (null to "Tandem’s sign-in route isn’t available. Check that your proxy sends /api/v1/ to Tandem."),
+                "sign_in_required" to (null to "Sign in to open your budgets."),
+                "invalid_credentials" to (null to "That password doesn’t match this Actual server. Check the password."),
+                "invalid_budget_password" to (null to "That password didn’t unlock this encrypted budget. Check the budget password."),
+                "invalid_device_credential" to (null to "Your sign-in is no longer active. Sign in again."),
+                "sign_in_expired" to (null to "Your sign-in is no longer active. Sign in again."),
+                "bank_sync_failed" to (null to "Actual couldn’t sync bank transactions. Check the bank connection."),
+                "bank_sync_busy" to (null to "Bank sync is already running. Wait a moment."),
+                "duplicate_imported_id" to (null to "Statement rows share a reference. Map a column with unique values."),
+                "statement_preview_failed" to
+                    (null to "Tandem couldn’t check which statement rows are already in Actual. Check your connection."),
+                "actual_operation_failed" to (null to "Actual couldn’t save this change. Refresh the budget before trying again."),
                 "operation_uncertain" to
-                    (null to "Tandem couldn’t confirm whether Actual saved this change. Check Actual, then try again."),
-                "operation_in_progress" to (null to "Tandem is still processing this change. Wait a moment, then try again."),
-                "schedule_changed" to (409 to "The scheduled transaction changed in Actual. Refresh the schedule, then try again."),
-                "operation_rejected" to (null to "Actual rejected this change earlier. Refresh the budget, then try again."),
+                    (null to "Tandem can’t confirm whether Actual saved this change. Check Actual before changing it again."),
+                "operation_in_progress" to (null to "Tandem is still processing this change. Wait for it to finish."),
+                "schedule_changed" to (409 to "This scheduled transaction changed in Actual. Refresh the schedule before trying again."),
+                "operation_rejected" to (null to "Actual rejected this change earlier. Refresh the budget before trying again."),
                 "idempotency_key_reused" to
-                    (null to "Tandem matched this change to a different request. Refresh the budget, then try again."),
+                    (null to "This change is linked to a different request. Refresh the budget before trying again."),
                 "operation_result_unavailable" to
                     (null to "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget."),
-                "invalid_request" to (null to "Check the details and try again."),
+                "invalid_request" to (null to "Tandem couldn’t use those details. Check the form."),
                 "server-error" to (503 to "Tandem is temporarily unavailable. Try again shortly."),
             )
 
@@ -161,18 +180,18 @@ class TandemMobileSessionTest {
         val fallback = "fallback"
         val sharedOutages =
             listOf(
-                "network-error" to (null to "Couldn’t reach Tandem at this address. Check the address and connection."),
-                "http-404" to (404 to "Tandem’s API route isn’t available. Check the address and the proxy’s /api/v1/ route."),
-                "http-405" to (405 to "Tandem’s API route isn’t available. Check the address and the proxy’s /api/v1/ route."),
-                "http-400" to (400 to "Tandem rejected the request. Check the details and try again."),
-                "http-422" to (422 to "Tandem rejected the request. Check the details and try again."),
-                "http-408" to (408 to "Tandem couldn’t complete the request. Wait a moment, then try again."),
-                "http-429" to (429 to "Tandem couldn’t complete the request. Wait a moment, then try again."),
+                "network-error" to (null to "Tandem isn’t responding at this address. Check the server address."),
+                "http-404" to (404 to "Tandem’s API route isn’t available. Check that your proxy sends /api/v1/ to Tandem."),
+                "http-405" to (405 to "Tandem’s API route isn’t available. Check that your proxy sends /api/v1/ to Tandem."),
+                "http-400" to (400 to "Tandem couldn’t accept this request. Check the details."),
+                "http-422" to (422 to "Tandem couldn’t accept this request. Check the details."),
+                "http-408" to (408 to "Tandem couldn’t complete the request. Wait a moment before trying again."),
+                "http-429" to (429 to "Tandem couldn’t complete the request. Wait a moment before trying again."),
                 "http-500" to (500 to "Tandem is temporarily unavailable. Try again shortly."),
                 "http-502" to (502 to "Tandem is temporarily unavailable. Try again shortly."),
                 "http-503" to (503 to "Tandem is temporarily unavailable. Try again shortly."),
                 "http-504" to (504 to "Tandem is temporarily unavailable. Try again shortly."),
-                "actual_unavailable" to (503 to "Tandem can’t reach Actual. Check the Actual connection, then try again."),
+                "actual_unavailable" to (503 to "Tandem can’t connect to Actual. Check that the Actual server is running."),
             )
 
         sharedOutages.forEach { (code, expected) ->
@@ -190,7 +209,7 @@ class TandemMobileSessionTest {
         val thrownNetwork =
             TandemApiException("network-error", cause = IllegalStateException("private host details"))
                 .userFacingMessage(fallback, ApiFailureContext.SIGN_IN)
-        assertEquals("Couldn’t reach Tandem at this address. Check the address and connection.", thrownNetwork)
+        assertEquals("Tandem isn’t responding at this address. Check the server address.", thrownNetwork)
         assertFalse(thrownNetwork.contains("private host details"))
         val thrownSyncNetwork =
             TandemApiException("network-error", cause = IllegalStateException("private host details"))
@@ -217,11 +236,11 @@ class TandemMobileSessionTest {
             apiFailureMessage("not_found", 404, ApiFailureContext.SYNC, fallback),
         )
         assertEquals(
-            "This item is no longer available. Refresh the budget and try again.",
+            "This item is no longer available. Refresh the budget.",
             apiFailureMessage("not_found", 404, ApiFailureContext.GENERAL, fallback),
         )
         assertEquals(
-            "Tandem has no saved status for this edit. Try again, or check Actual before removing it.",
+            "Tandem has no saved status for this edit. Check Actual before removing it.",
             apiFailureMessage("operation_not_found", 404, ApiFailureContext.SYNC, fallback),
         )
         assertFalse(TandemApiException("http-404", 404).indicatesTandemReachable())
@@ -230,12 +249,16 @@ class TandemMobileSessionTest {
         assertTrue(BudgetSyncRemoteException("not_found", 404).indicatesTandemReachable())
 
         assertEquals(
-            "The password didn’t match this Actual server. Check it and try again.",
+            "That password doesn’t match this Actual server. Check the password.",
             apiFailureMessage("invalid_credentials", 401, ApiFailureContext.SIGN_IN, fallback),
         )
         assertEquals(
-            "That budget password didn’t unlock this budget. Check it and try again.",
+            "That password didn’t unlock this encrypted budget. Check the budget password.",
             apiFailureMessage("invalid_budget_password", 422, ApiFailureContext.SYNC, fallback),
+        )
+        assertEquals(
+            "Tandem couldn’t start sign-in. Check the Actual password.",
+            apiFailureMessage("invalid_request", 400, ApiFailureContext.SIGN_IN, fallback),
         )
         assertFalse(
             apiFailureMessage("http-422", 422, ApiFailureContext.SYNC, fallback).contains("password", ignoreCase = true),
@@ -384,11 +407,48 @@ class TandemMobileSessionTest {
 
     @Test
     fun uncertainWriteScreenOffersRecoveryActionsOnlyAfterASettledStatusResponse() {
-        assertFalse(canOfferUncertainWriteRecoveryActions("uncertain", statusCheckAttempted = false))
-        assertTrue(canOfferUncertainWriteRecoveryActions("uncertain", statusCheckAttempted = true))
-        assertTrue(canOfferUncertainWriteRecoveryActions("queued", statusCheckAttempted = true))
-        assertFalse(canOfferUncertainWriteRecoveryActions("committed", statusCheckAttempted = true))
-        assertFalse(canOfferUncertainWriteRecoveryActions("conflict", statusCheckAttempted = true))
+        assertFalse(
+            canOfferUncertainWriteRecoveryActions(
+                "uncertain",
+                serverConfirmedUncertainStatus = false,
+                isNotFound = false,
+            ),
+        )
+        assertTrue(
+            canOfferUncertainWriteRecoveryActions(
+                "uncertain",
+                serverConfirmedUncertainStatus = true,
+                isNotFound = false,
+            ),
+        )
+        assertFalse(
+            canOfferUncertainWriteRecoveryActions(
+                "uncertain",
+                serverConfirmedUncertainStatus = true,
+                isNotFound = true,
+            ),
+        )
+        assertFalse(
+            canOfferUncertainWriteRecoveryActions(
+                "queued",
+                serverConfirmedUncertainStatus = true,
+                isNotFound = false,
+            ),
+        )
+        assertFalse(
+            canOfferUncertainWriteRecoveryActions(
+                "committed",
+                serverConfirmedUncertainStatus = true,
+                isNotFound = false,
+            ),
+        )
+        assertFalse(
+            canOfferUncertainWriteRecoveryActions(
+                "conflict",
+                serverConfirmedUncertainStatus = true,
+                isNotFound = false,
+            ),
+        )
         assertTrue(isUncertainWriteOperationNotFound("operation_not_found"))
         assertFalse(isUncertainWriteOperationNotFound("http-404"))
 

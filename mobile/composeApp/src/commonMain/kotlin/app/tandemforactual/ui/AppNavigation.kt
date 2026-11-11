@@ -10,10 +10,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -205,13 +207,16 @@ internal fun AppHeader(
     liveBudgetMonth: LiveBudgetMonthSummary?,
     activitySelectionTotalMinor: Long?,
     conflictTitle: String?,
+    compactLandscape: Boolean = false,
+    onAddTransaction: (() -> Unit)? = null,
+    addTransactionEnabled: Boolean = true,
 ) {
     val palette = tandemPalette
     val headerFontScale = LocalDensity.current.fontScale
     val budgetHeaderSlotHeight = maxOf(88.dp, 88.dp * headerFontScale)
     val headerMinHeight =
         if (route == AppRoute.BUDGET || route == AppRoute.BUDGET_CHOOSER) {
-            budgetHeaderSlotHeight
+            if (compactLandscape && headerFontScale < 1.5f) 64.dp else budgetHeaderSlotHeight
         } else {
             64.dp
         }
@@ -301,6 +306,16 @@ internal fun AppHeader(
                     )
                 }
             }
+        }
+        if (route == AppRoute.BUDGET && onAddTransaction != null) {
+            TandemIconButton(
+                icon = Lucide.Plus,
+                contentDescription = if (addTransactionEnabled) "Add transaction" else "Read-only mode is on",
+                onClickLabel = "Add transaction",
+                enabled = addTransactionEnabled,
+                iconSizeDp = 22,
+                onClick = onAddTransaction,
+            )
         }
         if (route.isTab()) {
             MainCloudStatusButton(syncStatus, pendingWriteStatuses, onSync)
@@ -400,6 +415,90 @@ internal fun BottomNavigation(
                         overflow = TextOverflow.Clip,
                     )
                 }
+            }
+        }
+    }
+}
+
+internal fun isLandscapeViewport(
+    widthPx: Int,
+    heightPx: Int,
+): Boolean = widthPx > heightPx
+
+@Composable
+internal fun SideNavigationRail(
+    selected: AppRoute,
+    selectTab: (AppRoute) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val palette = tandemPalette
+    val items =
+        listOf(
+            AppRoute.BUDGET to "Budget",
+            AppRoute.ACCOUNTS to "Accounts",
+            AppRoute.ACTIVITY to "Activity",
+            AppRoute.REPORTS to "Reports",
+            AppRoute.SETTINGS to "Settings",
+        )
+    Column(
+        modifier =
+            modifier
+                .width(80.dp)
+                .fillMaxHeight()
+                .background(palette.surface)
+                .padding(vertical = TandemSpacing.extraSmall),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceEvenly,
+    ) {
+        items.forEach { (route, label) ->
+            val active = route == selected
+            val tabColor by
+                animateColorAsState(
+                    targetValue = if (active) palette.accent else palette.muted,
+                    animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+                    label = "rail-tab-color-${route.name.lowercase()}",
+                )
+            val iconScale by
+                animateFloatAsState(
+                    targetValue = if (active) 1.08f else 1f,
+                    animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
+                    label = "rail-tab-icon-scale-${route.name.lowercase()}",
+                )
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = 52.dp)
+                        .clip(RoundedCornerShape(TandemShapes.medium))
+                        .selectable(
+                            selected = active,
+                            role = Role.Tab,
+                            onClick = { selectTab(route) },
+                        ).semantics(mergeDescendants = true) {
+                            contentDescription = label
+                            this.selected = active
+                        }.padding(vertical = TandemSpacing.xxSmall),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
+            ) {
+                Box(
+                    Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(if (active) palette.accentSurface else Color.Transparent),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    NavigationGlyph(route, tabColor, iconScale)
+                }
+                Text(
+                    label,
+                    color = tabColor,
+                    fontSize = TandemTypography.micro,
+                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }

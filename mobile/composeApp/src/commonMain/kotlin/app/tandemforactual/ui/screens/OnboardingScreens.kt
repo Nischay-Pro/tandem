@@ -26,10 +26,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.isLocalHttpHost
@@ -84,33 +82,13 @@ internal fun WelcomeScreen(
     navigation: AppNavigation,
     signOutNotice: String? = null,
 ) {
-    val palette = tandemPalette
-    val uriHandler = LocalUriHandler.current
     OnboardingLayout(
         horizontalPadding = TandemSpacing.extraLarge,
         content = {
             Spacer(Modifier.height(14.dp))
             TandemBrandMark(Modifier.size(72.dp))
-            Heading("Tandem for Actual Budget", "Connect to your own Actual Budget server.")
+            Heading("Tandem for Actual Budget", "Have your Tandem server address ready.")
             signOutNotice?.let { InfoBubble(it) }
-            SurfaceCard {
-                Column(
-                    Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                ) {
-                    Text("Before you start", color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
-                    BodyText("Have your server address ready.")
-                    Text(
-                        "Your budget data stays between this device and your server.",
-                        color = palette.text,
-                        fontSize = TandemTypography.compactBody,
-                        lineHeight = TandemTypography.bodyLineHeight,
-                    )
-                }
-            }
-            SecondaryButton("How to set up a server", modifier = Modifier.fillMaxWidth()) {
-                uriHandler.openUri("https://github.com/Nischay-Pro/tandem#readme")
-            }
         },
         actions = {
             PrimaryButton("Get started", modifier = Modifier.fillMaxWidth()) { navigation.open(AppRoute.SERVER_ADDRESS) }
@@ -277,7 +255,7 @@ internal fun SignInScreen(
                     mobileSession.credentialStorageError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
                     if (!passwordActive && !openIdActive) {
                         InlineMessage(
-                            "Tandem can’t use this Actual sign-in method. Change it to password or OpenID in Actual, then try again.",
+                            "Tandem can’t use this sign-in method. Change Actual to password or OpenID.",
                             InlineMessageKind.INFO,
                         )
                     }
@@ -286,7 +264,7 @@ internal fun SignInScreen(
                     InlineMessage(mobileSession.signInError.orEmpty(), InlineMessageKind.ERROR)
                 else ->
                     InlineMessage(
-                        "Tandem can’t use this Actual sign-in method. Change it to password or OpenID in Actual, then try again.",
+                        "Tandem can’t use this sign-in method. Change Actual to password or OpenID.",
                         InlineMessageKind.INFO,
                     )
             }
@@ -351,7 +329,6 @@ internal fun BudgetChooserScreen(
         )
         when {
             usingCachedCatalog || (mobileSession.budgets.isEmpty() && cachedCatalog.isNotEmpty()) -> {
-                BodyText("Saved budgets are available while Tandem is offline.")
                 selectableBudgets.forEach { budget ->
                     ChoiceRow(
                         budget.name,
@@ -379,7 +356,7 @@ internal fun BudgetChooserScreen(
             mobileSession.budgets.isEmpty() && mobileSession.isAuthenticated -> {
                 mobileSession.budgetError?.let { error ->
                     InlineMessage(error, InlineMessageKind.ERROR)
-                } ?: EmptyState("No budgets available", "Ask the budget owner to give this device access.")
+                } ?: EmptyState("No budgets available", "Ask the budget owner to grant access.")
                 SecondaryButton("Try again", onClick = onRefreshBudgets)
             }
             mobileSession.budgets.isEmpty() -> {

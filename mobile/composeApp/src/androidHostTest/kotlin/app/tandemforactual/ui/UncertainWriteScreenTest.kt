@@ -10,6 +10,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
@@ -57,9 +58,72 @@ class UncertainWriteScreenTest {
     }
 
     @Test
-    fun failedStatusCheckStillOffersRetryAndWarnedRemoval() {
+    fun noStatusResultOffersOnlyCheckStatus() {
         var retryRequested = false
-        var removalConfirmed = false
+        var removalRequested = false
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                UncertainWriteDetailsScreen(
+                    state = AppState(),
+                    operation = uncertainWrite(),
+                    transaction = transactionItem(),
+                    isChecked = false,
+                    isNotFound = false,
+                    checkError = null,
+                    isSyncing = false,
+                    onCheckStatus = {},
+                    onRetry = { retryRequested = true },
+                    onDiscard = { removalRequested = true },
+                    onReviewConflict = {},
+                    onReviewRejected = {},
+                    onDone = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Check status").assertExists()
+        composeTestRule.onNodeWithText("Try again").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Remove edit").assertDoesNotExist()
+        assertFalse(retryRequested)
+        assertFalse(removalRequested)
+    }
+
+    @Test
+    fun failedApiStatusCheckOffersOnlyCheckAgain() {
+        var retryRequested = false
+        var removalRequested = false
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                UncertainWriteDetailsScreen(
+                    state = AppState(),
+                    operation = uncertainWrite(),
+                    transaction = transactionItem(),
+                    isChecked = true,
+                    isNotFound = false,
+                    checkError = "Tandem rejected the status check.",
+                    isSyncing = false,
+                    onCheckStatus = {},
+                    onRetry = { retryRequested = true },
+                    onDiscard = { removalRequested = true },
+                    onReviewConflict = {},
+                    onReviewRejected = {},
+                    onDone = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Couldn’t check this change").assertExists()
+        composeTestRule.onNodeWithText("Check again").assertExists()
+        composeTestRule.onNodeWithText("Try again").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Remove edit").assertDoesNotExist()
+        assertFalse(retryRequested)
+        assertFalse(removalRequested)
+    }
+
+    @Test
+    fun failedOfflineStatusCheckOffersOnlyCheckAgain() {
+        var retryRequested = false
+        var removalRequested = false
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
                 UncertainWriteDetailsScreen(
@@ -72,7 +136,7 @@ class UncertainWriteScreenTest {
                     isSyncing = false,
                     onCheckStatus = {},
                     onRetry = { retryRequested = true },
-                    onDiscard = { removalConfirmed = true },
+                    onDiscard = { removalRequested = true },
                     onReviewConflict = {},
                     onReviewRejected = {},
                     onDone = {},
@@ -82,12 +146,47 @@ class UncertainWriteScreenTest {
 
         composeTestRule.onNodeWithText("Couldn’t check this change").assertExists()
         composeTestRule.onNodeWithText("Check again").assertExists()
-        composeTestRule.onNodeWithText("Try again").performClick()
-        assertTrue(retryRequested)
-        composeTestRule.onNodeWithText("Remove edit").performClick()
-        composeTestRule.onNodeWithText("Actual may already have saved it", substring = true).assertExists()
-        composeTestRule.onAllNodesWithText("Remove edit")[1].performClick()
-        assertTrue(removalConfirmed)
+        composeTestRule.onNodeWithText("Try again").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Remove edit").assertDoesNotExist()
+        assertFalse(retryRequested)
+        assertFalse(removalRequested)
+    }
+
+    @Test
+    fun authoritativeNotFoundDoesNotOfferRetryOrRemove() {
+        var retryRequested = false
+        var removalRequested = false
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                UncertainWriteDetailsScreen(
+                    state = AppState(),
+                    operation = uncertainWrite().copy(lastErrorCode = "operation_not_found"),
+                    transaction = transactionItem(),
+                    isChecked = true,
+                    isNotFound = true,
+                    checkError = null,
+                    isSyncing = false,
+                    onCheckStatus = {},
+                    onRetry = { retryRequested = true },
+                    onDiscard = { removalRequested = true },
+                    onReviewConflict = {},
+                    onReviewRejected = {},
+                    onDone = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Status not found").assertExists()
+        composeTestRule
+            .onNodeWithText(
+                "Keep it on this device and check Actual before retrying.",
+                substring = true,
+            ).assertExists()
+        composeTestRule.onNodeWithText("Check again").assertExists()
+        composeTestRule.onNodeWithText("Try again").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Remove edit").assertDoesNotExist()
+        assertFalse(retryRequested)
+        assertFalse(removalRequested)
     }
 
     private fun uncertainWrite() =

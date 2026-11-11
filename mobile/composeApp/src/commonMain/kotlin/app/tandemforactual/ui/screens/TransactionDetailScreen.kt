@@ -133,7 +133,11 @@ internal fun TransactionDetailScreen(
             DividerLine()
             ListRow("Category", leading = RowLeading.Icon(Lucide.Tags), trailing = state.transactionCategory)
             DividerLine()
-            ListRow("Date", leading = RowLeading.Icon(Lucide.CalendarDays), trailing = state.transactionDate)
+            ListRow(
+                "Date",
+                leading = RowLeading.Icon(Lucide.CalendarDays),
+                trailing = displayTransactionDate(state.transactionDate),
+            )
             DividerLine()
             ListRow(
                 "Notes",

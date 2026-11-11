@@ -56,6 +56,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
@@ -850,16 +851,14 @@ fun TandemApp(
     }
     LaunchedEffect(mobileSession, state.serverUrl) {
         AuthReturnEvents.uri.collect { returnUri ->
-            val code = returnUri?.let(::actualOpenIdReturnCode)
             if (returnUri != null) {
                 AuthReturnEvents.clear(returnUri)
-                if (code != null) {
-                    mobileSession.completeActualOpenIdSignIn(state.serverUrl, code)
+                val callback = actualOpenIdReturn(returnUri)
+                if (callback != null) {
+                    mobileSession.completeActualOpenIdSignIn(state.serverUrl, callback.code, callback.state)
                     if (mobileSession.authenticatedDevice != null) {
                         navigation.reset(AppRoute.BUDGET_CHOOSER)
                     }
-                } else {
-                    mobileSession.cancelActualOpenIdSignIn()
                 }
             }
         }
@@ -1030,6 +1029,8 @@ fun TandemApp(
         animateThemeChanges = state.settingsStorageReady || appPreferencesStore == null,
     ) {
         val palette = tandemPalette
+        val windowSize = LocalWindowInfo.current.containerSize
+        val isLandscape = isLandscapeViewport(windowSize.width, windowSize.height)
         val isDark =
             state.theme == ThemeMode.DARK ||
                 state.theme == ThemeMode.PURE_BLACK ||
@@ -1118,6 +1119,18 @@ fun TandemApp(
                     liveBudgetMonth = liveBudgetMonth,
                     activitySelectionTotalMinor = activitySelectionTotalMinor,
                     conflictTitle = conflictTitle,
+                    compactLandscape = isLandscape,
+                    onAddTransaction =
+                        if (isLandscape &&
+                            !transactionSheetActive &&
+                            headerRoute == AppRoute.BUDGET &&
+                            shouldShowBudgetCreateAction(state.selectedBudgetId.isNotBlank(), budgetGroupReorderActive)
+                        ) {
+                            { navigation.newTransaction(null) }
+                        } else {
+                            null
+                        },
+                    addTransactionEnabled = !state.readOnlyMode,
                 )
             }
         }
@@ -1222,7 +1235,8 @@ fun TandemApp(
                                 notificationPermissionEnabled = notificationPermissionEnabled,
                                 onToggleNotificationPermission = onToggleNotificationPermission,
                             )
-                            if (visibleRoute == AppRoute.BUDGET &&
+                            if (!isLandscape &&
+                                visibleRoute == AppRoute.BUDGET &&
                                 shouldShowBudgetCreateAction(state.selectedBudgetId.isNotBlank(), budgetGroupReorderActive)
                             ) {
                                 val transactionActionCompact by
@@ -1274,7 +1288,9 @@ fun TandemApp(
                                 )
                             }
                         }
-                        if (includeChrome && visibleRoute.isTab()) BottomNavigation(visibleRoute, navigation.selectTab)
+                        if (includeChrome && visibleRoute.isTab() && !isLandscape) {
+                            BottomNavigation(visibleRoute, navigation.selectTab)
+                        }
                     }
                 }
             }
@@ -1285,153 +1301,172 @@ fun TandemApp(
             }
         }
         val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-        Column(
+        val backTargetTab = backPreviewRoute?.route?.takeIf { it.isTab() }
+        val tabShellRoute =
+            route.takeIf { it.isTab() }
+                ?: backTargetTab
+                ?: backStack.dropLast(1).lastOrNull { it.route.isTab() }?.route
+        val stationaryTabShell = tabShellRoute != null
+        val shellHeaderRoute =
+            when {
+                backTargetTab != null -> backTargetTab
+                transactionSheetActive -> transactionSheetBaseEntry?.route ?: route
+                else -> route
+            }
+        val showLandscapeRail =
+            isLandscape &&
+                tabShellRoute != null &&
+                route.showsBottomNavigation() &&
+                !imeVisible &&
+                !transactionSheetActive
+        Box(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .background(appBackgroundBrush(state.backgroundStyle, palette))
                     .safeDrawingPadding(),
         ) {
-            val backTargetTab = backPreviewRoute?.route?.takeIf { it.isTab() }
-            val tabShellRoute =
-                route.takeIf { it.isTab() }
-                    ?: backTargetTab
-                    ?: backStack.dropLast(1).lastOrNull { it.route.isTab() }?.route
-            val stationaryTabShell = tabShellRoute != null
-            val shellHeaderRoute =
-                when {
-                    backTargetTab != null -> backTargetTab
-                    transactionSheetActive -> transactionSheetBaseEntry?.route ?: route
-                    else -> route
-                }
-            if (tabShellRoute != null) renderHeader(shellHeaderRoute)
-            val transitionInputModifier =
-                Modifier.pointerInput(Unit) {
-                    awaitEachGesture {
-                        val down =
-                            awaitFirstDown(
-                                requireUnconsumed = false,
-                                pass = PointerEventPass.Initial,
-                            )
-                        state.pointerInputSequence += 1
-                        if (routeTransitionInputBlockedState.value) down.consume()
-                        do {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                            if (routeTransitionInputBlockedState.value) {
-                                event.changes.forEach { it.consume() }
-                            }
-                        } while (event.changes.any { it.pressed })
-                    }
-                }
-            Box(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .clipToBounds()
-                        .then(transitionInputModifier)
-                        .tandemEdgeBackGesture(backStack.size > 1 && !transactionSheetActive, handleBack, updateBackGesture),
+            if (showLandscapeRail) {
+                SideNavigationRail(
+                    selected = requireNotNull(tabShellRoute),
+                    selectTab = navigation.selectTab,
+                    modifier = Modifier.align(Alignment.CenterStart),
+                )
+            }
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(start = if (showLandscapeRail) 80.dp else 0.dp),
             ) {
-                if (!transactionSheetActive && backGestureProgress > 0f && backPreviewRoute != null && backPreviewRoute != routeEntry) {
-                    val direction = backGestureDirection
-                    renderRoute(
-                        backPreviewRoute!!,
+                if (tabShellRoute != null) renderHeader(shellHeaderRoute)
+                val transitionInputModifier =
+                    Modifier.pointerInput(Unit) {
+                        awaitEachGesture {
+                            val down =
+                                awaitFirstDown(
+                                    requireUnconsumed = false,
+                                    pass = PointerEventPass.Initial,
+                                )
+                            state.pointerInputSequence += 1
+                            if (routeTransitionInputBlockedState.value) down.consume()
+                            do {
+                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                if (routeTransitionInputBlockedState.value) {
+                                    event.changes.forEach { it.consume() }
+                                }
+                            } while (event.changes.any { it.pressed })
+                        }
+                    }
+                Box(
+                    modifier =
                         Modifier
-                            .fillMaxSize()
-                            .clearAndSetSemantics {}
-                            .graphicsLayer {
-                                val progress = backGestureProgress
-                                translationX = -direction * size.width * (1f - progress)
-                            },
-                        false,
-                        !stationaryTabShell,
-                    )
-                }
-                AnimatedContent(
-                    targetState = backgroundRouteEntry,
-                    modifier = Modifier.fillMaxSize().clipToBounds(),
-                    transitionSpec = {
-                        when {
-                            reduceMotion ||
-                                skipNextRouteTransition ||
-                                initialState.route == AppRoute.STARTUP ||
-                                targetState.route == AppRoute.STARTUP ->
-                                EnterTransition.None togetherWith ExitTransition.None
-                            initialState.route.isTab() && targetState.route.isTab() ->
-                                fadeIn(tween(TandemMotion.CROSSFADE_MILLIS)) togetherWith
-                                    fadeOut(tween(TandemMotion.CROSSFADE_MILLIS)) using null
-                            routeTransitionDirection > 0f ->
-                                (
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .clipToBounds()
+                            .then(transitionInputModifier)
+                            .tandemEdgeBackGesture(backStack.size > 1 && !transactionSheetActive, handleBack, updateBackGesture),
+                ) {
+                    if (!transactionSheetActive && backGestureProgress > 0f && backPreviewRoute != null && backPreviewRoute != routeEntry) {
+                        val direction = backGestureDirection
+                        renderRoute(
+                            backPreviewRoute!!,
+                            Modifier
+                                .fillMaxSize()
+                                .clearAndSetSemantics {}
+                                .graphicsLayer {
+                                    val progress = backGestureProgress
+                                    translationX = -direction * size.width * (1f - progress)
+                                },
+                            false,
+                            !stationaryTabShell,
+                        )
+                    }
+                    AnimatedContent(
+                        targetState = backgroundRouteEntry,
+                        modifier = Modifier.fillMaxSize().clipToBounds(),
+                        transitionSpec = {
+                            when {
+                                reduceMotion ||
+                                    skipNextRouteTransition ||
+                                    initialState.route == AppRoute.STARTUP ||
+                                    targetState.route == AppRoute.STARTUP ->
+                                    EnterTransition.None togetherWith ExitTransition.None
+                                initialState.route.isTab() && targetState.route.isTab() ->
+                                    fadeIn(tween(TandemMotion.CROSSFADE_MILLIS)) togetherWith
+                                        fadeOut(tween(TandemMotion.CROSSFADE_MILLIS)) using null
+                                routeTransitionDirection > 0f ->
+                                    (
+                                        slideInHorizontally(
+                                            tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
+                                        ) { it }
+                                    ) togetherWith
+                                        slideOutHorizontally(
+                                            tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
+                                        ) { -it } using null
+                                routeTransitionDirection < 0f ->
                                     slideInHorizontally(
                                         tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                    ) { it }
-                                ) togetherWith
-                                    slideOutHorizontally(
-                                        tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                    ) { -it } using null
-                            routeTransitionDirection < 0f ->
-                                slideInHorizontally(
-                                    tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                ) { -it } togetherWith
-                                    slideOutHorizontally(
-                                        tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                    ) { it } using null
-                            else -> EnterTransition.None togetherWith ExitTransition.None
-                        }
-                    },
-                    label = "tandem-screen-transition",
-                ) { visibleEntry ->
-                    renderRoute(
-                        if (transactionSheetActive) backgroundRouteEntry else visibleEntry,
-                        Modifier.fillMaxSize().graphicsLayer {
-                            if (visibleEntry == backGestureOutgoingEntry && backGestureProgress > 0f) {
-                                translationX = backGestureProgress * size.width * backGestureDirection
+                                    ) { -it } togetherWith
+                                        slideOutHorizontally(
+                                            tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
+                                        ) { it } using null
+                                else -> EnterTransition.None togetherWith ExitTransition.None
                             }
                         },
-                        true,
-                        !stationaryTabShell,
-                    )
-                }
-            }
-            if (tabShellRoute != null && !imeVisible) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(72.dp),
-                    contentAlignment = Alignment.BottomCenter,
-                ) {
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = backgroundRouteEntry.route.showsBottomNavigation(),
-                        modifier = Modifier.fillMaxWidth(),
-                        enter = tandemBottomBarEnter(reduceMotion),
-                        exit = tandemBottomBarExit(reduceMotion),
-                    ) {
-                        BottomNavigation(
-                            tabShellRoute,
-                            navigation.selectTab,
+                        label = "tandem-screen-transition",
+                    ) { visibleEntry ->
+                        renderRoute(
+                            if (transactionSheetActive) backgroundRouteEntry else visibleEntry,
+                            Modifier.fillMaxSize().graphicsLayer {
+                                if (visibleEntry == backGestureOutgoingEntry && backGestureProgress > 0f) {
+                                    translationX = backGestureProgress * size.width * backGestureDirection
+                                }
+                            },
+                            true,
+                            !stationaryTabShell,
                         )
                     }
                 }
-            }
-            if (transactionSheetActive) {
-                TandemTaskSheet(
-                    visible = !transactionSheetClosing,
-                    onDismissRequest = handleBack,
-                    fullScreen = true,
-                    onDismissed = {
-                        routeTransitionDirection = 0f
-                        repeat(transactionSheetPopCount.coerceAtMost(backStack.size - 1)) {
-                            if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                if (tabShellRoute != null && !imeVisible && !isLandscape) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().height(72.dp),
+                        contentAlignment = Alignment.BottomCenter,
+                    ) {
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = backgroundRouteEntry.route.showsBottomNavigation(),
+                            modifier = Modifier.fillMaxWidth(),
+                            enter = tandemBottomBarEnter(reduceMotion),
+                            exit = tandemBottomBarExit(reduceMotion),
+                        ) {
+                            BottomNavigation(
+                                tabShellRoute,
+                                navigation.selectTab,
+                            )
                         }
-                        transactionSheetClosing = false
-                        transactionSheetPopCount = 1
-                    },
-                ) {
-                    AnimatedContent(
-                        targetState = routeEntry,
-                        modifier = Modifier.fillMaxSize().clipToBounds(),
-                        transitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
-                        label = "tandem-task-sheet-content",
-                    ) { sheetEntry ->
-                        renderRoute(sheetEntry, Modifier.fillMaxSize(), true, true)
+                    }
+                }
+                if (transactionSheetActive) {
+                    TandemTaskSheet(
+                        visible = !transactionSheetClosing,
+                        onDismissRequest = handleBack,
+                        fullScreen = true,
+                        onDismissed = {
+                            routeTransitionDirection = 0f
+                            repeat(transactionSheetPopCount.coerceAtMost(backStack.size - 1)) {
+                                if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                            }
+                            transactionSheetClosing = false
+                            transactionSheetPopCount = 1
+                        },
+                    ) {
+                        AnimatedContent(
+                            targetState = routeEntry,
+                            modifier = Modifier.fillMaxSize().clipToBounds(),
+                            transitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
+                            label = "tandem-task-sheet-content",
+                        ) { sheetEntry ->
+                            renderRoute(sheetEntry, Modifier.fillMaxSize(), true, true)
+                        }
                     }
                 }
             }
@@ -1493,15 +1528,3 @@ internal fun AppRoute.showsBottomNavigation(): Boolean =
     }
 
 internal fun AppRoute.isReportDetail(): Boolean = this == AppRoute.REPORT_DETAIL
-
-internal fun actualOpenIdReturnCode(uri: String): String? {
-    if (!uri.startsWith("tandem://signin/complete?")) return null
-    val code =
-        uri
-            .substringAfter('?')
-            .split('&')
-            .firstOrNull { it.startsWith("code=") }
-            ?.substringAfter('=')
-            ?: return null
-    return code.takeIf { it.matches(Regex("[A-Za-z0-9_-]{43}")) }
-}

@@ -3,6 +3,7 @@
 package app.tandemforactual.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,6 +13,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.DropdownMenu
+import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +31,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.api.client.StatementImportPreview
+import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
@@ -48,6 +53,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Receipt
 import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.X
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -90,6 +96,13 @@ internal fun AccountDetailScreen(
     var statementDateOrderName by rememberSaveable(state.selectedBudgetId, liveAccount?.id) {
         mutableStateOf(StatementDateOrder.MONTH_DAY_YEAR.name)
     }
+    var statementCsvLayout by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf<StatementCsvLayout?>(null) }
+    var statementCsvMapping by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(StatementCsvColumnMapping()) }
+    var showStatementCsvMapping by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(false) }
+    var statementImportPreview by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf<StatementImportPreview?>(null) }
+    var statementImportPreviewError by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf<String?>(null) }
+    var statementImportPreviewLoading by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(false) }
+    var statementImportPreviewRetry by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(0) }
     var showStatementImportDialog by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(false) }
     val statementDateOrder =
         StatementDateOrder.entries.firstOrNull { it.name == statementDateOrderName } ?: StatementDateOrder.MONTH_DAY_YEAR
@@ -99,11 +112,49 @@ internal fun AccountDetailScreen(
         rememberStatementFilePicker { file ->
             pickedStatementFile = file
             statementParseResult = null
+            statementImportPreview = null
+            statementImportPreviewError = null
+            statementCsvLayout = null
+            statementCsvMapping = StatementCsvColumnMapping()
             statementParseError =
                 file.errorMessage ?: if (file.contents == null) "Couldn’t read this file. Choose another statement." else null
+            val isCsv = file.name.substringAfterLast('.', "").equals("csv", ignoreCase = true)
+            if (isCsv && file.contents != null) {
+                runCatching { inspectStatementCsv(file.contents) }
+                    .onSuccess { layout ->
+                        statementCsvLayout = layout
+                        val currentHeaders = layout.columns.map { it.name }
+                        val savedPreference =
+                            statementCsvMappingPreferenceFor(
+                                state.statementCsvMappingsJson,
+                                state.serverUrl,
+                                state.selectedBudgetId,
+                                liveAccount?.id.orEmpty(),
+                                currentHeaders,
+                            )
+                        statementCsvMapping = savedPreference?.columns ?: layout.suggestedMapping
+                        if (savedPreference != null) statementDateOrderName = savedPreference.dateOrder.name
+                        showStatementCsvMapping =
+                            if (savedPreference == null) {
+                                !layout.suggestedMapping.isValidFor(layout.columns.size)
+                            } else {
+                                !savedPreference.columns.isValidFor(layout.columns.size)
+                            }
+                    }.onFailure { error ->
+                        statementParseError = (error as? StatementImportParseException)?.message ?: "Couldn’t read this CSV."
+                        showStatementCsvMapping = true
+                    }
+            }
             showStatementImportDialog = true
         }
-    LaunchedEffect(pickedStatementFile, statementDateOrder, currencyFractionDigits, numberFormat) {
+    LaunchedEffect(
+        pickedStatementFile,
+        statementDateOrder,
+        currencyFractionDigits,
+        numberFormat,
+        statementCsvLayout,
+        statementCsvMapping,
+    ) {
         val file = pickedStatementFile ?: return@LaunchedEffect
         val contents = file.contents ?: return@LaunchedEffect
         statementParseResult = null
@@ -116,10 +167,67 @@ internal fun AccountDetailScreen(
         try {
             statementParseResult =
                 withContext(Dispatchers.Default) {
-                    parseStatementImport(file.name, contents, statementDateOrder, fractionDigits, numberFormat)
+                    parseStatementImport(
+                        file.name,
+                        contents,
+                        statementDateOrder,
+                        fractionDigits,
+                        numberFormat,
+                        statementCsvMapping.takeIf { statementCsvLayout != null },
+                    )
                 }
+            if (statementCsvLayout != null && statementCsvMapping.isUsable && liveAccount != null) {
+                state.statementCsvMappingsJson =
+                    updateStatementCsvMappingPreference(
+                        state.statementCsvMappingsJson,
+                        StatementCsvMappingPreference(
+                            serverUrl = state.serverUrl,
+                            budgetId = state.selectedBudgetId,
+                            accountId = liveAccount.id,
+                            headers = statementCsvLayout?.columns?.map { it.name }.orEmpty(),
+                            dateOrder = statementDateOrder,
+                            columns = statementCsvMapping,
+                        ),
+                    )
+            }
         } catch (error: StatementImportParseException) {
-            statementParseError = error.message ?: "Couldn’t read this statement. Choose a CSV, QIF, or OFX file."
+            statementParseError = error.message ?: "Couldn’t read this statement. Choose a CSV, QIF, OFX, or QFX file."
+        }
+    }
+    LaunchedEffect(
+        statementParseResult,
+        statementImportPreviewRetry,
+        state.serverUrl,
+        state.selectedBudgetId,
+        state.encryptedPassword,
+        liveAccount?.id,
+    ) {
+        val parsed = statementParseResult
+        if (parsed == null || liveAccount == null) {
+            statementImportPreview = null
+            statementImportPreviewError = null
+            statementImportPreviewLoading = false
+            return@LaunchedEffect
+        }
+        statementImportPreview = null
+        statementImportPreviewError = null
+        statementImportPreviewLoading = true
+        try {
+            statementImportPreview =
+                mobileSession.previewStatementImportTransactions(
+                    state.selectedBudgetId,
+                    liveAccount.id,
+                    parsed.transactions.map { it.importedId },
+                    state.encryptedPassword.takeIf(String::isNotBlank),
+                )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: TandemApiException) {
+            statementImportPreviewError = error.userFacingMessage("Couldn’t check which rows are already in Actual. Try again.")
+        } catch (_: Exception) {
+            statementImportPreviewError = "Couldn’t check which rows are already in Actual. Try again."
+        } finally {
+            statementImportPreviewLoading = false
         }
     }
     LaunchedEffect(
@@ -288,8 +396,23 @@ internal fun AccountDetailScreen(
             actionMessage = mobileSession.budgetActionMessage,
             actionMessageKind = mobileSession.budgetActionMessageKind,
             dateOrder = statementDateOrder,
+            csvLayout = statementCsvLayout,
+            csvMapping = statementCsvMapping,
+            showCsvMapping = showStatementCsvMapping,
+            importPreview = statementImportPreview,
+            importPreviewLoading = statementImportPreviewLoading,
+            importPreviewError = statementImportPreviewError,
             busy = mobileSession.isPerformingBudgetAction,
-            onDateOrderChange = { statementDateOrderName = it.name },
+            onDateOrderChange = {
+                statementDateOrderName = it.name
+                showStatementCsvMapping = true
+            },
+            onCsvMappingChange = {
+                statementCsvMapping = it
+                showStatementCsvMapping = true
+            },
+            onToggleCsvMapping = { showStatementCsvMapping = !showStatementCsvMapping },
+            onRetryImportPreview = { statementImportPreviewRetry++ },
             onDismiss = {
                 if (!mobileSession.isPerformingBudgetAction) {
                     showStatementImportDialog = false
@@ -326,8 +449,17 @@ internal fun StatementImportDialog(
     actionMessage: String?,
     actionMessageKind: InlineMessageKind = InlineMessageKind.ERROR,
     dateOrder: StatementDateOrder,
+    csvLayout: StatementCsvLayout?,
+    csvMapping: StatementCsvColumnMapping,
+    showCsvMapping: Boolean,
+    importPreview: StatementImportPreview?,
+    importPreviewLoading: Boolean,
+    importPreviewError: String?,
     busy: Boolean,
     onDateOrderChange: (StatementDateOrder) -> Unit,
+    onCsvMappingChange: (StatementCsvColumnMapping) -> Unit,
+    onToggleCsvMapping: () -> Unit,
+    onRetryImportPreview: () -> Unit,
     onDismiss: () -> Unit,
     onDismissed: () -> Unit,
     onImport: (StatementParseResult) -> Unit,
@@ -359,23 +491,60 @@ internal fun StatementImportDialog(
                     InlineMessage("Reading statement…", InlineMessageKind.INFO)
                 }
                 parseError?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                if (parseResult != null && importPreviewLoading) {
+                    InlineMessage("Checking existing transactions…", InlineMessageKind.INFO)
+                }
+                if (parseResult != null && importPreviewError != null) {
+                    InlineMessage(importPreviewError, InlineMessageKind.ERROR)
+                    TandemActionButton(
+                        "Check again",
+                        TandemActionButtonTone.NEUTRAL,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !busy && !importPreviewLoading,
+                        onClick = onRetryImportPreview,
+                    )
+                }
                 actionMessage?.let {
                     InlineMessage(it, actionMessageKind)
                 }
-                parseResult?.let { result ->
-                    Text("Date format", color = tandemPalette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                        StatementDateOrder.entries.forEach { option ->
-                            TandemActionButton(
-                                if (option == StatementDateOrder.MONTH_DAY_YEAR) "MM/DD/YYYY" else "DD/MM/YYYY",
-                                if (dateOrder == option) TandemActionButtonTone.PRIMARY else TandemActionButtonTone.NEUTRAL,
-                                modifier = Modifier.weight(1f),
-                                enabled = !busy,
-                                onClick = { onDateOrderChange(option) },
-                            )
-                        }
+                if (parseResult != null && filename.substringAfterLast('.', "").equals("qif", ignoreCase = true)) {
+                    StatementDateOrderPicker(
+                        dateOrder = dateOrder,
+                        enabled = !busy,
+                        onDateOrderChange = onDateOrderChange,
+                    )
+                }
+                if (csvLayout != null) {
+                    ListRow(
+                        "CSV columns",
+                        trailing = if (showCsvMapping) "Done" else "Change",
+                        leading = RowLeading.None,
+                        options =
+                            app.tandemforactual.ui.components
+                                .ListRowOptions(dense = true),
+                        onClick = if (busy) null else onToggleCsvMapping,
+                    )
+                    if (showCsvMapping) {
+                        StatementCsvColumnMappingEditor(
+                            layout = csvLayout,
+                            mapping = csvMapping,
+                            dateOrder = dateOrder,
+                            enabled = !busy,
+                            onMappingChange = onCsvMappingChange,
+                            onDateOrderChange = onDateOrderChange,
+                        )
                     }
+                }
+                parseResult?.let { result ->
                     ListRow("Transactions", trailing = result.transactions.size.toString(), leading = RowLeading.Icon(Lucide.Receipt))
+                    importPreview?.let { preview ->
+                        ListRow(
+                            "New in Actual",
+                            trailing = preview.newRowCount(result.transactions.size).toString(),
+                            leading = RowLeading.None,
+                        )
+                        ListRow("Already in Actual", trailing = preview.existingImportedIds.size.toString(), leading = RowLeading.None)
+                    }
                     if (result.skippedRows > 0) {
                         val skippedCount = statementCount(result.skippedRows, "row")
                         val skippedMessage =
@@ -391,7 +560,13 @@ internal fun StatementImportDialog(
                     result.transactions.take(5).forEach { transaction ->
                         ListRow(
                             "${transaction.date} · ${transaction.payeeName}",
-                            subtitle = transaction.notes,
+                            subtitle =
+                                buildList {
+                                    if (importPreview?.existingImportedIds?.contains(transaction.importedId) == true) {
+                                        add("Already in Actual")
+                                    }
+                                    transaction.notes?.let { add(it) }
+                                }.joinToString(" · ").ifBlank { null },
                             trailing = formatCurrency(transaction.amountMinor, currencyDisplaySettings),
                             leading = RowLeading.Icon(Lucide.Receipt),
                         )
@@ -401,10 +576,106 @@ internal fun StatementImportDialog(
                         TandemActionButtonTone.PRIMARY,
                         modifier = Modifier.fillMaxWidth(),
                         icon = Lucide.Check,
-                        enabled = !busy && !state.readOnlyMode,
+                        enabled = !busy && !state.readOnlyMode && importPreview != null && !importPreviewLoading,
                         loading = busy,
                         onClick = { onImport(result) },
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatementCsvColumnMappingEditor(
+    layout: StatementCsvLayout,
+    mapping: StatementCsvColumnMapping,
+    dateOrder: StatementDateOrder,
+    enabled: Boolean,
+    onMappingChange: (StatementCsvColumnMapping) -> Unit,
+    onDateOrderChange: (StatementDateOrder) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+        StatementCsvColumnPicker("Date", layout.columns, mapping.dateColumn, enabled) { selected ->
+            onMappingChange(mapping.copy(dateColumn = selected))
+        }
+        StatementCsvColumnPicker("Amount", layout.columns, mapping.amountColumn, enabled) { selected ->
+            onMappingChange(mapping.copy(amountColumn = selected, debitColumn = null, creditColumn = null))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+            StatementCsvColumnPicker("Debit", layout.columns, mapping.debitColumn, enabled, Modifier.weight(1f)) { selected ->
+                onMappingChange(mapping.copy(amountColumn = null, debitColumn = selected))
+            }
+            StatementCsvColumnPicker("Credit", layout.columns, mapping.creditColumn, enabled, Modifier.weight(1f)) { selected ->
+                onMappingChange(mapping.copy(amountColumn = null, creditColumn = selected))
+            }
+        }
+        StatementCsvColumnPicker("Reference", layout.columns, mapping.referenceColumn, enabled) { selected ->
+            onMappingChange(mapping.copy(referenceColumn = selected))
+        }
+        StatementCsvColumnPicker("Payee", layout.columns, mapping.payeeColumn, enabled) { selected ->
+            onMappingChange(mapping.copy(payeeColumn = selected))
+        }
+        StatementCsvColumnPicker("Notes", layout.columns, mapping.notesColumn, enabled) { selected ->
+            onMappingChange(mapping.copy(notesColumn = selected))
+        }
+        StatementDateOrderPicker(dateOrder, enabled, onDateOrderChange)
+    }
+}
+
+@Composable
+private fun StatementDateOrderPicker(
+    dateOrder: StatementDateOrder,
+    enabled: Boolean,
+    onDateOrderChange: (StatementDateOrder) -> Unit,
+) {
+    Text("Date format", color = tandemPalette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+        StatementDateOrder.entries.forEach { option ->
+            TandemActionButton(
+                if (option == StatementDateOrder.MONTH_DAY_YEAR) "MM/DD/YYYY" else "DD/MM/YYYY",
+                if (dateOrder == option) TandemActionButtonTone.PRIMARY else TandemActionButtonTone.NEUTRAL,
+                modifier = Modifier.weight(1f),
+                enabled = enabled,
+                onClick = { onDateOrderChange(option) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatementCsvColumnPicker(
+    title: String,
+    columns: List<StatementCsvColumn>,
+    selectedIndex: Int?,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onSelect: (Int?) -> Unit,
+) {
+    var expanded by remember(title, columns) { mutableStateOf(false) }
+    Box(modifier) {
+        ListRow(
+            title,
+            trailing = columns.firstOrNull { it.index == selectedIndex }?.name ?: "Choose column",
+            leading = RowLeading.None,
+            options =
+                app.tandemforactual.ui.components
+                    .ListRowOptions(dense = true),
+            onClick = if (enabled) ({ expanded = true }) else null,
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(onClick = {
+                expanded = false
+                onSelect(null)
+            }) {
+                Text("Not used", color = tandemPalette.text, fontSize = TandemTypography.compactBody)
+            }
+            columns.forEach { column ->
+                DropdownMenuItem(onClick = {
+                    expanded = false
+                    onSelect(column.index)
+                }) {
+                    Text(column.name, color = tandemPalette.text, fontSize = TandemTypography.compactBody)
                 }
             }
         }

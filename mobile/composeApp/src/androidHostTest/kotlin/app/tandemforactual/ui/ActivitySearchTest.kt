@@ -35,6 +35,28 @@ class ActivitySearchTest {
     }
 
     @Test
+    fun searchResultRowsUseTheSharedRelativeDateLabels() {
+        val record =
+            ActivitySearchRecord(
+                payee = "Corner Market",
+                payeeId = null,
+                account = "Checking",
+                accountId = null,
+                category = "Groceries",
+                categoryId = null,
+                notes = "",
+                dateIso = "2026-05-14",
+                amountMinorUnits = -4_218,
+            )
+
+        assertEquals("Today", record.toTransactionItem(null, null, todayIso = "2026-05-14").dateLabel)
+        assertEquals(
+            "Yesterday",
+            record.copy(dateIso = "2026-05-13").toTransactionItem(null, null, todayIso = "2026-05-14").dateLabel,
+        )
+    }
+
+    @Test
     fun savedSearchesRoundTripWithBudgetScopeAndFilters() {
         val saved =
             SavedActivitySearch(

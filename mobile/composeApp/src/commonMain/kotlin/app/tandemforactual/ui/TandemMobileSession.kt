@@ -11,6 +11,7 @@ import app.tandemforactual.api.client.ActualLoginMethods
 import app.tandemforactual.api.client.AuthenticatedDevice
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.StatementImportItem
+import app.tandemforactual.api.client.StatementImportPreview
 import app.tandemforactual.api.client.StatementImportSummary
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
@@ -42,6 +43,7 @@ import app.tandemforactual.ui.reports.ReportsViewModels
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -1793,6 +1795,7 @@ internal class TandemMobileSession(
         isSigningOut = true
         signOutError = null
         signOutNotice = null
+        var cacheTablesCleared = false
         try {
             if (isSyncing || isSavingTransaction || isPerformingBudgetAction || isLoadingBudgets) {
                 signOutError = "Wait for the current sync or change to finish before signing out."
@@ -1810,34 +1813,106 @@ internal class TandemMobileSession(
                 signOutError = "Sync or resolve pending changes before signing out."
                 return false
             }
+            cacheTablesCleared = repository == null
+            val store = credentialStore
+            val storedCredential =
+                try {
+                    store?.let { withContext(Dispatchers.Default) { it.read() } }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    signOutError = "Couldn’t check this device’s saved sign-in. Try again."
+                    return false
+                }
+            var deviceRevoked = false
             if (apiClient.isAuthenticated) {
                 try {
                     revokeCurrentDeviceForSignOut()
+                    deviceRevoked = true
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: TandemApiException) {
-                    if (error.httpStatus != 401 && error.httpStatus != 404) {
+                    if (error.httpStatus == 401 || error.httpStatus == 404) {
+                        deviceRevoked = true
+                    } else {
                         signOutNotice = signOutRevocationNotice(error.httpStatus)
                     }
                 } catch (_: Exception) {
                     signOutNotice = signOutRevocationNotice(httpStatus = null)
                 }
             }
-            val store = credentialStore
+
+            suspend fun restoreSavedCredential(): Boolean {
+                if (store == null || storedCredential == null) {
+                    isCredentialStored = false
+                    return true
+                }
+                return try {
+                    withContext(NonCancellable + Dispatchers.Default) {
+                        store.write(storedCredential)
+                    }
+                    isCredentialStored = true
+                    credentialStorageError = null
+                    true
+                } catch (_: Exception) {
+                    isCredentialStored = false
+                    credentialStorageError = "Couldn’t restore this device’s saved sign-in."
+                    false
+                }
+            }
+
             try {
                 if (store != null) withContext(Dispatchers.Default) { store.clear() }
+                isCredentialStored = false
+                credentialStorageError = null
             } catch (error: CancellationException) {
+                withContext(NonCancellable) { restoreSavedCredential() }
                 throw error
             } catch (_: Exception) {
-                signOutError = "Couldn’t remove this device’s saved access. Try again."
+                val restored = restoreSavedCredential()
+                signOutError =
+                    if (storedCredential != null && !restored) {
+                        "Couldn’t remove or restore this device’s saved sign-in. Your cached budgets are still here."
+                    } else {
+                        "Couldn’t remove this device’s saved access. Try again."
+                    }
                 return false
             }
-            budgetQueuePersistenceMutex.withLock {
-                budgetReorderQueueState = BudgetReorderQueueState()
-                budgetQueueLoaded = true
-                repository?.clearAllLocalData()
-                preferencesStore?.putValue(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY, "")
-                preferencesStore?.putValue(BUDGET_CACHE_OWNER_KEY, "")
+
+            suspend fun reportLocalPurgeFailure() {
+                val restored = restoreSavedCredential()
+                signOutError =
+                    when {
+                        cacheTablesCleared && storedCredential != null && !restored ->
+                            "Cached budgets were cleared, but this device’s saved sign-in couldn’t be restored. Sign in again to continue."
+                        cacheTablesCleared ->
+                            "Cached budgets were cleared, but sign-out couldn’t finish. Try again."
+                        storedCredential != null && !restored ->
+                            "Couldn’t clear this device’s cached budgets or restore its saved sign-in. Your cached budgets are still here; sign in again to continue."
+                        deviceRevoked ->
+                            "Couldn’t clear this device’s cached budgets. They’re still here; the server sign-in was revoked, so sign in again to sync."
+                        storedCredential != null ->
+                            "Couldn’t clear this device’s cached budgets. They’re still here and saved sign-in was restored; try again."
+                        else ->
+                            "Couldn’t clear this device’s cached budgets. They’re still here; try again."
+                    }
+            }
+
+            try {
+                budgetQueuePersistenceMutex.withLock {
+                    repository?.clearAllLocalData()
+                    cacheTablesCleared = true
+                    preferencesStore?.putValue(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY, "")
+                    preferencesStore?.putValue(BUDGET_CACHE_OWNER_KEY, "")
+                    budgetReorderQueueState = BudgetReorderQueueState()
+                    budgetQueueLoaded = true
+                }
+            } catch (error: CancellationException) {
+                withContext(NonCancellable) { reportLocalPurgeFailure() }
+                throw error
+            } catch (_: Exception) {
+                reportLocalPurgeFailure()
+                return false
             }
             openIdLoginProofState.clear()
             apiClient.forgetSession()
@@ -1891,7 +1966,12 @@ internal class TandemMobileSession(
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            signOutError = "Couldn’t clear this device’s cached budgets. Try again."
+            signOutError =
+                if (cacheTablesCleared) {
+                    "Cached budgets were cleared, but sign-out couldn’t finish. Try again."
+                } else {
+                    "Couldn’t clear this device’s cached budgets. Try again."
+                }
             return false
         } finally {
             isSigningOut = false
@@ -1982,16 +2062,22 @@ internal class TandemMobileSession(
         openIdLoginProofState.clear()
         var redirectReady = false
         try {
-            val codeChallenge = openIdLoginProofState.begin(serverUrl)
+            val requestProof = openIdLoginProofState.begin(serverUrl)
             scheduleOpenIdProofExpiry()
-            val redirect = apiClient.startActualOpenIdSignIn(serverUrl, deviceName, codeChallenge)
+            val redirect =
+                apiClient.startActualOpenIdSignIn(
+                    serverUrl,
+                    deviceName,
+                    requestProof.codeChallenge,
+                    requestProof.callbackState,
+                )
             redirectReady = true
             return redirect
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
             isServerReachable = error.indicatesTandemReachable()
-            signInError = error.userFacingMessage("Couldn’t start sign-in. Check the address and connection.", ApiFailureContext.SIGN_IN)
+            signInError = error.userFacingMessage("Tandem couldn’t start sign-in. Check the server address.", ApiFailureContext.SIGN_IN)
         } catch (_: Exception) {
             isServerReachable = false
             signInError =
@@ -1999,7 +2085,7 @@ internal class TandemMobileSession(
                     "network-error",
                     null,
                     ApiFailureContext.SIGN_IN,
-                    "Couldn’t start sign-in. Check the address and connection.",
+                    "Tandem couldn’t start sign-in. Check the server address.",
                 )
         } finally {
             isSigningIn = false
@@ -2029,18 +2115,19 @@ internal class TandemMobileSession(
     suspend fun completeActualOpenIdSignIn(
         serverUrl: String,
         code: String,
+        callbackState: String,
     ) {
         signInError = null
         deviceRevocationError = null
         isSigningIn = true
-        cachedBudgets = emptyList()
         val previousSession = apiClient.exportStoredSession()
-        val codeVerifier = openIdLoginProofState.takeVerifierForCallback(serverUrl)
+        val codeVerifier = openIdLoginProofState.takeVerifierForCallback(serverUrl, callbackState)
         if (codeVerifier == null) {
-            signInError = "This sign-in expired or couldn’t be restored. Start sign-in again."
+            signInError = "This sign-in is no longer active. Start sign-in again."
             isSigningIn = false
             return
         }
+        cachedBudgets = emptyList()
         try {
             val signedInDevice = apiClient.completeActualOpenIdSignIn(serverUrl, code, codeVerifier)
             openIdLoginProofState.clear()
@@ -2056,7 +2143,7 @@ internal class TandemMobileSession(
             isServerReachable = error.indicatesTandemReachable()
             signInError =
                 error.userFacingMessage(
-                    "Couldn’t finish sign-in. Check the address and connection.",
+                    "Tandem couldn’t finish sign-in. Check the server address.",
                     ApiFailureContext.SIGN_IN,
                 )
             restorePreviousSessionAfterSignIn(previousSession)
@@ -2067,7 +2154,7 @@ internal class TandemMobileSession(
                     "network-error",
                     null,
                     ApiFailureContext.SIGN_IN,
-                    "Couldn’t finish sign-in. Check the address and connection.",
+                    "Tandem couldn’t finish sign-in. Check the server address.",
                 )
             restorePreviousSessionAfterSignIn(previousSession)
         } finally {
@@ -2090,12 +2177,12 @@ internal class TandemMobileSession(
             throw error
         } catch (error: TandemApiException) {
             isServerReachable = error.indicatesTandemReachable()
-            budgetError = error.userFacingMessage("Couldn’t load your budgets. Check the connection and try again.")
+            budgetError = error.userFacingMessage("Tandem couldn’t load your budgets. Check the connection.")
             if (error.errorCode == "invalid_device_credential") {
                 apiClient.forgetSession()
                 authenticatedDevice = null
                 budgets = emptyList()
-                credentialStorageError = "Sign in again to restore access."
+                credentialStorageError = "Your saved sign-in is no longer active. Sign in again."
                 clearStoredCredential()
             }
         } catch (error: Exception) {
@@ -2105,7 +2192,7 @@ internal class TandemMobileSession(
                     "network-error",
                     null,
                     ApiFailureContext.SIGN_IN,
-                    "Couldn’t load your budgets. Check the address and connection.",
+                    "Tandem couldn’t load your budgets. Check the server address.",
                 )
         } finally {
             isLoadingBudgets = false
@@ -2588,6 +2675,18 @@ internal class TandemMobileSession(
         performBudgetAction(budgetId, encryptionPassword, "Couldn’t copy last month’s assignments. Try again.") {
             apiClient.copyBudgetMonth(budgetId, month, encryptionPassword)
         }
+
+    suspend fun previewStatementImportTransactions(
+        budgetId: String,
+        accountId: String,
+        importedIds: List<String>,
+        encryptionPassword: String?,
+    ): StatementImportPreview {
+        if (budgetId.isBlank() || !apiClient.isAuthenticated) throw TandemApiException("sign_in_required")
+        return apiClient.withExclusiveSession {
+            apiClient.previewBudgetAccountStatementImport(budgetId, accountId, importedIds, encryptionPassword)
+        }
+    }
 
     suspend fun importStatementTransactions(
         budgetId: String,

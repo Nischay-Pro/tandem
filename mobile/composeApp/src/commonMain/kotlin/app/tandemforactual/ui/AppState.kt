@@ -70,6 +70,7 @@ internal class AppState {
     var activitySearchFilters by mutableStateOf<List<ActivitySearchFilter>>(emptyList())
     var savedActivitySearchesJson by mutableStateOf("")
     var budgetTemplatesJson by mutableStateOf("")
+    var statementCsvMappingsJson by mutableStateOf("")
     var activitySortOrder by mutableStateOf(ActivitySortOrder.NEWEST_FIRST)
     var activitySearchCache: ActivitySearchCache? = null
     var activitySearchResultCache: ActivitySearchResultCache? = null
@@ -211,6 +212,7 @@ internal class AppState {
             "reportsNetWorthScope" to reportsNetWorthScope,
             "savedActivitySearchesJson" to savedActivitySearchesJson,
             "budgetTemplatesJson" to budgetTemplatesJson,
+            "statementCsvMappingsJson" to statementCsvMappingsJson,
             "reduceMotionMode" to (reduceMotionOverride?.let { if (it) "on" else "off" } ?: "system"),
             "syncOnOpen" to syncOnOpen.toString(),
             "backgroundSyncEnabled" to backgroundSyncEnabled.toString(),
@@ -243,6 +245,7 @@ internal class AppState {
         reportsNetWorthScope = saved["reportsNetWorthScope"] ?: reportsNetWorthScope
         savedActivitySearchesJson = saved["savedActivitySearchesJson"] ?: savedActivitySearchesJson
         budgetTemplatesJson = saved["budgetTemplatesJson"] ?: budgetTemplatesJson
+        statementCsvMappingsJson = saved["statementCsvMappingsJson"] ?: statementCsvMappingsJson
         reduceMotionOverride =
             when (saved["reduceMotionMode"]) {
                 "on" -> true
@@ -283,6 +286,7 @@ internal class AppState {
                         "reportsRangePreset" to state.reportsRangePreset,
                         "reportsNetWorthScope" to state.reportsNetWorthScope,
                         "savedActivitySearchesJson" to state.savedActivitySearchesJson,
+                        "statementCsvMappingsJson" to state.statementCsvMappingsJson,
                         "selectedAccountId" to state.selectedAccountId,
                         "selectedCategoryGroupId" to state.selectedCategoryGroupId,
                         "selectedCategoryId" to state.selectedCategoryId,
@@ -351,6 +355,7 @@ internal class AppState {
                         reportsRangePreset = saved["reportsRangePreset"] as? String ?: reportsRangePreset
                         reportsNetWorthScope = saved["reportsNetWorthScope"] as? String ?: reportsNetWorthScope
                         savedActivitySearchesJson = saved["savedActivitySearchesJson"] as? String ?: savedActivitySearchesJson
+                        statementCsvMappingsJson = saved["statementCsvMappingsJson"] as? String ?: statementCsvMappingsJson
                         selectedAccountId = saved["selectedAccountId"] as? String ?: selectedAccountId
                         selectedCategoryGroupId = saved["selectedCategoryGroupId"] as? String ?: selectedCategoryGroupId
                         selectedCategoryId = saved["selectedCategoryId"] as? String ?: selectedCategoryId

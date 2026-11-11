@@ -12,11 +12,16 @@ class OpenIdPkceAndroidTest {
     fun androidPkceProofUsesRandomVerifierAndSha256Challenge() {
         val proof = createOpenIdPkceProof()
         val nextProof = createOpenIdPkceProof()
+        val callbackState = createOpenIdCallbackState()
+        val nextCallbackState = createOpenIdCallbackState()
 
         assertEquals(43, proof.codeVerifier.length)
         assertTrue(proof.codeVerifier.all { it.isLetterOrDigit() || it == '-' || it == '_' })
         assertEquals(43, proof.codeChallenge.length)
         assertNotEquals(proof.codeVerifier, nextProof.codeVerifier)
+        assertEquals(43, callbackState.length)
+        assertTrue(callbackState.all { it.isLetterOrDigit() || it == '-' || it == '_' })
+        assertNotEquals(callbackState, nextCallbackState)
 
         val expectedChallenge =
             Base64

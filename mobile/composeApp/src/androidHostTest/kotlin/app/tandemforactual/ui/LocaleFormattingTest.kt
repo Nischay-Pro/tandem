@@ -17,12 +17,26 @@ class LocaleFormattingTest {
             val expected = "May 14, 2026"
             assertEquals(expected, platformFormatDate(2026, 5, 14, includeYear = true))
             assertEquals(expected, formatLiveDate("2026-05-14"))
+            assertEquals(expected, displayTransactionDate("2026-05-14"))
+            assertEquals("Today", formatTransactionListDate("2026-05-14", "2026-05-14"))
+            assertEquals("Yesterday", formatTransactionListDate("2026-05-13", "2026-05-14"))
+            assertEquals("May 12, 2026", formatTransactionListDate("2026-05-12", "2026-05-14"))
         }
         withPhoneLocale(Locale.UK) {
             val expected = "14 May 2026"
             assertEquals(expected, platformFormatDate(2026, 5, 14, includeYear = true))
             assertEquals(expected, formatLiveDate("2026-05-14"))
+            assertEquals(expected, displayTransactionDate("2026-05-14"))
+            assertEquals("12 May 2026", formatTransactionListDate("2026-05-12", "2026-05-14"))
         }
+    }
+
+    @Test
+    fun relativeTransactionDatesUseCalendarDaysAcrossMonthAndYearBoundaries() {
+        assertEquals("Today", formatTransactionListDate("2026-01-01", "2026-01-01"))
+        assertEquals("Yesterday", formatTransactionListDate("2025-12-31", "2026-01-01"))
+        assertEquals("Yesterday", formatTransactionListDate("2024-03-01", "2024-03-02"))
+        assertEquals("Undated", formatTransactionListDate(null, "2026-01-01"))
     }
 
     @Test

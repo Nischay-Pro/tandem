@@ -72,6 +72,12 @@ data class StatementImportSummary(
     val errorCount: Int,
 )
 
+data class StatementImportPreview(
+    val existingImportedIds: Set<String>,
+) {
+    fun newRowCount(totalRows: Int): Int = (totalRows - existingImportedIds.size).coerceAtLeast(0)
+}
+
 class TandemApiException(
     val errorCode: String,
     val httpStatus: Int? = null,
@@ -79,38 +85,39 @@ class TandemApiException(
     safeMessageOverride: String? = null,
 ) : Exception(
         safeMessageOverride ?: when {
-            errorCode == "actual_only" ->
-                "Actual is running at this address, but Tandem isn’t. Check that Tandem is running and that the proxy sends /api/v1/ to it."
-            errorCode == "address_unreachable" -> "Couldn’t reach Tandem at this address. Check the address and connection."
-            errorCode == "actual_unavailable" -> "Tandem can’t reach Actual. Check the Actual connection, then try again."
-            errorCode == "tandem_not_ready" -> "Tandem isn’t ready yet. Check its connection to Actual, then try again."
+            errorCode == "actual_only" -> "Actual is responding at this address. Enter the address of your Tandem server."
+            errorCode == "address_unreachable" -> "Tandem isn’t responding at this address. Check the server address."
+            errorCode == "actual_unavailable" -> "Tandem can’t connect to Actual. Check that the Actual server is running."
+            errorCode == "tandem_not_ready" -> "Tandem is starting up. Try again in a moment."
             errorCode == "tandem_route_unavailable" ->
-                "Tandem’s sign-in route isn’t available. Check the Tandem API address and the proxy’s /api/v1/ route."
-            errorCode == "invalid_budget_password" -> "That budget password didn’t unlock this budget. Check it and try again."
-            errorCode == "sign_in_required" -> "Sign in to load your budgets."
-            errorCode == "sign_in_expired" -> "Sign in expired. Start again."
-            errorCode == "invalid_credentials" -> "The password didn’t match this Actual server. Check it and try again."
-            errorCode == "invalid_device_credential" -> "Sign in again to continue."
-            errorCode == "bank_sync_failed" -> "Actual couldn’t complete bank sync. Check its provider setup and try again."
-            errorCode == "bank_sync_busy" -> "A bank sync is already running. Try again shortly."
+                "Tandem’s sign-in route isn’t available. Check that your proxy sends /api/v1/ to Tandem."
+            errorCode == "invalid_budget_password" -> "That password didn’t unlock this encrypted budget. Check the budget password."
+            errorCode == "sign_in_required" -> "Sign in to open your budgets."
+            errorCode == "sign_in_expired" -> "Your sign-in is no longer active. Sign in again."
+            errorCode == "invalid_credentials" -> "That password doesn’t match this Actual server. Check the password."
+            errorCode == "invalid_device_credential" -> "Your sign-in is no longer active. Sign in again."
+            errorCode == "bank_sync_failed" -> "Actual couldn’t sync bank transactions. Check the bank connection."
+            errorCode == "bank_sync_busy" -> "Bank sync is already running. Wait a moment."
             errorCode == "duplicate_imported_id" ->
-                "This statement has repeated reference values. " +
-                    "Choose a unique reference column and try again."
-            errorCode == "actual_operation_failed" -> "Actual couldn’t complete this change. Check the budget and try again."
-            errorCode == "operation_uncertain" -> "Tandem couldn’t confirm whether Actual saved this change. Check Actual, then try again."
-            errorCode == "operation_in_progress" -> "Tandem is still processing this change. Wait a moment, then try again."
-            errorCode == "operation_rejected" -> "Actual rejected this change earlier. Refresh the budget, then try again."
+                "Statement rows share a reference. Map a column with unique values."
+            errorCode == "statement_preview_failed" ->
+                "Tandem couldn’t check which statement rows are already in Actual. Check your connection."
+            errorCode == "actual_operation_failed" -> "Actual couldn’t save this change. Refresh the budget before trying again."
+            errorCode == "operation_uncertain" ->
+                "Tandem can’t confirm whether Actual saved this change. Check Actual before changing it again."
+            errorCode == "operation_in_progress" -> "Tandem is still processing this change. Wait for it to finish."
+            errorCode == "operation_rejected" -> "Actual rejected this change earlier. Refresh the budget before trying again."
             errorCode == "idempotency_key_reused" ->
-                "Tandem matched this change to a different request. Refresh the budget, then try again."
+                "This change is linked to a different request. Refresh the budget before trying again."
             errorCode == "operation_result_unavailable" ->
                 "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget."
-            errorCode == "invalid_request" -> "Check the details and try again."
-            httpStatus == 400 -> "Tandem rejected this request. Check the details and try again."
-            httpStatus == 404 -> "Tandem’s API route couldn’t be reached. Check the address and the proxy’s /api/v1/ route."
-            httpStatus == 401 -> "Tandem couldn’t verify this request. Sign in again and try again."
-            httpStatus == 403 -> "This device can’t open that budget."
+            errorCode == "invalid_request" -> "Tandem couldn’t use those details. Check the form."
+            httpStatus == 400 -> "Tandem couldn’t accept this request. Check the details."
+            httpStatus == 404 -> "Tandem’s API route isn’t available. Check that your proxy sends /api/v1/ to Tandem."
+            httpStatus == 401 -> "Tandem can’t verify this device. Sign in again."
+            httpStatus == 403 -> "This device doesn’t have access to this budget. Ask the budget owner to grant access."
             httpStatus in 500..599 -> "Tandem is temporarily unavailable. Try again shortly."
-            else -> "Couldn’t reach Tandem at this address. Check the address and connection."
+            else -> "Tandem isn’t responding at this address. Check the server address."
         },
         cause,
     )
@@ -307,7 +314,7 @@ class TandemApiClient(
                                 error.errorCode,
                                 error.httpStatus,
                                 error,
-                                "Check your password and try again.",
+                                "Tandem couldn’t start sign-in. Check the Actual password.",
                             )
                         }
                         throw error
@@ -325,6 +332,7 @@ class TandemApiClient(
         serverUrl: String,
         deviceName: String,
         codeChallenge: String,
+        callbackState: String,
     ): String =
         sessionMutex.withLock {
             val parsedUrl = parseServerUrl(serverUrl, allowInsecurePrivateNetwork)
@@ -338,6 +346,7 @@ class TandemApiClient(
                             buildJsonObject {
                                 put("deviceName", normalizeDeviceName(deviceName))
                                 put("codeChallenge", codeChallenge)
+                                put("callbackState", callbackState)
                             }.toMap(),
                         ),
                     )
@@ -466,6 +475,44 @@ class TandemApiClient(
                             ?: throw TandemApiProtocolException("Statement import response has an invalid error count"),
                 )
             }
+        }
+    }
+
+    suspend fun previewBudgetAccountStatementImport(
+        budgetId: String,
+        accountId: String,
+        importedIds: List<String>,
+        encryptionPassword: String?,
+    ): StatementImportPreview {
+        require(importedIds.isNotEmpty() && importedIds.size <= 1_000)
+        require(importedIds.all { it.isNotBlank() && it.length <= 200 } && importedIds.distinct().size == importedIds.size)
+        val requestBody =
+            buildJsonObject {
+                put("importedIds", JsonArray(importedIds.map(::JsonPrimitive)))
+            }.toMap()
+        return withGeneratedApi {
+            val payload =
+                unwrap(
+                    TransactionsApi.previewBudgetAccountStatementImport(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        budgetId = budgetId,
+                        accountId = accountId,
+                        body = requestBody,
+                    ),
+                )
+            val status = (payload["status"] as? JsonPrimitive)?.contentOrNull
+            if (status != "ok") throw TandemApiProtocolException("Statement preview response has an invalid status")
+            val existingImportedIds =
+                (payload["existingImportedIds"] as? JsonArray)
+                    ?.map {
+                        (it as? JsonPrimitive)?.contentOrNull
+                            ?: throw TandemApiProtocolException("Statement preview response has an invalid reference")
+                    }
+                    ?: throw TandemApiProtocolException("Statement preview response is missing its references")
+            if (existingImportedIds.distinct().size != existingImportedIds.size || existingImportedIds.any { it !in importedIds }) {
+                throw TandemApiProtocolException("Statement preview response has unexpected references")
+            }
+            StatementImportPreview(existingImportedIds.toSet())
         }
     }
 

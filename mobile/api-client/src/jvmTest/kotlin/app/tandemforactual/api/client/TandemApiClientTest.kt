@@ -481,7 +481,7 @@ class TandemApiClientTest {
                 assertFalse(client.isAuthenticated)
                 val unauthenticated = captureApiException { client.listBudgets() }
                 assertEquals("sign_in_required", unauthenticated.errorCode)
-                assertEquals("Sign in to load your budgets.", unauthenticated.message)
+                assertEquals("Sign in to open your budgets.", unauthenticated.message)
 
                 val restored = client.restoreStoredSession(storedSession.orEmpty())
                 assertEquals(signedIn, restored)
@@ -521,7 +521,14 @@ class TandemApiClientTest {
             try {
                 val verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
                 val challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
-                val redirectUrl = client.startActualOpenIdSignIn("https://tandem.example", "Test phone", challenge)
+                val callbackState = "S".repeat(43)
+                val redirectUrl =
+                    client.startActualOpenIdSignIn(
+                        "https://tandem.example",
+                        "Test phone",
+                        challenge,
+                        callbackState,
+                    )
                 assertEquals("https://identity.example/sign-in", redirectUrl)
                 val signedIn = client.completeActualOpenIdSignIn("https://tandem.example", "C".repeat(43), verifier)
 
@@ -533,7 +540,7 @@ class TandemApiClientTest {
                 )
                 assertTrue(requests.all { it.headers[HttpHeaders.Authorization] == null })
                 assertEquals(
-                    """{"deviceName":"Test phone","codeChallenge":"$challenge"}""",
+                    """{"deviceName":"Test phone","codeChallenge":"$challenge","callbackState":"$callbackState"}""",
                     (requests[0].body as TextContent).text,
                 )
                 assertEquals(
@@ -582,14 +589,14 @@ class TandemApiClientTest {
                     captureApiException { client.signInWithPassword("https://tandem.example", "actual-test-password", "Phone") }
                 assertEquals("invalid_credentials", unauthorized.errorCode)
                 assertEquals(401, unauthorized.httpStatus)
-                assertEquals("The password didn’t match this Actual server. Check it and try again.", unauthorized.message)
+                assertEquals("That password doesn’t match this Actual server. Check the password.", unauthorized.message)
 
                 status = HttpStatusCode.BadRequest
                 responseBody = """{"error":{"code":"invalid_request","message":"private server detail"}}"""
                 val rejected = captureApiException { client.signInWithPassword("https://tandem.example", "wrong-test-password", "Phone") }
                 assertEquals("invalid_request", rejected.errorCode)
                 assertEquals(400, rejected.httpStatus)
-                assertEquals("Check your password and try again.", rejected.message)
+                assertEquals("Tandem couldn’t start sign-in. Check the Actual password.", rejected.message)
                 assertFalse(rejected.message.orEmpty().contains("host detail"))
                 assertFalse(client.isAuthenticated)
             } finally {
@@ -701,14 +708,14 @@ class TandemApiClientTest {
                 val unauthorized = captureApiException { client.listBudgets() }
                 assertEquals("http-401", unauthorized.errorCode)
                 assertEquals(401, unauthorized.httpStatus)
-                assertEquals("Tandem couldn’t verify this request. Sign in again and try again.", unauthorized.message)
+                assertEquals("Tandem can’t verify this device. Sign in again.", unauthorized.message)
                 assertFalse(unauthorized.message.orEmpty().contains("private server detail"))
 
                 responseBody = """{"error":{"code":"invalid_device_credential","message":"private server detail"}}"""
                 val invalidCredential = captureApiException { client.listBudgets() }
                 assertEquals("invalid_device_credential", invalidCredential.errorCode)
                 assertEquals(401, invalidCredential.httpStatus)
-                assertEquals("Sign in again to continue.", invalidCredential.message)
+                assertEquals("Your sign-in is no longer active. Sign in again.", invalidCredential.message)
                 assertFalse(invalidCredential.message.orEmpty().contains("private server detail"))
 
                 responseBody = """{"error":{"message":"private server detail"}}"""
@@ -716,7 +723,7 @@ class TandemApiClientTest {
                 val forbidden = captureApiException { client.listBudgets() }
                 assertEquals("http-403", forbidden.errorCode)
                 assertEquals(403, forbidden.httpStatus)
-                assertEquals("This device can’t open that budget.", forbidden.message)
+                assertEquals("This device doesn’t have access to this budget. Ask the budget owner to grant access.", forbidden.message)
 
                 status = HttpStatusCode.BadGateway
                 val unavailable = captureApiException { client.listBudgets() }
@@ -1066,7 +1073,7 @@ class TandemApiClientTest {
                 client.restoreSession("https://tandem.example", "device-token")
                 val failure = captureApiException { client.listBudgets() }
                 assertEquals("network-error", failure.errorCode)
-                assertEquals("Couldn’t reach Tandem at this address. Check the address and connection.", failure.message)
+                assertEquals("Tandem isn’t responding at this address. Check the server address.", failure.message)
                 assertFalse(failure.message.orEmpty().contains("private transport detail"))
             } finally {
                 cleanup()
@@ -1127,20 +1134,20 @@ class TandemApiClientTest {
                 client.restoreSession("https://tandem.example", "device-token")
                 val bankFailure = captureApiException { client.runBudgetBankSync("budget-1", null) }
                 assertEquals("bank_sync_failed", bankFailure.errorCode)
-                assertEquals("Actual couldn’t complete bank sync. Check its provider setup and try again.", bankFailure.message)
+                assertEquals("Actual couldn’t sync bank transactions. Check the bank connection.", bankFailure.message)
                 assertFalse(bankFailure.message.orEmpty().contains("private detail"))
 
                 status = HttpStatusCode.InternalServerError
                 responseBody = """{"error":{"code":"actual_operation_failed","message":"private detail"}}"""
                 val operationFailure = captureApiException { client.createBudgetAccount("budget-1", "Savings", false, null, null) }
                 assertEquals("actual_operation_failed", operationFailure.errorCode)
-                assertEquals("Actual couldn’t complete this change. Check the budget and try again.", operationFailure.message)
+                assertEquals("Actual couldn’t save this change. Refresh the budget before trying again.", operationFailure.message)
 
                 status = HttpStatusCode.BadRequest
                 responseBody = """{"error":{"message":"private detail"}}"""
                 val requestFailure = captureApiException { client.renameBudgetCategory("budget-1", "category-1", "Home", null) }
                 assertEquals("http-400", requestFailure.errorCode)
-                assertEquals("Tandem rejected this request. Check the details and try again.", requestFailure.message)
+                assertEquals("Tandem couldn’t accept this request. Check the details.", requestFailure.message)
             } finally {
                 cleanup()
                 Api.baseUrl = previousBaseUrl
@@ -1291,17 +1298,17 @@ class TandemApiClientTest {
     fun duplicateStatementReferencesHaveAnActionableMessage() {
         val error = TandemApiException("duplicate_imported_id", 400)
 
-        assertEquals("This statement has repeated reference values. Choose a unique reference column and try again.", error.message)
+        assertEquals("Statement rows share a reference. Map a column with unique values.", error.message)
     }
 
     @Test
     fun budgetMutationErrorCodesHaveDistinctActionableMessages() {
         val messages =
             mapOf(
-                "operation_uncertain" to "Tandem couldn’t confirm whether Actual saved this change. Check Actual, then try again.",
-                "operation_in_progress" to "Tandem is still processing this change. Wait a moment, then try again.",
-                "operation_rejected" to "Actual rejected this change earlier. Refresh the budget, then try again.",
-                "idempotency_key_reused" to "Tandem matched this change to a different request. Refresh the budget, then try again.",
+                "operation_uncertain" to "Tandem can’t confirm whether Actual saved this change. Check Actual before changing it again.",
+                "operation_in_progress" to "Tandem is still processing this change. Wait for it to finish.",
+                "operation_rejected" to "Actual rejected this change earlier. Refresh the budget before trying again.",
+                "idempotency_key_reused" to "This change is linked to a different request. Refresh the budget before trying again.",
                 "operation_result_unavailable" to "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget.",
             )
 
@@ -1314,11 +1321,11 @@ class TandemApiClientTest {
     fun authenticationAndBankSyncErrorsHaveActionableMessages() {
         val messages =
             mapOf(
-                "invalid_budget_password" to "That budget password didn’t unlock this budget. Check it and try again.",
-                "sign_in_expired" to "Sign in expired. Start again.",
-                "invalid_device_credential" to "Sign in again to continue.",
-                "bank_sync_failed" to "Actual couldn’t complete bank sync. Check its provider setup and try again.",
-                "bank_sync_busy" to "A bank sync is already running. Try again shortly.",
+                "invalid_budget_password" to "That password didn’t unlock this encrypted budget. Check the budget password.",
+                "sign_in_expired" to "Your sign-in is no longer active. Sign in again.",
+                "invalid_device_credential" to "Your sign-in is no longer active. Sign in again.",
+                "bank_sync_failed" to "Actual couldn’t sync bank transactions. Check the bank connection.",
+                "bank_sync_busy" to "Bank sync is already running. Wait a moment.",
             )
 
         messages.forEach { (errorCode, message) ->
@@ -1423,6 +1430,62 @@ class TandemApiClientTest {
                         listOf(transaction.copy(importedId = "csv:bad-errors")),
                         null,
                     )
+                }
+                Unit
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
+    fun previewsStatementImportReferencesWithoutAnIdempotencyKey() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            var responseBody = """{"status":"ok","existingImportedIds":["ref-existing"]}"""
+            val engine =
+                MockEngine { request ->
+                    requests += request
+                    respond(responseBody, headers = jsonHeaders())
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                client.restoreSession("https://tandem.example", "device-token")
+
+                assertFailsWith<IllegalArgumentException> {
+                    client.previewBudgetAccountStatementImport("budget-1", "account-1", emptyList(), null)
+                }
+                assertFailsWith<IllegalArgumentException> {
+                    client.previewBudgetAccountStatementImport("budget-1", "account-1", listOf("same", "same"), null)
+                }
+                val preview =
+                    client.previewBudgetAccountStatementImport(
+                        "budget-1",
+                        "account-1",
+                        listOf("ref-new", "ref-existing"),
+                        "budget-password",
+                    )
+
+                assertEquals(setOf("ref-existing"), preview.existingImportedIds)
+                assertEquals(1, preview.newRowCount(2))
+                val request = requests.single()
+                assertEquals("POST", request.method.value)
+                assertEquals(
+                    "/api/v1/budgets/budget-1/accounts/account-1/transactions/import/preview",
+                    request.url.encodedPath,
+                )
+                assertEquals("budget-password", request.headers["x-budget-encryption-password"])
+                assertEquals(null, request.headers["idempotency-key"])
+                assertEquals("{\"importedIds\":[\"ref-new\",\"ref-existing\"]}", (request.body as TextContent).text)
+
+                responseBody = """{"status":"ok","existingImportedIds":["unexpected"]}"""
+                assertFailsWith<TandemApiProtocolException> {
+                    client.previewBudgetAccountStatementImport("budget-1", "account-1", listOf("ref-new"), null)
                 }
                 Unit
             } finally {

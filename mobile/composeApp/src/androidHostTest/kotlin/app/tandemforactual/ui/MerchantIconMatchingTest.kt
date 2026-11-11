@@ -133,15 +133,49 @@ class MerchantIconMatchingTest {
     @Test
     fun accountSubtitleOnlyAddsTheOffBudgetTagWhenItAddsInformation() {
         assertEquals(
-            "Off budget",
-            accountListSubtitle(LiveAccountSummary("off", "Tracking", 100, "investment", true), 0),
+            "Off budget · Not synced yet",
+            accountListSubtitle(LiveAccountSummary("off", "Tracking", 100, "investment", true), null),
+        )
+        assertTrue(
+            accountListSubtitle(LiveAccountSummary("off", "Tracking", 100, "investment", true), 0)
+                .startsWith("Off budget · Last synced "),
         )
         assertTrue(
             accountListSubtitle(LiveAccountSummary("on", "Checking", 100, "checking", false), 0)
                 .orEmpty()
                 .startsWith("Last synced "),
         )
-        assertEquals("Not synced yet", accountListSubtitle(LiveAccountSummary("on", "Checking", 100, "checking", false), null))
-        assertNull(accountListSubtitle(LiveAccountSummary("closed", "Closed", 0, "savings", false, closed = true), 0))
+        assertEquals(
+            "Not synced yet",
+            accountListSubtitle(LiveAccountSummary("on", "Checking", 100, "checking", false), null),
+        )
+        assertEquals(
+            "Closed",
+            accountListSubtitle(LiveAccountSummary("closed", "Closed", 0, "savings", false, closed = true), 0),
+        )
+    }
+
+    @Test
+    fun accountCardsExposeTypeAndSignedBalanceAccessibly() {
+        assertEquals("Checking", accountListTypeLabel("checking"))
+        assertEquals("Credit", accountListTypeLabel("credit-card"))
+        assertEquals("Other", accountListTypeLabel(null))
+        assertEquals("Negative balance, -\$315.45", accountBalanceAccessibilityDescription(-31545, "-\$315.45"))
+        assertEquals("Balance unavailable", accountBalanceAccessibilityDescription(null, "Unavailable"))
+    }
+
+    @Test
+    fun closedAccountsSortAfterOpenAccountsAndAccountSortOrderIsPreserved() {
+        val ordered =
+            sortAccountsForList(
+                listOf(
+                    LiveAccountSummary("closed", "Closed Account", 0, "checking", false, closed = true, sortOrder = 0),
+                    LiveAccountSummary("later", "Later Checking", 0, "checking", false, sortOrder = 20),
+                    LiveAccountSummary("earlier", "Earlier Checking", 0, "checking", false, sortOrder = 10),
+                ),
+            )
+
+        assertEquals(listOf("earlier", "later", "closed"), ordered.map { it.id })
+        assertEquals(Int.MAX_VALUE, accountGroupOrder("Closed"))
     }
 }

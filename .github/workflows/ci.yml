@@ -218,10 +218,10 @@ jobs:
         run: ./gradlew :androidApp:assembleRelease
 
   ios_host:
-    name: iOS app · Xcode host build
+    name: iOS app · Xcode simulator tests and launch smoke
     needs: merchant_icon_pack
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       TANDEM_PREGENERATED_ICON_PACK: "true"
     steps:
@@ -249,17 +249,29 @@ jobs:
         working-directory: mobile
         run: ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64
 
-      - name: Build iOS app host with Xcode
+      - name: Test iOS app host and background scheduler
         working-directory: mobile
-        run: >-
-          xcodebuild
-          -project iosApp/TandemForActual.xcodeproj
-          -scheme TandemForActual
-          -destination "generic/platform=iOS Simulator"
-          ARCHS=arm64
-          ONLY_ACTIVE_ARCH=YES
-          CODE_SIGNING_ALLOWED=NO
-          build
+        run: |
+          simulator_id="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ && $2 ~ /^[[:xdigit:]-]+$/ { print $2; exit }')"
+          test -n "$simulator_id"
+          xcodebuild \
+            -project iosApp/TandemForActual.xcodeproj \
+            -scheme TandemForActual \
+            -destination "platform=iOS Simulator,id=$simulator_id" \
+            -resultBundlePath "$RUNNER_TEMP/TandemForActual.xcresult" \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=YES \
+            CODE_SIGNING_ALLOWED=NO \
+            test
+
+      - name: Upload Xcode simulator test results
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-host-test-results-${{ github.sha }}
+          path: ${{ runner.temp }}/TandemForActual.xcresult
+          if-no-files-found: warn
+          retention-days: 7
 
   api_ios:
     name: API client · iOS architectures

@@ -206,6 +206,16 @@ class IosLocaleFormattingTest {
     }
 
     @Test
+    fun transactionDetailsAndListsShareTheSystemDateFormatter() {
+        val isoDate = "2026-11-07"
+        val localizedDate = formatLiveDate(isoDate)
+
+        assertEquals(localizedDate, displayTransactionDate(isoDate))
+        assertEquals("Today", formatTransactionListDate(isoDate, isoDate))
+        assertFalse(localizedDate.isBlank())
+    }
+
+    @Test
     fun cachedEpochDateFormatterTracksTheCurrentTimeZoneAcrossUtcMidnight() {
         val previousTimeZone = CFTimeZoneCopyDefault()
         val instant = 1_767_227_400_000L // 2026-01-01T00:30:00Z

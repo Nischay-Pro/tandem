@@ -19,7 +19,7 @@
       <string>app.tandemforactual.signin</string>
       <key>CFBundleURLSchemes</key>
       <array>
-        <string>tandem</string>
+        <string>app.tandemforactual</string>
       </array>
     </dict>
   </array>

@@ -2,6 +2,7 @@ package app.tandemforactual.ui
 
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
+import app.tandemforactual.api.client.createOpenIdCallbackState
 import app.tandemforactual.api.client.createOpenIdPkceProof
 
 /** Short-lived proof for one browser round trip. Saved instance state restores it; credentials do not. */
@@ -9,23 +10,30 @@ internal class OpenIdLoginProofState(
     private val nowEpochMillis: () -> Long,
 ) {
     private var pendingVerifier: String? = null
+    private var pendingCallbackState: String? = null
     private var pendingServerUrl: String? = null
     private var expiresAtEpochMillis: Long = 0
 
-    fun begin(serverUrl: String): String {
+    fun begin(serverUrl: String): OpenIdLoginRequestProof {
         val proof = createOpenIdPkceProof()
+        val callbackState = createOpenIdCallbackState()
         pendingVerifier = proof.codeVerifier
+        pendingCallbackState = callbackState
         pendingServerUrl = serverUrl.trim()
         expiresAtEpochMillis = nowEpochMillis() + OPEN_ID_PROOF_TTL_MILLIS
-        return proof.codeChallenge
+        return OpenIdLoginRequestProof(proof.codeChallenge, callbackState)
     }
 
-    fun takeVerifierForCallback(serverUrl: String): String? {
+    fun takeVerifierForCallback(
+        serverUrl: String,
+        callbackState: String,
+    ): String? {
         expireIfNeeded()
         if (pendingServerUrl != serverUrl.trim()) {
             clear()
             return null
         }
+        if (pendingCallbackState != callbackState) return null
         return pendingVerifier.also { clear() }
     }
 
@@ -43,6 +51,7 @@ internal class OpenIdLoginProofState(
 
     fun clear() {
         pendingVerifier = null
+        pendingCallbackState = null
         pendingServerUrl = null
         expiresAtEpochMillis = 0
     }
@@ -51,6 +60,7 @@ internal class OpenIdLoginProofState(
         listOf(
             pendingVerifier.orEmpty(),
             pendingServerUrl.orEmpty(),
+            pendingCallbackState.orEmpty(),
             expiresAtEpochMillis.toString(),
         )
 
@@ -68,8 +78,9 @@ internal class OpenIdLoginProofState(
             OpenIdLoginProofState(nowEpochMillis).apply {
                 pendingVerifier = saved.getOrNull(0)?.takeIf(String::isNotEmpty)
                 pendingServerUrl = saved.getOrNull(1)?.takeIf(String::isNotEmpty)
-                expiresAtEpochMillis = saved.getOrNull(2)?.toLongOrNull() ?: 0
-                if (pendingVerifier == null || pendingServerUrl == null) {
+                pendingCallbackState = saved.getOrNull(2)?.takeIf(String::isNotEmpty)
+                expiresAtEpochMillis = saved.getOrNull(3)?.toLongOrNull() ?: 0
+                if (pendingVerifier == null || pendingServerUrl == null || pendingCallbackState == null) {
                     clear()
                 } else {
                     expireIfNeeded()
@@ -77,5 +88,10 @@ internal class OpenIdLoginProofState(
             }
     }
 }
+
+internal data class OpenIdLoginRequestProof(
+    val codeChallenge: String,
+    val callbackState: String,
+)
 
 internal const val OPEN_ID_PROOF_TTL_MILLIS = 6 * 60 * 1_000L + 30_000L

@@ -1,17 +1,21 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui
+
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.DropdownMenu
 import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
@@ -25,14 +29,18 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.ListRow
-import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
@@ -57,11 +65,14 @@ import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.X
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.painterResource
 
 internal data class AccountListItemUi(
     val id: String,
     val name: String,
-    val description: String?,
+    val typeLabel: String,
+    val status: String,
     val balance: String,
     val offBudget: Boolean,
     val closed: Boolean = false,
@@ -82,12 +93,41 @@ internal data class AccountListUi(
 internal fun accountListSubtitle(
     account: LiveAccountSummary,
     lastSyncedAtEpochMs: Long?,
-): String? =
+): String =
     when {
-        account.closed -> null
-        account.offBudget -> "Off budget"
-        lastSyncedAtEpochMs != null -> "Last synced ${formatDateAtEpochMilliseconds(lastSyncedAtEpochMs)}"
-        else -> "Not synced yet"
+        account.closed -> "Closed"
+        else ->
+            buildList {
+                if (account.offBudget) add("Off budget")
+                val syncState =
+                    lastSyncedAtEpochMs?.let { "Last synced ${formatDateAtEpochMilliseconds(it)}" }
+                        ?: "Not synced yet"
+                add(syncState)
+            }.joinToString(" · ")
+    }
+
+internal fun accountListTypeLabel(accountType: String?): String =
+    when (accountType?.trim()?.lowercase()) {
+        "checking", "chequing" -> "Checking"
+        "savings", "saving" -> "Savings"
+        "credit", "credit-card", "credit card" -> "Credit"
+        "loan" -> "Loan"
+        "mortgage" -> "Mortgage"
+        "debt" -> "Debt"
+        "investment" -> "Investment"
+        "cash" -> "Cash"
+        "other" -> "Other"
+        else -> "Other"
+    }
+
+internal fun accountBalanceAccessibilityDescription(
+    balanceMinor: Long?,
+    formattedBalance: String,
+): String =
+    when {
+        balanceMinor == null -> "Balance unavailable"
+        balanceMinor < 0L -> "Negative balance, $formattedBalance"
+        else -> "Balance, $formattedBalance"
     }
 
 internal fun accountTypeIcon(
@@ -134,6 +174,107 @@ internal fun accountGroupOrder(groupName: String): Int {
     }
 }
 
+internal fun sortAccountsForList(accounts: List<LiveAccountSummary>): List<LiveAccountSummary> =
+    accounts.sortedWith(
+        compareBy(
+            { accountGroupOrder(liveAccountGroupLabel(it)) },
+            { liveAccountGroupLabel(it).lowercase() },
+            { it.sortOrder ?: Long.MAX_VALUE },
+            { it.name.lowercase() },
+        ),
+    )
+
+@Composable
+internal fun AccountSummaryCard(
+    account: AccountListItemUi,
+    merchantArtwork: DrawableResource?,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    val balanceColor =
+        when {
+            account.closed || account.balanceMinor == null || account.balanceMinor == 0L -> palette.muted
+            account.balanceMinor > 0 -> palette.positive
+            else -> palette.negative
+        }
+    SurfaceCard(onClick = onClick, onClickLabel = "Open ${account.name}") {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = TandemLayout.listRowMinHeight)
+                    .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+        ) {
+            Box(
+                Modifier
+                    .size(TandemLayout.listRowLeadingSize)
+                    .clip(RoundedCornerShape(TandemShapes.medium))
+                    .background(if (account.closed) palette.surface else palette.raised),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (merchantArtwork != null) {
+                    Image(
+                        painterResource(merchantArtwork),
+                        contentDescription = null,
+                        modifier =
+                            Modifier
+                                .size(TandemLayout.listRowLogoSize)
+                                .padding(TandemSpacing.xxSmall)
+                                .alpha(if (account.closed) 0.48f else 1f),
+                        contentScale = ContentScale.Fit,
+                    )
+                } else {
+                    Icon(
+                        accountTypeIcon(account.name, account.accountType),
+                        contentDescription = null,
+                        modifier = Modifier.size(TandemLayout.listRowIconSize),
+                        tint = if (account.closed) palette.muted else palette.accent,
+                    )
+                }
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+            ) {
+                Text(
+                    account.name,
+                    color = if (account.closed) palette.muted else palette.text,
+                    fontSize = TandemTypography.body,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    "${account.typeLabel} · ${account.status}",
+                    color = palette.muted,
+                    fontSize = TandemTypography.caption,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                account.balance,
+                modifier =
+                    Modifier.semantics {
+                        contentDescription =
+                            accountBalanceAccessibilityDescription(
+                                account.balanceMinor,
+                                account.balance,
+                            )
+                    },
+                color = if (account.closed) palette.muted else balanceColor,
+                fontSize = TandemTypography.compactBody,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.End,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
 @Composable
 internal fun AccountsScreen(
     state: AppState,
@@ -168,10 +309,15 @@ internal fun AccountsScreen(
     }
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     val model =
-        remember(isLiveBudget, liveAccounts, state.budgetDisplaySettings) {
+        remember(
+            isLiveBudget,
+            liveAccounts,
+            state.budgetDisplaySettings,
+            mobileSession.localSyncState?.lastSyncedAtEpochMs,
+        ) {
             if (isLiveBudget) {
                 val groupedAccounts =
-                    liveAccounts
+                    sortAccountsForList(liveAccounts)
                         .groupBy(::liveAccountGroupLabel)
                         .entries
                         .sortedWith(
@@ -183,10 +329,11 @@ internal fun AccountsScreen(
                             AccountListGroupUi(
                                 groupName,
                                 state.formatCurrency(accounts.sumOf { it.balanceMinor ?: 0L }),
-                                accounts.sortedWith(compareBy({ it.sortOrder ?: Long.MAX_VALUE }, { it.name.lowercase() })).map { account ->
+                                accounts.map { account ->
                                     AccountListItemUi(
                                         account.id,
                                         account.name,
+                                        accountListTypeLabel(account.type),
                                         accountListSubtitle(account, mobileSession.localSyncState?.lastSyncedAtEpochMs),
                                         account.balanceMinor?.let(state::formatCurrency) ?: "Unavailable",
                                         account.offBudget,
@@ -250,33 +397,14 @@ internal fun AccountsScreen(
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                             group.accounts.forEach { account ->
-                                SurfaceCard {
-                                    ListRow(
-                                        account.name,
-                                        subtitle = account.description,
-                                        trailing = account.balance,
-                                        leading =
-                                            RowLeading.Merchant(
-                                                merchantIconMatcher?.accountIconFor(account.name),
-                                                fallback = accountTypeIcon(account.name, account.accountType),
-                                            ),
-                                        options =
-                                            ListRowOptions(
-                                                muted = account.closed,
-                                                trailingColor =
-                                                    when {
-                                                        account.closed || account.balanceMinor == null || account.balanceMinor == 0L ->
-                                                            tandemPalette.muted
-                                                        account.balanceMinor > 0 -> tandemPalette.positive
-                                                        else -> tandemPalette.negative
-                                                    },
-                                            ),
-                                        onClick = {
-                                            state.selectedAccountId = account.id
-                                            navigation.open(AppRoute.ACCOUNT_DETAIL)
-                                        },
-                                    )
-                                }
+                                AccountSummaryCard(
+                                    account = account,
+                                    merchantArtwork = merchantIconMatcher?.accountIconFor(account.name),
+                                    onClick = {
+                                        state.selectedAccountId = account.id
+                                        navigation.open(AppRoute.ACCOUNT_DETAIL)
+                                    },
+                                )
                             }
                         }
                     }

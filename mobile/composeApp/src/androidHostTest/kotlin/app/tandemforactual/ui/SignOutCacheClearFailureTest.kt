@@ -21,83 +21,104 @@ import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
 class SignOutCacheClearFailureTest {
     @Test
-    fun failedLocalPurgeAfterRevocationDoesNotReportSignOutOrDeleteTheCachedBudget() =
-        runBlocking {
-            val context: Context = RuntimeEnvironment.getApplication()
-            context.deleteDatabase(DATABASE_NAME)
-            val database = openDatabase(context)
-            val repository = LocalBudgetRepository(database) { NOW }
-            try {
-                seedCachedBudget(repository, AppPreferencesStore(database), withPendingWrite = false)
-                var savedCredential: String? = storedSession()
-                var revokeCalls = 0
-                var credentialClearCalls = 0
-                val credentialStore =
-                    object : DeviceCredentialStore {
-                        override fun read(): String? = savedCredential
+    fun failedLocalPurgeRestoresSavedCredentialAndKeepsCachedBudget() =
+        runBlocking { verifyLocalPurgeFailure(credentialRestoreFails = false) }
 
-                        override fun write(value: String) {
-                            savedCredential = value
-                        }
+    @Test
+    fun failedCredentialRestoreKeepsCachedBudgetAndReportsRecoveryGuidance() =
+        runBlocking { verifyLocalPurgeFailure(credentialRestoreFails = true) }
 
-                        override fun clear() {
-                            assertEquals(1, revokeCalls, "Actual device revocation must precede credential clearing")
-                            credentialClearCalls += 1
-                            savedCredential = null
-                            database.close()
-                        }
-                    }
-                val apiClient = TandemApiClient()
-                val session =
-                    TandemMobileSession(
-                        apiClient = apiClient,
-                        database = database,
-                        nowEpochMillis = { NOW },
-                        credentialStore = credentialStore,
-                        revokeCurrentDeviceForSignOut = {
-                            revokeCalls += 1
-                            assertNotNull(savedCredential)
-                            assertNotNull(repository.findRecord(BUDGET_ID, "transaction", TRANSACTION_ID))
-                        },
-                    )
-                session.restoreStoredSession()
+    private suspend fun verifyLocalPurgeFailure(credentialRestoreFails: Boolean) {
+        val context: Context = RuntimeEnvironment.getApplication()
+        context.deleteDatabase(DATABASE_NAME)
+        val database = openDatabase(context)
+        val repository = LocalBudgetRepository(database) { NOW }
+        var savedCredential: String? = storedSession()
+        var revokeCalls = 0
+        var credentialClearCalls = 0
+        var credentialRestoreCalls = 0
+        val credentialStore =
+            object : DeviceCredentialStore {
+                override fun read(): String? = savedCredential
 
-                assertTrue(session.isAuthenticated)
-                assertFalse(session.signOutAndClearLocalData())
+                override fun write(value: String) {
+                    credentialRestoreCalls += 1
+                    if (credentialRestoreFails) throw IllegalStateException("credential write failed")
+                    savedCredential = value
+                }
 
-                assertEquals(1, revokeCalls)
-                assertEquals(1, credentialClearCalls)
-                assertNull(savedCredential)
-                assertTrue(session.isAuthenticated, "The failed purge must not reset the in-memory session")
-                assertNotNull(session.authenticatedDevice)
-                assertEquals("Couldn’t clear this device’s cached budgets. Try again.", session.signOutError)
-                assertFalse(session.isSigningOut)
-            } finally {
-                database.close()
+                override fun clear() {
+                    assertEquals(1, revokeCalls, "Actual device revocation must precede credential clearing")
+                    credentialClearCalls += 1
+                    savedCredential = null
+                    database.close()
+                }
             }
+        val apiClient = TandemApiClient()
+        val session =
+            TandemMobileSession(
+                apiClient = apiClient,
+                database = database,
+                nowEpochMillis = { NOW },
+                credentialStore = credentialStore,
+                revokeCurrentDeviceForSignOut = {
+                    revokeCalls += 1
+                    assertNotNull(savedCredential)
+                    assertNotNull(repository.findRecord(BUDGET_ID, "transaction", TRANSACTION_ID))
+                },
+            )
+        try {
+            seedCachedBudget(repository, AppPreferencesStore(database), withPendingWrite = false)
+            session.restoreStoredSession()
 
-            val reopenedDatabase = openDatabase(context)
-            try {
-                val cachedTransaction =
-                    LocalBudgetRepository(reopenedDatabase) { NOW }
-                        .findRecord(BUDGET_ID, "transaction", TRANSACTION_ID)
-                assertEquals(TRANSACTION_JSON, cachedTransaction?.remoteJson)
-                assertEquals(
-                    """{"serverUrl":"https://actual.example.test","principalId":"principal-1"}""",
-                    AppPreferencesStore(reopenedDatabase).read()[CACHE_OWNER_KEY],
-                )
-            } finally {
-                reopenedDatabase.close()
-                context.deleteDatabase(DATABASE_NAME)
-            }
+            assertTrue(session.isAuthenticated)
+            assertFalse(session.signOutAndClearLocalData())
+
+            assertEquals(1, revokeCalls)
+            assertEquals(1, credentialClearCalls)
+            assertEquals(1, credentialRestoreCalls)
+            assertEquals(if (credentialRestoreFails) null else storedSession(), savedCredential)
+            assertTrue(session.isAuthenticated, "A failed purge must keep the in-memory session")
+            assertNotNull(session.authenticatedDevice)
+            assertEquals(
+                if (credentialRestoreFails) {
+                    "Couldn’t clear this device’s cached budgets or restore its saved sign-in. Your cached budgets are still here; sign in again to continue."
+                } else {
+                    "Couldn’t clear this device’s cached budgets. They’re still here; the server sign-in was revoked, so sign in again to sync."
+                },
+                session.signOutError,
+            )
+            assertEquals(!credentialRestoreFails, session.isCredentialStored)
+            assertEquals(
+                if (credentialRestoreFails) "Couldn’t restore this device’s saved sign-in." else null,
+                session.credentialStorageError,
+            )
+            assertFalse(session.isSigningOut)
+        } finally {
+            database.close()
         }
+
+        val reopenedDatabase = openDatabase(context)
+        try {
+            val cachedTransaction =
+                LocalBudgetRepository(reopenedDatabase) { NOW }
+                    .findRecord(BUDGET_ID, "transaction", TRANSACTION_ID)
+            assertEquals(TRANSACTION_JSON, cachedTransaction?.remoteJson)
+            assertEquals(
+                """{"serverUrl":"https://actual.example.test","principalId":"principal-1"}""",
+                AppPreferencesStore(reopenedDatabase).read()[CACHE_OWNER_KEY],
+            )
+        } finally {
+            reopenedDatabase.close()
+            context.deleteDatabase(DATABASE_NAME)
+        }
+    }
 
     @Test
     fun signOutPreflightKeepsAnUnresolvedEditAndDoesNotRevokeTheDevice() =

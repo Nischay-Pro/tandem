@@ -104,8 +104,12 @@ internal fun conflictPayeeTitle(
 
 internal fun canOfferUncertainWriteRecoveryActions(
     operationStatus: String,
-    statusCheckAttempted: Boolean,
-): Boolean = statusCheckAttempted && operationStatus in setOf("uncertain", "queued")
+    serverConfirmedUncertainStatus: Boolean,
+    isNotFound: Boolean,
+): Boolean =
+    serverConfirmedUncertainStatus &&
+        !isNotFound &&
+        operationStatus == "uncertain"
 
 internal fun isUncertainWriteOperationNotFound(errorCode: String?): Boolean = errorCode == "operation_not_found"
 
@@ -655,11 +659,17 @@ internal fun UncertainWriteDetailsScreen(
     val operationAmountText = operationAmount?.let(state::formatSignedCurrency) ?: "Unavailable"
     var confirmDiscard by rememberSaveable(operation?.operationId) { mutableStateOf(false) }
     val checkErrorForOperation = checkError.takeIf { operation != null }
+    val serverConfirmedUncertainStatus =
+        isChecked &&
+            checkErrorForOperation == null &&
+            !isSyncing &&
+            !isNotFound
     val canRetryOrRemove =
         operation != null &&
             canOfferUncertainWriteRecoveryActions(
                 operation.status,
-                isChecked,
+                serverConfirmedUncertainStatus,
+                isNotFound,
             )
     PageColumn {
         if (operation == null) {
@@ -675,7 +685,7 @@ internal fun UncertainWriteDetailsScreen(
                     operation.status == "discarded" -> "Change discarded"
                     operation.status == "queued" -> "Waiting to sync"
                     operation.status == "sending" -> "Syncing"
-                    isNotFound -> "Ready to try again"
+                    isNotFound -> "Status not found"
                     isChecked -> "Status unknown"
                     operation.status == "uncertain" -> "Status unknown"
                     isSyncing -> "Checking status"
@@ -692,7 +702,7 @@ internal fun UncertainWriteDetailsScreen(
                     operation.status == "queued" -> "Your edit is saved on this device and is waiting to sync."
                     operation.status == "sending" && isSyncing -> "Syncing this edit with Actual."
                     operation.status == "sending" -> "Tandem couldn’t confirm the save. Check its status before trying again."
-                    isNotFound -> "Tandem has no saved status for this edit. Try again, or check Actual before removing it."
+                    isNotFound -> "Tandem has no saved status for this edit. Keep it on this device and check Actual before retrying."
                     isChecked -> "Actual still can’t confirm whether this edit was saved. You can try again or remove it."
                     isSyncing -> "Checking Actual for this edit."
                     else -> "Tandem couldn’t confirm whether Actual saved this edit. Check its status before trying again."

@@ -3,21 +3,52 @@ import ComposeApp
 import Foundation
 import Network
 
+protocol IosBackgroundTaskScheduling {
+    func register(
+        identifier: String,
+        launchHandler: @escaping (BGTask) -> Void
+    ) -> Bool
+    func submit(_ request: BGTaskRequest) throws
+    func cancel(identifier: String)
+}
+
+extension BGTaskScheduler: IosBackgroundTaskScheduling {
+    func register(
+        identifier: String,
+        launchHandler: @escaping (BGTask) -> Void
+    ) -> Bool {
+        register(
+            forTaskWithIdentifier: identifier,
+            using: nil,
+            launchHandler: launchHandler
+        )
+    }
+
+    func cancel(identifier: String) {
+        cancel(taskRequestWithIdentifier: identifier)
+    }
+}
+
 final class IosBackgroundSyncScheduler {
-    static let shared = IosBackgroundSyncScheduler()
+    static let shared = IosBackgroundSyncScheduler(
+        taskScheduler: BGTaskScheduler.shared,
+        defaults: .standard
+    )
 
     private let taskIdentifier = "app.tandemforactual.ios.background-sync"
-    private let defaults = UserDefaults.standard
+    private let taskScheduler: IosBackgroundTaskScheduling
+    private let defaults: UserDefaults
     private let enabledKey = "tandem.backgroundSyncEnabled"
     private let unmeteredOnlyKey = "tandem.backgroundSyncWifiOnly"
 
-    private init() {}
+    init(taskScheduler: IosBackgroundTaskScheduling, defaults: UserDefaults) {
+        self.taskScheduler = taskScheduler
+        self.defaults = defaults
+    }
 
     func register() {
-        let registered = BGTaskScheduler.shared.register(
-            forTaskWithIdentifier: taskIdentifier,
-            using: nil
-        ) { [weak self] task in
+        let registered = taskScheduler.register(identifier: taskIdentifier) {
+            [weak self] task in
             guard let self, let refreshTask = task as? BGAppRefreshTask else {
                 task.setTaskCompleted(success: false)
                 return
@@ -35,7 +66,7 @@ final class IosBackgroundSyncScheduler {
         let shouldSchedule = enabled && !budgetId.isEmpty
         defaults.set(shouldSchedule, forKey: enabledKey)
         defaults.set(unmeteredOnly, forKey: unmeteredOnlyKey)
-        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: taskIdentifier)
+        taskScheduler.cancel(identifier: taskIdentifier)
         if shouldSchedule {
             schedule()
         }
@@ -43,7 +74,7 @@ final class IosBackgroundSyncScheduler {
 
     private func scheduleIfEnabled() {
         guard defaults.bool(forKey: enabledKey) else {
-            BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: taskIdentifier)
+            taskScheduler.cancel(identifier: taskIdentifier)
             return
         }
         schedule()
@@ -53,7 +84,7 @@ final class IosBackgroundSyncScheduler {
         let request = BGAppRefreshTaskRequest(identifier: taskIdentifier)
         request.earliestBeginDate = Date(timeIntervalSinceNow: 6 * 60 * 60)
         do {
-            try BGTaskScheduler.shared.submit(request)
+            try taskScheduler.submit(request)
         } catch {
             NSLog("Tandem background refresh could not be scheduled: %@", String(describing: error))
         }

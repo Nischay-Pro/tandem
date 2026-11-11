@@ -147,7 +147,7 @@ internal fun assertLoginMethodsOutcomes(outcomes: LoginMethodsOutcomes) {
     )
 
     assertEquals(
-        "Actual is running at this address, but Tandem isn’t. Check that Tandem is running and that the proxy sends /api/v1/ to it.",
+        "Actual is responding at this address. Enter the address of your Tandem server.",
         outcomes.actualOnly.signInError,
     )
     assertFalse(outcomes.actualOnly.isServerReachable)
@@ -157,12 +157,12 @@ internal fun assertLoginMethodsOutcomes(outcomes: LoginMethodsOutcomes) {
         outcomes.actualOnly.requests.map { it.path },
     )
 
-    assertEquals("Couldn’t reach Tandem at this address. Check the address and connection.", outcomes.unreachable.signInError)
+    assertEquals("Tandem isn’t responding at this address. Check the server address.", outcomes.unreachable.signInError)
     assertFalse(outcomes.unreachable.isServerReachable)
     assertNull(outcomes.unreachable.actualLoginMethods)
     assertEquals(3, outcomes.unreachable.requests.size)
 
-    assertEquals("Tandem can’t reach Actual. Check the Actual connection, then try again.", outcomes.actualUnavailable.signInError)
+    assertEquals("Tandem can’t connect to Actual. Check that the Actual server is running.", outcomes.actualUnavailable.signInError)
     assertTrue(outcomes.actualUnavailable.isServerReachable)
     assertNull(outcomes.actualUnavailable.actualLoginMethods)
     assertEquals(listOf("/api/v1/auth/methods"), outcomes.actualUnavailable.requests.map { it.path })

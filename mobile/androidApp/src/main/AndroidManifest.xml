@@ -22,7 +22,7 @@
         <action android:name="android.intent.action.VIEW" />
         <category android:name="android.intent.category.DEFAULT" />
         <category android:name="android.intent.category.BROWSABLE" />
-        <data android:scheme="tandem" android:host="signin" android:path="/complete" />
+        <data android:scheme="app.tandemforactual" android:path="/signin/complete" />
       </intent-filter>
     </activity>
   </application>

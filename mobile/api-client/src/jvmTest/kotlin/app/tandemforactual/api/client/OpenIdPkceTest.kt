@@ -18,11 +18,15 @@ class OpenIdPkceTest {
     fun generatedProofUsesFreshBase64UrlVerifierAndMatchingChallenge() {
         val first = createOpenIdPkceProof()
         val second = createOpenIdPkceProof()
+        val firstState = createOpenIdCallbackState()
+        val secondState = createOpenIdCallbackState()
 
         assertEquals(43, first.codeVerifier.length)
         assertTrue(first.codeVerifier.matches(Regex("[A-Za-z0-9_-]{43}")))
+        assertTrue(firstState.matches(Regex("[A-Za-z0-9_-]{43}")))
         assertEquals(openIdPkceS256Challenge(first.codeVerifier), first.codeChallenge)
         assertNotEquals(first.codeVerifier, second.codeVerifier)
+        assertNotEquals(firstState, secondState)
         assertFalse(first.toString().contains(first.codeVerifier))
         assertFalse(first.toString().contains(first.codeChallenge))
     }

@@ -72,6 +72,7 @@ internal fun ActivitySearchScreen(
     autoFocusSearch: Boolean,
 ) {
     val scope = rememberCoroutineScope()
+    val todayIso = platformTodayIsoDate()
     var search by rememberSaveable { mutableStateOf(state.activitySearchQuery) }
     val savedSearches =
         remember(state.savedActivitySearchesJson, state.selectedBudgetId) {
@@ -544,8 +545,8 @@ internal fun ActivitySearchScreen(
                                     ?.let(searchableRecords::getOrNull)
                                     ?.dateIso
                             val transaction =
-                                remember(record, state.budgetDisplaySettings, merchantIconMatcher) {
-                                    record.toTransactionItem(state.budgetDisplaySettings, merchantIconMatcher)
+                                remember(record, state.budgetDisplaySettings, merchantIconMatcher, todayIso) {
+                                    record.toTransactionItem(state.budgetDisplaySettings, merchantIconMatcher, todayIso)
                                 }
                             val transactionId = transaction.recordId
                             TransactionRow(

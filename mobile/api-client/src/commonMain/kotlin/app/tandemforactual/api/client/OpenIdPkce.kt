@@ -17,6 +17,9 @@ fun createOpenIdPkceProof(): OpenIdPkceProof {
     return OpenIdPkceProof(verifier, openIdPkceS256Challenge(verifier))
 }
 
+/** Generates an independent state value to match the browser response to this app's pending login. */
+fun createOpenIdCallbackState(): String = encodeBase64Url(secureRandomBytes(PKCE_VERIFIER_BYTE_COUNT))
+
 internal fun openIdPkceS256Challenge(verifier: String): String = encodeBase64Url(sha256(verifier.encodeToByteArray()))
 
 internal expect fun secureRandomBytes(size: Int): ByteArray

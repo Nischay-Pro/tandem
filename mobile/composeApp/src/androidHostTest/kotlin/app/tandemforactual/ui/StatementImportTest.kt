@@ -190,6 +190,119 @@ class StatementImportTest {
     }
 
     @Test
+    fun inspectsCsvHeadersAndUsesAnExplicitColumnMappingForBankSpecificNames() {
+        val statement =
+            "Posted On,Details,Money Out,Money In,Transaction Trace,Extra\n" +
+                "11/04/2026,Corner Market,18.50,,ref-1,Groceries\n" +
+                "11/05/2026,Payroll,,2500.00,ref-2,Paycheck\n"
+        val layout = inspectStatementCsv(statement)
+
+        assertEquals(
+            listOf("Posted On", "Details", "Money Out", "Money In", "Transaction Trace", "Extra"),
+            layout.columns.map { it.name },
+        )
+        assertEquals(false, layout.suggestedMapping.isUsable)
+
+        assertThrows(StatementImportParseException::class.java) {
+            parseStatementImport("statement.csv", statement)
+        }
+
+        val mapped =
+            parseStatementImport(
+                "statement.csv",
+                statement,
+                dateOrder = StatementDateOrder.MONTH_DAY_YEAR,
+                csvMapping =
+                    StatementCsvColumnMapping(
+                        dateColumn = 0,
+                        debitColumn = 2,
+                        creditColumn = 3,
+                        referenceColumn = 4,
+                        payeeColumn = 1,
+                        notesColumn = 5,
+                    ),
+            )
+
+        assertEquals(listOf("2026-11-04", "2026-11-05"), mapped.transactions.map { it.date })
+        assertEquals(listOf(-1_850L, 250_000L), mapped.transactions.map { it.amountMinor })
+        assertEquals(listOf("ref-1", "ref-2"), mapped.transactions.map { it.importedId })
+        assertEquals(listOf("Corner Market", "Payroll"), mapped.transactions.map { it.payeeName })
+        assertEquals(listOf("Groceries", "Paycheck"), mapped.transactions.map { it.notes })
+        assertEquals(mapped.transactions.map { it.amountMinor }, mapped.toStatementImportItems().map { it.amountMinor })
+    }
+
+    @Test
+    fun allowsTheUserToMapACombinedAmountColumnAndDateFormat() {
+        val parsed =
+            parseStatementImport(
+                "statement.csv",
+                "Value Date,Transaction text,Debit/Credit Amount\n" +
+                    "31/10/2026,Pet Clinic,-42.18\n",
+                dateOrder = StatementDateOrder.DAY_MONTH_YEAR,
+                csvMapping = StatementCsvColumnMapping(dateColumn = 0, amountColumn = 2, payeeColumn = 1),
+            )
+
+        assertEquals("2026-10-31", parsed.transactions.single().date)
+        assertEquals(-4_218L, parsed.transactions.single().amountMinor)
+        assertEquals("Pet Clinic", parsed.transactions.single().payeeName)
+    }
+
+    @Test
+    fun remembersCsvMappingPerServerBudgetAndAccount() {
+        val preference =
+            StatementCsvMappingPreference(
+                serverUrl = "https://budget.example.test",
+                budgetId = "household",
+                accountId = "checking",
+                headers = listOf("Date", "Memo", "Payee", "Amount"),
+                dateOrder = StatementDateOrder.DAY_MONTH_YEAR,
+                columns =
+                    StatementCsvColumnMapping(
+                        dateColumn = 1,
+                        amountColumn = 3,
+                        referenceColumn = 0,
+                        payeeColumn = 2,
+                    ),
+            )
+        val otherAccount = preference.copy(accountId = "savings")
+        val first = updateStatementCsvMappingPreference("", preference)
+        val both = updateStatementCsvMappingPreference(first, otherAccount)
+
+        assertEquals(listOf(preference, otherAccount), decodeStatementCsvMappingPreferences(both))
+        assertEquals(
+            preference,
+            statementCsvMappingPreferenceFor(
+                updateStatementCsvMappingPreference(both, preference),
+                preference.serverUrl,
+                preference.budgetId,
+                preference.accountId,
+                preference.headers,
+            ),
+        )
+        assertEquals(
+            null,
+            statementCsvMappingPreferenceFor(
+                both,
+                "https://other.example.test",
+                preference.budgetId,
+                preference.accountId,
+                preference.headers,
+            ),
+        )
+        assertEquals(
+            null,
+            statementCsvMappingPreferenceFor(
+                both,
+                preference.serverUrl,
+                preference.budgetId,
+                preference.accountId,
+                listOf("Reordered"),
+            ),
+        )
+        assertEquals(emptyList<StatementCsvMappingPreference>(), decodeStatementCsvMappingPreferences("invalid"))
+    }
+
+    @Test
     fun handlesInternationalDatesAndEuropeanDecimalFormatting() {
         val parsed =
             parseStatementImport(
@@ -314,6 +427,15 @@ class StatementImportTest {
         assertEquals(-1_850L, ofx.transactions.single().amountMinor)
         assertEquals("ofx-1", ofx.transactions.single().importedId)
         assertEquals("Medication", ofx.transactions.single().notes)
+
+        val qfx =
+            parseStatementImport(
+                "account.qfx",
+                """<OFX><BANKTRANLIST><STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20261104<TRNAMT>-18.50<FITID>qfx-1<NAME>Pet Clinic</STMTTRN></BANKTRANLIST></OFX>""",
+            )
+        assertEquals("2026-11-04", qfx.transactions.single().date)
+        assertEquals(-1_850L, qfx.transactions.single().amountMinor)
+        assertEquals("qfx-1", qfx.transactions.single().importedId)
     }
 
     @Test

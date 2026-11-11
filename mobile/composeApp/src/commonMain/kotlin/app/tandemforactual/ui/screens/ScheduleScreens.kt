@@ -102,7 +102,10 @@ internal fun LiveUpcomingBillsCard(
             if (index > 0) DividerLine()
             ListRow(
                 schedule.name,
-                listOfNotNull(formatLiveDate(schedule.nextDate), schedule.accountName).joinToString(" · "),
+                listOfNotNull(
+                    formatTransactionListDate(schedule.nextDate),
+                    schedule.accountName,
+                ).joinToString(" · "),
                 schedule.amountLabel(state),
                 leading = RowLeading.Icon(Lucide.CalendarDays),
             ) {
@@ -229,7 +232,10 @@ internal fun UpcomingSchedulesScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         ListRow(
                             schedule.name,
-                            listOfNotNull(formatLiveDate(schedule.nextDate), schedule.accountName).joinToString(" · "),
+                            listOfNotNull(
+                                formatTransactionListDate(schedule.nextDate),
+                                schedule.accountName,
+                            ).joinToString(" · "),
                             schedule.amountLabel(state),
                             leading = RowLeading.Icon(Lucide.CalendarDays),
                             onClick = {

@@ -56,11 +56,12 @@ internal fun buildSearchActivityRecords(
 internal fun ActivitySearchRecord.toTransactionItem(
     displaySettings: BudgetDisplaySettings?,
     merchantIconMatcher: MerchantIconMatcherPack?,
+    todayIso: String = platformTodayIsoDate(),
 ): TransactionItem =
     TransactionItem(
         payee = payee,
         category = category,
-        dateLabel = formatLiveDate(dateIso),
+        dateLabel = formatTransactionListDate(dateIso, todayIso),
         amountMinorUnits = amountMinorUnits,
         icon = payee.take(1).uppercase(),
         categoryIcon = financeIcon(category),

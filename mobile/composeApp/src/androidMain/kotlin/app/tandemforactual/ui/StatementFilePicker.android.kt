@@ -33,7 +33,13 @@ internal actual fun rememberStatementFilePicker(onPicked: (PickedStatementFile) 
                 }
             }
         }
-    return remember(launcher) { { launcher.launch(arrayOf("text/*", "application/octet-stream", "application/x-ofx")) } }
+    return remember(launcher) {
+        {
+            launcher.launch(
+                arrayOf("text/*", "application/octet-stream", "application/x-ofx", "application/x-qfx", "application/vnd.intu.qfx"),
+            )
+        }
+    }
 }
 
 private fun readStatementFile(

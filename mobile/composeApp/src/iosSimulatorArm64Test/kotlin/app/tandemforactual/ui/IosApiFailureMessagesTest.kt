@@ -19,19 +19,19 @@ class IosApiFailureMessagesTest {
     fun signInAndSyncUseTheSameNetworkAndServiceMessages() {
         val cases =
             listOf(
-                "network-error" to (null to "Couldn’t reach Tandem at this address. Check the address and connection."),
-                "http-404" to (404 to "Tandem’s API route isn’t available. Check the address and the proxy’s /api/v1/ route."),
-                "http-405" to (405 to "Tandem’s API route isn’t available. Check the address and the proxy’s /api/v1/ route."),
-                "http-400" to (400 to "Tandem rejected the request. Check the details and try again."),
-                "http-422" to (422 to "Tandem rejected the request. Check the details and try again."),
-                "http-408" to (408 to "Tandem couldn’t complete the request. Wait a moment, then try again."),
-                "http-429" to (429 to "Tandem couldn’t complete the request. Wait a moment, then try again."),
+                "network-error" to (null to "Tandem isn’t responding at this address. Check the server address."),
+                "http-404" to (404 to "Tandem’s API route isn’t available. Check that your proxy sends /api/v1/ to Tandem."),
+                "http-405" to (405 to "Tandem’s API route isn’t available. Check that your proxy sends /api/v1/ to Tandem."),
+                "http-400" to (400 to "Tandem couldn’t accept this request. Check the details."),
+                "http-422" to (422 to "Tandem couldn’t accept this request. Check the details."),
+                "http-408" to (408 to "Tandem couldn’t complete the request. Wait a moment before trying again."),
+                "http-429" to (429 to "Tandem couldn’t complete the request. Wait a moment before trying again."),
                 "http-500" to (500 to "Tandem is temporarily unavailable. Try again shortly."),
                 "http-502" to (502 to "Tandem is temporarily unavailable. Try again shortly."),
                 "http-503" to (503 to "Tandem is temporarily unavailable. Try again shortly."),
                 "http-504" to (504 to "Tandem is temporarily unavailable. Try again shortly."),
-                "schedule_changed" to (409 to "The scheduled transaction changed in Actual. Refresh the schedule, then try again."),
-                "actual_unavailable" to (503 to "Tandem can’t reach Actual. Check the Actual connection, then try again."),
+                "schedule_changed" to (409 to "This scheduled transaction changed in Actual. Refresh the schedule before trying again."),
+                "actual_unavailable" to (503 to "Tandem can’t connect to Actual. Check that the Actual server is running."),
             )
 
         cases.forEach { (code, expected) ->
@@ -45,7 +45,7 @@ class IosApiFailureMessagesTest {
         val thrownNetwork =
             TandemApiException("network-error", cause = IllegalStateException("private host details"))
                 .userFacingMessage("fallback", ApiFailureContext.SIGN_IN)
-        assertEquals("Couldn’t reach Tandem at this address. Check the address and connection.", thrownNetwork)
+        assertEquals("Tandem isn’t responding at this address. Check the server address.", thrownNetwork)
         assertFalse(thrownNetwork.contains("private host details"))
         val thrownSyncNetwork =
             TandemApiException("network-error", cause = IllegalStateException("private host details"))
@@ -63,7 +63,7 @@ class IosApiFailureMessagesTest {
             apiFailureMessage("not_found", 404, ApiFailureContext.SYNC, "fallback"),
         )
         assertEquals(
-            "This item is no longer available. Refresh the budget and try again.",
+            "This item is no longer available. Refresh the budget.",
             apiFailureMessage("not_found", 404, ApiFailureContext.GENERAL, "fallback"),
         )
     }
@@ -71,11 +71,11 @@ class IosApiFailureMessagesTest {
     @Test
     fun passwordMessagesRequireAnExplicitCredentialsCode() {
         assertEquals(
-            "The password didn’t match this Actual server. Check it and try again.",
+            "That password doesn’t match this Actual server. Check the password.",
             apiFailureMessage("invalid_credentials", 401, ApiFailureContext.SIGN_IN, "fallback"),
         )
         assertEquals(
-            "That budget password didn’t unlock this budget. Check it and try again.",
+            "That password didn’t unlock this encrypted budget. Check the budget password.",
             apiFailureMessage("invalid_budget_password", 422, ApiFailureContext.SYNC, "fallback"),
         )
         assertFalse(
@@ -86,11 +86,11 @@ class IosApiFailureMessagesTest {
     @Test
     fun operationStatusNotFoundDoesNotLookLikeABudgetWasRemoved() {
         assertEquals(
-            "Tandem has no saved status for this edit. Try again, or check Actual before removing it.",
+            "Tandem has no saved status for this edit. Check Actual before removing it.",
             apiFailureMessage("operation_not_found", 404, ApiFailureContext.SYNC, "fallback"),
         )
         assertEquals(
-            "Tandem’s API route isn’t available. Check the address and the proxy’s /api/v1/ route.",
+            "Tandem’s API route isn’t available. Check that your proxy sends /api/v1/ to Tandem.",
             apiFailureMessage("http-404", 404, ApiFailureContext.SYNC, "fallback"),
         )
         assertFalse(TandemApiException("http-404", 404).indicatesTandemReachable())
