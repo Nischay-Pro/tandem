@@ -1,16 +1,20 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { createTransactionApi } from "../src/actual/transaction-api.js";
 import {
   createTransactionRevision,
+  type TransactionCreateInput,
   type TransactionSnapshot,
 } from "../src/actual/transaction-reconciliation.js";
 import {
   TransactionReconciler,
   type ActualBudgetSessionPort,
 } from "../src/actual/transaction-reconciler.js";
-import type { ActualTransactionStore } from "../src/actual/transaction-store.js";
+import type {
+  ActualTransactionStore,
+  TransactionCreateValidationIssue,
+} from "../src/actual/transaction-store.js";
 import { buildApiApp } from "../src/app.js";
 import { createPostgresDatabase, type Database } from "../src/database.js";
 import type {
@@ -39,7 +43,10 @@ let adminPool: Pool;
 let inspectionPool: Pool;
 let isolatedSchema: string;
 
-function createBaseSnapshot(id: string): TransactionSnapshot {
+function createBaseSnapshot(
+  id: string,
+  overrides: Partial<TransactionSnapshot> = {},
+): TransactionSnapshot {
   return {
     id,
     account: "checking-account",
@@ -59,12 +66,39 @@ function createBaseSnapshot(id: string): TransactionSnapshot {
     isChild: false,
     parentId: null,
     subtransactions: [],
+    ...overrides,
+  };
+}
+
+function actualRecordFromSnapshot(
+  snapshot: TransactionSnapshot,
+): Record<string, unknown> {
+  return {
+    id: snapshot.id,
+    account: snapshot.account,
+    amount: snapshot.amount,
+    date: snapshot.date,
+    payee: snapshot.payee,
+    category: snapshot.category,
+    notes: snapshot.notes,
+    cleared: snapshot.cleared,
+    reconciled: snapshot.reconciled,
+    imported_id: snapshot.importedId,
+    imported_payee: snapshot.importedPayee,
+    starting_balance_flag: snapshot.startingBalance,
+    schedule: snapshot.schedule,
+    transfer_id: snapshot.transferId,
+    is_parent: snapshot.isParent,
+    is_child: snapshot.isChild,
+    parent_id: snapshot.parentId,
+    subtransactions: snapshot.subtransactions.map(actualRecordFromSnapshot),
   };
 }
 
 function createWriteInput(
   base: TransactionSnapshot,
   budgetId: string,
+  patch: { [key: string]: JsonValue } = { amount: -1200 },
 ): WriteOperationInput {
   return {
     operationId: randomUUID(),
@@ -76,7 +110,55 @@ function createWriteInput(
     entityId: base.id,
     baseRevision: createTransactionRevision(base),
     baseSnapshot: base as unknown as JsonValue,
-    patch: { amount: -1200 },
+    patch,
+  };
+}
+
+function createCreateInput(
+  budgetId: string,
+  transactionId: string,
+  patch: TransactionCreateInput,
+): WriteOperationInput {
+  return {
+    operationId: randomUUID(),
+    principalId: ownerDevice.principalId,
+    budgetId,
+    idempotencyKey: randomUUID(),
+    entityType: "transaction",
+    action: "create",
+    entityId: transactionId,
+    baseRevision: null,
+    baseSnapshot: {},
+    patch: patch as unknown as { [key: string]: JsonValue },
+  };
+}
+
+function createLegacySnapshotRevision(
+  snapshot: Record<string, unknown>,
+): string {
+  return createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
+}
+
+function createActualRecordForCreate(
+  transactionId: string,
+  input: TransactionCreateInput,
+  overrides: Partial<Record<string, unknown>> = {},
+): Record<string, unknown> {
+  return {
+    id: `actual-${randomUUID()}`,
+    account: input.account,
+    amount: input.amount,
+    date: input.date,
+    payee: input.payee,
+    category: input.category,
+    notes: input.notes,
+    cleared: input.cleared,
+    reconciled: false,
+    imported_id: transactionId,
+    is_parent: false,
+    is_child: false,
+    parent_id: null,
+    ...overrides,
   };
 }
 
@@ -84,29 +166,44 @@ async function createRecoveryApp(
   input: WriteOperationInput,
   base: TransactionSnapshot,
   writes: { count: number },
+  options: {
+    initialActual?: Record<string, unknown>;
+    updateValidationIssue?: TransactionCreateValidationIssue;
+  } = {},
 ) {
-  let actual: Record<string, unknown> = { ...base };
+  let actual: Record<string, unknown> | undefined =
+    options.initialActual ?? actualRecordFromSnapshot(base);
   const transactions: ActualTransactionStore = {
     async read(id) {
-      return id === base.id ? { ...actual } : undefined;
+      if (id !== base.id && id !== input.entityId) return undefined;
+      return actual ? { ...actual } : undefined;
     },
     async validateCreateInput() {
-      throw new Error("This test does not validate creates");
-    },
-    async validateUpdateInput() {
       return undefined;
     },
-    async create() {
-      throw new Error("This test does not create transactions");
+    async validateUpdateInput() {
+      return options.updateValidationIssue;
+    },
+    async create(id, createInput) {
+      writes.count += 1;
+      actual = createActualRecordForCreate(id, createInput);
+      return { ...actual };
     },
     async update(id, fields) {
-      if (id !== base.id) throw new Error("Unexpected transaction ID");
+      if (id !== base.id && id !== input.entityId) {
+        throw new Error("Unexpected transaction ID");
+      }
+      if (!actual) throw new Error("Transaction is absent");
       writes.count += 1;
       actual = { ...actual, ...fields };
       return { ...actual };
     },
-    async delete() {
-      throw new Error("This test does not delete transactions");
+    async delete(id) {
+      if (id !== base.id && id !== input.entityId) {
+        throw new Error("Unexpected transaction ID");
+      }
+      actual = undefined;
+      return undefined;
     },
   };
   const session: ActualBudgetSessionPort = {
@@ -186,6 +283,23 @@ function retryRequest(input: WriteOperationInput) {
       action: "update",
       baseRevision: input.baseRevision,
       baseSnapshot: input.baseSnapshot,
+      patch: input.patch,
+    },
+  };
+}
+
+function retryCreateRequest(input: WriteOperationInput) {
+  const transactionsUrl = `/api/v1/budgets/${input.budgetId}/transactions`;
+  return {
+    method: "POST" as const,
+    url: `${transactionsUrl}/${encodeURIComponent(input.entityId ?? "")}/operations`,
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "idempotency-key": input.idempotencyKey,
+    },
+    payload: {
+      operationId: input.operationId,
+      action: "create",
       patch: input.patch,
     },
   };
@@ -325,4 +439,233 @@ describe("uncertain transaction recovery through the API", () => {
       await app.close();
     }
   }, 30_000);
+
+  it.each([
+    ["account", { account: "other-account" }],
+    ["date", { date: "2026-11-02" }],
+    ["cleared", { cleared: true }],
+    ["reconciled", { reconciled: true }],
+  ] as const)(
+    "rejects a split-child %s edit through the API without recording a conflict",
+    async (_field, patch) => {
+      const base = createBaseSnapshot(`split-child-${randomUUID()}`, {
+        isChild: true,
+        parentId: `split-parent-${randomUUID()}`,
+      });
+      const budgetId = `split-child-budget-${randomUUID()}`;
+      const input = createWriteInput(base, budgetId, patch);
+      const writes = { count: 0 };
+      const { app, transactions } = await createRecoveryApp(
+        input,
+        base,
+        writes,
+      );
+
+      try {
+        const response = await app.inject(retryRequest(input));
+
+        expect(response.statusCode).toBe(400);
+        expect(response.json().error).toMatchObject({
+          code: "split-child-field-not-editable",
+        });
+        expect(writes.count).toBe(0);
+        await expect(
+          database.journal.get(input.operationId),
+        ).resolves.toMatchObject({
+          status: "rejected",
+          errorCode: "split-child-field-not-editable",
+        });
+        const status = await app.inject(statusRequest(input.operationId));
+        expect(status.statusCode).toBe(200);
+        expect(status.json()).toMatchObject({
+          operation: { status: "rejected" },
+          conflict: null,
+        });
+        await expect(transactions.read(base.id)).resolves.toMatchObject({
+          is_child: true,
+          parent_id: base.parentId,
+        });
+      } finally {
+        await app.close();
+      }
+    },
+  );
+
+  it("accepts a previous transaction snapshot format through the API", async () => {
+    const base = createBaseSnapshot(`legacy-snapshot-${randomUUID()}`);
+    const budgetId = `legacy-snapshot-budget-${randomUUID()}`;
+    const legacySnapshot = { ...base } as Record<string, unknown>;
+    delete legacySnapshot.reconciled;
+    const input = {
+      ...createWriteInput(base, budgetId),
+      baseRevision: createLegacySnapshotRevision(legacySnapshot),
+      baseSnapshot: legacySnapshot as JsonValue,
+    };
+    const writes = { count: 0 };
+    const { app, transactions } = await createRecoveryApp(input, base, writes);
+
+    try {
+      const response = await app.inject(retryRequest(input));
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        operation: { status: "committed", errorCode: null },
+        conflict: null,
+      });
+      expect(writes.count).toBe(1);
+      await expect(transactions.read(base.id)).resolves.toMatchObject({
+        amount: -1200,
+      });
+      await expect(
+        database.journal.get(input.operationId),
+      ).resolves.toMatchObject({
+        status: "committed",
+        baseSnapshot: legacySnapshot,
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it.each([
+    {
+      actualAmount: -1500,
+      expectedStatus: "committed",
+      expectedConflictFields: null,
+    },
+    {
+      actualAmount: -1300,
+      expectedStatus: "conflict",
+      expectedConflictFields: ["amount"],
+    },
+  ])(
+    "settles a retried uncertain create as $expectedStatus when Actual has $actualAmount",
+    async ({ actualAmount, expectedStatus, expectedConflictFields }) => {
+      const transactionId = `tandem:${randomUUID()}`;
+      const budgetId = `uncertain-create-budget-${randomUUID()}`;
+      const createPatch: TransactionCreateInput = {
+        account: "checking-account",
+        amount: -1500,
+        date: "2026-11-01",
+        payee: "market-payee",
+        category: "groceries-category",
+        notes: "Household market",
+        cleared: false,
+      };
+      const input = createCreateInput(budgetId, transactionId, createPatch);
+      const actualRecord = createActualRecordForCreate(
+        transactionId,
+        createPatch,
+        { amount: actualAmount },
+      );
+      const base = createBaseSnapshot(String(actualRecord.id), {
+        account: createPatch.account,
+        amount: actualAmount,
+        date: createPatch.date,
+        payee: createPatch.payee,
+        category: createPatch.category,
+        notes: createPatch.notes,
+        cleared: createPatch.cleared,
+        importedId: transactionId,
+      });
+      const writes = { count: 0 };
+      const { app } = await createRecoveryApp(input, base, writes, {
+        initialActual: actualRecord,
+      });
+
+      try {
+        await database.journal.enqueue(input);
+        expect((await database.journal.claim(input.operationId)).claimed).toBe(
+          true,
+        );
+        await database.journal.markUncertain(
+          input.operationId,
+          "actual-outcome-uncertain",
+          {
+            kind: "transaction-create-returned",
+          },
+        );
+
+        const response = await app.inject(retryCreateRequest(input));
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().operation.status).toBe(expectedStatus);
+        expect(response.json().conflict?.conflictingFields ?? null).toEqual(
+          expectedConflictFields,
+        );
+        expect(writes.count).toBe(0);
+        await expect(
+          database.journal.get(input.operationId),
+        ).resolves.toMatchObject({
+          status: expectedStatus,
+        });
+      } finally {
+        await app.close();
+      }
+    },
+  );
+
+  it.each([
+    {
+      field: "category",
+      patch: { category: "deleted-category" },
+      validationIssue: {
+        code: "category-not-found",
+        message: "Category does not exist in this budget",
+      },
+    },
+    {
+      field: "payee",
+      patch: { payee: "removed-payee" },
+      validationIssue: {
+        code: "payee-not-found",
+        message: "Payee does not exist in this budget",
+      },
+    },
+    {
+      field: "account",
+      patch: { account: "closed-account" },
+      validationIssue: {
+        code: "account-closed",
+        message: "Choose an open account for this transaction",
+      },
+    },
+  ] as const)(
+    "rejects an update that refers to a removed $field before writing",
+    async ({ patch, validationIssue }) => {
+      const base = createBaseSnapshot(`removed-reference-${randomUUID()}`);
+      const budgetId = `removed-reference-budget-${randomUUID()}`;
+      const input = createWriteInput(base, budgetId, patch);
+      const writes = { count: 0 };
+      const { app, transactions } = await createRecoveryApp(
+        input,
+        base,
+        writes,
+        { updateValidationIssue: validationIssue },
+      );
+
+      try {
+        const response = await app.inject(retryRequest(input));
+
+        expect(response.statusCode).toBe(400);
+        expect(response.json().error).toMatchObject({
+          code: validationIssue.code,
+        });
+        expect(writes.count).toBe(0);
+        await expect(
+          database.journal.get(input.operationId),
+        ).resolves.toMatchObject({
+          status: "rejected",
+          errorCode: validationIssue.code,
+        });
+        await expect(transactions.read(base.id)).resolves.toMatchObject({
+          account: base.account,
+          category: base.category,
+          payee: base.payee,
+        });
+      } finally {
+        await app.close();
+      }
+    },
+  );
 });
