@@ -323,6 +323,42 @@ class BudgetSyncCoordinatorTest {
         }
 
     @Test
+    fun statusOnlyCheckKeepsSuccessfulUncertainStatusDistinctFromLookupFailure() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val remote = FakeBudgetSyncRemote(snapshot(records = listOf(transaction())))
+                val coordinator = BudgetSyncCoordinator(repository, remote)
+                coordinator.synchronize(BUDGET, sendQueuedWrites = false)
+                val request = updateRequest()
+                repository.enqueueWrite(request)
+                repository.claimNextWrite(BUDGET)
+                repository.markWriteUncertain(request.operationId, "claim-lease-expired")
+                remote.operationHandler = { operationId ->
+                    operationResult(operationId, RemoteOperationStatus.UNCERTAIN, "claim-lease-expired")
+                }
+
+                val result =
+                    coordinator.synchronize(
+                        BUDGET,
+                        sendQueuedWrites = false,
+                        reconcileUncertainOperationId = request.operationId,
+                    )
+
+                val preserved = repository.findWrite(request.operationId)
+                assertEquals(1, result.writesUncertain)
+                assertEquals(null, result.operationStatusErrorCode)
+                assertEquals("uncertain", preserved?.status)
+                assertEquals("claim-lease-expired", preserved?.lastErrorCode)
+                assertEquals(1, remote.operationPolls)
+                assertEquals(0, remote.submitCount)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun generationResetReplacesRemoteBaselineAndKeepsQueuedDraft() =
         runBlocking {
             val database = newDatabase()
