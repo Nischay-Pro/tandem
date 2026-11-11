@@ -30,9 +30,11 @@ contains their paths, not their values; the API reads the database URL and
 auth encryption key from those mounted files. Keep the secrets
 directory private (`chmod 700 deploy/compose/secrets`). The `0444` file mode
 lets the unprivileged API process read the bind-mounted files even when the
-deployment host uses a different numeric user ID. Actual account passwords are
-entered in Tandem and are not deployment secrets. Do not change the secret
-paths in `.env` unless you move these files.
+deployment host uses a different numeric user ID. This mode is safe only while
+the containing directory stays private; anyone who can traverse it can read
+the files. Actual account passwords are entered in Tandem and are not
+deployment secrets. Do not change the secret paths in `.env` unless you move
+these files.
 
 The auth encryption key must remain stable between rotations. Keep a protected
 copy with the database backups. The always-mounted
@@ -78,12 +80,15 @@ refuses an empty value. Do not trust all forwarded headers. Keep
 TLS termination and the Actual server's existing proxy settings in the
 existing Nginx site configuration.
 The example limits general API traffic to 600 requests per minute per client
-address, and sign-in traffic to 10 per minute with a burst of 5. These Nginx
-limits are the public edge protection; the API also keeps an in-memory
-10-per-minute sign-in limit per client address in each process. Configure
-`TRUST_PROXY` so the API sees the real client address. Keep the API origin
-private so clients cannot bypass the reverse-proxy limits. The API location
-compresses JSON responses of at least 1 KiB when the client supports gzip.
+address, and sign-in traffic to 10 requests per minute per source address with
+a burst of 5. These Nginx zones key on the full source address. The API also
+keeps an in-memory 10-per-minute sign-in limit per client address in each
+process and groups IPv6 addresses by `/64`. Configure `TRUST_PROXY` so the API
+sees the real client address. Keep the API origin private so clients cannot
+bypass the edge limits. The API's `/64` limit is local to each API process; use
+a shared limiter before running multiple API processes or replicas. The API
+location compresses JSON responses of at least 1 KiB when the client supports
+gzip.
 
 Start and verify:
 
