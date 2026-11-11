@@ -546,6 +546,146 @@ describe("durable write journal integration", () => {
     }
   });
 
+  it("recovers an Actual update applied before a service restart but not journaled", async () => {
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error("DATABASE_URL is required to simulate a restart");
+    }
+    const isolatedConnection = new URL(connectionString);
+    isolatedConnection.searchParams.set(
+      "options",
+      `-c search_path=${writeJournalSchema}`,
+    );
+    const base: TransactionSnapshot = {
+      id: `transaction-crash-recovery-${randomUUID()}`,
+      account: "checking-account",
+      amount: 1500,
+      date: "2026-11-01",
+      payee: null,
+      category: null,
+      notes: null,
+      cleared: false,
+      reconciled: false,
+      importedId: null,
+      importedPayee: null,
+      startingBalance: null,
+      schedule: null,
+      transferId: null,
+      isParent: false,
+      isChild: false,
+      parentId: null,
+      subtransactions: [],
+    };
+    const input = createOperation({
+      budgetId: `crash-recovery-budget-${randomUUID()}`,
+      entityId: base.id,
+      baseRevision: createTransactionRevision(base),
+      baseSnapshot: base as unknown as JsonValue,
+      patch: { amount: 1200 },
+    });
+    const beforeRestart = createPostgresDatabase(
+      isolatedConnection.toString(),
+      process.env.AUTH_TOKEN_ENCRYPTION_KEY ??
+        "5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c",
+    );
+    let actualAfterCrash: Record<string, unknown> = {
+      id: base.id,
+      account: base.account,
+      amount: base.amount,
+      date: base.date,
+      payee: base.payee,
+      category: base.category,
+      notes: base.notes,
+      cleared: base.cleared,
+      reconciled: base.reconciled,
+    };
+    try {
+      await beforeRestart.journal.enqueue(input);
+      expect(
+        (await beforeRestart.journal.claim(input.operationId)).claimed,
+      ).toBe(true);
+
+      // Actual accepted the edit, then the Tandem process stopped before it
+      // could record the final journal result.
+      actualAfterCrash = { ...actualAfterCrash, amount: 1200 };
+      await inspectionPool.query(
+        `UPDATE tandem_operations
+         SET lease_expires_at = clock_timestamp() - interval '1 second'
+         WHERE operation_id = $1`,
+        [input.operationId],
+      );
+      expect(await beforeRestart.journal.expireLeases()).toBe(1);
+      await expect(
+        beforeRestart.journal.get(input.operationId),
+      ).resolves.toMatchObject({ status: "uncertain", writeEvidence: null });
+    } finally {
+      await beforeRestart.close();
+    }
+
+    const afterRestart = createPostgresDatabase(
+      isolatedConnection.toString(),
+      process.env.AUTH_TOKEN_ENCRYPTION_KEY ??
+        "5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c",
+    );
+    const transactions: ActualTransactionStore = {
+      async read() {
+        return { ...actualAfterCrash };
+      },
+      async validateCreateInput() {
+        throw new Error("This recovery does not create transactions");
+      },
+      async validateUpdateInput() {
+        return undefined;
+      },
+      async create() {
+        throw new Error("Recovery must not replay the applied update");
+      },
+      async update() {
+        throw new Error("Recovery must not replay the applied update");
+      },
+      async delete() {
+        throw new Error("This recovery does not delete transactions");
+      },
+    };
+    const session: ActualBudgetSessionPort = {
+      async runBudget<T>(_syncId: string, operation: () => Promise<T>) {
+        return operation();
+      },
+    };
+    try {
+      const reconciler = new TransactionReconciler(
+        afterRestart,
+        afterRestart.journal,
+        session,
+        transactions,
+      );
+
+      const recovered = await reconciler.checkOperationStatus(
+        input.operationId,
+      );
+
+      expect(recovered?.operation).toMatchObject({
+        status: "committed",
+        actualResult: {
+          transactionId: base.id,
+          recoveredByReadback: true,
+        },
+      });
+      await expect(
+        afterRestart.journal.get(input.operationId),
+      ).resolves.toMatchObject({
+        status: "committed",
+        actualResult: {
+          transactionId: base.id,
+          recoveredByReadback: true,
+        },
+      });
+      expect(actualAfterCrash.amount).toBe(1200);
+    } finally {
+      await afterRestart.close();
+    }
+  });
+
   it("rejects idempotency-key reuse when the requested financial patch changes", async () => {
     const input = createOperation();
     await database.journal.enqueue(input);
