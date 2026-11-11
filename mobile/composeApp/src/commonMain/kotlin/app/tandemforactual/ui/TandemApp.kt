@@ -970,7 +970,7 @@ fun TandemApp(
             }
         }
     }
-    val resolveConflict: (String, Boolean) -> Unit = { operationId, keepDeviceVersion ->
+    val resolveConflict: (String, Boolean, String) -> Unit = { operationId, keepDeviceVersion, reviewedRevision ->
         if (!mobileSession.isSavingTransaction) {
             coroutineScope.launch {
                 mobileSession.resolveConflict(
@@ -978,6 +978,7 @@ fun TandemApp(
                     operationId = operationId,
                     keepDeviceVersion = keepDeviceVersion,
                     encryptionPassword = state.encryptedPassword.takeIf { it.isNotBlank() },
+                    reviewedRevision = reviewedRevision,
                 )
             }
         }

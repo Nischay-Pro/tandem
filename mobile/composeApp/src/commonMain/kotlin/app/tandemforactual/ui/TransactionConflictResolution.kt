@@ -3,6 +3,7 @@ package app.tandemforactual.ui
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.store.BudgetSyncSummary
+import app.tandemforactual.data.store.InvalidLocalWriteException
 import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
@@ -75,6 +76,7 @@ internal class TransactionConflictResolution(
         operationId: String,
         keepDeviceVersion: Boolean,
         encryptionPassword: String?,
+        reviewedRevision: String,
     ): String {
         var replacementOperationId: String? = null
         try {
@@ -93,19 +95,23 @@ internal class TransactionConflictResolution(
                     ?: return "Tandem confirmed the latest budget, but this change no longer needs review. " +
                         "Sync the budget to check its status."
 
+            val current = store.findRecord(budgetId, confirmedOperation.recordType, confirmedOperation.recordId)
+            val revision = current?.remoteRevision
+            if (current == null || revision.isNullOrBlank() || revision != reviewedRevision) {
+                return "Actual changed again. Review the latest version before choosing."
+            }
+
             if (!keepDeviceVersion) {
                 store.discardWrite(operationId)
                 return "Tandem confirmed Actual’s latest version. Tandem kept that version and removed your edit."
             }
 
-            val current = store.findRecord(budgetId, confirmedOperation.recordType, confirmedOperation.recordId)
-            if (current?.remoteDeleted == true && confirmedOperation.action == LocalWriteAction.DELETE.name) {
+            if (current.remoteDeleted && confirmedOperation.action == LocalWriteAction.DELETE.name) {
                 store.discardWrite(operationId)
                 return "Tandem confirmed the transaction was deleted. Tandem removed the waiting deletion."
             }
-            val baseJson = current?.remoteJson
-            val revision = current?.remoteRevision
-            if (current == null || current.remoteDeleted || baseJson == null || revision.isNullOrBlank()) {
+            val baseJson = current.remoteJson
+            if (current.remoteDeleted || baseJson == null) {
                 return "Tandem didn’t return the latest transaction. Your edit remains on this device. Sync the budget and try again."
             }
             val base =
@@ -118,7 +124,6 @@ internal class TransactionConflictResolution(
             }
 
             val replacementId = newOperationId()
-            replacementOperationId = replacementId
             val action =
                 if (confirmedOperation.action == LocalWriteAction.DELETE.name) {
                     LocalWriteAction.DELETE
@@ -143,11 +148,18 @@ internal class TransactionConflictResolution(
                     supersedesConflictOperationId = operationId,
                 ),
             )
+            replacementOperationId = replacementId
             val summary = sync.synchronize(budgetId, encryptionPassword, retryQueuedBudgetMutations = false)
             val resolvedWrite = store.findWrite(replacementId)
             return conflictResolutionMessage(resolvedWrite, action, summary)
         } catch (error: CancellationException) {
             throw error
+        } catch (error: InvalidLocalWriteException) {
+            return if (error.message?.contains("cached transaction has changed", ignoreCase = true) == true) {
+                "Actual changed again. Review the latest version before choosing."
+            } else {
+                "Tandem couldn’t save this choice. Your original edit remains on this device. Try again."
+            }
         } catch (_: Exception) {
             return if (replacementOperationId == null) {
                 "Tandem hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."

@@ -40,7 +40,6 @@ import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
-import app.tandemforactual.ui.model.longValue
 import app.tandemforactual.ui.model.recordName
 import app.tandemforactual.ui.model.stringValue
 import com.composables.icons.lucide.Lucide
@@ -52,6 +51,38 @@ import kotlinx.serialization.json.jsonObject
 internal fun conflictSnapshot(operation: OutboxOperationEntity?): JsonObject? =
     (operation?.optimisticJson ?: operation?.baseSnapshotJson)
         ?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
+
+internal fun conflictReviewRevisionChanged(
+    serverConfirmed: Boolean,
+    reviewedRevision: String?,
+    latestRevision: String?,
+): Boolean =
+    serverConfirmed &&
+        !reviewedRevision.isNullOrBlank() &&
+        !latestRevision.isNullOrBlank() &&
+        reviewedRevision != latestRevision
+
+internal fun canResolveReviewedConflict(
+    serverConfirmed: Boolean,
+    reviewedRevision: String?,
+    latestRevision: String?,
+): Boolean =
+    serverConfirmed &&
+        !reviewedRevision.isNullOrBlank() &&
+        reviewedRevision == latestRevision
+
+internal fun conflictReplacementForRecord(
+    pendingWrites: List<OutboxOperationEntity>,
+    selectedOperationId: String?,
+    recordId: String?,
+): OutboxOperationEntity? =
+    if (recordId.isNullOrBlank()) {
+        null
+    } else {
+        pendingWrites.firstOrNull {
+            it.status == "conflict" && it.recordId == recordId && it.operationId != selectedOperationId
+        }
+    }
 
 internal fun conflictPayeeTitle(
     operation: OutboxOperationEntity?,
@@ -279,7 +310,7 @@ internal fun ConflictReviewScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
-    onResolveConflict: (String, Boolean) -> Unit,
+    onResolveConflict: (String, Boolean, String) -> Unit,
     liveTransactions: List<TransactionItem>,
     merchantIconMatcher: MerchantIconMatcherPack?,
 ) {
@@ -299,6 +330,26 @@ internal fun ConflictReviewScreen(
         mobileSession.pendingWrites.firstOrNull {
             it.operationId == state.selectedConflictOperationId && it.status == "conflict"
         }
+    var reviewedRecordId by rememberSaveable(state.selectedConflictOperationId) { mutableStateOf<String?>(null) }
+    var reviewedRevision by rememberSaveable(state.selectedConflictOperationId) { mutableStateOf<String?>(null) }
+    var redirectedToLatestConflict by remember { mutableStateOf(false) }
+    LaunchedEffect(operation?.recordId) {
+        if (reviewedRecordId == null) reviewedRecordId = operation?.recordId
+    }
+    LaunchedEffect(operation?.operationId, state.selectedConflictOperationId, mobileSession.pendingWrites) {
+        if (operation == null && !reviewedRecordId.isNullOrBlank()) {
+            val latestConflict =
+                conflictReplacementForRecord(
+                    mobileSession.pendingWrites,
+                    state.selectedConflictOperationId,
+                    reviewedRecordId,
+                )
+            if (latestConflict != null) {
+                redirectedToLatestConflict = true
+                state.selectedConflictOperationId = latestConflict.operationId
+            }
+        }
+    }
     var serverCheckAttempt by rememberSaveable(operation?.operationId) { mutableStateOf(0) }
     LaunchedEffect(operation?.operationId, serverCheckAttempt) {
         operation?.let {
@@ -315,11 +366,18 @@ internal fun ConflictReviewScreen(
             mobileSession.conflictRecordsByRecordId[item.recordId]
                 ?: mobileSession.transactionRecords.firstOrNull { it.recordId == item.recordId }
         }
+    LaunchedEffect(operation?.operationId, serverConfirmed, record?.remoteRevision) {
+        if (serverConfirmed && reviewedRevision == null) reviewedRevision = record?.remoteRevision
+    }
+    val latestRevision = record?.remoteRevision
+    val reviewRevisionChanged = conflictReviewRevisionChanged(serverConfirmed, reviewedRevision, latestRevision)
+    val canResolveReviewedVersion = canResolveReviewedConflict(serverConfirmed, reviewedRevision, latestRevision)
     val deviceVersion = operation?.optimisticJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
+    val userEditedFields = operation?.patchJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject.keys }.getOrNull() }
     val actualDeleted = serverConfirmed && record?.remoteDeleted == true
     val conflictDetails = operation?.lastErrorCode?.let(::parseLocalWriteConflictDetails)
     val conflictReason =
-        if (serverConfirmed && operation != null) {
+        if (serverConfirmed) {
             conflictReasonMessage(
                 conflictType = conflictDetails?.conflictType,
                 conflictingFields = conflictDetails?.conflictingFields.orEmpty(),
@@ -335,19 +393,8 @@ internal fun ConflictReviewScreen(
         } else {
             null
         }
-    val deviceAmount = deviceVersion?.longValue("amount")
-    val actualAmount = actualVersion?.longValue("amount")
     val transaction = operation?.let { conflict -> liveTransactions.firstOrNull { it.recordId == conflict.recordId } }
     val transactionTitle = conflictPayeeTitle(operation, liveTransactions, mobileSession) ?: "Transaction"
-    val deviceAmountText = deviceAmount?.let { amount -> state.formatSignedCurrency(amount) } ?: "Deleted"
-    val actualAmountText =
-        conflictActualAmountText(
-            serverConfirmed = serverConfirmed,
-            isSyncing = mobileSession.isSyncing,
-            actualDeleted = actualDeleted,
-            amount = actualAmount,
-            formatAmount = { amount -> state.formatSignedCurrency(amount) },
-        )
     val categoryId = deviceVersion?.stringValue("category")
     val categoryName =
         transaction?.category
@@ -382,6 +429,7 @@ internal fun ConflictReviewScreen(
                     ),
                 formatAmount = { amount -> state.formatSignedCurrency(amount) },
                 formatDate = ::formatLiveDate,
+                userEditedFields = userEditedFields,
             )
         } else {
             emptyList()
@@ -395,6 +443,7 @@ internal fun ConflictReviewScreen(
                 ?.let { feedback -> BodyText(feedback.message) }
         } else {
             Heading("Two versions differ")
+            if (redirectedToLatestConflict) BodyText("Actual changed again. Review this latest version before choosing.")
             when {
                 mobileSession.isSyncing -> BodyText("Checking the latest transaction with Tandem…")
                 serverConfirmed -> BodyText("Tandem confirmed the latest Actual version.")
@@ -409,6 +458,20 @@ internal fun ConflictReviewScreen(
                     ) { serverCheckAttempt += 1 }
                 }
             }
+            if (reviewRevisionChanged) {
+                SurfaceCard {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(TandemSpacing.medium),
+                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                    ) {
+                        BodyText("Actual changed again. Review the latest version before choosing.")
+                        SecondaryButton("Review latest version", enabled = !latestRevision.isNullOrBlank()) {
+                            mobileSession.clearConflictResolutionFeedback()
+                            reviewedRevision = latestRevision
+                        }
+                    }
+                }
+            }
             ListRow(
                 transactionTitle,
                 "$dateLabel · $categoryName",
@@ -419,16 +482,19 @@ internal fun ConflictReviewScreen(
                     ),
                 options = ListRowOptions(dense = true),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                ConflictValueCard("Your edit", deviceAmountText, Modifier.weight(1f))
-                ConflictValueCard("Actual", actualAmountText, Modifier.weight(1f))
+            comparisons.firstOrNull { it.label == "Amount" }?.let { amountComparison ->
+                Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    ConflictValueCard("Your edit", amountComparison.editedValue, Modifier.weight(1f))
+                    ConflictValueCard("Actual", amountComparison.actualValue, Modifier.weight(1f))
+                }
             }
             conflictReason?.let { BodyText(it) }
             when {
                 !serverConfirmed -> BodyText("Actual’s latest transaction details appear after the Tandem check.")
                 actualDeleted -> if (conflictReason == null) BodyText("Actual no longer has this transaction.")
                 actualVersion == null -> BodyText("Actual’s latest transaction details aren’t available.")
-                comparisons.isEmpty() -> BodyText("Tandem returned no differing transaction fields.")
+                comparisons.isEmpty() && operation.action == "DELETE" -> BodyText("The transaction is still in Actual.")
+                comparisons.isEmpty() -> BodyText("Your edit already matches the latest Actual version.")
                 detailComparisons.isEmpty() -> BodyText("Amount is the only differing field.")
                 else -> ConflictComparisonCard(detailComparisons)
             }
@@ -442,14 +508,15 @@ internal fun ConflictReviewScreen(
                     else -> "Keep your edit"
                 },
                 enabled =
-                    serverConfirmed &&
+                    canResolveReviewedVersion &&
                         !state.readOnlyMode &&
                         !mobileSession.isSavingTransaction &&
                         (operation.action == "DELETE" || record?.remoteDeleted != true),
-            ) { onResolveConflict(operation.operationId, true) }
+            ) { onResolveConflict(operation.operationId, true, reviewedRevision.orEmpty()) }
             KeepLastSyncedConflictAction(
                 operationId = operation.operationId,
-                enabled = serverConfirmed && !state.readOnlyMode && !mobileSession.isSavingTransaction,
+                reviewedRevision = reviewedRevision.orEmpty(),
+                enabled = canResolveReviewedVersion && !state.readOnlyMode && !mobileSession.isSavingTransaction,
                 onResolveConflict = onResolveConflict,
             )
         }
@@ -459,8 +526,9 @@ internal fun ConflictReviewScreen(
 @Composable
 internal fun KeepLastSyncedConflictAction(
     operationId: String,
+    reviewedRevision: String,
     enabled: Boolean,
-    onResolveConflict: (String, Boolean) -> Unit,
+    onResolveConflict: (String, Boolean, String) -> Unit,
 ) {
     var confirmDiscard by rememberSaveable(operationId) { mutableStateOf(false) }
     SecondaryButton(
@@ -482,7 +550,7 @@ internal fun KeepLastSyncedConflictAction(
             onDismissRequest = { confirmDiscard = false },
             onConfirm = {
                 confirmDiscard = false
-                onResolveConflict(operationId, false)
+                onResolveConflict(operationId, false, reviewedRevision)
             },
         )
     }

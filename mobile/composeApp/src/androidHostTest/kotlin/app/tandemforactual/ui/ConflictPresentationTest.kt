@@ -3,6 +3,7 @@ package app.tandemforactual.ui
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import app.tandemforactual.data.database.OutboxOperationEntity
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import org.junit.Rule
@@ -12,6 +13,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
@@ -19,6 +21,36 @@ import kotlin.test.assertTrue
 class ConflictPresentationTest {
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    @Test
+    fun conflictActionsRequireTheLatestRevisionThatWasShownForReview() {
+        assertFalse(canResolveReviewedConflict(serverConfirmed = false, reviewedRevision = "rev-1", latestRevision = "rev-1"))
+        assertFalse(canResolveReviewedConflict(serverConfirmed = true, reviewedRevision = null, latestRevision = "rev-1"))
+        assertTrue(canResolveReviewedConflict(serverConfirmed = true, reviewedRevision = "rev-1", latestRevision = "rev-1"))
+        assertFalse(canResolveReviewedConflict(serverConfirmed = true, reviewedRevision = "rev-1", latestRevision = "rev-2"))
+        assertTrue(conflictReviewRevisionChanged(serverConfirmed = true, reviewedRevision = "rev-1", latestRevision = "rev-2"))
+    }
+
+    @Test
+    fun replacementConflictForTheSameTransactionStaysOnTheReviewScreen() {
+        val replacement = conflictOperation("replacement", "transaction-1", "conflict")
+
+        assertEquals(
+            replacement,
+            conflictReplacementForRecord(
+                listOf(conflictOperation("original", "transaction-1", "superseded"), replacement),
+                selectedOperationId = "original",
+                recordId = "transaction-1",
+            ),
+        )
+        assertNull(
+            conflictReplacementForRecord(
+                listOf(replacement),
+                selectedOperationId = "replacement",
+                recordId = "transaction-1",
+            ),
+        )
+    }
 
     @Test
     fun conflictComparisonListsEveryChangedTransactionField() {
@@ -84,6 +116,24 @@ class ConflictPresentationTest {
             )
 
         assertEquals(listOf(ConflictFieldComparison("Cleared", "Reconciled", "Uncleared")), differences)
+    }
+
+    @Test
+    fun conflictComparisonDoesNotLabelUneditedActualFieldsAsTheUsersEdit() {
+        val edited = Json.parseToJsonElement("""{"amount":1200,"notes":"old note"}""").jsonObject
+        val actual = Json.parseToJsonElement("""{"amount":1500,"notes":"new note"}""").jsonObject
+
+        val differences =
+            conflictFieldComparisons(
+                edited = edited,
+                actual = actual,
+                names = ConflictFieldNameLookup(),
+                formatAmount = { "minor:$it" },
+                formatDate = { it },
+                userEditedFields = setOf("notes"),
+            )
+
+        assertEquals(listOf(ConflictFieldComparison("Notes", "old note", "new note")), differences)
     }
 
     @Test
@@ -157,8 +207,9 @@ class ConflictPresentationTest {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
                 KeepLastSyncedConflictAction(
                     operationId = "conflicted-edit",
+                    reviewedRevision = "revision-1",
                     enabled = true,
-                    onResolveConflict = { _, keepYourEdit ->
+                    onResolveConflict = { _, keepYourEdit, _ ->
                         if (!keepYourEdit) editDiscarded = true
                     },
                 )
@@ -180,8 +231,9 @@ class ConflictPresentationTest {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
                 KeepLastSyncedConflictAction(
                     operationId = "conflicted-edit",
+                    reviewedRevision = "revision-1",
                     enabled = true,
-                    onResolveConflict = { _, keepYourEdit ->
+                    onResolveConflict = { _, keepYourEdit, _ ->
                         if (!keepYourEdit) editDiscarded = true
                     },
                 )
@@ -194,4 +246,33 @@ class ConflictPresentationTest {
 
         assertTrue(editDiscarded)
     }
+
+    private fun conflictOperation(
+        operationId: String,
+        recordId: String,
+        status: String,
+    ) = OutboxOperationEntity(
+        operationId = operationId,
+        idempotencyKey = "key-$operationId",
+        budgetId = "budget-1",
+        recordType = "transaction",
+        recordId = recordId,
+        action = "UPDATE",
+        baseRevision = "revision-1",
+        baseSnapshotJson = "{}",
+        patchJson = "{}",
+        optimisticJson = "{}",
+        optimisticRecordDate = null,
+        optimisticAccountId = null,
+        optimisticCategoryId = null,
+        optimisticPayeeId = null,
+        optimisticAmountMinor = null,
+        optimisticBudgetMonth = null,
+        status = status,
+        attemptCount = 0,
+        serverOperationId = null,
+        lastErrorCode = null,
+        createdAtEpochMs = 0,
+        updatedAtEpochMs = 0,
+    )
 }

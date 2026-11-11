@@ -38,10 +38,13 @@ internal fun conflictFieldComparisons(
     names: ConflictFieldNameLookup,
     formatAmount: (Long) -> String,
     formatDate: (String) -> String,
+    userEditedFields: Set<String>? = null,
 ): List<ConflictFieldComparison> {
-    val editedFields = conflictFieldValues(edited, names, formatAmount, formatDate)
+    val editedValues = conflictFieldValues(edited, names, formatAmount, formatDate)
     val actualFields = conflictFieldValues(actual, names, formatAmount, formatDate)
-    return editedFields.mapNotNull { (label, editedValue) ->
+    val visibleLabels = userEditedFields?.let(::conflictDisplayLabels)
+    return editedValues.mapNotNull { (label, editedValue) ->
+        if (visibleLabels != null && label !in visibleLabels) return@mapNotNull null
         val actualValue = actualFields.getValue(label)
         if (editedValue == actualValue) {
             null
@@ -50,6 +53,17 @@ internal fun conflictFieldComparisons(
         }
     }
 }
+
+private fun conflictDisplayLabels(fields: Set<String>): Set<String> =
+    buildSet {
+        if ("amount" in fields) add("Amount")
+        if (fields.any { it in setOf("payee", "importedPayee", "imported_payee") }) add("Payee")
+        if ("category" in fields) add("Category")
+        if ("date" in fields) add("Date")
+        if ("account" in fields) add("Account")
+        if ("notes" in fields) add("Notes")
+        if (fields.any { it in setOf("cleared", "reconciled") }) add("Cleared")
+    }
 
 internal fun conflictReasonMessage(
     conflictType: String?,

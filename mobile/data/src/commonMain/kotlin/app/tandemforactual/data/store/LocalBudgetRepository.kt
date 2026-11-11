@@ -1436,7 +1436,7 @@ class LocalBudgetRepository(
             throw InvalidLocalWriteException("A remote base record is required for this write")
         }
         if (current.remoteRevision != request.baseRevision) {
-            throw InvalidLocalWriteException("The write base revision does not match the cached remote record")
+            throw InvalidLocalWriteException("The cached transaction has changed")
         }
     }
 

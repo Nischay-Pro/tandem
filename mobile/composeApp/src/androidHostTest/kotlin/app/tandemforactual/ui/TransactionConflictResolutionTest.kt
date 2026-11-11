@@ -3,6 +3,7 @@ package app.tandemforactual.ui
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.store.BudgetSyncSummary
+import app.tandemforactual.data.store.InvalidLocalWriteException
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
 import kotlinx.coroutines.runBlocking
@@ -22,7 +23,14 @@ class TransactionConflictResolutionTest {
             val store = FakeStore()
             val sync = FakeSync(store)
 
-            val message = workflow(store, sync).resolve(BUDGET, CONFLICT_ID, keepDeviceVersion = false, encryptionPassword = null)
+            val message =
+                workflow(store, sync).resolve(
+                    BUDGET,
+                    CONFLICT_ID,
+                    keepDeviceVersion = false,
+                    encryptionPassword = null,
+                    reviewedRevision = "revision-latest",
+                )
 
             assertTrue(sync.confirmationRequested)
             assertEquals("discarded", store.writes[CONFLICT_ID]?.status)
@@ -32,12 +40,70 @@ class TransactionConflictResolutionTest {
         }
 
     @Test
+    fun staleReviewCannotKeepAnEditOrDiscardItAfterActualChangesAgain() =
+        runBlocking {
+            listOf(true, false).forEach { keepDeviceVersion ->
+                val store = FakeStore()
+                val sync =
+                    FakeSync(store) {
+                        store.record = store.record.copy(remoteRevision = "revision-after-review")
+                    }
+
+                val message =
+                    workflow(store, sync).resolve(
+                        BUDGET,
+                        CONFLICT_ID,
+                        keepDeviceVersion = keepDeviceVersion,
+                        encryptionPassword = null,
+                        reviewedRevision = "revision-latest",
+                    )
+
+                assertEquals("conflict", store.writes[CONFLICT_ID]?.status)
+                assertTrue(store.requests.isEmpty())
+                assertTrue(message.contains("Actual changed again"))
+            }
+        }
+
+    @Test
+    fun revisionChangingBetweenReviewAndQueueingKeepsTheOriginalConflict() =
+        runBlocking {
+            val store =
+                FakeStore(
+                    enqueueError =
+                        InvalidLocalWriteException(
+                            "The cached transaction has changed",
+                        ),
+                )
+            val sync = FakeSync(store)
+
+            val message =
+                workflow(store, sync).resolve(
+                    BUDGET,
+                    CONFLICT_ID,
+                    keepDeviceVersion = true,
+                    encryptionPassword = null,
+                    reviewedRevision = "revision-latest",
+                )
+
+            assertEquals("conflict", store.writes[CONFLICT_ID]?.status)
+            assertTrue(store.requests.isEmpty())
+            assertTrue(message.contains("Actual changed again"))
+        }
+
+    @Test
     fun serverFailureLeavesTheOriginalConflictAndItsEditUntouched() =
         runBlocking {
             val store = FakeStore()
             val sync = FakeSync(store, confirmationResult = false)
 
-            val message = workflow(store, sync).resolve(BUDGET, CONFLICT_ID, keepDeviceVersion = false, encryptionPassword = null)
+            val message =
+                workflow(store, sync).resolve(
+                    BUDGET,
+                    CONFLICT_ID,
+                    keepDeviceVersion = false,
+                    encryptionPassword = null,
+                    reviewedRevision = "revision-latest",
+                )
 
             assertEquals("conflict", store.writes[CONFLICT_ID]?.status)
             assertTrue(store.requests.isEmpty())
@@ -53,7 +119,14 @@ class TransactionConflictResolutionTest {
             val store = FakeStore()
             val sync = FakeSync(store)
 
-            val message = workflow(store, sync).resolve(BUDGET, CONFLICT_ID, keepDeviceVersion = true, encryptionPassword = null)
+            val message =
+                workflow(store, sync).resolve(
+                    BUDGET,
+                    CONFLICT_ID,
+                    keepDeviceVersion = true,
+                    encryptionPassword = null,
+                    reviewedRevision = "revision-latest",
+                )
 
             val request = store.requests.single()
             val rebased = Json.parseToJsonElement(checkNotNull(request.optimisticJson)).jsonObject
@@ -74,7 +147,14 @@ class TransactionConflictResolutionTest {
             val store = FakeStore(action = LocalWriteAction.DELETE.name)
             val sync = FakeSync(store)
 
-            val message = workflow(store, sync).resolve(BUDGET, CONFLICT_ID, keepDeviceVersion = true, encryptionPassword = null)
+            val message =
+                workflow(store, sync).resolve(
+                    BUDGET,
+                    CONFLICT_ID,
+                    keepDeviceVersion = true,
+                    encryptionPassword = null,
+                    reviewedRevision = "revision-latest",
+                )
 
             val request = store.requests.single()
             assertEquals(LocalWriteAction.DELETE, request.action)
@@ -90,7 +170,14 @@ class TransactionConflictResolutionTest {
             val store = FakeStore(action = LocalWriteAction.DELETE.name, remoteDeleted = true)
             val sync = FakeSync(store)
 
-            val message = workflow(store, sync).resolve(BUDGET, CONFLICT_ID, keepDeviceVersion = true, encryptionPassword = null)
+            val message =
+                workflow(store, sync).resolve(
+                    BUDGET,
+                    CONFLICT_ID,
+                    keepDeviceVersion = true,
+                    encryptionPassword = null,
+                    reviewedRevision = "revision-latest",
+                )
 
             assertEquals("discarded", store.writes[CONFLICT_ID]?.status)
             assertTrue(store.requests.isEmpty())
@@ -104,7 +191,14 @@ class TransactionConflictResolutionTest {
             val store = FakeStore(remoteDeleted = true)
             val sync = FakeSync(store)
 
-            val message = workflow(store, sync).resolve(BUDGET, CONFLICT_ID, keepDeviceVersion = true, encryptionPassword = null)
+            val message =
+                workflow(store, sync).resolve(
+                    BUDGET,
+                    CONFLICT_ID,
+                    keepDeviceVersion = true,
+                    encryptionPassword = null,
+                    reviewedRevision = "revision-latest",
+                )
 
             assertEquals("conflict", store.writes[CONFLICT_ID]?.status)
             assertTrue(store.requests.isEmpty())
@@ -117,7 +211,14 @@ class TransactionConflictResolutionTest {
             val store = FakeStore()
             val sync = FakeSync(store, writeStatusAfterSync = "conflict")
 
-            val message = workflow(store, sync).resolve(BUDGET, CONFLICT_ID, keepDeviceVersion = true, encryptionPassword = null)
+            val message =
+                workflow(store, sync).resolve(
+                    BUDGET,
+                    CONFLICT_ID,
+                    keepDeviceVersion = true,
+                    encryptionPassword = null,
+                    reviewedRevision = "revision-latest",
+                )
 
             assertEquals("superseded", store.writes[CONFLICT_ID]?.status)
             assertEquals("conflict", store.writes[REPLACEMENT_ID]?.status)
@@ -130,7 +231,14 @@ class TransactionConflictResolutionTest {
             val store = FakeStore()
             val sync = FakeSync(store, syncResult = null, writeStatusAfterSync = null)
 
-            val message = workflow(store, sync).resolve(BUDGET, CONFLICT_ID, keepDeviceVersion = true, encryptionPassword = null)
+            val message =
+                workflow(store, sync).resolve(
+                    BUDGET,
+                    CONFLICT_ID,
+                    keepDeviceVersion = true,
+                    encryptionPassword = null,
+                    reviewedRevision = "revision-latest",
+                )
 
             assertEquals("superseded", store.writes[CONFLICT_ID]?.status)
             assertEquals("queued", store.writes[REPLACEMENT_ID]?.status)
@@ -150,10 +258,11 @@ class TransactionConflictResolutionTest {
     private inner class FakeStore(
         action: String = LocalWriteAction.UPDATE.name,
         remoteDeleted: Boolean = false,
+        private val enqueueError: Exception? = null,
     ) : ConflictResolutionStore {
         val writes = mutableMapOf(CONFLICT_ID to conflictedWrite(action))
         val requests = mutableListOf<LocalWriteRequest>()
-        val record = latestRecord(remoteDeleted)
+        var record = latestRecord(remoteDeleted)
 
         override suspend fun readPendingWrites(budgetId: String): List<OutboxOperationEntity> =
             writes.values.filter { it.budgetId == budgetId }
@@ -169,6 +278,7 @@ class TransactionConflictResolutionTest {
         }
 
         override suspend fun enqueueWrite(request: LocalWriteRequest) {
+            enqueueError?.let { throw it }
             requests += request
             request.supersedesConflictOperationId?.let { oldId ->
                 writes[oldId] = checkNotNull(writes[oldId]).copy(status = "superseded")
@@ -184,6 +294,7 @@ class TransactionConflictResolutionTest {
         private val confirmationResult: Boolean = true,
         private val syncResult: BudgetSyncSummary? = successfulSync,
         private val writeStatusAfterSync: String? = "committed",
+        private val onConfirm: () -> Unit = {},
     ) : ConflictResolutionSync {
         var confirmationRequested = false
         var syncCalls = 0
@@ -194,6 +305,7 @@ class TransactionConflictResolutionTest {
             encryptionPassword: String?,
         ): Boolean {
             confirmationRequested = true
+            onConfirm()
             return confirmationResult
         }
 

@@ -680,7 +680,7 @@ class TandemMobileSessionTest {
             )
             assertEquals(readOnlyMessage, session.transactionWriteMessage)
 
-            session.resolveConflict("budget-1", "operation-1", true, null)
+            session.resolveConflict("budget-1", "operation-1", true, null, reviewedRevision = "revision-1")
             assertEquals(readOnlyMessage, session.transactionWriteMessage)
 
             session.discardWrite("budget-1", "operation-1")

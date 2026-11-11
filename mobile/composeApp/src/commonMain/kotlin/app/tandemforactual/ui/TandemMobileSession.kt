@@ -3076,6 +3076,7 @@ internal class TandemMobileSession(
         operationId: String,
         keepDeviceVersion: Boolean,
         encryptionPassword: String?,
+        reviewedRevision: String,
     ) {
         clearTransactionWriteMessage()
         if (refuseWriteInReadOnlyMode()) {
@@ -3125,7 +3126,13 @@ internal class TandemMobileSession(
                 )
             reportConflictResolution(
                 operationId,
-                workflow.resolve(budgetId, operationId, keepDeviceVersion, encryptionPassword),
+                workflow.resolve(
+                    budgetId,
+                    operationId,
+                    keepDeviceVersion,
+                    encryptionPassword,
+                    reviewedRevision,
+                ),
             )
             loadLocalRecords(budgetId)
         } catch (error: CancellationException) {

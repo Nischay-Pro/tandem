@@ -71,7 +71,7 @@ internal fun ScreenContent(
     onSaveTransaction: (String?, (Boolean) -> Unit) -> Unit,
     onDeleteTransaction: ((Boolean) -> Unit) -> Unit,
     onCreateTransaction: (String?) -> Unit,
-    onResolveConflict: (String, Boolean) -> Unit,
+    onResolveConflict: (String, Boolean, String) -> Unit,
     onDiscardWrite: (String) -> Unit,
     onRetryUncertainWrite: (String) -> Unit,
     onCheckUncertainWriteStatus: (String) -> Unit,
