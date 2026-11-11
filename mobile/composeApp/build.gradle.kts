@@ -78,9 +78,14 @@ kotlin {
   }
 
   sourceSets {
+    commonTest.dependencies {
+      implementation(kotlin("test"))
+      implementation(libs.ktorClientMock)
+    }
     getByName("iosSimulatorArm64Test") {
       dependencies {
         implementation(kotlin("test"))
+        implementation(libs.coroutinesTest)
       }
     }
     commonMain.dependencies {

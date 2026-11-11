@@ -2,12 +2,19 @@ package app.tandemforactual.ui
 
 import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.data.store.BudgetSyncRemoteException
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class IosApiFailureMessagesTest {
+    @Test
+    fun actualLoginAvailabilityDistinguishesTheFourConnectionOutcomes() =
+        runTest {
+            assertLoginMethodsOutcomes(loginMethodsOutcomes())
+        }
+
     @Test
     fun signInAndSyncUseTheSameNetworkAndServiceMessages() {
         val cases =

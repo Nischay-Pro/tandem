@@ -1763,6 +1763,7 @@ internal class TandemMobileSession(
         signInError = null
         try {
             actualLoginMethods = apiClient.readActualLoginMethods(serverUrl)
+            isServerReachable = true
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
