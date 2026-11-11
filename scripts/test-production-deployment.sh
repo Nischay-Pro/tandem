@@ -40,6 +40,7 @@ printf 'postgresql://tandem_release_check:%s@postgres:5432/tandem_release_check'
   "$test_secret" > "$secret_dir/database_url"
 printf '%s' "$auth_key" > "$secret_dir/auth_token_encryption_key"
 touch "$secret_dir/auth_token_encryption_key_previous"
+touch "$secret_dir/actual_session_token"
 printf '%s' "release-check-gpg-passphrase-$test_epoch" > "$backup_passphrase_file"
 chmod 444 "$secret_dir"/*
 chmod 600 "$backup_passphrase_file"
@@ -50,6 +51,7 @@ POSTGRES_PASSWORD_FILE=$secret_dir/postgres_password
 DATABASE_URL_FILE=$secret_dir/database_url
 AUTH_TOKEN_ENCRYPTION_KEY_FILE=$secret_dir/auth_token_encryption_key
 AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE=$secret_dir/auth_token_encryption_key_previous
+ACTUAL_SESSION_TOKEN_FILE=$secret_dir/actual_session_token
 CHANGE_FEED_EPOCH=$test_epoch
 TRUST_PROXY=127.0.0.1
 TANDEM_EDGE_NETWORK=$edge_network
@@ -71,6 +73,7 @@ if [[ "$api_environment" == *"$test_secret"* || "$api_environment" == *"$auth_ke
   exit 1
 fi
 if [[ "$api_environment" != *"DATABASE_URL_FILE=/run/secrets/database_url"* || \
+  "$api_environment" != *"ACTUAL_SESSION_TOKEN_FILE=/run/secrets/actual_session_token"* || \
   "$api_environment" != *"AUTH_TOKEN_ENCRYPTION_KEY_FILE=/run/secrets/auth_token_encryption_key"* || \
   "$api_environment" != *"AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE=/run/secrets/auth_token_encryption_key_previous"* ]]; then
   echo "The production API did not receive its secret-file paths." >&2

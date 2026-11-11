@@ -132,6 +132,21 @@ describe("parseApiConfig", () => {
     );
   });
 
+  it("treats a blank mounted Actual session token file as unset", () => {
+    withSecretFiles({ ACTUAL_SESSION_TOKEN: "" }, (paths) => {
+      expect(
+        parseApiConfig({
+          DATABASE_URL: databaseUrl,
+          ACTUAL_SERVER_URL: "https://budget.example.com",
+          ACTUAL_SESSION_TOKEN_FILE: paths.ACTUAL_SESSION_TOKEN,
+        }).actual,
+      ).toEqual({
+        serverURL: "https://budget.example.com",
+        dataDir: "/data/actual-api",
+      });
+    });
+  });
+
   it("rejects a shared Actual server password", () => {
     expect(() =>
       parseApiConfig({

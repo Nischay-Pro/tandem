@@ -145,6 +145,11 @@ operator-managed startup session; it is not required for each person to sign in.
 Session tokens can expire or be revoked. When a configured startup token is
 rejected, `GET /api/v1/health/ready` returns `503` with a message to replace the
 token and restart Tandem. Tandem does not refresh it automatically.
+For production Compose, leave `ACTUAL_SESSION_TOKEN_FILE` empty for normal
+per-person sign-in. If an operator-managed startup session is needed, sign in
+to Actual in a browser and copy the `user-token` value from the `actual` /
+`asyncStorage` IndexedDB store into the mounted secret described in the
+deployment guide. Never put the token in `.env` or the mobile app.
 
 The Actual server must be the exact version supported by the API build; the API
 fails startup if it cannot verify that version. `ACTUAL_API_DATA_DIR` defaults

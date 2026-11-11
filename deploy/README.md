@@ -22,14 +22,17 @@ printf '%s' "$postgres_password" > deploy/compose/secrets/postgres_password
 printf 'postgresql://tandem:%s@postgres:5432/tandem' "$postgres_password" > deploy/compose/secrets/database_url
 openssl rand -hex 32 > deploy/compose/secrets/auth_token_encryption_key
 touch deploy/compose/secrets/auth_token_encryption_key_previous
+touch deploy/compose/secrets/actual_session_token
 sudo chown root:1000 deploy/compose/secrets/*
 sudo chmod 0440 deploy/compose/secrets/*
 unset postgres_password
 ```
 
 Compose secrets are mounted read-only inside the containers. The `.env` file
-contains their paths, not their values; the API reads the database URL and
-auth encryption key from those mounted files. The API runs as UID/GID 1000 in
+contains their paths, not their values; the API reads the database URL, Actual
+session token, and auth encryption key from those mounted files. The Actual
+session-token file is empty by default, which leaves normal per-person sign-in
+unchanged. The API runs as UID/GID 1000 in
 the supplied image. On a Linux host using rootful Docker, the files are owned by
 `root:1000` and use mode `0440`: the API can read them through its group, while
 other host users cannot read them through file permissions. Keep the secrets
@@ -37,6 +40,23 @@ directory private (`chmod 700 deploy/compose/secrets`) as an additional layer.
 If you change the API's runtime GID, use that GID instead of `1000`. Actual
 account passwords are entered in Tandem and are not deployment secrets. Do not
 change the secret paths in `.env` unless you move these files.
+
+### Optional operator-managed Actual session
+
+Most deployments should leave `actual_session_token` empty. Tandem users sign
+in through Actual, and Tandem keeps each user's session token encrypted in
+PostgreSQL. An operator-managed token is only needed when the API itself must
+start an Actual session before anyone signs in. It is not sent to the app.
+
+To obtain one, sign in to the Actual web app in a browser. Open that browser's
+developer tools and find IndexedDB database `actual`, object store
+`asyncStorage`, key `user-token`. Copy the value into
+`deploy/compose/secrets/actual_session_token`; do not put it in `.env`, shell
+history, a command-line argument, or a tracked file. Keep the existing
+`root:1000` ownership and `0440` mode, then restart the API. The token grants
+the same budget access as that Actual account. If it expires or is revoked,
+Tandem reports it in readiness and the API log; replace the secret and restart
+the API. Tandem does not refresh operator-managed tokens automatically.
 
 The auth encryption key must remain stable between rotations. Keep a protected
 copy with the database backups. The always-mounted

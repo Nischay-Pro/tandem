@@ -44,6 +44,7 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:?Set TRUST_PROXY to the reverse proxy IP or narrow CIDR in deploy/compose/.env}
       CHANGE_FEED_EPOCH: ${CHANGE_FEED_EPOCH:?Set CHANGE_FEED_EPOCH in deploy/compose/.env}
       ACTUAL_SERVER_URL: ${ACTUAL_SERVER_URL:-}
+      ACTUAL_SESSION_TOKEN_FILE: /run/secrets/actual_session_token
       ACTUAL_PUBLIC_URL: ${ACTUAL_PUBLIC_URL:-}
       ACTUAL_API_DATA_DIR: /data/actual-api
     depends_on:
@@ -71,6 +72,7 @@ services:
       - edge
     secrets:
       - database_url
+      - actual_session_token
       - auth_token_encryption_key
       - auth_token_encryption_key_previous
 
@@ -79,6 +81,8 @@ secrets:
     file: ${POSTGRES_PASSWORD_FILE:?Set POSTGRES_PASSWORD_FILE in deploy/compose/.env}
   database_url:
     file: ${DATABASE_URL_FILE:?Set DATABASE_URL_FILE in deploy/compose/.env}
+  actual_session_token:
+    file: ${ACTUAL_SESSION_TOKEN_FILE:?Set ACTUAL_SESSION_TOKEN_FILE in deploy/compose/.env}
   auth_token_encryption_key:
     file: ${AUTH_TOKEN_ENCRYPTION_KEY_FILE:?Set AUTH_TOKEN_ENCRYPTION_KEY_FILE in deploy/compose/.env}
   auth_token_encryption_key_previous:

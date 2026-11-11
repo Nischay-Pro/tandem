@@ -144,7 +144,8 @@ function parseActualConnection(
       "ACTUAL_SERVER_PASSWORD is not supported; sign in from Tandem or configure an operator-managed ACTUAL_SESSION_TOKEN",
     );
   }
-  const sessionToken = readSecret(environment, "ACTUAL_SESSION_TOKEN");
+  const sessionToken =
+    readSecret(environment, "ACTUAL_SESSION_TOKEN")?.trim() || undefined;
   const configuredDataDirectory = environment.ACTUAL_API_DATA_DIR?.trim();
 
   if (!serverUrl && !sessionToken) {
