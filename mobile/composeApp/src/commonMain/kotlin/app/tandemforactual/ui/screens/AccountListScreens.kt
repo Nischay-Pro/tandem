@@ -31,8 +31,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -191,6 +193,7 @@ internal fun AccountSummaryCard(
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
+    val stackBalance = LocalDensity.current.fontScale >= 1.5f
     val balanceColor =
         when {
             account.closed || account.balanceMinor == null || account.balanceMinor == 0L -> palette.muted
@@ -256,26 +259,44 @@ internal fun AccountSummaryCard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (stackBalance) {
+                    AccountBalanceText(
+                        account = account,
+                        color = balanceColor,
+                        modifier = Modifier.fillMaxWidth(),
+                        wrap = true,
+                    )
+                }
             }
-            Text(
-                account.balance,
-                modifier =
-                    Modifier.semantics {
-                        contentDescription =
-                            accountBalanceAccessibilityDescription(
-                                account.balanceMinor,
-                                account.balance,
-                            )
-                    },
-                color = if (account.closed) palette.muted else balanceColor,
-                fontSize = TandemTypography.compactBody,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.End,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (!stackBalance) AccountBalanceText(account, balanceColor)
         }
     }
+}
+
+@Composable
+private fun AccountBalanceText(
+    account: AccountListItemUi,
+    color: Color,
+    modifier: Modifier = Modifier,
+    wrap: Boolean = false,
+) {
+    Text(
+        account.balance,
+        modifier =
+            modifier.semantics {
+                contentDescription =
+                    accountBalanceAccessibilityDescription(
+                        account.balanceMinor,
+                        account.balance,
+                    )
+            },
+        color = if (account.closed) tandemPalette.muted else color,
+        fontSize = TandemTypography.compactBody,
+        fontWeight = FontWeight.SemiBold,
+        textAlign = TextAlign.End,
+        maxLines = if (wrap) Int.MAX_VALUE else 2,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 @Composable
