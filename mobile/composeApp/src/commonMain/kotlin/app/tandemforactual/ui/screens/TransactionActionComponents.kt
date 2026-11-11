@@ -23,7 +23,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.ListRow
@@ -41,6 +45,7 @@ import com.composables.icons.lucide.Trash2
 @Composable
 internal fun TransactionRow(
     transaction: TransactionItem,
+    activityStyle: Boolean = false,
     selectionMode: Boolean = false,
     selected: Boolean = false,
     showDateHeader: Boolean = true,
@@ -51,6 +56,7 @@ internal fun TransactionRow(
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
+    val amountText = formatSignedCurrency(transaction.amountMinorUnits, transaction.displaySettings)
     Column(modifier) {
         if (showDateHeader) {
             Text(
@@ -64,7 +70,7 @@ internal fun TransactionRow(
         ListRow(
             transaction.payee,
             secondaryLabel,
-            formatSignedCurrency(transaction.amountMinorUnits, transaction.displaySettings),
+            amountText.takeUnless { activityStyle },
             leading =
                 if (selectionMode) {
                     RowLeading.Icon(if (selected) Lucide.Check else Lucide.Square)
@@ -78,6 +84,21 @@ internal fun TransactionRow(
                 ),
             onClick = onClick,
             onLongClick = onLongClick,
+            trailingContent =
+                if (activityStyle) {
+                    {
+                        ActivityTransactionAmount(
+                            amountText,
+                            positive = transaction.amountMinorUnits > 0,
+                            fractionDigits =
+                                transaction.displaySettings
+                                    ?.takeUnless { it.hideFraction }
+                                    ?.currencyFractionDigits ?: 0,
+                        )
+                    }
+                } else {
+                    null
+                },
         )
         if (showDivider) {
             Box(
@@ -96,12 +117,60 @@ internal fun activityTransactionSubtitle(
     showAccount: Boolean,
 ): String {
     val note = transaction.notes.trim()
-    if (note.isNotEmpty()) return note
     return listOfNotNull(
+        note.takeIf(String::isNotEmpty),
         transaction.category.takeIf(String::isNotBlank),
         transaction.account.takeIf { showAccount && it.isNotBlank() },
     ).joinToString(" · ")
 }
+
+internal fun activityAmountFractionRange(
+    value: String,
+    fractionDigits: Int,
+): IntRange? {
+    if (fractionDigits <= 0) return null
+    val lastDigitIndex = value.indexOfLast(Char::isDigit)
+    if (lastDigitIndex < 0) return null
+
+    val firstFractionDigitIndex = lastDigitIndex - fractionDigits + 1
+    if (firstFractionDigitIndex < 0) return null
+    if (value.substring(firstFractionDigitIndex, lastDigitIndex + 1).any { !it.isDigit() }) return null
+
+    val decimalSeparatorIndex = firstFractionDigitIndex - 1
+    if (decimalSeparatorIndex < 0 || value[decimalSeparatorIndex] !in ACTIVITY_AMOUNT_DECIMAL_SEPARATORS) return null
+    return firstFractionDigitIndex..lastDigitIndex
+}
+
+internal fun activityAmountAnnotatedString(
+    value: String,
+    fractionDigits: Int,
+): AnnotatedString {
+    val fractionRange = activityAmountFractionRange(value, fractionDigits) ?: return AnnotatedString(value)
+    return buildAnnotatedString {
+        append(value.substring(0, fractionRange.first))
+        withStyle(SpanStyle(fontSize = TandemTypography.caption)) {
+            append(value.substring(fractionRange.first, fractionRange.last + 1))
+        }
+        append(value.substring(fractionRange.last + 1))
+    }
+}
+
+@Composable
+private fun ActivityTransactionAmount(
+    value: String,
+    positive: Boolean,
+    fractionDigits: Int,
+) {
+    Text(
+        activityAmountAnnotatedString(value, fractionDigits),
+        color = if (positive) tandemPalette.positive else tandemPalette.text,
+        fontSize = TandemTypography.compactBody,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 2,
+    )
+}
+
+private val ACTIVITY_AMOUNT_DECIMAL_SEPARATORS = setOf('.', ',', '\u066b', '\uff0e')
 
 @Composable
 internal fun TransactionSelectionFloatingBar(

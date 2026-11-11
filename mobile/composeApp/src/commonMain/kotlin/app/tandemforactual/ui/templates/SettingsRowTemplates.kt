@@ -168,7 +168,6 @@ internal fun SettingRowLayout(
     title: String,
     subtitle: String?,
     enabled: Boolean,
-    minHeightDp: Int,
     compactTitle: Boolean = false,
     semiboldTitle: Boolean = false,
     interactionModifier: Modifier = Modifier,
@@ -179,11 +178,11 @@ internal fun SettingRowLayout(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .defaultMinSize(minHeight = minHeightDp.dp)
+                .defaultMinSize(minHeight = TandemLayout.listRowMinHeight)
                 .then(interactionModifier)
-                .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+                .padding(horizontal = TandemLayout.listRowHorizontalInset, vertical = TandemLayout.listRowVerticalInset),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+        horizontalArrangement = Arrangement.spacedBy(TandemLayout.listRowGap),
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
             Text(
@@ -239,7 +238,6 @@ internal fun ToggleRow(
         title = title,
         subtitle = subtitle,
         enabled = enabled,
-        minHeightDp = 66,
         compactTitle = true,
         interactionModifier = Modifier.toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange),
     ) {
@@ -276,7 +274,6 @@ internal fun CheckBoxRow(
         title = title,
         subtitle = subtitle,
         enabled = enabled,
-        minHeightDp = 64,
         interactionModifier = Modifier.toggleable(value = checked, enabled = enabled, role = Role.Checkbox, onValueChange = onChange),
     ) {
         Box(
@@ -338,7 +335,6 @@ internal fun ChoiceRow(
             title = title,
             subtitle = subtitle,
             enabled = true,
-            minHeightDp = 64,
             semiboldTitle = true,
         ) {
             Box(

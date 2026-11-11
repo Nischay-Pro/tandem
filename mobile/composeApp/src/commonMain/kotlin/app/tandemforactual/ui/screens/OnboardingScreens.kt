@@ -497,14 +497,32 @@ internal fun FirstSyncScreen(
                 }
             }
         }
-        PrimaryButton("Done", enabled = mobileSession.syncComplete) {
+        FirstSyncCompletionAction(
+            state = state,
+            navigation = navigation,
+            syncComplete = mobileSession.syncComplete,
+            notificationPermissionEnabled = notificationPermissionEnabled,
+        ) {
             selectLatestCachedMonth(state, mobileSession.budgetMonthIds, mobileSession.transactionRecords)
-            if (shouldShowNotificationOnboarding(state.hasCompletedNotificationOnboarding, notificationPermissionEnabled)) {
-                navigation.open(AppRoute.NOTIFICATION_ONBOARDING)
-            } else {
-                state.hasCompletedNotificationOnboarding = true
-                navigation.selectTab(AppRoute.BUDGET)
-            }
+        }
+    }
+}
+
+@Composable
+internal fun FirstSyncCompletionAction(
+    state: AppState,
+    navigation: AppNavigation,
+    syncComplete: Boolean,
+    notificationPermissionEnabled: Boolean?,
+    onComplete: () -> Unit,
+) {
+    PrimaryButton("Done", enabled = syncComplete) {
+        onComplete()
+        if (shouldShowNotificationOnboarding(state.hasCompletedNotificationOnboarding, notificationPermissionEnabled)) {
+            navigation.open(AppRoute.NOTIFICATION_ONBOARDING)
+        } else {
+            state.hasCompletedNotificationOnboarding = true
+            navigation.selectTab(AppRoute.BUDGET)
         }
     }
 }

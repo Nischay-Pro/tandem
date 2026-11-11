@@ -34,6 +34,8 @@ import app.tandemforactual.ui.components.BodyText
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
+import app.tandemforactual.ui.components.FeedbackMessageOwner
+import app.tandemforactual.ui.components.FieldErrorMessage
 import app.tandemforactual.ui.components.FutureTransactionDateConfirmationDialog
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
@@ -266,9 +268,10 @@ internal fun TransactionFormScreen(
                         onShowKeypad = { keypadVisible = true },
                     )
                     budgetAmountPreview?.let { BodyText("Budget format: $it") }
-                    val transactionErrorMessage = amountInputErrorMessage ?: amountEntryMessage ?: mobileSession.transactionWriteMessage
-                    AnimatedReveal(visible = transactionErrorMessage != null) {
-                        InlineMessage(transactionErrorMessage.orEmpty(), InlineMessageKind.ERROR)
+                    val transactionFieldError = amountInputErrorMessage ?: amountEntryMessage
+                    val transactionActionError = mobileSession.transactionWriteMessage
+                    AnimatedReveal(visible = transactionFieldError != null || transactionActionError != null) {
+                        TransactionFormFeedback(transactionFieldError, transactionActionError)
                     }
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         TransactionTypePicker(
@@ -641,9 +644,10 @@ internal fun TransactionFormScreen(
                     onShowKeypad = { keypadVisible = true },
                 )
                 budgetAmountPreview?.let { BodyText("Budget format: $it") }
-                val transactionErrorMessage = amountInputErrorMessage ?: amountEntryMessage ?: mobileSession.transactionWriteMessage
-                AnimatedReveal(visible = transactionErrorMessage != null) {
-                    InlineMessage(transactionErrorMessage.orEmpty(), InlineMessageKind.ERROR)
+                val transactionFieldError = amountInputErrorMessage ?: amountEntryMessage
+                val transactionActionError = mobileSession.transactionWriteMessage
+                AnimatedReveal(visible = transactionFieldError != null || transactionActionError != null) {
+                    TransactionFormFeedback(transactionFieldError, transactionActionError)
                 }
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     TransactionTypePicker(
@@ -820,5 +824,21 @@ internal fun TransactionFormScreen(
             actionLabel = "Choose budget",
             onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
         )
+    }
+}
+
+@Composable
+private fun TransactionFormFeedback(
+    fieldError: String?,
+    actionError: String?,
+) {
+    when {
+        fieldError != null -> FieldErrorMessage(fieldError, owner = FeedbackMessageOwner.Field("amount"))
+        actionError != null ->
+            InlineMessage(
+                actionError,
+                InlineMessageKind.ERROR,
+                owner = FeedbackMessageOwner.Action("transaction.save"),
+            )
     }
 }

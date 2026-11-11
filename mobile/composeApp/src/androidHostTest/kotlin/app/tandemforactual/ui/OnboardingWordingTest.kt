@@ -1,6 +1,9 @@
 package app.tandemforactual.ui
 
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -111,6 +114,49 @@ class OnboardingWordingTest {
         assertFalse(shouldShowNotificationOnboarding(alreadyCompleted = true, permissionEnabled = false))
         assertTrue(shouldShowNotificationOnboarding(alreadyCompleted = false, permissionEnabled = false))
         assertTrue(shouldShowNotificationOnboarding(alreadyCompleted = false, permissionEnabled = null))
+    }
+
+    @Test
+    fun firstSyncDoneOpensOptionalNotificationStepAndCanBeSkipped() {
+        val state = AppState()
+        val route = mutableStateOf(AppRoute.FIRST_SYNC)
+        val syncComplete = mutableStateOf(false)
+        var permissionRequests = 0
+        val navigation =
+            noOpNavigation().copy(
+                open = { route.value = it },
+                selectTab = { route.value = it },
+            )
+
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                when (route.value) {
+                    AppRoute.FIRST_SYNC ->
+                        FirstSyncCompletionAction(
+                            state = state,
+                            navigation = navigation,
+                            syncComplete = syncComplete.value,
+                            notificationPermissionEnabled = false,
+                            onComplete = {},
+                        )
+                    AppRoute.NOTIFICATION_ONBOARDING ->
+                        NotificationOnboardingScreen(state, navigation) { permissionRequests += 1 }
+                    else -> Unit
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithText("Done").assertIsNotEnabled()
+        composeTestRule.runOnIdle { syncComplete.value = true }
+        composeTestRule.onNodeWithText("Done").assertIsEnabled().performClick()
+
+        composeTestRule.onNodeWithText("Stay in the loop").assertExists()
+        assertEquals(AppRoute.NOTIFICATION_ONBOARDING, route.value)
+        composeTestRule.onNodeWithText("Not now").performClick()
+
+        assertEquals(0, permissionRequests)
+        assertTrue(state.hasCompletedNotificationOnboarding)
+        assertEquals(AppRoute.BUDGET, route.value)
     }
 
     @Test

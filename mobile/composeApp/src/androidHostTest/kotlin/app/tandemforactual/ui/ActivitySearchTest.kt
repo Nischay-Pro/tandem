@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 
 class ActivitySearchTest {
     @Test
-    fun activityRowsUseOneQuietLineForNotesOrCategoryAndAccount() {
+    fun activityRowsUseOneQuietLineForNoteCategoryAndAccount() {
         val transaction =
             TransactionItem(
                 payee = "Corner Market",
@@ -22,9 +22,28 @@ class ActivitySearchTest {
                 notes = "  Weekly groceries  ",
             )
 
-        assertEquals("Weekly groceries", activityTransactionSubtitle(transaction, showAccount = true))
+        assertEquals("Weekly groceries · Groceries · Checking", activityTransactionSubtitle(transaction, showAccount = true))
         assertEquals("Groceries · Checking", activityTransactionSubtitle(transaction.copy(notes = ""), showAccount = true))
         assertEquals("Groceries", activityTransactionSubtitle(transaction.copy(notes = ""), showAccount = false))
+    }
+
+    @Test
+    fun activityAmountsKeepDirectionAndRenderFractionSmaller() {
+        val amount = activityAmountAnnotatedString("+$1,234.56", fractionDigits = 2)
+
+        assertEquals("+$1,234.56", amount.text)
+        assertEquals(8..9, activityAmountFractionRange(amount.text, fractionDigits = 2))
+        assertEquals(1, amount.spanStyles.size)
+        val fractionStyle = amount.spanStyles.first().item
+        assertEquals(TandemTypography.caption, fractionStyle.fontSize)
+    }
+
+    @Test
+    fun activityAmountFractionStylingSupportsSuffixCurrencyAndNoFractionCurrencies() {
+        assertEquals(7..8, activityAmountFractionRange("-1.234,56\u202fCA$", fractionDigits = 2))
+        assertEquals(4..6, activityAmountFractionRange("KD1.234", fractionDigits = 3))
+        assertNull(activityAmountFractionRange("¥1,234", fractionDigits = 0))
+        assertTrue(activityAmountAnnotatedString("¥1,234", fractionDigits = 0).spanStyles.isEmpty())
     }
 
     @Test

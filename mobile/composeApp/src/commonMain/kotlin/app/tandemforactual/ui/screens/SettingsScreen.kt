@@ -34,7 +34,6 @@ import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
-import app.tandemforactual.ui.components.SurfaceCard
 import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.BookOpen
 import com.composables.icons.lucide.CloudSync
@@ -59,7 +58,7 @@ internal fun SettingsScreen(
                 SecondaryButton("Try again") { state.settingsStorageRetry += 1 }
             }
         }
-        SurfaceCard {
+        SectionCard("Personalization") {
             ListRow(
                 "Appearance",
                 leading = RowLeading.Icon(Lucide.Palette),
@@ -212,7 +211,7 @@ private fun AppearanceChoiceRow(
                 this.selected = selected
             }.padding(horizontal = TandemLayout.listRowHorizontalInset, vertical = TandemLayout.listRowVerticalInset),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+        horizontalArrangement = Arrangement.spacedBy(TandemLayout.listRowGap),
     ) {
         Text(
             title,
@@ -261,7 +260,7 @@ private fun AccentChoiceRow(
                 this.selected = selected
             }.padding(horizontal = TandemLayout.listRowHorizontalInset, vertical = TandemLayout.listRowVerticalInset),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+        horizontalArrangement = Arrangement.spacedBy(TandemLayout.listRowGap),
     ) {
         Box(Modifier.size(22.dp).clip(CircleShape).background(color))
         Text(

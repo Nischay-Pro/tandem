@@ -203,9 +203,12 @@ internal fun AccountSummaryCard(
                 Modifier
                     .fillMaxWidth()
                     .defaultMinSize(minHeight = TandemLayout.listRowMinHeight)
-                    .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
+                    .padding(
+                        horizontal = TandemLayout.listRowHorizontalInset,
+                        vertical = TandemLayout.listRowVerticalInset,
+                    ),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+            horizontalArrangement = Arrangement.spacedBy(TandemLayout.listRowGap),
         ) {
             Box(
                 Modifier

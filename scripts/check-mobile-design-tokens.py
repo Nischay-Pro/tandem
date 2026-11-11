@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep raw typography, shape radii, and colors in the mobile theme."""
+"""Keep mobile typography, colors, shapes, and list-row geometry on theme tokens."""
 
 from pathlib import Path
 import re
@@ -38,6 +38,27 @@ LAYOUT_CONTRACTS = {
         re.compile(r"heightIn\(min\s*=\s*TandemLayout\.listRowMinHeight\)"),
         re.compile(r"horizontal\s*=\s*TandemLayout\.listRowHorizontalInset"),
         re.compile(r"vertical\s*=\s*TandemLayout\.listRowVerticalInset"),
+        re.compile(r"Arrangement\.spacedBy\(TandemLayout\.listRowGap\)"),
+    ),
+    UI_ROOT / "templates/SettingsRowTemplates.kt": (
+        re.compile(r"defaultMinSize\(minHeight\s*=\s*TandemLayout\.listRowMinHeight\)"),
+        re.compile(r"horizontal\s*=\s*TandemLayout\.listRowHorizontalInset"),
+        re.compile(r"vertical\s*=\s*TandemLayout\.listRowVerticalInset"),
+        re.compile(r"Arrangement\.spacedBy\(TandemLayout\.listRowGap\)"),
+    ),
+    UI_ROOT / "screens/AccountListScreens.kt": (
+        re.compile(r"defaultMinSize\(minHeight\s*=\s*TandemLayout\.listRowMinHeight\)"),
+        re.compile(r"horizontal\s*=\s*TandemLayout\.listRowHorizontalInset"),
+        re.compile(r"vertical\s*=\s*TandemLayout\.listRowVerticalInset"),
+        re.compile(r"Arrangement\.spacedBy\(TandemLayout\.listRowGap\)"),
+    ),
+    UI_ROOT / "screens/CategoryDetailScreen.kt": (
+        re.compile(r"heightIn\(min\s*=\s*TandemLayout\.listRowMinHeight\)"),
+        re.compile(r"horizontal\s*=\s*TandemLayout\.listRowHorizontalInset"),
+        re.compile(r"vertical\s*=\s*TandemLayout\.listRowVerticalInset"),
+        re.compile(r"Arrangement\.spacedBy\(TandemLayout\.listRowGap\)"),
+        re.compile(r"size\(TandemLayout\.listRowLeadingSize\)"),
+        re.compile(r"size\(TandemLayout\.listRowIconSize\)"),
     ),
 }
 

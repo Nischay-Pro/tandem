@@ -31,11 +31,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -46,6 +43,8 @@ import app.tandemforactual.ui.components.CollapsibleSectionCard
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
+import app.tandemforactual.ui.components.FeedbackMessageOwner
+import app.tandemforactual.ui.components.FieldErrorMessage
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.ListRow
@@ -65,7 +64,6 @@ import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronLeft
 import com.composables.icons.lucide.ChevronRight
-import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Trash2
@@ -327,12 +325,12 @@ internal fun UpcomingSchedulesScreen(
                             )
                         }
                         dialogMode == "edit" -> {
-                            editError?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                            editError?.takeIf { editErrorField == null }?.let { InlineMessage(it, InlineMessageKind.ERROR) }
                             TextFieldCard("Name", nameDraft, {
                                 nameDraft = it
                                 clearEditError("name")
                             })
-                            ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "name"))
+                            ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "name"), "name")
                             TextFieldCard(
                                 "Amount",
                                 amountDraft,
@@ -342,7 +340,7 @@ internal fun UpcomingSchedulesScreen(
                                 },
                                 TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)),
                             )
-                            ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "amount"))
+                            ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "amount"), "amount")
                             ScheduleChoiceField(
                                 "Amount rule",
                                 when (amountRuleDraft) {
@@ -365,7 +363,7 @@ internal fun UpcomingSchedulesScreen(
                                     },
                                     TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)),
                                 )
-                                ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "maximum"))
+                                ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "maximum"), "maximum")
                             }
                             ScheduleChoiceField(
                                 "Account",
@@ -375,7 +373,7 @@ internal fun UpcomingSchedulesScreen(
                                 accountIdDraft = it
                                 clearEditError("account")
                             }
-                            ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "account"))
+                            ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "account"), "account")
                             ScheduleChoiceField(
                                 "Payee",
                                 payeeOptions.firstOrNull { it.first == payeeIdDraft }?.second ?: "Choose payee",
@@ -384,7 +382,7 @@ internal fun UpcomingSchedulesScreen(
                                 payeeIdDraft = it
                                 clearEditError("payee")
                             }
-                            ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "payee"))
+                            ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "payee"), "payee")
                             ScheduleChoiceField(
                                 if (frequencyDraft == "once") "Repeats" else "Repeats every",
                                 when (frequencyDraft) {
@@ -420,7 +418,7 @@ internal fun UpcomingSchedulesScreen(
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     ),
                                 )
-                                ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "interval"))
+                                ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "interval"), "interval")
                             }
                             FieldFrame(
                                 if (frequencyDraft == "once") "Date" else "Start date",
@@ -440,7 +438,7 @@ internal fun UpcomingSchedulesScreen(
                                     tint = tandemPalette.muted,
                                 )
                             }
-                            ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "startDate"))
+                            ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "startDate"), "startDate")
                             if (frequencyDraft != "once") {
                                 ToggleRow("Skip weekends", checked = skipWeekendDraft) {
                                     skipWeekendDraft = it
@@ -471,7 +469,7 @@ internal fun UpcomingSchedulesScreen(
                                         },
                                         TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)),
                                     )
-                                    ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "occurrences"))
+                                    ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "occurrences"), "occurrences")
                                 }
                                 if (endModeDraft == "on_date") {
                                     FieldFrame(
@@ -492,7 +490,7 @@ internal fun UpcomingSchedulesScreen(
                                             tint = tandemPalette.muted,
                                         )
                                     }
-                                    ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "endDate"))
+                                    ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "endDate"), "endDate")
                                 }
                             }
                             budgetActionFeedbackMessage(mobileSession)
@@ -743,17 +741,11 @@ internal fun scheduleFieldErrorMessage(
 ): String? = message?.takeIf { messageField == field }
 
 @Composable
-private fun ScheduleFieldError(message: String?) {
-    if (message != null) {
-        Row(
-            Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Assertive },
-            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Lucide.CircleAlert, contentDescription = null, modifier = Modifier.size(16.dp), tint = tandemPalette.negative)
-            Text(message, color = tandemPalette.negative, fontSize = TandemTypography.compactBody)
-        }
-    }
+private fun ScheduleFieldError(
+    message: String?,
+    field: String,
+) {
+    FieldErrorMessage(message, owner = FeedbackMessageOwner.Field(field))
 }
 
 @Composable

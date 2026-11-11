@@ -222,18 +222,24 @@ internal fun CategoryDetailScreen(
                                     mobileSession.clearBudgetActionMessage()
                                     showAssignedAmountDialog = true
                                 },
-                            ).padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
+                            ).padding(
+                                horizontal = TandemLayout.listRowHorizontalInset,
+                                vertical = TandemLayout.listRowVerticalInset,
+                            ),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                        horizontalArrangement = Arrangement.spacedBy(TandemLayout.listRowGap),
                     ) {
                         Box(
-                            Modifier.size(44.dp).clip(RoundedCornerShape(TandemShapes.medium)).background(tandemPalette.raised),
+                            Modifier
+                                .size(TandemLayout.listRowLeadingSize)
+                                .clip(RoundedCornerShape(TandemShapes.medium))
+                                .background(tandemPalette.raised),
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
                                 Lucide.WalletCards,
                                 contentDescription = null,
-                                modifier = Modifier.size(24.dp),
+                                modifier = Modifier.size(TandemLayout.listRowIconSize),
                                 tint = tandemPalette.accent,
                             )
                         }

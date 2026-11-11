@@ -197,6 +197,7 @@ internal fun ActivityScreen(
                     val transactionId = transaction.recordId
                     TransactionRow(
                         transaction,
+                        activityStyle = true,
                         selectionMode = selectionMode,
                         selected = transactionId != null && transactionId in selectedTransactionIds,
                         showDateHeader =

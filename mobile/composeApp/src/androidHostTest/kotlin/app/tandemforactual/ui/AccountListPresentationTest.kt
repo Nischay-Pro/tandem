@@ -1,5 +1,7 @@
 package app.tandemforactual.ui
 
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -41,6 +43,7 @@ class AccountListPresentationTest {
             }
         }
 
+        composeTestRule.onNode(hasClickAction()).assertHeightIsAtLeast(TandemLayout.listRowMinHeight)
         composeTestRule.onNodeWithText(longName).assertExists().performClick()
         composeTestRule.onNodeWithContentDescription("Negative balance, -\$3,200.00").assertExists()
         assertTrue(opened)

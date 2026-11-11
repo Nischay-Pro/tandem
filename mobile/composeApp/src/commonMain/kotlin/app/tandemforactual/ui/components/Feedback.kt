@@ -52,6 +52,7 @@ import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.X
 
 @Composable
 internal fun BodyText(text: String) {
@@ -65,6 +66,37 @@ internal enum class InlineMessageKind {
     SUCCESS,
 }
 
+internal sealed interface FeedbackMessageOwner {
+    data class Field(
+        val name: String,
+    ) : FeedbackMessageOwner
+
+    data class Screen(
+        val name: String,
+    ) : FeedbackMessageOwner
+
+    data class Action(
+        val name: String,
+    ) : FeedbackMessageOwner
+}
+
+internal data class FeedbackMessage(
+    val text: String,
+    val kind: InlineMessageKind = InlineMessageKind.WARNING,
+    val owner: FeedbackMessageOwner? = null,
+    val detail: String? = null,
+    val title: String? = null,
+    val actionLabel: String? = null,
+    val onAction: (() -> Unit)? = null,
+    val onDismiss: (() -> Unit)? = null,
+)
+
+internal enum class FeedbackPresentation {
+    FIELD,
+    BANNER,
+    EMPTY_STATE,
+}
+
 internal fun inlineMessageLiveRegion(kind: InlineMessageKind): LiveRegionMode =
     if (kind == InlineMessageKind.ERROR) LiveRegionMode.Assertive else LiveRegionMode.Polite
 
@@ -75,60 +107,181 @@ internal fun InlineMessage(
     modifier: Modifier = Modifier,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
+    onDismiss: (() -> Unit)? = null,
+    owner: FeedbackMessageOwner? = null,
+) {
+    FeedbackMessageView(
+        message =
+            FeedbackMessage(
+                text = text,
+                kind = kind,
+                owner = owner,
+                actionLabel = actionLabel,
+                onAction = onAction,
+                onDismiss = onDismiss,
+            ),
+        presentation = FeedbackPresentation.BANNER,
+        modifier = modifier,
+    )
+}
+
+@Composable
+internal fun FieldErrorMessage(
+    text: String?,
+    owner: FeedbackMessageOwner? = null,
+    modifier: Modifier = Modifier,
+) {
+    if (!text.isNullOrBlank()) {
+        FeedbackMessageView(
+            FeedbackMessage(text = text, kind = InlineMessageKind.ERROR, owner = owner),
+            presentation = FeedbackPresentation.FIELD,
+            modifier = modifier,
+        )
+    }
+}
+
+@Composable
+internal fun FeedbackEmptyState(
+    message: FeedbackMessage,
+    modifier: Modifier = Modifier,
+) {
+    FeedbackMessageView(message, FeedbackPresentation.EMPTY_STATE, modifier)
+}
+
+@Composable
+internal fun FeedbackMessageView(
+    message: FeedbackMessage,
+    presentation: FeedbackPresentation,
+    modifier: Modifier = Modifier,
 ) {
     val palette = tandemPalette
     val color =
-        when (kind) {
+        when (message.kind) {
             InlineMessageKind.ERROR -> palette.negative
             InlineMessageKind.WARNING -> palette.warning
             InlineMessageKind.INFO -> palette.muted
             InlineMessageKind.SUCCESS -> palette.positive
         }
     val icon =
-        when (kind) {
+        when (message.kind) {
             InlineMessageKind.ERROR,
             InlineMessageKind.WARNING,
             -> Lucide.CircleAlert
             InlineMessageKind.INFO -> Lucide.Info
             InlineMessageKind.SUCCESS -> Lucide.Check
         }
-    val shape = RoundedCornerShape(TandemShapes.medium)
-    Row(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .clip(shape)
-                .background(color.copy(alpha = 0.08f))
-                .border(1.dp, color.copy(alpha = 0.24f), shape)
-                .semantics { liveRegion = inlineMessageLiveRegion(kind) }
-                .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
-        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = color)
-        Text(
-            text,
-            modifier = Modifier.weight(1f, fill = actionLabel == null || onAction == null),
-            color = palette.text,
-            fontSize = TandemTypography.compactBody,
-            lineHeight = TandemTypography.bodyLineHeight,
-        )
-        if (actionLabel != null && onAction != null) {
-            Text(
-                actionLabel,
+    val kindDescription = message.kind.accessibilityLabel()
+    val textModifier = Modifier.semantics { liveRegion = inlineMessageLiveRegion(message.kind) }
+    when (presentation) {
+        FeedbackPresentation.FIELD -> {
+            Row(
+                modifier = modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(icon, contentDescription = kindDescription, modifier = Modifier.size(16.dp), tint = color)
+                Text(
+                    message.text,
+                    modifier = textModifier.weight(1f),
+                    color = color,
+                    fontSize = TandemTypography.compactBody,
+                    lineHeight = TandemTypography.bodyLineHeight,
+                )
+            }
+        }
+
+        FeedbackPresentation.BANNER -> {
+            val shape = RoundedCornerShape(TandemShapes.medium)
+            Row(
                 modifier =
-                    Modifier
-                        .heightIn(min = 48.dp)
-                        .clip(RoundedCornerShape(TandemShapes.small))
-                        .clickable(role = Role.Button, onClick = onAction)
-                        .padding(horizontal = TandemSpacing.small, vertical = TandemSpacing.small),
-                color = palette.accent,
-                fontSize = TandemTypography.compactBody,
-                fontWeight = FontWeight.SemiBold,
-            )
+                    modifier
+                        .fillMaxWidth()
+                        .clip(shape)
+                        .background(color.copy(alpha = 0.08f))
+                        .border(1.dp, color.copy(alpha = 0.24f), shape)
+                        .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(icon, contentDescription = kindDescription, modifier = Modifier.size(18.dp), tint = color)
+                Column(
+                    modifier = Modifier.weight(1f, fill = message.actionLabel == null || message.onAction == null),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+                ) {
+                    message.title?.let {
+                        Text(it, color = palette.text, fontSize = TandemTypography.compactBody, fontWeight = FontWeight.SemiBold)
+                    }
+                    Text(
+                        message.text,
+                        modifier = textModifier,
+                        color = palette.text,
+                        fontSize = TandemTypography.compactBody,
+                        lineHeight = TandemTypography.bodyLineHeight,
+                    )
+                    message.detail?.let { Text(it, color = palette.muted, fontSize = TandemTypography.caption) }
+                }
+                if (message.actionLabel != null && message.onAction != null) {
+                    Text(
+                        message.actionLabel,
+                        modifier =
+                            Modifier
+                                .heightIn(min = 48.dp)
+                                .clip(RoundedCornerShape(TandemShapes.small))
+                                .clickable(role = Role.Button, onClick = message.onAction)
+                                .padding(horizontal = TandemSpacing.small, vertical = TandemSpacing.small),
+                        color = palette.accent,
+                        fontSize = TandemTypography.compactBody,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                message.onDismiss?.let { dismiss ->
+                    TandemIconButton(
+                        icon = Lucide.X,
+                        contentDescription = "Dismiss message",
+                        sizeDp = 44,
+                        iconSizeDp = 18,
+                        tint = palette.muted,
+                        onClick = dismiss,
+                    )
+                }
+            }
+        }
+
+        FeedbackPresentation.EMPTY_STATE -> {
+            Column(
+                modifier = modifier,
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(icon, contentDescription = kindDescription, modifier = Modifier.size(20.dp), tint = color)
+                    Text(
+                        message.title ?: message.text,
+                        modifier = textModifier.weight(1f),
+                        color = palette.text,
+                        fontSize = TandemTypography.action,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                if (message.title != null) BodyText(message.text)
+                message.detail?.let { BodyText(it) }
+                if (message.actionLabel != null && message.onAction != null) {
+                    SecondaryButton(message.actionLabel, onClick = message.onAction)
+                }
+            }
         }
     }
 }
+
+private fun InlineMessageKind.accessibilityLabel(): String =
+    when (this) {
+        InlineMessageKind.ERROR -> "Error"
+        InlineMessageKind.WARNING -> "Warning"
+        InlineMessageKind.INFO -> "Information"
+        InlineMessageKind.SUCCESS -> "Success"
+    }
 
 @Composable
 internal fun EmptyState(
