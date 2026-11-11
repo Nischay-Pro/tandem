@@ -80,11 +80,11 @@ data class StatementImportPreview(
 
 private val specificApiErrorMessages =
     mapOf(
-        "actual_only" to "We found Actual Budget, but not the Tandem API Gateway. Check that the gateway is running at /api/v1/.",
+        "actual_only" to "We found your Actual Budget service. Make sure the Tandem API Gateway is running at /api/v1/.",
         "address_unreachable" to "Tandem isn’t responding at this address. Check the server address.",
         "actual_unavailable" to "Tandem can’t connect to Actual. Check that the Actual server is running.",
         "tandem_not_ready" to "Tandem is starting up. Try again in a moment.",
-        "tandem_route_unavailable" to "Tandem’s sign-in route isn’t available. Check that your proxy sends /api/v1/ to Tandem.",
+        "tandem_route_unavailable" to "The Tandem API Gateway isn’t available at this address. Check that it’s running at /api/v1/.",
         "invalid_budget_password" to "That password didn’t unlock this encrypted budget. Check the budget password.",
         "sign_in_required" to "Sign in to open your budgets.",
         "sign_in_expired" to "Your sign-in is no longer active. Sign in again.",
@@ -99,7 +99,8 @@ private val specificApiErrorMessages =
         "operation_in_progress" to "Tandem is still processing this change. Wait for it to finish.",
         "operation_rejected" to "Actual rejected this change earlier. Refresh the budget before trying again.",
         "idempotency_key_reused" to "This change is linked to a different request. Refresh the budget before trying again.",
-        "operation_result_unavailable" to "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget.",
+        "operation_result_unavailable" to
+            "Actual saved this change, but Tandem hasn’t refreshed the budget. Sync the budget to update this device.",
         "invalid_request" to "Tandem couldn’t use those details. Check the form.",
     )
 
@@ -130,7 +131,7 @@ class TandemApiException(
 ) : Exception(
         safeMessageOverride ?: specificApiErrorMessages[errorCode] ?: when {
             httpStatus == 400 -> "Tandem couldn’t accept this request. Check the details."
-            httpStatus == 404 -> "Tandem’s API route isn’t available. Check that your proxy sends /api/v1/ to Tandem."
+            httpStatus == 404 -> "The Tandem API Gateway isn’t available at this address. Check that it’s running at /api/v1/."
             httpStatus == 401 -> "Tandem can’t verify this device. Sign in again."
             httpStatus == 403 -> "This device doesn’t have access to this budget. Ask the budget owner to grant access."
             httpStatus in 500..599 -> "Tandem is temporarily unavailable. Try again shortly."
@@ -331,7 +332,7 @@ class TandemApiClient(
                                 error.errorCode,
                                 error.httpStatus,
                                 error,
-                                "Tandem couldn’t start sign-in. Check the Actual password.",
+                                "Tandem couldn’t start sign-in. Check the server address and try again.",
                             )
                         }
                         throw error

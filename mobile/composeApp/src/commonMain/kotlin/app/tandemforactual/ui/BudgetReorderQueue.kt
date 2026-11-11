@@ -51,7 +51,8 @@ internal fun budgetMutationFailureMessage(errorCode: String?): String =
             "Tandem couldn’t confirm whether Actual saved this change. " +
                 "Refresh the budget and check Actual before deciding what to do with it."
         "operation_rejected" -> "Actual rejected this change earlier. Refresh the budget, then try again."
-        "operation_result_unavailable" -> "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget."
+        "operation_result_unavailable" ->
+            "Actual saved this change, but Tandem hasn’t refreshed the budget. Sync the budget to update this device."
         else -> "Tandem received an unexpected response. Refresh the budget and check Actual before deciding what to do with this change."
     }
 

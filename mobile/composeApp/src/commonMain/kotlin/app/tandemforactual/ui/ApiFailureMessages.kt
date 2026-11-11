@@ -18,12 +18,12 @@ internal fun apiFailureMessage(
     val effectiveStatus = apiFailureHttpStatus(errorCode, httpStatus)
     return when (errorCode) {
         "actual_only" ->
-            "We found Actual Budget, but not the Tandem API Gateway. Check that the gateway is running at /api/v1/."
+            "We found your Actual Budget service. Make sure the Tandem API Gateway is running at /api/v1/."
         "address_unreachable", "network-error" -> "Tandem isn’t responding at this address. Check the server address."
         "actual_unavailable" -> "Tandem can’t connect to Actual. Check that the Actual server is running."
         "tandem_not_ready" -> "Tandem is starting up. Try again in a moment."
         "tandem_route_unavailable" ->
-            "Tandem’s sign-in route isn’t available. Check that your proxy sends /api/v1/ to Tandem."
+            "The Tandem API Gateway isn’t available at this address. Check that it’s running at /api/v1/."
         "invalid_credentials" -> "That password doesn’t match this Actual server. Check the password."
         "invalid_budget_password" -> "That password didn’t unlock this encrypted budget. Check the budget password."
         "invalid_device_credential", "sign_in_expired" -> "Your sign-in is no longer active. Sign in again."
@@ -36,14 +36,15 @@ internal fun apiFailureMessage(
         "budget_sync_failed" -> "Tandem couldn’t refresh this budget from Actual. Check the Actual connection."
         "operation_uncertain" -> "Tandem can’t confirm whether Actual saved this change. Check Actual before changing it again."
         "operation_in_progress" -> "Tandem is still processing this change. Wait for it to finish."
-        "operation_not_found" -> "Tandem has no saved status for this edit. Check Actual before removing it."
+        "operation_not_found" -> "Tandem can’t find this edit’s status. Check Actual before removing the edit."
         "schedule_changed" -> "This scheduled transaction changed in Actual. Refresh the schedule before trying again."
         "operation_rejected" -> "Actual rejected this change earlier. Refresh the budget before trying again."
         "idempotency_key_reused" -> "This change is linked to a different request. Refresh the budget before trying again."
-        "operation_result_unavailable" -> "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget."
+        "operation_result_unavailable" ->
+            "Actual saved this change, but Tandem hasn’t refreshed the budget. Sync the budget to update this device."
         "invalid_request" ->
             if (context == ApiFailureContext.SIGN_IN) {
-                "Tandem couldn’t start sign-in. Check the Actual password."
+                "Tandem couldn’t start sign-in. Check the server address and try again."
             } else {
                 "Tandem couldn’t use those details. Check the form."
             }
@@ -60,7 +61,7 @@ internal fun apiFailureMessage(
                     "Tandem can’t verify this device. Sign in again."
                 403 ->
                     "This device doesn’t have access to this budget. Ask the budget owner to grant access."
-                404, 405 -> "Tandem’s API route isn’t available. Check that your proxy sends /api/v1/ to Tandem."
+                404, 405 -> "The Tandem API Gateway isn’t available at this address. Check that it’s running at /api/v1/."
                 408, 425, 429 -> "Tandem couldn’t complete the request. Wait a moment before trying again."
                 in 500..599 -> "Tandem is temporarily unavailable. Try again shortly."
                 else -> fallback

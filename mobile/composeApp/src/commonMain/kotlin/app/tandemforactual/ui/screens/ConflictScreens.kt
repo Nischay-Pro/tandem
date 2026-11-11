@@ -693,7 +693,7 @@ internal fun UncertainWriteDetailsScreen(
                     operation.status == "queued" -> "Your edit is saved on this device and is waiting to sync."
                     operation.status == "sending" && isSyncing -> "Syncing this edit with Actual."
                     operation.status == "sending" -> "Tandem couldn’t confirm the save. Check its status before trying again."
-                    isNotFound -> "Tandem has no saved status for this edit. Keep it on this device and check Actual before retrying."
+                    isNotFound -> "Tandem can’t find this edit’s status. Keep it on this device and check Actual before trying again."
                     isChecked -> "Actual still can’t confirm whether this edit was saved. You can try again or remove it."
                     isSyncing -> "Checking Actual for this edit."
                     else -> "Tandem couldn’t confirm whether Actual saved this edit. Check its status before trying again."

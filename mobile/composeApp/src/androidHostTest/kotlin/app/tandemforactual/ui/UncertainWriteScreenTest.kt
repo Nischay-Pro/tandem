@@ -182,7 +182,7 @@ class UncertainWriteScreenTest {
         composeTestRule.onNodeWithText("Status not found").assertExists()
         composeTestRule
             .onNodeWithText(
-                "Keep it on this device and check Actual before retrying.",
+                "Keep it on this device and check Actual before trying again.",
                 substring = true,
             ).assertExists()
         composeTestRule.onNodeWithText("Check again").assertExists()

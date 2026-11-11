@@ -20,8 +20,8 @@ class IosApiFailureMessagesTest {
         val cases =
             listOf(
                 "network-error" to (null to "Tandem isn’t responding at this address. Check the server address."),
-                "http-404" to (404 to "Tandem’s API route isn’t available. Check that your proxy sends /api/v1/ to Tandem."),
-                "http-405" to (405 to "Tandem’s API route isn’t available. Check that your proxy sends /api/v1/ to Tandem."),
+                "http-404" to (404 to "The Tandem API Gateway isn’t available at this address. Check that it’s running at /api/v1/."),
+                "http-405" to (405 to "The Tandem API Gateway isn’t available at this address. Check that it’s running at /api/v1/."),
                 "http-400" to (400 to "Tandem couldn’t accept this request. Check the details."),
                 "http-422" to (422 to "Tandem couldn’t accept this request. Check the details."),
                 "http-408" to (408 to "Tandem couldn’t complete the request. Wait a moment before trying again."),
@@ -86,11 +86,11 @@ class IosApiFailureMessagesTest {
     @Test
     fun operationStatusNotFoundDoesNotLookLikeABudgetWasRemoved() {
         assertEquals(
-            "Tandem has no saved status for this edit. Check Actual before removing it.",
+            "Tandem can’t find this edit’s status. Check Actual before removing the edit.",
             apiFailureMessage("operation_not_found", 404, ApiFailureContext.SYNC, "fallback"),
         )
         assertEquals(
-            "Tandem’s API route isn’t available. Check that your proxy sends /api/v1/ to Tandem.",
+            "The Tandem API Gateway isn’t available at this address. Check that it’s running at /api/v1/.",
             apiFailureMessage("http-404", 404, ApiFailureContext.SYNC, "fallback"),
         )
         assertFalse(TandemApiException("http-404", 404).indicatesTandemReachable())

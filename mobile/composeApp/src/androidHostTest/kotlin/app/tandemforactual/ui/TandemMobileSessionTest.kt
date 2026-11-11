@@ -138,12 +138,12 @@ class TandemMobileSessionTest {
         val messages =
             listOf(
                 "actual_only" to
-                    (null to "We found Actual Budget, but not the Tandem API Gateway. Check that the gateway is running at /api/v1/."),
+                    (null to "We found your Actual Budget service. Make sure the Tandem API Gateway is running at /api/v1/."),
                 "address_unreachable" to (null to "Tandem isn’t responding at this address. Check the server address."),
                 "actual_unavailable" to (null to "Tandem can’t connect to Actual. Check that the Actual server is running."),
                 "tandem_not_ready" to (null to "Tandem is starting up. Try again in a moment."),
                 "tandem_route_unavailable" to
-                    (null to "Tandem’s sign-in route isn’t available. Check that your proxy sends /api/v1/ to Tandem."),
+                    (null to "The Tandem API Gateway isn’t available at this address. Check that it’s running at /api/v1/."),
                 "sign_in_required" to (null to "Sign in to open your budgets."),
                 "invalid_credentials" to (null to "That password doesn’t match this Actual server. Check the password."),
                 "invalid_budget_password" to (null to "That password didn’t unlock this encrypted budget. Check the budget password."),
@@ -163,7 +163,7 @@ class TandemMobileSessionTest {
                 "idempotency_key_reused" to
                     (null to "This change is linked to a different request. Refresh the budget before trying again."),
                 "operation_result_unavailable" to
-                    (null to "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget."),
+                    (null to "Actual saved this change, but Tandem hasn’t refreshed the budget. Sync the budget to update this device."),
                 "invalid_request" to (null to "Tandem couldn’t use those details. Check the form."),
                 "server-error" to (503 to "Tandem is temporarily unavailable. Try again shortly."),
             )
@@ -183,8 +183,8 @@ class TandemMobileSessionTest {
         val sharedOutages =
             listOf(
                 "network-error" to (null to "Tandem isn’t responding at this address. Check the server address."),
-                "http-404" to (404 to "Tandem’s API route isn’t available. Check that your proxy sends /api/v1/ to Tandem."),
-                "http-405" to (405 to "Tandem’s API route isn’t available. Check that your proxy sends /api/v1/ to Tandem."),
+                "http-404" to (404 to "The Tandem API Gateway isn’t available at this address. Check that it’s running at /api/v1/."),
+                "http-405" to (405 to "The Tandem API Gateway isn’t available at this address. Check that it’s running at /api/v1/."),
                 "http-400" to (400 to "Tandem couldn’t accept this request. Check the details."),
                 "http-422" to (422 to "Tandem couldn’t accept this request. Check the details."),
                 "http-408" to (408 to "Tandem couldn’t complete the request. Wait a moment before trying again."),
@@ -242,7 +242,7 @@ class TandemMobileSessionTest {
             apiFailureMessage("not_found", 404, ApiFailureContext.GENERAL, fallback),
         )
         assertEquals(
-            "Tandem has no saved status for this edit. Check Actual before removing it.",
+            "Tandem can’t find this edit’s status. Check Actual before removing the edit.",
             apiFailureMessage("operation_not_found", 404, ApiFailureContext.SYNC, fallback),
         )
         assertFalse(TandemApiException("http-404", 404).indicatesTandemReachable())
@@ -259,7 +259,7 @@ class TandemMobileSessionTest {
             apiFailureMessage("invalid_budget_password", 422, ApiFailureContext.SYNC, fallback),
         )
         assertEquals(
-            "Tandem couldn’t start sign-in. Check the Actual password.",
+            "Tandem couldn’t start sign-in. Check the server address and try again.",
             apiFailureMessage("invalid_request", 400, ApiFailureContext.SIGN_IN, fallback),
         )
         assertFalse(
@@ -294,7 +294,7 @@ class TandemMobileSessionTest {
                 "operation_result_unavailable" to
                     (
                         BudgetMutationFailureDisposition.RESULT_UNAVAILABLE to
-                            "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget."
+                            "Actual saved this change, but Tandem hasn’t refreshed the budget. Sync the budget to update this device."
                     ),
             )
 

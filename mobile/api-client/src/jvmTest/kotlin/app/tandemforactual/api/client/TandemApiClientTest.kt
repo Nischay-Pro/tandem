@@ -629,7 +629,7 @@ class TandemApiClientTest {
                 val rejected = captureApiException { client.signInWithPassword("https://tandem.example", "wrong-test-password", "Phone") }
                 assertEquals("invalid_request", rejected.errorCode)
                 assertEquals(400, rejected.httpStatus)
-                assertEquals("Tandem couldn’t start sign-in. Check the Actual password.", rejected.message)
+                assertEquals("Tandem couldn’t start sign-in. Check the server address and try again.", rejected.message)
                 assertFalse(rejected.message.orEmpty().contains("host detail"))
                 assertFalse(client.isAuthenticated)
             } finally {
@@ -1342,7 +1342,8 @@ class TandemApiClientTest {
                 "operation_in_progress" to "Tandem is still processing this change. Wait for it to finish.",
                 "operation_rejected" to "Actual rejected this change earlier. Refresh the budget before trying again.",
                 "idempotency_key_reused" to "This change is linked to a different request. Refresh the budget before trying again.",
-                "operation_result_unavailable" to "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget.",
+                "operation_result_unavailable" to
+                    "Actual saved this change, but Tandem hasn’t refreshed the budget. Sync the budget to update this device.",
             )
 
         messages.forEach { (errorCode, message) ->
@@ -1354,7 +1355,7 @@ class TandemApiClientTest {
     fun authenticationAndBankSyncErrorsHaveActionableMessages() {
         val messages =
             mapOf(
-                "actual_only" to "We found Actual Budget, but not the Tandem API Gateway. Check that the gateway is running at /api/v1/.",
+                "actual_only" to "We found your Actual Budget service. Make sure the Tandem API Gateway is running at /api/v1/.",
                 "invalid_budget_password" to "That password didn’t unlock this encrypted budget. Check the budget password.",
                 "sign_in_expired" to "Your sign-in is no longer active. Sign in again.",
                 "invalid_device_credential" to "Your sign-in is no longer active. Sign in again.",

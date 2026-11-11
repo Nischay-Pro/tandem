@@ -45,6 +45,14 @@ now” continues directly to the budget. Tandem does not repeat the onboarding
 prompt after either choice. If the system permission was denied and can no
 longer be requested, the platform action opens notification settings.
 
+Assume people already have an Actual Budget and want to connect Tandem to it.
+The normal setup path connects to that existing server, signs in, chooses an
+existing budget, and syncs it. Keep the optional setup help focused on the
+Tandem API Gateway; do not present creating an Actual budget as a normal setup
+step. If Actual is reachable but the gateway is missing, say: “We found your
+Actual Budget service. Make sure the Tandem API Gateway is running at
+`/api/v1/`.” Avoid terms such as “proxy” and “route” in that message.
+
 | Idea                                      | Use                                                                                      | Avoid                                         |
 | ----------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------- |
 | A local copy                              | Saved on this device                                                                     | Saved on this phone                           |
