@@ -1111,6 +1111,7 @@ fun TandemApp(
                     onBack = handleBack,
                     onSync = { navigation.open(AppRoute.SYNC_CENTER) },
                     syncStatus = mainCloudStatus,
+                    pendingWriteStatuses = mobileSession.pendingWrites.map { it.status },
                     onBudget = { navigation.open(AppRoute.BUDGET_CHOOSER) },
                     actualConnected = mobileSession.isServerReachable,
                     liveAccounts = liveAccounts,

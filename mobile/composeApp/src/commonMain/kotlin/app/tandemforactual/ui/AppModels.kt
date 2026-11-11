@@ -101,6 +101,42 @@ internal fun mainCloudStatusLabel(status: MainCloudStatus): String =
         MainCloudStatus.ERROR -> "Sync needs attention"
     }
 
+internal fun mainCloudStatusAccessibilityDescription(
+    status: MainCloudStatus,
+    pendingWriteStatuses: Collection<String>,
+): String {
+    val conflictCount = pendingWriteStatuses.count { it == "conflict" }
+    val uncertainCount = pendingWriteStatuses.count { it == "uncertain" }
+    val rejectedCount = pendingWriteStatuses.count { it == "rejected" }
+    val reviewCount = conflictCount + uncertainCount + rejectedCount
+    if (reviewCount == 0) {
+        return when (status) {
+            MainCloudStatus.OFF -> "Sync is off"
+            MainCloudStatus.SYNCED -> "Everything synced"
+            MainCloudStatus.SYNCING -> "Syncing changes"
+            MainCloudStatus.ERROR -> "Sync needs attention"
+        }
+    }
+
+    val reasons =
+        buildList {
+            if (conflictCount > 0) add("$conflictCount ${pluralizeCloudCount(conflictCount, "conflict", "conflicts")}")
+            if (uncertainCount > 0) {
+                add("$uncertainCount ${pluralizeCloudCount(uncertainCount, "edit with unknown status", "edits with unknown status")}")
+            }
+            if (rejectedCount > 0) add("$rejectedCount ${pluralizeCloudCount(rejectedCount, "rejected edit", "rejected edits")}")
+        }
+    val changeNoun = if (reviewCount == 1) "change" else "changes"
+    val verb = if (reviewCount == 1) "needs" else "need"
+    return "$reviewCount $changeNoun $verb review: ${reasons.joinToString(", ")}."
+}
+
+private fun pluralizeCloudCount(
+    count: Int,
+    singular: String,
+    plural: String,
+): String = if (count == 1) singular else plural
+
 internal enum class AppRoute(
     val title: String,
 ) {
@@ -162,12 +198,13 @@ internal fun resolveMainCloudStatus(
     hasPendingBudgetChanges: Boolean = false,
     budgetChangesWaitingForConnection: Boolean = false,
 ): MainCloudStatus {
+    val hasWriteNeedingReview = pendingWriteStatuses.any { it in setOf("conflict", "uncertain", "rejected") }
+    if (hasWriteNeedingReview) return MainCloudStatus.ERROR
     if (isSyncing || persistedSyncStatus == "SYNCING") return MainCloudStatus.SYNCING
     if (budgetChangesWaitingForConnection) return MainCloudStatus.ERROR
     if (!syncEnabled) return if (hasPendingBudgetChanges) MainCloudStatus.ERROR else MainCloudStatus.OFF
 
-    val hasWriteNeedingReview = pendingWriteStatuses.any { it in setOf("conflict", "uncertain", "rejected") }
-    if (hasSyncError || persistedSyncStatus in setOf("FAILED", "NEEDS_FULL_SYNC") || hasWriteNeedingReview) {
+    if (hasSyncError || persistedSyncStatus in setOf("FAILED", "NEEDS_FULL_SYNC")) {
         return MainCloudStatus.ERROR
     }
     if (pendingWriteStatuses.any { it in setOf("queued", "sending") } || hasPendingBudgetChanges) return MainCloudStatus.SYNCING

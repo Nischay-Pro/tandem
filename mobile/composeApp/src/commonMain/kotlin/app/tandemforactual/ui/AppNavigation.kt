@@ -162,6 +162,35 @@ internal fun FloatingSyncAction(
 }
 
 @Composable
+internal fun MainCloudStatusButton(
+    syncStatus: MainCloudStatus,
+    pendingWriteStatuses: Collection<String>,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    val cloudTint =
+        when (syncStatus) {
+            MainCloudStatus.OFF -> palette.muted
+            MainCloudStatus.SYNCED -> palette.positive
+            MainCloudStatus.SYNCING -> palette.syncing
+            MainCloudStatus.ERROR -> palette.negative
+        }
+    TandemIconButton(
+        icon =
+            when (syncStatus) {
+                MainCloudStatus.OFF -> Lucide.CloudOff
+                MainCloudStatus.ERROR -> Lucide.CloudAlert
+                else -> Lucide.Cloud
+            },
+        contentDescription = mainCloudStatusAccessibilityDescription(syncStatus, pendingWriteStatuses),
+        onClickLabel = "Open sync center",
+        onClick = onClick,
+        iconSizeDp = 25,
+        tint = cloudTint,
+    )
+}
+
+@Composable
 internal fun AppHeader(
     route: AppRoute,
     state: AppState,
@@ -169,6 +198,7 @@ internal fun AppHeader(
     onBack: () -> Unit,
     onSync: () -> Unit,
     syncStatus: MainCloudStatus,
+    pendingWriteStatuses: Collection<String>,
     onBudget: () -> Unit,
     actualConnected: Boolean,
     liveAccounts: List<LiveAccountSummary>,
@@ -273,32 +303,7 @@ internal fun AppHeader(
             }
         }
         if (route.isTab()) {
-            val cloudTint =
-                when (syncStatus) {
-                    MainCloudStatus.OFF -> palette.muted
-                    MainCloudStatus.SYNCED -> palette.positive
-                    MainCloudStatus.SYNCING -> palette.syncing
-                    MainCloudStatus.ERROR -> palette.negative
-                }
-            TandemIconButton(
-                icon =
-                    when (syncStatus) {
-                        MainCloudStatus.OFF -> Lucide.CloudOff
-                        MainCloudStatus.ERROR -> Lucide.CloudAlert
-                        else -> Lucide.Cloud
-                    },
-                contentDescription =
-                    when (syncStatus) {
-                        MainCloudStatus.OFF -> "Sync is off"
-                        MainCloudStatus.SYNCED -> "Everything synced"
-                        MainCloudStatus.SYNCING -> "Syncing changes"
-                        MainCloudStatus.ERROR -> "Sync needs attention"
-                    },
-                onClickLabel = "Open sync center",
-                onClick = onSync,
-                iconSizeDp = 25,
-                tint = cloudTint,
-            )
+            MainCloudStatusButton(syncStatus, pendingWriteStatuses, onSync)
         } else if (route == AppRoute.BUDGET_CHOOSER) {
             Text(
                 when {
