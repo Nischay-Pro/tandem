@@ -2,6 +2,7 @@ package app.tandemforactual.api.client
 
 import app.tandemforactual.api.generated.Api
 import app.tandemforactual.api.generated.Auth
+import app.tandemforactual.api.generated.api.AuthenticationApi
 import app.tandemforactual.api.generated.api.BudgetsApi
 import app.tandemforactual.api.generated.api.TransactionsApi
 import com.kroegerama.openapi.kmp.gen.companion.AuthPlugin
@@ -548,6 +549,38 @@ class TandemApiClientTest {
                     (requests[1].body as TextContent).text,
                 )
                 assertFalse(requests[0].body.toString().contains(verifier))
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
+    fun generatedBrowserHandoffRouteKeepsStateInThePath() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            val engine =
+                MockEngine { request ->
+                    requests += request
+                    respond("", HttpStatusCode.OK, jsonHeaders())
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                val state = "S".repeat(43)
+                val response = AuthenticationApi.startActualOpenIdBrowserHandoff(state)
+
+                assertTrue(response.isRight())
+                assertEquals(HttpMethod.Get, requests.single().method)
+                assertEquals(
+                    "/api/v1/auth/openid/browser-start/$state",
+                    requests.single().url.encodedPath,
+                )
+                assertTrue(requests.single().headers[HttpHeaders.Authorization] == null)
             } finally {
                 cleanup()
                 Api.baseUrl = previousBaseUrl
