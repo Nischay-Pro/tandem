@@ -1,7 +1,7 @@
 package app.tandemforactual.ui
 
 internal const val MIN_TRANSACTION_DATE = "1995-01-01"
-internal const val TRANSACTION_DATE_CONFIRMATION_YEARS = 1
+internal const val TRANSACTION_DATE_CONFIRMATION_YEARS = 10
 
 internal enum class TransactionDateValidationStatus {
     VALID,

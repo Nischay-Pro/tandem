@@ -735,7 +735,7 @@ class TandemMobileSessionTest {
             )
             assertEquals("Choose a date on or after ${displayTransactionDate("1995-01-01")}.", session.transactionWriteMessage)
 
-            for (futureDate in listOf("2027-11-11", "2062-03-04")) {
+            for (futureDate in listOf("2036-11-11", "2062-03-04")) {
                 for (create in listOf(true, false)) {
                     if (create) {
                         assertFalse(
@@ -776,10 +776,10 @@ class TandemMobileSessionTest {
                     null,
                     null,
                     "1.00",
-                    "2027-11-11",
+                    "2036-11-11",
                     "note",
                     null,
-                    confirmedFutureDate = "2027-11-11",
+                    confirmedFutureDate = "2036-11-11",
                 ),
             )
             assertEquals("Budget data isn’t available on this device. Reopen the budget and try again.", session.transactionWriteMessage)

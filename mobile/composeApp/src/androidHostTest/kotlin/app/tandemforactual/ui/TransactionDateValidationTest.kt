@@ -35,12 +35,12 @@ class TransactionDateValidationTest {
     }
 
     @Test
-    fun asksForConfirmationOnlyWhenTheDateIsMoreThanOneYearAhead() {
+    fun asksForConfirmationOnlyWhenTheDateIsMoreThanTenYearsAhead() {
         assertEquals(
             TransactionDateValidationStatus.VALID,
-            validateTransactionDate("2027-11-10", "2026-11-10").status,
+            validateTransactionDate("2036-11-10", "2026-11-10").status,
         )
-        val futureDate = "2027-11-11"
+        val futureDate = "2036-11-11"
         assertEquals(
             TransactionDateValidationStatus.CONFIRMATION_REQUIRED,
             validateTransactionDate(futureDate, "2026-11-10").status,
@@ -58,7 +58,7 @@ class TransactionDateValidationTest {
             validateTransactionDate(
                 futureDate,
                 "2026-11-10",
-                confirmedFutureDate = "2027-11-12",
+                confirmedFutureDate = "2036-11-12",
             ).status,
         )
     }
@@ -67,11 +67,11 @@ class TransactionDateValidationTest {
     fun anniversaryConfirmationBoundaryClampsToTheLastDayOfFebruary() {
         assertEquals(
             TransactionDateValidationStatus.VALID,
-            validateTransactionDate("2025-02-28", "2024-02-29").status,
+            validateTransactionDate("2030-02-28", "2020-02-29").status,
         )
         assertEquals(
             TransactionDateValidationStatus.CONFIRMATION_REQUIRED,
-            validateTransactionDate("2025-03-01", "2024-02-29").status,
+            validateTransactionDate("2030-03-01", "2020-02-29").status,
         )
     }
 

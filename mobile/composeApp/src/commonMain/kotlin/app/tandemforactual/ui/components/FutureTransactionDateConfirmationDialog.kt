@@ -32,7 +32,7 @@ internal fun FutureTransactionDateConfirmationDialog(
                     titleSize = TandemTypography.cardTitle,
                     onClose = onDismissRequest,
                 )
-                BodyText("$formattedDate is more than a year away. Save this transaction for that date?")
+                BodyText("$formattedDate is more than 10 years away. Save this transaction for that date?")
                 Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     SecondaryButton("Change date", Modifier.weight(1f), onClick = onDismissRequest)
                     PrimaryButton("Save date", modifier = Modifier.weight(1f), onClick = onConfirm)
