@@ -128,11 +128,11 @@ The API joins the Compose project's `default` network so it can reach Actual and
 
 Tandem does not need a shared Actual server password. Each person signs in from the app with their Actual password or OpenID provider. Set `ACTUAL_PUBLIC_URL` to the public Tandem URL for OpenID; leave it empty if you only use password sign-in.
 
-Keep Tandem's secret files in a private directory beside your Compose file. Compose mounts them read-only at `/run/secrets`; Tandem reads the values from those files, so they do not appear in the container environment. Create the directory and generate the database password, database URL, and encrypted-session key. Keep the previous-key file empty during normal operation; the deployment guide explains when to put the old key there during a rotation.
+Keep Tandem's secret files in a private directory beside your Compose file. Compose mounts them read-only at `/run/secrets`; Tandem reads the values from those files, so they do not appear in the container environment. Create the directory and generate the database password, database URL, and encrypted-session key. The session key is 32 random bytes encoded as 64 hexadecimal characters and is used directly by AES-256-GCM; it is not a human passphrase, so password stretching does not apply. Key rotation is supported; the deployment guide explains when to put the old key in the previous-key file.
 
-When updating an existing Compose setup, add the empty previous-key file, its
+When updating an existing Compose setup, add the previous-key file, its
 `.env.tandem` path, and the matching secret mount before recreating the API.
-An empty file leaves the current key unchanged.
+Keep the previous-key file at zero bytes outside a key rotation.
 
 ```sh
 mkdir -p .tandem-secrets

@@ -116,14 +116,17 @@ Per-install server addresses cannot be pre-associated in a single distributed
 app. See [RFC 8252 §§7.1, 7.2, 8.9](https://www.rfc-editor.org/rfc/rfc8252) and
 [RFC 7636](https://www.rfc-editor.org/rfc/rfc7636).
 
-Sign-in endpoints are limited to 10 requests per client address per minute in
-each API process; IPv6 addresses in the same `/64` share a limit. The Nginx
-example adds an edge limit of 10 sign-in requests per minute with a burst of 5,
-keyed by source address. Forwarded client addresses are ignored by the API by
-default. Set `TRUST_PROXY` to the exact reverse-proxy IPs or narrow CIDRs, such
-as `172.30.0.2` or `172.30.0.0/24`; do not use `0.0.0.0/0`. Without it, clients
-behind one proxy share the API's in-memory limit. Keep the API reachable only
-through that trusted proxy.
+The API applies an in-memory limit of 10 requests per client address per minute
+shared by password login and OpenID start. `GET /api/v1/auth/methods` has a
+separate limit of 60 requests per minute. The API does not apply that 10-request
+limit to the Actual callback or OpenID code exchange; the Nginx example limits
+password login, OpenID start and completion, and the Actual callback to 10
+requests per minute with a burst of 5. API limits are per process, and IPv6
+addresses in the same `/64` share a limit. Forwarded client addresses are
+ignored by the API by default. Set `TRUST_PROXY` to the exact reverse-proxy IPs
+or narrow CIDRs, such as `172.30.0.2` or `172.30.0.0/24`; do not use
+`0.0.0.0/0`. Without it, clients behind one proxy share the API's in-memory
+limit. Keep the API reachable only through that trusted proxy.
 
 `GET /api/v1/budgets` requires a device token and returns budgets visible to the
 signed-in Actual account. Each item includes its Actual sync ID, display name,
