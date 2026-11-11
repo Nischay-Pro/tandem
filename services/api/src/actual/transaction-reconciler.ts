@@ -347,12 +347,30 @@ export class TransactionReconciler {
     }
 
     if (result.kind === "create-id-exists") {
+      const mismatchedFields = createMismatchFields(
+        result.snapshot,
+        prepared.input,
+        prepared.request.transactionId,
+      );
+      if (mismatchedFields.length === 0) {
+        const committed = await this.#markVerifiedCommitted(
+          operation,
+          {
+            transactionId: prepared.request.transactionId,
+            created: true,
+            recoveredByReadback: true,
+            verifiedRevision: createTransactionRevision(result.snapshot),
+          },
+          { kind: "transaction-create-returned" },
+        );
+        return { operation: committed, conflict: null };
+      }
       try {
         return await this.#recordConflict(operation, {
           kind: "conflict",
           conflictType: "transaction-id-already-exists",
           remoteSnapshot: toJsonValue(result.snapshot),
-          conflictingFields: ["$entity"],
+          conflictingFields: mismatchedFields,
         });
       } catch (error) {
         return this.#handleActualFailure(operation, false, error);
@@ -818,14 +836,17 @@ export class TransactionReconciler {
     ) {
       return this.#existingResult(operation);
     }
-    const matchesCreate =
-      (snapshot.id === prepared.request.transactionId ||
-        snapshot.importedId === prepared.request.transactionId) &&
-      snapshot.account === prepared.input.account &&
-      snapshot.amount === prepared.input.amount &&
-      snapshot.date === prepared.input.date;
-    if (!matchesCreate) {
-      return this.#existingResult(operation);
+    const mismatchedFields = createMismatchFields(
+      snapshot,
+      prepared.input,
+      prepared.request.transactionId,
+    );
+    if (mismatchedFields.length > 0) {
+      return this.#resolveUncertainCreateConflict(
+        operation,
+        snapshot,
+        mismatchedFields,
+      );
     }
 
     try {
@@ -912,6 +933,34 @@ export class TransactionReconciler {
       throw new Error("Transaction conflict has no operation record");
     }
     return { operation: current, conflict: recorded };
+  }
+
+  async #resolveUncertainCreateConflict(
+    operation: WriteOperation,
+    snapshot: TransactionSnapshot,
+    conflictingFields: string[],
+  ): Promise<TransactionReconciliationResult> {
+    try {
+      const conflict = await this.journal.resolveUncertainAsConflict(
+        operation.operationId,
+        {
+          conflictId: randomUUID(),
+          conflictType: "transaction-id-already-exists",
+          baseSnapshot: operation.baseSnapshot,
+          localPatch: operation.patch,
+          remoteSnapshot: toJsonValue(snapshot),
+          conflictingFields,
+        },
+      );
+      const resolved = await this.journal.get(operation.operationId);
+      if (!resolved) {
+        throw new Error("Transaction conflict has no operation record");
+      }
+      return { operation: resolved, conflict };
+    } catch {
+      // Keep the durable operation uncertain if conflict recording fails.
+      return this.#existingResult(operation);
+    }
   }
 
   async #existingResult(
@@ -1077,6 +1126,28 @@ function transactionMatchesBaseFields(
       base[key as keyof TransactionSnapshot],
     );
   });
+}
+
+function createMismatchFields(
+  snapshot: TransactionSnapshot,
+  input: TransactionCreateInput,
+  transactionId: string,
+): string[] {
+  if (snapshot.id !== transactionId && snapshot.importedId !== transactionId) {
+    return ["$entity"];
+  }
+
+  const mismatches: string[] = [];
+  if (snapshot.account !== input.account) mismatches.push("account");
+  if (snapshot.amount !== input.amount) mismatches.push("amount");
+  if (snapshot.date !== input.date) mismatches.push("date");
+  if (snapshot.payee !== input.payee) mismatches.push("payee");
+  if (snapshot.category !== input.category) mismatches.push("category");
+  if (snapshot.notes !== (input.notes === "" ? null : input.notes)) {
+    mismatches.push("notes");
+  }
+  if (snapshot.cleared !== input.cleared) mismatches.push("cleared");
+  return mismatches;
 }
 
 function structuredFields(

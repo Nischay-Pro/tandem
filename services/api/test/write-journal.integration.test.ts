@@ -1042,6 +1042,66 @@ describe("durable write journal integration", () => {
     });
   });
 
+  it("durably resolves an uncertain create as a conflict", async () => {
+    const input = createOperation({
+      action: "create",
+      entityId: "tandem:8c88495a-65d9-4531-8392-93bff2c65374",
+      baseRevision: null,
+      baseSnapshot: {},
+      patch: {
+        account: "account-1",
+        amount: -1250,
+        date: "2026-11-01",
+        payee: "payee-1",
+        category: "category-1",
+        notes: "Requested transaction",
+        cleared: false,
+      },
+    });
+    await database.journal.enqueue(input);
+    await database.journal.claim(input.operationId);
+    await database.journal.markUncertain(input.operationId, "actual-timeout", {
+      kind: "transaction-create-returned",
+    });
+    const conflict = createConflict({
+      conflictType: "transaction-id-already-exists",
+      baseSnapshot: {},
+      localPatch: input.patch,
+      remoteSnapshot: {
+        id: input.entityId,
+        account: "account-1",
+        amount: -1300,
+        date: "2026-11-01",
+      },
+      conflictingFields: ["amount"],
+    });
+
+    const stored = await database.journal.resolveUncertainAsConflict(
+      input.operationId,
+      conflict,
+    );
+    const repeated = await database.journal.resolveUncertainAsConflict(
+      input.operationId,
+      { ...conflict, conflictId: randomUUID() },
+    );
+
+    expect(repeated.conflictId).toBe(stored.conflictId);
+    await expect(
+      database.journal.get(input.operationId),
+    ).resolves.toMatchObject({
+      status: "conflict",
+      errorCode: "conflict-detected",
+      writeEvidence: null,
+    });
+    await expect(
+      database.journal.getConflict(input.operationId),
+    ).resolves.toMatchObject({
+      conflictType: "transaction-id-already-exists",
+      conflictingFields: ["amount"],
+      remoteSnapshot: conflict.remoteSnapshot,
+    });
+  });
+
   it("stores a conflict and treats a matching conflict retry as idempotent", async () => {
     const input = createOperation();
     await database.journal.enqueue(input);

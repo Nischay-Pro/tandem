@@ -139,6 +139,33 @@ function createCreateRequest(
   };
 }
 
+function actualCreateFrom(
+  request: TransactionCreateRequest,
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const input = request.patch as unknown as {
+    account: string;
+    amount: number;
+    date: string;
+    payee: string | null;
+    category: string | null;
+    notes: string;
+    cleared: boolean;
+  };
+  return {
+    id: `actual-${randomUUID()}`,
+    account: input.account,
+    amount: input.amount,
+    date: input.date,
+    payee: input.payee,
+    category: input.category,
+    notes: input.notes,
+    cleared: input.cleared,
+    imported_id: request.transactionId,
+    ...overrides,
+  };
+}
+
 function operationInputFor(
   request: TransactionReconciliationRequest,
 ): WriteOperationInput {
@@ -379,6 +406,31 @@ class MemoryWriteJournal implements DurableWriteJournal {
     this.#throwIfFailed("recordConflict");
     const operation = this.#requireOperation();
     this.operation = { ...operation, status: "conflict" };
+    this.conflict = {
+      ...conflict,
+      operationId: operation.operationId,
+      createdAt: new Date("2026-11-01T12:00:00.000Z"),
+    };
+    return this.conflict;
+  }
+
+  async resolveUncertainAsConflict(
+    _operationId: string,
+    conflict: ConflictInput,
+  ): Promise<OperationConflict> {
+    this.#throwIfFailed("resolveUncertainAsConflict");
+    const operation = this.#requireOperation();
+    if (operation.status !== "uncertain" && operation.status !== "conflict") {
+      throw new Error(`Cannot resolve conflict from ${operation.status}`);
+    }
+    this.operation = {
+      ...operation,
+      status: "conflict",
+      errorCode: "conflict-detected",
+      actualResult: null,
+      writeEvidence: null,
+      completedAt: new Date("2026-11-01T12:00:00.000Z"),
+    };
     this.conflict = {
       ...conflict,
       operationId: operation.operationId,
@@ -674,13 +726,7 @@ describe("Actual transaction reconciliation", () => {
   it("records a conflict instead of replacing an existing stable transaction", async () => {
     const request = createCreateRequest();
     const harness = createHarness(request);
-    harness.actual = {
-      id: "actual-existing-id",
-      account: "account-1",
-      amount: -1250,
-      date: "2026-11-01",
-      imported_id: request.transactionId,
-    };
+    harness.actual = actualCreateFrom(request, { amount: -1300 });
 
     const result = await harness.reconciler.submit(request);
 
@@ -690,10 +736,55 @@ describe("Actual transaction reconciliation", () => {
     });
     expect(result.conflict).toMatchObject({
       conflictType: "transaction-id-already-exists",
-      conflictingFields: ["$entity"],
+      conflictingFields: ["amount"],
     });
-    expect(harness.actual).toMatchObject({ id: "actual-existing-id" });
+    expect(harness.actual).toMatchObject({ amount: -1300 });
   });
+
+  it("commits a create when the existing stable transaction exactly matches", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request);
+    harness.actual = actualCreateFrom(request);
+    const create = vi.spyOn(harness.store, "create");
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      status: "committed",
+      actualResult: {
+        transactionId: request.transactionId,
+        created: true,
+        recoveredByReadback: true,
+      },
+    });
+    expect(result.conflict).toBeNull();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["account", { account: "account-other" }],
+    ["amount", { amount: -1300 }],
+    ["date", { date: "2026-11-02" }],
+    ["payee", { payee: "payee-other" }],
+    ["category", { category: "category-other" }],
+    ["notes", { notes: "Edited in Actual" }],
+    ["cleared", { cleared: true }],
+  ] as const)(
+    "conflicts an existing create with a different %s",
+    async (field, difference) => {
+      const request = createCreateRequest();
+      const harness = createHarness(request);
+      harness.actual = actualCreateFrom(request, difference);
+
+      const result = await harness.reconciler.submit(request);
+
+      expect(result.operation.status).toBe("conflict");
+      expect(result.conflict).toMatchObject({
+        conflictType: "transaction-id-already-exists",
+        conflictingFields: [field],
+      });
+    },
+  );
 
   it("preserves a conflict journal error when a create ID already exists", async () => {
     const request = createCreateRequest();
@@ -755,13 +846,7 @@ describe("Actual transaction reconciliation", () => {
       initialStatus: "uncertain",
       initialWriteEvidence: { kind: "transaction-create-returned" },
     });
-    harness.actual = {
-      id: "actual-random-id",
-      account: "account-1",
-      amount: -1250,
-      date: "2026-11-01",
-      imported_id: request.transactionId,
-    };
+    harness.actual = actualCreateFrom(request);
 
     const result = await harness.reconciler.submit(request);
 
@@ -818,34 +903,56 @@ describe("Actual transaction reconciliation", () => {
     expect(harness.journal.resolveCalls).toBe(0);
   });
 
-  it.each(["id", "account", "amount", "date"] as const)(
-    "does not recover an uncertain create when Actual read-back %s differs",
-    async (field) => {
+  it.each([
+    ["id", { imported_id: `tandem:${randomUUID()}` }, ["$entity"]],
+    ["account", { account: "different-account" }, ["account"]],
+    ["amount", { amount: -1300 }, ["amount"]],
+    ["date", { date: "2026-10-31" }, ["date"]],
+    ["payee", { payee: "different-payee" }, ["payee"]],
+    ["category", { category: "different-category" }, ["category"]],
+    ["notes", { notes: "Changed in Actual" }, ["notes"]],
+    ["cleared", { cleared: true }, ["cleared"]],
+  ] as const)(
+    "records a conflict when an uncertain create read-back %s differs",
+    async (_field, difference, conflictingFields) => {
       const request = createCreateRequest();
       const harness = createHarness(request, {
         initialStatus: "uncertain",
         initialWriteEvidence: { kind: "transaction-create-returned" },
       });
-      const actual: Record<string, unknown> = {
-        id: "actual-random-id",
-        account: "account-1",
-        amount: -1250,
-        date: "2026-11-01",
-        imported_id: request.transactionId,
-      };
-      if (field === "id")
-        actual.imported_id = "tandem:00000000-0000-4000-8000-000000000000";
-      if (field === "account") actual.account = "different-account";
-      if (field === "amount") actual.amount = -1300;
-      if (field === "date") actual.date = "2026-10-31";
-      harness.actual = actual;
+      harness.actual = actualCreateFrom(request, difference);
 
       const result = await harness.reconciler.submit(request);
 
-      expect(result.operation.status).toBe("uncertain");
-      expect(harness.journal.resolveCalls).toBe(0);
+      expect(result.operation.status).toBe("conflict");
+      expect(result.conflict).toMatchObject({
+        conflictType: "transaction-id-already-exists",
+        conflictingFields,
+      });
     },
   );
+
+  it("keeps a mismatched uncertain create unresolved if conflict persistence fails", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: { kind: "transaction-create-returned" },
+    });
+    harness.actual = actualCreateFrom(request, { amount: -1300 });
+    harness.journal.failures.set(
+      "resolveUncertainAsConflict",
+      new Error("synthetic journal failure"),
+    );
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      status: "uncertain",
+      patch: request.patch,
+      writeEvidence: { kind: "transaction-create-returned" },
+    });
+    expect(result.conflict).toBeNull();
+  });
 
   it("keeps an uncertain create when the journal cannot record read-back", async () => {
     const request = createCreateRequest();
@@ -853,13 +960,7 @@ describe("Actual transaction reconciliation", () => {
       initialStatus: "uncertain",
       initialWriteEvidence: { kind: "transaction-create-returned" },
     });
-    harness.actual = {
-      id: "actual-random-id",
-      account: "account-1",
-      amount: -1250,
-      date: "2026-11-01",
-      imported_id: request.transactionId,
-    };
+    harness.actual = actualCreateFrom(request);
     harness.journal.failures.set(
       "resolveUncertainAsCommitted",
       new Error("synthetic journal failure"),
@@ -2525,13 +2626,7 @@ describe("Actual transaction reconciliation", () => {
     const harness = createHarness(request, { initialStatus: "uncertain" });
     const operation = createOperation(operationInputFor(request), "uncertain");
     harness.journal.operation = operation;
-    harness.actual = {
-      id: request.transactionId,
-      account: "account-1",
-      amount: -1250,
-      date: "2026-11-01",
-      imported_id: request.transactionId,
-    };
+    harness.actual = actualCreateFrom(request, { id: request.transactionId });
 
     const result = await harness.reconciler.checkOperationStatus(
       request.operationId,
@@ -2780,29 +2875,42 @@ describe("Actual transaction reconciliation", () => {
     expect(harness.actual).toMatchObject({ amount: 1200, notes: "" });
   });
 
-  it("rejects edits to unsupported split-child fields before writing", async () => {
-    const base = createSnapshot({
-      id: "transaction-child",
-      isChild: true,
-      parentId: "transaction-1",
-    });
-    const request = createRequest({
-      transactionId: base.id,
-      patch: { date: "2026-11-02" },
-      baseSnapshot: base as unknown as JsonValue,
-      baseRevision: createTransactionRevision(base),
-    });
-    const harness = createHarness(request);
-    harness.actual = actualFrom(base);
+  it.each([
+    ["account", { account: "account-other" }],
+    ["date", { date: "2026-11-02" }],
+    ["cleared", { cleared: true }],
+    ["reconciled", { reconciled: true }],
+  ] as const)(
+    "rejects a split-child %s change without reporting a conflict or writing",
+    async (_field, patch) => {
+      const base = createSnapshot({
+        id: "transaction-child",
+        cleared: false,
+        reconciled: false,
+        isChild: true,
+        parentId: "transaction-1",
+      });
+      const request = createRequest({
+        transactionId: base.id,
+        patch,
+        baseSnapshot: base as unknown as JsonValue,
+        baseRevision: createTransactionRevision(base),
+      });
+      const harness = createHarness(request);
+      harness.actual = actualFrom(base);
+      const update = vi.spyOn(harness.store, "update");
 
-    const result = await harness.reconciler.submit(request);
+      const result = await harness.reconciler.submit(request);
 
-    expect(result.operation).toMatchObject({
-      status: "rejected",
-      errorCode: "split-child-field-not-editable",
-    });
-    expect(harness.actual).toEqual(actualFrom(base));
-  });
+      expect(result.operation).toMatchObject({
+        status: "rejected",
+        errorCode: "split-child-field-not-editable",
+      });
+      expect(result.conflict).toBeNull();
+      expect(harness.actual).toEqual(actualFrom(base));
+      expect(update).not.toHaveBeenCalled();
+    },
+  );
 
   it("recovers a write when a no-op requested field changed remotely", async () => {
     const base = createSnapshot({ notes: null });

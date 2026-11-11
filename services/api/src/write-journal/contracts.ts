@@ -98,6 +98,10 @@ export interface DurableWriteJournal {
     operationId: string,
     conflict: ConflictInput,
   ): Promise<OperationConflict>;
+  resolveUncertainAsConflict(
+    operationId: string,
+    conflict: ConflictInput,
+  ): Promise<OperationConflict>;
   expireLeases(): Promise<number>;
   compactTerminalPayloads?(): Promise<number>;
 }

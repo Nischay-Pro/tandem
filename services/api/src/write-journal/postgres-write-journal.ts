@@ -486,6 +486,80 @@ export class PostgresWriteJournal implements DurableWriteJournal {
     });
   }
 
+  async resolveUncertainAsConflict(
+    operationId: string,
+    conflict: ConflictInput,
+  ): Promise<OperationConflict> {
+    validateUuid("operationId", operationId);
+    validateConflictInput(conflict);
+
+    return withTransaction(this.pool, async (client) => {
+      const operation = await selectOperation(client, operationId, true);
+      if (!operation) {
+        throw new OperationNotFoundError(operationId);
+      }
+      if (operation.status !== "uncertain" && operation.status !== "conflict") {
+        throw new InvalidOperationTransitionError(
+          operationId,
+          operation.status,
+          "conflict",
+        );
+      }
+
+      if (operation.status === "uncertain") {
+        await client.query(
+          `INSERT INTO tandem_operation_conflicts (
+            conflict_id, operation_id, conflict_type, base_snapshot,
+            local_patch, remote_snapshot, conflicting_fields
+          ) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7)
+          ON CONFLICT (operation_id) DO NOTHING`,
+          [
+            conflict.conflictId,
+            operationId,
+            conflict.conflictType,
+            JSON.stringify(conflict.baseSnapshot),
+            JSON.stringify(conflict.localPatch),
+            JSON.stringify(conflict.remoteSnapshot),
+            conflict.conflictingFields,
+          ],
+        );
+      }
+
+      const conflictResult = await client.query<ConflictRow>(
+        "SELECT * FROM tandem_operation_conflicts WHERE operation_id = $1 FOR UPDATE",
+        [operationId],
+      );
+      const storedConflict = conflictResult.rows[0];
+      if (!storedConflict) {
+        throw new Error("Conflict record was not persisted");
+      }
+      if (!sameConflict(storedConflict, conflict)) {
+        throw new Error("Operation already has a different conflict record");
+      }
+
+      if (operation.status === "uncertain") {
+        const result = await client.query<OperationRow>(
+          `UPDATE tandem_operations
+          SET status = 'conflict', error_code = 'conflict-detected',
+              actual_result = NULL,
+              completed_at = clock_timestamp(), updated_at = clock_timestamp(),
+              lease_expires_at = NULL
+          WHERE operation_id = $1 AND status = 'uncertain'
+          RETURNING *`,
+          [operationId],
+        );
+        if (!result.rows[0]) {
+          throw new InvalidOperationTransitionError(
+            operationId,
+            operation.status,
+            "conflict",
+          );
+        }
+      }
+      return mapConflict(storedConflict);
+    });
+  }
+
   async expireLeases(): Promise<number> {
     const result = await this.pool.query(
       `UPDATE tandem_operations
