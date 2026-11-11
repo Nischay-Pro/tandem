@@ -269,7 +269,7 @@ class IosLocaleFormattingTest {
             "Off budget · Last synced ${formatDateAtEpochMilliseconds(1_794_087_360_000)}",
             accountListSubtitle(offBudget, 1_794_087_360_000),
         )
-        assertNull(accountListSubtitle(closed, 1_794_087_360_000))
+        assertEquals("Closed", accountListSubtitle(closed, 1_794_087_360_000))
     }
 
     private fun settings(
