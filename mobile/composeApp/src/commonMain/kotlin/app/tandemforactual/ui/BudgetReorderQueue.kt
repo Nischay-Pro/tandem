@@ -50,7 +50,7 @@ internal fun budgetMutationFailureMessage(errorCode: String?): String =
         "operation_uncertain" -> "Tandem couldn’t confirm whether Actual saved this change. Check Actual, then try again."
         "operation_rejected" -> "Actual rejected this change earlier. Refresh the budget, then try again."
         "operation_result_unavailable" -> "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget."
-        else -> "Tandem needs a fresh budget copy before this change can be reviewed. Refresh the budget, then try again."
+        else -> "Tandem received an unexpected response. Refresh the budget and check Actual before deciding what to do with this change."
     }
 
 internal fun budgetMutationStatusLabel(status: String): String =
@@ -68,8 +68,34 @@ internal fun budgetMutationRetryNeedsNewKey(errorCode: String?): Boolean =
         setOf(
             BudgetMutationFailureDisposition.OPERATION_REJECTED,
             BudgetMutationFailureDisposition.IDEMPOTENCY_KEY_REUSED,
-            BudgetMutationFailureDisposition.REVIEW,
         )
+
+internal fun budgetMutationCanRetry(errorCode: String?): Boolean =
+    budgetMutationFailureDisposition(errorCode) in
+        setOf(
+            BudgetMutationFailureDisposition.OPERATION_IN_PROGRESS,
+            BudgetMutationFailureDisposition.OPERATION_UNCERTAIN,
+            BudgetMutationFailureDisposition.OPERATION_REJECTED,
+            BudgetMutationFailureDisposition.IDEMPOTENCY_KEY_REUSED,
+        )
+
+/** Returns null when replay is unsafe or the result must be refreshed first. */
+internal fun budgetMutationRequestForRetry(
+    request: QueuedBudgetReorder,
+    errorCode: String?,
+    replacementOperationId: String,
+): QueuedBudgetReorder? =
+    when (budgetMutationFailureDisposition(errorCode)) {
+        BudgetMutationFailureDisposition.OPERATION_IN_PROGRESS,
+        BudgetMutationFailureDisposition.OPERATION_UNCERTAIN,
+        -> request
+        BudgetMutationFailureDisposition.OPERATION_REJECTED,
+        BudgetMutationFailureDisposition.IDEMPOTENCY_KEY_REUSED,
+        -> request.copy(operationId = replacementOperationId)
+        BudgetMutationFailureDisposition.RESULT_UNAVAILABLE,
+        BudgetMutationFailureDisposition.REVIEW,
+        -> null
+    }
 
 internal fun budgetMutationNeedsRefresh(errorCode: String?): Boolean =
     budgetMutationFailureDisposition(errorCode) == BudgetMutationFailureDisposition.RESULT_UNAVAILABLE

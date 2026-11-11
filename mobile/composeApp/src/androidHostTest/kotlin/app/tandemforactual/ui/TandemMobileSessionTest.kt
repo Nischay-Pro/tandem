@@ -288,6 +288,47 @@ class TandemMobileSessionTest {
     }
 
     @Test
+    fun budgetMutationRetryUsesFreshKeysOnlyForTerminalRequestsAndBlocksUnknownOutcomes() {
+        val request =
+            QueuedBudgetReorder(
+                budgetId = "budget-1",
+                scopeId = "group-1",
+                kind = BudgetReorderKind.RENAME_CATEGORY,
+                itemId = "category-1",
+                targetId = null,
+                desiredOrder = emptyList(),
+                encryptionPassword = null,
+                name = "Household",
+                operationId = "original-key",
+            )
+
+        assertEquals(
+            request,
+            budgetMutationRequestForRetry(request, "operation_in_progress", "replacement-key"),
+        )
+        assertEquals(
+            request,
+            budgetMutationRequestForRetry(request, "operation_uncertain", "replacement-key"),
+        )
+        listOf("operation_rejected", "idempotency_key_reused").forEach { code ->
+            val retry = budgetMutationRequestForRetry(request, code, "replacement-key")
+            assertEquals("replacement-key", retry?.operationId, code)
+            assertEquals(request.copy(operationId = "replacement-key"), retry, code)
+            assertTrue(budgetMutationRetryNeedsNewKey(code), code)
+        }
+        listOf("operation_result_unavailable", "unexpected_409", null).forEach { code ->
+            assertNull(budgetMutationRequestForRetry(request, code, "replacement-key"), "$code must not be replayed")
+            assertFalse(budgetMutationCanRetry(code), "$code must not offer a retry")
+            assertFalse(budgetMutationRetryNeedsNewKey(code), "$code must not mint a retry key")
+        }
+        assertTrue(budgetMutationCanRetry("operation_in_progress"))
+        assertTrue(budgetMutationCanRetry("operation_uncertain"))
+        assertTrue(
+            budgetMutationFailureMessage("unexpected_409").contains("check Actual", ignoreCase = true),
+        )
+    }
+
+    @Test
     fun budgetMutationReviewUsesTheSharedUserFacingStatusNames() {
         assertEquals("Needs review", budgetMutationStatusLabel("conflict"))
         assertEquals("Status unknown", budgetMutationStatusLabel("uncertain"))

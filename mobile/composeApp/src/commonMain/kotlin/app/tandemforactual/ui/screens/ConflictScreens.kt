@@ -825,6 +825,19 @@ internal fun BudgetMutationReviewScreen(
                             "Refresh budget",
                             enabled = !state.readOnlyMode && mutation?.requiresEncryptionPassword != true,
                         ) { mobileSession.retryBudgetMutation(operation.operationId) }
+                    } else if (!budgetMutationCanRetry(operation.lastErrorCode)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                            PrimaryButton(
+                                "Refresh budget",
+                                enabled = !state.readOnlyMode && mutation?.requiresEncryptionPassword != true,
+                                modifier = Modifier.weight(1f),
+                            ) { mobileSession.retryBudgetMutation(operation.operationId) }
+                            SecondaryButton(
+                                "Discard change",
+                                modifier = Modifier.weight(1f),
+                                enabled = !state.readOnlyMode,
+                            ) { confirmDiscard = true }
+                        }
                     } else {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                             PrimaryButton(
@@ -841,7 +854,7 @@ internal fun BudgetMutationReviewScreen(
                     }
                 }
                 "rejected" -> {
-                    if (operation.lastErrorCode == "operation_rejected") {
+                    if (budgetMutationCanRetry(operation.lastErrorCode)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                             PrimaryButton(
                                 "Try again",
@@ -855,7 +868,18 @@ internal fun BudgetMutationReviewScreen(
                             ) { confirmDiscard = true }
                         }
                     } else {
-                        PrimaryButton("Discard change", enabled = !state.readOnlyMode) { confirmDiscard = true }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                            PrimaryButton(
+                                "Refresh budget",
+                                enabled = !state.readOnlyMode && mutation?.requiresEncryptionPassword != true,
+                                modifier = Modifier.weight(1f),
+                            ) { mobileSession.retryBudgetMutation(operation.operationId) }
+                            SecondaryButton(
+                                "Discard change",
+                                modifier = Modifier.weight(1f),
+                                enabled = !state.readOnlyMode,
+                            ) { confirmDiscard = true }
+                        }
                     }
                 }
                 else -> Spacer(Modifier.height(72.dp))

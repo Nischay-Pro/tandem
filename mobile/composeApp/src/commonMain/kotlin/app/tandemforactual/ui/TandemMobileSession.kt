@@ -670,9 +670,33 @@ internal class TandemMobileSession(
                 return@launch
             }
 
-            if (operation.status in setOf("conflict", "rejected") && budgetMutationRetryNeedsNewKey(operation.lastErrorCode)) {
+            if (budgetMutationFailureDisposition(operation.lastErrorCode) == BudgetMutationFailureDisposition.REVIEW) {
+                val refreshed =
+                    synchronize(
+                        operation.budgetId,
+                        request.encryptionPassword,
+                        retryQueuedBudgetMutations = false,
+                    )
+                if (refreshed != null) pendingWrites = localRepository.readPendingWrites(operation.budgetId)
+                return@launch
+            }
+
+            if (budgetMutationRetryNeedsNewKey(operation.lastErrorCode)) {
+                if (operation.status !in setOf("conflict", "rejected")) return@launch
+                val refreshed =
+                    synchronize(
+                        operation.budgetId,
+                        request.encryptionPassword,
+                        retryQueuedBudgetMutations = false,
+                    )
+                if (refreshed == null) return@launch
                 val replacementOperationId = Uuid.random().toString()
-                val replacement = request.copy(operationId = replacementOperationId)
+                val replacement =
+                    budgetMutationRequestForRetry(
+                        request,
+                        operation.lastErrorCode,
+                        replacementOperationId,
+                    ) ?: return@launch
                 val nextQueue =
                     if (budgetReorderQueue.moves.any { it.operationId == operation.operationId }) {
                         budgetReorderQueue.replaceOperationId(operation.operationId, replacementOperationId)
@@ -684,12 +708,18 @@ internal class TandemMobileSession(
                     budgetReorderQueue = nextQueue
                 }
             } else {
+                val retryRequest =
+                    budgetMutationRequestForRetry(
+                        request,
+                        operation.lastErrorCode,
+                        operation.operationId,
+                    ) ?: return@launch
                 val retried =
                     runCatching { localRepository.retryBudgetMutationAfterReview(operationId) }
                         .getOrNull() ?: return@launch
-                val retryRequest = request.copy(operationId = retried.operationId)
+                val resumedRequest = retryRequest.copy(operationId = retried.operationId)
                 if (budgetReorderQueue.moves.none { it.operationId == retried.operationId }) {
-                    budgetReorderQueue = budgetReorderQueue.enqueue(retryRequest)
+                    budgetReorderQueue = budgetReorderQueue.enqueue(resumedRequest)
                 } else {
                     budgetReorderQueue = budgetReorderQueue.resumeAfterConnection()
                 }
