@@ -15,7 +15,7 @@ class StatementImportTest {
                 filename = "date-bounds.csv",
                 contents =
                     "Date,Payee,Amount\n" +
-                        "2036-11-10,At the limit,1.00\n" +
+                        "2036-11-10,Future bill,1.00\n" +
                         "2036-11-11,Future,2.00\n" +
                         "2062-03-04,Far future,3.00\n" +
                         "1994-12-31,Too old,3.00\n",
