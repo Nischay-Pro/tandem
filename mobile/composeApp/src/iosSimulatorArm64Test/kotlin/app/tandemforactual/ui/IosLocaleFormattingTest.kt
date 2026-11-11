@@ -62,6 +62,27 @@ class IosLocaleFormattingTest {
     }
 
     @Test
+    fun transactionAmountsRejectKeyboardDecimalMarksThatConflictWithBudgetFormat() {
+        val dotBudget = settings("comma-dot")
+        val commaBudget = settings("dot-comma")
+
+        assertEquals(1_250L, platformParseDecimalMinorUnits("12.50", dotBudget))
+        assertNull(platformParseDecimalMinorUnits("12,50", dotBudget))
+        assertNull(platformParseDecimalMinorUnits("1,5", dotBudget))
+        assertEquals(
+            "Use a period for decimals in this budget, such as 12.00.",
+            transactionAmountInputError("1,5", dotBudget),
+        )
+
+        assertEquals(1_250L, platformParseDecimalMinorUnits("12,50", commaBudget))
+        assertNull(platformParseDecimalMinorUnits("12.50", commaBudget))
+        assertEquals(
+            "Use a comma for decimals in this budget, such as 12,00.",
+            transactionAmountInputError("12.50", commaBudget),
+        )
+    }
+
+    @Test
     fun amountParserUsesZeroTwoAndThreeDigitCurrenciesOnIos() {
         val yen = settings("comma-dot", fractionDigits = 0).copy(currencyCode = "JPY", currencySymbol = "¥")
         val usd = settings("comma-dot")

@@ -155,6 +155,31 @@ class LocaleFormattingTest {
     }
 
     @Test
+    fun transactionAmountsRejectKeyboardDecimalMarksThatConflictWithBudgetFormat() {
+        val dotBudget = displaySettings("USD", "comma-dot")
+        val commaBudget = displaySettings("EUR", "dot-comma", "€")
+
+        withPhoneLocale(Locale.GERMANY) {
+            assertEquals(1_250L, platformParseDecimalMinorUnits("12.50", dotBudget))
+            assertNull(platformParseDecimalMinorUnits("12,50", dotBudget))
+            assertNull(platformParseDecimalMinorUnits("1,5", dotBudget))
+            assertEquals(
+                "Use a period for decimals in this budget, such as 12.00.",
+                transactionAmountInputError("1,5", dotBudget),
+            )
+        }
+
+        withPhoneLocale(Locale.US) {
+            assertEquals(1_250L, platformParseDecimalMinorUnits("12,50", commaBudget))
+            assertNull(platformParseDecimalMinorUnits("12.50", commaBudget))
+            assertEquals(
+                "Use a comma for decimals in this budget, such as 12,00.",
+                transactionAmountInputError("12.50", commaBudget),
+            )
+        }
+    }
+
+    @Test
     fun threeDecimalAmountsRejectGroupingThatCouldBeAKeyboardDecimalMark() {
         val us = displaySettings("USD", "comma-dot", currencyFractionDigits = 3)
         val germany = displaySettings("EUR", "dot-comma", "€", currencyFractionDigits = 3)
