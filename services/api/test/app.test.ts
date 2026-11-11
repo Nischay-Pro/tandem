@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
 import { Writable } from "node:stream";
 import { buildApiApp } from "../src/app.js";
 import {
   ActualPasswordRejectedError,
   ActualPasswordUnavailableError,
 } from "../src/auth/actual-password-login.js";
-import type { ActualOpenIdLogin } from "../src/auth/actual-openid-login.js";
+import { ActualOpenIdLogin } from "../src/auth/actual-openid-login.js";
+import type { ActualPasswordLogin } from "../src/auth/actual-password-login.js";
 import { DeviceAuthInputError } from "../src/auth/device-auth.js";
 import type {
   DeviceAuthorization,
@@ -167,6 +169,63 @@ describe("health routes and OpenAPI", () => {
     expect(lines[0]).not.toContain("stack");
     expect(lines[0]).not.toContain("must-not-be-logged");
     expect(lines[0]).not.toContain(testAccessToken);
+    await app.close();
+  });
+
+  it("logs safe types for thrown non-errors and malformed Error constructor names", async () => {
+    const lines: string[] = [];
+    const stream = new Writable({
+      write(chunk, _encoding, callback) {
+        lines.push(String(chunk));
+        callback();
+      },
+    });
+    const malformedNameError = new Error("private exception");
+    Object.defineProperty(malformedNameError, "constructor", {
+      value: { name: "Unsafe Error Name" },
+    });
+    const thrownValues: unknown[] = [
+      "private thrown value",
+      malformedNameError,
+    ];
+    let thrownValueIndex = 0;
+    const app = await buildApiApp(
+      {
+        ping: vi.fn<() => Promise<void>>(),
+        close: vi.fn<() => Promise<void>>(),
+      },
+      {
+        logger: { level: "info", stream },
+        deviceAuth: createDeviceAuth({
+          authenticate: vi.fn(async () => {
+            throw thrownValues[thrownValueIndex++];
+          }),
+        }),
+      },
+    );
+
+    const responses = [];
+    for (let index = 0; index < thrownValues.length; index += 1) {
+      const response = await app.inject({
+        method: "GET",
+        url: "/api/v1/budgets",
+        headers: { authorization: `Bearer ${testAccessToken}` },
+      });
+      responses.push(response);
+    }
+    const entries = lines.map(
+      (line) => JSON.parse(line) as Record<string, unknown>,
+    );
+
+    expect(responses.map((response) => response.statusCode)).toEqual([
+      500, 500,
+    ]);
+    expect(entries.map((entry) => entry.errorType)).toEqual([
+      "string",
+      "Error",
+    ]);
+    expect(lines.join("\n")).not.toContain("private thrown value");
+    expect(lines.join("\n")).not.toContain("private exception");
     await app.close();
   });
 
@@ -668,33 +727,42 @@ describe("health routes and OpenAPI", () => {
     await app.close();
   });
 
-  it("completes OpenID sign-in using a one-use Tandem code", async () => {
-    const completionCode = "C".repeat(43);
-    const codeChallenge = "H".repeat(43);
-    const codeVerifier = "V".repeat(64);
+  it("binds OpenID code exchange to the starting app's PKCE verifier", async () => {
+    const codeVerifier = "v".repeat(64);
+    const wrongVerifier = "w".repeat(64);
+    const codeChallenge = createHash("sha256")
+      .update(codeVerifier, "ascii")
+      .digest("base64url");
+    const startOpenIdSignIn = vi.fn<(returnUrl: string) => Promise<string>>(
+      async () => "https://idp.example/login",
+    );
+    const actualLogin = {
+      startOpenIdSignIn,
+      identifySessionToken: vi.fn(async () => "actual-user:synthetic"),
+    } as unknown as ActualPasswordLogin;
+    const openIdLogin = new ActualOpenIdLogin(
+      actualLogin,
+      "https://tandem.example",
+      async (grant) => ({ ...grant, budgetIds: ["synthetic-budget"] }),
+    );
     const device = createDevice({
       principalId: "actual-user:synthetic",
       budgetIds: ["synthetic-budget"],
     });
-    const createSignedInDevice = vi.fn(async () => ({
-      ...device,
-      accessToken: testAccessToken,
-    }));
+    const createSignedInDevice = vi.fn(
+      async (input: {
+        principalId: string;
+        budgetIds: string[];
+        deviceName: string;
+      }) => ({
+        ...device,
+        principalId: input.principalId,
+        budgetIds: input.budgetIds,
+        name: input.deviceName,
+        accessToken: testAccessToken,
+      }),
+    );
     const auth = createDeviceAuth({ createDevice: createSignedInDevice });
-    const openIdLogin = {
-      start: vi.fn(async () => ({ redirectUrl: "https://idp.example/login" })),
-      completeCallback: vi.fn(
-        async () => `tandem://signin/complete?code=${completionCode}`,
-      ),
-      consume: vi.fn(() => ({
-        deviceName: "Synthetic phone",
-        grant: {
-          principalId: "actual-user:synthetic",
-          sessionToken: "server-side-actual-token",
-          budgetIds: ["synthetic-budget"],
-        },
-      })),
-    } as unknown as ActualOpenIdLogin;
     const persistActualSessionToken = vi.fn(async () => {});
     const app = await buildApiApp(
       { ping: vi.fn(), close: vi.fn() },
@@ -710,14 +778,25 @@ describe("health routes and OpenAPI", () => {
       url: "/api/v1/auth/openid/start",
       payload: { deviceName: "Synthetic phone", codeChallenge },
     });
+    const actualReturnUrl = startOpenIdSignIn.mock.calls[0]?.[0] ?? "";
+    const state = new URL(actualReturnUrl).pathname.split("/").at(-2);
     const callback = await app.inject({
       method: "GET",
-      url:
-        "/api/v1/auth/actual-return/" +
-        "S".repeat(43) +
-        "/openid-cb?token=actual-secret",
+      url: `/api/v1/auth/actual-return/${state}/openid-cb?token=actual-secret`,
+    });
+    const tandemReturn = new URL(callback.headers.location ?? "");
+    const completionCode = tandemReturn.searchParams.get("code") ?? "";
+    const wrongVerifierResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/openid/complete",
+      payload: { code: completionCode, codeVerifier: wrongVerifier },
     });
     const completed = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/openid/complete",
+      payload: { code: completionCode, codeVerifier },
+    });
+    const replayed = await app.inject({
       method: "POST",
       url: "/api/v1/auth/openid/complete",
       payload: { code: completionCode, codeVerifier },
@@ -727,26 +806,32 @@ describe("health routes and OpenAPI", () => {
     expect(started.json()).toEqual({
       redirectUrl: "https://idp.example/login",
     });
+    expect(actualReturnUrl).toMatch(
+      /\/api\/v1\/auth\/actual-return\/[A-Za-z0-9_-]{43}\/openid-cb$/u,
+    );
     expect(callback.statusCode).toBe(302);
-    expect(callback.headers.location).toBe(
-      `tandem://signin/complete?code=${completionCode}`,
+    expect(callback.headers.location).toMatch(
+      /^tandem:\/\/signin\/complete\?code=[A-Za-z0-9_-]{43}$/u,
     );
     expect(callback.headers["cache-control"]).toBe("no-store");
     expect(callback.body).not.toContain("actual-secret");
+    expect(tandemReturn.protocol).toBe("tandem:");
+    expect(completionCode).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+    expect(callback.headers.location).not.toContain(codeVerifier);
+    expect(wrongVerifierResponse.statusCode).toBe(401);
     expect(completed.statusCode).toBe(201);
     expect(completed.json()).toMatchObject({
       principalId: "actual-user:synthetic",
       budgetIds: ["synthetic-budget"],
       accessToken: testAccessToken,
     });
+    expect(replayed.statusCode).toBe(401);
     expect(persistActualSessionToken).toHaveBeenCalledWith(
       "actual-user:synthetic",
-      "server-side-actual-token",
+      "actual-secret",
     );
-    expect(openIdLogin.consume).toHaveBeenCalledWith(
-      completionCode,
-      codeVerifier,
-    );
+    expect(persistActualSessionToken).toHaveBeenCalledOnce();
+    expect(createSignedInDevice).toHaveBeenCalledOnce();
     await app.close();
   });
 
