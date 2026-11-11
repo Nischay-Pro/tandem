@@ -222,12 +222,19 @@ internal fun serverAddressMayBeInsecure(value: String): Boolean {
     return true
 }
 
-internal fun actualPasswordTransportWarning(serverUrl: String): String? =
-    if (serverAddressMayBeInsecure(serverUrl)) {
-        "HTTP does not encrypt your Actual password. Use HTTPS on untrusted networks."
+internal fun signInHttpTransportWarning(serverUrl: String): String? =
+    if (serverUrl.trim().startsWith("http://", ignoreCase = true)) {
+        "HTTP does not encrypt passwords or session tokens. Use it only on trusted local networks."
     } else {
         null
     }
+
+@Composable
+internal fun SignInTransportWarning(serverUrl: String) {
+    signInHttpTransportWarning(serverUrl)?.let { warning ->
+        InlineMessage(warning, InlineMessageKind.WARNING)
+    }
+}
 
 @Composable
 internal fun SignInScreen(
@@ -248,6 +255,7 @@ internal fun SignInScreen(
     OnboardingLayout(
         content = {
             Heading("Sign in to Actual")
+            SignInTransportWarning(state.serverUrl)
             when {
                 mobileSession.isLoadingLoginMethods -> {
                     TandemLoadingIndicator(Modifier.size(24.dp), color = tandemPalette.accent, strokeWidth = 2.dp)
@@ -264,9 +272,6 @@ internal fun SignInScreen(
                             TextFieldOptions(placeholder = "Password", isSecret = true),
                         )
                         InfoBubble("Your password is used to sign in and isn’t saved on this device.")
-                        actualPasswordTransportWarning(state.serverUrl)?.let { warning ->
-                            InlineMessage(warning, InlineMessageKind.WARNING)
-                        }
                     }
                     mobileSession.signInError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
                     mobileSession.credentialStorageError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }

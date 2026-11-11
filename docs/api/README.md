@@ -35,6 +35,11 @@ definitions and is part of `pnpm check:all`.
 
 ## Sign-in and device authorization
 
+The mobile app connects to this API at the server address entered during setup.
+HTTP does not encrypt Actual passwords, device session tokens, OpenID codes, or
+other request data. Use HTTPS except for trusted local-network development; the
+app displays this warning for every HTTP sign-in, including OpenID.
+
 Set `ACTUAL_SERVER_URL` on the Tandem API to the Actual server address reachable
 from the API container. Tandem reads the server's active methods from
 `/account/needs-bootstrap` and supports password and OpenID sign-in. The Actual

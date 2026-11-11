@@ -145,7 +145,7 @@ chmod 444 .tandem-secrets/*
 unset tandem_db_password
 ```
 
-Keep the directory private (`chmod 700 .tandem-secrets`). The files use mode `444` so the non-root API process can read Compose's file-backed secret mounts; the private directory prevents other host users from traversing to them.
+Keep the directory private (`chmod 700 .tandem-secrets`). The files use mode `444` so the non-root API process can read Compose's file-backed secret mounts. That mode is safe only while the containing directory stays private: anyone who can traverse the directory can read those files.
 
 The separate `.env.tandem` file contains paths and non-secret settings only:
 
@@ -253,7 +253,9 @@ adb reverse tcp:19753 tcp:19753
 adb install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk
 ```
 
-Open Tandem, enter the HTTPS API address reachable from the Android device, then sign in to Actual. For a local development API, use `adb reverse tcp:19753 tcp:19753` and `http://127.0.0.1:19753`; for a deployment, use the HTTPS URL configured in the reverse proxy.
+Open Tandem, enter the Tandem API address reachable from the Android device, then sign in to Actual. For a local development API, use `adb reverse tcp:19753 tcp:19753` and `http://127.0.0.1:19753`; for a deployment, use the HTTPS URL configured in the reverse proxy.
+
+The app warns that HTTP does not encrypt passwords or session tokens. The `adb reverse` HTTP address is for trusted local development over USB; use HTTPS for any remote or shared network.
 
 ### Build iOS
 
