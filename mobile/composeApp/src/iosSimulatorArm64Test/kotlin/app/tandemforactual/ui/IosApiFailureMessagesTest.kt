@@ -90,7 +90,7 @@ class IosApiFailureMessagesTest {
             apiFailureMessage("operation_not_found", 404, ApiFailureContext.SYNC, "fallback"),
         )
         assertEquals(
-            "Tandem’s API route couldn’t be reached. Check the address and the proxy’s /api/v1/ route.",
+            "Tandem’s API route isn’t available. Check the address and the proxy’s /api/v1/ route.",
             apiFailureMessage("http-404", 404, ApiFailureContext.SYNC, "fallback"),
         )
         assertFalse(TandemApiException("http-404", 404).indicatesTandemReachable())
