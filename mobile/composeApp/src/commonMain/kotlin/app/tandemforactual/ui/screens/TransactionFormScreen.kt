@@ -151,7 +151,13 @@ internal fun TransactionFormScreen(
                 val currentAmount =
                     transactionAmountInputMagnitude(state.parseAmountMinorUnits(state.transactionAmount))
                 if (previous != null && pending != null && !enterNewOperand) {
-                    val result = calculateAmountMinorUnits(previous, currentAmount, pending)
+                    val result =
+                        calculateAmountMinorUnits(
+                            previous,
+                            currentAmount,
+                            pending,
+                            state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
+                        )
                     if (result == null) {
                         amountEntryMessage =
                             if (pending == "÷" && currentAmount == 0L) {
@@ -178,7 +184,16 @@ internal fun TransactionFormScreen(
                     val currentAmount =
                         transactionAmountInputMagnitude(state.parseAmountMinorUnits(state.transactionAmount))
                     val result =
-                        if (enterNewOperand) previous else calculateAmountMinorUnits(previous, currentAmount, operator)
+                        if (enterNewOperand) {
+                            previous
+                        } else {
+                            calculateAmountMinorUnits(
+                                previous,
+                                currentAmount,
+                                operator,
+                                state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
+                            )
+                        }
                     if (result == null) {
                         amountEntryMessage =
                             if (operator == "÷" && currentAmount == 0L) {
@@ -504,7 +519,13 @@ internal fun TransactionFormScreen(
                     state.parseAmountMinorUnits(state.transactionAmount) ?: state.selectedTransactionAmountMinor,
                 )
             if (previous != null && pending != null && !enterNewOperand) {
-                val result = calculateAmountMinorUnits(previous, currentAmount, pending) ?: return
+                val result =
+                    calculateAmountMinorUnits(
+                        previous,
+                        currentAmount,
+                        pending,
+                        state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
+                    ) ?: return
                 setEditAmount(result)
                 calculatorAccumulator = kotlin.math.abs(result)
             } else if (previous == null) {
@@ -523,7 +544,16 @@ internal fun TransactionFormScreen(
                         state.parseAmountMinorUnits(state.transactionAmount) ?: state.selectedTransactionAmountMinor,
                     )
                 val result =
-                    if (enterNewOperand) previous else calculateAmountMinorUnits(previous, currentAmount, operator)
+                    if (enterNewOperand) {
+                        previous
+                    } else {
+                        calculateAmountMinorUnits(
+                            previous,
+                            currentAmount,
+                            operator,
+                            state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
+                        )
+                    }
                 if (result != null) setEditAmount(result)
             }
             calculatorAccumulator = null

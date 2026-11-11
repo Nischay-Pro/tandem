@@ -47,14 +47,23 @@ class StatementImportTest {
             )
         assertEquals(listOf(1_234L, -23_500L), csv.transactions.map { it.amountMinor })
 
-        val grouped =
+        assertThrows(StatementImportParseException::class.java) {
             parseStatementImport(
                 "grouped.csv",
                 "Date,Payee,Amount\n11/01/2026,Market,\"1,234\"\n",
                 currencyFractionDigits = 3,
                 numberFormat = "comma-dot",
             )
-        assertEquals(1_234_000L, grouped.transactions.single().amountMinor)
+        }
+
+        val european =
+            parseStatementImport(
+                "three-decimal-europe.csv",
+                "Date;Payee;Amount\n11/01/2026;Market;1,234\n11/02/2026;Cafe;-2,5\n",
+                currencyFractionDigits = 3,
+                numberFormat = "dot-comma",
+            )
+        assertEquals(listOf(1_234L, -2_500L), european.transactions.map { it.amountMinor })
 
         val qif =
             parseStatementImport(

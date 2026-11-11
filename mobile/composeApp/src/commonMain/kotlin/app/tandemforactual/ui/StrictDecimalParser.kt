@@ -45,6 +45,18 @@ internal fun parseStrictMinorUnits(
 
     val integerGroups = integerPart.split(separators.grouping)
     if (integerGroups.size > 1 && !hasValidGrouping(integerGroups, separators)) return null
+    if (
+        fractionDigits == 3 &&
+        decimalIndex < 0 &&
+        integerGroups.size == 2 &&
+        separators.grouping in setOf('.', ',') &&
+        integerGroups.first().length in 1..3 &&
+        integerGroups.last().length == 3
+    ) {
+        // On a three-decimal budget, “1,234” may mean either 1.234 or 1,234.
+        // Reject it instead of silently multiplying the user's intended amount by 1,000.
+        return null
+    }
     val integerDigits = integerGroups.joinToString(separator = "")
     val normalizedInteger = digitsOnly(integerDigits) ?: return null
     val normalizedFraction = digitsOnly(fractionPart) ?: return null

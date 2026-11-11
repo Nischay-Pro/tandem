@@ -402,7 +402,8 @@ private fun parseMoney(
             fractionLength in 1..currencyFractionDigits -> {
                 if (fractionLength == 3 && separators == 1) {
                     when {
-                        numeric[lastSeparator] == groupingSeparatorFor(numberFormat) && isGroupedInteger(numeric) -> null
+                        numeric[lastSeparator] == groupingSeparatorFor(numberFormat) && isGroupedInteger(numeric) ->
+                            throw invalidAmount(trimmed, "This amount is ambiguous. Remove the grouping mark or include the decimal mark.")
                         numeric[lastSeparator] == decimalSeparatorFor(numberFormat) -> numeric[lastSeparator]
                         else -> throw invalidAmount(trimmed, "Check its separators.")
                     }

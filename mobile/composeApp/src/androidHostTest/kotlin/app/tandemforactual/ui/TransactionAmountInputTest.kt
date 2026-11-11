@@ -44,6 +44,17 @@ class TransactionAmountInputTest {
     }
 
     @Test
+    fun keypadCalculatorUsesTheBudgetsCurrencyScale() {
+        assertEquals(10L, calculateAmountMinorUnits(5L, 2L, "×", fractionDigits = 0))
+        assertEquals(3L, calculateAmountMinorUnits(5L, 2L, "÷", fractionDigits = 0))
+        assertEquals(1_000L, calculateAmountMinorUnits(500L, 200L, "×", fractionDigits = 2))
+        assertEquals(250L, calculateAmountMinorUnits(500L, 200L, "÷", fractionDigits = 2))
+        assertEquals(10_000L, calculateAmountMinorUnits(5_000L, 2_000L, "×", fractionDigits = 3))
+        assertEquals(2_500L, calculateAmountMinorUnits(5_000L, 2_000L, "÷", fractionDigits = 3))
+        assertNull(calculateAmountMinorUnits(5_000L, 2_000L, "×", fractionDigits = 10))
+    }
+
+    @Test
     fun digitEntryStopsAtTheServerAmountLimit() {
         assertEquals(MAX_TRANSACTION_AMOUNT_MINOR_UNITS, appendAmountDigit(100_000_000L, 0))
         assertEquals(MAX_TRANSACTION_AMOUNT_MINOR_UNITS, appendAmountDigit(MAX_TRANSACTION_AMOUNT_MINOR_UNITS, 9))

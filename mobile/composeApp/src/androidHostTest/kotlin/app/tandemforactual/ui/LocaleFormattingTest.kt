@@ -120,6 +120,20 @@ class LocaleFormattingTest {
     }
 
     @Test
+    fun threeDecimalAmountsRejectGroupingThatCouldBeAKeyboardDecimalMark() {
+        val us = displaySettings("USD", "comma-dot", currencyFractionDigits = 3)
+        val germany = displaySettings("EUR", "dot-comma", "€", currencyFractionDigits = 3)
+
+        assertEquals(12_345L, platformParseDecimalMinorUnits("12.345", us))
+        assertNull(platformParseDecimalMinorUnits("12,345", us))
+        assertEquals("12.345", platformFormatDecimal(12_345L, us))
+
+        assertEquals(12_345L, platformParseDecimalMinorUnits("12,345", germany))
+        assertNull(platformParseDecimalMinorUnits("12.345", germany))
+        assertEquals("12,345", platformFormatDecimal(12_345L, germany))
+    }
+
+    @Test
     fun invalidAmountMessageNamesTheBudgetDecimalMark() {
         val us = displaySettings(currencyCode = "USD", numberFormat = "comma-dot")
         val germany = displaySettings(currencyCode = "EUR", numberFormat = "dot-comma", currencySymbol = "€")

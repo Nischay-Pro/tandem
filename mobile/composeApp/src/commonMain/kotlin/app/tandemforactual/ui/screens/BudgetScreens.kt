@@ -856,7 +856,13 @@ internal fun BudgetScreen(
             val accumulator = holdCalculatorAccumulator
             val pending = holdCalculatorOperator
             if (accumulator != null && pending != null && !holdEnterNewOperand) {
-                val result = calculateAmountMinorUnits(accumulator, nextMonthHoldAmountMinor, pending)
+                val result =
+                    calculateAmountMinorUnits(
+                        accumulator,
+                        nextMonthHoldAmountMinor,
+                        pending,
+                        state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
+                    )
                 if (result == null) {
                     holdAmountMessage =
                         if (pending == "÷" && nextMonthHoldAmountMinor == 0L) "Can’t divide by zero." else "Amount is too large."
@@ -877,7 +883,16 @@ internal fun BudgetScreen(
             val operator = holdCalculatorOperator
             if (accumulator != null && operator != null) {
                 val result =
-                    if (holdEnterNewOperand) accumulator else calculateAmountMinorUnits(accumulator, nextMonthHoldAmountMinor, operator)
+                    if (holdEnterNewOperand) {
+                        accumulator
+                    } else {
+                        calculateAmountMinorUnits(
+                            accumulator,
+                            nextMonthHoldAmountMinor,
+                            operator,
+                            state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
+                        )
+                    }
                 if (result == null) {
                     holdAmountMessage =
                         if (operator == "÷" && nextMonthHoldAmountMinor == 0L) "Can’t divide by zero." else "Amount is too large."
