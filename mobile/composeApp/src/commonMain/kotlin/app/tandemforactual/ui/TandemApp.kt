@@ -464,6 +464,7 @@ fun TandemApp(
     }
     val handleBack: () -> Unit = {
         val currentRoute = backStack.lastOrNull()?.route
+        if (currentRoute == AppRoute.SCHEDULES) state.pendingScheduleToOpenId = null
         if (transactionFormHasUnsavedChanges(state, currentRoute)) {
             backGestureCancelJob?.cancel()
             backGestureCancelJob = null
@@ -509,6 +510,21 @@ fun TandemApp(
                             backStack.add(newRouteEntry(next))
                         }
                     }
+                }
+            },
+            openSchedule = { scheduleId ->
+                if (beginRouteTransition()) {
+                    coroutineScope.launch {
+                        withFrameNanos { }
+                        state.pendingScheduleToOpenId = scheduleId
+                        if (backStack.lastOrNull()?.route != AppRoute.SCHEDULES) {
+                            routeTransitionDirection = 1f
+                            backStack.add(newRouteEntry(AppRoute.SCHEDULES))
+                        }
+                    }
+                    true
+                } else {
+                    false
                 }
             },
             reset = { next ->

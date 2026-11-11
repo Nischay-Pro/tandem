@@ -757,6 +757,7 @@ internal fun AppState.categoryPinKey(categoryId: String): String = "$selectedBud
 
 internal data class AppNavigation(
     val open: (AppRoute) -> Unit,
+    val openSchedule: (String) -> Boolean = { false },
     val reset: (AppRoute) -> Unit,
     val replaceTop: (AppRoute) -> Unit,
     val newTransaction: (accountId: String?) -> Unit,

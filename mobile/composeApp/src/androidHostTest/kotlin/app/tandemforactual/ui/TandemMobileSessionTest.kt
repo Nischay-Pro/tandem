@@ -36,6 +36,60 @@ import kotlin.test.assertTrue
 @Config(sdk = [36])
 class TandemMobileSessionTest {
     @Test
+    fun schedulePostAndSkipAreSavedLocallyWithoutAReachableServer() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val preferences = AppPreferencesStore(database)
+                val repository = LocalBudgetRepository(database) { 1_000L }
+                seedCachedBudget(repository, preferences, withPendingWrite = false)
+                val credentialStore = memoryCredentialStore(storedSession("https://offline.example.test", "principal-old"))
+                val apiClient = TandemApiClient()
+                val session = TandemMobileSession(apiClient, database, { 1_000L }, credentialStore)
+
+                assertEquals("https://offline.example.test", session.restoreStoredSession())
+                assertTrue(
+                    session.manageBudgetSchedule(
+                        budgetId = "budget-1",
+                        scheduleId = "schedule-post",
+                        action = "post",
+                        name = null,
+                        encryptionPassword = null,
+                        expectedNextDate = "2026-11-15",
+                    ),
+                )
+                assertTrue(
+                    session.manageBudgetSchedule(
+                        budgetId = "budget-1",
+                        scheduleId = "schedule-skip",
+                        action = "skip",
+                        name = null,
+                        encryptionPassword = null,
+                        expectedNextDate = "2026-11-16",
+                    ),
+                )
+
+                val queuedActions = repository.readScheduleActionQueue()
+                assertEquals(setOf("schedule-post", "schedule-skip"), queuedActions.map { it.recordId }.toSet())
+                assertTrue(queuedActions.all { it.status == "queued" })
+                assertEquals(setOf("post", "skip"), queuedActions.map { it.action }.toSet())
+                assertEquals(
+                    mapOf("schedule-post" to "2026-11-15", "schedule-skip" to "2026-11-16"),
+                    queuedActions.associate { operation ->
+                        operation.recordId to
+                            Json
+                                .parseToJsonElement(operation.patchJson)
+                                .jsonObject["expectedNextDate"]
+                                ?.jsonPrimitive
+                                ?.content
+                    },
+                )
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun openIdVerifierSurvivesBackgroundTimeButIsBoundToServerAndExpires() {
         var now = 1_000L
         val state = OpenIdLoginProofState { now }

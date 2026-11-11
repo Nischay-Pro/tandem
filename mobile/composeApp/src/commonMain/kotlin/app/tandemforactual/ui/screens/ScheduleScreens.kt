@@ -107,8 +107,7 @@ internal fun LiveUpcomingBillsCard(
                 schedule.amountLabel(state),
                 leading = RowLeading.Icon(Lucide.CalendarDays),
             ) {
-                state.pendingScheduleToOpenId = schedule.id
-                navigation.open(AppRoute.SCHEDULES)
+                navigation.openSchedule(schedule.id)
             }
         }
     }
