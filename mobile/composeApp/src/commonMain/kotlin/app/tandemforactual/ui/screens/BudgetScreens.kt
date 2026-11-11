@@ -596,10 +596,10 @@ internal fun BudgetScreen(
                         }
                     }
                 }
-                if (isLiveBudget && liveSchedules.isNotEmpty()) {
-                    item(key = "actual-upcoming-schedules") {
-                        LiveUpcomingBillsCard(state, navigation, liveSchedules)
-                    }
+            }
+            if (isLiveBudget && liveSchedules.isNotEmpty()) {
+                item(key = "actual-upcoming-schedules") {
+                    LiveUpcomingBillsCard(state, navigation, liveSchedules)
                 }
             }
             if (recentTransactions.isNotEmpty()) {
