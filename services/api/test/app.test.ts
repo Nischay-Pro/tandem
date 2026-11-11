@@ -782,9 +782,53 @@ describe("health routes and OpenAPI", () => {
     });
     const actualReturnUrl = startOpenIdSignIn.mock.calls[0]?.[0] ?? "";
     const state = new URL(actualReturnUrl).pathname.split("/").at(-2);
+    const browserStartUrl = new URL(started.json().redirectUrl as string);
+    const browserStart = await app.inject({
+      method: "GET",
+      url: browserStartUrl.pathname,
+    });
+    const browserStartFromAnotherBrowser = await app.inject({
+      method: "GET",
+      url: browserStartUrl.pathname,
+    });
+    const setCookieHeader = browserStart.headers["set-cookie"];
+    const setCookie = Array.isArray(setCookieHeader)
+      ? setCookieHeader[0]
+      : setCookieHeader;
+    const browserCookie = setCookie?.split(";", 1)[0];
+    const cookieName = browserCookie?.split("=", 1)[0];
+    expect(browserCookie).toBeDefined();
+    expect(cookieName).toBeDefined();
+    const callbackWithoutCookie = await app.inject({
+      method: "GET",
+      url: `/api/v1/auth/actual-return/${state}/openid-cb?token=actual-secret`,
+    });
+    const callbackWithWrongCookie = await app.inject({
+      method: "GET",
+      url: `/api/v1/auth/actual-return/${state}/openid-cb?token=actual-secret`,
+      headers: { cookie: `${cookieName ?? ""}=wrong-browser` },
+    });
+    const callbackWithMalformedCookie = await app.inject({
+      method: "GET",
+      url: `/api/v1/auth/actual-return/${state}/openid-cb?token=actual-secret`,
+      headers: { cookie: cookieName ?? "missing-separator" },
+    });
+    const callbackWithDuplicateCookie = await app.inject({
+      method: "GET",
+      url: `/api/v1/auth/actual-return/${state}/openid-cb?token=actual-secret`,
+      headers: {
+        cookie: `${cookieName ?? ""}=first; ${cookieName ?? ""}=second`,
+      },
+    });
+    const callbackWithOtherCookie = await app.inject({
+      method: "GET",
+      url: `/api/v1/auth/actual-return/${state}/openid-cb?token=actual-secret`,
+      headers: { cookie: "other=value" },
+    });
     const callback = await app.inject({
       method: "GET",
       url: `/api/v1/auth/actual-return/${state}/openid-cb?token=actual-secret`,
+      headers: { cookie: browserCookie ?? "" },
     });
     const tandemReturn = new URL(callback.headers.location ?? "");
     const completionCode = tandemReturn.searchParams.get("code") ?? "";
@@ -806,8 +850,19 @@ describe("health routes and OpenAPI", () => {
 
     expect(started.statusCode).toBe(200);
     expect(started.json()).toEqual({
-      redirectUrl: "https://idp.example/login",
+      redirectUrl: `https://tandem.example/api/v1/auth/openid/browser-start/${state}`,
     });
+    expect(browserStart.statusCode).toBe(302);
+    expect(browserStart.headers.location).toBe("https://idp.example/login");
+    expect(browserStartFromAnotherBrowser.statusCode).toBe(401);
+    expect(setCookie).toContain("HttpOnly");
+    expect(setCookie).toContain("SameSite=Lax");
+    expect(setCookie).toContain("Secure");
+    expect(callbackWithoutCookie.statusCode).toBe(401);
+    expect(callbackWithWrongCookie.statusCode).toBe(401);
+    expect(callbackWithMalformedCookie.statusCode).toBe(401);
+    expect(callbackWithDuplicateCookie.statusCode).toBe(401);
+    expect(callbackWithOtherCookie.statusCode).toBe(401);
     expect(actualReturnUrl).toMatch(
       /\/api\/v1\/auth\/actual-return\/[A-Za-z0-9_-]{43}\/openid-cb$/u,
     );

@@ -24,7 +24,10 @@ import {
   type ActualPasswordGrant,
 } from "./auth/actual-password-login.js";
 import type { ActualLoginMethods } from "./auth/actual-login-methods.js";
-import type { ActualOpenIdLogin } from "./auth/actual-openid-login.js";
+import {
+  openIdBrowserCookieName,
+  type ActualOpenIdLogin,
+} from "./auth/actual-openid-login.js";
 import { ActualLoginMethodsCache } from "./auth/actual-login-methods-cache.js";
 import { RequestRateLimiter } from "./auth/request-rate-limiter.js";
 import { logSecurityAuditEvent } from "./security-audit.js";
@@ -744,6 +747,66 @@ function registerDeviceAuthorizationRoutes(
 
     app.get<{
       Params: { state: string };
+    }>(
+      "/api/v1/auth/openid/browser-start/:state",
+      {
+        schema: {
+          tags: ["Authentication"],
+          operationId: "startActualOpenIdBrowserHandoff",
+          summary: "Start the browser-bound Actual OpenID handoff",
+          params: {
+            type: "object",
+            properties: {
+              state: {
+                type: "string",
+                minLength: 43,
+                maxLength: 43,
+                pattern: "^[A-Za-z0-9_-]{43}$",
+              },
+            },
+            required: ["state"],
+            additionalProperties: false,
+          },
+          response: {
+            302: {
+              type: "null",
+              description:
+                "Sets a short-lived browser cookie and redirects to Actual sign-in.",
+            },
+            401: errorSchema,
+          },
+        },
+      },
+      async (request, reply) => {
+        reply.header("cache-control", "no-store");
+        reply.header("referrer-policy", "no-referrer");
+        const cookieName = openIdBrowserCookieName(request.params.state);
+        const existingCookieValue = readCookieValue(
+          request.headers.cookie,
+          cookieName,
+        );
+        const handoff = actualOpenIdLogin.startBrowserHandoff(
+          request.params.state,
+          existingCookieValue,
+        );
+        if (!handoff) {
+          return reply.code(401).send({
+            error: {
+              code: "sign_in_expired",
+              message: "Sign-in expired. Start again.",
+            },
+          });
+        }
+        return reply
+          .code(302)
+          .header("set-cookie", handoff.setCookie)
+          .header("location", handoff.redirectUrl)
+          .send();
+      },
+    );
+
+    app.get<{
+      Params: { state: string };
       Querystring: { token?: string };
     }>(
       "/api/v1/auth/actual-return/:state/openid-cb",
@@ -793,9 +856,14 @@ function registerDeviceAuthorizationRoutes(
           });
         }
         try {
+          const browserCookie = readCookieValue(
+            request.headers.cookie,
+            openIdBrowserCookieName(request.params.state),
+          );
           const returnUrl = await actualOpenIdLogin.completeCallback(
             request.params.state,
             request.query.token,
+            browserCookie,
           );
           if (!returnUrl) {
             return reply.code(401).send({
@@ -5325,6 +5393,27 @@ function actualLoginMethodsUnavailable() {
         "Could not check the Actual sign-in method. Check the server connection.",
     },
   };
+}
+
+function readCookieValue(
+  cookieHeader: string | string[] | undefined,
+  cookieName: string,
+): string | undefined {
+  if (typeof cookieHeader !== "string") return undefined;
+  const matches = cookieHeader
+    .split(";")
+    .map((part) => part.trim())
+    .filter((part) => {
+      const separatorIndex = part.indexOf("=");
+      return (
+        separatorIndex >= 0 &&
+        part.slice(0, separatorIndex).trim() === cookieName
+      );
+    });
+  if (matches.length !== 1) return undefined;
+  const matchingCookie = matches[0]!;
+  const separatorIndex = matchingCookie.indexOf("=");
+  return matchingCookie.slice(separatorIndex + 1).trim();
 }
 
 function actualRequestFailed(

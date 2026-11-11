@@ -21,6 +21,7 @@ definitions and is part of `pnpm check:all`.
 | `GET`    | `/api/v1/auth/methods`                                                        | Read the Actual server's available sign-in methods.                |
 | `POST`   | `/api/v1/auth/login`                                                          | Sign in with an Actual password and create a device session.       |
 | `POST`   | `/api/v1/auth/openid/start`                                                   | Start Actual OpenID sign-in in the system browser.                 |
+| `GET`    | `/api/v1/auth/openid/browser-start/{state}`                                   | Bind the pending sign-in to this browser and redirect to Actual.   |
 | `GET`    | `/api/v1/auth/actual-return/{state}/openid-cb`                                | Receive Actual's browser callback and return to the mobile app.    |
 | `POST`   | `/api/v1/auth/openid/complete`                                                | Exchange a one-use return code for the device session.             |
 | `GET`    | `/api/v1/auth/me`                                                             | Return the authenticated device and its budget scope.              |
@@ -80,11 +81,14 @@ Tandem does not advertise OpenID as available.
 
 1. The app calls `POST /api/v1/auth/openid/start` with its device name, an
    S256 `codeChallenge`, and a fresh 32-byte random `callbackState`. Tandem
-   binds both values to the pending login and returns the provider redirect
+   binds both values to the pending login and returns a Tandem browser handoff
    URL.
-2. Actual redirects the browser to
-   `/api/v1/auth/actual-return/{state}/openid-cb?token=…`. Tandem validates the
-   Actual session, associates it with the account, and redirects the app to its
+2. The system browser opens that URL. Tandem sets a short-lived, HttpOnly,
+   `SameSite=Lax` cookie scoped to the callback path, then redirects the same
+   browser to Actual. Actual returns to
+   `/api/v1/auth/actual-return/{state}/openid-cb?token=…`. Tandem requires the
+   browser cookie before it validates the Actual session, associates it with
+   the account, and redirects the app to its
    `app.tandemforactual://signin/complete` handler with a short-lived, one-use
    Tandem code and the `callbackState`. The app checks that state against its
    pending login before exchanging the code. The Actual token is never included

@@ -492,6 +492,54 @@
         }
       }
     },
+    "/api/v1/auth/openid/browser-start/{state}": {
+      "get": {
+        "operationId": "startActualOpenIdBrowserHandoff",
+        "summary": "Start the browser-bound Actual OpenID handoff",
+        "tags": ["Authentication"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 43,
+              "maxLength": 43,
+              "pattern": "^[A-Za-z0-9_-]{43}$"
+            },
+            "in": "path",
+            "name": "state",
+            "required": true
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Sets a short-lived browser cookie and redirects to Actual sign-in."
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/actual-return/{state}/openid-cb": {
       "get": {
         "operationId": "completeActualOpenIdReturn",

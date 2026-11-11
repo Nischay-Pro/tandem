@@ -8,12 +8,24 @@ const STATE_TTL_MS = 5 * 60_000;
 const COMPLETION_TTL_MS = 90_000;
 const MAX_PENDING_LOGINS = 1_000;
 const MOBILE_SIGN_IN_RETURN_URI = "app.tandemforactual://signin/complete";
+const OPENID_BROWSER_COOKIE_PREFIX = "tandem_openid_";
+
+export function openIdBrowserCookieName(state: string): string {
+  return `${OPENID_BROWSER_COOKIE_PREFIX}${state}`;
+}
 
 interface PendingLogin {
   deviceName: string;
   codeChallenge: string;
   callbackState: string;
+  actualRedirectUrl: string;
+  browserCookieHash?: string;
   expiresAt: number;
+}
+
+export interface OpenIdBrowserHandoff {
+  redirectUrl: string;
+  setCookie: string;
 }
 
 export interface OpenIdCompletion {
@@ -59,30 +71,68 @@ export class ActualOpenIdLogin {
       throw new Error("Device name is invalid");
     }
     const state = this.makeCode();
-    const callbackUrl = new URL(this.publicUrl);
-    callbackUrl.pathname = `${callbackUrl.pathname.replace(/\/+$/, "")}/api/v1/auth/actual-return/${state}/openid-cb`;
-    callbackUrl.search = "";
-    callbackUrl.hash = "";
     const redirectUrl = await this.actualLogin.startOpenIdSignIn(
-      callbackUrl.toString(),
+      this.#actualCallbackUrl(state),
     );
     this.#pending.set(state, {
       deviceName: normalizedDeviceName,
       codeChallenge,
       callbackState,
+      actualRedirectUrl: redirectUrl,
       expiresAt: this.now() + STATE_TTL_MS,
     });
-    return { redirectUrl };
+    return { redirectUrl: this.#browserStartUrl(state) };
+  }
+
+  startBrowserHandoff(
+    state: string,
+    existingCookieValue?: string,
+  ): OpenIdBrowserHandoff | undefined {
+    this.#removeExpired();
+    const pending = this.#pending.get(state);
+    if (!pending || pending.expiresAt <= this.now()) return undefined;
+
+    let cookieValue = existingCookieValue;
+    if (pending.browserCookieHash) {
+      if (!cookieValue || !this.#browserCookieMatches(pending, cookieValue)) {
+        return undefined;
+      }
+    } else {
+      cookieValue = randomBytes(32).toString("base64url");
+      pending.browserCookieHash = this.#hash(cookieValue);
+    }
+
+    const cookieName = openIdBrowserCookieName(state);
+    const callbackPath = new URL(this.#actualCallbackUrl(state)).pathname;
+    const maxAgeSeconds = Math.max(
+      0,
+      Math.floor((pending.expiresAt - this.now()) / 1_000),
+    );
+    const secure = new URL(this.publicUrl).protocol === "https:";
+    const cookieAttributes = `Path=${callbackPath}; Max-Age=${maxAgeSeconds}; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`;
+
+    return {
+      redirectUrl: pending.actualRedirectUrl,
+      setCookie: `${cookieName}=${cookieValue}; ${cookieAttributes}`,
+    };
   }
 
   async completeCallback(
     state: string,
     sessionToken: string,
+    browserCookieValue?: string,
   ): Promise<string | undefined> {
     this.#removeExpired();
     const pending = this.#pending.get(state);
+    if (
+      !pending ||
+      pending.expiresAt <= this.now() ||
+      !browserCookieValue ||
+      !this.#browserCookieMatches(pending, browserCookieValue)
+    ) {
+      return undefined;
+    }
     this.#pending.delete(state);
-    if (!pending || pending.expiresAt <= this.now()) return undefined;
 
     const grant: ActualPasswordGrant = {
       principalId: await this.actualLogin.identifySessionToken(sessionToken),
@@ -134,5 +184,39 @@ export class ActualOpenIdLogin {
     for (const [code, completion] of this.#completions) {
       if (completion.expiresAt <= now) this.#completions.delete(code);
     }
+  }
+
+  #browserCookieMatches(pending: PendingLogin, cookieValue: string): boolean {
+    if (
+      !pending.browserCookieHash ||
+      !/^[A-Za-z0-9_-]{43}$/u.test(cookieValue)
+    ) {
+      return false;
+    }
+    const suppliedHash = this.#hash(cookieValue);
+    return timingSafeEqual(
+      Buffer.from(suppliedHash, "ascii"),
+      Buffer.from(pending.browserCookieHash, "ascii"),
+    );
+  }
+
+  #hash(value: string): string {
+    return createHash("sha256").update(value, "ascii").digest("base64url");
+  }
+
+  #browserStartUrl(state: string): string {
+    const browserStartUrl = new URL(this.publicUrl);
+    browserStartUrl.pathname = `${browserStartUrl.pathname.replace(/\/+$/, "")}/api/v1/auth/openid/browser-start/${state}`;
+    browserStartUrl.search = "";
+    browserStartUrl.hash = "";
+    return browserStartUrl.toString();
+  }
+
+  #actualCallbackUrl(state: string): string {
+    const callbackUrl = new URL(this.publicUrl);
+    callbackUrl.pathname = `${callbackUrl.pathname.replace(/\/+$/, "")}/api/v1/auth/actual-return/${state}/openid-cb`;
+    callbackUrl.search = "";
+    callbackUrl.hash = "";
+    return callbackUrl.toString();
   }
 }

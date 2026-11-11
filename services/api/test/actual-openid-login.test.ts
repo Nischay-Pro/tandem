@@ -9,6 +9,10 @@ const TEST_CODE_CHALLENGE = createHash("sha256")
   .digest("base64url");
 const TEST_CALLBACK_STATE = "s".repeat(43);
 
+function cookieValue(setCookie: string | undefined): string | undefined {
+  return setCookie?.split(";", 1)[0]?.split("=").slice(1).join("=");
+}
+
 function jsonResponse(value: unknown): Response {
   return new Response(JSON.stringify(value), {
     status: 200,
@@ -41,14 +45,43 @@ describe("Actual OpenID sign-in handoff", () => {
     );
     const callbackUrl = new URL(startOpenIdSignIn.mock.calls[0]?.[0] ?? "");
     const state = callbackUrl.pathname.split("/").at(-2);
+    const browserHandoff = openId.startBrowserHandoff(state ?? "");
+    const browserCookie = cookieValue(browserHandoff?.setCookie);
+    expect(openId.startBrowserHandoff("u".repeat(43))).toBeUndefined();
+    expect(openId.startBrowserHandoff(state ?? "")).toBeUndefined();
+    expect(
+      openId.startBrowserHandoff(state ?? "", "w".repeat(43)),
+    ).toBeUndefined();
+    const repeatedBrowserHandoff = openId.startBrowserHandoff(
+      state ?? "",
+      browserCookie,
+    );
+    expect(repeatedBrowserHandoff?.redirectUrl).toBe(
+      browserHandoff?.redirectUrl,
+    );
+    expect(cookieValue(repeatedBrowserHandoff?.setCookie)).toBe(browserCookie);
+    await expect(
+      openId.completeCallback(state ?? "", "synthetic-session-token"),
+    ).resolves.toBeUndefined();
+    await expect(
+      openId.completeCallback(
+        state ?? "",
+        "synthetic-session-token",
+        "wrong-cookie-value-that-is-long-enough-to-be-rejected",
+      ),
+    ).resolves.toBeUndefined();
     const returnUrl = await openId.completeCallback(
       state ?? "",
       "synthetic-session-token",
+      browserCookie,
     );
     const code = new URL(returnUrl ?? "").searchParams.get("code");
     const callbackState = new URL(returnUrl ?? "").searchParams.get("state");
 
-    expect(started.redirectUrl).toBe("https://idp.example/authorize");
+    expect(started.redirectUrl).toBe(
+      `https://tandem.example/api/v1/auth/openid/browser-start/${state}`,
+    );
+    expect(browserHandoff?.redirectUrl).toBe("https://idp.example/authorize");
     expect(state).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(code).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(callbackState).toBe(TEST_CALLBACK_STATE);
@@ -61,6 +94,32 @@ describe("Actual OpenID sign-in handoff", () => {
       deviceName: "Synthetic phone",
       grant: { principalId: "actual-user:synthetic" },
     });
+  });
+
+  it("keeps local HTTP browser cookies usable without the Secure attribute", async () => {
+    const startOpenIdSignIn = vi.fn(
+      async () => "https://idp.example/authorize",
+    );
+    const passwordLogin = {
+      startOpenIdSignIn,
+    } as unknown as ActualPasswordLogin;
+    const openId = new ActualOpenIdLogin(
+      passwordLogin,
+      "http://tandem.example",
+      async (grant) => grant,
+    );
+
+    const started = await openId.start(
+      "Synthetic phone",
+      TEST_CODE_CHALLENGE,
+      TEST_CALLBACK_STATE,
+    );
+    const state = new URL(started.redirectUrl).pathname.split("/").at(-1);
+    const handoff = openId.startBrowserHandoff(state ?? "");
+
+    expect(handoff?.setCookie).toContain("HttpOnly");
+    expect(handoff?.setCookie).toContain("SameSite=Lax");
+    expect(handoff?.setCookie).not.toContain("; Secure");
   });
 
   it.each(["", "  ", "x".repeat(101)])(
@@ -193,15 +252,19 @@ describe("Actual OpenID sign-in handoff", () => {
     };
     const callbackPath = new URL(requestBody.returnUrl).pathname;
     const state = callbackPath.split("/").at(-2);
-    expect(started.redirectUrl).toBe("https://idp.example/authorize");
+    expect(started.redirectUrl).toMatch(
+      /^https:\/\/actual\.example\/api\/v1\/auth\/openid\/browser-start\/[A-Za-z0-9_-]{43}$/u,
+    );
     expect(requestBody.loginMethod).toBe("openid");
     expect(requestBody.returnUrl).toBe(
       `https://actual.example/api/v1/auth/actual-return/${state}/openid-cb`,
     );
 
+    const browserHandoff = openId.startBrowserHandoff(state ?? "");
     const returnUrl = await openId.completeCallback(
       state ?? "",
       "synthetic-actual-session-token",
+      cookieValue(browserHandoff?.setCookie),
     );
     expect(returnUrl).toBe(
       `app.tandemforactual://signin/complete?code=0000000000000000000000000000000000000000002&state=${TEST_CALLBACK_STATE}`,
@@ -293,9 +356,12 @@ describe("Actual OpenID sign-in handoff", () => {
       String(fetchRequest.mock.calls[0]?.[1]?.body),
     ) as { returnUrl: string };
     const state = new URL(request.returnUrl).pathname.split("/").at(-2);
+    const browserHandoff = openId.startBrowserHandoff(state ?? "");
+    const browserCookie = cookieValue(browserHandoff?.setCookie);
     const returnUrl = await openId.completeCallback(
       state ?? "",
       "synthetic-session-token",
+      browserCookie,
     );
     const code = new URL(returnUrl ?? "").searchParams.get("code");
 

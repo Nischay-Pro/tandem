@@ -571,9 +571,10 @@ describe("API bootstrap integration", () => {
         },
       });
       expect(started.statusCode).toBe(200);
-      expect(started.json()).toEqual({
-        redirectUrl: "https://idp.example/authorize",
-      });
+      const tandemBrowserStart = new URL(started.json().redirectUrl);
+      expect(tandemBrowserStart.toString()).toMatch(
+        /^https:\/\/tandem\.example\/api\/v1\/auth\/openid\/browser-start\/[A-Za-z0-9_-]{43}$/u,
+      );
 
       const loginRequest = JSON.parse(
         String(fetchRequest.mock.calls[0]?.[1]?.body),
@@ -581,9 +582,24 @@ describe("API bootstrap integration", () => {
       const state = new URL(loginRequest.returnUrl).pathname.split("/").at(-2);
       expect(state).toMatch(/^[A-Za-z0-9_-]{43}$/);
 
+      const browserStart = await app.inject({
+        method: "GET",
+        url: tandemBrowserStart.pathname,
+      });
+      const setCookieHeader = browserStart.headers["set-cookie"];
+      const browserCookie = Array.isArray(setCookieHeader)
+        ? setCookieHeader[0]?.split(";", 1)[0]
+        : setCookieHeader?.split(";", 1)[0];
+      expect(browserStart.statusCode).toBe(302);
+      expect(browserStart.headers.location).toBe(
+        "https://idp.example/authorize",
+      );
+      expect(browserCookie).toBeDefined();
+
       const callback = await app.inject({
         method: "GET",
         url: `/api/v1/auth/actual-return/${state}/openid-cb?token=${actualSessionToken}`,
+        headers: { cookie: browserCookie ?? "" },
       });
       expect(callback.statusCode).toBe(302);
       const completionCode = new URL(
