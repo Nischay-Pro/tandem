@@ -17,7 +17,8 @@ internal fun apiFailureMessage(
 ): String {
     val effectiveStatus = apiFailureHttpStatus(errorCode, httpStatus)
     return when (errorCode) {
-        "actual_only" -> "Actual is responding at this address. Enter the address of your Tandem server."
+        "actual_only" ->
+            "We found Actual Budget, but not the Tandem API Gateway. Check that the gateway is running at /api/v1/."
         "address_unreachable", "network-error" -> "Tandem isn’t responding at this address. Check the server address."
         "actual_unavailable" -> "Tandem can’t connect to Actual. Check that the Actual server is running."
         "tandem_not_ready" -> "Tandem is starting up. Try again in a moment."

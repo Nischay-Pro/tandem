@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.Icon
 import androidx.compose.material.Surface
@@ -126,6 +127,7 @@ internal data class TextFieldOptions(
     val isSecret: Boolean = false,
     val secretKeyboardType: KeyboardType = KeyboardType.Password,
     val keyboardOptions: KeyboardOptions? = null,
+    val keyboardActions: KeyboardActions? = null,
     val textAlign: TextAlign = TextAlign.Start,
     val large: Boolean = false,
     val onFocusedChange: ((Boolean) -> Unit)? = null,
@@ -198,6 +200,7 @@ internal fun TextFieldCard(
                 } else {
                     KeyboardOptions.Default
                 },
+            keyboardActions = options.keyboardActions ?: KeyboardActions.Default,
             visualTransformation =
                 when {
                     options.isSecret -> PasswordVisualTransformation()

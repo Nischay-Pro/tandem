@@ -1354,6 +1354,7 @@ class TandemApiClientTest {
     fun authenticationAndBankSyncErrorsHaveActionableMessages() {
         val messages =
             mapOf(
+                "actual_only" to "We found Actual Budget, but not the Tandem API Gateway. Check that the gateway is running at /api/v1/.",
                 "invalid_budget_password" to "That password didn’t unlock this encrypted budget. Check the budget password.",
                 "sign_in_expired" to "Your sign-in is no longer active. Sign in again.",
                 "invalid_device_credential" to "Your sign-in is no longer active. Sign in again.",

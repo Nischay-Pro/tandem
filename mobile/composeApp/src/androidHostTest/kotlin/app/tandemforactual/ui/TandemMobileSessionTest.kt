@@ -137,7 +137,8 @@ class TandemMobileSessionTest {
     fun commonApiErrorsExplainWhatHappenedAndGiveOneNextStep() {
         val messages =
             listOf(
-                "actual_only" to (null to "Actual is responding at this address. Enter the address of your Tandem server."),
+                "actual_only" to
+                    (null to "We found Actual Budget, but not the Tandem API Gateway. Check that the gateway is running at /api/v1/."),
                 "address_unreachable" to (null to "Tandem isn’t responding at this address. Check the server address."),
                 "actual_unavailable" to (null to "Tandem can’t connect to Actual. Check that the Actual server is running."),
                 "tandem_not_ready" to (null to "Tandem is starting up. Try again in a moment."),

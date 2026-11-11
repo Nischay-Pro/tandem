@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -35,13 +36,15 @@ class OnboardingWordingTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Connect to your own Actual Budget server.").assertExists()
-        composeTestRule.onNodeWithText("Before you start").assertExists()
-        composeTestRule.onNodeWithText("Have your server address ready.").assertExists()
-        composeTestRule.onNodeWithText("Your budget data stays between this device and your server.").assertExists()
-        listOf("Server", "Sign in", "Budget", "First sync").forEach { step ->
-            composeTestRule.onNodeWithText(step).assertDoesNotExist()
-        }
+        composeTestRule.onNodeWithText("Connect your Actual Budget server.").assertExists()
+        composeTestRule
+            .onNodeWithContentDescription("Setup progress. Step 1 of 4: Server. Next: Sign in, Budget, First sync.")
+            .assertExists()
+        listOf(
+            "Open your saved budget offline",
+            "Edits wait here until they sync",
+            "Changes marked “Needs review” stay on this device",
+        ).forEach { benefit -> composeTestRule.onNodeWithText(benefit).assertExists() }
         composeTestRule
             .onNodeWithText("How to set up a server")
             .performScrollTo()
@@ -61,8 +64,17 @@ class OnboardingWordingTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Enter the web address for your Tandem server.").assertExists()
+        composeTestRule
+            .onNodeWithText("Enter your Actual Budget address. Tandem checks for its API Gateway at /api/v1/.")
+            .assertExists()
         composeTestRule.onAllNodesWithText("Continue").assertCountEquals(1)
+    }
+
+    @Test
+    fun signInWaitsUntilTheServerAddressFieldIsDoneBeforeCheckingTheGateway() {
+        assertFalse(shouldCheckActualLoginMethods("https://budget.example.com", serverUrlFocused = true))
+        assertTrue(shouldCheckActualLoginMethods("https://budget.example.com", serverUrlFocused = false))
+        assertFalse(shouldCheckActualLoginMethods("budget.example.com", serverUrlFocused = false))
     }
 
     @Test
@@ -118,6 +130,50 @@ class OnboardingWordingTest {
         assertFalse(shouldShowNotificationOnboarding(alreadyCompleted = true, permissionEnabled = false))
         assertTrue(shouldShowNotificationOnboarding(alreadyCompleted = false, permissionEnabled = false))
         assertTrue(shouldShowNotificationOnboarding(alreadyCompleted = false, permissionEnabled = null))
+    }
+
+    @Test
+    fun alreadyDeniedSystemPermissionCanOpenSettingsFromTheAllowAction() {
+        val state = AppState()
+        var openedSettings = false
+        val navigation = noOpNavigation()
+
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                NotificationOnboardingScreen(state, navigation) {
+                    // Native permission handlers open settings when the system has already denied access.
+                    openedSettings = true
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithText("Allow notifications").performClick()
+
+        assertTrue(openedSettings)
+        assertTrue(state.hasCompletedNotificationOnboarding)
+    }
+
+    @Test
+    fun firstSyncSkipsNotificationStepWhenSystemPermissionIsAlreadyEnabled() {
+        val state = AppState()
+        val route = mutableStateOf(AppRoute.FIRST_SYNC)
+        val navigation = noOpNavigation().copy(selectTab = { route.value = it })
+
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                FirstSyncCompletionAction(
+                    state = state,
+                    navigation = navigation,
+                    syncComplete = true,
+                    notificationPermissionEnabled = true,
+                    onComplete = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Done").performClick()
+
+        assertEquals(AppRoute.BUDGET, route.value)
     }
 
     @Test

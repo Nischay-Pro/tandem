@@ -15,7 +15,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -27,7 +30,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.isLocalHttpHost
@@ -46,7 +53,10 @@ import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemLoadingIndicator
 import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.CircleAlert
+import com.composables.icons.lucide.Cloud
+import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.ShieldCheck
 import kotlinx.coroutines.delay
 
 @Composable
@@ -89,34 +99,93 @@ internal fun WelcomeScreen(
         horizontalPadding = TandemSpacing.extraLarge,
         content = {
             TandemBrandMark(Modifier.size(72.dp))
-            Heading("Tandem for Actual Budget", "Connect to your own Actual Budget server.")
+            Heading("Tandem for Actual Budget", "Connect your Actual Budget server.")
+            SetupProgressIndicator()
             SurfaceCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier.padding(TandemSpacing.large),
                     verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
                 ) {
-                    Text(
-                        "Before you start",
-                        color = tandemPalette.text,
-                        fontSize = TandemTypography.cardTitle,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        "Have your server address ready.",
-                        color = tandemPalette.muted,
-                        fontSize = TandemTypography.body,
-                        lineHeight = TandemTypography.bodyLineHeight,
-                    )
-                    BodyText("Your budget data stays between this device and your server.")
+                    WelcomeBenefit(Lucide.Cloud, "Open your saved budget offline")
+                    WelcomeBenefit(Lucide.CloudSync, "Edits wait here until they sync")
+                    WelcomeBenefit(Lucide.ShieldCheck, "Changes marked “Needs review” stay on this device")
                 }
             }
             SecondaryButton("How to set up a server", modifier = Modifier.fillMaxWidth(), onClick = onOpenSetupGuide)
             signOutNotice?.let { InfoBubble(it) }
         },
         actions = {
-            PrimaryButton("Get started", modifier = Modifier.fillMaxWidth()) { navigation.open(AppRoute.SIGN_IN) }
+            PrimaryButton("Get started", modifier = Modifier.fillMaxWidth()) {
+                navigation.open(AppRoute.SIGN_IN)
+            }
         },
     )
+}
+
+@Composable
+private fun SetupProgressIndicator() {
+    val palette = tandemPalette
+    val steps = listOf("Server", "Sign in", "Budget", "First sync")
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clearAndSetSemantics {
+                    contentDescription = "Setup progress. Step 1 of 4: Server. Next: Sign in, Budget, First sync."
+                },
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+        verticalAlignment = Alignment.Top,
+    ) {
+        steps.forEachIndexed { index, step ->
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Box(
+                    Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(if (index == 0) palette.accent else palette.surface)
+                        .border(1.dp, if (index == 0) palette.accent else palette.border, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "${index + 1}",
+                        color = if (index == 0) palette.accentContent else palette.muted,
+                        fontSize = TandemTypography.micro,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                Text(
+                    step,
+                    color = if (index == 0) palette.text else palette.muted,
+                    fontSize = TandemTypography.label,
+                    fontWeight = if (index == 0) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WelcomeBenefit(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp), tint = tandemPalette.accent)
+        Text(
+            text,
+            color = tandemPalette.text,
+            fontSize = TandemTypography.compactBody,
+            lineHeight = TandemTypography.bodyLineHeight,
+        )
+    }
 }
 
 @Composable
@@ -132,7 +201,7 @@ internal fun ServerAddressScreen(
                 { state.serverUrl = it },
                 TextFieldOptions(placeholder = "https://"),
             )
-            InfoBubble("Enter the web address for your Tandem server.")
+            InfoBubble("Enter your Actual Budget address. Tandem checks for its API Gateway at /api/v1/.")
             if (serverAddressMayBeInsecure(state.serverUrl)) {
                 val palette = tandemPalette
                 Row(
@@ -204,6 +273,11 @@ internal fun serverAddressIsValid(value: String): Boolean {
     return host.isNotBlank()
 }
 
+internal fun shouldCheckActualLoginMethods(
+    serverUrl: String,
+    serverUrlFocused: Boolean,
+): Boolean = serverAddressIsValid(serverUrl) && !serverUrlFocused
+
 internal fun serverAddressMayBeInsecure(value: String): Boolean {
     val address = value.trim().lowercase()
     if (!address.startsWith("http://")) return false
@@ -244,10 +318,12 @@ internal fun SignInScreen(
     onSignIn: () -> Unit,
     onStartOpenIdSignIn: () -> Unit,
 ) {
-    LaunchedEffect(state.serverUrl) {
+    var serverUrlFocused by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(state.serverUrl, serverUrlFocused) {
         state.actualPassword = ""
         mobileSession.clearActualLoginMethodState()
-        if (serverAddressIsValid(state.serverUrl)) {
+        if (shouldCheckActualLoginMethods(state.serverUrl, serverUrlFocused)) {
             delay(300)
             mobileSession.loadActualLoginMethods(state.serverUrl)
         }
@@ -264,13 +340,19 @@ internal fun SignInScreen(
                 "Server URL",
                 state.serverUrl,
                 { state.serverUrl = it },
-                TextFieldOptions(placeholder = "https://"),
+                TextFieldOptions(
+                    placeholder = "https://",
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                    onFocusedChange = { serverUrlFocused = it },
+                ),
             )
             if (serverAddressIsValid(state.serverUrl)) SignInTransportWarning(state.serverUrl)
             when {
                 !serverAddressIsValid(state.serverUrl) -> {
                     InfoBubble("Enter your server address to see sign-in options.")
                 }
+                serverUrlFocused -> Unit
                 mobileSession.isLoadingLoginMethods -> {
                     TandemLoadingIndicator(Modifier.size(24.dp), color = tandemPalette.accent, strokeWidth = 2.dp)
                 }
