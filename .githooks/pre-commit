@@ -26,6 +26,17 @@ if [ -n "$staged_javascript" ]; then
   "$repo_root/node_modules/.bin/eslint" .
 fi
 
+staged_api_typescript=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^services/api/.*\.(ts|tsx)$' || true)
+if [ -n "$staged_api_typescript" ]; then
+  if [ ! -x "$repo_root/node_modules/.bin/tsc" ]; then
+    printf '%s\n' 'API type checks need the JavaScript dependencies. Run pnpm install first.' >&2
+    exit 1
+  fi
+  "$repo_root/node_modules/.bin/tsc" --noEmit -p "$repo_root/services/api/tsconfig.json"
+  "$repo_root/node_modules/.bin/tsc" --noEmit -p "$repo_root/services/api/tsconfig.test.json"
+  node scripts/check-staged-api-coverage.mjs
+fi
+
 staged_mobile_kotlin=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^mobile/.*\.(kt|kts)$' || true)
 if [ -n "$staged_mobile_kotlin" ]; then
   unstaged_mobile=$(git diff --name-only -- mobile)
