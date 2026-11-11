@@ -189,6 +189,15 @@ describe("Actual transaction store", () => {
 
   it.each([
     {
+      label: "a destination account that no longer exists",
+      destinationAccount: "deleted-account",
+      accounts: [{ id: "account-1", name: "Checking", closed: false }],
+      issue: {
+        code: "account-not-found",
+        message: "Account does not exist in this budget",
+      },
+    },
+    {
       label: "a closed destination account",
       destinationAccount: "account-2",
       accounts: [
