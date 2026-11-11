@@ -110,6 +110,26 @@ export function createActualTransactionStore(
     return transaction.id;
   }
 
+  async function validateCategoryReference(
+    categoryId: string,
+  ): Promise<TransactionCreateValidationIssue | undefined> {
+    const visibleCategories = await client.getCategories({ hidden: false });
+    if (visibleCategories.some((candidate) => candidate.id === categoryId)) {
+      return undefined;
+    }
+
+    const hiddenCategories = await client.getCategories({ hidden: true });
+    return hiddenCategories.some((candidate) => candidate.id === categoryId)
+      ? {
+          code: "category-hidden",
+          message: "Choose a visible category for this transaction",
+        }
+      : {
+          code: "category-not-found",
+          message: "Category does not exist in this budget",
+        };
+  }
+
   async function validateCreateInput(
     input: TransactionCreateInput,
   ): Promise<TransactionCreateValidationIssue | undefined> {
@@ -149,22 +169,8 @@ export function createActualTransactionStore(
     }
 
     if (input.category !== null) {
-      const categories = await client.getCategories();
-      let exists = categories.some(
-        (candidate) => candidate.id === input.category,
-      );
-      if (!exists) {
-        const hiddenCategories = await client.getCategories({ hidden: true });
-        exists = hiddenCategories.some(
-          (candidate) => candidate.id === input.category,
-        );
-      }
-      if (!exists) {
-        return {
-          code: "category-not-found",
-          message: "Category does not exist in this budget",
-        };
-      }
+      const categoryIssue = await validateCategoryReference(input.category);
+      if (categoryIssue) return categoryIssue;
     }
     return undefined;
   }
@@ -202,23 +208,7 @@ export function createActualTransactionStore(
     }
 
     if (fields.category !== undefined && fields.category !== null) {
-      const categories = await client.getCategories();
-      if (categories.some((candidate) => candidate.id === fields.category)) {
-        return undefined;
-      }
-      const hiddenCategories = await client.getCategories({ hidden: true });
-      if (
-        hiddenCategories.some((candidate) => candidate.id === fields.category)
-      ) {
-        return {
-          code: "category-hidden",
-          message: "Choose a visible category for this transaction",
-        };
-      }
-      return {
-        code: "category-not-found",
-        message: "Category does not exist in this budget",
-      };
+      return validateCategoryReference(fields.category);
     }
 
     return undefined;

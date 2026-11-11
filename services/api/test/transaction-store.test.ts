@@ -41,19 +41,21 @@ function createClient(
           { id: "account-1", name: "Checking", closed: false },
         ],
     ),
-    getCategories: vi.fn(async (options?: { hidden?: boolean }) =>
-      options?.hidden
-        ? (references.hiddenCategories ?? [])
-        : (references.categories ?? [
-            {
-              id: "category-1",
-              name: "Groceries",
-              is_income: false,
-              hidden: false,
-              group_id: "category-group-1",
-            },
-          ]),
-    ),
+    getCategories: vi.fn(async (options?: { hidden?: boolean }) => {
+      const visibleCategories = references.categories ?? [
+        {
+          id: "category-1",
+          name: "Groceries",
+          is_income: false,
+          hidden: false,
+          group_id: "category-group-1",
+        },
+      ];
+      const hiddenCategories = references.hiddenCategories ?? [];
+      if (options?.hidden === true) return hiddenCategories;
+      if (options?.hidden === false) return visibleCategories;
+      return [...visibleCategories, ...hiddenCategories];
+    }),
     getPayees: vi.fn(
       async () =>
         references.payees ?? [
@@ -124,7 +126,7 @@ describe("Actual transaction store", () => {
     },
   );
 
-  it("accepts existing hidden categories and nullable payees", async () => {
+  it("rejects a hidden category when creating a transaction", async () => {
     const hiddenCategory = {
       id: "hidden-category",
       name: "Archived",
@@ -145,11 +147,16 @@ describe("Actual transaction store", () => {
         date: "2026-11-01",
         payee: null,
         category: "hidden-category",
-        notes: "Hidden category remains a valid reference",
+        notes: "Hidden categories cannot be newly assigned",
         cleared: false,
       }),
-    ).resolves.toBeUndefined();
-    expect(fake.client.getCategories.mock.calls[0]).toEqual([]);
+    ).resolves.toEqual({
+      code: "category-hidden",
+      message: "Choose a visible category for this transaction",
+    });
+    expect(fake.client.getCategories).toHaveBeenNthCalledWith(1, {
+      hidden: false,
+    });
     expect(fake.client.getCategories).toHaveBeenNthCalledWith(2, {
       hidden: true,
     });
@@ -173,6 +180,7 @@ describe("Actual transaction store", () => {
     expect(fake.client.getAccounts).toHaveBeenCalledOnce();
     expect(fake.client.getPayees).toHaveBeenCalledOnce();
     expect(fake.client.getCategories).toHaveBeenCalledOnce();
+    expect(fake.client.getCategories).toHaveBeenCalledWith({ hidden: false });
   });
 
   it("accepts a valid account when optional payee and category are null", async () => {
@@ -262,6 +270,14 @@ describe("Actual transaction store", () => {
         store.validateUpdateInput(patch as TransactionPatch),
       ).resolves.toEqual(issue);
       expect(fake.client.updateTransaction).not.toHaveBeenCalled();
+      if (issue.code === "category-hidden") {
+        expect(fake.client.getCategories).toHaveBeenNthCalledWith(1, {
+          hidden: false,
+        });
+        expect(fake.client.getCategories).toHaveBeenNthCalledWith(2, {
+          hidden: true,
+        });
+      }
     },
   );
 
@@ -294,6 +310,7 @@ describe("Actual transaction store", () => {
     expect(fake.client.getAccounts).toHaveBeenCalledOnce();
     expect(fake.client.getPayees).toHaveBeenCalledOnce();
     expect(fake.client.getCategories).toHaveBeenCalledOnce();
+    expect(fake.client.getCategories).toHaveBeenCalledWith({ hidden: false });
   });
 
   it("accepts null payee and category references in an update", async () => {
