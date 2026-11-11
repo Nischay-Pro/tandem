@@ -265,7 +265,10 @@ class IosLocaleFormattingTest {
 
         assertTrue(accountListSubtitle(checking, 1_794_087_360_000)?.startsWith("Last synced ") == true)
         assertEquals("Not synced yet", accountListSubtitle(checking, null))
-        assertEquals("Off budget", accountListSubtitle(offBudget, 1_794_087_360_000))
+        assertEquals(
+            "Off budget · Last synced ${formatDateAtEpochMilliseconds(1_794_087_360_000)}",
+            accountListSubtitle(offBudget, 1_794_087_360_000),
+        )
         assertNull(accountListSubtitle(closed, 1_794_087_360_000))
     }
 
