@@ -64,6 +64,7 @@ fi
     :api-client:compileAndroidMain \
     :api-client:compileCommonMainKotlinMetadata \
     :api-client:jvmTest \
+    :api-client:testAndroidHostTest \
     :api-client:koverVerify \
     :api-client:ktlintCheck \
     :data:compileAndroidMain \

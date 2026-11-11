@@ -1311,6 +1311,22 @@ class TandemApiClientTest {
     }
 
     @Test
+    fun authenticationAndBankSyncErrorsHaveActionableMessages() {
+        val messages =
+            mapOf(
+                "invalid_budget_password" to "That budget password didn’t unlock this budget. Check it and try again.",
+                "sign_in_expired" to "Sign in expired. Start again.",
+                "invalid_device_credential" to "Sign in again to continue.",
+                "bank_sync_failed" to "Actual couldn’t complete bank sync. Check its provider setup and try again.",
+                "bank_sync_busy" to "A bank sync is already running. Try again shortly.",
+            )
+
+        messages.forEach { (errorCode, message) ->
+            assertEquals(message, TandemApiException(errorCode).message, errorCode)
+        }
+    }
+
+    @Test
     fun importingStatementTransactionsPreservesMinorUnitsAndValidatesRequestsAndResponses() =
         runBlocking {
             val requests = mutableListOf<HttpRequestData>()

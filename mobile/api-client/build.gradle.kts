@@ -13,6 +13,10 @@ kotlin {
     namespace = "app.tandemforactual.api.client"
     compileSdk = 37
     minSdk = 26
+
+    withHostTest {
+      isIncludeAndroidResources = true
+    }
   }
   iosArm64()
   iosSimulatorArm64()
@@ -27,6 +31,17 @@ kotlin {
       implementation(kotlin("test"))
       implementation(libs.ktorClientMock)
     }
+    getByName("androidHostTest") {
+      dependencies {
+        implementation(kotlin("test"))
+      }
+    }
+  }
+}
+
+tasks.configureEach {
+  if (name == "koverGenerateArtifactAndroid") {
+    dependsOn("testAndroidHostTest")
   }
 }
 
