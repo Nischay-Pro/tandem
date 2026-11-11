@@ -254,7 +254,7 @@ class TandemMobileSessionTest {
                 "operation_uncertain" to
                     (
                         BudgetMutationFailureDisposition.OPERATION_UNCERTAIN to
-                            "Tandem couldn’t confirm whether Actual saved this change. Check Actual, then try again."
+                            "Tandem couldn’t confirm whether Actual saved this change. Refresh the budget and check Actual before deciding what to do with it."
                     ),
                 "operation_rejected" to
                     (
@@ -284,6 +284,18 @@ class TandemMobileSessionTest {
                 .distinct()
                 .size,
         )
+        val recoveryActions =
+            mapOf(
+                "operation_in_progress" to (true to false),
+                "operation_uncertain" to (false to true),
+                "operation_rejected" to (true to false),
+                "idempotency_key_reused" to (true to false),
+                "operation_result_unavailable" to (false to false),
+            )
+        recoveryActions.forEach { (code, expected) ->
+            assertEquals(expected.first, budgetMutationCanRetry(code), "$code can retry")
+            assertEquals(expected.second, budgetMutationRequiresActualCheck(code), "$code requires an Actual check")
+        }
         assertTrue(budgetMutationRetryNeedsNewKey("operation_rejected"))
         assertTrue(budgetMutationRetryNeedsNewKey("idempotency_key_reused"))
         assertFalse(budgetMutationRetryNeedsNewKey("operation_in_progress"))
@@ -312,23 +324,21 @@ class TandemMobileSessionTest {
             request,
             budgetMutationRequestForRetry(request, "operation_in_progress", "replacement-key"),
         )
-        assertEquals(
-            request,
-            budgetMutationRequestForRetry(request, "operation_uncertain", "replacement-key"),
-        )
+        assertNull(budgetMutationRequestForRetry(request, "operation_uncertain", "replacement-key"))
         listOf("operation_rejected", "idempotency_key_reused").forEach { code ->
             val retry = budgetMutationRequestForRetry(request, code, "replacement-key")
             assertEquals("replacement-key", retry?.operationId, code)
             assertEquals(request.copy(operationId = "replacement-key"), retry, code)
             assertTrue(budgetMutationRetryNeedsNewKey(code), code)
         }
-        listOf("operation_result_unavailable", "unexpected_409", null).forEach { code ->
+        listOf("operation_uncertain", "operation_result_unavailable", "unexpected_409", null).forEach { code ->
             assertNull(budgetMutationRequestForRetry(request, code, "replacement-key"), "$code must not be replayed")
             assertFalse(budgetMutationCanRetry(code), "$code must not offer a retry")
             assertFalse(budgetMutationRetryNeedsNewKey(code), "$code must not mint a retry key")
         }
         assertTrue(budgetMutationCanRetry("operation_in_progress"))
-        assertTrue(budgetMutationCanRetry("operation_uncertain"))
+        assertTrue(budgetMutationRequiresActualCheck("operation_uncertain"))
+        assertFalse(budgetMutationRequiresActualCheck("operation_in_progress"))
         assertTrue(
             budgetMutationFailureMessage("unexpected_409").contains("check Actual", ignoreCase = true),
         )

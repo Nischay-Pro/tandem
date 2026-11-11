@@ -675,7 +675,7 @@ internal class TandemMobileSession(
                 return@launch
             }
 
-            if (budgetMutationFailureDisposition(operation.lastErrorCode) == BudgetMutationFailureDisposition.REVIEW) {
+            if (budgetMutationRequiresActualCheck(operation.lastErrorCode)) {
                 val refreshed =
                     synchronize(
                         operation.budgetId,

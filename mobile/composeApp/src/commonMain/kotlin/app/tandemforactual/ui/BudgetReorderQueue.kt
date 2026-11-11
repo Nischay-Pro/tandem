@@ -47,7 +47,9 @@ internal fun budgetMutationFailureMessage(errorCode: String?): String =
     when (errorCode) {
         "idempotency_key_reused" -> "Tandem matched this change to a different request. Refresh the budget, then try again."
         "operation_in_progress" -> "Tandem is still processing this change. Wait a moment, then try again."
-        "operation_uncertain" -> "Tandem couldn’t confirm whether Actual saved this change. Check Actual, then try again."
+        "operation_uncertain" ->
+            "Tandem couldn’t confirm whether Actual saved this change. " +
+                "Refresh the budget and check Actual before deciding what to do with it."
         "operation_rejected" -> "Actual rejected this change earlier. Refresh the budget, then try again."
         "operation_result_unavailable" -> "Actual saved this change, but Tandem needs a fresh budget copy. Refresh the budget."
         else -> "Tandem received an unexpected response. Refresh the budget and check Actual before deciding what to do with this change."
@@ -74,9 +76,15 @@ internal fun budgetMutationCanRetry(errorCode: String?): Boolean =
     budgetMutationFailureDisposition(errorCode) in
         setOf(
             BudgetMutationFailureDisposition.OPERATION_IN_PROGRESS,
-            BudgetMutationFailureDisposition.OPERATION_UNCERTAIN,
             BudgetMutationFailureDisposition.OPERATION_REJECTED,
             BudgetMutationFailureDisposition.IDEMPOTENCY_KEY_REUSED,
+        )
+
+internal fun budgetMutationRequiresActualCheck(errorCode: String?): Boolean =
+    budgetMutationFailureDisposition(errorCode) in
+        setOf(
+            BudgetMutationFailureDisposition.OPERATION_UNCERTAIN,
+            BudgetMutationFailureDisposition.REVIEW,
         )
 
 /** Returns null when replay is unsafe or the result must be refreshed first. */
@@ -87,11 +95,11 @@ internal fun budgetMutationRequestForRetry(
 ): QueuedBudgetReorder? =
     when (budgetMutationFailureDisposition(errorCode)) {
         BudgetMutationFailureDisposition.OPERATION_IN_PROGRESS,
-        BudgetMutationFailureDisposition.OPERATION_UNCERTAIN,
         -> request
         BudgetMutationFailureDisposition.OPERATION_REJECTED,
         BudgetMutationFailureDisposition.IDEMPOTENCY_KEY_REUSED,
         -> request.copy(operationId = replacementOperationId)
+        BudgetMutationFailureDisposition.OPERATION_UNCERTAIN,
         BudgetMutationFailureDisposition.RESULT_UNAVAILABLE,
         BudgetMutationFailureDisposition.REVIEW,
         -> null
