@@ -3,6 +3,7 @@ import { Writable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import type { FastifyServerOptions } from "fastify";
 import { buildApiApp } from "../src/app.js";
+import { ActualPrincipalSessionExpiredError } from "../src/actual/actual-session.js";
 import type { TransactionApiPort } from "../src/actual/transaction-api.js";
 import type { TransactionSnapshot } from "../src/actual/transaction-reconciliation.js";
 import { TransactionRequestValidationError } from "../src/actual/transaction-reconciler.js";
@@ -320,6 +321,27 @@ describe("transaction REST routes", () => {
     expect(response.body).not.toContain("private Actual server detail");
     expect(consoleError).toHaveBeenCalledOnce();
     consoleError.mockRestore();
+    await app.close();
+  });
+
+  it("asks the device to sign in again when the Actual session expired", async () => {
+    const fake = createApi({
+      readTransaction: async () => {
+        throw new ActualPrincipalSessionExpiredError();
+      },
+    });
+    const app = await fake.buildApp();
+    const response = await app.inject({
+      method: "GET",
+      url: transactionUrl,
+      headers: authHeaders,
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json().error).toEqual({
+      code: "actual_sign_in_expired",
+      message: "Actual sign-in expired. Sign in again to continue.",
+    });
     await app.close();
   });
 
