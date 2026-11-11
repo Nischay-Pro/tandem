@@ -3,6 +3,7 @@ import {
   isTandemTransactionId,
   type TransactionCreateInput,
   type TransactionPatch,
+  type TransactionSnapshot,
 } from "./transaction-reconciliation.js";
 
 export interface ActualTransactionStore {
@@ -12,6 +13,7 @@ export interface ActualTransactionStore {
   ): Promise<TransactionCreateValidationIssue | undefined>;
   validateUpdateInput(
     fields: TransactionPatch,
+    current: Pick<TransactionSnapshot, "account" | "payee">,
   ): Promise<TransactionCreateValidationIssue | undefined>;
   create(id: string, input: TransactionCreateInput): Promise<unknown>;
   update(id: string, fields: TransactionPatch): Promise<unknown>;
@@ -35,6 +37,8 @@ export interface TransactionCreateValidationIssue {
     | "account-not-found"
     | "account-closed"
     | "payee-not-found"
+    | "transfer-account-closed"
+    | "transfer-account-same-as-source"
     | "category-not-found"
     | "category-hidden";
   message: string;
@@ -160,6 +164,15 @@ export function createActualTransactionStore(
           message: "Payee does not exist in this budget",
         };
       }
+      const transferDestinationIssue = validateTransferDestination(
+        input.account,
+        payee.transfer_acct,
+        accounts,
+      );
+      if (transferDestinationIssue) {
+        validatedPayeeTransfers.delete(input);
+        return transferDestinationIssue;
+      }
       validatedPayeeTransfers.set(input, {
         id: payee.id,
         transferAccount: Boolean(payee.transfer_acct),
@@ -177,9 +190,11 @@ export function createActualTransactionStore(
 
   async function validateUpdateInput(
     fields: TransactionPatch,
+    current: Pick<TransactionSnapshot, "account" | "payee">,
   ): Promise<TransactionCreateValidationIssue | undefined> {
+    let accounts: Awaited<ReturnType<typeof client.getAccounts>> | undefined;
     if (fields.account !== undefined) {
-      const accounts = await client.getAccounts();
+      accounts = await client.getAccounts();
       const account = accounts.find(
         (candidate) => candidate.id === fields.account,
       );
@@ -197,13 +212,32 @@ export function createActualTransactionStore(
       }
     }
 
-    if (fields.payee !== undefined && fields.payee !== null) {
+    const payeeChanged = fields.payee !== undefined;
+    const accountChanged = fields.account !== undefined;
+    const effectivePayeeId = payeeChanged ? fields.payee : current.payee;
+    const effectiveAccountId = fields.account ?? current.account;
+    if (
+      (payeeChanged && fields.payee !== null) ||
+      (accountChanged && current.payee !== null)
+    ) {
       const payees = await client.getPayees();
-      if (!payees.some((candidate) => candidate.id === fields.payee)) {
+      const payee = payees.find(
+        (candidate) => candidate.id === effectivePayeeId,
+      );
+      if (payeeChanged && fields.payee !== null && !payee) {
         return {
           code: "payee-not-found",
           message: "Payee does not exist in this budget",
         };
+      }
+      if (payee?.transfer_acct) {
+        accounts ??= await client.getAccounts();
+        const transferDestinationIssue = validateTransferDestination(
+          effectiveAccountId,
+          payee.transfer_acct,
+          accounts,
+        );
+        if (transferDestinationIssue) return transferDestinationIssue;
       }
     }
 
@@ -270,4 +304,35 @@ export function createActualTransactionStore(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && !Array.isArray(value) && typeof value === "object";
+}
+
+function validateTransferDestination(
+  sourceAccountId: string,
+  destinationAccountId: string | null | undefined,
+  accounts: Array<{ id: string; closed?: boolean }>,
+): TransactionCreateValidationIssue | undefined {
+  if (!destinationAccountId) return undefined;
+
+  const destination = accounts.find(
+    (candidate) => candidate.id === destinationAccountId,
+  );
+  if (!destination) {
+    return {
+      code: "account-not-found",
+      message: "Account does not exist in this budget",
+    };
+  }
+  if (destination.closed) {
+    return {
+      code: "transfer-account-closed",
+      message: "Choose an open destination account for this transfer",
+    };
+  }
+  if (destination.id === sourceAccountId) {
+    return {
+      code: "transfer-account-same-as-source",
+      message: "Choose a different destination account for this transfer",
+    };
+  }
+  return undefined;
 }

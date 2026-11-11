@@ -24,7 +24,11 @@ function createClient(
       hidden: boolean;
       group_id: string;
     }>;
-    payees?: Array<{ id: string; name: string; transfer_acct: string }>;
+    payees?: Array<{
+      id: string;
+      name: string;
+      transfer_acct?: string;
+    }>;
   } = {},
 ) {
   const queries: unknown[] = [];
@@ -183,6 +187,58 @@ describe("Actual transaction store", () => {
     expect(fake.client.getCategories).toHaveBeenCalledWith({ hidden: false });
   });
 
+  it.each([
+    {
+      label: "a closed destination account",
+      destinationAccount: "account-2",
+      accounts: [
+        { id: "account-1", name: "Checking", closed: false },
+        { id: "account-2", name: "Closed savings", closed: true },
+      ],
+      issue: {
+        code: "transfer-account-closed",
+        message: "Choose an open destination account for this transfer",
+      },
+    },
+    {
+      label: "the source account as its own destination",
+      destinationAccount: "account-1",
+      accounts: [{ id: "account-1", name: "Checking", closed: false }],
+      issue: {
+        code: "transfer-account-same-as-source",
+        message: "Choose a different destination account for this transfer",
+      },
+    },
+  ])("rejects a transfer to $label before creating it", async (testCase) => {
+    const fake = createClient(
+      { data: [] },
+      {
+        accounts: testCase.accounts,
+        payees: [
+          {
+            id: "transfer-payee",
+            name: "Transfer: Savings",
+            transfer_acct: testCase.destinationAccount,
+          },
+        ],
+      },
+    );
+    const store = createActualTransactionStore(fake.client);
+
+    await expect(
+      store.validateCreateInput({
+        account: "account-1",
+        amount: -100,
+        date: "2026-11-01",
+        payee: "transfer-payee",
+        category: null,
+        notes: "Invalid transfer destination",
+        cleared: false,
+      }),
+    ).resolves.toEqual(testCase.issue);
+    expect(fake.client.addTransactions).not.toHaveBeenCalled();
+  });
+
   it("accepts a valid account when optional payee and category are null", async () => {
     const fake = createClient({ data: [] });
     const store = createActualTransactionStore(fake.client);
@@ -267,7 +323,10 @@ describe("Actual transaction store", () => {
       const store = createActualTransactionStore(fake.client);
 
       await expect(
-        store.validateUpdateInput(patch as TransactionPatch),
+        store.validateUpdateInput(patch as TransactionPatch, {
+          account: "account-1",
+          payee: null,
+        }),
       ).resolves.toEqual(issue);
       expect(fake.client.updateTransaction).not.toHaveBeenCalled();
       if (issue.code === "category-hidden") {
@@ -289,7 +348,10 @@ describe("Actual transaction store", () => {
     const store = createActualTransactionStore(fake.client);
 
     await expect(
-      store.validateUpdateInput({ amount: -250 }),
+      store.validateUpdateInput(
+        { amount: -250 },
+        { account: "account-1", payee: null },
+      ),
     ).resolves.toBeUndefined();
     expect(fake.client.getAccounts).not.toHaveBeenCalled();
     expect(fake.client.getPayees).not.toHaveBeenCalled();
@@ -301,11 +363,14 @@ describe("Actual transaction store", () => {
     const store = createActualTransactionStore(fake.client);
 
     await expect(
-      store.validateUpdateInput({
-        account: "account-1",
-        payee: "payee-1",
-        category: "category-1",
-      }),
+      store.validateUpdateInput(
+        {
+          account: "account-1",
+          payee: "payee-1",
+          category: "category-1",
+        },
+        { account: "account-1", payee: null },
+      ),
     ).resolves.toBeUndefined();
     expect(fake.client.getAccounts).toHaveBeenCalledOnce();
     expect(fake.client.getPayees).toHaveBeenCalledOnce();
@@ -318,10 +383,135 @@ describe("Actual transaction store", () => {
     const store = createActualTransactionStore(fake.client);
 
     await expect(
-      store.validateUpdateInput({ payee: null, category: null }),
+      store.validateUpdateInput(
+        { payee: null, category: null },
+        { account: "account-1", payee: "payee-1" },
+      ),
     ).resolves.toBeUndefined();
     expect(fake.client.getPayees).not.toHaveBeenCalled();
     expect(fake.client.getCategories).not.toHaveBeenCalled();
+  });
+
+  it("rejects a changed payee that targets a closed account", async () => {
+    const fake = createClient(
+      { data: [] },
+      {
+        accounts: [
+          { id: "account-1", name: "Checking", closed: false },
+          { id: "account-2", name: "Closed savings", closed: true },
+        ],
+        payees: [
+          {
+            id: "transfer-payee",
+            name: "Transfer: Savings",
+            transfer_acct: "account-2",
+          },
+        ],
+      },
+    );
+    const store = createActualTransactionStore(fake.client);
+
+    await expect(
+      store.validateUpdateInput(
+        { payee: "transfer-payee" },
+        { account: "account-1", payee: null },
+      ),
+    ).resolves.toEqual({
+      code: "transfer-account-closed",
+      message: "Choose an open destination account for this transfer",
+    });
+    expect(fake.client.updateTransaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects a changed payee that targets the current source account", async () => {
+    const fake = createClient(
+      { data: [] },
+      {
+        accounts: [{ id: "account-1", name: "Checking", closed: false }],
+        payees: [
+          {
+            id: "transfer-payee",
+            name: "Transfer: Checking",
+            transfer_acct: "account-1",
+          },
+        ],
+      },
+    );
+    const store = createActualTransactionStore(fake.client);
+
+    await expect(
+      store.validateUpdateInput(
+        { payee: "transfer-payee" },
+        { account: "account-1", payee: null },
+      ),
+    ).resolves.toEqual({
+      code: "transfer-account-same-as-source",
+      message: "Choose a different destination account for this transfer",
+    });
+    expect(fake.client.updateTransaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects an account-only edit that would make a transfer self-referential", async () => {
+    const fake = createClient(
+      { data: [] },
+      {
+        accounts: [
+          { id: "account-1", name: "Checking", closed: false },
+          { id: "account-2", name: "Savings", closed: false },
+        ],
+        payees: [
+          {
+            id: "transfer-payee",
+            name: "Transfer: Savings",
+            transfer_acct: "account-2",
+          },
+        ],
+      },
+    );
+    const store = createActualTransactionStore(fake.client);
+
+    await expect(
+      store.validateUpdateInput(
+        { account: "account-2" },
+        { account: "account-1", payee: "transfer-payee" },
+      ),
+    ).resolves.toEqual({
+      code: "transfer-account-same-as-source",
+      message: "Choose a different destination account for this transfer",
+    });
+    expect(fake.client.updateTransaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects an account-only edit when the existing transfer targets a closed account", async () => {
+    const fake = createClient(
+      { data: [] },
+      {
+        accounts: [
+          { id: "account-1", name: "Checking", closed: false },
+          { id: "account-2", name: "Closed savings", closed: true },
+          { id: "account-3", name: "Cash", closed: false },
+        ],
+        payees: [
+          {
+            id: "transfer-payee",
+            name: "Transfer: Savings",
+            transfer_acct: "account-2",
+          },
+        ],
+      },
+    );
+    const store = createActualTransactionStore(fake.client);
+
+    await expect(
+      store.validateUpdateInput(
+        { account: "account-3" },
+        { account: "account-1", payee: "transfer-payee" },
+      ),
+    ).resolves.toEqual({
+      code: "transfer-account-closed",
+      message: "Choose an open destination account for this transfer",
+    });
+    expect(fake.client.updateTransaction).not.toHaveBeenCalled();
   });
 
   it("reads by stable ID with grouped split data through public AQL", async () => {
@@ -548,6 +738,10 @@ describe("Actual transaction store", () => {
     const fake = createClient(
       { data: [outgoing] },
       {
+        accounts: [
+          { id: "account-1", name: "Checking", closed: false },
+          { id: "account-2", name: "Savings", closed: false },
+        ],
         payees: [
           {
             id: "transfer-payee",

@@ -764,6 +764,29 @@ describe("Actual transaction reconciliation", () => {
     });
   });
 
+  it("rejects a transfer to a closed destination before creating in Actual", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request);
+    const create = vi.spyOn(harness.store, "create");
+    vi.spyOn(harness.store, "validateCreateInput").mockResolvedValue({
+      code: "transfer-account-closed",
+      message: "Choose an open destination account for this transfer",
+    });
+
+    await expect(harness.reconciler.submit(request)).rejects.toMatchObject({
+      name: "TransactionRequestValidationError",
+      message: "Choose an open destination account for this transfer",
+      errorCode: "transfer-account-closed",
+    });
+
+    expect(create).not.toHaveBeenCalled();
+    expect(harness.actual).toBeUndefined();
+    expect(harness.journal.operation).toMatchObject({
+      status: "rejected",
+      errorCode: "transfer-account-closed",
+    });
+  });
+
   it("returns a previously committed create without applying it again", async () => {
     const request = createCreateRequest();
     const harness = createHarness(request, { initialStatus: "committed" });
@@ -848,6 +871,43 @@ describe("Actual transaction reconciliation", () => {
       });
     },
   );
+
+  it("passes the current account and payee into transfer edit validation and skips Actual on rejection", async () => {
+    const base = createSnapshot({
+      account: "source-account",
+      payee: "transfer-payee",
+    });
+    const request = createRequest({
+      baseSnapshot: base as unknown as JsonValue,
+      baseRevision: createTransactionRevision(base),
+      patch: { account: "destination-account" },
+    });
+    const harness = createHarness(request);
+    const update = vi.spyOn(harness.store, "update");
+    const validate = vi
+      .spyOn(harness.store, "validateUpdateInput")
+      .mockResolvedValue({
+        code: "transfer-account-same-as-source",
+        message: "Choose a different destination account for this transfer",
+      });
+    const actualBefore = harness.actual;
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toMatchObject({
+      status: "rejected",
+      errorCode: "transfer-account-same-as-source",
+    });
+    expect(validate).toHaveBeenCalledWith(
+      { account: "destination-account" },
+      expect.objectContaining({
+        account: "source-account",
+        payee: "transfer-payee",
+      }),
+    );
+    expect(update).not.toHaveBeenCalled();
+    expect(harness.actual).toEqual(actualBefore);
+  });
 
   it("preserves a conflict journal error when a create ID already exists", async () => {
     const request = createCreateRequest();

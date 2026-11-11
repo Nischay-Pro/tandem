@@ -526,6 +526,14 @@ describe("transaction REST routes", () => {
     ["account-not-found", "Account does not exist in this budget"],
     ["account-closed", "Choose an open account for this transaction"],
     ["payee-not-found", "Payee does not exist in this budget"],
+    [
+      "transfer-account-closed",
+      "Choose an open destination account for this transfer",
+    ],
+    [
+      "transfer-account-same-as-source",
+      "Choose a different destination account for this transfer",
+    ],
     ["category-not-found", "Category does not exist in this budget"],
     ["category-hidden", "Choose a visible category for this transaction"],
     ["unknown-rejection", "Transaction request is invalid"],

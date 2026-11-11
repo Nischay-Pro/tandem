@@ -5169,6 +5169,10 @@ function rejectedTransactionMessage(errorCode: string): string {
       return "Choose an open account for this transaction";
     case "payee-not-found":
       return "Payee does not exist in this budget";
+    case "transfer-account-closed":
+      return "Choose an open destination account for this transfer";
+    case "transfer-account-same-as-source":
+      return "Choose a different destination account for this transfer";
     case "category-not-found":
       return "Category does not exist in this budget";
     case "category-hidden":

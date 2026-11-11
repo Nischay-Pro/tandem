@@ -498,6 +498,7 @@ export class TransactionReconciler {
             }
             const validationIssue = await this.transactions.validateUpdateInput(
               updatePlan.patch,
+              latest,
             );
             if (validationIssue) {
               return { kind: "rejected", errorCode: validationIssue.code };

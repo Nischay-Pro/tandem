@@ -83,6 +83,8 @@ describe("transaction request validation integration", () => {
             | "account-not-found"
             | "account-closed"
             | "payee-not-found"
+            | "transfer-account-closed"
+            | "transfer-account-same-as-source"
             | "category-not-found"
             | "category-hidden";
           message: string;
@@ -94,6 +96,8 @@ describe("transaction request validation integration", () => {
             | "account-not-found"
             | "account-closed"
             | "payee-not-found"
+            | "transfer-account-closed"
+            | "transfer-account-same-as-source"
             | "category-not-found"
             | "category-hidden";
           message: string;
@@ -201,6 +205,14 @@ describe("transaction request validation integration", () => {
           message: "Payee does not exist in this budget",
         },
         {
+          code: "transfer-account-closed",
+          message: "Choose an open destination account for this transfer",
+        },
+        {
+          code: "transfer-account-same-as-source",
+          message: "Choose a different destination account for this transfer",
+        },
+        {
           code: "category-not-found",
           message: "Category does not exist in this budget",
         },
@@ -263,6 +275,20 @@ describe("transaction request validation integration", () => {
             message: "Payee does not exist in this budget",
           },
           patch: { payee: "removed-payee" },
+        },
+        {
+          issue: {
+            code: "transfer-account-closed",
+            message: "Choose an open destination account for this transfer",
+          },
+          patch: { payee: "closed-transfer-payee" },
+        },
+        {
+          issue: {
+            code: "transfer-account-same-as-source",
+            message: "Choose a different destination account for this transfer",
+          },
+          patch: { account: "self-transfer-target" },
         },
         {
           issue: {
