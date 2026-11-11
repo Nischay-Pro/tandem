@@ -1481,6 +1481,80 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
+    fun offlineEditCanBeRevisedAcrossFieldsWithoutDroppingTheFirstChange() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val original =
+                    transaction(
+                        bodyJson = """{"id":"txn-1","amount":-1000,"notes":"before"}""",
+                        amountMinor = -1000L,
+                    )
+                repository.applySnapshot(BUDGET, GENERATION, "c1", listOf(original))
+
+                val first =
+                    repository.enqueueWrite(
+                        updateRequest(
+                            patch = """{"amount":-1200}""",
+                            optimistic = """{"id":"txn-1","amount":-1200,"notes":"before"}""",
+                            projection = LocalRecordProjection("2026-10-01", "checking", "food", "market", -1200L, null),
+                            baseSnapshot = original.bodyJson,
+                        ),
+                    )
+                val sending = assertNotNull(repository.claimNextWrite(BUDGET))
+                repository.returnWriteToQueue(sending.operationId, "offline-before-submission")
+
+                // The edit form shows the local amount and builds its next patch against Actual's base.
+                val revised =
+                    updateRequest(
+                        operationId = "op-2",
+                        idempotencyKey = "key-2",
+                        patch = """{"amount":-1200,"notes":"lunch"}""",
+                        optimistic = """{"id":"txn-1","amount":-1200,"notes":"lunch"}""",
+                        projection = LocalRecordProjection("2026-10-01", "checking", "food", "market", -1200L, null),
+                        baseSnapshot = original.bodyJson,
+                    )
+                val merged = repository.enqueueWrite(revised)
+
+                assertTrue(merged.replacedUnsent)
+                assertEquals(first.operation.operationId, merged.operation.operationId)
+                assertEquals(first.operation.idempotencyKey, merged.operation.idempotencyKey)
+                assertEquals(1, merged.operation.attemptCount)
+                assertEquals("queued", merged.operation.status)
+                assertEquals(revised.patchJson, merged.operation.patchJson)
+                assertEquals(revised.optimisticJson, repository.findRecord(BUDGET, "transaction", "txn-1")?.localJson)
+                assertEquals(1, repository.readPendingWrites(BUDGET).size)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun revertingAnOfflineEditToActualDiscardsItAndRestoresTheRemoteOverlay() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val original = transaction()
+                repository.applySnapshot(BUDGET, GENERATION, "c1", listOf(original))
+                val queued = repository.enqueueWrite(updateRequest())
+                val sending = assertNotNull(repository.claimNextWrite(BUDGET))
+                repository.returnWriteToQueue(sending.operationId, "offline-before-submission")
+
+                val discarded = repository.discardWrite(queued.operation.operationId)
+                val restored = repository.findRecord(BUDGET, "transaction", "txn-1")
+
+                assertEquals("discarded", discarded.status)
+                assertEquals(original.bodyJson, restored?.remoteJson)
+                assertNull(restored?.localJson)
+                assertFalse(repository.hasUnresolvedWrites())
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun editAfterRemotePullRebasesTheQueuedWriteOnTheNewRevision() =
         runBlocking {
             val database = newDatabase()

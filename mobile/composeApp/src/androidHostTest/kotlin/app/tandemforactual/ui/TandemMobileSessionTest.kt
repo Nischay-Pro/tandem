@@ -315,6 +315,51 @@ class TandemMobileSessionTest {
         }
 
     @Test
+    fun restoresBudgetMutationOrderFromMetadataInsteadOfDeviceClock() =
+        runBlocking {
+            val firstMove =
+                QueuedBudgetReorder(
+                    budgetId = "budget-1",
+                    scopeId = "group-1",
+                    kind = BudgetReorderKind.CATEGORY,
+                    itemId = "category-1",
+                    targetId = null,
+                    desiredOrder = listOf("category-1", "category-2"),
+                    encryptionPassword = null,
+                    operationId = "first-operation",
+                )
+            val secondMove =
+                firstMove.copy(
+                    itemId = "category-2",
+                    operationId = "second-operation",
+                )
+            val savedState = BudgetReorderQueueState().enqueue(firstMove).enqueue(secondMove)
+            val persistence =
+                InMemoryBudgetMutationQueuePersistence(
+                    items =
+                        listOf(
+                            budgetMutationItem(secondMove).copy(createdAtEpochMs = 1L),
+                            budgetMutationItem(firstMove).copy(createdAtEpochMs = 2L),
+                        ),
+                    metadataJson = encodeBudgetReorderQueueMetadata(savedState),
+                )
+            val session =
+                TandemMobileSession(
+                    apiClient = TandemApiClient(),
+                    database = null,
+                    nowEpochMillis = { 10L },
+                    budgetMutationQueuePersistenceOverride = persistence,
+                )
+
+            assertTrue(session.restoreBudgetReorderQueue())
+
+            assertEquals(
+                listOf("first-operation", "second-operation"),
+                session.budgetReorderMovesFor("budget-1", "group-1").map { it.operationId },
+            )
+        }
+
+    @Test
     fun budgetMutationIsPersistedBeforeEnqueueReturnsAndRestoresInANewSession() =
         runBlocking {
             val persistence = InMemoryBudgetMutationQueuePersistence()
