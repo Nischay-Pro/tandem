@@ -48,4 +48,23 @@ describe("Actual budget catalog reader", () => {
       "Actual returned a budget without a valid name",
     );
   });
+
+  it("returns one catalog entry when Actual lists a cached and remote copy", async () => {
+    const fake = createReader([
+      { groupId: "sync-household", name: "Old household name" },
+      {
+        groupId: "sync-household",
+        name: "Household",
+        encryptKeyId: "encrypted-key",
+      },
+    ]);
+
+    await expect(fake.reader.read()).resolves.toEqual([
+      {
+        budgetId: "sync-household",
+        name: "Household",
+        isEncrypted: true,
+      },
+    ]);
+  });
 });
