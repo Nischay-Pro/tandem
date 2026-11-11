@@ -13,25 +13,26 @@ definitions and is part of `pnpm check:all`.
 
 ## Implemented endpoints
 
-| Method   | Path                                                                 | Purpose                                                            |
-| -------- | -------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `GET`    | `/api/v1/health/live`                                                | Liveness check for the API process.                                |
-| `GET`    | `/api/v1/health/ready`                                               | Readiness check for PostgreSQL and any configured startup session. |
-| `GET`    | `/api/v1/openapi.json`                                               | Generated API contract.                                            |
-| `GET`    | `/api/v1/auth/methods`                                               | Read the Actual server's available sign-in methods.                |
-| `POST`   | `/api/v1/auth/login`                                                 | Sign in with an Actual password and create a device session.       |
-| `POST`   | `/api/v1/auth/openid/start`                                          | Start Actual OpenID sign-in in the system browser.                 |
-| `GET`    | `/api/v1/auth/actual-return/{state}/openid-cb`                       | Receive Actual's browser callback and return to the mobile app.    |
-| `POST`   | `/api/v1/auth/openid/complete`                                       | Exchange a one-use return code for the device session.             |
-| `GET`    | `/api/v1/auth/me`                                                    | Return the authenticated device and its budget scope.              |
-| `GET`    | `/api/v1/devices`                                                    | List devices visible to the authenticated device.                  |
-| `DELETE` | `/api/v1/devices/{deviceId}`                                         | Revoke an authorized device token.                                 |
-| `GET`    | `/api/v1/budgets`                                                    | List Actual budgets visible to the signed-in account.              |
-| `GET`    | `/api/v1/budgets/{budgetId}/snapshot`                                | Refresh and read a complete budget snapshot.                       |
-| `GET`    | `/api/v1/budgets/{budgetId}/changes`                                 | Read generation-aware pages of budget changes.                     |
-| `GET`    | `/api/v1/budgets/{budgetId}/transactions/{transactionId}`            | Read a transaction snapshot and revision.                          |
-| `POST`   | `/api/v1/budgets/{budgetId}/transactions/{transactionId}/operations` | Create, update, or delete a transaction idempotently.              |
-| `GET`    | `/api/v1/operations/{operationId}`                                   | Read operation status and conflict details.                        |
+| Method   | Path                                                                          | Purpose                                                            |
+| -------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `GET`    | `/api/v1/health/live`                                                         | Liveness check for the API process.                                |
+| `GET`    | `/api/v1/health/ready`                                                        | Readiness check for PostgreSQL and any configured startup session. |
+| `GET`    | `/api/v1/openapi.json`                                                        | Generated API contract.                                            |
+| `GET`    | `/api/v1/auth/methods`                                                        | Read the Actual server's available sign-in methods.                |
+| `POST`   | `/api/v1/auth/login`                                                          | Sign in with an Actual password and create a device session.       |
+| `POST`   | `/api/v1/auth/openid/start`                                                   | Start Actual OpenID sign-in in the system browser.                 |
+| `GET`    | `/api/v1/auth/actual-return/{state}/openid-cb`                                | Receive Actual's browser callback and return to the mobile app.    |
+| `POST`   | `/api/v1/auth/openid/complete`                                                | Exchange a one-use return code for the device session.             |
+| `GET`    | `/api/v1/auth/me`                                                             | Return the authenticated device and its budget scope.              |
+| `GET`    | `/api/v1/devices`                                                             | List devices visible to the authenticated device.                  |
+| `DELETE` | `/api/v1/devices/{deviceId}`                                                  | Revoke an authorized device token.                                 |
+| `GET`    | `/api/v1/budgets`                                                             | List Actual budgets visible to the signed-in account.              |
+| `GET`    | `/api/v1/budgets/{budgetId}/snapshot`                                         | Refresh and read a complete budget snapshot.                       |
+| `GET`    | `/api/v1/budgets/{budgetId}/changes`                                          | Read generation-aware pages of budget changes.                     |
+| `GET`    | `/api/v1/budgets/{budgetId}/transactions/{transactionId}`                     | Read a transaction snapshot and revision.                          |
+| `POST`   | `/api/v1/budgets/{budgetId}/accounts/{accountId}/transactions/import/preview` | Count existing statement references without importing them.        |
+| `POST`   | `/api/v1/budgets/{budgetId}/transactions/{transactionId}/operations`          | Create, update, or delete a transaction idempotently.              |
+| `GET`    | `/api/v1/operations/{operationId}`                                            | Read operation status and conflict details.                        |
 
 ## Sign-in and device authorization
 
@@ -66,6 +67,8 @@ stored sessions in one transaction. If any row matches neither key, startup
 fails and the transaction rolls back. After the API is healthy, clear the
 previous-key setting and restart; retain the old key in protected backup
 storage while any database backup may still contain tokens encrypted with it.
+A ciphertext envelope carries a key ID, so rows encrypted with the previous
+key remain readable during rotation without a schema migration.
 A budget password for an Actual-encrypted budget is different: mobile sends it
 only on the requests that need it, and Tandem does not persist it.
 
@@ -75,26 +78,43 @@ Set `ACTUAL_PUBLIC_URL` to the public HTTPS URL that reaches Tandem through the
 reverse proxy. The browser return URL is built from that base. If it is unset,
 Tandem does not advertise OpenID as available.
 
-1. The app calls `POST /api/v1/auth/openid/start` with its device name and an
-   S256 `codeChallenge`. Tandem starts Actual's OpenID login and returns the
-   provider redirect URL.
+1. The app calls `POST /api/v1/auth/openid/start` with its device name, an
+   S256 `codeChallenge`, and a fresh 32-byte random `callbackState`. Tandem
+   binds both values to the pending login and returns the provider redirect
+   URL.
 2. Actual redirects the browser to
    `/api/v1/auth/actual-return/{state}/openid-cb?token=…`. Tandem validates the
    Actual session, associates it with the account, and redirects the app to its
-   current `tandem://signin/complete` handler with a short-lived, one-use Tandem
-   code. The Actual token is never included in the app return link; the code
-   alone cannot be exchanged for a device token.
+   `app.tandemforactual:/signin/complete` handler with a short-lived, one-use
+   Tandem code and the `callbackState`. The app checks that state against its
+   pending login before exchanging the code. The Actual token is never included
+   in the app return link; the code alone cannot be exchanged for a device
+   token.
 3. The app calls `POST /api/v1/auth/openid/complete` with the one-use `code` and
    its original `codeVerifier`. Tandem hashes the verifier and only issues a
    device token if it matches the challenge from step 1.
 
-The state expires after five minutes and the app return code expires after 90
-seconds. Both are one-use. A failed verifier does not consume the code. The
-callback response disables caching and referrers. Actual's callback URL
-includes its session token as a query parameter. The Nginx example disables
+The provider return state expires after five minutes, the app's pending proof
+expires after six minutes and thirty seconds, and the app return code expires
+after 90 seconds. A failed verifier does not consume the code. The callback
+response disables caching and referrers. Actual's callback URL includes its
+session token as a query parameter. The Nginx example disables
 access logs and suppresses non-emergency error logs for this path. Configure
 custom reverse proxies to omit the callback query from both access and error
 logs.
+
+The mobile return is a package-style private-use URI scheme, not a verified
+Android App Link or iOS Universal Link. PKCE prevents an app that intercepts
+the one-use code from redeeming it without the verifier; the callback state
+rejects responses that do not match the pending app login. A competing app can
+still claim the scheme and intercept or drop the callback, denying sign-in.
+RFC 8252 §7.1 requires private-use schemes to be based on a domain under app
+control; the current package-style name does not prove domain ownership.
+Verified HTTPS returns would require a fixed app-associated domain, Android
+`assetlinks.json`, Apple `apple-app-site-association`, and app entitlements.
+Per-install server addresses cannot be pre-associated in a single distributed
+app. See [RFC 8252 §§7.1, 7.2, 8.9](https://www.rfc-editor.org/rfc/rfc8252) and
+[RFC 7636](https://www.rfc-editor.org/rfc/rfc7636).
 
 Sign-in endpoints are limited to 10 requests per client address per minute in
 each API process; IPv6 addresses in the same `/64` share a limit. The Nginx
@@ -204,6 +224,15 @@ password is distinct from the Actual account sign-in password; the service
 forwards it to the official API for that request and does not persist it. Use
 HTTPS. Responses
 containing financial data set `Cache-Control: no-store`.
+
+Before importing a statement, the client calls
+`POST /api/v1/budgets/{budgetId}/accounts/{accountId}/transactions/import/preview`
+with 1 to 1,000 unique `importedIds`. The server returns the subset already
+present in that account as `existingImportedIds`; the client can show exact new
+and existing counts before confirmation. The endpoint reads Actual under the
+budget lock, honors `X-Budget-Encryption-Password` for encrypted budgets, and
+does not import, journal, or otherwise mutate transactions. The response uses
+`Cache-Control: no-store`.
 
 Submit a write to
 `POST /api/v1/budgets/{budgetId}/transactions/{transactionId}/operations` with

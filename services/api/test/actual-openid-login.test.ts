@@ -7,6 +7,7 @@ const TEST_CODE_VERIFIER = "v".repeat(64);
 const TEST_CODE_CHALLENGE = createHash("sha256")
   .update(TEST_CODE_VERIFIER, "ascii")
   .digest("base64url");
+const TEST_CALLBACK_STATE = "s".repeat(43);
 
 function jsonResponse(value: unknown): Response {
   return new Response(JSON.stringify(value), {
@@ -33,7 +34,11 @@ describe("Actual OpenID sign-in handoff", () => {
       prepareGrant,
     );
 
-    const started = await openId.start("Synthetic phone", TEST_CODE_CHALLENGE);
+    const started = await openId.start(
+      "Synthetic phone",
+      TEST_CODE_CHALLENGE,
+      TEST_CALLBACK_STATE,
+    );
     const callbackUrl = new URL(startOpenIdSignIn.mock.calls[0]?.[0] ?? "");
     const state = callbackUrl.pathname.split("/").at(-2);
     const returnUrl = await openId.completeCallback(
@@ -41,10 +46,12 @@ describe("Actual OpenID sign-in handoff", () => {
       "synthetic-session-token",
     );
     const code = new URL(returnUrl ?? "").searchParams.get("code");
+    const callbackState = new URL(returnUrl ?? "").searchParams.get("state");
 
     expect(started.redirectUrl).toBe("https://idp.example/authorize");
     expect(state).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(code).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(callbackState).toBe(TEST_CALLBACK_STATE);
     expect(prepareGrant).toHaveBeenCalledWith({
       principalId: "actual-user:synthetic",
       sessionToken: "synthetic-session-token",
@@ -74,7 +81,7 @@ describe("Actual OpenID sign-in handoff", () => {
       );
 
       await expect(
-        openId.start(deviceName, TEST_CODE_CHALLENGE),
+        openId.start(deviceName, TEST_CODE_CHALLENGE, TEST_CALLBACK_STATE),
       ).rejects.toThrow("Device name is invalid");
       expect(startOpenIdSignIn).not.toHaveBeenCalled();
     },
@@ -92,8 +99,25 @@ describe("Actual OpenID sign-in handoff", () => {
     );
 
     await expect(
-      openId.start("Synthetic phone", "not-a-challenge"),
+      openId.start("Synthetic phone", "not-a-challenge", TEST_CALLBACK_STATE),
     ).rejects.toThrow("OpenID code challenge is invalid");
+    expect(startOpenIdSignIn).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed callback state before starting provider login", async () => {
+    const startOpenIdSignIn = vi.fn(async () => "https://idp.example/login");
+    const passwordLogin = {
+      startOpenIdSignIn,
+    } as unknown as ActualPasswordLogin;
+    const openId = new ActualOpenIdLogin(
+      passwordLogin,
+      "https://tandem.example",
+      async (grant) => grant,
+    );
+
+    await expect(
+      openId.start("Synthetic phone", TEST_CODE_CHALLENGE, "short"),
+    ).rejects.toThrow("OpenID callback state is invalid");
     expect(startOpenIdSignIn).not.toHaveBeenCalled();
   });
 
@@ -116,11 +140,15 @@ describe("Actual OpenID sign-in handoff", () => {
     );
 
     for (let index = 0; index < 1_000; index += 1) {
-      await openId.start("Synthetic phone", TEST_CODE_CHALLENGE);
+      await openId.start(
+        "Synthetic phone",
+        TEST_CODE_CHALLENGE,
+        TEST_CALLBACK_STATE,
+      );
     }
 
     await expect(
-      openId.start("Synthetic phone", TEST_CODE_CHALLENGE),
+      openId.start("Synthetic phone", TEST_CODE_CHALLENGE, TEST_CALLBACK_STATE),
     ).rejects.toThrow("OpenID sign-in is temporarily busy");
     expect(startOpenIdSignIn).toHaveBeenCalledTimes(1_000);
   });
@@ -154,7 +182,11 @@ describe("Actual OpenID sign-in handoff", () => {
       },
     );
 
-    const started = await openId.start("Synthetic phone", TEST_CODE_CHALLENGE);
+    const started = await openId.start(
+      "Synthetic phone",
+      TEST_CODE_CHALLENGE,
+      TEST_CALLBACK_STATE,
+    );
     const requestBody = JSON.parse(requests[0]?.body ?? "{}") as {
       loginMethod: string;
       returnUrl: string;
@@ -172,7 +204,7 @@ describe("Actual OpenID sign-in handoff", () => {
       "synthetic-actual-session-token",
     );
     expect(returnUrl).toBe(
-      "tandem://signin/complete?code=0000000000000000000000000000000000000000002",
+      `app.tandemforactual:/signin/complete?code=0000000000000000000000000000000000000000002&state=${TEST_CALLBACK_STATE}`,
     );
     expect(returnUrl).not.toContain("synthetic-actual-session-token");
     expect(requests[1]?.url).toBe("https://actual.example/account/validate");
@@ -211,7 +243,11 @@ describe("Actual OpenID sign-in handoff", () => {
         return String(codeIndex).padStart(43, "0");
       },
     );
-    await openId.start("Synthetic phone", TEST_CODE_CHALLENGE);
+    await openId.start(
+      "Synthetic phone",
+      TEST_CODE_CHALLENGE,
+      TEST_CALLBACK_STATE,
+    );
     now = 5 * 60_000;
 
     await expect(
@@ -248,7 +284,11 @@ describe("Actual OpenID sign-in handoff", () => {
     ).resolves.toBeUndefined();
     expect(openId.consume("Z".repeat(43), TEST_CODE_VERIFIER)).toBeUndefined();
 
-    await openId.start("Synthetic phone", TEST_CODE_CHALLENGE);
+    await openId.start(
+      "Synthetic phone",
+      TEST_CODE_CHALLENGE,
+      TEST_CALLBACK_STATE,
+    );
     const request = JSON.parse(
       String(fetchRequest.mock.calls[0]?.[1]?.body),
     ) as { returnUrl: string };

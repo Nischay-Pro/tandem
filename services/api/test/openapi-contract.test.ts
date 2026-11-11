@@ -34,6 +34,16 @@ describe("OpenAPI contract generation", () => {
         "/api/v1/budgets/{budgetId}/transactions/{transactionId}/operations"
       ],
     ).toBeDefined();
+    expect(
+      document.paths[
+        "/api/v1/budgets/{budgetId}/accounts/{accountId}/transactions/import/preview"
+      ],
+    ).toMatchObject({
+      post: {
+        operationId: "previewBudgetAccountStatementImport",
+        requestBody: expect.objectContaining({ required: true }),
+      },
+    });
   });
 
   it("writes a stable contract and verifies it without changing the file", async () => {

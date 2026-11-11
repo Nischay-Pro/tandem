@@ -74,6 +74,18 @@ const statusNotReady = {
   additionalProperties: false,
 };
 
+const budgetEncryptionHeaderSchema = {
+  type: "object",
+  properties: {
+    "x-budget-encryption-password": {
+      type: "string",
+      minLength: 1,
+      maxLength: 1_024,
+    },
+  },
+  additionalProperties: true,
+};
+
 export function safeErrorType(error: unknown): string {
   if (!(error instanceof Error)) return error === null ? "null" : typeof error;
   const name = error.constructor.name;
@@ -635,7 +647,13 @@ function registerDeviceAuthorizationRoutes(
   );
 
   if (actualOpenIdLogin) {
-    app.post<{ Body: { deviceName: string; codeChallenge: string } }>(
+    app.post<{
+      Body: {
+        deviceName: string;
+        codeChallenge: string;
+        callbackState: string;
+      };
+    }>(
       "/api/v1/auth/openid/start",
       {
         schema: {
@@ -659,8 +677,16 @@ function registerDeviceAuthorizationRoutes(
                 description:
                   "Unpadded base64url SHA-256 challenge for the app-generated PKCE verifier.",
               },
+              callbackState: {
+                type: "string",
+                minLength: 43,
+                maxLength: 43,
+                pattern: "^[A-Za-z0-9_-]{43}$",
+                description:
+                  "High-entropy state used to match the browser callback to this pending app login.",
+              },
             },
-            required: ["deviceName", "codeChallenge"],
+            required: ["deviceName", "codeChallenge", "callbackState"],
             additionalProperties: false,
           },
           response: {
@@ -703,6 +729,7 @@ function registerDeviceAuthorizationRoutes(
           return await actualOpenIdLogin.start(
             request.body.deviceName,
             request.body.codeChallenge,
+            request.body.callbackState,
           );
         } catch {
           return reply.code(503).send({
@@ -742,7 +769,11 @@ function registerDeviceAuthorizationRoutes(
             additionalProperties: false,
           },
           response: {
-            302: { type: "null" },
+            302: {
+              type: "null",
+              description:
+                "Redirects to the mobile app with a one-use code and the state for the pending sign-in.",
+            },
             400: errorSchema,
             401: errorSchema,
             503: errorSchema,
@@ -1128,6 +1159,8 @@ function registerTransactionRoutes(
           errorCode: nullableStringSchema,
           actualResult: {
             type: ["object", "array", "string", "number", "boolean", "null"],
+            additionalProperties: true,
+            items: {},
           },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
@@ -1177,18 +1210,6 @@ function registerTransactionRoutes(
     required: ["budgetId", "transactionId"],
     additionalProperties: false,
   };
-  const budgetEncryptionHeaderSchema = {
-    type: "object",
-    properties: {
-      "x-budget-encryption-password": {
-        type: "string",
-        minLength: 1,
-        maxLength: 1_024,
-      },
-    },
-    additionalProperties: true,
-  };
-
   app.get<{
     Params: TransactionRouteParams;
     Headers: TransactionHeaders;
@@ -1586,6 +1607,10 @@ interface BudgetStatementImportBody {
   transactions: StatementTransactionImport[];
 }
 
+interface BudgetStatementImportPreviewBody {
+  importedIds: string[];
+}
+
 interface BudgetMoveMoneyBody {
   month: string;
   fromCategoryId: string;
@@ -1821,6 +1846,101 @@ function registerBudgetMaintenanceRoutes(
             code: "bank_sync_failed",
             message:
               "Actual could not complete bank sync. Check its provider setup and try again.",
+          },
+        });
+      }
+    },
+  );
+
+  app.post<{
+    Params: BudgetRouteParams & { accountId: string };
+    Headers: BudgetReadHeaders;
+    Body: BudgetStatementImportPreviewBody;
+  }>(
+    "/api/v1/budgets/:budgetId/accounts/:accountId/transactions/import/preview",
+    {
+      bodyLimit: 256 * 1024,
+      schema: {
+        tags: ["Transactions"],
+        operationId: "previewBudgetAccountStatementImport",
+        summary:
+          "Check which statement references already exist in an Actual Budget account",
+        security: [{ bearerAuth: [] }],
+        params: accountParamsSchema,
+        headers: budgetEncryptionHeaderSchema,
+        body: {
+          type: "object",
+          properties: {
+            importedIds: {
+              type: "array",
+              minItems: 1,
+              maxItems: 1_000,
+              uniqueItems: true,
+              items: { type: "string", minLength: 1, maxLength: 200 },
+            },
+          },
+          required: ["importedIds"],
+          additionalProperties: false,
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              status: { type: "string", const: "ok" },
+              existingImportedIds: {
+                type: "array",
+                uniqueItems: true,
+                items: { type: "string", minLength: 1, maxLength: 200 },
+              },
+            },
+            required: ["status", "existingImportedIds"],
+            additionalProperties: false,
+          },
+          400: errorSchema,
+          401: errorSchema,
+          404: errorSchema,
+          502: errorSchema,
+        },
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(deviceAuth, request, reply);
+      if (!device) return reply;
+      if (request.validationError) return invalidBudgetRequest(reply);
+      if (
+        !DeviceAuthorization.canAccessBudget(device, request.params.budgetId)
+      ) {
+        return transactionNotFound(reply);
+      }
+      if (!maintenanceApi) return actualNotConfigured(reply);
+      try {
+        const preview = await maintenanceApi.previewStatementImportTransactions(
+          request.params.budgetId,
+          request.params.accountId,
+          request.body.importedIds,
+          request.headers["x-budget-encryption-password"],
+        );
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send({
+          status: "ok",
+          existingImportedIds: preview.existingImportedIds,
+        });
+      } catch (error) {
+        if (error instanceof BudgetMaintenanceInputError) {
+          return reply.code(400).send({
+            error: { code: "invalid_request", message: error.message },
+          });
+        }
+        reportTransactionFailure(
+          "Actual statement import preview failed",
+          error,
+        );
+        return reply.code(502).send({
+          error: {
+            code: "statement_preview_failed",
+            message:
+              "Actual could not check which statement rows are already imported. Try again.",
           },
         });
       }

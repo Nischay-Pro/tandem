@@ -15,7 +15,8 @@ the deployment environment file:
 docker network create tandem-edge
 cp deploy/compose/.env.example deploy/compose/.env
 chmod 600 deploy/compose/.env
-mkdir -m 700 -p deploy/compose/secrets
+mkdir -p deploy/compose/secrets
+chmod 700 deploy/compose/secrets
 postgres_password="$(openssl rand -hex 32)"
 printf '%s' "$postgres_password" > deploy/compose/secrets/postgres_password
 printf 'postgresql://tandem:%s@postgres:5432/tandem' "$postgres_password" > deploy/compose/secrets/database_url
@@ -94,16 +95,26 @@ exact proxy address or narrow CIDR observed by the API; production Compose
 refuses an empty value. Do not trust all forwarded headers. Keep
 TLS termination and the Actual server's existing proxy settings in the
 existing Nginx site configuration.
-The example limits general API traffic to 600 requests per minute per client
-address, and sign-in traffic to 10 requests per minute per source address with
-a burst of 5. These Nginx zones key on the full source address. The API also
-keeps an in-memory 10-per-minute sign-in limit per client address in each
-process and groups IPv6 addresses by `/64`. Configure `TRUST_PROXY` so the API
-sees the real client address. Keep the API origin private so clients cannot
-bypass the edge limits. The API's `/64` limit is local to each API process; use
-a shared limiter before running multiple API processes or replicas. The API
-location compresses JSON responses of at least 1 KiB when the client supports
-gzip.
+The example limits general API traffic to 600 requests per minute with a burst
+of 60, and applies an edge limit of 10 requests per minute with a burst of 5 to
+password login, OpenID start, OpenID completion, and the Actual callback.
+Nginx keys these zones on `$binary_remote_addr`, the immediate peer address it
+sees. If Nginx is behind a CDN or another proxy, configure Nginx real-IP
+handling for only that upstream or the edge limit will group clients under the
+upstream's address.
+
+Each API process shares one in-memory 10-requests-per-60-seconds limit across
+Actual-password login and OpenID start. It keys by client address and groups
+IPv6 addresses by `/64`. Fastify uses the direct peer address unless
+`TRUST_PROXY` lists the proxy addresses it should trust when reading the
+forwarded chain. For a proxy chain, configure Nginx real-IP handling only for
+the upstream proxy and list the trusted hops in `TRUST_PROXY`; otherwise the
+API may also group clients under an upstream address. With no trusted proxy,
+clients behind one proxy share the API process's limit. Keep the API origin
+private so clients cannot bypass Nginx's edge limits. The API limit is local to
+each process; use a shared limiter before running multiple API processes or
+replicas. The API location compresses JSON responses of at least 1 KiB when
+the client supports gzip.
 
 Start and verify:
 

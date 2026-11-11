@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildApiApp } from "../src/app.js";
+import { ActualPrincipalSessionExpiredError } from "../src/actual/actual-session.js";
 import {
   DeviceAuthorization,
   type DeviceRecord,
@@ -399,6 +400,27 @@ describe("budget snapshot and change feed routes", () => {
       errorType: "Error",
     });
     vi.restoreAllMocks();
+    await app.close();
+  });
+
+  it("asks the device to sign in again when Actual expired a budget session", async () => {
+    const expiredApi = createBudgetReadApi({
+      getSnapshot: vi.fn(async () => {
+        throw new ActualPrincipalSessionExpiredError();
+      }),
+    });
+    const app = await buildApp(expiredApi);
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/budgets/budget-1/snapshot",
+      headers: authHeaders,
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json().error).toEqual({
+      code: "actual_sign_in_expired",
+      message: "Actual sign-in expired. Sign in again to continue.",
+    });
     await app.close();
   });
 

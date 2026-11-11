@@ -60,6 +60,10 @@ export interface StatementImportResult {
   errors: string[];
 }
 
+export interface StatementImportPreviewResult {
+  existingImportedIds: string[];
+}
+
 function validateBudgetScheduleEdit(edit: BudgetScheduleEdit): void {
   if (Object.keys(edit).length === 0) {
     throw new BudgetMaintenanceInputError("Add at least one schedule change");
@@ -219,6 +223,12 @@ function isIsoDate(value: string): boolean {
 
 export interface BudgetMaintenanceApiPort {
   runBankSync(budgetId: string, encryptionPassword?: string): Promise<void>;
+  previewStatementImportTransactions(
+    budgetId: string,
+    accountId: string,
+    importedIds: readonly string[],
+    encryptionPassword?: string,
+  ): Promise<StatementImportPreviewResult>;
   importStatementTransactions(
     budgetId: string,
     accountId: string,
@@ -435,6 +445,8 @@ export class BudgetMaintenanceBusyError extends Error {
 type ActualBudgetMaintenanceClient = Pick<
   typeof actualApi,
   | "runBankSync"
+  | "q"
+  | "aqlQuery"
   | "importTransactions"
   | "createAccount"
   | "updateAccount"
@@ -538,6 +550,83 @@ export function createBudgetMaintenanceApi(
           bankSyncs.delete(budgetId);
         });
       return waitForCompletion(sync, BANK_SYNC_TIMEOUT_MS);
+    },
+    previewStatementImportTransactions(
+      budgetId,
+      accountId,
+      importedIds,
+      encryptionPassword,
+    ) {
+      if (!accountId.trim()) {
+        return Promise.reject(
+          new BudgetMaintenanceInputError("Choose an account"),
+        );
+      }
+      if (
+        importedIds.length === 0 ||
+        importedIds.length > 1_000 ||
+        importedIds.some((id) => !id.trim() || id.length > 200) ||
+        new Set(importedIds).size !== importedIds.length
+      ) {
+        return Promise.reject(
+          new BudgetMaintenanceInputError(
+            "Choose up to 1,000 unique statement references",
+          ),
+        );
+      }
+      return locks.withBudgetLock(budgetId, () =>
+        session.runBudget(
+          budgetId,
+          async () => {
+            const account = (await client.getAccounts()).find(
+              (candidate) => candidate.id === accountId && !candidate.closed,
+            );
+            if (!account) {
+              throw new BudgetMaintenanceInputError(
+                "Choose an open account in this budget",
+              );
+            }
+            const result = await client.aqlQuery(
+              client
+                .q("transactions")
+                .filter({
+                  account: accountId,
+                  imported_id: { $oneof: [...importedIds] },
+                })
+                .select(["imported_id"])
+                .options({ splits: "grouped" }),
+            );
+            if (
+              !isRecord(result) ||
+              !Array.isArray(result.data) ||
+              result.data.some((row) => !isRecord(row))
+            ) {
+              throw new Error(
+                "Actual returned an invalid statement-import preview",
+              );
+            }
+            const requested = new Set(importedIds);
+            const existingImportedIds = new Set<string>();
+            for (const row of result.data) {
+              const importedId = row.imported_id;
+              if (
+                typeof importedId !== "string" ||
+                !requested.has(importedId)
+              ) {
+                throw new Error(
+                  "Actual returned an invalid statement reference",
+                );
+              }
+              existingImportedIds.add(importedId);
+            }
+            return { existingImportedIds: [...existingImportedIds] };
+          },
+          {
+            synchronizeAfterWrite: false,
+            ...(encryptionPassword === undefined ? {} : { encryptionPassword }),
+          },
+        ),
+      );
     },
     importStatementTransactions(
       budgetId,

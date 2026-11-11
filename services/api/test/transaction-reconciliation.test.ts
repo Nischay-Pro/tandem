@@ -12,6 +12,8 @@ import {
   planTransactionDeletion,
   planTransactionUpdate,
   snapshotActualTransaction,
+  type TransactionEditField,
+  type TransactionPatch,
   type TransactionSnapshot,
 } from "../src/actual/transaction-reconciliation.js";
 
@@ -39,6 +41,91 @@ function createSnapshot(
     subtransactions: [],
     ...overrides,
   };
+}
+
+const editableFields: readonly TransactionEditField[] = [
+  "account",
+  "amount",
+  "date",
+  "payee",
+  "category",
+  "notes",
+  "cleared",
+  "reconciled",
+];
+
+const divergentFields: readonly TransactionEditField[] = editableFields.filter(
+  (field) => field !== "cleared" && field !== "reconciled",
+);
+
+function createSeededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    return (state >>> 0) / 0x1_0000_0000;
+  };
+}
+
+function shuffleFields(
+  random: () => number,
+  fields: readonly TransactionEditField[] = editableFields,
+): TransactionEditField[] {
+  const shuffled = [...fields];
+  for (let index = shuffled.length - 1; index > 0; index--) {
+    const otherIndex = Math.floor(random() * (index + 1));
+    [shuffled[index], shuffled[otherIndex]] = [
+      shuffled[otherIndex]!,
+      shuffled[index]!,
+    ];
+  }
+  return shuffled;
+}
+
+function generatedFieldValue(
+  field: TransactionEditField,
+  token: number,
+): string | number | boolean {
+  switch (field) {
+    case "account":
+    case "payee":
+    case "category":
+    case "notes":
+      return `${field}-${token}`;
+    case "amount":
+      return -2_000 - token;
+    case "date": {
+      const year = 2030 + (token % 20);
+      const month = String((token % 12) + 1).padStart(2, "0");
+      const day = String((token % 28) + 1).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+    case "cleared":
+    case "reconciled":
+      return true;
+  }
+}
+
+function generatedPatch(
+  assignments: readonly {
+    field: TransactionEditField;
+    token: number;
+  }[],
+): TransactionPatch {
+  return Object.fromEntries(
+    assignments.map(({ field, token }) => [
+      field,
+      generatedFieldValue(field, token),
+    ]),
+  ) as TransactionPatch;
+}
+
+function applyPatch(
+  snapshot: TransactionSnapshot,
+  patch: TransactionPatch,
+): TransactionSnapshot {
+  return Object.assign({}, snapshot, patch);
 }
 
 describe("transaction snapshots and merge planning", () => {
@@ -759,6 +846,48 @@ describe("transaction snapshots and merge planning", () => {
     ).toEqual({ kind: "unchanged" });
   });
 
+  it("preserves seeded combinations of independent local and remote field edits", () => {
+    const base = createSnapshot();
+    const random = createSeededRandom(0x322_317);
+
+    for (let iteration = 0; iteration < 128; iteration++) {
+      const fields = shuffleFields(random);
+      const localFieldCount = 1 + Math.floor(random() * 3);
+      const remoteFieldCount =
+        1 + Math.floor(random() * Math.min(3, fields.length - localFieldCount));
+      const localFields = fields.slice(0, localFieldCount);
+      const remoteFields = fields.slice(
+        localFieldCount,
+        localFieldCount + remoteFieldCount,
+      );
+      const tokenBase = 1_000 + iteration * 8;
+      const local = generatedPatch(
+        localFields.map((field, index) => ({
+          field,
+          token: tokenBase + index,
+        })),
+      );
+      const remotePatch = generatedPatch(
+        remoteFields.map((field, index) => ({
+          field,
+          token: tokenBase + 4 + index,
+        })),
+      );
+      const remote = applyPatch(base, remotePatch);
+      const plan = planTransactionUpdate(base, remote, local);
+
+      expect(plan, `seeded independent-edit case ${iteration}`).toEqual({
+        kind: "apply",
+        patch: local,
+      });
+      if (plan.kind !== "apply") continue;
+
+      expect(applyPatch(remote, plan.patch)).toEqual(
+        applyPatch(base, { ...remotePatch, ...local }),
+      );
+    }
+  });
+
   it("allows split parent changes when the group is unchanged", () => {
     const splitChild = createSnapshot({
       id: "split-child",
@@ -978,6 +1107,38 @@ describe("transaction snapshots and merge planning", () => {
         amount: -1200,
       }),
     ).toThrow("Transaction snapshot IDs do not match");
+  });
+
+  it("conflicts on seeded divergent edits to the same field", () => {
+    const base = createSnapshot();
+    const random = createSeededRandom(0x317_322);
+
+    for (let iteration = 0; iteration < 128; iteration++) {
+      const sharedField =
+        divergentFields[Math.floor(random() * divergentFields.length)]!;
+      const otherFields = shuffleFields(
+        random,
+        editableFields.filter((field) => field !== sharedField),
+      );
+      const tokenBase = 10_000 + iteration * 4;
+      const local = generatedPatch([
+        { field: sharedField, token: tokenBase },
+        { field: otherFields[0]!, token: tokenBase + 2 },
+      ]);
+      const remotePatch = generatedPatch([
+        { field: sharedField, token: tokenBase + 1 },
+        { field: otherFields[1]!, token: tokenBase + 3 },
+      ]);
+      const remote = applyPatch(base, remotePatch);
+
+      expect(local[sharedField]).not.toBe(base[sharedField]);
+      expect(remote[sharedField]).not.toBe(base[sharedField]);
+      expect(local[sharedField]).not.toBe(remote[sharedField]);
+      expect(
+        planTransactionUpdate(base, remote, local),
+        `seeded divergent-edit case ${iteration}`,
+      ).toEqual({ kind: "conflict", conflictingFields: [sharedField] });
+    }
   });
 
   it("detects deletion versus any changed managed field", () => {

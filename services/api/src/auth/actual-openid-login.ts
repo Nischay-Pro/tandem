@@ -7,10 +7,12 @@ import {
 const STATE_TTL_MS = 5 * 60_000;
 const COMPLETION_TTL_MS = 90_000;
 const MAX_PENDING_LOGINS = 1_000;
+const MOBILE_SIGN_IN_RETURN_URI = "app.tandemforactual:/signin/complete";
 
 interface PendingLogin {
   deviceName: string;
   codeChallenge: string;
+  callbackState: string;
   expiresAt: number;
 }
 
@@ -40,6 +42,7 @@ export class ActualOpenIdLogin {
   async start(
     deviceName: string,
     codeChallenge: string,
+    callbackState: string,
   ): Promise<{ redirectUrl: string }> {
     this.#removeExpired();
     if (this.#pending.size >= MAX_PENDING_LOGINS) {
@@ -47,6 +50,9 @@ export class ActualOpenIdLogin {
     }
     if (!/^[A-Za-z0-9_-]{43}$/u.test(codeChallenge)) {
       throw new Error("OpenID code challenge is invalid");
+    }
+    if (!/^[A-Za-z0-9_-]{43}$/u.test(callbackState)) {
+      throw new Error("OpenID callback state is invalid");
     }
     const normalizedDeviceName = deviceName.trim();
     if (normalizedDeviceName.length < 1 || normalizedDeviceName.length > 100) {
@@ -63,6 +69,7 @@ export class ActualOpenIdLogin {
     this.#pending.set(state, {
       deviceName: normalizedDeviceName,
       codeChallenge,
+      callbackState,
       expiresAt: this.now() + STATE_TTL_MS,
     });
     return { redirectUrl };
@@ -89,7 +96,7 @@ export class ActualOpenIdLogin {
       codeChallenge: pending.codeChallenge,
       expiresAt: this.now() + COMPLETION_TTL_MS,
     });
-    return `tandem://signin/complete?code=${encodeURIComponent(code)}`;
+    return `${MOBILE_SIGN_IN_RETURN_URI}?code=${encodeURIComponent(code)}&state=${encodeURIComponent(pending.callbackState)}`;
   }
 
   consume(code: string, codeVerifier: string): OpenIdCompletion | undefined {

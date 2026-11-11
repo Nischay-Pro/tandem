@@ -135,7 +135,8 @@ When updating an existing Compose setup, add the empty previous-key file, its
 An empty file leaves the current key unchanged.
 
 ```sh
-mkdir -m 700 -p .tandem-secrets
+mkdir -p .tandem-secrets
+chmod 700 .tandem-secrets
 tandem_db_password="$(openssl rand -hex 32)"
 printf '%s' "$tandem_db_password" > .tandem-secrets/postgres_password
 printf 'postgresql://tandem:%s@tandem-postgres:5432/tandem' "$tandem_db_password" > .tandem-secrets/database_url

@@ -507,6 +507,22 @@ describe.skipIf(!compatibilityTestEnabled)(
         };
         const yenPreviewAmountMinor = -1_500;
         const yenImportedId = `ABC JPY statement ${randomUUID()}`;
+        const yenImportPreviewUrl = `/api/v1/budgets/${yenBudget.groupId}/accounts/${encodeURIComponent(yenAccountId)}`;
+        const yenImportPreviewPath = `${yenImportPreviewUrl}/transactions/import/preview`;
+        const yenImportPreviewBefore = await reconciliationApp.inject({
+          method: "POST",
+          url: yenImportPreviewPath,
+          headers: authorizationHeaders,
+          payload: { importedIds: [yenImportedId] },
+        });
+        expect(yenImportPreviewBefore.statusCode).toBe(200);
+        expect(yenImportPreviewBefore.headers["cache-control"]).toBe(
+          "no-store",
+        );
+        expect(yenImportPreviewBefore.json()).toEqual({
+          status: "ok",
+          existingImportedIds: [],
+        });
         const yenImportResponse = await reconciliationApp.inject({
           method: "POST",
           url: `/api/v1/budgets/${yenBudget.groupId}/accounts/${encodeURIComponent(yenAccountId)}/transactions/import`,
@@ -544,6 +560,18 @@ describe.skipIf(!compatibilityTestEnabled)(
             ).find(({ imported_id }) => imported_id === yenImportedId),
         );
         expect(storedYenTransaction?.amount).toBe(yenPreviewAmountMinor);
+
+        const yenImportPreviewAfter = await reconciliationApp.inject({
+          method: "POST",
+          url: yenImportPreviewPath,
+          headers: authorizationHeaders,
+          payload: { importedIds: [yenImportedId] },
+        });
+        expect(yenImportPreviewAfter.statusCode).toBe(200);
+        expect(yenImportPreviewAfter.json()).toEqual({
+          status: "ok",
+          existingImportedIds: [yenImportedId],
+        });
 
         const tandemTransactionId = `tandem:${randomUUID()}`;
         const maxAmountTransactionId = `tandem:${randomUUID()}`;

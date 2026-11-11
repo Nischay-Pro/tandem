@@ -104,8 +104,18 @@ function createFake() {
       return work();
     },
   );
+  const previewQuery = {
+    filter: vi.fn(),
+    select: vi.fn(),
+    options: vi.fn(),
+  };
+  previewQuery.filter.mockReturnValue(previewQuery);
+  previewQuery.select.mockReturnValue(previewQuery);
+  previewQuery.options.mockReturnValue(previewQuery);
   const client = {
     runBankSync: vi.fn(async () => undefined),
+    q: vi.fn(() => previewQuery),
+    aqlQuery: vi.fn(async () => ({ data: [{ imported_id: "ref-existing" }] })),
     importTransactions: vi.fn(async () => ({
       added: ["imported-1"],
       updated: [] as string[],
@@ -117,6 +127,7 @@ function createFake() {
     getAccountGroups: vi.fn(async () => [{ id: "credit", name: "Credit" }]),
     closeAccount: vi.fn(async () => undefined),
     getAccounts: vi.fn(async () => [
+      { id: "account-1", closed: false },
       { id: "source", closed: false },
       { id: "destination", closed: false },
       { id: "closed", closed: true },
@@ -197,6 +208,99 @@ function createFake() {
 }
 
 describe("Actual budget maintenance API", () => {
+  it("checks statement references read-only, scoped to the account, and accepts encrypted budgets", async () => {
+    const fake = createFake();
+
+    await expect(
+      fake.api.previewStatementImportTransactions(
+        "budget-1",
+        "account-1",
+        ["ref-new", "ref-existing"],
+        "budget-secret",
+      ),
+    ).resolves.toEqual({ existingImportedIds: ["ref-existing"] });
+
+    expect(fake.events.slice(-2)).toEqual([
+      "lock:budget-1",
+      "session:budget-1",
+    ]);
+    expect(fake.runBudgetCalls.at(-1)?.options).toEqual({
+      synchronizeAfterWrite: false,
+      encryptionPassword: "budget-secret",
+    });
+    expect(fake.client.q).toHaveBeenCalledWith("transactions");
+    expect(fake.client.aqlQuery).toHaveBeenCalledWith(
+      fake.client.q.mock.results[0]?.value,
+    );
+    expect(fake.client.importTransactions).not.toHaveBeenCalled();
+    expect(fake.client.q.mock.results[0]?.value.filter).toHaveBeenCalledWith({
+      account: "account-1",
+      imported_id: { $oneof: ["ref-new", "ref-existing"] },
+    });
+    expect(fake.client.q.mock.results[0]?.value.select).toHaveBeenCalledWith([
+      "imported_id",
+    ]);
+    expect(fake.client.q.mock.results[0]?.value.options).toHaveBeenCalledWith({
+      splits: "grouped",
+    });
+  });
+
+  it("rejects empty, oversized, duplicate, and closed-account statement previews", async () => {
+    const fake = createFake();
+
+    await expect(
+      fake.api.previewStatementImportTransactions("budget-1", " ", [
+        "reference",
+      ]),
+    ).rejects.toThrow("Choose an account");
+    await expect(
+      fake.api.previewStatementImportTransactions("budget-1", "account-1", []),
+    ).rejects.toThrow("Choose up to 1,000 unique statement references");
+    await expect(
+      fake.api.previewStatementImportTransactions("budget-1", "account-1", [
+        "repeat",
+        "repeat",
+      ]),
+    ).rejects.toThrow("Choose up to 1,000 unique statement references");
+    await expect(
+      fake.api.previewStatementImportTransactions(
+        "budget-1",
+        "account-1",
+        Array(1_001).fill("reference"),
+      ),
+    ).rejects.toThrow("Choose up to 1,000 unique statement references");
+    await expect(
+      fake.api.previewStatementImportTransactions("budget-1", "closed", [
+        "ref-existing",
+      ]),
+    ).rejects.toThrow("Choose an open account in this budget");
+    expect(fake.client.aqlQuery).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed Actual rows in a statement preview", async () => {
+    const invalidRow = createFake();
+    invalidRow.client.aqlQuery.mockResolvedValueOnce({ data: [null] } as never);
+    await expect(
+      invalidRow.api.previewStatementImportTransactions(
+        "budget-1",
+        "account-1",
+        ["reference"],
+      ),
+    ).rejects.toThrow("Actual returned an invalid statement-import preview");
+
+    const invalidReference = createFake();
+    invalidReference.client.aqlQuery.mockResolvedValueOnce({
+      data: [{ imported_id: "different-reference" }],
+    });
+    await expect(
+      invalidReference.api.previewStatementImportTransactions(
+        "budget-1",
+        "account-1",
+        ["reference"],
+      ),
+    ).rejects.toThrow("Actual returned an invalid statement reference");
+  });
+
   it("limits overlapping, failed, and recently completed bank syncs", async () => {
     const fake = createFake();
     let finishSync: (() => void) | undefined;

@@ -34,6 +34,9 @@ async function createApi(
 ) {
   const budgetMaintenanceApi: BudgetMaintenanceApiPort = {
     runBankSync: vi.fn(async () => undefined),
+    previewStatementImportTransactions: vi.fn(async () => ({
+      existingImportedIds: ["existing-1"],
+    })),
     importStatementTransactions: vi.fn(async () => ({
       added: 1,
       updated: 0,
@@ -677,6 +680,124 @@ describe("budget maintenance routes", () => {
       },
     });
     await fake.app.close();
+  });
+
+  it("previews statement references with no write journal or idempotency key", async () => {
+    const fake = await createApi();
+    const unauthorized = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/accounts/account-1/transactions/import/preview`,
+      payload: { importedIds: ["new-1"] },
+    });
+    expect(unauthorized.statusCode).toBe(401);
+
+    const response = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/accounts/account-1/transactions/import/preview`,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        "x-budget-encryption-password": "budget-secret",
+      },
+      payload: { importedIds: ["new-1", "existing-1"] },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.json()).toEqual({
+      status: "ok",
+      existingImportedIds: ["existing-1"],
+    });
+    expect(
+      fake.budgetMaintenanceApi.previewStatementImportTransactions,
+    ).toHaveBeenCalledWith(
+      budgetId,
+      "account-1",
+      ["new-1", "existing-1"],
+      "budget-secret",
+    );
+    expect(fake.operations.size).toBe(0);
+
+    const duplicateIds = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/accounts/account-1/transactions/import/preview`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { importedIds: ["same", "same"] },
+    });
+    expect(duplicateIds.statusCode).toBe(400);
+    expect(
+      fake.budgetMaintenanceApi.previewStatementImportTransactions,
+    ).toHaveBeenCalledTimes(1);
+    await fake.app.close();
+  });
+
+  it("keeps statement preview failures scoped and safe", async () => {
+    const outOfScope = await createApi();
+    outOfScope.authenticate.mockImplementation(async () => ({
+      ...device,
+      budgetIds: [],
+    }));
+    const denied = await outOfScope.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/accounts/account-1/transactions/import/preview`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { importedIds: ["reference"] },
+    });
+    expect(denied.statusCode).toBe(404);
+    expect(
+      outOfScope.budgetMaintenanceApi.previewStatementImportTransactions,
+    ).not.toHaveBeenCalled();
+    await outOfScope.app.close();
+
+    const inputFailure = await createApi();
+    vi.mocked(
+      inputFailure.budgetMaintenanceApi.previewStatementImportTransactions,
+    ).mockRejectedValueOnce(
+      new BudgetMaintenanceInputError("Choose an open account in this budget"),
+    );
+    const invalid = await inputFailure.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/accounts/account-1/transactions/import/preview`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { importedIds: ["reference"] },
+    });
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json().error.message).toBe(
+      "Choose an open account in this budget",
+    );
+    await inputFailure.app.close();
+
+    const actualFailure = await createApi();
+    vi.mocked(
+      actualFailure.budgetMaintenanceApi.previewStatementImportTransactions,
+    ).mockRejectedValueOnce(new Error("private Actual workspace detail"));
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const unavailable = await actualFailure.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/accounts/account-1/transactions/import/preview`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { importedIds: ["reference"] },
+    });
+    expect(unavailable.statusCode).toBe(502);
+    expect(unavailable.body).not.toContain("private Actual workspace detail");
+    expect(unavailable.json().error.code).toBe("statement_preview_failed");
+    expect(consoleError).toHaveBeenCalledWith(
+      "Actual statement import preview failed",
+      { errorType: "Error" },
+    );
+    vi.restoreAllMocks();
+    await actualFailure.app.close();
+
+    const withoutActual = await createApi(false);
+    const notConfigured = await withoutActual.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/accounts/account-1/transactions/import/preview`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { importedIds: ["reference"] },
+    });
+    expect(notConfigured.statusCode).toBe(503);
+    await withoutActual.app.close();
   });
 
   it("replays a completed maintenance write without calling Actual twice", async () => {

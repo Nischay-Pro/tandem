@@ -728,9 +728,10 @@ describe("health routes and OpenAPI", () => {
     await app.close();
   });
 
-  it("binds OpenID code exchange to the starting app's PKCE verifier", async () => {
+  it("binds OpenID code exchange to the starting app's PKCE verifier and callback state", async () => {
     const codeVerifier = "v".repeat(64);
     const wrongVerifier = "w".repeat(64);
+    const callbackState = "S".repeat(43);
     const codeChallenge = createHash("sha256")
       .update(codeVerifier, "ascii")
       .digest("base64url");
@@ -777,7 +778,7 @@ describe("health routes and OpenAPI", () => {
     const started = await app.inject({
       method: "POST",
       url: "/api/v1/auth/openid/start",
-      payload: { deviceName: "Synthetic phone", codeChallenge },
+      payload: { deviceName: "Synthetic phone", codeChallenge, callbackState },
     });
     const actualReturnUrl = startOpenIdSignIn.mock.calls[0]?.[0] ?? "";
     const state = new URL(actualReturnUrl).pathname.split("/").at(-2);
@@ -812,11 +813,12 @@ describe("health routes and OpenAPI", () => {
     );
     expect(callback.statusCode).toBe(302);
     expect(callback.headers.location).toMatch(
-      /^tandem:\/\/signin\/complete\?code=[A-Za-z0-9_-]{43}$/u,
+      /^app\.tandemforactual:\/signin\/complete\?code=[A-Za-z0-9_-]{43}&state=[A-Za-z0-9_-]{43}$/u,
     );
     expect(callback.headers["cache-control"]).toBe("no-store");
     expect(callback.body).not.toContain("actual-secret");
-    expect(tandemReturn.protocol).toBe("tandem:");
+    expect(tandemReturn.protocol).toBe("app.tandemforactual:");
+    expect(tandemReturn.searchParams.get("state")).toBe(callbackState);
     expect(completionCode).toMatch(/^[A-Za-z0-9_-]{43}$/u);
     expect(callback.headers.location).not.toContain(codeVerifier);
     expect(wrongVerifierResponse.statusCode).toBe(401);
@@ -886,14 +888,32 @@ describe("health routes and OpenAPI", () => {
     const invalidChallengeStart = await app.inject({
       method: "POST",
       url: "/api/v1/auth/openid/start",
-      payload: { deviceName: "Synthetic phone", codeChallenge: "short" },
+      payload: {
+        deviceName: "Synthetic phone",
+        codeChallenge: "short",
+        callbackState: "S".repeat(43),
+      },
     });
     expect(invalidChallengeStart.statusCode).toBe(400);
+    const invalidCallbackStateStart = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/openid/start",
+      payload: {
+        deviceName: "Synthetic phone",
+        codeChallenge,
+        callbackState: "short",
+      },
+    });
+    expect(invalidCallbackStateStart.statusCode).toBe(400);
 
     const firstStart = await app.inject({
       method: "POST",
       url: "/api/v1/auth/openid/start",
-      payload: { deviceName: "Synthetic phone", codeChallenge },
+      payload: {
+        deviceName: "Synthetic phone",
+        codeChallenge,
+        callbackState: "S".repeat(43),
+      },
     });
     expect(firstStart.statusCode).toBe(503);
     expect(firstStart.body).not.toContain("private identity provider error");
@@ -903,7 +923,11 @@ describe("health routes and OpenAPI", () => {
           await app.inject({
             method: "POST",
             url: "/api/v1/auth/openid/start",
-            payload: { deviceName: "Synthetic phone", codeChallenge },
+            payload: {
+              deviceName: "Synthetic phone",
+              codeChallenge,
+              callbackState: "S".repeat(43),
+            },
           })
         ).statusCode,
       ).toBe(503);
@@ -911,7 +935,11 @@ describe("health routes and OpenAPI", () => {
     const limitedStart = await app.inject({
       method: "POST",
       url: "/api/v1/auth/openid/start",
-      payload: { deviceName: "Synthetic phone", codeChallenge },
+      payload: {
+        deviceName: "Synthetic phone",
+        codeChallenge,
+        callbackState: "S".repeat(43),
+      },
     });
     expect(limitedStart.statusCode).toBe(429);
     expect(limitedStart.headers["retry-after"]).toBe("60");

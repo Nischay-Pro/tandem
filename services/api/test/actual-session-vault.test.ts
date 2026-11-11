@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import {
   InvalidStoredActualSessionCredentialError,
@@ -177,6 +178,98 @@ describe("PostgresActualSessionVault", () => {
     await expect(vault.read(credential.principalId)).rejects.toMatchObject({
       name: InvalidStoredActualSessionCredentialError.name,
       message: "Stored Actual sign-in credentials could not be decrypted",
+    });
+  });
+
+  it("stores a key identifier in the ciphertext envelope without changing the table shape", async () => {
+    const store = createVaultPool();
+    const credential = {
+      principalId: "actual-user:key-id",
+      sessionToken: "private-session-token",
+    };
+    await new PostgresActualSessionVault(store.pool, currentKey).save(
+      credential,
+    );
+
+    const row = store.rows.get(credential.principalId)!;
+    expect(row.token_ciphertext.subarray(0, 8).toString("ascii")).toBe(
+      "TANDEMS1",
+    );
+    expect(row.token_ciphertext.length).toBeGreaterThan(24);
+    await expect(
+      new PostgresActualSessionVault(store.pool, currentKey).read(
+        credential.principalId,
+      ),
+    ).resolves.toEqual(credential);
+  });
+
+  it("reads legacy raw ciphertext so the key identifier needs no database migration", async () => {
+    const store = createVaultPool();
+    const credential = {
+      principalId: "actual-user:legacy-envelope",
+      sessionToken: "legacy-session-token",
+    };
+    const key = createHash("sha256").update(currentKey, "utf8").digest();
+    const nonce = randomBytes(12);
+    const cipher = createCipheriv("aes-256-gcm", key, nonce);
+    cipher.setAAD(Buffer.from(credential.principalId, "utf8"));
+    const ciphertext = Buffer.concat([
+      cipher.update(credential.sessionToken, "utf8"),
+      cipher.final(),
+    ]);
+    store.rows.set(credential.principalId, {
+      principal_id: credential.principalId,
+      token_ciphertext: ciphertext,
+      token_nonce: nonce,
+      token_tag: cipher.getAuthTag(),
+    });
+
+    await expect(
+      new PostgresActualSessionVault(store.pool, currentKey).read(
+        credential.principalId,
+      ),
+    ).resolves.toEqual(credential);
+  });
+
+  it("refuses a ciphertext envelope tagged for another encryption key", async () => {
+    const store = createVaultPool();
+    const credential = {
+      principalId: "actual-user:wrong-key-id",
+      sessionToken: "private-session-token",
+    };
+    await new PostgresActualSessionVault(store.pool, currentKey).save(
+      credential,
+    );
+
+    await expect(
+      new PostgresActualSessionVault(store.pool, unrelatedKey).read(
+        credential.principalId,
+      ),
+    ).rejects.toMatchObject({
+      name: InvalidStoredActualSessionCredentialError.name,
+    });
+  });
+
+  it("rejects a truncated ciphertext envelope", async () => {
+    const store = createVaultPool();
+    const credential = {
+      principalId: "actual-user:truncated-envelope",
+      sessionToken: "private-session-token",
+    };
+    await new PostgresActualSessionVault(store.pool, currentKey).save(
+      credential,
+    );
+    store.rows.get(credential.principalId)!.token_ciphertext = Buffer.from(
+      "TANDEMS1",
+      "ascii",
+    );
+
+    await expect(
+      new PostgresActualSessionVault(store.pool, currentKey).read(
+        credential.principalId,
+      ),
+    ).rejects.toMatchObject({
+      name: InvalidStoredActualSessionCredentialError.name,
     });
   });
 

@@ -516,6 +516,7 @@ describe("API bootstrap integration", () => {
     const port = await findAvailablePort();
     const actualSessionToken = "synthetic-oidc-session-token";
     const codeVerifier = "v".repeat(64);
+    const callbackState = "S".repeat(43);
     const codeChallenge = createHash("sha256")
       .update(codeVerifier, "ascii")
       .digest("base64url");
@@ -566,6 +567,7 @@ describe("API bootstrap integration", () => {
         payload: {
           deviceName: "Synthetic OpenID phone",
           codeChallenge,
+          callbackState,
         },
       });
       expect(started.statusCode).toBe(200);
@@ -587,6 +589,9 @@ describe("API bootstrap integration", () => {
       const completionCode = new URL(
         callback.headers.location ?? "",
       ).searchParams.get("code");
+      expect(
+        new URL(callback.headers.location ?? "").searchParams.get("state"),
+      ).toBe(callbackState);
       expect(completionCode).toMatch(/^[A-Za-z0-9_-]{43}$/);
 
       const stolenCodeAttempt = await app.inject({
