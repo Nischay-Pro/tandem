@@ -21,31 +21,45 @@ printf '%s' "$postgres_password" > deploy/compose/secrets/postgres_password
 printf 'postgresql://tandem:%s@postgres:5432/tandem' "$postgres_password" > deploy/compose/secrets/database_url
 openssl rand -hex 32 > deploy/compose/secrets/auth_token_encryption_key
 touch deploy/compose/secrets/auth_token_encryption_key_previous
-chmod 444 deploy/compose/secrets/*
+sudo chown root:1000 deploy/compose/secrets/*
+sudo chmod 0440 deploy/compose/secrets/*
 unset postgres_password
 ```
 
 Compose secrets are mounted read-only inside the containers. The `.env` file
 contains their paths, not their values; the API reads the database URL and
-auth encryption key from those mounted files. Keep the secrets
-directory private (`chmod 700 deploy/compose/secrets`). The `0444` file mode
-lets the unprivileged API process read the bind-mounted files even when the
-deployment host uses a different numeric user ID. This mode is safe only while
-the containing directory stays private; anyone who can traverse it can read
-the files. Actual account passwords are entered in Tandem and are not
-deployment secrets. Do not change the secret paths in `.env` unless you move
-these files.
+auth encryption key from those mounted files. The API runs as UID/GID 1000 in
+the supplied image. On a Linux host using rootful Docker, the files are owned by
+`root:1000` and use mode `0440`: the API can read them through its group, while
+other host users cannot read them through file permissions. Keep the secrets
+directory private (`chmod 700 deploy/compose/secrets`) as an additional layer.
+If you change the API's runtime GID, use that GID instead of `1000`. Actual
+account passwords are entered in Tandem and are not deployment secrets. Do not
+change the secret paths in `.env` unless you move these files.
 
 The auth encryption key must remain stable between rotations. Keep a protected
 copy with the database backups. The always-mounted
-`auth_token_encryption_key_previous` file should be empty during normal
-operation. To rotate keys, generate a new 32-byte key, put it in
-`auth_token_encryption_key`, and put the old key in
-`auth_token_encryption_key_previous`. Restart the API and wait for it to become
-healthy; startup re-encrypts every stored Actual session in one transaction and
-fails without changing the rows if any cannot be decrypted. Then empty the
-previous-key file, restart the API, and confirm it becomes healthy again. Keep
-the old key in protected backup storage while any database backup may still
+`auth_token_encryption_key_previous` file should be zero bytes during normal
+operation. To rotate keys, generate a new 32-byte key and replace the current
+and previous files while preserving their ownership and mode. For example:
+
+```sh
+sudo install -o root -g 1000 -m 0440 /secure/new-auth-key deploy/compose/secrets/auth_token_encryption_key
+sudo install -o root -g 1000 -m 0440 /secure/old-auth-key deploy/compose/secrets/auth_token_encryption_key_previous
+```
+
+Restart the API and wait for it to become healthy; startup re-encrypts every
+stored Actual session in one transaction and fails without changing the rows if
+any cannot be decrypted. Then replace the previous-key file with an empty file
+using the same owner and mode, then restart the API and confirm it becomes
+healthy again. To clear the previous-key file, install an empty file with the
+same ownership and permissions:
+
+```sh
+sudo install -o root -g 1000 -m 0440 /dev/null deploy/compose/secrets/auth_token_encryption_key_previous
+```
+
+Keep the old key in protected backup storage while any database backup may still
 contain tokens encrypted with it.
 
 Set `CHANGE_FEED_EPOCH` in `deploy/compose/.env` to a random stable value. Keep
@@ -60,9 +74,10 @@ When moving an existing deployment to this Compose file, populate the secret
 files with the credentials already in use. In particular, the Postgres
 password secret and database URL must match the existing database role; setting
 `POSTGRES_PASSWORD_FILE` does not rotate a password in an initialized volume.
-Create the new `auth_token_encryption_key_previous` secret file as empty unless
-you are rotating keys, and keep its path in `.env`. The existing PostgreSQL and
-Actual workspace volumes are preserved.
+Create the new `auth_token_encryption_key_previous` secret file as zero bytes
+unless you are rotating keys, and keep its path in `.env`. Apply the
+`root:1000` ownership and `0440` mode before starting the API. The existing
+PostgreSQL and Actual workspace volumes are preserved.
 Keep the `actual-workspace` named volume while any write operation is
 uncertain. It contains Actual's local budget data, including writes that may
 not yet have reached the budget file; deleting it can discard those changes.
@@ -118,8 +133,9 @@ Available budgets come from that account's Actual budget catalog.
 For remote sign-in, use HTTPS. HTTP does not encrypt the Actual password or
 session credentials in transit; use it only on a trusted local network. The
 Actual OpenID callback URL carries a short-lived Actual session token in its
-query string, so this example disables access logging for that callback path.
-Custom reverse proxies must also omit that path from access logs.
+query string, so this example disables access logging and suppresses
+non-emergency error logs for that callback path. Custom reverse proxies must
+also omit its query string from access and error logs.
 
 ## Backups and restore
 

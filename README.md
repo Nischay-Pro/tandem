@@ -141,11 +141,12 @@ printf '%s' "$tandem_db_password" > .tandem-secrets/postgres_password
 printf 'postgresql://tandem:%s@tandem-postgres:5432/tandem' "$tandem_db_password" > .tandem-secrets/database_url
 openssl rand -hex 32 > .tandem-secrets/auth_token_encryption_key
 touch .tandem-secrets/auth_token_encryption_key_previous
-chmod 444 .tandem-secrets/*
+sudo chown root:1000 .tandem-secrets/*
+sudo chmod 0440 .tandem-secrets/*
 unset tandem_db_password
 ```
 
-Keep the directory private (`chmod 700 .tandem-secrets`). The files use mode `444` so the non-root API process can read Compose's file-backed secret mounts. That mode is safe only while the containing directory stays private: anyone who can traverse the directory can read those files.
+The API runs as UID/GID 1000 in the supplied image. On a Linux host using rootful Docker, keep the files owned by `root:1000` with mode `0440`, so the API can read them through its group. Keep the directory private (`chmod 700 .tandem-secrets`) as an additional layer. If you change the API's runtime GID, use that GID instead of `1000`. See the [deployment guide](deploy/README.md) for key rotation and deployment details.
 
 The separate `.env.tandem` file contains paths and non-secret settings only:
 

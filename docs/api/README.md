@@ -90,10 +90,11 @@ Tandem does not advertise OpenID as available.
 
 The state expires after five minutes and the app return code expires after 90
 seconds. Both are one-use. A failed verifier does not consume the code. The
-callback response disables caching and referrers. The Nginx example disables
-access logging on the callback because Actual's callback URL includes its
-session token as a query parameter. Custom reverse proxies must also omit this
-path from access logs.
+callback response disables caching and referrers. Actual's callback URL
+includes its session token as a query parameter. The Nginx example disables
+access logs and suppresses non-emergency error logs for this path. Configure
+custom reverse proxies to omit the callback query from both access and error
+logs.
 
 Sign-in endpoints are limited to 10 requests per client address per minute in
 each API process; IPv6 addresses in the same `/64` share a limit. The Nginx
