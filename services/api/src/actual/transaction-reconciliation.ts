@@ -124,6 +124,9 @@ const OPTIONAL_SNAPSHOT_FIELDS: readonly (keyof TransactionSnapshot)[] = [
   "startingBalance",
   "schedule",
   "transferId",
+  "isParent",
+  "isChild",
+  "parentId",
   "subtransactions",
 ];
 
@@ -212,9 +215,21 @@ export function parseTransactionSnapshot(
     startingBalance: optionalSnapshotBoolean(record, "startingBalance"),
     schedule: optionalSnapshotString(record, "schedule"),
     transferId: optionalSnapshotString(record, "transferId"),
-    isParent: requiredBoolean(record.isParent, "baseSnapshot.isParent"),
-    isChild: requiredBoolean(record.isChild, "baseSnapshot.isChild"),
-    parentId: nullableString(record.parentId, "baseSnapshot.parentId"),
+    // Split metadata was added after the original transaction snapshot format.
+    // Treat its absence as a regular transaction; merge planning compares this
+    // conservative shape with Actual and raises a conflict if it is now split.
+    isParent:
+      record.isParent === undefined
+        ? false
+        : requiredBoolean(record.isParent, "baseSnapshot.isParent"),
+    isChild:
+      record.isChild === undefined
+        ? false
+        : requiredBoolean(record.isChild, "baseSnapshot.isChild"),
+    parentId:
+      record.parentId === undefined
+        ? null
+        : nullableString(record.parentId, "baseSnapshot.parentId"),
     subtransactions:
       record.subtransactions === undefined
         ? []

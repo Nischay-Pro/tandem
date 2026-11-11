@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import type { JsonValue } from "../src/write-journal/contracts.js";
 import {
@@ -484,7 +485,7 @@ describe("transaction snapshots and merge planning", () => {
     expect(() => snapshotActualTransaction(value)).toThrow(errorField);
   });
 
-  it("parses a complete durable base snapshot and rejects extra or missing fields", () => {
+  it("parses a complete durable base snapshot and rejects extra or required missing fields", () => {
     const snapshot = createSnapshot();
     expect(parseTransactionSnapshot(snapshot as unknown as JsonValue)).toEqual(
       snapshot,
@@ -508,17 +509,12 @@ describe("transaction snapshots and merge planning", () => {
     ).toThrow(
       "baseSnapshot contains unsupported fields: privateField, anotherPrivateField",
     );
-    const missingParentId: Partial<TransactionSnapshot> = { ...snapshot };
-    delete missingParentId.parentId;
-    expect(() =>
-      parseTransactionSnapshot(missingParentId as unknown as JsonValue),
-    ).toThrow("baseSnapshot is missing fields: parentId");
     const missingFields: Partial<TransactionSnapshot> = { ...snapshot };
-    delete missingFields.parentId;
+    delete missingFields.id;
     delete missingFields.reconciled;
     expect(() =>
       parseTransactionSnapshot(missingFields as unknown as JsonValue),
-    ).toThrow("baseSnapshot is missing fields: parentId");
+    ).toThrow("baseSnapshot is missing fields: id");
     expect(() =>
       parseTransactionSnapshot({
         ...snapshot,
@@ -534,6 +530,37 @@ describe("transaction snapshots and merge planning", () => {
     expect(() => parseTransactionSnapshot(null)).toThrow(
       "baseSnapshot must be an object",
     );
+  });
+
+  it("accepts the original snapshot format and conflicts if the transaction is now split", () => {
+    const snapshot = createSnapshot();
+    const legacySnapshot: Partial<TransactionSnapshot> = { ...snapshot };
+    delete legacySnapshot.isParent;
+    delete legacySnapshot.isChild;
+    delete legacySnapshot.parentId;
+    delete legacySnapshot.subtransactions;
+    const legacyRevision = createHash("sha256")
+      .update(JSON.stringify(legacySnapshot))
+      .digest("hex");
+    const parsed = parseTransactionSnapshot(
+      legacySnapshot as unknown as JsonValue,
+    );
+
+    expect(parsed).toEqual(snapshot);
+    expect(
+      matchesTransactionRevision(
+        legacySnapshot as unknown as JsonValue,
+        parsed,
+        legacyRevision,
+      ),
+    ).toBe(true);
+    expect(
+      planTransactionUpdate(
+        parsed,
+        { ...snapshot, isChild: true, parentId: "split-parent" },
+        { notes: "Updated from the older snapshot" },
+      ).kind,
+    ).toBe("conflict");
   });
 
   it("defaults omitted legacy snapshot string and text fields to null", () => {

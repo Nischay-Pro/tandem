@@ -429,6 +429,30 @@ describe.skipIf(!compatibilityTestEnabled)(
           date: transactionDate,
         });
 
+        const yenBudgetName = `ABC JPY statement compatibility ${randomUUID()}`;
+        let yenAccountId = "";
+        await firstDevice.execute(
+          async () => {
+            await Actual.runImport(yenBudgetName, async () => {
+              await Actual.setPreference("flags.currency", "true");
+              await Actual.setPreference("defaultCurrencyCode", "JPY");
+              await Actual.setPreference("hideFraction", "false");
+              yenAccountId = await Actual.createAccount(
+                { name: "ABC JPY checking", offbudget: false },
+                0,
+              );
+            });
+          },
+          { synchronizeAfterWrite: true },
+        );
+        const yenBudget = (
+          await firstDevice.execute(() => Actual.getBudgets())
+        ).find((file) => file.name === yenBudgetName && file.groupId);
+        expect(yenBudget?.groupId).toBeTruthy();
+        if (!yenBudget?.groupId) {
+          throw new Error("Actual did not publish the synthetic JPY budget");
+        }
+
         if (!database) {
           throw new Error("Actual compatibility database was not initialized");
         }
@@ -437,7 +461,7 @@ describe.skipIf(!compatibilityTestEnabled)(
           deviceId: randomUUID(),
           principalId: "actual-compatibility-owner",
           name: "Synthetic compatibility client",
-          budgetIds: [budget.groupId],
+          budgetIds: [budget.groupId, yenBudget.groupId],
           createdAt: new Date(),
           lastSeenAt: null,
           revokedAt: null,
@@ -481,6 +505,46 @@ describe.skipIf(!compatibilityTestEnabled)(
         const authorizationHeaders = {
           authorization: `Bearer ${compatibilityToken}`,
         };
+        const yenPreviewAmountMinor = -1_500;
+        const yenImportedId = `ABC JPY statement ${randomUUID()}`;
+        const yenImportResponse = await reconciliationApp.inject({
+          method: "POST",
+          url: `/api/v1/budgets/${yenBudget.groupId}/accounts/${encodeURIComponent(yenAccountId)}/transactions/import`,
+          headers: {
+            ...authorizationHeaders,
+            "idempotency-key": `compat-jpy-import-${randomUUID()}`,
+          },
+          payload: {
+            transactions: [
+              {
+                date: transactionDate,
+                amountMinor: yenPreviewAmountMinor,
+                payeeName: "JPY Market",
+                importedId: yenImportedId,
+              },
+            ],
+          },
+        });
+        expect(yenImportResponse.statusCode).toBe(200);
+        expect(yenImportResponse.json()).toMatchObject({
+          status: "ok",
+          added: 1,
+          updated: 0,
+          errorCount: 0,
+        });
+        const storedYenTransaction = await firstDevice.runBudget(
+          yenBudget.groupId,
+          async () =>
+            (
+              await Actual.getTransactions(
+                yenAccountId,
+                transactionDate,
+                transactionDate,
+              )
+            ).find(({ imported_id }) => imported_id === yenImportedId),
+        );
+        expect(storedYenTransaction?.amount).toBe(yenPreviewAmountMinor);
+
         const tandemTransactionId = `tandem:${randomUUID()}`;
         const maxAmountTransactionId = `tandem:${randomUUID()}`;
         const followupTransactionId = `tandem:${randomUUID()}`;
@@ -1509,15 +1573,28 @@ describe.skipIf(!compatibilityTestEnabled)(
           headers: runtimeAuthorizationHeaders,
         });
         expect(runtimeCatalogResponse.statusCode).toBe(200);
-        expect(runtimeCatalogResponse.json()).toMatchObject({
-          budgets: [
+        const runtimeCatalog = runtimeCatalogResponse.json() as {
+          budgets: Array<{
+            budgetId: string;
+            name: string;
+            isEncrypted: boolean;
+          }>;
+        };
+        expect(runtimeCatalog.budgets).toHaveLength(2);
+        expect(runtimeCatalog.budgets).toEqual(
+          expect.arrayContaining([
             {
               budgetId: budget.groupId,
               name: budget.name,
               isEncrypted: Boolean(budget.encryptKeyId),
             },
-          ],
-        });
+            {
+              budgetId: yenBudget.groupId,
+              name: yenBudget.name,
+              isEncrypted: Boolean(yenBudget.encryptKeyId),
+            },
+          ]),
+        );
         const runtimeRead = await productionApp.inject({
           method: "GET",
           url: `/api/v1/budgets/${budget.groupId}/transactions/${transaction.id}`,
