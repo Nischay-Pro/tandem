@@ -1,6 +1,11 @@
 package app.tandemforactual.ui
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import app.tandemforactual.data.database.OutboxOperationEntity
@@ -186,18 +191,69 @@ class ConflictPresentationTest {
     fun conflictDetailsShowBothVersionsForEachChangedField() {
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                ConflictComparisonCard(
-                    listOf(
-                        ConflictFieldComparison("Payee", "Target", "Costco"),
-                        ConflictFieldComparison("Notes", "Hardware", "Groceries"),
-                        ConflictFieldComparison("Cleared", "Cleared", "Uncleared"),
-                    ),
+                Column {
+                    Row {
+                        ConflictValueCard("Your edit", "-$12.00")
+                        ConflictValueCard("Actual", "-$15.00")
+                    }
+                    ConflictComparisonCard(
+                        listOf(
+                            ConflictFieldComparison("Payee", "Target", "Costco"),
+                            ConflictFieldComparison("Category", "Home supplies", "Medical & Dental"),
+                            ConflictFieldComparison("Date", "Nov 2, 2026", "Nov 1, 2026"),
+                            ConflictFieldComparison("Account", "Savings", "Checking"),
+                            ConflictFieldComparison("Notes", "Hardware", "Groceries"),
+                            ConflictFieldComparison("Cleared", "Cleared", "Uncleared"),
+                        ),
+                    )
+                }
+            }
+        }
+
+        composeTestRule.onAllNodesWithText("Your edit", useUnmergedTree = true).assertCountEquals(7)
+        composeTestRule.onAllNodesWithText("Actual", useUnmergedTree = true).assertCountEquals(7)
+        composeTestRule.onAllNodesWithText("Cleared", useUnmergedTree = true).assertCountEquals(2)
+        listOf(
+            "-$12.00",
+            "-$15.00",
+            "Changed details",
+            "Payee",
+            "Target",
+            "Costco",
+            "Category",
+            "Home supplies",
+            "Medical & Dental",
+            "Date",
+            "Nov 2, 2026",
+            "Nov 1, 2026",
+            "Account",
+            "Savings",
+            "Checking",
+            "Notes",
+            "Hardware",
+            "Groceries",
+            "Uncleared",
+        ).forEach { composeTestRule.onNodeWithText(it).assertExists() }
+    }
+
+    @Test
+    fun keepActualActionCannotOpenItsDiscardConfirmationBeforeServerConfirmation() {
+        var resolutionRequested = false
+        val canResolve = canResolveReviewedConflict(serverConfirmed = false, reviewedRevision = null, latestRevision = "revision-1")
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                KeepLastSyncedConflictAction(
+                    operationId = "conflicted-edit",
+                    reviewedRevision = "",
+                    enabled = canResolve,
+                    onResolveConflict = { _, _, _ -> resolutionRequested = true },
                 )
             }
         }
 
-        listOf("Changed details", "Payee", "Target", "Costco", "Notes", "Hardware", "Groceries", "Uncleared")
-            .forEach { composeTestRule.onNodeWithText(it).assertExists() }
+        composeTestRule.onNodeWithText("Keep Actual’s version").assertIsNotEnabled().performClick()
+        composeTestRule.onNodeWithText("Discard your edit?").assertDoesNotExist()
+        assertFalse(resolutionRequested)
     }
 
     @Test

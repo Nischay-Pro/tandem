@@ -249,6 +249,40 @@ class IosLocaleFormattingTest {
         }
     }
 
+    @Test
+    fun futureDateConfirmationBoundaryUsesTheLocalCalendarDay() {
+        val previousTimeZone = CFTimeZoneCopyDefault()
+        val instant = 1_767_227_400_000L // 2026-01-01T00:30:00Z
+        try {
+            setDefaultTimeZone("America/Los_Angeles")
+            val westCoastToday = platformIsoDateAtEpochMilliseconds(instant)
+            assertEquals("2025-12-31", westCoastToday)
+            assertEquals(
+                TransactionDateValidationStatus.VALID,
+                validateTransactionDate("2035-12-31", westCoastToday).status,
+            )
+            assertEquals(
+                TransactionDateValidationStatus.CONFIRMATION_REQUIRED,
+                validateTransactionDate("2036-01-01", westCoastToday).status,
+            )
+
+            setDefaultTimeZone("Pacific/Kiritimati")
+            val eastToday = platformIsoDateAtEpochMilliseconds(instant)
+            assertEquals("2026-01-01", eastToday)
+            assertEquals(
+                TransactionDateValidationStatus.VALID,
+                validateTransactionDate("2036-01-01", eastToday).status,
+            )
+            assertEquals(
+                TransactionDateValidationStatus.CONFIRMATION_REQUIRED,
+                validateTransactionDate("2036-01-02", eastToday).status,
+            )
+        } finally {
+            CFTimeZoneSetDefault(previousTimeZone)
+            CFRelease(previousTimeZone)
+        }
+    }
+
     private fun setDefaultTimeZone(identifier: String) {
         val name = CFStringCreateWithCString(null, identifier, kCFStringEncodingUTF8)!!
         val timeZone = CFTimeZoneCreateWithName(null, name, true)!!

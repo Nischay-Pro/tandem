@@ -688,6 +688,48 @@ class TandemMobileSessionTest {
     }
 
     @Test
+    fun savingAnEditCannotReplaceAConflictedTransactionWrite() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 1_000L }
+                seedCachedBudget(repository, AppPreferencesStore(database), withPendingWrite = true)
+                val conflicted = assertNotNull(repository.readPendingWrites("budget-1").singleOrNull())
+                database.outboxDao().put(conflicted.copy(status = "conflict", attemptCount = 1))
+                val credential = storedSession("https://old.example.test", "principal-old")
+                val session =
+                    TandemMobileSession(
+                        apiClient = TandemApiClient(),
+                        database = database,
+                        nowEpochMillis = { 1_000L },
+                        credentialStore = memoryCredentialStore(credential),
+                    )
+                session.restoreStoredSession()
+
+                val saved =
+                    session.updateTransaction(
+                        budgetId = "budget-1",
+                        transactionId = "txn-1",
+                        amountText = "12.00",
+                        notes = "changed while conflict is waiting",
+                        originalAmountMinor = 1_100L,
+                        transactionType = "Spending",
+                    )
+
+                assertFalse(saved)
+                assertEquals(blockedTransactionEditMessage("conflict"), session.transactionWriteMessage)
+                assertEquals(conflicted.operationId, repository.readPendingWrites("budget-1").single().operationId)
+                assertEquals("conflict", repository.findWrite(conflicted.operationId)?.status)
+                assertEquals(
+                    "{\"id\":\"txn-1\",\"amount\":1100,\"account\":\"checking\"}",
+                    repository.findRecord("budget-1", "transaction", "txn-1")?.localJson,
+                )
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun revertingToActualDiscardsOnlyAnUnsentQueuedUpdate() {
         val queuedUpdate = pendingTransactionWrite()
 

@@ -73,6 +73,39 @@ class LocaleFormattingTest {
     }
 
     @Test
+    fun futureDateConfirmationBoundaryUsesTheLocalCalendarDay() {
+        val previousTimeZone = TimeZone.getDefault()
+        val instant = Instant.parse("2026-01-01T00:30:00Z").toEpochMilli()
+        try {
+            TimeZone.setDefault(TimeZone.getTimeZone("America/Los_Angeles"))
+            val westCoastToday = platformIsoDateAtEpochMilliseconds(instant)
+            assertEquals("2025-12-31", westCoastToday)
+            assertEquals(
+                TransactionDateValidationStatus.VALID,
+                validateTransactionDate("2035-12-31", westCoastToday).status,
+            )
+            assertEquals(
+                TransactionDateValidationStatus.CONFIRMATION_REQUIRED,
+                validateTransactionDate("2036-01-01", westCoastToday).status,
+            )
+
+            TimeZone.setDefault(TimeZone.getTimeZone("Pacific/Kiritimati"))
+            val eastToday = platformIsoDateAtEpochMilliseconds(instant)
+            assertEquals("2026-01-01", eastToday)
+            assertEquals(
+                TransactionDateValidationStatus.VALID,
+                validateTransactionDate("2036-01-01", eastToday).status,
+            )
+            assertEquals(
+                TransactionDateValidationStatus.CONFIRMATION_REQUIRED,
+                validateTransactionDate("2036-01-02", eastToday).status,
+            )
+        } finally {
+            TimeZone.setDefault(previousTimeZone)
+        }
+    }
+
+    @Test
     fun selectedBudgetCurrencyAndPrecisionOverrideThePhoneLocale() {
         withPhoneLocale(Locale.JAPAN) {
             val cad = displaySettings(currencyCode = "CAD", numberFormat = "comma-dot")

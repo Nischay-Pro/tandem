@@ -121,50 +121,62 @@ class SignOutCacheClearFailureTest {
     }
 
     @Test
-    fun signOutPreflightKeepsAnUnresolvedEditAndDoesNotRevokeTheDevice() =
+    fun signOutPreflightPreservesEveryUnresolvedEditWithoutRevokingTheDevice() =
         runBlocking {
-            val database = newInMemoryDatabase()
-            try {
-                val repository = LocalBudgetRepository(database) { NOW }
-                seedCachedBudget(repository, AppPreferencesStore(database), withPendingWrite = true)
-                var savedCredential: String? = storedSession()
-                var revokeCalls = 0
-                var credentialClearCalls = 0
-                val credentialStore =
-                    object : DeviceCredentialStore {
-                        override fun read(): String? = savedCredential
-
-                        override fun write(value: String) {
-                            savedCredential = value
-                        }
-
-                        override fun clear() {
-                            credentialClearCalls += 1
-                            savedCredential = null
-                        }
-                    }
-                val apiClient = TandemApiClient()
-                val session =
-                    TandemMobileSession(
-                        apiClient = apiClient,
-                        database = database,
-                        nowEpochMillis = { NOW },
-                        credentialStore = credentialStore,
-                        revokeCurrentDeviceForSignOut = { revokeCalls += 1 },
+            listOf("queued", "sending", "uncertain", "conflict", "rejected").forEach { status ->
+                val database = newInMemoryDatabase()
+                try {
+                    val repository = LocalBudgetRepository(database) { NOW }
+                    seedCachedBudget(repository, AppPreferencesStore(database), withPendingWrite = true)
+                    val queued = repository.readPendingWrites(BUDGET_ID).single()
+                    database.outboxDao().put(
+                        queued.copy(
+                            status = status,
+                            attemptCount = if (status == "queued") 0 else 1,
+                        ),
                     )
-                session.restoreStoredSession()
+                    var savedCredential: String? = storedSession()
+                    var revokeCalls = 0
+                    var credentialClearCalls = 0
+                    val credentialStore =
+                        object : DeviceCredentialStore {
+                            override fun read(): String? = savedCredential
 
-                assertFalse(session.signOutAndClearLocalData())
+                            override fun write(value: String) {
+                                savedCredential = value
+                            }
 
-                assertEquals(0, revokeCalls)
-                assertEquals(0, credentialClearCalls)
-                assertEquals(storedSession(), savedCredential)
-                assertEquals("queued", repository.readPendingWrites(BUDGET_ID).single().status)
-                assertEquals(OPTIMISTIC_TRANSACTION_JSON, repository.findRecord(BUDGET_ID, "transaction", TRANSACTION_ID)?.localJson)
-                assertTrue(session.isAuthenticated)
-                assertTrue(session.signOutError.orEmpty().contains("pending changes"))
-            } finally {
-                database.close()
+                            override fun clear() {
+                                credentialClearCalls += 1
+                                savedCredential = null
+                            }
+                        }
+                    val apiClient = TandemApiClient()
+                    val session =
+                        TandemMobileSession(
+                            apiClient = apiClient,
+                            database = database,
+                            nowEpochMillis = { NOW },
+                            credentialStore = credentialStore,
+                            revokeCurrentDeviceForSignOut = { revokeCalls += 1 },
+                        )
+                    session.restoreStoredSession()
+
+                    assertFalse(session.signOutAndClearLocalData(), "$status edits must block sign-out")
+
+                    assertEquals(0, revokeCalls, "$status edits must not revoke the device")
+                    assertEquals(0, credentialClearCalls, "$status edits must not clear the credential")
+                    assertEquals(storedSession(), savedCredential)
+                    assertEquals(status, repository.readPendingWrites(BUDGET_ID).single().status)
+                    assertEquals(
+                        OPTIMISTIC_TRANSACTION_JSON,
+                        repository.findRecord(BUDGET_ID, "transaction", TRANSACTION_ID)?.localJson,
+                    )
+                    assertTrue(session.isAuthenticated)
+                    assertTrue(session.signOutError.orEmpty().contains("pending changes"))
+                } finally {
+                    database.close()
+                }
             }
         }
 

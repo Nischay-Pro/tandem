@@ -1956,6 +1956,41 @@ describe("budget maintenance routes", () => {
     await fake.app.close();
   });
 
+  it("returns schedule_changed when a skip uses a stale next date", async () => {
+    const fake = await createApi();
+    vi.mocked(fake.budgetMaintenanceApi.skipSchedule).mockRejectedValueOnce(
+      new BudgetScheduleChangedError(),
+    );
+    const request = {
+      method: "POST" as const,
+      url: `/api/v1/budgets/${budgetId}/schedules/schedule-1/actions`,
+      headers: { ...testHeaders(), "idempotency-key": "stale-schedule-skip" },
+      payload: { action: "skip", expectedNextDate: "2026-11-15" },
+    };
+
+    const response = await fake.app.inject(request);
+    const replay = await fake.app.inject(request);
+
+    expect(response.statusCode).toBe(409);
+    expect(replay.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      error: {
+        code: "schedule_changed",
+        message:
+          "This schedule changed in Actual. Refresh it before trying again.",
+      },
+    });
+    expect(replay.json()).toEqual(response.json());
+    expect(fake.budgetMaintenanceApi.skipSchedule).toHaveBeenCalledOnce();
+    expect(fake.budgetMaintenanceApi.skipSchedule).toHaveBeenCalledWith(
+      budgetId,
+      "schedule-1",
+      "2026-11-15",
+      undefined,
+    );
+    await fake.app.close();
+  });
+
   it("requires a valid expected date for post and skip actions", async () => {
     const fake = await createApi();
     const path = `/api/v1/budgets/${budgetId}/schedules/schedule-1/actions`;

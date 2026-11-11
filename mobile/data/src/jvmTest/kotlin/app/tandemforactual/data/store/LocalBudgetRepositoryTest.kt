@@ -43,18 +43,35 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
-    fun unresolvedWriteGuardTracksQueuedWritesUntilTheyAreDiscarded() =
+    fun unresolvedWriteGuardTracksEveryNonterminalOutboxState() =
         runBlocking {
             val database = newDatabase()
             try {
                 val repository = LocalBudgetRepository(database) { 200L }
-                repository.applySnapshot(BUDGET, GENERATION, "c1", listOf(transaction()))
+                val unresolvedStatuses = listOf("queued", "sending", "uncertain", "conflict", "rejected")
 
-                assertFalse(repository.hasUnresolvedWrites())
-                val queued = repository.enqueueWrite(updateRequest())
-                assertTrue(repository.hasUnresolvedWrites())
-                repository.discardWrite(queued.operation.operationId)
-                assertFalse(repository.hasUnresolvedWrites())
+                unresolvedStatuses.forEachIndexed { index, status ->
+                    val write =
+                        repository.enqueueWrite(
+                            createRequest(
+                                operationId = "guard-$status",
+                                idempotencyKey = "guard-key-$status",
+                                recordId = "guard-record-$index",
+                            ),
+                        )
+                    val queuedEntity = assertNotNull(database.outboxDao().find(write.operation.operationId))
+                    database.outboxDao().put(
+                        queuedEntity.copy(
+                            status = status,
+                            attemptCount = if (status == "queued") 0 else 1,
+                        ),
+                    )
+
+                    assertTrue(repository.hasUnresolvedWrites(), "$status must block clearing local data")
+
+                    database.outboxDao().put(queuedEntity.copy(status = "committed"))
+                    assertFalse(repository.hasUnresolvedWrites(), "committed write must not block clearing local data")
+                }
             } finally {
                 database.close()
             }
