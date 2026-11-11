@@ -54,6 +54,28 @@ class BottomNavigationVisibilityTest {
     }
 
     @Test
+    fun switchingTabsPreservesEachTabsNestedStack() {
+        val activityStack =
+            listOf(
+                AppRouteEntry(AppRoute.BUDGET, 1),
+                AppRouteEntry(AppRoute.ACTIVITY, 2),
+                AppRouteEntry(AppRoute.ACTIVITY_SEARCH, 3),
+            )
+        var nextId = 10L
+        val accountSelection =
+            selectAppTabNavigation(activityStack, "", AppRoute.ACCOUNTS) { route -> AppRouteEntry(route, nextId++) }
+        val activitySelection =
+            selectAppTabNavigation(
+                accountSelection.backStack,
+                accountSelection.savedTabBackStacks,
+                AppRoute.ACTIVITY,
+            ) { route -> AppRouteEntry(route, nextId++) }
+
+        assertEquals(listOf(AppRoute.BUDGET, AppRoute.ACCOUNTS), accountSelection.backStack.map { it.route })
+        assertEquals(activityStack, activitySelection.backStack)
+    }
+
+    @Test
     fun tappingAnActiveTabRootLeavesTheStackAlone() {
         val currentStack = listOf(AppRouteEntry(AppRoute.BUDGET, 1), AppRouteEntry(AppRoute.ACTIVITY, 2))
         var createdEntry = false

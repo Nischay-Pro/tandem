@@ -220,9 +220,14 @@ class LocaleFormattingTest {
         withPhoneLocale(Locale.US) {
             assertEquals(1_250L, platformParseDecimalMinorUnits("12,50", commaBudget))
             assertNull(platformParseDecimalMinorUnits("12.50", commaBudget))
+            assertNull(platformParseDecimalMinorUnits("12.5", commaBudget))
             assertEquals(
                 "Use a comma for decimals in this budget, such as 12,00.",
                 transactionAmountInputError("12.50", commaBudget),
+            )
+            assertEquals(
+                "Use a comma for decimals in this budget, such as 12,00.",
+                transactionAmountInputError("12.5", commaBudget),
             )
         }
     }

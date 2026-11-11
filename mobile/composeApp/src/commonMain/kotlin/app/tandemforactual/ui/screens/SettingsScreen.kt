@@ -231,7 +231,7 @@ private fun AppearanceSelectionIndicator(selected: Boolean) {
         Modifier
             .size(22.dp)
             .border(2.dp, if (selected) palette.accent else palette.muted, CircleShape)
-            .padding(4.dp),
+            .padding(TandemSpacing.extraSmall),
     ) {
         Box(
             Modifier

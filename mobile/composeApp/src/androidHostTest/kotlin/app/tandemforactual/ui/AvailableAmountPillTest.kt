@@ -61,6 +61,6 @@ class AvailableAmountPillTest {
         composeTestRule
             .onNodeWithContentDescription("Overspent, -€123,456,789.00 available")
             .assertExists()
-            .assertHeightIsAtLeast(48.dp)
+            .assertHeightIsAtLeast(56.dp)
     }
 }

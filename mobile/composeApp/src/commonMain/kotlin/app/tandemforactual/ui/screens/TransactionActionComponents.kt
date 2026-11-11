@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -89,7 +90,7 @@ internal fun TransactionRow(
                     {
                         ActivityTransactionAmount(
                             amountText,
-                            positive = transaction.amountMinorUnits > 0,
+                            amountMinorUnits = transaction.amountMinorUnits,
                             fractionDigits =
                                 transaction.displaySettings
                                     ?.takeUnless { it.hideFraction }
@@ -155,15 +156,29 @@ internal fun activityAmountAnnotatedString(
     }
 }
 
+internal fun activityAmountAccessibilityDescription(
+    value: String,
+    amountMinorUnits: Long,
+): String =
+    when {
+        amountMinorUnits > 0 -> "$value, money in"
+        amountMinorUnits < 0 -> "$value, money out"
+        else -> value
+    }
+
 @Composable
 private fun ActivityTransactionAmount(
     value: String,
-    positive: Boolean,
+    amountMinorUnits: Long,
     fractionDigits: Int,
 ) {
     Text(
         activityAmountAnnotatedString(value, fractionDigits),
-        color = if (positive) tandemPalette.positive else tandemPalette.text,
+        modifier =
+            Modifier.semantics {
+                contentDescription = activityAmountAccessibilityDescription(value, amountMinorUnits)
+            },
+        color = if (amountMinorUnits > 0) tandemPalette.positive else tandemPalette.text,
         fontSize = TandemTypography.compactBody,
         fontWeight = FontWeight.SemiBold,
         maxLines = 2,

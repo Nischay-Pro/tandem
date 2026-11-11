@@ -39,6 +39,13 @@ class ActivitySearchTest {
     }
 
     @Test
+    fun activityAmountAccessibilityIncludesDirectionWithoutDependingOnColor() {
+        assertEquals("+$12.34, money in", activityAmountAccessibilityDescription("+$12.34", 1_234))
+        assertEquals("-$12.34, money out", activityAmountAccessibilityDescription("-$12.34", -1_234))
+        assertEquals("$0.00", activityAmountAccessibilityDescription("$0.00", 0))
+    }
+
+    @Test
     fun activityAmountFractionStylingSupportsSuffixCurrencyAndNoFractionCurrencies() {
         assertEquals(7..8, activityAmountFractionRange("-1.234,56\u202fCA$", fractionDigits = 2))
         assertEquals(4..6, activityAmountFractionRange("KD1.234", fractionDigits = 3))

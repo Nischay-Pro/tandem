@@ -20,6 +20,12 @@ RULES = {
     "hard-coded Color; use TandemPalette": re.compile(r"\bColor\s*\(\s*0x[0-9A-Fa-f]{6,8}\s*\)"),
 }
 DIALOG_CALL = re.compile(r"\b(?:AlertDialog|Dialog)\s*\(")
+RAW_SETTINGS_SPACING = re.compile(r"\.(?:padding|spacedBy)\([^)]*\b\d+(?:\.\d+)?\.dp\b", re.DOTALL)
+SHARED_SETTINGS_SPACING_FILES = (
+    UI_ROOT / "screens/SettingsScreen.kt",
+    UI_ROOT / "templates/SettingsRowTemplates.kt",
+    UI_ROOT / "components/Rows.kt",
+)
 LAYOUT_CONTRACTS = {
     UI_ROOT / "TandemTheme.kt": (
         re.compile(r"listRowMinHeight\s*=\s*64\.dp"),
@@ -71,6 +77,13 @@ def main() -> int:
             if not pattern.search(content):
                 relative = source.relative_to(ROOT)
                 violations.append(f"{relative}: shared row layout must use TandemLayout tokens")
+
+    for source in SHARED_SETTINGS_SPACING_FILES:
+        content = source.read_text(encoding="utf-8")
+        for match in RAW_SETTINGS_SPACING.finditer(content):
+            relative = source.relative_to(ROOT)
+            line_number = content.count("\n", 0, match.start()) + 1
+            violations.append(f"{relative}:{line_number}: raw settings/list spacing; use TandemSpacing or TandemLayout")
 
     for source in sorted(UI_ROOT.rglob("*.kt")):
         if source == THEME_FILE:
