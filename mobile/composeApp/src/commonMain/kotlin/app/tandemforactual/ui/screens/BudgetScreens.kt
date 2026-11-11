@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -39,6 +40,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.ui.components.AnimatedReveal
 import app.tandemforactual.ui.components.AvailableAmountPill
 import app.tandemforactual.ui.components.CollapsibleSectionCard
@@ -72,6 +74,57 @@ import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.X
 import kotlinx.coroutines.launch
+
+internal fun LazyListScope.budgetPendingChangeBannerItems(
+    state: AppState,
+    navigation: AppNavigation,
+    pendingWrites: List<OutboxOperationEntity>,
+) {
+    val conflictCount = pendingWrites.count { it.status == "conflict" }
+    val rejectedWrites = pendingWrites.filter { it.status == "rejected" }
+    val uncertainWrites = pendingWrites.filter { it.status == "uncertain" }
+
+    item(key = "budget-conflict-alert") {
+        AnimatedReveal(visible = conflictCount > 0) {
+            AttentionBanner(
+                "Needs review",
+                if (conflictCount == 1) "Choose which version to keep." else "Review $conflictCount changes.",
+                "Review",
+            ) {
+                state.selectedConflictOperationId = ""
+                navigation.open(AppRoute.CONFLICT_INBOX)
+            }
+        }
+    }
+    item(key = "budget-rejected-alert") {
+        AnimatedReveal(visible = rejectedWrites.isNotEmpty()) {
+            AttentionBanner(
+                "Rejected",
+                if (rejectedWrites.size == 1) {
+                    "Actual kept the previous value. Review it."
+                } else {
+                    "Actual kept the previous values. Review them."
+                },
+                "Review",
+            ) {
+                state.selectedConflictOperationId = rejectedWrites.firstOrNull()?.operationId.orEmpty()
+                navigation.open(AppRoute.UNCERTAIN_WRITE)
+            }
+        }
+    }
+    item(key = "budget-status-unknown-alert") {
+        AnimatedReveal(visible = uncertainWrites.isNotEmpty()) {
+            AttentionBanner(
+                "Status unknown",
+                "Tandem hasn’t confirmed these edits. Check their status.",
+                "Check status",
+            ) {
+                state.selectedConflictOperationId = uncertainWrites.firstOrNull()?.operationId.orEmpty()
+                navigation.open(AppRoute.UNCERTAIN_WRITE)
+            }
+        }
+    }
+}
 
 @Composable
 internal fun BudgetScreen(
@@ -148,9 +201,6 @@ internal fun BudgetScreen(
             groups.flatMap { group -> group.categories }.map { it.id to it.assignedMinor }
         }
     val recentTransactions = remember(liveTransactions) { liveTransactions.filterNot(TransactionItem::isSplitParent) }
-    val conflictCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "conflict" } else 0
-    val rejectedCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "rejected" } else 0
-    val unknownStatusCount = if (isLiveBudget) mobileSession.pendingWrites.count { it.status == "uncertain" } else 0
     val readyToAssignMinor = liveBudgetMonth?.toBudgetMinor ?: 0
     val assignmentPresentation = presentBudgetAssignment(readyToAssignMinor)
     val displayedAssignmentMinor = assignmentPresentation.amountMinor
@@ -208,54 +258,7 @@ internal fun BudgetScreen(
             onRefresh = onSyncNow.takeIf { isLiveBudget },
         ) {
             if (isLiveBudget) {
-                item(key = "budget-conflict-alert") {
-                    AnimatedReveal(visible = conflictCount > 0) {
-                        AttentionBanner(
-                            "Needs review",
-                            if (conflictCount == 1) "Choose which version to keep." else "Review $conflictCount changes.",
-                            "Review",
-                        ) {
-                            state.selectedConflictOperationId = ""
-                            navigation.open(AppRoute.CONFLICT_INBOX)
-                        }
-                    }
-                }
-                item(key = "budget-rejected-alert") {
-                    AnimatedReveal(visible = rejectedCount > 0) {
-                        AttentionBanner(
-                            "Rejected",
-                            if (rejectedCount == 1) {
-                                "Actual kept the previous value. Review it."
-                            } else {
-                                "Actual kept the previous values. Review them."
-                            },
-                            "Review",
-                        ) {
-                            state.selectedConflictOperationId =
-                                mobileSession.pendingWrites
-                                    .firstOrNull { it.status == "rejected" }
-                                    ?.operationId
-                                    .orEmpty()
-                            navigation.open(AppRoute.UNCERTAIN_WRITE)
-                        }
-                    }
-                }
-                item(key = "budget-status-unknown-alert") {
-                    AnimatedReveal(visible = unknownStatusCount > 0) {
-                        AttentionBanner(
-                            "Status unknown",
-                            "Tandem hasn’t confirmed these edits. Check their status.",
-                            "Check status",
-                        ) {
-                            state.selectedConflictOperationId =
-                                mobileSession.pendingWrites
-                                    .firstOrNull { it.status == "uncertain" }
-                                    ?.operationId
-                                    .orEmpty()
-                            navigation.open(AppRoute.UNCERTAIN_WRITE)
-                        }
-                    }
-                }
+                budgetPendingChangeBannerItems(state, navigation, mobileSession.pendingWrites)
             }
             item(key = "budget-overview-title") {
                 Heading("Budget overview")
