@@ -91,7 +91,13 @@ internal fun ScreenContent(
         AppRoute.BUDGET_CHOOSER ->
             BudgetChooserScreen(state, mobileSession, navigation, onSelectBudget, onRefreshBudgets, onOpenSelectedBudget)
         AppRoute.UNLOCK_BUDGET -> UnlockBudgetScreen(state, navigation)
-        AppRoute.FIRST_SYNC -> FirstSyncScreen(state, mobileSession, navigation, onRetrySync)
+        AppRoute.FIRST_SYNC -> FirstSyncScreen(state, mobileSession, navigation, onRetrySync, notificationPermissionEnabled)
+        AppRoute.NOTIFICATION_ONBOARDING ->
+            NotificationOnboardingScreen(
+                state,
+                navigation,
+                onRequestNotificationPermission,
+            )
         AppRoute.BUDGET ->
             BudgetScreen(
                 state,

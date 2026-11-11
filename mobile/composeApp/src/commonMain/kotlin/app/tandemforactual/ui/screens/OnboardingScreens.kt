@@ -6,6 +6,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,6 +29,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.isLocalHttpHost
@@ -44,6 +48,7 @@ import app.tandemforactual.ui.components.PrimaryButton
 import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemLoadingIndicator
+import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Lucide
 import kotlinx.coroutines.delay
@@ -87,7 +92,15 @@ internal fun WelcomeScreen(
         content = {
             Spacer(Modifier.height(14.dp))
             TandemBrandMark(Modifier.size(72.dp))
-            Heading("Tandem for Actual Budget", "Have your Tandem server address ready.")
+            Heading("Tandem for Actual Budget", "Use your budget with confidence.")
+            SetupProgressIndicator()
+            SurfaceCard {
+                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                    WelcomeBenefit("Use your budget offline")
+                    WelcomeBenefit("Edits wait on this device until they sync")
+                    WelcomeBenefit("Changes that need attention stay visible")
+                }
+            }
             signOutNotice?.let { InfoBubble(it) }
         },
         actions = {
@@ -407,6 +420,7 @@ internal fun FirstSyncScreen(
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
     onRetrySync: () -> Unit,
+    notificationPermissionEnabled: Boolean?,
 ) {
     val palette = tandemPalette
     PageColumn {
@@ -473,8 +487,134 @@ internal fun FirstSyncScreen(
         }
         PrimaryButton("Done", enabled = mobileSession.syncComplete) {
             selectLatestCachedMonth(state, mobileSession.budgetMonthIds, mobileSession.transactionRecords)
-            navigation.selectTab(AppRoute.BUDGET)
+            if (shouldShowNotificationOnboarding(state.hasCompletedNotificationOnboarding, notificationPermissionEnabled)) {
+                navigation.open(AppRoute.NOTIFICATION_ONBOARDING)
+            } else {
+                state.hasCompletedNotificationOnboarding = true
+                navigation.selectTab(AppRoute.BUDGET)
+            }
         }
+    }
+}
+
+internal fun shouldShowNotificationOnboarding(
+    alreadyCompleted: Boolean,
+    permissionEnabled: Boolean?,
+): Boolean = !alreadyCompleted && permissionEnabled != true
+
+@Composable
+internal fun NotificationOnboardingScreen(
+    state: AppState,
+    navigation: AppNavigation,
+    onRequestNotificationPermission: (() -> Unit)?,
+) {
+    OnboardingLayout(
+        horizontalPadding = TandemSpacing.extraLarge,
+        content = {
+            Spacer(Modifier.height(14.dp))
+            Box(
+                Modifier
+                    .size(64.dp)
+                    .clip(RoundedCornerShape(TandemShapes.large))
+                    .background(tandemPalette.accent.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Lucide.Bell, contentDescription = null, modifier = Modifier.size(30.dp), tint = tandemPalette.accent)
+            }
+            Heading("Stay in the loop", "Get an alert when a change needs your attention.")
+            SurfaceCard {
+                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    BodyText("Tandem can alert you when an edit needs review, is rejected, or has an unknown status.")
+                    BodyText("You can change this later in Settings.")
+                }
+            }
+        },
+        actions = {
+            PrimaryButton("Allow notifications", modifier = Modifier.fillMaxWidth()) {
+                finishNotificationOnboarding(state, navigation, onRequestNotificationPermission)
+            }
+            SecondaryButton("Not now", modifier = Modifier.fillMaxWidth()) {
+                finishNotificationOnboarding(state, navigation, onRequestPermission = null)
+            }
+        },
+    )
+}
+
+internal fun finishNotificationOnboarding(
+    state: AppState,
+    navigation: AppNavigation,
+    onRequestPermission: (() -> Unit)?,
+) {
+    state.hasCompletedNotificationOnboarding = true
+    onRequestPermission?.invoke()
+    navigation.selectTab(AppRoute.BUDGET)
+}
+
+@Composable
+private fun SetupProgressIndicator() {
+    val palette = tandemPalette
+    val steps = listOf("Server", "Sign in", "Budget", "First sync")
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+        verticalAlignment = Alignment.Top,
+    ) {
+        steps.forEachIndexed { index, step ->
+            Column(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = "Step ${index + 1} of ${steps.size}: $step"
+                        },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+            ) {
+                Box(
+                    Modifier
+                        .size(24.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(if (index == 0) palette.accent else palette.raised),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "${index + 1}",
+                        color = if (index == 0) palette.accentContent else palette.muted,
+                        fontSize = TandemTypography.micro,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                Text(
+                    step,
+                    color = palette.muted,
+                    fontSize = TandemTypography.micro,
+                    lineHeight = TandemTypography.microLineHeight,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WelcomeBenefit(text: String) {
+    val palette = tandemPalette
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(24.dp)
+                .clip(RoundedCornerShape(50))
+                .background(palette.positive.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("✓", color = palette.positive, fontSize = TandemTypography.micro, fontWeight = FontWeight.Bold)
+        }
+        BodyText(text)
     }
 }
 

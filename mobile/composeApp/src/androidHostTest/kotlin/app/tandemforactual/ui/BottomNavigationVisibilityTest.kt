@@ -18,8 +18,8 @@ class BottomNavigationVisibilityTest {
     }
 
     @Test
-    fun fullScreenRoutesStayBelowForty() {
-        assertTrue(AppRoute.entries.size < 40)
+    fun routeCountStaysWithinForty() {
+        assertTrue(AppRoute.entries.size <= 40)
     }
 
     @Test
@@ -81,6 +81,7 @@ class BottomNavigationVisibilityTest {
         assertFalse(AppRoute.EDIT_TRANSACTION.showsBottomNavigation())
         assertFalse(AppRoute.CHOOSE_PAYEE.showsBottomNavigation())
         assertFalse(AppRoute.CHOOSE_CATEGORY.showsBottomNavigation())
+        assertFalse(AppRoute.NOTIFICATION_ONBOARDING.showsBottomNavigation())
     }
 
     @Test

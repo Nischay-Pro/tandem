@@ -37,6 +37,14 @@ follows the selected light, dark, or system mode alongside the Compose screens.
 
 ## Wording
 
+The first-run welcome screen gives three short benefits and shows the four
+required setup steps: Server, Sign in, Budget, and First sync. After a
+successful first sync, Tandem offers one optional “Stay in the loop” screen.
+The notification permission request happens only after “Allow notifications”
+is tapped; “Not now” continues directly to the budget. Tandem does not repeat
+the onboarding prompt after either choice. If the system permission was already
+denied, the platform action opens notification settings.
+
 | Idea                                      | Use                                                                                      | Avoid                                         |
 | ----------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------- |
 | A local copy                              | Saved on this device                                                                     | Saved on this phone                           |

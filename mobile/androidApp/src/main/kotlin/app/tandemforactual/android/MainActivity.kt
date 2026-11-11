@@ -1,6 +1,7 @@
 package app.tandemforactual.android
 
 import android.Manifest
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -32,7 +33,7 @@ class MainActivity : ComponentActivity() {
   private var notificationPermissionEnabled by mutableStateOf(false)
   private val notificationPermissionLauncher =
     registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-      notificationPermissionEnabled = granted || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+      notificationPermissionEnabled = granted && appNotificationsEnabled()
     }
   private val appResumeEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
   private val networkRestoredEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -99,12 +100,21 @@ class MainActivity : ComponentActivity() {
   }
 
   private fun requestNotificationPermission() {
+    if (!appNotificationsEnabled()) {
+      openNotificationSettings()
+      return
+    }
+    if (hasRuntimeNotificationPermission()) {
+      notificationPermissionEnabled = true
+      return
+    }
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
       notificationPermissionEnabled = true
       return
     }
-    if (hasNotificationPermission()) {
-      notificationPermissionEnabled = true
+    val permissionWasRequested = notificationPreferences().getBoolean(NOTIFICATION_PERMISSION_PROMPTED, false)
+    if (permissionWasRequested && !shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
+      openNotificationSettings()
       return
     }
     notificationPreferences().edit().putBoolean(NOTIFICATION_PERMISSION_PROMPTED, true).apply()
@@ -131,7 +141,13 @@ class MainActivity : ComponentActivity() {
   private fun notificationPreferences() =
     getSharedPreferences(NOTIFICATION_PREFERENCES, MODE_PRIVATE)
 
+  private fun appNotificationsEnabled(): Boolean =
+    getSystemService(NotificationManager::class.java)?.areNotificationsEnabled() != false
+
   private fun hasNotificationPermission(): Boolean =
+    appNotificationsEnabled() && hasRuntimeNotificationPermission()
+
+  private fun hasRuntimeNotificationPermission(): Boolean =
     Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
       checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 

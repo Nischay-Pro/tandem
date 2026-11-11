@@ -116,6 +116,7 @@ internal class AppState {
     var categoryIconOverrides by mutableStateOf("")
     var readOnlyMode by mutableStateOf(false)
     var hasDismissedBudgetHint by mutableStateOf(false)
+    var hasCompletedNotificationOnboarding by mutableStateOf(false)
     var reduceMotionOverride by mutableStateOf<Boolean?>(null)
     var systemReduceMotionEnabled by mutableStateOf(false)
     val reduceMotion: Boolean get() = reduceMotionOverride ?: systemReduceMotionEnabled
@@ -199,6 +200,7 @@ internal class AppState {
             "categoryIconOverrides" to categoryIconOverrides,
             "readOnlyMode" to readOnlyMode.toString(),
             "hasDismissedBudgetHint" to hasDismissedBudgetHint.toString(),
+            "hasCompletedNotificationOnboarding" to hasCompletedNotificationOnboarding.toString(),
             "selectedBudget" to selectedBudget,
             "selectedBudgetId" to selectedBudgetId,
             "selectedBudgetEncrypted" to selectedBudgetEncrypted.toString(),
@@ -232,6 +234,8 @@ internal class AppState {
         categoryIconOverrides = saved["categoryIconOverrides"] ?: categoryIconOverrides
         readOnlyMode = saved["readOnlyMode"]?.toBooleanStrictOrNull() ?: readOnlyMode
         hasDismissedBudgetHint = saved["hasDismissedBudgetHint"]?.toBooleanStrictOrNull() ?: hasDismissedBudgetHint
+        hasCompletedNotificationOnboarding =
+            saved["hasCompletedNotificationOnboarding"]?.toBooleanStrictOrNull() ?: hasCompletedNotificationOnboarding
         selectedBudget = saved["selectedBudget"] ?: selectedBudget
         selectedBudgetId = saved["selectedBudgetId"] ?: selectedBudgetId
         selectedBudgetEncrypted = saved["selectedBudgetEncrypted"]?.toBooleanStrictOrNull() ?: selectedBudgetEncrypted
@@ -325,6 +329,7 @@ internal class AppState {
                         "categoryIconOverrides" to state.categoryIconOverrides,
                         "readOnlyMode" to state.readOnlyMode,
                         "hasDismissedBudgetHint" to state.hasDismissedBudgetHint,
+                        "hasCompletedNotificationOnboarding" to state.hasCompletedNotificationOnboarding,
                         "reduceMotionOverride" to state.reduceMotionOverride,
                         "syncOnOpen" to state.syncOnOpen,
                         "backgroundSyncEnabled" to state.backgroundSyncEnabled,
@@ -401,6 +406,8 @@ internal class AppState {
                         categoryIconOverrides = saved["categoryIconOverrides"] as? String ?: categoryIconOverrides
                         readOnlyMode = saved["readOnlyMode"] as? Boolean ?: readOnlyMode
                         hasDismissedBudgetHint = saved["hasDismissedBudgetHint"] as? Boolean ?: hasDismissedBudgetHint
+                        hasCompletedNotificationOnboarding =
+                            saved["hasCompletedNotificationOnboarding"] as? Boolean ?: hasCompletedNotificationOnboarding
                         selectedBudgetId = saved["selectedBudgetId"] as? String ?: selectedBudgetId
                         reduceMotionOverride =
                             (saved["reduceMotionOverride"] as? Boolean) ?: (saved["reduceMotion"] as? Boolean)

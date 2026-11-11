@@ -10,11 +10,22 @@ final class IosBudgetNotifications {
     private init() {}
 
     func requestPermission() {
-        center.requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-            if let error {
-                NSLog("Tandem notification permission request failed: %@", String(describing: error))
-            } else if !granted {
-                NSLog("Tandem notifications remain disabled until enabled in Settings.")
+        center.getNotificationSettings { settings in
+            switch settings.authorizationStatus {
+            case .notDetermined:
+                self.center.requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+                    if let error {
+                        NSLog("Tandem notification permission request failed: %@", String(describing: error))
+                    } else if !granted {
+                        NSLog("Tandem notifications remain disabled until enabled in Settings.")
+                    }
+                }
+            case .denied:
+                self.openSettings()
+            case .authorized, .provisional, .ephemeral:
+                break
+            @unknown default:
+                self.openSettings()
             }
         }
     }
