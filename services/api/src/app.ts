@@ -74,7 +74,7 @@ const statusNotReady = {
   additionalProperties: false,
 };
 
-function safeErrorType(error: unknown): string {
+export function safeErrorType(error: unknown): string {
   if (!(error instanceof Error)) return error === null ? "null" : typeof error;
   const name = error.constructor.name;
   return /^[A-Za-z][A-Za-z0-9_$]{0,63}$/.test(name) ? name : "Error";

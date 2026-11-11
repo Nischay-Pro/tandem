@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 import { Writable } from "node:stream";
-import { buildApiApp } from "../src/app.js";
+import { buildApiApp, safeErrorType } from "../src/app.js";
 import {
   ActualPasswordRejectedError,
   ActualPasswordUnavailableError,
@@ -173,6 +173,7 @@ describe("health routes and OpenAPI", () => {
   });
 
   it("logs safe types for thrown non-errors and malformed Error constructor names", async () => {
+    expect(safeErrorType(null)).toBe("null");
     const lines: string[] = [];
     const stream = new Writable({
       write(chunk, _encoding, callback) {
