@@ -168,6 +168,24 @@ class GeneratedBudgetSyncRemote(
         }
     }
 
+    override suspend fun discardUncertainOperation(operationId: String): RemoteOperationResult {
+        val parsedId =
+            try {
+                Uuid.parse(operationId)
+            } catch (error: IllegalArgumentException) {
+                throw BudgetSyncProtocolException("Outbox operation ID is not a UUID", error)
+            }
+        return BudgetSyncJson.parseOperation(
+            unwrap(
+                withApiRequest {
+                    TransactionsApi.discardUncertainTransactionOperation(
+                        operationId = parsedId,
+                    )
+                },
+            ),
+        )
+    }
+
     override suspend fun readTransaction(
         budgetId: String,
         transactionId: String,

@@ -104,6 +104,7 @@ function createApi(
   };
   const submit = vi.fn(async () => submitted);
   const checkOperationStatus = vi.fn(async () => submitted);
+  const discardUncertainOperation = vi.fn(async () => submitted);
   const operation = overrides.operation;
   const conflict = overrides.conflict;
   const journal = {
@@ -113,6 +114,7 @@ function createApi(
   const reconciler = {
     submit,
     checkOperationStatus,
+    discardUncertainOperation,
   } as unknown as TransactionReconciler;
   return {
     api: createTransactionApi(session, transactions, reconciler, journal),
@@ -120,6 +122,7 @@ function createApi(
     read,
     submit,
     checkOperationStatus,
+    discardUncertainOperation,
     journal,
     submitted,
   };
@@ -257,5 +260,41 @@ describe("transaction API adapter", () => {
       "budget-password",
     );
     expect(fake.journal.getConflict).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a missing operation", undefined],
+    [
+      "an operation owned by another principal",
+      createOperation({ principalId: "another-owner" }),
+    ],
+    [
+      "a non-transaction operation",
+      createOperation({ entityType: "category" }),
+    ],
+  ])("does not discard %s", async (_description, operation) => {
+    const fake = createApi({ operation });
+    const operationId = operation?.operationId ?? randomUUID();
+
+    await expect(
+      fake.api.discardUncertainOperation("owner", operationId),
+    ).resolves.toBeUndefined();
+
+    expect(fake.journal.get).toHaveBeenCalledWith(operationId);
+    expect(fake.discardUncertainOperation).not.toHaveBeenCalled();
+  });
+
+  it("discards an owned transaction operation through the reconciler", async () => {
+    const operation = createOperation({ status: "uncertain" });
+    const fake = createApi({ operation });
+
+    await expect(
+      fake.api.discardUncertainOperation("owner", operation.operationId),
+    ).resolves.toBe(fake.submitted);
+
+    expect(fake.journal.get).toHaveBeenCalledWith(operation.operationId);
+    expect(fake.discardUncertainOperation).toHaveBeenCalledWith(
+      operation.operationId,
+    );
   });
 });

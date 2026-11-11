@@ -68,8 +68,9 @@ kover {
   reports {
     filters {
       excludes {
-        // Kover treats the generated, compile-time @SerialName metadata line as executable.
-        classes("app.tandemforactual.api.generated.models.ApiV1HealthReady200Response*")
+        // The generated API surface is checked by route/method/header contract tests.
+        // Its compiler-generated default-argument bridges are not meaningful line coverage.
+        classes("app.tandemforactual.api.generated.**")
       }
     }
     verify {

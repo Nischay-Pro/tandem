@@ -407,47 +407,35 @@ class TandemMobileSessionTest {
     }
 
     @Test
-    fun uncertainWriteScreenOffersRecoveryActionsOnlyAfterASettledStatusResponse() {
+    fun uncertainWriteScreenOffersRecoveryActionsAfterACompletedStatusCheck() {
         assertFalse(
             canOfferUncertainWriteRecoveryActions(
                 "uncertain",
-                serverConfirmedUncertainStatus = false,
-                isNotFound = false,
+                statusCheckFinished = false,
             ),
         )
         assertTrue(
             canOfferUncertainWriteRecoveryActions(
                 "uncertain",
-                serverConfirmedUncertainStatus = true,
-                isNotFound = false,
-            ),
-        )
-        assertFalse(
-            canOfferUncertainWriteRecoveryActions(
-                "uncertain",
-                serverConfirmedUncertainStatus = true,
-                isNotFound = true,
+                statusCheckFinished = true,
             ),
         )
         assertFalse(
             canOfferUncertainWriteRecoveryActions(
                 "queued",
-                serverConfirmedUncertainStatus = true,
-                isNotFound = false,
+                statusCheckFinished = true,
             ),
         )
         assertFalse(
             canOfferUncertainWriteRecoveryActions(
                 "committed",
-                serverConfirmedUncertainStatus = true,
-                isNotFound = false,
+                statusCheckFinished = true,
             ),
         )
         assertFalse(
             canOfferUncertainWriteRecoveryActions(
                 "conflict",
-                serverConfirmedUncertainStatus = true,
-                isNotFound = false,
+                statusCheckFinished = true,
             ),
         )
         assertTrue(isUncertainWriteOperationNotFound("operation_not_found"))

@@ -104,12 +104,8 @@ internal fun conflictPayeeTitle(
 
 internal fun canOfferUncertainWriteRecoveryActions(
     operationStatus: String,
-    serverConfirmedUncertainStatus: Boolean,
-    isNotFound: Boolean,
-): Boolean =
-    serverConfirmedUncertainStatus &&
-        !isNotFound &&
-        operationStatus == "uncertain"
+    statusCheckFinished: Boolean,
+): Boolean = statusCheckFinished && operationStatus == "uncertain"
 
 internal fun isUncertainWriteOperationNotFound(errorCode: String?): Boolean = errorCode == "operation_not_found"
 
@@ -659,17 +655,12 @@ internal fun UncertainWriteDetailsScreen(
     val operationAmountText = operationAmount?.let(state::formatSignedCurrency) ?: "Unavailable"
     var confirmDiscard by rememberSaveable(operation?.operationId) { mutableStateOf(false) }
     val checkErrorForOperation = checkError.takeIf { operation != null }
-    val serverConfirmedUncertainStatus =
-        isChecked &&
-            checkErrorForOperation == null &&
-            !isSyncing &&
-            !isNotFound
+    val statusCheckFinished = isChecked && !isSyncing
     val canRetryOrRemove =
         operation != null &&
             canOfferUncertainWriteRecoveryActions(
                 operation.status,
-                serverConfirmedUncertainStatus,
-                isNotFound,
+                statusCheckFinished,
             )
     PageColumn {
         if (operation == null) {
@@ -743,7 +734,7 @@ internal fun UncertainWriteDetailsScreen(
                 }
                 canRetryOrRemove -> {
                     UncertainWriteRecoveryActions(
-                        showCheckAgain = false,
+                        showCheckAgain = isNotFound,
                         showRetryAndRemove = true,
                         isSyncing = isSyncing,
                         readOnly = state.readOnlyMode,

@@ -243,42 +243,56 @@ export class TransactionReconciler {
       const current = await this.journal.get(operationId);
       if (!current) return undefined;
       if (current.status !== "uncertain") return this.#existingResult(current);
-      try {
-        if (current.action === "create") {
-          const prepared = prepareCreateRequest({
-            operationId: current.operationId,
-            principalId: current.principalId,
-            budgetId: current.budgetId,
-            idempotencyKey: current.idempotencyKey,
-            transactionId: current.entityId ?? "",
-            action: "create",
-            patch: current.patch,
-            ...(encryptionPassword === undefined ? {} : { encryptionPassword }),
-          });
-          return this.#recoverUncertainCreate(current, prepared);
-        }
-        if (current.action !== "update" && current.action !== "delete") {
-          return this.#existingResult(current);
-        }
-        const prepared = prepareRequest({
+      if (current.action === "create") {
+        const prepared = prepareCreateRequest({
           operationId: current.operationId,
           principalId: current.principalId,
           budgetId: current.budgetId,
           idempotencyKey: current.idempotencyKey,
           transactionId: current.entityId ?? "",
-          action: current.action,
-          baseRevision: current.baseRevision ?? "",
-          baseSnapshot: current.baseSnapshot,
+          action: "create",
           patch: current.patch,
           ...(encryptionPassword === undefined ? {} : { encryptionPassword }),
         });
-        return this.#recoverUncertain(current, prepared);
-      } catch (error) {
-        if (error instanceof TransactionRequestValidationError) {
-          return this.#existingResult(current);
-        }
-        throw error;
+        return this.#recoverUncertainCreate(current, prepared, true);
       }
+      if (current.action !== "update" && current.action !== "delete") {
+        throw new Error("Uncertain operation has an unsupported action");
+      }
+      const prepared = prepareRequest({
+        operationId: current.operationId,
+        principalId: current.principalId,
+        budgetId: current.budgetId,
+        idempotencyKey: current.idempotencyKey,
+        transactionId: current.entityId ?? "",
+        action: current.action,
+        baseRevision: current.baseRevision ?? "",
+        baseSnapshot: current.baseSnapshot,
+        patch: current.patch,
+        ...(encryptionPassword === undefined ? {} : { encryptionPassword }),
+      });
+      return this.#recoverUncertain(current, prepared, true);
+    });
+  }
+
+  async discardUncertainOperation(
+    operationId: string,
+  ): Promise<TransactionReconciliationResult | undefined> {
+    const operation = await this.journal.get(operationId);
+    if (!operation) return undefined;
+
+    return this.locks.withBudgetLock(operation.budgetId, async () => {
+      const current = await this.journal.get(operationId);
+      if (!current) return undefined;
+      if (current.entityType !== "transaction") {
+        return this.#existingResult(current);
+      }
+      const discarded = await this.journal.discardUncertain(operationId);
+      const conflict =
+        discarded.status === "conflict"
+          ? ((await this.journal.getConflict(operationId)) ?? null)
+          : null;
+      return { operation: discarded, conflict };
     });
   }
 
@@ -718,9 +732,13 @@ export class TransactionReconciler {
   async #recoverUncertain(
     operation: WriteOperation,
     prepared: PreparedRequest,
+    failOnReadError = false,
   ): Promise<TransactionReconciliationResult> {
     const evidence = operation.writeEvidence;
     if (evidence?.kind === "transaction-create-returned") {
+      if (failOnReadError) {
+        throw new Error("Uncertain update has write evidence for a create");
+      }
       return this.#existingResult(operation);
     }
 
@@ -731,7 +749,8 @@ export class TransactionReconciler {
         () => this.transactions.read(prepared.request.transactionId),
         runOptions(prepared.request.encryptionPassword),
       );
-    } catch {
+    } catch (error) {
+      if (failOnReadError) throw error;
       return this.#existingResult(operation);
     }
 
@@ -816,6 +835,7 @@ export class TransactionReconciler {
   async #recoverUncertainCreate(
     operation: WriteOperation,
     prepared: PreparedCreateRequest,
+    failOnReadError = false,
   ): Promise<TransactionReconciliationResult> {
     let current: unknown | undefined;
     try {
@@ -824,7 +844,8 @@ export class TransactionReconciler {
         () => this.transactions.read(prepared.request.transactionId),
         runOptions(prepared.request.encryptionPassword),
       );
-    } catch {
+    } catch (error) {
+      if (failOnReadError) throw error;
       return this.#existingResult(operation);
     }
     if (current === undefined) {

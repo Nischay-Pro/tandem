@@ -113,6 +113,22 @@ function createConflictJournalHarness(
 }
 
 describe("PostgreSQL journal rollback failures", () => {
+  it("returns the uncertain operation when the conditional discard update loses its race", async () => {
+    const harness = createConflictJournalHarness({ updateWins: false });
+
+    await expect(
+      harness.journal.discardUncertain(input.operationId),
+    ).resolves.toMatchObject({
+      operationId: input.operationId,
+      status: "uncertain",
+    });
+    expect(harness.query).toHaveBeenCalledWith(
+      expect.stringContaining("SET status = 'rejected'"),
+      [input.operationId],
+    );
+    expect(harness.query).toHaveBeenCalledWith("COMMIT");
+  });
+
   it("rejects uncertain conflict resolution for a missing operation", async () => {
     const harness = createConflictJournalHarness({ operationMissing: true });
 

@@ -998,7 +998,13 @@ fun TandemApp(
         }
     }
     val discardWrite: (String) -> Unit = { operationId ->
-        coroutineScope.launch { mobileSession.discardWrite(state.selectedBudgetId, operationId) }
+        coroutineScope.launch {
+            mobileSession.discardWrite(
+                state.selectedBudgetId,
+                operationId,
+                state.encryptedPassword.takeIf { it.isNotBlank() },
+            )
+        }
     }
     val retryUncertainWrite: (String) -> Unit = { operationId ->
         coroutineScope.launch {

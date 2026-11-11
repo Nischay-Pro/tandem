@@ -89,7 +89,7 @@ class UncertainWriteScreenTest {
     }
 
     @Test
-    fun failedApiStatusCheckOffersOnlyCheckAgain() {
+    fun failedApiStatusCheckKeepsServerGatedRecoveryActionsAvailable() {
         var retryRequested = false
         var removalRequested = false
         composeTestRule.setContent {
@@ -114,14 +114,15 @@ class UncertainWriteScreenTest {
 
         composeTestRule.onNodeWithText("Couldn’t check this change").assertExists()
         composeTestRule.onNodeWithText("Check again").assertExists()
-        composeTestRule.onNodeWithText("Try again").assertDoesNotExist()
-        composeTestRule.onNodeWithText("Remove edit").assertDoesNotExist()
-        assertFalse(retryRequested)
+        composeTestRule.onNodeWithText("Try again").performClick()
+        assertTrue(retryRequested)
+        composeTestRule.onNodeWithText("Remove edit").performClick()
+        composeTestRule.onNodeWithText("Actual may already have saved it", substring = true).assertExists()
         assertFalse(removalRequested)
     }
 
     @Test
-    fun failedOfflineStatusCheckOffersOnlyCheckAgain() {
+    fun failedOfflineStatusCheckOffersActionsThatStillRequireServerConfirmation() {
         var retryRequested = false
         var removalRequested = false
         composeTestRule.setContent {
@@ -146,14 +147,16 @@ class UncertainWriteScreenTest {
 
         composeTestRule.onNodeWithText("Couldn’t check this change").assertExists()
         composeTestRule.onNodeWithText("Check again").assertExists()
-        composeTestRule.onNodeWithText("Try again").assertDoesNotExist()
-        composeTestRule.onNodeWithText("Remove edit").assertDoesNotExist()
-        assertFalse(retryRequested)
+        composeTestRule.onNodeWithText("Try again").performClick()
+        assertTrue(retryRequested)
+        composeTestRule.onNodeWithText("Remove edit").performClick()
+        composeTestRule.onNodeWithText("Actual may already have saved it", substring = true).assertExists()
+        assertTrue(retryRequested)
         assertFalse(removalRequested)
     }
 
     @Test
-    fun authoritativeNotFoundDoesNotOfferRetryOrRemove() {
+    fun authoritativeNotFoundOffersRetryAndRemoveChoices() {
         var retryRequested = false
         var removalRequested = false
         composeTestRule.setContent {
@@ -183,9 +186,10 @@ class UncertainWriteScreenTest {
                 substring = true,
             ).assertExists()
         composeTestRule.onNodeWithText("Check again").assertExists()
-        composeTestRule.onNodeWithText("Try again").assertDoesNotExist()
-        composeTestRule.onNodeWithText("Remove edit").assertDoesNotExist()
-        assertFalse(retryRequested)
+        composeTestRule.onNodeWithText("Try again").performClick()
+        assertTrue(retryRequested)
+        composeTestRule.onNodeWithText("Remove edit").performClick()
+        composeTestRule.onNodeWithText("Actual may already have saved it", substring = true).assertExists()
         assertFalse(removalRequested)
     }
 

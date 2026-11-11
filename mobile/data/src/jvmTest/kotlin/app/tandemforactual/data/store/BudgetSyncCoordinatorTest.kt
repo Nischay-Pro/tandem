@@ -473,6 +473,165 @@ class BudgetSyncCoordinatorTest {
         }
 
     @Test
+    fun uncertainWriteIsDiscardedLocallyOnlyAfterServerConfirmation() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val remote = FakeBudgetSyncRemote(snapshot(records = listOf(transaction())))
+                val coordinator = BudgetSyncCoordinator(repository, remote)
+                coordinator.synchronize(BUDGET, sendQueuedWrites = false)
+                val request = updateRequest()
+                repository.enqueueWrite(request)
+                repository.claimNextWrite(BUDGET)
+                repository.markWriteUncertain(request.operationId, "claim-lease-expired")
+                remote.discardHandler = { operationId ->
+                    operationResult(operationId, RemoteOperationStatus.REJECTED, "discarded-by-user")
+                }
+
+                val result = coordinator.discardUncertainWrite(BUDGET, request.operationId)
+
+                assertEquals(RemoteOperationStatus.REJECTED, result.status)
+                assertEquals("discarded-by-user", result.errorCode)
+                assertEquals(1, remote.discardCount)
+                assertEquals("discarded", repository.findWrite(request.operationId)?.status)
+                assertNull(repository.findRecord(BUDGET, "transaction", TXN)?.localJson)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun uncertainWriteDiscardRequiresMatchingLocalAndServerOperations() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val remote = FakeBudgetSyncRemote(snapshot(records = listOf(transaction())))
+                val coordinator = BudgetSyncCoordinator(repository, remote)
+                coordinator.synchronize(BUDGET, sendQueuedWrites = false)
+
+                val missing =
+                    runCatching { coordinator.discardUncertainWrite(BUDGET, "missing-operation") }
+                        .exceptionOrNull()
+                assertTrue(missing is NoSuchElementException)
+
+                val request = updateRequest()
+                repository.enqueueWrite(request)
+                val queued =
+                    runCatching { coordinator.discardUncertainWrite(BUDGET, request.operationId) }
+                        .exceptionOrNull()
+                assertTrue(queued is InvalidLocalWriteException)
+
+                repository.claimNextWrite(BUDGET)
+                repository.markWriteUncertain(request.operationId, "claim-lease-expired")
+                remote.discardHandler = { operationId ->
+                    operationResult(operationId, RemoteOperationStatus.REJECTED, "discarded-by-user")
+                        .copy(transactionId = "other-transaction")
+                }
+                val mismatch =
+                    runCatching { coordinator.discardUncertainWrite(BUDGET, request.operationId) }
+                        .exceptionOrNull()
+
+                assertTrue(mismatch is BudgetSyncProtocolException)
+                assertEquals("uncertain", repository.findWrite(request.operationId)?.status)
+                assertEquals(1, remote.discardCount)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun uncertainWriteRemainsLocalWhenServerCannotConfirmDiscard() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val remote = FakeBudgetSyncRemote(snapshot(records = listOf(transaction())))
+                val coordinator = BudgetSyncCoordinator(repository, remote)
+                coordinator.synchronize(BUDGET, sendQueuedWrites = false)
+                val request = updateRequest()
+                repository.enqueueWrite(request)
+                repository.claimNextWrite(BUDGET)
+                repository.markWriteUncertain(request.operationId, "claim-lease-expired")
+                remote.discardError = BudgetSyncRemoteException("network-error")
+
+                val error =
+                    runCatching { coordinator.discardUncertainWrite(BUDGET, request.operationId) }
+                        .exceptionOrNull()
+
+                assertTrue(error is BudgetSyncRemoteException)
+                assertEquals(1, remote.discardCount)
+                assertEquals("uncertain", repository.findWrite(request.operationId)?.status)
+                assertEquals(
+                    "{\"id\":\"txn-1\",\"amount\":1200}",
+                    repository.findRecord(BUDGET, "transaction", TXN)?.localJson,
+                )
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun uncertainWriteRemainsLocalWhenServerReportsItStillUncertain() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val remote = FakeBudgetSyncRemote(snapshot(records = listOf(transaction())))
+                val coordinator = BudgetSyncCoordinator(repository, remote)
+                coordinator.synchronize(BUDGET, sendQueuedWrites = false)
+                val request = updateRequest()
+                repository.enqueueWrite(request)
+                repository.claimNextWrite(BUDGET)
+                repository.markWriteUncertain(request.operationId, "claim-lease-expired")
+
+                val result = coordinator.discardUncertainWrite(BUDGET, request.operationId)
+
+                assertEquals(RemoteOperationStatus.UNCERTAIN, result.status)
+                assertEquals("uncertain", repository.findWrite(request.operationId)?.status)
+                assertEquals(
+                    "{\"id\":\"txn-1\",\"amount\":1200}",
+                    repository.findRecord(BUDGET, "transaction", TXN)?.localJson,
+                )
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun statusCheckAppliesAServerConfirmedUncertainDiscard() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val remote = FakeBudgetSyncRemote(snapshot(records = listOf(transaction())))
+                val coordinator = BudgetSyncCoordinator(repository, remote)
+                coordinator.synchronize(BUDGET, sendQueuedWrites = false)
+                val request = updateRequest()
+                repository.enqueueWrite(request)
+                repository.claimNextWrite(BUDGET)
+                repository.markWriteUncertain(request.operationId, "claim-lease-expired")
+                remote.operationHandler = { operationId ->
+                    operationResult(operationId, RemoteOperationStatus.REJECTED, "discarded-by-user")
+                }
+
+                val result =
+                    coordinator.synchronize(
+                        BUDGET,
+                        sendQueuedWrites = false,
+                        reconcileUncertainOperationId = request.operationId,
+                    )
+
+                assertEquals(1, result.writesRejected)
+                assertEquals("discarded", repository.findWrite(request.operationId)?.status)
+                assertNull(repository.findRecord(BUDGET, "transaction", TXN)?.localJson)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun interruptedSendIsRecoveredAndPolledAfterDatabaseReopen() =
         runBlocking {
             val file = File.createTempFile("tandem-sync-", ".db")
@@ -1322,9 +1481,11 @@ class BudgetSyncCoordinatorTest {
         val changeRequests = mutableListOf<ChangeRequest>()
         val submittedOperations = mutableListOf<app.tandemforactual.data.database.OutboxOperationEntity>()
         var submitCount = 0
+        var discardCount = 0
         var operationPolls = 0
         val operationPasswords = mutableListOf<String?>()
         var submitError: Exception? = null
+        var discardError: Exception? = null
         var readOperationError: Exception? = null
         var snapshotHandler: suspend (String, String?) -> RemoteBudgetSnapshot = { _, _ -> snapshotResponse }
         var snapshotPageHandler: (suspend (String, String?, String?, String?, String?, Int, String?) -> RemoteBudgetSnapshotPage)? = null
@@ -1335,6 +1496,8 @@ class BudgetSyncCoordinatorTest {
         var submitHandler: suspend (app.tandemforactual.data.database.OutboxOperationEntity) -> RemoteOperationResult =
             { operation -> operationResult(operation.operationId, RemoteOperationStatus.COMMITTED) }
         var operationHandler: suspend (String) -> RemoteOperationResult =
+            { operationId -> operationResult(operationId, RemoteOperationStatus.UNCERTAIN) }
+        var discardHandler: suspend (String) -> RemoteOperationResult =
             { operationId -> operationResult(operationId, RemoteOperationStatus.UNCERTAIN) }
         var transactionHandler: suspend (String, String, String?) -> RemoteTransactionRecord? =
             { _, _, _ -> null }
@@ -1403,6 +1566,12 @@ class BudgetSyncCoordinatorTest {
             operationPasswords += encryptionPassword
             readOperationError?.let { throw it }
             return operationHandler(operationId)
+        }
+
+        override suspend fun discardUncertainOperation(operationId: String): RemoteOperationResult {
+            discardCount += 1
+            discardError?.let { throw it }
+            return discardHandler(operationId)
         }
 
         override suspend fun readTransaction(

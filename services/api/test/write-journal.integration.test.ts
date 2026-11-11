@@ -1017,6 +1017,50 @@ describe("durable write journal integration", () => {
     expect(claim.operation.status).toBe("uncertain");
   });
 
+  it("records server-confirmed removal of an uncertain write", async () => {
+    const input = createOperation();
+    await database.journal.enqueue(input);
+    await database.journal.claim(input.operationId);
+    await database.journal.markUncertain(
+      input.operationId,
+      "claim-lease-expired",
+    );
+
+    const discarded = await database.journal.discardUncertain(
+      input.operationId,
+    );
+
+    expect(discarded).toMatchObject({
+      status: "rejected",
+      errorCode: "discarded-by-user",
+      actualResult: null,
+      leaseExpiresAt: null,
+      completedAt: expect.any(Date),
+    });
+    await expect(database.journal.get(input.operationId)).resolves.toEqual(
+      discarded,
+    );
+  });
+
+  it("does not discard an operation after another request settled it", async () => {
+    const input = createOperation();
+    await database.journal.enqueue(input);
+    await database.journal.claim(input.operationId);
+    const committed = await database.journal.markCommitted(input.operationId, {
+      transactionId: input.entityId,
+    });
+
+    await expect(
+      database.journal.discardUncertain(input.operationId),
+    ).resolves.toEqual(committed);
+  });
+
+  it("does not discard an operation that is missing", async () => {
+    await expect(
+      database.journal.discardUncertain(randomUUID()),
+    ).rejects.toThrow("does not exist");
+  });
+
   it("requeues an uncertain operation after a read-back proves it was not applied", async () => {
     const input = createOperation();
     await database.journal.enqueue(input);

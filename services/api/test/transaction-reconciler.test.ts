@@ -296,6 +296,20 @@ class MemoryWriteJournal implements DurableWriteJournal {
     return this.operation;
   }
 
+  async discardUncertain(): Promise<WriteOperation> {
+    this.#throwIfFailed("discardUncertain");
+    const operation = this.#requireOperation();
+    if (operation.status === "uncertain") {
+      this.operation = {
+        ...operation,
+        status: "rejected",
+        errorCode: "discarded-by-user",
+        actualResult: null,
+      };
+    }
+    return this.#requireOperation();
+  }
+
   async markCommitted(
     _operationId: string,
     actualResult: JsonValue,
@@ -1010,6 +1024,21 @@ describe("Actual transaction reconciliation", () => {
 
     expect(result.operation.status).toBe("uncertain");
     expect(harness.journal.resolveCalls).toBe(0);
+  });
+
+  it("fails a status check when Actual cannot read back an uncertain create", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request, {
+      initialStatus: "uncertain",
+      initialWriteEvidence: { kind: "transaction-create-returned" },
+    });
+    harness.setSessionErrorAt(1, new Error("Actual unavailable"));
+    await harness.journal.enqueue(operationInputFor(request));
+
+    await expect(
+      harness.reconciler.checkOperationStatus(request.operationId),
+    ).rejects.toThrow("Actual unavailable");
+    expect(harness.journal.operation?.status).toBe("uncertain");
   });
 
   it("leaves an uncertain create unresolved when Actual read-back is malformed", async () => {
@@ -2546,6 +2575,20 @@ describe("Actual transaction reconciliation", () => {
     expect(result.operation.status).toBe("uncertain");
   });
 
+  it("returns an uncertain update unchanged when retry sees create write evidence", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const operation = createOperation(operationInputFor(request), "uncertain", {
+      kind: "transaction-create-returned",
+    });
+    harness.journal.operation = operation;
+
+    const result = await harness.reconciler.submit(request);
+
+    expect(result.operation).toEqual(operation);
+    expect(harness.sessionCalls).toHaveLength(0);
+  });
+
   it("does not recover an uncertain deletion when Actual still has the row", async () => {
     const request = createRequest({ action: "delete", patch: {} });
     const harness = createHarness(request, {
@@ -2636,6 +2679,122 @@ describe("Actual transaction reconciliation", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  it("records an uncertain edit as discarded before reporting server confirmation", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    await harness.journal.enqueue(operationInputFor(request));
+
+    const result = await harness.reconciler.discardUncertainOperation(
+      request.operationId,
+    );
+
+    expect(result?.operation).toMatchObject({
+      status: "rejected",
+      errorCode: "discarded-by-user",
+    });
+    expect(harness.journal.operation).toMatchObject({
+      status: "rejected",
+      errorCode: "discarded-by-user",
+    });
+    expect(harness.sessionCalls).toHaveLength(0);
+  });
+
+  it("does not discard uncertain non-transaction operations", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    await harness.journal.enqueue({
+      ...operationInputFor(request),
+      entityType: "budget-mutation",
+    });
+
+    const result = await harness.reconciler.discardUncertainOperation(
+      request.operationId,
+    );
+
+    expect(result?.operation.status).toBe("uncertain");
+    expect(harness.journal.operation?.status).toBe("uncertain");
+    expect(harness.sessionCalls).toHaveLength(0);
+  });
+
+  it("returns no discard result when the operation is missing", async () => {
+    const request = createRequest();
+    const harness = createHarness(request);
+    harness.journal.missingOnGet = true;
+
+    await expect(
+      harness.reconciler.discardUncertainOperation(request.operationId),
+    ).resolves.toBeUndefined();
+  });
+
+  it("returns no discard result if the operation disappears while waiting for its budget lock", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const operation = createOperation(operationInputFor(request), "uncertain");
+    vi.spyOn(harness.journal, "get")
+      .mockResolvedValueOnce(operation)
+      .mockResolvedValueOnce(undefined);
+
+    await expect(
+      harness.reconciler.discardUncertainOperation(request.operationId),
+    ).resolves.toBeUndefined();
+  });
+
+  it("returns a concurrent conflict when it wins the discard race", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const operation = createOperation(operationInputFor(request), "uncertain");
+    const conflictOperation = { ...operation, status: "conflict" as const };
+    await harness.journal.enqueue(operationInputFor(request));
+    harness.journal.conflict = {
+      conflictId: randomUUID(),
+      operationId: request.operationId,
+      conflictType: "same-field-edit",
+      baseSnapshot: { amount: -1500 },
+      localPatch: { amount: -1200 },
+      remoteSnapshot: { amount: -1300 },
+      conflictingFields: ["amount"],
+      createdAt: new Date("2026-11-01T12:00:00.000Z"),
+    };
+    vi.spyOn(harness.journal, "discardUncertain").mockResolvedValue(
+      conflictOperation,
+    );
+
+    await expect(
+      harness.reconciler.discardUncertainOperation(request.operationId),
+    ).resolves.toEqual({
+      operation: conflictOperation,
+      conflict: harness.journal.conflict,
+    });
+  });
+
+  it("returns a concurrent conflict when its detail row is missing", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const operation = createOperation(operationInputFor(request), "uncertain");
+    const conflictOperation = { ...operation, status: "conflict" as const };
+    await harness.journal.enqueue(operationInputFor(request));
+    vi.spyOn(harness.journal, "discardUncertain").mockResolvedValue(
+      conflictOperation,
+    );
+
+    await expect(
+      harness.reconciler.discardUncertainOperation(request.operationId),
+    ).resolves.toEqual({ operation: conflictOperation, conflict: null });
+  });
+
+  it("does not report a discard when another request already settled the edit", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, { initialStatus: "committed" });
+    await harness.journal.enqueue(operationInputFor(request));
+
+    const result = await harness.reconciler.discardUncertainOperation(
+      request.operationId,
+    );
+
+    expect(result?.operation.status).toBe("committed");
+    expect(result?.operation.errorCode).toBeNull();
+  });
+
   it("retries a lease-expired operation only after read-back confirms the base value", async () => {
     const request = createRequest();
     const harness = createHarness(request, { initialStatus: "uncertain" });
@@ -2678,6 +2837,19 @@ describe("Actual transaction reconciliation", () => {
 
     expect(result?.operation.status).toBe("uncertain");
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it("fails a status check when Actual read-back is unavailable", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const error = new Error("Actual read-back unavailable");
+    harness.setSessionErrorAt(1, error);
+    await harness.journal.enqueue(operationInputFor(request));
+
+    await expect(
+      harness.reconciler.checkOperationStatus(request.operationId),
+    ).rejects.toBe(error);
+    expect(harness.journal.operation?.status).toBe("uncertain");
   });
 
   it("returns an uncertain operation to the queue only when read-back matches its base", async () => {
@@ -2790,7 +2962,7 @@ describe("Actual transaction reconciliation", () => {
     expect(harness.sessionCalls).toHaveLength(0);
   });
 
-  it("keeps an uncertain operation when its stored references are invalid", async () => {
+  it("fails a status check when an uncertain operation has invalid stored references", async () => {
     const request = createRequest();
     const harness = createHarness(request, { initialStatus: "uncertain" });
     const operation = createOperation(
@@ -2803,11 +2975,10 @@ describe("Actual transaction reconciliation", () => {
     );
     harness.journal.operation = operation;
 
-    const result = await harness.reconciler.checkOperationStatus(
-      request.operationId,
-    );
-
-    expect(result?.operation).toEqual(operation);
+    await expect(
+      harness.reconciler.checkOperationStatus(request.operationId),
+    ).rejects.toThrow("transactionId must be a non-empty string");
+    expect(harness.journal.operation).toEqual(operation);
     expect(harness.sessionCalls).toHaveLength(0);
   });
 
@@ -2868,7 +3039,7 @@ describe("Actual transaction reconciliation", () => {
     expect(harness.sessionCalls).toHaveLength(1);
   });
 
-  it("keeps an uncertain operation when its legacy snapshot is malformed", async () => {
+  it("fails a status check when the uncertain operation snapshot is malformed", async () => {
     const request = createRequest();
     const harness = createHarness(request, { initialStatus: "uncertain" });
     const malformedSnapshot = {
@@ -2885,17 +3056,15 @@ describe("Actual transaction reconciliation", () => {
     harness.journal.operation = operation;
     const read = vi.spyOn(harness.store, "read");
 
-    const result = await harness.reconciler.checkOperationStatus(
-      request.operationId,
-    );
-
-    expect(result?.operation).toEqual(operation);
-    expect(result?.operation.status).toBe("uncertain");
+    await expect(
+      harness.reconciler.checkOperationStatus(request.operationId),
+    ).rejects.toThrow("baseSnapshot.amount must be a safe integer");
+    expect(harness.journal.operation).toEqual(operation);
     expect(harness.sessionCalls).toHaveLength(0);
     expect(read).not.toHaveBeenCalled();
   });
 
-  it("returns an uncertain operation with an unsupported journal action", async () => {
+  it("fails a status check for an unsupported uncertain operation action", async () => {
     const request = createRequest();
     const harness = createHarness(request, { initialStatus: "uncertain" });
     const operation = createOperation(
@@ -2904,11 +3073,10 @@ describe("Actual transaction reconciliation", () => {
     );
     harness.journal.operation = operation;
 
-    const result = await harness.reconciler.checkOperationStatus(
-      request.operationId,
-    );
-
-    expect(result?.operation).toEqual(operation);
+    await expect(
+      harness.reconciler.checkOperationStatus(request.operationId),
+    ).rejects.toThrow("Uncertain operation has an unsupported action");
+    expect(harness.journal.operation).toEqual(operation);
     expect(harness.sessionCalls).toHaveLength(0);
   });
 
@@ -2967,7 +3135,7 @@ describe("Actual transaction reconciliation", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it("keeps an uncertain create when its stored transaction ID is missing", async () => {
+  it("fails a status check when an uncertain create has no stored transaction ID", async () => {
     const request = createCreateRequest();
     const harness = createHarness(request, { initialStatus: "uncertain" });
     const operation = createOperation(
@@ -2976,11 +3144,10 @@ describe("Actual transaction reconciliation", () => {
     );
     harness.journal.operation = operation;
 
-    const result = await harness.reconciler.checkOperationStatus(
-      request.operationId,
-    );
-
-    expect(result?.operation).toEqual(operation);
+    await expect(
+      harness.reconciler.checkOperationStatus(request.operationId),
+    ).rejects.toThrow("transactionId must be a stable Tandem transaction ID");
+    expect(harness.journal.operation).toEqual(operation);
     expect(harness.sessionCalls).toHaveLength(0);
   });
 
@@ -3069,7 +3236,7 @@ describe("Actual transaction reconciliation", () => {
     expect(harness.journal.resolveCalls).toBe(0);
   });
 
-  it("does not read Actual when uncertain update evidence says the create already returned", async () => {
+  it("fails a status check when uncertain update evidence is for a create", async () => {
     const request = createRequest();
     const harness = createHarness(request, { initialStatus: "uncertain" });
     const operation = createOperation(operationInputFor(request), "uncertain", {
@@ -3078,11 +3245,9 @@ describe("Actual transaction reconciliation", () => {
     harness.journal.operation = operation;
     const read = vi.spyOn(harness.store, "read");
 
-    const result = await harness.reconciler.checkOperationStatus(
-      request.operationId,
-    );
-
-    expect(result?.operation).toEqual(operation);
+    await expect(
+      harness.reconciler.checkOperationStatus(request.operationId),
+    ).rejects.toThrow("Uncertain update has write evidence for a create");
     expect(read).not.toHaveBeenCalled();
   });
 

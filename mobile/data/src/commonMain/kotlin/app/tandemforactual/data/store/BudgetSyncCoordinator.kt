@@ -90,6 +90,32 @@ class BudgetSyncCoordinator(
             }
         }
 
+    /** Removes a local uncertain write only after the server records the discard. */
+    suspend fun discardUncertainWrite(
+        budgetId: String,
+        operationId: String,
+    ): RemoteOperationResult =
+        processSyncMutex.withLock {
+            val local =
+                repository.findWrite(operationId)
+                    ?: throw NoSuchElementException("Local write not found")
+            if (local.budgetId != budgetId || local.status != "uncertain") {
+                throw InvalidLocalWriteException("Only an uncertain write in this budget can be discarded")
+            }
+            val result = remote.discardUncertainOperation(operationId)
+            if (
+                result.operationId != local.operationId ||
+                result.budgetId != local.budgetId ||
+                result.transactionId != local.recordId
+            ) {
+                throw BudgetSyncProtocolException("Discard response does not match its local outbox entry")
+            }
+            if (result.status == RemoteOperationStatus.REJECTED && result.errorCode == "discarded-by-user") {
+                repository.discardWrite(operationId)
+            }
+            result
+        }
+
     private suspend fun refreshBudget(
         budgetId: String,
         encryptionPassword: String?,
@@ -481,10 +507,14 @@ class BudgetSyncCoordinator(
                 WriteOutcome.CONFLICTED
             }
             RemoteOperationStatus.REJECTED -> {
-                repository.markWriteRejected(
-                    local.operationId,
-                    remoteResult.errorCode?.safeCode() ?: "remote-rejected",
-                )
+                if (remoteResult.errorCode == "discarded-by-user") {
+                    repository.discardWrite(local.operationId)
+                } else {
+                    repository.markWriteRejected(
+                        local.operationId,
+                        remoteResult.errorCode?.safeCode() ?: "remote-rejected",
+                    )
+                }
                 WriteOutcome.REJECTED
             }
         }

@@ -3525,12 +3525,81 @@ internal class TandemMobileSession(
     suspend fun discardWrite(
         budgetId: String,
         operationId: String,
+        encryptionPassword: String? = null,
     ) {
         transactionWriteMessage = null
         clearUncertainWriteCheck()
         if (refuseWriteInReadOnlyMode()) return
         val localRepository = repository ?: return
         val operation = localRepository.findWrite(operationId)
+        if (operation?.status == "uncertain") {
+            if (operation.recordType != "transaction") {
+                uncertainWriteCheckError = "Tandem couldn’t confirm that this change was removed. It remains on this device."
+                uncertainWriteCheckErrorOperationId = operationId
+                return
+            }
+            val coordinator = syncCoordinator
+            if (coordinator == null || !isCurrentIdentityCacheOwner()) {
+                uncertainWriteCheckError =
+                    "Tandem couldn’t confirm that this edit was removed. It remains on this device. Sign in to the server and try again."
+                uncertainWriteCheckErrorOperationId = operationId
+                checkedWriteOperation = operation
+                checkedWriteOperationId = operationId
+                return
+            }
+            isSavingTransaction = true
+            try {
+                val result =
+                    apiClient.withExclusiveSession {
+                        coordinator.discardUncertainWrite(
+                            budgetId,
+                            operationId,
+                        )
+                    }
+                if (result.status == app.tandemforactual.data.store.RemoteOperationStatus.REJECTED &&
+                    result.errorCode == "discarded-by-user"
+                ) {
+                    loadLocalRecords(budgetId)
+                    checkedWriteOperation = localRepository.findWrite(operationId)
+                    checkedWriteOperationId = operationId
+                    transactionWriteMessage = discardedPendingWriteMessage("uncertain")
+                    return
+                }
+
+                val summary =
+                    synchronize(
+                        budgetId = budgetId,
+                        encryptionPassword = encryptionPassword,
+                        sendQueuedWrites = false,
+                        reconcileUncertainOperationId = operationId,
+                    )
+                checkedWriteOperation = localRepository.findWrite(operationId)
+                checkedWriteOperationId = operationId
+                if (checkedWriteOperation?.status == "uncertain") {
+                    uncertainWriteCheckError =
+                        if (summary == null) {
+                            "Tandem couldn’t confirm that this edit was removed. " +
+                                "It remains on this device. Check the connection and try again."
+                        } else {
+                            "Tandem still can’t confirm whether Actual saved this edit. " +
+                                "It remains on this device. Check status before removing it."
+                        }
+                    uncertainWriteCheckErrorOperationId = operationId
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                checkedWriteOperation = localRepository.findWrite(operationId)
+                checkedWriteOperationId = operationId
+                uncertainWriteCheckError =
+                    "Tandem couldn’t confirm that this edit was removed. It remains on this device. Check the connection and try again."
+                uncertainWriteCheckErrorOperationId = operationId
+                loadLocalRecords(budgetId)
+            } finally {
+                isSavingTransaction = false
+            }
+            return
+        }
         if (operation?.recordType == "budget-mutation" && !restoreBudgetReorderQueue()) {
             transactionWriteMessage = "Couldn’t verify this pending change. Try again before removing it."
             return

@@ -101,6 +101,7 @@ function createApi(
     readTransaction?: TransactionApiPort["readTransaction"];
     submit?: TransactionApiPort["submit"];
     getOperation?: TransactionApiPort["getOperation"];
+    discardUncertainOperation?: TransactionApiPort["discardUncertainOperation"];
     authenticatedDevice?: DeviceRecord | undefined;
   } = {},
   logger?: FastifyServerOptions["logger"],
@@ -117,10 +118,15 @@ function createApi(
     overrides.getOperation ??
       (async () => ({ operation: createOperation(), conflict: null })),
   );
+  const discardUncertainOperation = vi.fn(
+    overrides.discardUncertainOperation ??
+      (async () => ({ operation: createOperation(), conflict: null })),
+  );
   const transactionApi: TransactionApiPort = {
     readTransaction,
     submit,
     getOperation,
+    discardUncertainOperation,
   };
   const authenticate = vi.fn(async (token?: string) =>
     token === accessToken
@@ -141,6 +147,7 @@ function createApi(
     readTransaction,
     submit,
     getOperation,
+    discardUncertainOperation,
     authenticate,
     buildApp: (withTransactionApi = true) =>
       buildApiApp(
@@ -180,6 +187,9 @@ describe("transaction REST routes", () => {
         post: expect.any(Object),
       },
       "/api/v1/operations/{operationId}": { get: expect.any(Object) },
+      "/api/v1/operations/{operationId}/discard": {
+        post: expect.any(Object),
+      },
     });
     await app.close();
   });
@@ -691,6 +701,81 @@ describe("transaction REST routes", () => {
     await app.close();
   });
 
+  it("discards an uncertain operation only through an authenticated server request", async () => {
+    const fake = createApi({
+      discardUncertainOperation: async () => ({
+        operation: createOperation({
+          status: "rejected",
+          errorCode: "discarded-by-user",
+          actualResult: null,
+        }),
+        conflict: null,
+      }),
+    });
+    const app = await fake.buildApp();
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/operations/${operationId}/discard`,
+      headers: authHeaders,
+    });
+    const unauthorized = await app.inject({
+      method: "POST",
+      url: `/api/v1/operations/${operationId}/discard`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(unauthorized.statusCode).toBe(401);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.json().operation).toMatchObject({
+      status: "rejected",
+      errorCode: "discarded-by-user",
+    });
+    expect(fake.discardUncertainOperation).toHaveBeenCalledWith(
+      "owner",
+      operationId,
+    );
+    await app.close();
+  });
+
+  it("hides uncertain-operation discard for budgets outside device scope", async () => {
+    const fake = createApi({
+      discardUncertainOperation: async () => ({
+        operation: createOperation({
+          budgetId: "other-budget",
+          status: "uncertain",
+        }),
+        conflict: null,
+      }),
+    });
+    const app = await fake.buildApp();
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/operations/${operationId}/discard`,
+      headers: authHeaders,
+    });
+
+    expect(response.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("sanitizes uncertain-operation discard failures", async () => {
+    const fake = createApi({
+      discardUncertainOperation: async () => {
+        throw new Error("private Actual failure");
+      },
+    });
+    const app = await fake.buildApp();
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/operations/${operationId}/discard`,
+      headers: authHeaders,
+    });
+
+    expect(response.statusCode).toBe(502);
+    expect(response.body).not.toContain("private Actual failure");
+    await app.close();
+  });
+
   it("passes an encrypted budget password only to the operation lookup", async () => {
     const fake = createApi();
     const app = await fake.buildApp();
@@ -788,6 +873,11 @@ describe("transaction REST routes", () => {
       url: "/api/v1/operations/not-a-uuid",
       headers: authHeaders,
     });
+    const invalidDiscardId = await app.inject({
+      method: "POST",
+      url: "/api/v1/operations/not-a-uuid/discard",
+      headers: authHeaders,
+    });
     await app.close();
 
     const disabled = await fake.buildApp(false);
@@ -796,9 +886,16 @@ describe("transaction REST routes", () => {
       url: `/api/v1/operations/${operationId}`,
       headers: authHeaders,
     });
+    const discardUnavailable = await disabled.inject({
+      method: "POST",
+      url: `/api/v1/operations/${operationId}/discard`,
+      headers: authHeaders,
+    });
 
     expect(invalidId.statusCode).toBe(400);
+    expect(invalidDiscardId.statusCode).toBe(400);
     expect(unavailable.statusCode).toBe(503);
+    expect(discardUnavailable.statusCode).toBe(503);
     await disabled.close();
   });
 

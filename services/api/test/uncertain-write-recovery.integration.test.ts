@@ -169,12 +169,14 @@ async function createRecoveryApp(
   options: {
     initialActual?: Record<string, unknown>;
     updateValidationIssue?: TransactionCreateValidationIssue;
+    readError?: Error;
   } = {},
 ) {
   let actual: Record<string, unknown> | undefined =
     options.initialActual ?? actualRecordFromSnapshot(base);
   const transactions: ActualTransactionStore = {
     async read(id) {
+      if (options.readError) throw options.readError;
       if (id !== base.id && id !== input.entityId) return undefined;
       return actual ? { ...actual } : undefined;
     },
@@ -265,6 +267,14 @@ function statusRequest(operationId: string) {
   return {
     method: "GET" as const,
     url: `/api/v1/operations/${operationId}`,
+    headers: { authorization: `Bearer ${accessToken}` },
+  };
+}
+
+function discardRequest(operationId: string) {
+  return {
+    method: "POST" as const,
+    url: `/api/v1/operations/${operationId}/discard`,
     headers: { authorization: `Bearer ${accessToken}` },
   };
 }
@@ -434,6 +444,70 @@ describe("uncertain transaction recovery through the API", () => {
       expect(writes.count).toBe(1);
       await expect(transactions.read(base.id)).resolves.toMatchObject({
         amount: -1300,
+      });
+    } finally {
+      await app.close();
+    }
+  }, 30_000);
+
+  it("removes an uncertain edit locally only after the server confirms discard", async () => {
+    const base = createBaseSnapshot(`recovery-${randomUUID()}`);
+    const budgetId = `recovery-budget-${randomUUID()}`;
+    const input = createWriteInput(base, budgetId);
+    const writes = { count: 0 };
+    const { app, transactions } = await createRecoveryApp(input, base, writes);
+
+    try {
+      await expireClaimedLease(input, async () => {
+        await transactions.update(base.id, { amount: -1300 });
+      });
+
+      const checked = await app.inject(statusRequest(input.operationId));
+      expect(checked.statusCode).toBe(200);
+      expect(checked.json().operation.status).toBe("uncertain");
+
+      const discarded = await app.inject(discardRequest(input.operationId));
+      expect(discarded.statusCode).toBe(200);
+      expect(discarded.json().operation).toMatchObject({
+        status: "rejected",
+        errorCode: "discarded-by-user",
+      });
+      await expect(
+        database.journal.get(input.operationId),
+      ).resolves.toMatchObject({
+        status: "rejected",
+        errorCode: "discarded-by-user",
+      });
+      await expect(transactions.read(base.id)).resolves.toMatchObject({
+        amount: -1300,
+      });
+      expect(writes.count).toBe(1);
+    } finally {
+      await app.close();
+    }
+  }, 30_000);
+
+  it("does not return a settled status when the server cannot read Actual", async () => {
+    const base = createBaseSnapshot(`recovery-${randomUUID()}`);
+    const budgetId = `recovery-budget-${randomUUID()}`;
+    const input = createWriteInput(base, budgetId);
+    const writes = { count: 0 };
+    const { app } = await createRecoveryApp(input, base, writes, {
+      readError: new Error("Actual is temporarily unavailable"),
+    });
+
+    try {
+      await expireClaimedLease(input);
+
+      const checked = await app.inject(statusRequest(input.operationId));
+
+      expect(checked.statusCode).toBe(502);
+      expect(checked.body).not.toContain("Actual is temporarily unavailable");
+      await expect(
+        database.journal.get(input.operationId),
+      ).resolves.toMatchObject({
+        status: "uncertain",
+        errorCode: "claim-lease-expired",
       });
     } finally {
       await app.close();

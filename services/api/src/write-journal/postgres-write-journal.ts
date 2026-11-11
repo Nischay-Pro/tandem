@@ -269,6 +269,27 @@ export class PostgresWriteJournal implements DurableWriteJournal {
     );
   }
 
+  async discardUncertain(operationId: string): Promise<WriteOperation> {
+    validateUuid("operationId", operationId);
+    return withTransaction(this.pool, async (client) => {
+      const existing = await selectOperation(client, operationId, true);
+      if (!existing) throw new OperationNotFoundError(operationId);
+      const operation = mapOperation(existing);
+      if (operation.status !== "uncertain") return operation;
+
+      const result = await client.query<OperationRow>(
+        `UPDATE tandem_operations
+        SET status = 'rejected', error_code = 'discarded-by-user',
+            actual_result = NULL, completed_at = clock_timestamp(),
+            updated_at = clock_timestamp(), lease_expires_at = NULL
+        WHERE operation_id = $1 AND status = 'uncertain'
+        RETURNING *`,
+        [operationId],
+      );
+      return result.rows[0] ? mapOperation(result.rows[0]) : operation;
+    });
+  }
+
   async markCommitted(
     operationId: string,
     actualResult: JsonValue,

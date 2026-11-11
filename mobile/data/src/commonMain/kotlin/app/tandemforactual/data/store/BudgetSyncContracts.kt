@@ -161,6 +161,9 @@ interface BudgetSyncRemote {
         encryptionPassword: String?,
     ): RemoteOperationResult = readOperation(operationId)
 
+    suspend fun discardUncertainOperation(operationId: String): RemoteOperationResult =
+        throw BudgetSyncProtocolException("Server-confirmed removal is unavailable")
+
     /** Returns null only for an authoritative HTTP 404 response. */
     suspend fun readTransaction(
         budgetId: String,

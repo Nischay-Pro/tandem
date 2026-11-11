@@ -36,6 +36,38 @@ for (const source of stagedSources) {
     (file) => !file.endsWith(".integration.test.ts"),
   );
 
+  if (modulePath === "src/write-journal/postgres-write-journal.ts") {
+    const integrationTests = matchingTests.filter((file) =>
+      file.endsWith(".integration.test.ts"),
+    );
+    if (integrationTests.length === 0) {
+      throw new Error(
+        "PostgreSQL write-journal changes require a database integration test",
+      );
+    }
+    for (const test of integrationTests)
+      assertNoUnstagedChange(`services/api/${test}`);
+
+    if (!process.env.DATABASE_URL) {
+      process.stdout.write(
+        "API coverage: PostgreSQL write-journal integration tests are present; set DATABASE_URL for local coverage (CI runs the full database coverage gate).\n",
+      );
+      continue;
+    }
+
+    process.stdout.write(
+      `API coverage: checking ${modulePath} with the full database-backed suite\n`,
+    );
+    const result = spawnSync(
+      vitest,
+      ["run", "--coverage.enabled", `--coverage.include=${modulePath}`],
+      { cwd: apiRoot, stdio: "inherit" },
+    );
+    if (result.error) throw result.error;
+    if (result.status !== 0) process.exit(result.status ?? 1);
+    continue;
+  }
+
   if (unitTests.length === 0) {
     process.stdout.write(
       `API coverage: no focused unit test imports ${modulePath}; CI will run the integration coverage gate.\n`,

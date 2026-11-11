@@ -113,6 +113,14 @@ class GeneratedBudgetSyncRemoteTest {
                         request.url.encodedPath.endsWith("/snapshot") -> respond(snapshotJson(), headers = jsonHeaders())
                         request.url.encodedPath.endsWith("/changes") -> respond(changePageJson(), headers = jsonHeaders())
                         request.url.encodedPath.endsWith("/operations") -> respond(operationJson("queued"), headers = jsonHeaders())
+                        request.url.encodedPath.endsWith("/discard") ->
+                            respond(
+                                operationJson("rejected").replace(
+                                    "\"errorCode\":null",
+                                    "\"errorCode\":\"discarded-by-user\"",
+                                ),
+                                headers = jsonHeaders(),
+                            )
                         request.url.encodedPath.startsWith("/api/v1/operations/") ->
                             respond(
                                 operationJson("committed"),
@@ -160,6 +168,9 @@ class GeneratedBudgetSyncRemoteTest {
 
                 val status = remote.readOperation(OPERATION_ID)
                 assertEquals(RemoteOperationStatus.COMMITTED, status.status)
+                val discarded = remote.discardUncertainOperation(OPERATION_ID)
+                assertEquals(RemoteOperationStatus.REJECTED, discarded.status)
+                assertEquals("discarded-by-user", discarded.errorCode)
                 val transaction = remote.readTransaction(BUDGET, TXN, "encrypted-budget")
                 assertEquals(TXN, transaction?.transactionId)
                 assertEquals("checking", transaction?.projection?.accountId)
@@ -262,6 +273,8 @@ class GeneratedBudgetSyncRemoteTest {
                 mode = "ok"
                 val invalidOperationId = captureProtocolException { remote.readOperation("not-a-uuid") }
                 assertTrue(invalidOperationId.message.orEmpty().contains("UUID"))
+                val invalidDiscardOperationId = captureProtocolException { remote.discardUncertainOperation("not-a-uuid") }
+                assertTrue(invalidDiscardOperationId.message.orEmpty().contains("UUID"))
                 val invalidBase =
                     captureProtocolException {
                         remote.submitOperation(outboxOperation("UPDATE").copy(baseSnapshotJson = null), null)

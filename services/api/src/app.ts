@@ -1207,7 +1207,7 @@ function registerTransactionRoutes(
         properties: {
           operationId: { type: "string", format: "uuid" },
           budgetId: { type: "string" },
-          action: { type: "string", enum: ["update", "delete"] },
+          action: { type: "string", enum: ["create", "update", "delete"] },
           transactionId: { type: "string" },
           baseRevision: { type: "string" },
           baseSnapshot: { type: "object", additionalProperties: true },
@@ -1564,6 +1564,61 @@ function registerTransactionRoutes(
         return reply.code(200).send(toOperationResultResponse(result));
       } catch (error) {
         reportTransactionFailure("Transaction operation lookup failed", error);
+        return actualRequestFailed(reply, error);
+      }
+    },
+  );
+
+  app.post<{ Params: OperationRouteParams }>(
+    "/api/v1/operations/:operationId/discard",
+    {
+      schema: {
+        tags: ["Transactions"],
+        operationId: "discardUncertainTransactionOperation",
+        summary: "Discard an uncertain transaction operation on the server",
+        description:
+          "Marks an uncertain operation as discarded only if it is still uncertain. If its status changed, returns the current status without discarding it.",
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          properties: { operationId: { type: "string", format: "uuid" } },
+          required: ["operationId"],
+          additionalProperties: false,
+        },
+        response: {
+          200: operationResultSchema,
+          400: errorSchema,
+          401: errorSchema,
+          404: errorSchema,
+          503: errorSchema,
+        },
+      },
+      attachValidation: true,
+    },
+    async (request, reply) => {
+      const device = await requireDevice(deviceAuth, request, reply);
+      if (!device) return reply;
+      if (request.validationError) return invalidTransactionRequest(reply);
+      if (!transactionApi) return actualNotConfigured(reply);
+
+      try {
+        const result = await transactionApi.discardUncertainOperation(
+          device.principalId,
+          request.params.operationId,
+        );
+        if (
+          !result ||
+          !DeviceAuthorization.canAccessBudget(
+            device,
+            result.operation.budgetId,
+          )
+        ) {
+          return transactionNotFound(reply);
+        }
+        reply.header("cache-control", "no-store");
+        return reply.code(200).send(toOperationResultResponse(result));
+      } catch (error) {
+        reportTransactionFailure("Uncertain operation discard failed", error);
         return actualRequestFailed(reply, error);
       }
     },

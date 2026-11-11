@@ -185,6 +185,7 @@ class GeneratedApiSurfaceTest {
                         ?.isSuccessful == true,
                 )
                 assertTrue(TransactionsApi.getTransactionOperation(operationId = operationId).getOrNull()?.isSuccessful == true)
+                assertTrue(TransactionsApi.discardUncertainTransactionOperation(operationId).getOrNull()?.isSuccessful == true)
                 assertTrue(
                     TransactionsApi
                         .getBudgetTransaction(
@@ -281,6 +282,7 @@ class GeneratedApiSurfaceTest {
                         HttpMethod.Post to "/api/v1/budgets/budget-1/transactions/transaction-1/operations",
                         HttpMethod.Get to "/api/v1/operations/$operationId",
                         HttpMethod.Get to "/api/v1/operations/$operationId",
+                        HttpMethod.Post to "/api/v1/operations/$operationId/discard",
                         HttpMethod.Get to "/api/v1/budgets/budget-2/transactions/transaction-2",
                         HttpMethod.Post to "/api/v1/budgets/budget-2/transactions/transaction-2/operations",
                         HttpMethod.Post to "/api/v1/budgets/budget-2/accounts/account-2/transactions/import",
@@ -321,7 +323,7 @@ class GeneratedApiSurfaceTest {
                 assertNull(capturedRequests[17].headers["x-budget-encryption-password"])
                 assertNull(capturedRequests[18].headers["x-budget-encryption-password"])
                 assertNull(capturedRequests[19].headers["x-budget-encryption-password"])
-                assertEquals("operation-key-defaults", capturedRequests[19].headers["idempotency-key"])
+                assertEquals("operation-key-defaults", capturedRequests[20].headers["idempotency-key"])
                 assertNotNull(capturedRequests[6].body)
                 assertNotNull(capturedRequests[15].body)
                 Unit

@@ -1315,7 +1315,7 @@
                         "budgetId": { "type": "string" },
                         "action": {
                           "type": "string",
-                          "enum": ["update", "delete"]
+                          "enum": ["create", "update", "delete"]
                         },
                         "transactionId": { "type": "string" },
                         "baseRevision": { "type": "string" },
@@ -1659,7 +1659,300 @@
                         "budgetId": { "type": "string" },
                         "action": {
                           "type": "string",
-                          "enum": ["update", "delete"]
+                          "enum": ["create", "update", "delete"]
+                        },
+                        "transactionId": { "type": "string" },
+                        "baseRevision": { "type": "string" },
+                        "baseSnapshot": {
+                          "type": "object",
+                          "additionalProperties": true
+                        },
+                        "patch": {
+                          "type": "object",
+                          "additionalProperties": true
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "applying",
+                            "committed",
+                            "conflict",
+                            "uncertain",
+                            "rejected"
+                          ]
+                        },
+                        "attemptCount": { "type": "integer" },
+                        "errorCode": { "type": ["null", "string"] },
+                        "actualResult": {
+                          "type": [
+                            "null",
+                            "object",
+                            "array",
+                            "string",
+                            "number",
+                            "boolean"
+                          ],
+                          "additionalProperties": true,
+                          "items": {}
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "startedAt": {
+                          "type": ["null", "string"],
+                          "format": "date-time"
+                        },
+                        "completedAt": {
+                          "type": ["null", "string"],
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "operationId",
+                        "budgetId",
+                        "action",
+                        "transactionId",
+                        "baseRevision",
+                        "baseSnapshot",
+                        "patch",
+                        "status",
+                        "attemptCount",
+                        "errorCode",
+                        "actualResult",
+                        "createdAt",
+                        "updatedAt",
+                        "startedAt",
+                        "completedAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "conflict": {
+                      "type": ["null", "object"],
+                      "properties": {
+                        "conflictId": { "type": "string", "format": "uuid" },
+                        "conflictType": { "type": "string" },
+                        "baseSnapshot": {
+                          "type": "object",
+                          "additionalProperties": true
+                        },
+                        "localPatch": {
+                          "type": "object",
+                          "additionalProperties": true
+                        },
+                        "remoteSnapshot": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": { "type": "string" },
+                                "account": { "type": "string" },
+                                "amount": { "type": "integer" },
+                                "date": { "type": "string", "format": "date" },
+                                "payee": { "type": ["null", "string"] },
+                                "category": { "type": ["null", "string"] },
+                                "notes": { "type": ["null", "string"] },
+                                "cleared": { "type": ["null", "boolean"] },
+                                "reconciled": { "type": ["null", "boolean"] },
+                                "importedId": { "type": ["null", "string"] },
+                                "importedPayee": { "type": ["null", "string"] },
+                                "startingBalance": {
+                                  "type": ["null", "boolean"]
+                                },
+                                "schedule": { "type": ["null", "string"] },
+                                "transferId": { "type": ["null", "string"] },
+                                "isParent": { "type": "boolean" },
+                                "isChild": { "type": "boolean" },
+                                "parentId": { "type": ["null", "string"] },
+                                "subtransactions": {
+                                  "type": "array",
+                                  "maxItems": 1000,
+                                  "items": {
+                                    "type": "object",
+                                    "additionalProperties": true
+                                  }
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "account",
+                                "amount",
+                                "date",
+                                "payee",
+                                "category",
+                                "notes",
+                                "cleared",
+                                "reconciled",
+                                "importedId",
+                                "importedPayee",
+                                "startingBalance",
+                                "schedule",
+                                "transferId",
+                                "isParent",
+                                "isChild",
+                                "parentId",
+                                "subtransactions"
+                              ],
+                              "additionalProperties": false
+                            },
+                            { "type": "null" }
+                          ]
+                        },
+                        "conflictingFields": {
+                          "type": "array",
+                          "items": { "type": "string" }
+                        },
+                        "createdAt": { "type": "string", "format": "date-time" }
+                      },
+                      "required": [
+                        "conflictId",
+                        "conflictType",
+                        "baseSnapshot",
+                        "localPatch",
+                        "remoteSnapshot",
+                        "conflictingFields",
+                        "createdAt"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["operation", "conflict"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/operations/{operationId}/discard": {
+      "post": {
+        "operationId": "discardUncertainTransactionOperation",
+        "summary": "Discard an uncertain transaction operation on the server",
+        "tags": ["Transactions"],
+        "description": "Marks an uncertain operation as discarded only if it is still uncertain. If its status changed, returns the current status without discarding it.",
+        "parameters": [
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "in": "path",
+            "name": "operationId",
+            "required": true
+          }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "operation": {
+                      "type": "object",
+                      "properties": {
+                        "operationId": { "type": "string", "format": "uuid" },
+                        "budgetId": { "type": "string" },
+                        "action": {
+                          "type": "string",
+                          "enum": ["create", "update", "delete"]
                         },
                         "transactionId": { "type": "string" },
                         "baseRevision": { "type": "string" },
