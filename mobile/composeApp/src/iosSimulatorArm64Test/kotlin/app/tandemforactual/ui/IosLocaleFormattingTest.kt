@@ -9,6 +9,7 @@ import platform.CoreFoundation.CFTimeZoneCopyDefault
 import platform.CoreFoundation.CFTimeZoneCreateWithName
 import platform.CoreFoundation.CFTimeZoneSetDefault
 import platform.CoreFoundation.kCFStringEncodingUTF8
+import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -171,6 +172,28 @@ class IosLocaleFormattingTest {
                     assertNull(
                         platformParseDecimalMinorUnits("1234${groupingMark}567${decimalMark}$fractionalDigits", displaySettings),
                         "$numberFormat/$fractionDigits malformed grouped decimal",
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun generatedAmountsRoundTripAcrossEveryBudgetNumberFormatAndScaleOnIos() {
+        val random = Random(317_2026)
+        val formats = listOf("comma-dot", "dot-comma", "space-comma", "apostrophe-dot", "comma-dot-in")
+
+        formats.forEach { numberFormat ->
+            listOf(0, 2, 3).forEach { fractionDigits ->
+                val displaySettings = settings(numberFormat, fractionDigits)
+                repeat(64) { sample ->
+                    val amountMinor = random.nextLong(0L, 1_000_000_000_000L)
+                    val formatted = platformFormatDecimal(amountMinor, displaySettings)
+
+                    assertEquals(
+                        amountMinor,
+                        platformParseDecimalMinorUnits(formatted, displaySettings),
+                        "seed=3172026 format=$numberFormat scale=$fractionDigits sample=$sample value=$formatted",
                     )
                 }
             }

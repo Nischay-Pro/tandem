@@ -4,6 +4,7 @@ import app.tandemforactual.data.store.BudgetDisplaySettings
 import java.time.Instant
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -358,6 +359,28 @@ class LocaleFormattingTest {
                     assertNull(
                         platformParseDecimalMinorUnits("1234${groupingMark}567${decimalMark}$fractionalDigits", settings),
                         "$numberFormat/$fractionDigits malformed grouped decimal",
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun generatedAmountsRoundTripAcrossEveryBudgetNumberFormatAndScale() {
+        val random = Random(317_2026)
+        val formats = listOf("comma-dot", "dot-comma", "space-comma", "apostrophe-dot", "comma-dot-in")
+
+        formats.forEach { numberFormat ->
+            listOf(0, 2, 3).forEach { fractionDigits ->
+                val settings = displaySettings("USD", numberFormat, currencyFractionDigits = fractionDigits)
+                repeat(64) { sample ->
+                    val amountMinor = random.nextLong(0L, 1_000_000_000_000L)
+                    val formatted = platformFormatDecimal(amountMinor, settings)
+
+                    assertEquals(
+                        amountMinor,
+                        platformParseDecimalMinorUnits(formatted, settings),
+                        "seed=3172026 format=$numberFormat scale=$fractionDigits sample=$sample value=$formatted",
                     )
                 }
             }

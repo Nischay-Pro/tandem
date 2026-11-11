@@ -8,10 +8,13 @@ import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import org.junit.Test
+import kotlin.random.Random
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -139,6 +142,89 @@ class TransactionConflictResolutionTest {
             assertEquals("superseded", store.writes[CONFLICT_ID]?.status)
             assertEquals("committed", store.writes[REPLACEMENT_ID]?.status)
             assertEquals("Tandem confirmed your edit in Actual.", message)
+        }
+
+    @Test
+    fun generatedDisjointEditsNeverDropOneSidedFieldsDuringRebase() =
+        runBlocking {
+            val random = Random(322_2026)
+            val patchableFields = listOf("amount", "date", "account", "category", "payee", "notes", "cleared")
+
+            repeat(64) { sample ->
+                val suffix = random.nextInt(1, 1_000_000)
+                val baseAmount = random.nextLong(1_000L, 1_000_000L)
+                val baseCleared = random.nextBoolean()
+                val latestActual =
+                    JsonObject(
+                        mapOf(
+                            "id" to JsonPrimitive("transaction-1"),
+                            "amount" to JsonPrimitive(baseAmount),
+                            "date" to JsonPrimitive("2026-11-${(sample % 27 + 1).toString().padStart(2, '0')}"),
+                            "account" to JsonPrimitive("actual-account-$suffix"),
+                            "category" to JsonPrimitive("actual-category-$suffix"),
+                            "payee" to JsonPrimitive("actual-payee-$suffix"),
+                            "month" to JsonPrimitive("2026-11"),
+                            "notes" to JsonPrimitive("Actual note $suffix"),
+                            "cleared" to JsonPrimitive(baseCleared),
+                        ),
+                    )
+                val originalSnapshot =
+                    JsonObject(
+                        latestActual +
+                            mapOf(
+                                "amount" to JsonPrimitive(baseAmount + 1),
+                                "date" to JsonPrimitive("2026-10-${(sample % 27 + 1).toString().padStart(2, '0')}"),
+                                "account" to JsonPrimitive("original-account-$suffix"),
+                                "category" to JsonPrimitive("original-category-$suffix"),
+                                "payee" to JsonPrimitive("original-payee-$suffix"),
+                                "notes" to JsonPrimitive("Original note $suffix"),
+                                "cleared" to JsonPrimitive(!baseCleared),
+                            ),
+                    )
+                val changedFields =
+                    patchableFields
+                        .filter { random.nextBoolean() }
+                        .ifEmpty { listOf(patchableFields[sample % patchableFields.size]) }
+                val patch =
+                    JsonObject(
+                        changedFields.associateWith { field ->
+                            when (field) {
+                                "amount" -> JsonPrimitive(baseAmount + 2)
+                                "date" -> JsonPrimitive("2026-12-${(sample % 27 + 1).toString().padStart(2, '0')}")
+                                "account" -> JsonPrimitive("device-account-$suffix")
+                                "category" -> JsonPrimitive("device-category-$suffix")
+                                "payee" -> JsonPrimitive("device-payee-$suffix")
+                                "notes" -> JsonPrimitive("Device note $suffix")
+                                "cleared" -> JsonPrimitive(!baseCleared)
+                                else -> error("Unexpected generated patch field: $field")
+                            }
+                        },
+                    )
+                val store = FakeStore()
+                store.record = store.record.copy(remoteJson = latestActual.toString())
+                store.writes[CONFLICT_ID] =
+                    checkNotNull(store.writes[CONFLICT_ID]).copy(
+                        baseSnapshotJson = originalSnapshot.toString(),
+                        patchJson = patch.toString(),
+                    )
+
+                workflow(store, FakeSync(store)).resolve(
+                    BUDGET,
+                    CONFLICT_ID,
+                    keepDeviceVersion = true,
+                    encryptionPassword = null,
+                    reviewedRevision = "revision-latest",
+                )
+
+                val rebased = Json.parseToJsonElement(checkNotNull(store.requests.single().optimisticJson)).jsonObject
+                latestActual.keys.forEach { field ->
+                    assertEquals(
+                        patch[field] ?: latestActual.getValue(field),
+                        rebased[field],
+                        "seed=3222026 sample=$sample field=$field changed=${field in changedFields}",
+                    )
+                }
+            }
         }
 
     @Test
