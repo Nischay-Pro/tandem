@@ -62,7 +62,7 @@ internal fun apiFailureMessage(
                     } else {
                         "This device can’t open that budget. Ask the budget owner for access."
                     }
-                404 -> "Tandem’s API route couldn’t be reached. Check the address and the proxy’s /api/v1/ route."
+                404, 405 -> "Tandem’s API route isn’t available. Check the address and the proxy’s /api/v1/ route."
                 408, 425, 429 -> "Tandem couldn’t complete the request. Wait a moment, then try again."
                 in 500..599 -> "Tandem is temporarily unavailable. Try again shortly."
                 else -> fallback

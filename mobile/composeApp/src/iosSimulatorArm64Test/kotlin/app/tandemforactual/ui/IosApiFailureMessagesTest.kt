@@ -20,7 +20,8 @@ class IosApiFailureMessagesTest {
         val cases =
             listOf(
                 "network-error" to (null to "Couldn’t reach Tandem at this address. Check the address and connection."),
-                "http-404" to (404 to "Tandem’s API route couldn’t be reached. Check the address and the proxy’s /api/v1/ route."),
+                "http-404" to (404 to "Tandem’s API route isn’t available. Check the address and the proxy’s /api/v1/ route."),
+                "http-405" to (405 to "Tandem’s API route isn’t available. Check the address and the proxy’s /api/v1/ route."),
                 "http-400" to (400 to "Tandem rejected the request. Check the details and try again."),
                 "http-422" to (422 to "Tandem rejected the request. Check the details and try again."),
                 "http-408" to (408 to "Tandem couldn’t complete the request. Wait a moment, then try again."),
@@ -46,6 +47,11 @@ class IosApiFailureMessagesTest {
                 .userFacingMessage("fallback", ApiFailureContext.SIGN_IN)
         assertEquals("Couldn’t reach Tandem at this address. Check the address and connection.", thrownNetwork)
         assertFalse(thrownNetwork.contains("private host details"))
+        val thrownSyncNetwork =
+            TandemApiException("network-error", cause = IllegalStateException("private host details"))
+                .userFacingMessage("fallback", ApiFailureContext.SYNC)
+        assertEquals(thrownNetwork, thrownSyncNetwork)
+        assertFalse(thrownSyncNetwork.contains("password", ignoreCase = true))
 
         listOf(ApiFailureContext.SIGN_IN, ApiFailureContext.SYNC).forEach { context ->
             assertFalse(apiFailureMessage("http-401", 401, context, "fallback").contains("password", ignoreCase = true))
