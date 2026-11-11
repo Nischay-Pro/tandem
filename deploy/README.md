@@ -148,6 +148,12 @@ docker compose --project-directory "$PWD" \
 curl --fail https://budget.example.com/api/v1/health/ready
 ```
 
+The response should be `{"status":"ok"}` as JSON. If this URL returns the
+Actual web page, the reverse proxy is sending `/api/v1/` to Actual instead of
+the Tandem API. Add the API locations from
+[`nginx/tandem-locations.conf.example`](nginx/tandem-locations.conf.example)
+to the same TLS server block as Actual.
+
 The API has Docker liveness/readiness checks; readiness requires PostgreSQL.
 PostgreSQL has its own `pg_isready` check. Compose starts the API after
 PostgreSQL is healthy, restarts failed services, gives the API 45 seconds to
