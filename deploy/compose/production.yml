@@ -38,6 +38,7 @@ services:
     environment:
       DATABASE_URL_FILE: /run/secrets/database_url
       AUTH_TOKEN_ENCRYPTION_KEY_FILE: /run/secrets/auth_token_encryption_key
+      AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE: /run/secrets/auth_token_encryption_key_previous
       HOST: 0.0.0.0
       PORT: 19753
       TRUST_PROXY: ${TRUST_PROXY:?Set TRUST_PROXY to the reverse proxy IP or narrow CIDR in deploy/compose/.env}
@@ -71,6 +72,7 @@ services:
     secrets:
       - database_url
       - auth_token_encryption_key
+      - auth_token_encryption_key_previous
 
 secrets:
   postgres_password:
@@ -79,6 +81,8 @@ secrets:
     file: ${DATABASE_URL_FILE:?Set DATABASE_URL_FILE in deploy/compose/.env}
   auth_token_encryption_key:
     file: ${AUTH_TOKEN_ENCRYPTION_KEY_FILE:?Set AUTH_TOKEN_ENCRYPTION_KEY_FILE in deploy/compose/.env}
+  auth_token_encryption_key_previous:
+    file: ${AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE:?Set AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE in deploy/compose/.env}
 
 volumes:
   postgres-data:

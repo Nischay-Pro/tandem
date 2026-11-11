@@ -324,6 +324,7 @@ class TandemApiClient(
     suspend fun startActualOpenIdSignIn(
         serverUrl: String,
         deviceName: String,
+        codeChallenge: String,
     ): String =
         sessionMutex.withLock {
             val parsedUrl = parseServerUrl(serverUrl, allowInsecurePrivateNetwork)
@@ -336,6 +337,7 @@ class TandemApiClient(
                         AuthenticationApi.startActualOpenIdSignIn(
                             buildJsonObject {
                                 put("deviceName", normalizeDeviceName(deviceName))
+                                put("codeChallenge", codeChallenge)
                             }.toMap(),
                         ),
                     )
@@ -346,6 +348,7 @@ class TandemApiClient(
     suspend fun completeActualOpenIdSignIn(
         serverUrl: String,
         code: String,
+        codeVerifier: String,
     ): AuthenticatedDevice =
         sessionMutex.withLock {
             val parsedUrl = parseServerUrl(serverUrl, allowInsecurePrivateNetwork)
@@ -359,7 +362,10 @@ class TandemApiClient(
                 val payload =
                     unwrap(
                         AuthenticationApi.completeActualOpenIdSignIn(
-                            buildJsonObject { put("code", code) }.toMap(),
+                            buildJsonObject {
+                                put("code", code)
+                                put("codeVerifier", codeVerifier)
+                            }.toMap(),
                         ),
                     )
                 val deviceId = payload.requiredString("deviceId")

@@ -827,6 +827,49 @@ describe("budget maintenance routes", () => {
     await enqueueFailureFake.app.close();
   });
 
+  it("requires a fresh idempotency key after a rejected budget change", async () => {
+    const fake = await createApi();
+    const firstHeaders = testHeaders();
+    vi.mocked(fake.budgetMaintenanceApi.createAccount).mockRejectedValueOnce(
+      new BudgetMaintenanceInputError("Account name is already in use"),
+    );
+    const route = {
+      method: "POST" as const,
+      url: `/api/v1/budgets/${budgetId}/accounts`,
+    };
+    const rejected = await fake.app.inject({
+      ...route,
+      headers: firstHeaders,
+      payload: { name: "Savings", offbudget: false },
+    });
+    const sameKeyRetry = await fake.app.inject({
+      ...route,
+      headers: firstHeaders,
+      payload: { name: "Savings", offbudget: false },
+    });
+
+    expect(rejected.statusCode).toBe(400);
+    expect(rejected.json().error.code).toBe("invalid_request");
+    expect(sameKeyRetry.statusCode).toBe(409);
+    expect(sameKeyRetry.json().error).toMatchObject({
+      code: "operation_rejected",
+      message:
+        "This change was rejected earlier. Correct it and submit it again with a new request.",
+    });
+    expect(fake.budgetMaintenanceApi.createAccount).toHaveBeenCalledTimes(1);
+
+    const corrected = await fake.app.inject({
+      ...route,
+      headers: { ...firstHeaders, "idempotency-key": randomUUID() },
+      payload: { name: "Emergency savings", offbudget: false },
+    });
+
+    expect(corrected.statusCode).toBe(200);
+    expect(corrected.json()).toEqual({ status: "ok" });
+    expect(fake.budgetMaintenanceApi.createAccount).toHaveBeenCalledTimes(2);
+    await fake.app.close();
+  });
+
   it("maps an in-progress replay consistently across every maintenance route", async () => {
     const fake = await createApi();
     const enqueue = fake.journal.enqueue.bind(fake.journal);

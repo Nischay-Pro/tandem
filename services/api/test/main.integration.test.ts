@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createServer } from "node:net";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { reportProcessFailure, runApi, runProductionApi } from "../src/main.js";
 import type { Database } from "../src/database.js";
@@ -22,7 +22,8 @@ const actualApi = vi.hoisted(() => ({
   sync: vi.fn(async () => undefined),
   shutdown: vi.fn(async () => undefined),
 }));
-const testAuthTokenEncryptionKey = "synthetic-session-token-encryption-key-32";
+const testAuthTokenEncryptionKey =
+  "5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c";
 
 vi.mock("@actual-app/api", () => actualApi);
 
@@ -202,9 +203,273 @@ describe("API bootstrap integration", () => {
     }
   });
 
+  it("loads each principal's Actual session without using the last sign-in for startup readiness", async () => {
+    const port = await findAvailablePort();
+    const accounts = [
+      {
+        password: "synthetic-account-a-password",
+        sessionToken: "synthetic-account-a-session-token",
+        userId: "synthetic-account-a",
+        budget: {
+          groupId: "account-a-budget",
+          name: "Account A budget",
+          encryptKeyId: "account-a-encryption-key",
+        },
+      },
+      {
+        password: "synthetic-account-b-password",
+        sessionToken: "synthetic-account-b-session-token",
+        userId: "synthetic-account-b",
+        budget: {
+          groupId: "account-b-budget",
+          name: "Account B budget",
+          encryptKeyId: "account-b-encryption-key",
+        },
+      },
+    ];
+    const readLatest = vi.fn(async () => {
+      throw new Error(
+        "Startup must not select the most recently signed-in user",
+      );
+    });
+    const createDatabase = (
+      connectionString: string,
+      encryptionKey: string,
+      previousEncryptionKey?: string,
+    ): Database => {
+      const database = createPostgresDatabase(
+        connectionString,
+        encryptionKey,
+        previousEncryptionKey,
+      );
+      vi.spyOn(database.actualSessionVault!, "readLatest").mockImplementation(
+        readLatest,
+      );
+      return database;
+    };
+    const actualFetch = vi.fn<typeof fetch>(async (input, init) => {
+      const endpoint = new URL(input.toString());
+      if (endpoint.pathname === "/account/login") {
+        const body = JSON.parse(String(init?.body)) as { password: string };
+        const account = accounts.find(
+          ({ password }) => password === body.password,
+        );
+        return new Response(
+          JSON.stringify({
+            status: "ok",
+            data: { token: account?.sessionToken },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      const token = new Headers(init?.headers).get("X-ACTUAL-TOKEN");
+      const account = accounts.find(
+        ({ sessionToken }) => sessionToken === token,
+      );
+      return new Response(
+        JSON.stringify({ status: "ok", data: { userId: account?.userId } }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+    actualApi.init.mockReset().mockResolvedValue(undefined);
+    actualApi.getServerVersion
+      .mockReset()
+      .mockResolvedValue({ version: "26.11.0" });
+    actualApi.shutdown.mockReset().mockResolvedValue(undefined);
+    actualApi.getBudgets
+      .mockReset()
+      .mockResolvedValueOnce([accounts[0]!.budget])
+      .mockResolvedValueOnce([accounts[1]!.budget])
+      .mockResolvedValueOnce([accounts[0]!.budget])
+      .mockResolvedValueOnce([accounts[0]!.budget]);
+    vi.stubGlobal("fetch", actualFetch);
+    const app = await runApi(
+      {
+        DATABASE_URL: isolatedDatabaseUrl,
+        AUTH_TOKEN_ENCRYPTION_KEY: testAuthTokenEncryptionKey,
+        HOST: "127.0.0.1",
+        PORT: String(port),
+        ACTUAL_SERVER_URL: "http://actual.example",
+        ACTUAL_SESSION_TOKEN: "synthetic-service-session-token",
+        ACTUAL_API_DATA_DIR: `/tmp/tandem-principals-${randomUUID()}`,
+      },
+      createDatabase,
+      () => {},
+    );
+
+    try {
+      const accountAResponse = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/login",
+        payload: {
+          password: accounts[0]!.password,
+          deviceName: "Synthetic account A phone",
+        },
+      });
+      expect(accountAResponse.statusCode).toBe(201);
+      const accountA = accountAResponse.json() as {
+        accessToken: string;
+        principalId: string;
+        budgetIds: string[];
+      };
+      const runningApp = app;
+      const accountBResponse = await runningApp.inject({
+        method: "POST",
+        url: "/api/v1/auth/login",
+        payload: {
+          password: accounts[1]!.password,
+          deviceName: "Synthetic account B phone",
+        },
+      });
+      expect(accountBResponse.statusCode).toBe(201);
+      const accountB = accountBResponse.json() as {
+        accessToken: string;
+        principalId: string;
+        budgetIds: string[];
+      };
+      expect(accountA.budgetIds).toEqual([accounts[0]!.budget.groupId]);
+      expect(accountB.budgetIds).toEqual([accounts[1]!.budget.groupId]);
+      expect(readLatest).not.toHaveBeenCalled();
+
+      const budgetsForA = await runningApp.inject({
+        method: "GET",
+        url: "/api/v1/budgets",
+        headers: { authorization: `Bearer ${accountA.accessToken}` },
+      });
+      expect(budgetsForA.statusCode).toBe(200);
+      expect(budgetsForA.json().budgets).toMatchObject([
+        { budgetId: accounts[0]!.budget.groupId },
+      ]);
+      const initCallsBeforeExpiredAccountB = actualApi.init.mock
+        .calls as unknown as [{ sessionToken?: string }][];
+      expect(
+        initCallsBeforeExpiredAccountB.map(
+          ([connection]) => connection.sessionToken,
+        ),
+      ).toEqual([
+        "synthetic-service-session-token",
+        accounts[0]!.sessionToken,
+        accounts[1]!.sessionToken,
+        accounts[0]!.sessionToken,
+      ]);
+
+      actualApi.init.mockRejectedValueOnce(
+        Object.assign(new Error(`unauthorized ${accounts[1]!.sessionToken}`), {
+          status: 401,
+        }),
+      );
+      const expiredAccountB = await runningApp.inject({
+        method: "GET",
+        url: "/api/v1/budgets",
+        headers: { authorization: `Bearer ${accountB.accessToken}` },
+      });
+      expect(expiredAccountB.statusCode).toBe(401);
+      expect(expiredAccountB.json().error).toEqual({
+        code: "actual_sign_in_expired",
+        message: "Actual sign-in expired. Sign in again to continue.",
+      });
+
+      const readiness = await runningApp.inject({
+        method: "GET",
+        url: "/api/v1/health/ready",
+      });
+      expect(readiness.statusCode).toBe(200);
+      expect(readLatest).not.toHaveBeenCalled();
+
+      const budgetsForAAfterFailure = await runningApp.inject({
+        method: "GET",
+        url: "/api/v1/budgets",
+        headers: { authorization: `Bearer ${accountA.accessToken}` },
+      });
+      expect(budgetsForAAfterFailure.statusCode).toBe(200);
+      expect(budgetsForAAfterFailure.json().budgets).toMatchObject([
+        { budgetId: accounts[0]!.budget.groupId },
+      ]);
+
+      const sessionPool = new Pool({
+        connectionString: isolatedDatabaseUrl,
+        max: 1,
+      });
+      try {
+        await sessionPool.query(
+          "UPDATE tandem_actual_sessions SET token_tag = $2 WHERE principal_id = $1",
+          [accountB.principalId, Buffer.alloc(16, 0)],
+        );
+        const corruptedAccountB = await runningApp.inject({
+          method: "GET",
+          url: "/api/v1/budgets",
+          headers: { authorization: `Bearer ${accountB.accessToken}` },
+        });
+        expect(corruptedAccountB.statusCode).toBe(401);
+        expect(corruptedAccountB.json().error).toEqual({
+          code: "actual_sign_in_expired",
+          message: "Actual sign-in expired. Sign in again to continue.",
+        });
+        const readinessAfterCorruptedToken = await runningApp.inject({
+          method: "GET",
+          url: "/api/v1/health/ready",
+        });
+        expect(readinessAfterCorruptedToken.statusCode).toBe(200);
+
+        await sessionPool.query(
+          "DELETE FROM tandem_actual_sessions WHERE principal_id = $1",
+          [accountB.principalId],
+        );
+        const missingAccountB = await runningApp.inject({
+          method: "GET",
+          url: "/api/v1/budgets",
+          headers: { authorization: `Bearer ${accountB.accessToken}` },
+        });
+        expect(missingAccountB.statusCode).toBe(401);
+        expect(missingAccountB.json().error).toEqual({
+          code: "actual_sign_in_expired",
+          message: "Actual sign-in expired. Sign in again to continue.",
+        });
+        const readinessAfterMissingToken = await runningApp.inject({
+          method: "GET",
+          url: "/api/v1/health/ready",
+        });
+        expect(readinessAfterMissingToken.statusCode).toBe(200);
+      } finally {
+        await sessionPool.end();
+      }
+
+      const initCalls = actualApi.init.mock.calls as unknown as [
+        { sessionToken?: string },
+      ][];
+      expect(initCalls.map(([connection]) => connection.sessionToken)).toEqual([
+        "synthetic-service-session-token",
+        accounts[0]!.sessionToken,
+        accounts[1]!.sessionToken,
+        accounts[0]!.sessionToken,
+        accounts[1]!.sessionToken,
+        accounts[0]!.sessionToken,
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+      await (await app).close();
+      actualApi.init.mockReset().mockResolvedValue(undefined);
+      actualApi.getServerVersion
+        .mockReset()
+        .mockResolvedValue({ version: "26.11.0" });
+      actualApi.shutdown.mockReset().mockResolvedValue(undefined);
+      actualApi.getBudgets.mockReset().mockResolvedValue([
+        {
+          groupId: "synthetic-catalog-budget",
+          name: "Synthetic catalog budget",
+          encryptKeyId: "synthetic-encryption-key-id",
+        },
+      ]);
+    }
+  });
+
   it("completes hosted OpenID sign-in and loads the account's Actual budgets", async () => {
     const port = await findAvailablePort();
     const actualSessionToken = "synthetic-oidc-session-token";
+    const codeVerifier = "v".repeat(64);
+    const codeChallenge = createHash("sha256")
+      .update(codeVerifier, "ascii")
+      .digest("base64url");
     const fetchRequest = vi.fn<typeof fetch>(async (input) => {
       const endpoint = new URL(input.toString());
       if (endpoint.pathname === "/account/login") {
@@ -249,7 +514,10 @@ describe("API bootstrap integration", () => {
       const started = await app.inject({
         method: "POST",
         url: "/api/v1/auth/openid/start",
-        payload: { deviceName: "Synthetic OpenID phone" },
+        payload: {
+          deviceName: "Synthetic OpenID phone",
+          codeChallenge,
+        },
       });
       expect(started.statusCode).toBe(200);
       expect(started.json()).toEqual({
@@ -272,10 +540,17 @@ describe("API bootstrap integration", () => {
       ).searchParams.get("code");
       expect(completionCode).toMatch(/^[A-Za-z0-9_-]{43}$/);
 
+      const stolenCodeAttempt = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/openid/complete",
+        payload: { code: completionCode, codeVerifier: "x".repeat(64) },
+      });
+      expect(stolenCodeAttempt.statusCode).toBe(401);
+
       const completed = await app.inject({
         method: "POST",
         url: "/api/v1/auth/openid/complete",
-        payload: { code: completionCode },
+        payload: { code: completionCode, codeVerifier },
       });
       expect(completed.statusCode).toBe(201);
       expect(completed.json()).toMatchObject({

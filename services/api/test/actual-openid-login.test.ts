@@ -1,6 +1,12 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { ActualOpenIdLogin } from "../src/auth/actual-openid-login.js";
 import { ActualPasswordLogin } from "../src/auth/actual-password-login.js";
+
+const TEST_CODE_VERIFIER = "v".repeat(64);
+const TEST_CODE_CHALLENGE = createHash("sha256")
+  .update(TEST_CODE_VERIFIER, "ascii")
+  .digest("base64url");
 
 function jsonResponse(value: unknown): Response {
   return new Response(JSON.stringify(value), {
@@ -27,7 +33,7 @@ describe("Actual OpenID sign-in handoff", () => {
       prepareGrant,
     );
 
-    const started = await openId.start("Synthetic phone");
+    const started = await openId.start("Synthetic phone", TEST_CODE_CHALLENGE);
     const callbackUrl = new URL(startOpenIdSignIn.mock.calls[0]?.[0] ?? "");
     const state = callbackUrl.pathname.split("/").at(-2);
     const returnUrl = await openId.completeCallback(
@@ -44,7 +50,7 @@ describe("Actual OpenID sign-in handoff", () => {
       sessionToken: "synthetic-session-token",
       budgetIds: [],
     });
-    expect(openId.consume(code ?? "")).toMatchObject({
+    expect(openId.consume(code ?? "", TEST_CODE_VERIFIER)).toMatchObject({
       deviceName: "Synthetic phone",
       grant: { principalId: "actual-user:synthetic" },
     });
@@ -67,12 +73,29 @@ describe("Actual OpenID sign-in handoff", () => {
         async (grant) => grant,
       );
 
-      await expect(openId.start(deviceName)).rejects.toThrow(
-        "Device name is invalid",
-      );
+      await expect(
+        openId.start(deviceName, TEST_CODE_CHALLENGE),
+      ).rejects.toThrow("Device name is invalid");
       expect(startOpenIdSignIn).not.toHaveBeenCalled();
     },
   );
+
+  it("rejects a malformed PKCE challenge before starting provider login", async () => {
+    const startOpenIdSignIn = vi.fn(async () => "https://idp.example/login");
+    const passwordLogin = {
+      startOpenIdSignIn,
+    } as unknown as ActualPasswordLogin;
+    const openId = new ActualOpenIdLogin(
+      passwordLogin,
+      "https://tandem.example",
+      async (grant) => grant,
+    );
+
+    await expect(
+      openId.start("Synthetic phone", "not-a-challenge"),
+    ).rejects.toThrow("OpenID code challenge is invalid");
+    expect(startOpenIdSignIn).not.toHaveBeenCalled();
+  });
 
   it("refuses new pending logins when the state store is full", async () => {
     const startOpenIdSignIn = vi.fn(async (returnUrl: string) =>
@@ -93,12 +116,12 @@ describe("Actual OpenID sign-in handoff", () => {
     );
 
     for (let index = 0; index < 1_000; index += 1) {
-      await openId.start("Synthetic phone");
+      await openId.start("Synthetic phone", TEST_CODE_CHALLENGE);
     }
 
-    await expect(openId.start("Synthetic phone")).rejects.toThrow(
-      "OpenID sign-in is temporarily busy",
-    );
+    await expect(
+      openId.start("Synthetic phone", TEST_CODE_CHALLENGE),
+    ).rejects.toThrow("OpenID sign-in is temporarily busy");
     expect(startOpenIdSignIn).toHaveBeenCalledTimes(1_000);
   });
 
@@ -131,7 +154,7 @@ describe("Actual OpenID sign-in handoff", () => {
       },
     );
 
-    const started = await openId.start("Synthetic phone");
+    const started = await openId.start("Synthetic phone", TEST_CODE_CHALLENGE);
     const requestBody = JSON.parse(requests[0]?.body ?? "{}") as {
       loginMethod: string;
       returnUrl: string;
@@ -154,9 +177,9 @@ describe("Actual OpenID sign-in handoff", () => {
     expect(returnUrl).not.toContain("synthetic-actual-session-token");
     expect(requests[1]?.url).toBe("https://actual.example/account/validate");
 
-    const completion = openId.consume(
-      "0000000000000000000000000000000000000000002",
-    );
+    const code = "0000000000000000000000000000000000000000002";
+    expect(openId.consume(code, "x".repeat(43))).toBeUndefined();
+    const completion = openId.consume(code, TEST_CODE_VERIFIER);
     expect(completion).toMatchObject({
       deviceName: "Synthetic phone",
       grant: {
@@ -165,9 +188,7 @@ describe("Actual OpenID sign-in handoff", () => {
         budgetIds: ["budget-a"],
       },
     });
-    expect(
-      openId.consume("0000000000000000000000000000000000000000002"),
-    ).toBeUndefined();
+    expect(openId.consume(code, TEST_CODE_VERIFIER)).toBeUndefined();
   });
 
   it("expires an OpenID return state and rejects replay", async () => {
@@ -190,7 +211,7 @@ describe("Actual OpenID sign-in handoff", () => {
         return String(codeIndex).padStart(43, "0");
       },
     );
-    await openId.start("Synthetic phone");
+    await openId.start("Synthetic phone", TEST_CODE_CHALLENGE);
     now = 5 * 60_000;
 
     await expect(
@@ -225,9 +246,9 @@ describe("Actual OpenID sign-in handoff", () => {
     await expect(
       openId.completeCallback("Z".repeat(43), "unused-token"),
     ).resolves.toBeUndefined();
-    expect(openId.consume("Z".repeat(43))).toBeUndefined();
+    expect(openId.consume("Z".repeat(43), TEST_CODE_VERIFIER)).toBeUndefined();
 
-    await openId.start("Synthetic phone");
+    await openId.start("Synthetic phone", TEST_CODE_CHALLENGE);
     const request = JSON.parse(
       String(fetchRequest.mock.calls[0]?.[1]?.body),
     ) as { returnUrl: string };
@@ -239,6 +260,6 @@ describe("Actual OpenID sign-in handoff", () => {
     const code = new URL(returnUrl ?? "").searchParams.get("code");
 
     now += 90_000;
-    expect(openId.consume(code ?? "")).toBeUndefined();
+    expect(openId.consume(code ?? "", TEST_CODE_VERIFIER)).toBeUndefined();
   });
 });

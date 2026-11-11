@@ -555,6 +555,17 @@ interface OutboxDao {
 
 @Dao
 interface BudgetSyncStateDao {
+    @Query(
+        """
+        SELECT EXISTS(SELECT 1 FROM budget_records)
+            OR EXISTS(SELECT 1 FROM budget_snapshot_records)
+            OR EXISTS(SELECT 1 FROM budget_snapshot_progress)
+            OR EXISTS(SELECT 1 FROM budget_sync_state)
+            OR EXISTS(SELECT 1 FROM sync_outbox)
+        """,
+    )
+    suspend fun hasAnyBudgetData(): Boolean
+
     @Query("SELECT * FROM budget_sync_state WHERE budgetId = :budgetId")
     suspend fun find(budgetId: String): BudgetSyncStateEntity?
 

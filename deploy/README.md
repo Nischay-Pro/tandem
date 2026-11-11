@@ -20,6 +20,7 @@ postgres_password="$(openssl rand -hex 32)"
 printf '%s' "$postgres_password" > deploy/compose/secrets/postgres_password
 printf 'postgresql://tandem:%s@postgres:5432/tandem' "$postgres_password" > deploy/compose/secrets/database_url
 openssl rand -hex 32 > deploy/compose/secrets/auth_token_encryption_key
+touch deploy/compose/secrets/auth_token_encryption_key_previous
 chmod 444 deploy/compose/secrets/*
 unset postgres_password
 ```
@@ -33,6 +34,18 @@ deployment host uses a different numeric user ID. Actual account passwords are
 entered in Tandem and are not deployment secrets. Do not change the secret
 paths in `.env` unless you move these files.
 
+The auth encryption key must remain stable between rotations. Keep a protected
+copy with the database backups. The always-mounted
+`auth_token_encryption_key_previous` file should be empty during normal
+operation. To rotate keys, generate a new 32-byte key, put it in
+`auth_token_encryption_key`, and put the old key in
+`auth_token_encryption_key_previous`. Restart the API and wait for it to become
+healthy; startup re-encrypts every stored Actual session in one transaction and
+fails without changing the rows if any cannot be decrypted. Then empty the
+previous-key file, restart the API, and confirm it becomes healthy again. Keep
+the old key in protected backup storage while any database backup may still
+contain tokens encrypted with it.
+
 Set `CHANGE_FEED_EPOCH` in `deploy/compose/.env` to a random stable value. Keep
 it unchanged for ordinary restarts. Use a new value after restoring a database
 backup so mobile devices discard cursors from the pre-restore history. Set
@@ -45,7 +58,9 @@ When moving an existing deployment to this Compose file, populate the secret
 files with the credentials already in use. In particular, the Postgres
 password secret and database URL must match the existing database role; setting
 `POSTGRES_PASSWORD_FILE` does not rotate a password in an initialized volume.
-The existing PostgreSQL and Actual workspace volumes are preserved.
+Create the new `auth_token_encryption_key_previous` secret file as empty unless
+you are rotating keys, and keep its path in `.env`. The existing PostgreSQL and
+Actual workspace volumes are preserved.
 Keep the `actual-workspace` named volume while any write operation is
 uncertain. It contains Actual's local budget data, including writes that may
 not yet have reached the budget file; deleting it can discard those changes.
@@ -62,10 +77,13 @@ exact proxy address or narrow CIDR observed by the API; production Compose
 refuses an empty value. Do not trust all forwarded headers. Keep
 TLS termination and the Actual server's existing proxy settings in the
 existing Nginx site configuration.
-The example also limits the API to 600 requests per minute per client address
-and sign-in attempts to 10 per minute. Keep the API origin private so clients
-cannot bypass the reverse-proxy limits. The API location compresses JSON
-responses of at least 1 KiB when the client supports gzip.
+The example limits general API traffic to 600 requests per minute per client
+address, and sign-in traffic to 10 per minute with a burst of 5. These Nginx
+limits are the public edge protection; the API also keeps an in-memory
+10-per-minute sign-in limit per client address in each process. Configure
+`TRUST_PROXY` so the API sees the real client address. Keep the API origin
+private so clients cannot bypass the reverse-proxy limits. The API location
+compresses JSON responses of at least 1 KiB when the client supports gzip.
 
 Start and verify:
 
@@ -84,12 +102,19 @@ PostgreSQL has its own `pg_isready` check. Compose starts the API after
 PostgreSQL is healthy, restarts failed services, gives the API 45 seconds to
 shut down, and uses its init process to forward container signals. API startup
 runs and validates migrations before listening. Unknown database/driver errors
-are logged by error type, without connection strings. Neither the database nor
-API ports are published on the host. Allow resource monitoring and persistent
+and unexpected request exceptions are logged by error type only; messages,
+stack traces, and connection strings are omitted. Neither the database nor API
+ports are published on the host. Allow resource monitoring and persistent
 volume monitoring at the Docker host level.
 
 In Tandem, enter the public API address and sign in with the Actual account.
 Available budgets come from that account's Actual budget catalog.
+
+For remote sign-in, use HTTPS. HTTP does not encrypt the Actual password or
+session credentials in transit; use it only on a trusted local network. The
+Actual OpenID callback URL carries a short-lived Actual session token in its
+query string, so this example disables access logging for that callback path.
+Custom reverse proxies must also omit that path from access logs.
 
 ## Backups and restore
 

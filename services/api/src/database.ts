@@ -38,6 +38,7 @@ export interface Database extends ServerDatabase {
 export function createPostgresDatabase(
   connectionString: string,
   authTokenEncryptionKey: string,
+  authTokenEncryptionKeyPrevious?: string,
 ): Database {
   const pool = new Pool({
     connectionString,
@@ -59,6 +60,7 @@ export function createPostgresDatabase(
   const actualSessionVault = new PostgresActualSessionVault(
     pool,
     authTokenEncryptionKey,
+    authTokenEncryptionKeyPrevious,
   );
   let readinessCheck: Promise<void> | undefined;
 
@@ -79,6 +81,7 @@ export function createPostgresDatabase(
     },
     async migrate() {
       await applyMigrations(pool);
+      await actualSessionVault.reencryptStoredTokensWithCurrentKey();
     },
     journal,
     maintenanceJournal: journal,

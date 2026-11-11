@@ -519,9 +519,11 @@ class TandemApiClientTest {
             val client = TandemApiClient()
             val cleanup = configureApi(engine, client.bearerAuth)
             try {
-                val redirectUrl = client.startActualOpenIdSignIn("https://tandem.example", "Test phone")
+                val verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+                val challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+                val redirectUrl = client.startActualOpenIdSignIn("https://tandem.example", "Test phone", challenge)
                 assertEquals("https://identity.example/sign-in", redirectUrl)
-                val signedIn = client.completeActualOpenIdSignIn("https://tandem.example", "C".repeat(43))
+                val signedIn = client.completeActualOpenIdSignIn("https://tandem.example", "C".repeat(43), verifier)
 
                 assertEquals("device-1", signedIn.deviceId)
                 assertTrue(client.isAuthenticated)
@@ -531,13 +533,14 @@ class TandemApiClientTest {
                 )
                 assertTrue(requests.all { it.headers[HttpHeaders.Authorization] == null })
                 assertEquals(
-                    """{"deviceName":"Test phone"}""",
+                    """{"deviceName":"Test phone","codeChallenge":"$challenge"}""",
                     (requests[0].body as TextContent).text,
                 )
                 assertEquals(
-                    """{"code":"${"C".repeat(43)}"}""",
+                    """{"code":"${"C".repeat(43)}","codeVerifier":"$verifier"}""",
                     (requests[1].body as TextContent).text,
                 )
+                assertFalse(requests[0].body.toString().contains(verifier))
             } finally {
                 cleanup()
                 Api.baseUrl = previousBaseUrl
@@ -1308,7 +1311,7 @@ class TandemApiClientTest {
     }
 
     @Test
-    fun importingStatementTransactionsValidatesRequestsAndResponses() =
+    fun importingStatementTransactionsPreservesMinorUnitsAndValidatesRequestsAndResponses() =
         runBlocking {
             val requests = mutableListOf<HttpRequestData>()
             var responseBody = """{"status":"ok","added":1,"updated":2,"errorCount":0}"""
@@ -1324,6 +1327,8 @@ class TandemApiClientTest {
             try {
                 client.restoreSession("https://tandem.example", "device-token")
                 val transaction = StatementImportItem("2026-11-08", -1170, "Coffee Shop", "Lunch", "csv:row-1")
+                val yenTransaction = StatementImportItem("2026-11-08", 1_500, "Market", null, "csv:row-2")
+                val threeDecimalTransaction = StatementImportItem("2026-11-08", -12_345, "Transit", null, "csv:row-3")
                 val matchingTransaction = transaction.copy()
                 assertEquals(transaction, matchingTransaction)
                 assertEquals(transaction.hashCode(), matchingTransaction.hashCode())
@@ -1348,7 +1353,12 @@ class TandemApiClientTest {
 
                 assertEquals(
                     StatementImportSummary(1, 2, 0),
-                    client.importBudgetAccountTransactions("budget-1", "account-1", listOf(transaction), "budget-password"),
+                    client.importBudgetAccountTransactions(
+                        "budget-1",
+                        "account-1",
+                        listOf(transaction, yenTransaction, threeDecimalTransaction),
+                        "budget-password",
+                    ),
                 )
                 val request = requests.single()
                 assertEquals("POST", request.method.value)
@@ -1356,6 +1366,8 @@ class TandemApiClientTest {
                 assertEquals("budget-password", request.headers["x-budget-encryption-password"])
                 val requestBody = (request.body as TextContent).text
                 assertTrue(requestBody.contains("\"amountMinor\":-1170"))
+                assertTrue(requestBody.contains("\"amountMinor\":1500"))
+                assertTrue(requestBody.contains("\"amountMinor\":-12345"))
                 assertTrue(requestBody.contains("\"payeeName\":\"Coffee Shop\""))
                 assertTrue(requestBody.contains("\"notes\":\"Lunch\""))
                 assertTrue(requestBody.contains("\"importedId\":\"csv:row-1\""))

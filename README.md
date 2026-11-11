@@ -82,6 +82,7 @@ services:
     environment:
       DATABASE_URL_FILE: /run/secrets/tandem_database_url
       AUTH_TOKEN_ENCRYPTION_KEY_FILE: /run/secrets/tandem_auth_token_encryption_key
+      AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE: /run/secrets/tandem_auth_token_encryption_key_previous
       HOST: 0.0.0.0
       PORT: 19753
       CHANGE_FEED_EPOCH: ${CHANGE_FEED_EPOCH:?Set CHANGE_FEED_EPOCH in .env.tandem}
@@ -102,6 +103,7 @@ services:
     secrets:
       - tandem_database_url
       - tandem_auth_token_encryption_key
+      - tandem_auth_token_encryption_key_previous
 
 secrets:
   tandem_postgres_password:
@@ -110,6 +112,8 @@ secrets:
     file: ${TANDEM_DATABASE_URL_FILE:?Set TANDEM_DATABASE_URL_FILE in .env.tandem}
   tandem_auth_token_encryption_key:
     file: ${TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_FILE:?Set TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_FILE in .env.tandem}
+  tandem_auth_token_encryption_key_previous:
+    file: ${TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE:?Set TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE in .env.tandem}
 
 volumes:
   tandem-postgres-data:
@@ -124,7 +128,11 @@ The API joins the Compose project's `default` network so it can reach Actual and
 
 Tandem does not need a shared Actual server password. Each person signs in from the app with their Actual password or OpenID provider. Set `ACTUAL_PUBLIC_URL` to the public Tandem URL for OpenID; leave it empty if you only use password sign-in.
 
-Keep Tandem's secret files in a private directory beside your Compose file. Compose mounts them read-only at `/run/secrets`; Tandem reads the values from those files, so they do not appear in the container environment. Create the directory and generate the database password, database URL, and encrypted-session key:
+Keep Tandem's secret files in a private directory beside your Compose file. Compose mounts them read-only at `/run/secrets`; Tandem reads the values from those files, so they do not appear in the container environment. Create the directory and generate the database password, database URL, and encrypted-session key. Keep the previous-key file empty during normal operation; the deployment guide explains when to put the old key there during a rotation.
+
+When updating an existing Compose setup, add the empty previous-key file, its
+`.env.tandem` path, and the matching secret mount before recreating the API.
+An empty file leaves the current key unchanged.
 
 ```sh
 mkdir -m 700 -p .tandem-secrets
@@ -132,11 +140,12 @@ tandem_db_password="$(openssl rand -hex 32)"
 printf '%s' "$tandem_db_password" > .tandem-secrets/postgres_password
 printf 'postgresql://tandem:%s@tandem-postgres:5432/tandem' "$tandem_db_password" > .tandem-secrets/database_url
 openssl rand -hex 32 > .tandem-secrets/auth_token_encryption_key
+touch .tandem-secrets/auth_token_encryption_key_previous
 chmod 444 .tandem-secrets/*
 unset tandem_db_password
 ```
 
-Keep the directory private (`chmod 700 .tandem-secrets`); the files are readable inside the container because Compose file-backed secrets use the source file permissions. If Actual has no password, leave the file empty.
+Keep the directory private (`chmod 700 .tandem-secrets`). The files use mode `444` so the non-root API process can read Compose's file-backed secret mounts; the private directory prevents other host users from traversing to them.
 
 The separate `.env.tandem` file contains paths and non-secret settings only:
 
@@ -144,6 +153,7 @@ The separate `.env.tandem` file contains paths and non-secret settings only:
 TANDEM_POSTGRES_PASSWORD_FILE=.tandem-secrets/postgres_password
 TANDEM_DATABASE_URL_FILE=.tandem-secrets/database_url
 TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_FILE=.tandem-secrets/auth_token_encryption_key
+TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE=.tandem-secrets/auth_token_encryption_key_previous
 CHANGE_FEED_EPOCH=<paste-the-generated-change-feed-value>
 ACTUAL_SERVER_URL=http://actual-server:5006
 ACTUAL_PUBLIC_URL=https://budget.example.com
@@ -213,7 +223,7 @@ sudo -u postgres createdb --owner=tandem tandem
 sudo install -d -o tandem -g tandem -m 0700 /var/lib/tandem/actual-api
 
 export DATABASE_URL='postgresql://tandem:<url-safe-password>@127.0.0.1:5432/tandem'
-export AUTH_TOKEN_ENCRYPTION_KEY='<at-least-32-byte-random-value>'
+export AUTH_TOKEN_ENCRYPTION_KEY='<64-hex-character-random-value>'
 export CHANGE_FEED_EPOCH='<stable-random-value>'
 export HOST=127.0.0.1
 export PORT=19753

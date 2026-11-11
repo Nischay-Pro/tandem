@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import {
   ActualPasswordLogin,
   type ActualPasswordGrant,
@@ -10,6 +10,7 @@ const MAX_PENDING_LOGINS = 1_000;
 
 interface PendingLogin {
   deviceName: string;
+  codeChallenge: string;
   expiresAt: number;
 }
 
@@ -22,7 +23,7 @@ export class ActualOpenIdLogin {
   readonly #pending = new Map<string, PendingLogin>();
   readonly #completions = new Map<
     string,
-    { value: OpenIdCompletion; expiresAt: number }
+    { value: OpenIdCompletion; codeChallenge: string; expiresAt: number }
   >();
 
   constructor(
@@ -36,10 +37,16 @@ export class ActualOpenIdLogin {
       randomBytes(32).toString("base64url"),
   ) {}
 
-  async start(deviceName: string): Promise<{ redirectUrl: string }> {
+  async start(
+    deviceName: string,
+    codeChallenge: string,
+  ): Promise<{ redirectUrl: string }> {
     this.#removeExpired();
     if (this.#pending.size >= MAX_PENDING_LOGINS) {
       throw new Error("OpenID sign-in is temporarily busy");
+    }
+    if (!/^[A-Za-z0-9_-]{43}$/u.test(codeChallenge)) {
+      throw new Error("OpenID code challenge is invalid");
     }
     const normalizedDeviceName = deviceName.trim();
     if (normalizedDeviceName.length < 1 || normalizedDeviceName.length > 100) {
@@ -55,6 +62,7 @@ export class ActualOpenIdLogin {
     );
     this.#pending.set(state, {
       deviceName: normalizedDeviceName,
+      codeChallenge,
       expiresAt: this.now() + STATE_TTL_MS,
     });
     return { redirectUrl };
@@ -78,18 +86,37 @@ export class ActualOpenIdLogin {
     const code = this.makeCode();
     this.#completions.set(code, {
       value: { deviceName: pending.deviceName, grant: preparedGrant },
+      codeChallenge: pending.codeChallenge,
       expiresAt: this.now() + COMPLETION_TTL_MS,
     });
     return `tandem://signin/complete?code=${encodeURIComponent(code)}`;
   }
 
-  consume(code: string): OpenIdCompletion | undefined {
+  consume(code: string, codeVerifier: string): OpenIdCompletion | undefined {
     this.#removeExpired();
     const completion = this.#completions.get(code);
+    if (
+      !completion ||
+      completion.expiresAt <= this.now() ||
+      !/^[A-Za-z0-9._~-]{43,128}$/u.test(codeVerifier)
+    ) {
+      return undefined;
+    }
+
+    const challenge = createHash("sha256")
+      .update(codeVerifier, "ascii")
+      .digest("base64url");
+    if (
+      !timingSafeEqual(
+        Buffer.from(challenge, "ascii"),
+        Buffer.from(completion.codeChallenge, "ascii"),
+      )
+    ) {
+      return undefined;
+    }
+
     this.#completions.delete(code);
-    return completion && completion.expiresAt > this.now()
-      ? completion.value
-      : undefined;
+    return completion.value;
   }
 
   #removeExpired(): void {

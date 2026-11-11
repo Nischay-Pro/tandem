@@ -127,6 +127,9 @@ internal data class BudgetActionFeedback(
     val actionLabel: String?,
 )
 
+internal fun pendingDeviceChangeNotice(): String =
+    "Any changes waiting to sync stay on this device. Sign in to the same server and account to sync them."
+
 @Composable
 internal fun budgetActionFeedbackMessage(mobileSession: TandemMobileSession) {
     val message = mobileSession.budgetActionMessage ?: return
@@ -226,6 +229,8 @@ internal class TandemMobileSession(
     private val credentialStore: DeviceCredentialStore? = null,
     budgetMutationQueuePersistenceOverride: BudgetMutationQueuePersistence? = null,
     private val currentDateIso: () -> String = ::platformTodayIsoDate,
+    private val openIdLoginProofState: OpenIdLoginProofState = OpenIdLoginProofState(nowEpochMillis),
+    private val revokeCurrentDeviceForSignOut: suspend () -> Unit = { apiClient.revokeCurrentDevice() },
 ) {
     private val repository = database?.let { LocalBudgetRepository(it, nowEpochMillis) }
     private val budgetMutationQueuePersistence =
@@ -288,6 +293,9 @@ internal class TandemMobileSession(
         private set
 
     var signOutError by mutableStateOf<String?>(null)
+        private set
+
+    var signOutNotice by mutableStateOf<String?>(null)
         private set
 
     var isSigningOut by mutableStateOf(false)
@@ -1555,7 +1563,7 @@ internal class TandemMobileSession(
                     return null
                 } ?: return null
 
-            authenticatedDevice =
+            val restoredDevice =
                 try {
                     apiClient.restoreStoredSession(storedSession)
                 } catch (error: CancellationException) {
@@ -1568,7 +1576,12 @@ internal class TandemMobileSession(
                     clearStoredCredential()
                     return null
                 }
+            if (!acceptAuthenticatedIdentity(restoredDevice, previousSession = null, restoringSavedSession = true)) {
+                credentialStorageError = signInError
+                return null
+            }
             isCredentialStored = true
+            loadCachedBudgets()
             return apiClient.currentServerUrl.takeIf { apiClient.isAuthenticated }
         } finally {
             isRestoringStoredSession = false
@@ -1609,6 +1622,7 @@ internal class TandemMobileSession(
         if (isSigningOut) return false
         isSigningOut = true
         signOutError = null
+        signOutNotice = null
         try {
             if (isSyncing || isSavingTransaction || isPerformingBudgetAction || isLoadingBudgets) {
                 signOutError = "Wait for the current sync or change to finish before signing out."
@@ -1626,6 +1640,19 @@ internal class TandemMobileSession(
                 signOutError = "Sync or resolve pending changes before signing out."
                 return false
             }
+            if (apiClient.isAuthenticated) {
+                try {
+                    revokeCurrentDeviceForSignOut()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: TandemApiException) {
+                    if (error.httpStatus != 401 && error.httpStatus != 404) {
+                        signOutNotice = signOutRevocationNotice(error.httpStatus)
+                    }
+                } catch (_: Exception) {
+                    signOutNotice = signOutRevocationNotice(httpStatus = null)
+                }
+            }
             val store = credentialStore
             try {
                 if (store != null) withContext(Dispatchers.Default) { store.clear() }
@@ -1640,7 +1667,9 @@ internal class TandemMobileSession(
                 budgetQueueLoaded = true
                 repository?.clearAllLocalData()
                 preferencesStore?.putValue(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY, "")
+                preferencesStore?.putValue(BUDGET_CACHE_OWNER_KEY, "")
             }
+            openIdLoginProofState.clear()
             apiClient.forgetSession()
             authenticatedDevice = null
             budgets = emptyList()
@@ -1733,10 +1762,15 @@ internal class TandemMobileSession(
         deviceName: String,
     ) {
         signInError = null
+        signOutNotice = null
         deviceRevocationError = null
         isSigningIn = true
+        cachedBudgets = emptyList()
+        openIdLoginProofState.clear()
+        val previousSession = apiClient.exportStoredSession()
         try {
-            authenticatedDevice = apiClient.signInWithPassword(serverUrl, password, deviceName)
+            val signedInDevice = apiClient.signInWithPassword(serverUrl, password, deviceName)
+            if (!acceptAuthenticatedIdentity(signedInDevice, previousSession)) return
             isServerReachable = true
             persistCurrentSession()
             loadBudgets()
@@ -1750,7 +1784,7 @@ internal class TandemMobileSession(
                     "Couldn’t sign in. Check the address and try again.",
                     ApiFailureContext.SIGN_IN,
                 )
-            authenticatedDevice = null
+            restorePreviousSessionAfterSignIn(previousSession)
         } catch (_: Exception) {
             isServerReachable = false
             signInError =
@@ -1760,9 +1794,10 @@ internal class TandemMobileSession(
                     ApiFailureContext.SIGN_IN,
                     "Couldn’t sign in. Check the address and try again.",
                 )
-            authenticatedDevice = null
+            restorePreviousSessionAfterSignIn(previousSession)
         } finally {
             isSigningIn = false
+            if (apiClient.isAuthenticated) loadCachedBudgets()
         }
     }
 
@@ -1771,9 +1806,16 @@ internal class TandemMobileSession(
         deviceName: String,
     ): String? {
         signInError = null
+        signOutNotice = null
         isSigningIn = true
+        openIdLoginProofState.clear()
+        var redirectReady = false
         try {
-            return apiClient.startActualOpenIdSignIn(serverUrl, deviceName)
+            val codeChallenge = openIdLoginProofState.begin(serverUrl)
+            scheduleOpenIdProofExpiry()
+            val redirect = apiClient.startActualOpenIdSignIn(serverUrl, deviceName, codeChallenge)
+            redirectReady = true
+            return redirect
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
@@ -1790,12 +1832,27 @@ internal class TandemMobileSession(
                 )
         } finally {
             isSigningIn = false
+            if (!redirectReady) openIdLoginProofState.clear()
         }
         return null
     }
 
     fun reportSignInError(message: String) {
         signInError = message
+    }
+
+    fun cancelActualOpenIdSignIn() {
+        openIdLoginProofState.clear()
+    }
+
+    fun scheduleOpenIdProofExpiry() {
+        val remainingTtlMillis = openIdLoginProofState.remainingTtlMillis()
+        if (remainingTtlMillis > 0) {
+            sessionScope.launch {
+                delay(remainingTtlMillis)
+                openIdLoginProofState.expireIfNeeded()
+            }
+        }
     }
 
     suspend fun completeActualOpenIdSignIn(
@@ -1805,13 +1862,24 @@ internal class TandemMobileSession(
         signInError = null
         deviceRevocationError = null
         isSigningIn = true
+        cachedBudgets = emptyList()
+        val previousSession = apiClient.exportStoredSession()
+        val codeVerifier = openIdLoginProofState.takeVerifierForCallback(serverUrl)
+        if (codeVerifier == null) {
+            signInError = "This sign-in expired or couldn’t be restored. Start sign-in again."
+            isSigningIn = false
+            return
+        }
         try {
-            authenticatedDevice = apiClient.completeActualOpenIdSignIn(serverUrl, code)
+            val signedInDevice = apiClient.completeActualOpenIdSignIn(serverUrl, code, codeVerifier)
+            openIdLoginProofState.clear()
+            if (!acceptAuthenticatedIdentity(signedInDevice, previousSession)) return
             isServerReachable = true
             persistCurrentSession()
             loadBudgets()
             retryQueuedBudgetReorders()
         } catch (error: CancellationException) {
+            openIdLoginProofState.clear()
             throw error
         } catch (error: TandemApiException) {
             isServerReachable = error.indicatesTandemReachable()
@@ -1820,7 +1888,7 @@ internal class TandemMobileSession(
                     "Couldn’t finish sign-in. Check the address and connection.",
                     ApiFailureContext.SIGN_IN,
                 )
-            authenticatedDevice = null
+            restorePreviousSessionAfterSignIn(previousSession)
         } catch (_: Exception) {
             isServerReachable = false
             signInError =
@@ -1830,9 +1898,11 @@ internal class TandemMobileSession(
                     ApiFailureContext.SIGN_IN,
                     "Couldn’t finish sign-in. Check the address and connection.",
                 )
-            authenticatedDevice = null
+            restorePreviousSessionAfterSignIn(previousSession)
         } finally {
             isSigningIn = false
+            openIdLoginProofState.clear()
+            if (apiClient.isAuthenticated) loadCachedBudgets()
         }
     }
 
@@ -1879,6 +1949,13 @@ internal class TandemMobileSession(
         retryQueuedBudgetMutations: Boolean = true,
     ): BudgetSyncSummary? {
         if (isSigningOut) return null
+        if (!isCurrentIdentityCacheOwner()) {
+            syncPresentation =
+                syncPresentation.failed(
+                    "These changes belong to another server or account. Sign in there before syncing them.",
+                )
+            return null
+        }
         val budgetQueueRestored = restoreBudgetReorderQueue()
         if (budgetQueueRestored && retryQueuedBudgetMutations && !encryptionPassword.isNullOrBlank()) {
             retryQueuedBudgetReorders(budgetId, encryptionPassword)
@@ -2542,6 +2619,13 @@ internal class TandemMobileSession(
             setBudgetActionMessage("Sign in and open a budget before changing it.", ownerRoute = messageOwner)
             return false
         }
+        if (!isCurrentIdentityCacheOwner()) {
+            setBudgetActionMessage(
+                "Sign in to the server and account that own this budget before changing it.",
+                ownerRoute = messageOwner,
+            )
+            return false
+        }
         if (isPerformingBudgetAction) return false
         isPerformingBudgetAction = true
         var actionApplied = false
@@ -2663,6 +2747,10 @@ internal class TandemMobileSession(
     ): Boolean {
         transactionWriteMessage = null
         if (refuseWriteInReadOnlyMode()) return false
+        if (!isCurrentIdentityCacheOwner()) {
+            transactionWriteMessage = "Sign in to the server and account that own this budget before editing a transaction."
+            return false
+        }
         val enteredAmount = parseAmountMinorUnits(amountText, displaySettings)
         if (enteredAmount == null) {
             transactionWriteMessage = transactionAmountInputError(amountText, displaySettings)
@@ -2824,6 +2912,10 @@ internal class TandemMobileSession(
     ): Boolean {
         transactionWriteMessage = null
         if (refuseWriteInReadOnlyMode()) return false
+        if (!isCurrentIdentityCacheOwner()) {
+            transactionWriteMessage = "Sign in to the server and account that own this budget before deleting a transaction."
+            return false
+        }
         val localRepository = repository
         if (localRepository == null) {
             transactionWriteMessage = "Budget data isn’t available on this device. Reopen the budget and try again."
@@ -2911,6 +3003,10 @@ internal class TandemMobileSession(
     ): Boolean {
         transactionWriteMessage = null
         if (refuseWriteInReadOnlyMode()) return false
+        if (!isCurrentIdentityCacheOwner()) {
+            transactionWriteMessage = "Sign in to the server and account that own this budget before adding a transaction."
+            return false
+        }
         val amount = parseAmountMinorUnits(amountText, displaySettings)
         if (amount == null) {
             transactionWriteMessage = transactionAmountInputError(amountText, displaySettings)
@@ -3247,6 +3343,10 @@ internal class TandemMobileSession(
 
     suspend fun loadLocalRecords(budgetId: String) {
         val localRepository = repository ?: return
+        if (!isCurrentIdentityCacheOwner()) {
+            clearCachedBudgetPresentation()
+            return
+        }
         cachedSnapshotBudgetId = budgetId
         hasCachedSnapshot = localRepository.hasCachedSnapshot(budgetId)
         budgetDisplaySettingsBudgetId = budgetId
@@ -3288,6 +3388,10 @@ internal class TandemMobileSession(
     ) {
         val localRepository = repository ?: return
         if (budgetId.isBlank()) return
+        if (!isCurrentIdentityCacheOwner()) {
+            clearCachedBudgetPresentation()
+            return
+        }
         activityTransactionPageMutex.lock()
         try {
             if (reset || activityTransactionPageBudgetId != budgetId) {
@@ -3401,6 +3505,10 @@ internal class TandemMobileSession(
 
     suspend fun observeLocalRecords(budgetId: String) {
         val localRepository = repository ?: return
+        if (!isCurrentIdentityCacheOwner()) {
+            clearCachedBudgetPresentation()
+            return
+        }
         cachedSnapshotBudgetId = budgetId
         hasCachedSnapshot = localRepository.hasCachedSnapshot(budgetId)
         budgetDisplaySettingsBudgetId = budgetId
@@ -3439,12 +3547,18 @@ internal class TandemMobileSession(
         val localRepository = repository ?: return
         selectedBudgetMonthRecord = null
         if (budgetId.isBlank() || monthId.isBlank()) return
+        if (!isCurrentIdentityCacheOwner()) return
         localRepository.observeRecord(budgetId, "budget-month", monthId).collect { selectedBudgetMonthRecord = it }
     }
 
     suspend fun observeActivitySearchRecords(budgetId: String) {
         val localRepository = repository
         if (localRepository == null || budgetId.isBlank()) {
+            activitySearchRecords = emptyList()
+            activitySearchRecordsBudgetId = budgetId
+            return
+        }
+        if (!isCurrentIdentityCacheOwner()) {
             activitySearchRecords = emptyList()
             activitySearchRecordsBudgetId = budgetId
             return
@@ -3458,10 +3572,15 @@ internal class TandemMobileSession(
         }
     }
 
-    suspend fun hasCachedBudgetSnapshot(budgetId: String): Boolean = repository?.hasCachedSnapshot(budgetId) == true
+    suspend fun hasCachedBudgetSnapshot(budgetId: String): Boolean =
+        isCurrentIdentityCacheOwner() && repository?.hasCachedSnapshot(budgetId) == true
 
     suspend fun loadCachedBudgets(): List<BudgetCatalogItem> {
         val localRepository = repository ?: return emptyList()
+        if (isSigningIn || !isCurrentIdentityCacheOwner()) {
+            cachedBudgets = emptyList()
+            return emptyList()
+        }
         val cached =
             localRepository.findCachedBudgetIds().map { budgetId ->
                 val currencyCode = localRepository.readBudgetDisplaySettings(budgetId)?.currencyCode
@@ -3473,6 +3592,117 @@ internal class TandemMobileSession(
             }
         cachedBudgets = cached
         return cached
+    }
+
+    /** Saves local cache ownership before any sync can expose another account's records. */
+    internal suspend fun acceptAuthenticatedIdentity(
+        device: AuthenticatedDevice,
+        previousSession: String?,
+        restoringSavedSession: Boolean = false,
+    ): Boolean {
+        authenticatedDevice = device
+        val store = preferencesStore ?: return true
+        val serverUrl = apiClient.currentServerUrl
+        if (serverUrl.isNullOrBlank() || !apiClient.isAuthenticated) {
+            restorePreviousSessionAfterSignIn(previousSession)
+            signInError = "Couldn’t verify this sign-in. Try again."
+            return false
+        }
+        if (!restoreBudgetReorderQueue()) {
+            restorePreviousSessionAfterSignIn(previousSession)
+            signInError = "Couldn’t check pending changes. Try again before switching accounts."
+            return false
+        }
+
+        val owner = budgetCacheOwner(serverUrl, device.principalId)
+        val savedPreferences = store.read()
+        val savedOwner = savedPreferences[BUDGET_CACHE_OWNER_KEY]?.takeIf(String::isNotBlank)
+        val hasAnyLocalBudgetData = repository?.hasAnyLocalBudgetData() == true
+        val hasPendingBudgetChanges = budgetReorderQueue.moves.isNotEmpty()
+        val hasUnresolvedWrites = repository?.hasUnresolvedWrites() == true
+        val changingOwner = savedOwner != null && savedOwner != owner
+        val ownerUnknownWithLocalData =
+            !restoringSavedSession &&
+                savedOwner == null &&
+                (hasAnyLocalBudgetData || hasPendingBudgetChanges || hasUnresolvedWrites)
+
+        if ((changingOwner || ownerUnknownWithLocalData) && (hasPendingBudgetChanges || hasUnresolvedWrites)) {
+            restorePreviousSessionAfterSignIn(previousSession)
+            signInError =
+                "Pending changes belong to another server or account. Sign in there and sync or resolve them before switching."
+            return false
+        }
+
+        if (changingOwner || ownerUnknownWithLocalData) {
+            budgetQueuePersistenceMutex.withLock {
+                budgetReorderQueueState = BudgetReorderQueueState()
+                budgetQueueLoaded = true
+                repository?.clearAllLocalData()
+                store.putValue(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY, "")
+            }
+            clearCachedBudgetPresentation()
+        }
+        store.putValue(BUDGET_CACHE_OWNER_KEY, owner)
+        return true
+    }
+
+    private suspend fun restorePreviousSessionAfterSignIn(previousSession: String?) {
+        if (previousSession.isNullOrBlank()) {
+            apiClient.forgetSession()
+            authenticatedDevice = null
+            return
+        }
+        try {
+            authenticatedDevice = apiClient.restoreStoredSession(previousSession)
+        } catch (_: Exception) {
+            apiClient.forgetSession()
+            authenticatedDevice = null
+        }
+    }
+
+    private suspend fun isCurrentIdentityCacheOwner(): Boolean {
+        if (!apiClient.isAuthenticated) return true
+        val device = authenticatedDevice ?: return false
+        val serverUrl = apiClient.currentServerUrl ?: return false
+        val store = preferencesStore ?: return true
+        return try {
+            store.read()[BUDGET_CACHE_OWNER_KEY] == budgetCacheOwner(serverUrl, device.principalId)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun clearCachedBudgetPresentation() {
+        budgets = emptyList()
+        cachedBudgets = emptyList()
+        budgetCatalogLoaded = false
+        budgetCatalogVersion += 1
+        hasCachedSnapshot = false
+        cachedSnapshotBudgetId = ""
+        budgetDisplaySettings = null
+        budgetDisplaySettingsBudgetId = null
+        localSyncState = null
+        transactionRecords = emptyList()
+        activityTransactionRecords.clear()
+        activityTransactionRecordsVersion += 1
+        activityTransactionPageBudgetId = ""
+        activityTransactionPageError = null
+        hasMoreActivityTransactions = false
+        activitySearchRecords = emptyList()
+        activitySearchRecordsBudgetId = ""
+        payeeRecords = emptyList()
+        categoryRecords = emptyList()
+        categoryGroupRecords = emptyList()
+        budgetMonthIds = emptyList()
+        selectedBudgetMonthRecord = null
+        accountRecords = emptyList()
+        accountGroupRecords = emptyList()
+        scheduleRecords = emptyList()
+        ruleRecords = emptyList()
+        pendingWrites = emptyList()
+        conflictRecordsByRecordId = emptyMap()
+        cachedTransactionCount = 0
+        syncedTransactionCount = 0
     }
 
     private suspend fun persistCurrentSession() {
@@ -3503,6 +3733,7 @@ internal class TandemMobileSession(
     }
 
     private suspend fun clearDeviceSession() {
+        openIdLoginProofState.clear()
         apiClient.forgetSession()
         authenticatedDevice = null
         budgets = emptyList()
@@ -3520,6 +3751,13 @@ internal fun discardedPendingWriteMessage(operationStatus: String?): String =
         "Your edit was discarded. Actual wasn’t changed."
     }
 
+internal fun signOutRevocationNotice(httpStatus: Int?): String =
+    if (httpStatus == null) {
+        "The server still trusts this device. Sign in again to this server and remove it in Settings."
+    } else {
+        "Couldn’t confirm that the server removed this device. Sign in again to this server and check Settings."
+    }
+
 internal fun TandemApiException.userFacingMessage(
     fallback: String,
     context: ApiFailureContext = ApiFailureContext.GENERAL,
@@ -3534,6 +3772,16 @@ internal fun budgetApiErrorMessage(
 private const val ACTIVITY_TRANSACTION_PAGE_SIZE = 50
 private const val ACTIVITY_TRANSACTION_REFRESH_LIMIT = 200
 private const val BUDGET_QUEUE_RESTORE_ERROR = "Couldn’t load saved category changes. Try again before editing categories."
+private const val BUDGET_CACHE_OWNER_KEY = "internal:budget-cache-owner-v1"
+
+private fun budgetCacheOwner(
+    serverUrl: String,
+    principalId: String,
+): String =
+    buildJsonObject {
+        put("serverUrl", serverUrl.trim().trimEnd('/'))
+        put("principalId", principalId)
+    }.toString()
 
 private fun BudgetReorderQueueState.enqueueIfMissing(move: QueuedBudgetReorder): BudgetReorderQueueState =
     if (moves.any { it.operationId == move.operationId }) this else enqueue(move)

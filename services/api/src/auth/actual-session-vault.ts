@@ -11,26 +11,48 @@ export interface ActualSessionCredential {
   sessionToken: string;
 }
 
+interface StoredActualSession {
+  principal_id: string;
+  token_ciphertext: Buffer;
+  token_nonce: Buffer;
+  token_tag: Buffer;
+}
+
+interface EncryptedSessionToken {
+  ciphertext: Buffer;
+  nonce: Buffer;
+  tag: Buffer;
+}
+
+export class InvalidStoredActualSessionCredentialError extends Error {
+  constructor() {
+    super("Stored Actual sign-in credentials could not be decrypted");
+    this.name = "InvalidStoredActualSessionCredentialError";
+  }
+}
+
 export class PostgresActualSessionVault {
   readonly #encryptionKey: Buffer;
+  readonly #previousEncryptionKey: Buffer | undefined;
 
   constructor(
     private readonly pool: Pool,
     encryptionKey: string,
+    previousEncryptionKey?: string,
   ) {
-    this.#encryptionKey = createHash("sha256")
-      .update(encryptionKey, "utf8")
-      .digest();
+    this.#encryptionKey = deriveEncryptionKey(encryptionKey);
+    this.#previousEncryptionKey =
+      previousEncryptionKey === undefined
+        ? undefined
+        : deriveEncryptionKey(previousEncryptionKey);
   }
 
   async save(credential: ActualSessionCredential): Promise<void> {
-    const nonce = randomBytes(12);
-    const cipher = createCipheriv("aes-256-gcm", this.#encryptionKey, nonce);
-    cipher.setAAD(Buffer.from(credential.principalId, "utf8"));
-    const ciphertext = Buffer.concat([
-      cipher.update(credential.sessionToken, "utf8"),
-      cipher.final(),
-    ]);
+    const encrypted = encryptSessionToken(
+      credential.principalId,
+      credential.sessionToken,
+      this.#encryptionKey,
+    );
     await this.pool.query(
       `INSERT INTO tandem_actual_sessions (
         principal_id, token_ciphertext, token_nonce, token_tag
@@ -40,65 +62,163 @@ export class PostgresActualSessionVault {
         token_nonce = EXCLUDED.token_nonce,
         token_tag = EXCLUDED.token_tag,
         updated_at = clock_timestamp()`,
-      [credential.principalId, ciphertext, nonce, cipher.getAuthTag()],
+      [
+        credential.principalId,
+        encrypted.ciphertext,
+        encrypted.nonce,
+        encrypted.tag,
+      ],
     );
   }
 
   async readLatest(): Promise<ActualSessionCredential | undefined> {
-    const result = await this.pool.query<{
-      principal_id: string;
-      token_ciphertext: Buffer;
-      token_nonce: Buffer;
-      token_tag: Buffer;
-    }>(
+    const result = await this.pool.query<StoredActualSession>(
       `SELECT principal_id, token_ciphertext, token_nonce, token_tag
        FROM tandem_actual_sessions
        ORDER BY updated_at DESC, principal_id
        LIMIT 1`,
     );
     const row = result.rows[0];
-    if (row === undefined) return undefined;
-    const decipher = createDecipheriv(
-      "aes-256-gcm",
-      this.#encryptionKey,
-      row.token_nonce,
-    );
-    decipher.setAAD(Buffer.from(row.principal_id, "utf8"));
-    decipher.setAuthTag(row.token_tag);
-    const sessionToken = Buffer.concat([
-      decipher.update(row.token_ciphertext),
-      decipher.final(),
-    ]).toString("utf8");
-    return { principalId: row.principal_id, sessionToken };
+    return row === undefined ? undefined : this.#decryptRow(row);
   }
 
   async read(
     principalId: string,
   ): Promise<ActualSessionCredential | undefined> {
-    const result = await this.pool.query<{
-      principal_id: string;
-      token_ciphertext: Buffer;
-      token_nonce: Buffer;
-      token_tag: Buffer;
-    }>(
+    const result = await this.pool.query<StoredActualSession>(
       `SELECT principal_id, token_ciphertext, token_nonce, token_tag
        FROM tandem_actual_sessions
        WHERE principal_id = $1`,
       [principalId],
     );
     const row = result.rows[0];
-    if (row === undefined) return undefined;
-    const decipher = createDecipheriv(
-      "aes-256-gcm",
-      this.#encryptionKey,
-      row.token_nonce,
-    );
-    decipher.setAAD(Buffer.from(row.principal_id, "utf8"));
-    decipher.setAuthTag(row.token_tag);
-    const sessionToken = Buffer.concat([
-      decipher.update(row.token_ciphertext),
-      decipher.final(),
-    ]).toString("utf8");
-    return { principalId: row.principal_id, sessionToken };
+    return row === undefined ? undefined : this.#decryptRow(row);
+  }
+
+  async reencryptStoredTokensWithCurrentKey(): Promise<void> {
+    const previousKey = this.#previousEncryptionKey;
+    if (previousKey === undefined) return;
+
+    const client = await this.pool.connect();
+    let transactionStarted = false;
+    let destroyClient = false;
+    try {
+      await client.query("BEGIN");
+      transactionStarted = true;
+      const result = await client.query<StoredActualSession>(
+        `SELECT principal_id, token_ciphertext, token_nonce, token_tag
+         FROM tandem_actual_sessions
+         ORDER BY principal_id
+         FOR UPDATE`,
+      );
+
+      for (const row of result.rows) {
+        if (canDecryptSessionToken(row, this.#encryptionKey)) continue;
+
+        let sessionToken: string;
+        try {
+          sessionToken = decryptSessionToken(row, previousKey);
+        } catch {
+          throw new Error(
+            "Could not rotate stored Actual sessions: a token cannot be decrypted with the current or previous AUTH_TOKEN_ENCRYPTION_KEY",
+          );
+        }
+
+        const encrypted = encryptSessionToken(
+          row.principal_id,
+          sessionToken,
+          this.#encryptionKey,
+        );
+        await client.query(
+          `UPDATE tandem_actual_sessions
+           SET token_ciphertext = $2,
+               token_nonce = $3,
+               token_tag = $4,
+               updated_at = clock_timestamp()
+           WHERE principal_id = $1`,
+          [
+            row.principal_id,
+            encrypted.ciphertext,
+            encrypted.nonce,
+            encrypted.tag,
+          ],
+        );
+      }
+
+      await client.query("COMMIT");
+      transactionStarted = false;
+    } catch (error) {
+      if (transactionStarted) {
+        try {
+          await client.query("ROLLBACK");
+        } catch {
+          destroyClient = true;
+        }
+      }
+      throw error;
+    } finally {
+      client.release(destroyClient ? true : undefined);
+    }
+  }
+
+  #decryptRow(row: StoredActualSession): ActualSessionCredential {
+    let sessionToken: string;
+    try {
+      sessionToken = decryptSessionToken(row, this.#encryptionKey);
+    } catch {
+      throw new InvalidStoredActualSessionCredentialError();
+    }
+    return {
+      principalId: row.principal_id,
+      sessionToken,
+    };
+  }
+}
+
+function deriveEncryptionKey(value: string): Buffer {
+  return createHash("sha256").update(value, "utf8").digest();
+}
+
+function encryptSessionToken(
+  principalId: string,
+  sessionToken: string,
+  encryptionKey: Buffer,
+): EncryptedSessionToken {
+  const nonce = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", encryptionKey, nonce);
+  cipher.setAAD(Buffer.from(principalId, "utf8"));
+  const ciphertext = Buffer.concat([
+    cipher.update(sessionToken, "utf8"),
+    cipher.final(),
+  ]);
+  return { ciphertext, nonce, tag: cipher.getAuthTag() };
+}
+
+function decryptSessionToken(
+  row: StoredActualSession,
+  encryptionKey: Buffer,
+): string {
+  const decipher = createDecipheriv(
+    "aes-256-gcm",
+    encryptionKey,
+    row.token_nonce,
+  );
+  decipher.setAAD(Buffer.from(row.principal_id, "utf8"));
+  decipher.setAuthTag(row.token_tag);
+  return Buffer.concat([
+    decipher.update(row.token_ciphertext),
+    decipher.final(),
+  ]).toString("utf8");
+}
+
+function canDecryptSessionToken(
+  row: StoredActualSession,
+  encryptionKey: Buffer,
+): boolean {
+  try {
+    decryptSessionToken(row, encryptionKey);
+    return true;
+  } catch {
+    return false;
   }
 }

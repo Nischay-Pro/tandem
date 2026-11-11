@@ -85,7 +85,7 @@ internal fun ScreenContent(
     val scope = rememberCoroutineScope()
     when (route) {
         AppRoute.STARTUP -> StartupScreen()
-        AppRoute.WELCOME -> WelcomeScreen(navigation)
+        AppRoute.WELCOME -> WelcomeScreen(navigation, mobileSession.signOutNotice)
         AppRoute.SERVER_ADDRESS -> ServerAddressScreen(state, navigation)
         AppRoute.SIGN_IN -> SignInScreen(state, mobileSession, onSignIn, onStartOpenIdSignIn)
         AppRoute.BUDGET_CHOOSER ->

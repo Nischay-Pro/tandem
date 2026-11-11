@@ -111,12 +111,25 @@ fun TandemApp(
     SideEffect { state.systemReduceMotionEnabled = systemReduceMotion }
     val reduceMotion = state.reduceMotionOverride ?: systemReduceMotion
     val apiClient = remember(allowInsecurePrivateNetwork) { TandemApiClient(allowInsecurePrivateNetwork) }
+    val openIdLoginProofState =
+        rememberSaveable(saver = OpenIdLoginProofState.saver(nowEpochMillis)) {
+            OpenIdLoginProofState(nowEpochMillis)
+        }
     val mobileSession =
-        remember(apiClient, database, deviceCredentialStore) {
-            TandemMobileSession(apiClient, database, nowEpochMillis, deviceCredentialStore)
+        remember(apiClient, database, deviceCredentialStore, openIdLoginProofState) {
+            TandemMobileSession(
+                apiClient,
+                database,
+                nowEpochMillis,
+                deviceCredentialStore,
+                openIdLoginProofState = openIdLoginProofState,
+            )
         }
     LaunchedEffect(mobileSession) {
         mobileSession.processQueuedBudgetReorders()
+    }
+    LaunchedEffect(mobileSession) {
+        mobileSession.scheduleOpenIdProofExpiry()
     }
     SideEffect { mobileSession.setReadOnlyMode(state.readOnlyMode) }
     val appPreferencesStore = remember(database) { database?.let(::AppPreferencesStore) }
@@ -828,6 +841,7 @@ fun TandemApp(
                     try {
                         uriHandler.openUri(redirectUrl)
                     } catch (_: Exception) {
+                        mobileSession.cancelActualOpenIdSignIn()
                         mobileSession.reportSignInError("Couldn’t open the sign-in page. Try again.")
                     }
                 }
@@ -844,6 +858,8 @@ fun TandemApp(
                     if (mobileSession.authenticatedDevice != null) {
                         navigation.reset(AppRoute.BUDGET_CHOOSER)
                     }
+                } else {
+                    mobileSession.cancelActualOpenIdSignIn()
                 }
             }
         }

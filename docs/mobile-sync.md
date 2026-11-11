@@ -14,14 +14,15 @@ flowchart LR
   Sync <--> Client[Generated API client]
   Client <--> API[Tandem API]
   API <--> Projection[(Server projection and change feed)]
-  API <--> ActualAPI[@actual-app/api]
+  API <--> ActualAPI["Actual API package in Tandem"]
   ActualAPI <--> Actual[Actual Budget server]
 ```
 
 The UI reads local records. The coordinator sends changes through the Tandem
-API, which reads and writes Actual through its supported API and maintains the
-server-side projection used for snapshots and change pages. Tandem does not
-write directly to Actual's database.
+API, which uses Actual's supported Node API package (`@actual-app/api`) to read
+and write budgets, and maintains the server-side projection used for snapshots
+and change pages. The package runs inside the Tandem API service, not as a
+separate network service. Tandem does not write directly to Actual's database.
 
 ## First sync
 
@@ -30,17 +31,36 @@ sequenceDiagram
   actor Person
   participant App as Mobile app
   participant API as Tandem API
-  participant Actual as Actual Budget
+  participant Actual as Actual Budget server
+  participant Vault as Server credential store
+  participant ActualApi as Actual API package in Tandem
   participant Room
-  Person->>App: Sign in to Actual
-  App->>API: Sign in and request visible budgets
-  API-->>App: Device token and budget list
+  Person->>App: Enter Actual server and sign-in details
+  App->>API: Sign in to Actual
+  API->>Actual: Verify credentials or complete sign-in
+  Actual-->>API: Actual session token and user identity
+  API->>Vault: Store Actual session token encrypted
+  Vault-->>API: Token stored
+  API->>ActualApi: Read this user's budget catalog
+  ActualApi->>Actual: List accessible budgets
+  Actual-->>ActualApi: Budget catalog
+  ActualApi-->>API: Budget IDs, names and encryption state
+  API-->>App: Device token and authorized budget IDs
+  App->>API: Load budget names and details
+  API->>ActualApi: Read authorized budget catalog
+  ActualApi->>Actual: List accessible budgets
+  Actual-->>ActualApi: Budget catalog
+  ActualApi-->>API: Authorized budget catalog
+  API-->>App: Available budgets
+  Person->>App: Choose a budget
   opt Encrypted budget
     Person->>App: Enter budget password
   end
   App->>API: Request full snapshot
-  API->>Actual: Read selected budget through official API
-  Actual-->>API: Budget records and display settings
+  API->>ActualApi: Download and read selected budget
+  ActualApi->>Actual: Sync and read through supported API
+  Actual-->>ActualApi: Budget records and display settings
+  ActualApi-->>API: Snapshot records and display settings
   API-->>App: Snapshot and sync checkpoint
   App->>Room: Apply snapshot transactionally
   Room-->>App: Notify screens from local data

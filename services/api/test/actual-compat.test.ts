@@ -39,7 +39,7 @@ const firstDataDir = process.env.ACTUAL_API_DATA_DIR;
 const databaseUrl = process.env.DATABASE_URL;
 const authTokenEncryptionKey =
   process.env.AUTH_TOKEN_ENCRYPTION_KEY ??
-  "synthetic-session-token-encryption-key-32";
+  "5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c";
 const compatibilityTestEnabled = Boolean(
   serverURL && serverPassword && firstDataDir && databaseUrl,
 );

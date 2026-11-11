@@ -1,7 +1,10 @@
 import * as actualApi from "@actual-app/api";
 import type { BudgetOperationOptions } from "./actual-session.js";
 import type { BudgetLockPort } from "./transaction-reconciler.js";
-import { MAX_TRANSACTION_AMOUNT } from "./transaction-reconciliation.js";
+import {
+  MAX_TRANSACTION_AMOUNT,
+  validateTransactionDate,
+} from "./transaction-reconciliation.js";
 
 /** Maximum category assignment: 1,000,000,000 major currency units. */
 export const MAX_BUDGET_AMOUNT_MINOR = 100_000_000_000;
@@ -571,6 +574,17 @@ export function createBudgetMaintenanceApi(
           return Promise.reject(
             new BudgetMaintenanceInputError(
               "The statement contains an invalid or duplicate transaction row",
+            ),
+          );
+        }
+        try {
+          validateTransactionDate(transaction.date);
+        } catch (error) {
+          return Promise.reject(
+            new BudgetMaintenanceInputError(
+              error instanceof Error
+                ? error.message
+                : "The statement contains an invalid transaction date",
             ),
           );
         }

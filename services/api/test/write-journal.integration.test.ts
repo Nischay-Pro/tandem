@@ -1,10 +1,11 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { Pool } from "pg";
 import type { Pool as PoolType } from "pg";
 import {
   TransactionReconciler,
   type ActualBudgetSessionPort,
+  type BudgetLockPort,
 } from "../src/actual/transaction-reconciler.js";
 import {
   createTransactionRevision,
@@ -92,7 +93,7 @@ describe("durable write journal integration", () => {
     database = createPostgresDatabase(
       isolatedConnection.toString(),
       process.env.AUTH_TOKEN_ENCRYPTION_KEY ??
-        "synthetic-session-token-encryption-key-32",
+        "5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c",
     );
     inspectionPool = new Pool({
       connectionString,
@@ -406,7 +407,7 @@ describe("durable write journal integration", () => {
     const beforeRestart = createPostgresDatabase(
       isolatedConnection.toString(),
       process.env.AUTH_TOKEN_ENCRYPTION_KEY ??
-        "synthetic-session-token-encryption-key-32",
+        "5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c",
     );
     try {
       await beforeRestart.journal.enqueue(input);
@@ -417,7 +418,7 @@ describe("durable write journal integration", () => {
     const afterRestart = createPostgresDatabase(
       isolatedConnection.toString(),
       process.env.AUTH_TOKEN_ENCRYPTION_KEY ??
-        "synthetic-session-token-encryption-key-32",
+        "5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c",
     );
     try {
       await expect(
@@ -427,6 +428,119 @@ describe("durable write journal integration", () => {
         status: "queued",
         attemptCount: 0,
       });
+    } finally {
+      await afterRestart.close();
+    }
+  });
+
+  it("recovers a matching uncertain create after a service restart", async () => {
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error("DATABASE_URL is required to simulate a restart");
+    }
+    const isolatedConnection = new URL(connectionString);
+    isolatedConnection.searchParams.set(
+      "options",
+      `-c search_path=${writeJournalSchema}`,
+    );
+    const operationId = randomUUID();
+    const transactionId = `tandem:${randomUUID()}`;
+    const budgetId = `restart-budget-${randomUUID()}`;
+    const request = createOperation({
+      operationId,
+      budgetId,
+      action: "create",
+      entityId: transactionId,
+      baseRevision: null,
+      baseSnapshot: {},
+      patch: {
+        account: "checking-account",
+        amount: -1250,
+        date: "2026-11-01",
+        payee: null,
+        category: "groceries-category",
+        notes: "Created before restart",
+        cleared: false,
+      },
+    });
+    const beforeRestart = createPostgresDatabase(
+      isolatedConnection.toString(),
+      process.env.AUTH_TOKEN_ENCRYPTION_KEY ??
+        "5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c",
+    );
+    try {
+      await beforeRestart.journal.enqueue(request);
+      await beforeRestart.journal.claim(operationId);
+      await beforeRestart.journal.markUncertain(
+        operationId,
+        "actual-outcome-uncertain",
+        { kind: "transaction-create-returned" },
+      );
+    } finally {
+      await beforeRestart.close();
+    }
+
+    const afterRestart = createPostgresDatabase(
+      isolatedConnection.toString(),
+      process.env.AUTH_TOKEN_ENCRYPTION_KEY ??
+        "5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c",
+    );
+    const actual = {
+      id: transactionId,
+      imported_id: transactionId,
+      account: "checking-account",
+      amount: -1250,
+      date: "2026-11-01",
+      payee: null,
+      category: "groceries-category",
+      notes: "Created before restart",
+      cleared: false,
+    };
+    const transactions: ActualTransactionStore = {
+      async read() {
+        return actual;
+      },
+      async validateCreateInput() {
+        throw new Error("The existing create should be recovered by readback");
+      },
+      async validateUpdateInput() {
+        throw new Error("This test does not update transactions");
+      },
+      async create() {
+        throw new Error("The existing create must not be replayed");
+      },
+      async update() {
+        throw new Error("This test does not update transactions");
+      },
+      async delete() {
+        throw new Error("This test does not delete transactions");
+      },
+    };
+    const session: ActualBudgetSessionPort = {
+      async runBudget<T>(_syncId: string, operation: () => Promise<T>) {
+        return operation();
+      },
+    };
+    try {
+      const reconciler = new TransactionReconciler(
+        afterRestart,
+        afterRestart.journal,
+        session,
+        transactions,
+      );
+      const recovered = await reconciler.checkOperationStatus(operationId);
+
+      expect(recovered?.operation).toMatchObject({
+        status: "committed",
+        actualResult: {
+          transactionId,
+          created: true,
+          recoveredByReadback: true,
+        },
+      });
+      await expect(
+        afterRestart.journal.get(operationId),
+      ).resolves.toMatchObject({ status: "committed" });
     } finally {
       await afterRestart.close();
     }
@@ -1371,6 +1485,340 @@ describe("durable write journal integration", () => {
     expect(retry.operation.status).toBe("committed");
     expect(actualWrites).toBe(1);
     expect(actual.amount).toBe(1200);
+  });
+
+  it("retries an expired update only after status readback confirms it was not applied", async () => {
+    const base: TransactionSnapshot = {
+      id: `transaction-status-retry-${randomUUID()}`,
+      account: "checking-account",
+      amount: 1500,
+      date: "2026-11-01",
+      payee: null,
+      category: null,
+      notes: null,
+      cleared: null,
+      reconciled: null,
+      importedId: null,
+      importedPayee: null,
+      startingBalance: null,
+      schedule: null,
+      transferId: null,
+      isParent: false,
+      isChild: false,
+      parentId: null,
+      subtransactions: [],
+    };
+    const input = createOperation({
+      budgetId: `status-retry-budget-${randomUUID()}`,
+      entityId: base.id,
+      baseRevision: createTransactionRevision(base),
+      baseSnapshot: base as unknown as JsonValue,
+      patch: { amount: 1200 },
+    });
+    const request = {
+      operationId: input.operationId,
+      principalId: input.principalId,
+      budgetId: input.budgetId,
+      idempotencyKey: input.idempotencyKey,
+      transactionId: base.id,
+      baseRevision: input.baseRevision!,
+      baseSnapshot: input.baseSnapshot,
+      action: "update" as const,
+      patch: input.patch,
+    };
+    let actual: Record<string, unknown> = {
+      id: base.id,
+      account: base.account,
+      amount: base.amount,
+      date: base.date,
+      payee: null,
+      category: null,
+      notes: null,
+      cleared: null,
+      reconciled: null,
+    };
+    let writes = 0;
+    const transactions: ActualTransactionStore = {
+      async read() {
+        return { ...actual };
+      },
+      async validateCreateInput() {
+        throw new Error("This test does not validate creates");
+      },
+      async validateUpdateInput() {
+        return undefined;
+      },
+      async create() {
+        throw new Error("This test does not create transactions");
+      },
+      async update(_id, fields) {
+        writes += 1;
+        actual = { ...actual, ...fields };
+        return actual;
+      },
+      async delete() {
+        throw new Error("This test does not delete transactions");
+      },
+    };
+    const session: ActualBudgetSessionPort = {
+      async runBudget<T>(_syncId: string, operation: () => Promise<T>) {
+        return operation();
+      },
+    };
+    const reconciler = new TransactionReconciler(
+      database,
+      database.journal,
+      session,
+      transactions,
+    );
+
+    await database.journal.enqueue(input);
+    expect((await database.journal.claim(input.operationId)).claimed).toBe(
+      true,
+    );
+    await inspectionPool.query(
+      `UPDATE tandem_operations
+      SET lease_expires_at = clock_timestamp() - interval '1 second'
+      WHERE operation_id = $1`,
+      [input.operationId],
+    );
+    expect(await database.journal.expireLeases()).toBe(1);
+
+    const checked = await reconciler.checkOperationStatus(input.operationId);
+    expect(checked?.operation).toMatchObject({
+      status: "queued",
+      errorCode: "actual-readback-not-applied",
+    });
+    expect(writes).toBe(0);
+    expect(actual.amount).toBe(1500);
+
+    const retried = await reconciler.submit(request);
+
+    expect(retried.operation).toMatchObject({
+      status: "committed",
+      actualResult: {
+        transactionId: base.id,
+        appliedPatch: { amount: 1200 },
+      },
+    });
+    expect(writes).toBe(1);
+    expect(actual.amount).toBe(1200);
+  });
+
+  it("recovers an uncertain update from a legacy snapshot loaded from the durable journal", async () => {
+    const base: TransactionSnapshot = {
+      id: `transaction-legacy-status-${randomUUID()}`,
+      account: "checking-account",
+      amount: 1500,
+      date: "2026-11-01",
+      payee: null,
+      category: null,
+      notes: null,
+      cleared: false,
+      reconciled: false,
+      importedId: null,
+      importedPayee: null,
+      startingBalance: null,
+      schedule: null,
+      transferId: null,
+      isParent: false,
+      isChild: false,
+      parentId: null,
+      subtransactions: [],
+    };
+    const legacySnapshot = { ...base } as Record<string, unknown>;
+    delete legacySnapshot.reconciled;
+    const input = createOperation({
+      budgetId: `legacy-status-budget-${randomUUID()}`,
+      entityId: base.id,
+      baseRevision: createHash("sha256")
+        .update(JSON.stringify(legacySnapshot))
+        .digest("hex"),
+      baseSnapshot: legacySnapshot as unknown as JsonValue,
+      patch: { amount: 1200 },
+    });
+    await database.journal.enqueue(input);
+    await database.journal.claim(input.operationId);
+    await database.journal.markUncertain(
+      input.operationId,
+      "claim-lease-expired",
+    );
+
+    const transactions: ActualTransactionStore = {
+      async read() {
+        return {
+          id: base.id,
+          account: base.account,
+          amount: 1200,
+          date: base.date,
+          payee: base.payee,
+          category: base.category,
+          notes: base.notes,
+          cleared: base.cleared,
+          reconciled: base.reconciled,
+        };
+      },
+      async validateCreateInput() {
+        throw new Error("This test does not create transactions");
+      },
+      async validateUpdateInput() {
+        return undefined;
+      },
+      async create() {
+        throw new Error("This test does not create transactions");
+      },
+      async update() {
+        throw new Error("Status read-back must not replay an applied update");
+      },
+      async delete() {
+        throw new Error("This test does not delete transactions");
+      },
+    };
+    const session: ActualBudgetSessionPort = {
+      async runBudget<T>(_syncId: string, operation: () => Promise<T>) {
+        return operation();
+      },
+    };
+    const reconciler = new TransactionReconciler(
+      database,
+      database.journal,
+      session,
+      transactions,
+    );
+
+    const result = await reconciler.checkOperationStatus(input.operationId);
+
+    expect(result?.operation).toMatchObject({
+      status: "committed",
+      baseRevision: input.baseRevision,
+      baseSnapshot: legacySnapshot,
+      actualResult: {
+        transactionId: base.id,
+        recoveredByReadback: true,
+      },
+    });
+    await expect(
+      database.journal.get(input.operationId),
+    ).resolves.toMatchObject({
+      status: "committed",
+      baseSnapshot: legacySnapshot,
+    });
+  });
+
+  it("serializes same-transaction edits from concurrent device principals", async () => {
+    const base: TransactionSnapshot = {
+      id: "transaction-concurrent-devices",
+      account: "checking-account",
+      amount: 1500,
+      date: "2026-11-01",
+      payee: null,
+      category: null,
+      notes: null,
+      cleared: null,
+      reconciled: null,
+      importedId: null,
+      importedPayee: null,
+      startingBalance: null,
+      schedule: null,
+      transferId: null,
+      isParent: false,
+      isChild: false,
+      parentId: null,
+      subtransactions: [],
+    };
+    const budgetId = `budget-${randomUUID()}`;
+    const makeRequest = (principalId: string, amount: number) => ({
+      operationId: randomUUID(),
+      principalId,
+      budgetId,
+      idempotencyKey: randomUUID(),
+      transactionId: base.id,
+      baseRevision: createTransactionRevision(base),
+      baseSnapshot: base as unknown as JsonValue,
+      action: "update" as const,
+      patch: { amount },
+    });
+    const firstRequest = makeRequest("device-one", 1700);
+    const secondRequest = makeRequest("device-two", 1900);
+    const firstReadEntered = deferred();
+    const releaseFirstRead = deferred();
+    let lockCalls = 0;
+    let readCount = 0;
+    let actual: Record<string, unknown> = {
+      id: base.id,
+      account: base.account,
+      amount: base.amount,
+      date: base.date,
+      payee: null,
+      category: null,
+      notes: null,
+      cleared: null,
+      reconciled: null,
+    };
+    let writeCount = 0;
+    const transactions: ActualTransactionStore = {
+      async read() {
+        readCount += 1;
+        if (readCount === 1) {
+          firstReadEntered.resolve();
+          await releaseFirstRead.promise;
+        }
+        return { ...actual };
+      },
+      async validateCreateInput() {
+        throw new Error("This test does not validate creates");
+      },
+      async validateUpdateInput() {
+        return undefined;
+      },
+      async create() {
+        throw new Error("This test does not create transactions");
+      },
+      async update(_id, fields) {
+        writeCount += 1;
+        actual = { ...actual, ...fields };
+        return actual;
+      },
+      async delete() {
+        throw new Error("This test does not delete transactions");
+      },
+    };
+    const session: ActualBudgetSessionPort = {
+      async runBudget<T>(_syncId: string, operation: () => Promise<T>) {
+        return operation();
+      },
+    };
+    const locks: BudgetLockPort = {
+      async withBudgetLock<T>(lockedBudgetId: string, work: () => Promise<T>) {
+        lockCalls += 1;
+        return database.withBudgetLock(lockedBudgetId, work);
+      },
+    };
+    const reconciler = new TransactionReconciler(
+      locks,
+      database.journal,
+      session,
+      transactions,
+    );
+
+    const firstSubmit = reconciler.submit(firstRequest);
+    await firstReadEntered.promise;
+    const secondSubmit = reconciler.submit(secondRequest);
+    await vi.waitFor(() => expect(lockCalls).toBe(2));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(readCount).toBe(1);
+
+    releaseFirstRead.resolve();
+    const [first, second] = await Promise.all([firstSubmit, secondSubmit]);
+
+    expect(first.operation.status).toBe("committed");
+    expect(second.operation.status).toBe("conflict");
+    expect(second.conflict).toMatchObject({
+      conflictType: "same-field-edit",
+      conflictingFields: ["amount"],
+    });
+    expect(writeCount).toBe(1);
+    expect(actual.amount).toBe(1700);
   });
 
   it("serializes the same budget across PostgreSQL connections and releases locks after failure", async () => {

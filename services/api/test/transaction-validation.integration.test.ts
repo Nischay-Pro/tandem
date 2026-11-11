@@ -60,7 +60,7 @@ describe("transaction request validation integration", () => {
     database = createPostgresDatabase(
       isolatedConnection.toString(),
       process.env.AUTH_TOKEN_ENCRYPTION_KEY ??
-        "synthetic-session-token-encryption-key-32",
+        "5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c",
     );
     await database.migrate();
   }, 30_000);

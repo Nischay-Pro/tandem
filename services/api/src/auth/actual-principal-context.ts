@@ -12,7 +12,3 @@ export function runAsActualPrincipal<T>(
 ): T {
   return actualPrincipal.run(principalId, operation);
 }
-
-export function enterActualPrincipal(principalId: string): void {
-  actualPrincipal.enterWith(principalId);
-}

@@ -11,6 +11,10 @@ import Fastify, {
 import { READINESS_TIMEOUT_MS } from "./config.js";
 import type { HealthDatabase } from "./database.js";
 import {
+  ActualPrincipalSessionExpiredError,
+  ACTUAL_PRINCIPAL_SESSION_EXPIRED_MESSAGE,
+} from "./actual/actual-session.js";
+import {
   DeviceAuthorization,
   DeviceAuthInputError,
 } from "./auth/device-auth.js";
@@ -24,7 +28,7 @@ import type { ActualOpenIdLogin } from "./auth/actual-openid-login.js";
 import { ActualLoginMethodsCache } from "./auth/actual-login-methods-cache.js";
 import { RequestRateLimiter } from "./auth/request-rate-limiter.js";
 import { logSecurityAuditEvent } from "./security-audit.js";
-import { enterActualPrincipal } from "./auth/actual-principal-context.js";
+import { runAsActualPrincipal } from "./auth/actual-principal-context.js";
 import type { TransactionApiPort } from "./actual/transaction-api.js";
 import {
   BudgetMaintenanceBusyError,
@@ -69,6 +73,12 @@ const statusNotReady = {
   required: ["status"],
   additionalProperties: false,
 };
+
+function safeErrorType(error: unknown): string {
+  if (!(error instanceof Error)) return error === null ? "null" : typeof error;
+  const name = error.constructor.name;
+  return /^[A-Za-z][A-Za-z0-9_$]{0,63}$/.test(name) ? name : "Error";
+}
 
 const liveSchema: FastifySchema = {
   tags: ["Health"],
@@ -115,6 +125,7 @@ export async function buildApiApp(
   const actualLoginMethodsCache = new ActualLoginMethodsCache(45_000);
   const actualLoginMethodsRateLimiter = new RequestRateLimiter(60, 60_000);
   const requestErrors = new WeakMap<FastifyRequest, unknown>();
+  const requestPrincipalIds = new WeakMap<FastifyRequest, string>();
   const responseErrorCodes = new WeakMap<FastifyRequest, string>();
   const requestStartedAt = new WeakMap<FastifyRequest, number>();
   const app = Fastify({
@@ -174,7 +185,10 @@ export async function buildApiApp(
     const thrownError = requestErrors.get(request);
     if (hasThrownError || statusCode === 409 || statusCode >= 500) {
       request.log.error(
-        { ...logFields, ...(hasThrownError ? { err: thrownError } : {}) },
+        {
+          ...logFields,
+          ...(hasThrownError ? { errorType: safeErrorType(thrownError) } : {}),
+        },
         "API request failed",
       );
     } else {
@@ -187,7 +201,15 @@ export async function buildApiApp(
         /^Bearer ([A-Za-z0-9_-]{43})$/i,
       );
       const device = await options.deviceAuth?.authenticate(match?.[1]);
-      if (device) enterActualPrincipal(device.principalId);
+      if (device) requestPrincipalIds.set(request, device.principalId);
+    });
+    app.addHook("preHandler", (request, _reply, done) => {
+      const principalId = requestPrincipalIds.get(request);
+      if (principalId === undefined) {
+        done();
+        return;
+      }
+      runAsActualPrincipal(principalId, () => done());
     });
   }
 
@@ -613,7 +635,7 @@ function registerDeviceAuthorizationRoutes(
   );
 
   if (actualOpenIdLogin) {
-    app.post<{ Body: { deviceName: string } }>(
+    app.post<{ Body: { deviceName: string; codeChallenge: string } }>(
       "/api/v1/auth/openid/start",
       {
         schema: {
@@ -629,8 +651,16 @@ function registerDeviceAuthorizationRoutes(
                 maxLength: 100,
                 pattern: "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$",
               },
+              codeChallenge: {
+                type: "string",
+                minLength: 43,
+                maxLength: 43,
+                pattern: "^[A-Za-z0-9_-]{43}$",
+                description:
+                  "Unpadded base64url SHA-256 challenge for the app-generated PKCE verifier.",
+              },
             },
-            required: ["deviceName"],
+            required: ["deviceName", "codeChallenge"],
             additionalProperties: false,
           },
           response: {
@@ -670,7 +700,10 @@ function registerDeviceAuthorizationRoutes(
             });
         }
         try {
-          return await actualOpenIdLogin.start(request.body.deviceName);
+          return await actualOpenIdLogin.start(
+            request.body.deviceName,
+            request.body.codeChallenge,
+          );
         } catch {
           return reply.code(503).send({
             error: {
@@ -753,7 +786,7 @@ function registerDeviceAuthorizationRoutes(
       },
     );
 
-    app.post<{ Body: { code: string } }>(
+    app.post<{ Body: { code: string; codeVerifier: string } }>(
       "/api/v1/auth/openid/complete",
       {
         schema: {
@@ -764,8 +797,16 @@ function registerDeviceAuthorizationRoutes(
             type: "object",
             properties: {
               code: { type: "string", minLength: 43, maxLength: 43 },
+              codeVerifier: {
+                type: "string",
+                minLength: 43,
+                maxLength: 128,
+                pattern: "^[A-Za-z0-9._~-]{43,128}$",
+                description:
+                  "The PKCE verifier whose S256 challenge was sent to the start endpoint.",
+              },
             },
-            required: ["code"],
+            required: ["code", "codeVerifier"],
             additionalProperties: false,
           },
           response: {
@@ -787,7 +828,10 @@ function registerDeviceAuthorizationRoutes(
             },
           });
         }
-        const completion = actualOpenIdLogin.consume(request.body.code);
+        const completion = actualOpenIdLogin.consume(
+          request.body.code,
+          request.body.codeVerifier,
+        );
         if (!completion) {
           return reply.code(401).send({
             error: {
@@ -1200,9 +1244,9 @@ function registerTransactionRoutes(
           transaction: result.snapshot,
           revision: result.revision,
         });
-      } catch {
-        reportTransactionFailure("Transaction read failed");
-        return actualRequestFailed(reply);
+      } catch (error) {
+        reportTransactionFailure("Transaction read failed", error);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -1367,7 +1411,7 @@ function registerTransactionRoutes(
           });
         }
         reportTransactionFailure("Transaction operation failed", error);
-        return actualRequestFailed(reply);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -1431,7 +1475,7 @@ function registerTransactionRoutes(
         return reply.code(200).send(toOperationResultResponse(result));
       } catch (error) {
         reportTransactionFailure("Transaction operation lookup failed", error);
-        return actualRequestFailed(reply);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -2050,7 +2094,7 @@ function registerBudgetMaintenanceRoutes(
           "failed",
         );
         reportTransactionFailure("Actual account creation failed", error);
-        return actualRequestFailed(reply);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -2236,7 +2280,7 @@ function registerBudgetMaintenanceRoutes(
           request.params.payeeId,
         );
         reportTransactionFailure("Actual payee action failed", error);
-        return actualRequestFailed(reply);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -2350,7 +2394,7 @@ function registerBudgetMaintenanceRoutes(
           request.params.accountId,
         );
         reportTransactionFailure("Actual account close failed", error);
-        return actualRequestFailed(reply);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -2457,7 +2501,7 @@ function registerBudgetMaintenanceRoutes(
           request.params.accountId,
         );
         reportTransactionFailure("Actual account rename failed", error);
-        return actualRequestFailed(reply);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -2548,7 +2592,7 @@ function registerBudgetMaintenanceRoutes(
           request.params.accountId,
         );
         reportTransactionFailure("Actual account reopen failed", error);
-        return actualRequestFailed(reply);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -2653,7 +2697,7 @@ function registerBudgetMaintenanceRoutes(
           request.params.accountId,
         );
         reportTransactionFailure("Actual account reorder failed", error);
-        return actualRequestFailed(reply);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -2772,7 +2816,7 @@ function registerBudgetMaintenanceRoutes(
           "failed",
         );
         reportTransactionFailure("Actual payee creation failed", error);
-        return actualRequestFailed(reply);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -2899,7 +2943,7 @@ function registerBudgetMaintenanceRoutes(
           "failed",
         );
         reportTransactionFailure("Actual category creation failed", error);
-        return actualRequestFailed(reply);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -3025,7 +3069,7 @@ function registerBudgetMaintenanceRoutes(
           "Actual category group creation failed",
           error,
         );
-        return actualRequestFailed(reply);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -3156,7 +3200,7 @@ function registerBudgetMaintenanceRoutes(
           request.params.groupId,
         );
         reportTransactionFailure("Actual category group change failed", error);
-        return actualRequestFailed(reply);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -3280,7 +3324,7 @@ function registerBudgetMaintenanceRoutes(
           request.params.categoryId,
         );
         reportTransactionFailure("Actual category change failed", error);
-        return actualRequestFailed(reply);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -3387,7 +3431,7 @@ function registerBudgetMaintenanceRoutes(
           request.params.categoryId,
         );
         reportTransactionFailure("Actual category budget update failed", error);
-        return actualRequestFailed(reply);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -3494,7 +3538,7 @@ function registerBudgetMaintenanceRoutes(
           "Actual category carryover update failed",
           error,
         );
-        return actualRequestFailed(reply);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -3687,7 +3731,7 @@ function registerBudgetMaintenanceRoutes(
           request.params.month,
         );
         reportTransactionFailure("Actual budget month action failed", error);
-        return actualRequestFailed(reply);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -3809,7 +3853,7 @@ function registerBudgetMaintenanceRoutes(
           request.body.fromCategoryId,
         );
         reportTransactionFailure("Actual category money move failed", error);
-        return actualRequestFailed(reply);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -3916,7 +3960,7 @@ function registerBudgetMaintenanceRoutes(
           request.params.categoryId,
         );
         reportTransactionFailure("Actual category rename failed", error);
-        return actualRequestFailed(reply);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -4022,7 +4066,7 @@ function registerBudgetMaintenanceRoutes(
           request.params.categoryId,
         );
         reportTransactionFailure("Actual category delete failed", error);
-        return actualRequestFailed(reply);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -4324,7 +4368,7 @@ function registerBudgetMaintenanceRoutes(
           request.params.scheduleId,
         );
         reportTransactionFailure("Actual schedule action failed", error);
-        return actualRequestFailed(reply);
+        return actualRequestFailed(reply, error);
       }
     },
   );
@@ -4762,7 +4806,7 @@ function registerBudgetReadRoutes(
         return reply.code(200).send({ budgets: authorizedBudgets });
       } catch (error) {
         reportTransactionFailure("Budget catalog read failed", error);
-        return budgetReadFailed(reply);
+        return budgetReadFailed(reply, error);
       }
     },
   );
@@ -4814,7 +4858,7 @@ function registerBudgetReadRoutes(
           return invalidBudgetRequest(reply);
         }
         reportTransactionFailure("Budget snapshot read failed", error);
-        return budgetReadFailed(reply);
+        return budgetReadFailed(reply, error);
       }
     },
   );
@@ -4900,7 +4944,7 @@ function registerBudgetReadRoutes(
           return invalidBudgetRequest(reply);
         }
         reportTransactionFailure("Budget snapshot page read failed", error);
-        return budgetReadFailed(reply);
+        return budgetReadFailed(reply, error);
       }
     },
   );
@@ -4978,7 +5022,7 @@ function registerBudgetReadRoutes(
           return invalidBudgetRequest(reply);
         }
         reportTransactionFailure("Budget change feed read failed", error);
-        return budgetReadFailed(reply);
+        return budgetReadFailed(reply, error);
       }
     },
   );
@@ -5087,7 +5131,18 @@ function invalidBudgetRequest(reply: import("fastify").FastifyReply) {
   });
 }
 
-function budgetReadFailed(reply: import("fastify").FastifyReply) {
+function budgetReadFailed(
+  reply: import("fastify").FastifyReply,
+  error?: unknown,
+) {
+  if (error instanceof ActualPrincipalSessionExpiredError) {
+    return reply.code(401).send({
+      error: {
+        code: "actual_sign_in_expired",
+        message: ACTUAL_PRINCIPAL_SESSION_EXPIRED_MESSAGE,
+      },
+    });
+  }
   return reply.code(502).send({
     error: {
       code: "budget_sync_failed",
@@ -5148,7 +5203,18 @@ function actualLoginMethodsUnavailable() {
   };
 }
 
-function actualRequestFailed(reply: import("fastify").FastifyReply) {
+function actualRequestFailed(
+  reply: import("fastify").FastifyReply,
+  error?: unknown,
+) {
+  if (error instanceof ActualPrincipalSessionExpiredError) {
+    return reply.code(401).send({
+      error: {
+        code: "actual_sign_in_expired",
+        message: ACTUAL_PRINCIPAL_SESSION_EXPIRED_MESSAGE,
+      },
+    });
+  }
   return reply.code(502).send({
     error: {
       code: "actual_operation_failed",

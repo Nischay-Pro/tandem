@@ -7,6 +7,7 @@ import type { ActualTransactionStore } from "./transaction-store.js";
 import {
   createTransactionRevision,
   isTandemTransactionId,
+  matchesTransactionRevision,
   parseTransactionCreateInput,
   parseTransactionPatch,
   parseTransactionSnapshot,
@@ -91,6 +92,7 @@ export class TransactionRequestValidationError extends Error {
 interface PreparedRequest {
   request: TransactionUpdateRequest;
   base: TransactionSnapshot;
+  normalizedBaseRevision: string;
   patch: TransactionPatch;
   operationInput: WriteOperationInput;
 }
@@ -753,7 +755,8 @@ export class TransactionReconciler {
       } else {
         const snapshot = snapshotActualTransaction(current);
         if (
-          createTransactionRevision(snapshot) === prepared.request.baseRevision
+          createTransactionRevision(snapshot) ===
+          prepared.normalizedBaseRevision
         ) {
           return this.#requeueAfterReadback(operation);
         }
@@ -1072,7 +1075,13 @@ function prepareValidatedRequest(
   if (base.id !== request.transactionId) {
     throw new Error("baseSnapshot ID does not match transactionId");
   }
-  if (createTransactionRevision(base) !== request.baseRevision) {
+  if (
+    !matchesTransactionRevision(
+      request.baseSnapshot,
+      base,
+      request.baseRevision,
+    )
+  ) {
     throw new Error("baseRevision does not match baseSnapshot");
   }
   const patch =
@@ -1091,7 +1100,13 @@ function prepareValidatedRequest(
     baseSnapshot: request.baseSnapshot,
     patch: patch as { [key: string]: JsonValue },
   };
-  return { request, base, patch, operationInput };
+  return {
+    request,
+    base,
+    normalizedBaseRevision: createTransactionRevision(base),
+    patch,
+    operationInput,
+  };
 }
 
 function parseDeletePatch(value: JsonValue): TransactionPatch {

@@ -402,6 +402,21 @@ class ActivitySearchTest {
     }
 
     @Test
+    fun actualPasswordWarningCoversPublicHttpAndKeepsLocalHttpSupported() {
+        val warning = "HTTP does not encrypt your Actual password. Use HTTPS on untrusted networks."
+
+        assertEquals(null, actualPasswordTransportWarning("http://192.168.1.40:5006"))
+        assertEquals(null, actualPasswordTransportWarning("http://10.0.0.12"))
+        assertEquals(null, actualPasswordTransportWarning("http://[fd12::1]:19753"))
+        assertEquals(null, actualPasswordTransportWarning("http://localhost:19753"))
+        assertEquals(warning, actualPasswordTransportWarning("http://budget.example.com"))
+        assertEquals(warning, actualPasswordTransportWarning("http://tandem.home"))
+        assertEquals(warning, actualPasswordTransportWarning(" HTTP://1.1.1.1:5006 "))
+        assertEquals(null, actualPasswordTransportWarning("https://budget.example.com"))
+        assertTrue(serverAddressIsValid("http://192.168.1.40:5006"))
+    }
+
+    @Test
     fun serverAddressRequiresAUsableHttpAddress() {
         assertFalse(serverAddressIsValid(""))
         assertFalse(serverAddressIsValid("https://"))

@@ -158,12 +158,13 @@ describe("health routes and OpenAPI", () => {
       method: "GET",
       route: "/api/v1/budgets",
       statusCode: 500,
+      errorType: "Error",
       msg: "API request failed",
     });
     expect(entries[0]?.durationMs).toEqual(expect.any(Number));
-    expect(lines[0]).toContain(
-      "synthetic db host 10.1.2.3 password=private-value",
-    );
+    expect(lines[0]).not.toContain("synthetic db host");
+    expect(lines[0]).not.toContain("private-value");
+    expect(lines[0]).not.toContain("stack");
     expect(lines[0]).not.toContain("must-not-be-logged");
     expect(lines[0]).not.toContain(testAccessToken);
     await app.close();
@@ -669,6 +670,8 @@ describe("health routes and OpenAPI", () => {
 
   it("completes OpenID sign-in using a one-use Tandem code", async () => {
     const completionCode = "C".repeat(43);
+    const codeChallenge = "H".repeat(43);
+    const codeVerifier = "V".repeat(64);
     const device = createDevice({
       principalId: "actual-user:synthetic",
       budgetIds: ["synthetic-budget"],
@@ -705,7 +708,7 @@ describe("health routes and OpenAPI", () => {
     const started = await app.inject({
       method: "POST",
       url: "/api/v1/auth/openid/start",
-      payload: { deviceName: "Synthetic phone" },
+      payload: { deviceName: "Synthetic phone", codeChallenge },
     });
     const callback = await app.inject({
       method: "GET",
@@ -717,7 +720,7 @@ describe("health routes and OpenAPI", () => {
     const completed = await app.inject({
       method: "POST",
       url: "/api/v1/auth/openid/complete",
-      payload: { code: completionCode },
+      payload: { code: completionCode, codeVerifier },
     });
 
     expect(started.statusCode).toBe(200);
@@ -740,6 +743,10 @@ describe("health routes and OpenAPI", () => {
       "actual-user:synthetic",
       "server-side-actual-token",
     );
+    expect(openIdLogin.consume).toHaveBeenCalledWith(
+      completionCode,
+      codeVerifier,
+    );
     await app.close();
   });
 
@@ -752,6 +759,8 @@ describe("health routes and OpenAPI", () => {
         budgetIds: ["synthetic-budget"],
       },
     };
+    const codeChallenge = "H".repeat(43);
+    const codeVerifier = "V".repeat(64);
     const openIdLogin = {
       start: vi.fn(async () => {
         throw new Error("private identity provider error");
@@ -782,11 +791,23 @@ describe("health routes and OpenAPI", () => {
       payload: { deviceName: " " },
     });
     expect(invalidStart.statusCode).toBe(400);
+    const missingChallengeStart = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/openid/start",
+      payload: { deviceName: "Synthetic phone" },
+    });
+    expect(missingChallengeStart.statusCode).toBe(400);
+    const invalidChallengeStart = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/openid/start",
+      payload: { deviceName: "Synthetic phone", codeChallenge: "short" },
+    });
+    expect(invalidChallengeStart.statusCode).toBe(400);
 
     const firstStart = await app.inject({
       method: "POST",
       url: "/api/v1/auth/openid/start",
-      payload: { deviceName: "Synthetic phone" },
+      payload: { deviceName: "Synthetic phone", codeChallenge },
     });
     expect(firstStart.statusCode).toBe(503);
     expect(firstStart.body).not.toContain("private identity provider error");
@@ -796,7 +817,7 @@ describe("health routes and OpenAPI", () => {
           await app.inject({
             method: "POST",
             url: "/api/v1/auth/openid/start",
-            payload: { deviceName: "Synthetic phone" },
+            payload: { deviceName: "Synthetic phone", codeChallenge },
           })
         ).statusCode,
       ).toBe(503);
@@ -804,7 +825,7 @@ describe("health routes and OpenAPI", () => {
     const limitedStart = await app.inject({
       method: "POST",
       url: "/api/v1/auth/openid/start",
-      payload: { deviceName: "Synthetic phone" },
+      payload: { deviceName: "Synthetic phone", codeChallenge },
     });
     expect(limitedStart.statusCode).toBe(429);
     expect(limitedStart.headers["retry-after"]).toBe("60");
@@ -831,19 +852,31 @@ describe("health routes and OpenAPI", () => {
     const invalidCompletion = await app.inject({
       method: "POST",
       url: "/api/v1/auth/openid/complete",
-      payload: { code: "" },
+      payload: { code: "", codeVerifier },
     });
     expect(invalidCompletion.statusCode).toBe(400);
+    const missingVerifierCompletion = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/openid/complete",
+      payload: { code: "C".repeat(43) },
+    });
+    expect(missingVerifierCompletion.statusCode).toBe(400);
+    const invalidVerifierCompletion = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/openid/complete",
+      payload: { code: "C".repeat(43), codeVerifier: "short" },
+    });
+    expect(invalidVerifierCompletion.statusCode).toBe(400);
     const expiredCompletion = await app.inject({
       method: "POST",
       url: "/api/v1/auth/openid/complete",
-      payload: { code: "E".repeat(43) },
+      payload: { code: "E".repeat(43), codeVerifier },
     });
     expect(expiredCompletion.statusCode).toBe(401);
     const failedCompletion = await app.inject({
       method: "POST",
       url: "/api/v1/auth/openid/complete",
-      payload: { code: "C".repeat(43) },
+      payload: { code: "C".repeat(43), codeVerifier },
     });
     expect(failedCompletion.statusCode).toBe(503);
     expect(failedCompletion.body).not.toContain("private device store error");

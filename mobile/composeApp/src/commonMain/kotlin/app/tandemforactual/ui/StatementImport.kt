@@ -1,5 +1,6 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.api.client.StatementImportItem
 import app.tandemforactual.api.client.StatementImportSummary
 
 internal enum class StatementDateOrder {
@@ -20,6 +21,17 @@ internal data class StatementParseResult(
     val skippedRows: Int,
     val firstSkippedReason: String? = null,
 )
+
+internal fun StatementParseResult.toStatementImportItems(): List<StatementImportItem> =
+    transactions.map { row ->
+        StatementImportItem(
+            date = row.date,
+            amountMinor = row.amountMinor,
+            payeeName = row.payeeName,
+            notes = row.notes,
+            importedId = row.importedId,
+        )
+    }
 
 internal class StatementImportParseException(
     message: String,
@@ -79,10 +91,32 @@ internal fun parseStatementImport(
     if (parsed.transactions.isEmpty()) {
         throw StatementImportParseException(parsed.firstSkippedReason ?: "No usable transactions were found in this statement.")
     }
+    var rejectedPreMinimumRows = 0
+    var firstPreMinimumReason: String? = null
+    val transactionsOnOrAfterMinimum =
+        parsed.transactions.filter { transaction ->
+            if (transaction.date < MIN_TRANSACTION_DATE) {
+                rejectedPreMinimumRows++
+                if (firstPreMinimumReason == null) {
+                    firstPreMinimumReason =
+                        "Choose a date on or after ${displayTransactionDate(MIN_TRANSACTION_DATE)}."
+                }
+                false
+            } else {
+                true
+            }
+        }
+    if (transactionsOnOrAfterMinimum.isEmpty()) {
+        throw StatementImportParseException(firstPreMinimumReason ?: "No transactions are on or after the supported date.")
+    }
     if (parsed.transactions.size > MAX_STATEMENT_IMPORT_ROWS) {
         throw StatementImportParseException("Import up to $MAX_STATEMENT_IMPORT_ROWS transactions at a time.")
     }
-    return parsed
+    return parsed.copy(
+        transactions = transactionsOnOrAfterMinimum,
+        skippedRows = parsed.skippedRows + rejectedPreMinimumRows,
+        firstSkippedReason = parsed.firstSkippedReason ?: firstPreMinimumReason,
+    )
 }
 
 private const val MAX_STATEMENT_IMPORT_ROWS = 1_000

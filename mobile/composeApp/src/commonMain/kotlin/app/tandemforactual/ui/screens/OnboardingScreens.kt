@@ -80,7 +80,10 @@ internal fun StartupScreen() {
 }
 
 @Composable
-internal fun WelcomeScreen(navigation: AppNavigation) {
+internal fun WelcomeScreen(
+    navigation: AppNavigation,
+    signOutNotice: String? = null,
+) {
     val palette = tandemPalette
     val uriHandler = LocalUriHandler.current
     OnboardingLayout(
@@ -89,6 +92,7 @@ internal fun WelcomeScreen(navigation: AppNavigation) {
             Spacer(Modifier.height(14.dp))
             TandemBrandMark(Modifier.size(72.dp))
             Heading("Tandem for Actual Budget", "Connect to your own Actual Budget server.")
+            signOutNotice?.let { InfoBubble(it) }
             SurfaceCard {
                 Column(
                     Modifier.fillMaxWidth().padding(TandemSpacing.large),
@@ -218,6 +222,13 @@ internal fun serverAddressMayBeInsecure(value: String): Boolean {
     return true
 }
 
+internal fun actualPasswordTransportWarning(serverUrl: String): String? =
+    if (serverAddressMayBeInsecure(serverUrl)) {
+        "HTTP does not encrypt your Actual password. Use HTTPS on untrusted networks."
+    } else {
+        null
+    }
+
 @Composable
 internal fun SignInScreen(
     state: AppState,
@@ -253,6 +264,9 @@ internal fun SignInScreen(
                             TextFieldOptions(placeholder = "Password", isSecret = true),
                         )
                         InfoBubble("Your password is used to sign in and isn’t saved on this device.")
+                        actualPasswordTransportWarning(state.serverUrl)?.let { warning ->
+                            InlineMessage(warning, InlineMessageKind.WARNING)
+                        }
                     }
                     mobileSession.signInError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
                     mobileSession.credentialStorageError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }

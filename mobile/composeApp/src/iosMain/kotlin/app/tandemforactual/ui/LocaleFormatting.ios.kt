@@ -173,14 +173,21 @@ internal actual fun platformFormatDateAtEpochMilliseconds(epochMilliseconds: Lon
     }) { it.stringFromDate(date) }
 }
 
-internal actual fun platformTodayIsoDate(): String {
+internal actual fun platformIsoDateAtEpochMilliseconds(epochMilliseconds: Long): String {
+    val date = NSDate(timeIntervalSinceReferenceDate = epochMilliseconds.toDouble() / 1_000.0 - APPLE_REFERENCE_DATE_UNIX_SECONDS)
+    return formatIsoDate(date)
+}
+
+internal actual fun platformTodayIsoDate(): String = formatIsoDate(NSDate())
+
+private fun formatIsoDate(date: NSDate): String {
     val locale = NSLocale(localeIdentifier = "en_US_POSIX")
     return withDateFormatter("date:iso", {
         NSDateFormatter().apply {
             this.locale = locale
             dateFormat = "yyyy-MM-dd"
         }
-    }) { it.stringFromDate(NSDate()) }
+    }) { it.stringFromDate(date) }
 }
 
 internal actual fun platformFormatMonth(
@@ -322,7 +329,11 @@ private fun <T> withDateFormatter(
     key: String,
     create: () -> NSDateFormatter,
     use: (NSDateFormatter) -> T,
-): T = IosFormatterCache.withDate(key, create, use)
+): T =
+    IosFormatterCache.withDate(key, create) { formatter ->
+        formatter.timeZone = NSCalendar.currentCalendar.timeZone
+        use(formatter)
+    }
 
 private fun calendarDate(
     year: Int,

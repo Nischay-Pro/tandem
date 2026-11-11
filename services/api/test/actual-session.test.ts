@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   type ActualSecondaryFailure,
   ActualCompatibilityError,
+  ActualPrincipalSessionExpiredError,
   ActualSession,
   SUPPORTED_ACTUAL_SERVER_VERSION,
   type ActualApiPort,
@@ -901,7 +902,7 @@ describe("ActualSession", () => {
     await session.close();
   });
 
-  it("rejects a principal without a stored token or data directory", async () => {
+  it("asks the principal to sign in again when no stored token exists", async () => {
     const fake = createFakeClient();
     const session = new ActualSession(
       fake.api,
@@ -919,10 +920,34 @@ describe("ActualSession", () => {
       runAsActualPrincipal("actual-user-a", () =>
         session.execute(async () => "unreachable"),
       ),
-    ).rejects.toThrow(
-      "Actual rejected ACTUAL_SESSION_TOKEN. Replace the token and restart Tandem.",
-    );
+    ).rejects.toBeInstanceOf(ActualPrincipalSessionExpiredError);
     expect(fake.calls).toEqual([]);
+    expect(session.readinessMessage).toBeUndefined();
+    await session.close();
+  });
+
+  it("does not turn a rejected principal token into a process readiness failure", async () => {
+    const fake = createFakeClient();
+    fake.failInit(Object.assign(new Error("unauthorized"), { status: 401 }));
+    const session = new ActualSession(
+      fake.api,
+      { serverURL: config.serverURL, dataDir: config.dataDir },
+      undefined,
+      undefined,
+      undefined,
+      {
+        sessionToken: async () => "expired-principal-session-token",
+        dataDir: async () => "/tmp/actual-api/actual-user-a",
+      },
+    );
+
+    await expect(
+      runAsActualPrincipal("actual-user-a", () =>
+        session.execute(async () => "unreachable"),
+      ),
+    ).rejects.toBeInstanceOf(ActualPrincipalSessionExpiredError);
+    expect(session.readinessMessage).toBeUndefined();
+    expect(fake.api.shutdown).toHaveBeenCalledOnce();
     await session.close();
   });
 

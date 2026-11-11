@@ -9,6 +9,80 @@ import org.junit.Test
 
 class StatementImportTest {
     @Test
+    fun previewSkipsStatementRowsBefore1995AndAllowsFarFutureDates() {
+        val parsed =
+            parseStatementImport(
+                filename = "date-bounds.csv",
+                contents =
+                    "Date,Payee,Amount\n" +
+                        "2036-11-10,At the limit,1.00\n" +
+                        "2036-11-11,Future,2.00\n" +
+                        "2062-03-04,Far future,3.00\n" +
+                        "1994-12-31,Too old,3.00\n",
+            )
+
+        assertEquals(
+            listOf("2036-11-10", "2036-11-11", "2062-03-04"),
+            parsed.transactions.map { it.date },
+        )
+        assertEquals(1, parsed.skippedRows)
+        assertEquals(
+            "Choose a date on or after ${displayTransactionDate("1995-01-01")}.",
+            parsed.firstSkippedReason,
+        )
+        assertEquals(
+            parsed.transactions.map { it.date },
+            parsed.toStatementImportItems().map { it.date },
+        )
+    }
+
+    @Test
+    fun statementPreviewAndImportItemsKeepTheSameMinorUnitsAcrossCurrencyScales() {
+        val cases =
+            listOf(
+                Triple(
+                    parseStatementImport(
+                        "yen.csv",
+                        "Date,Payee,Amount\n11/01/2026,Market,1500\n",
+                        currencyFractionDigits = 0,
+                        numberFormat = "comma-dot",
+                    ),
+                    displaySettings("JPY", "¥", 0),
+                    listOf(1_500L),
+                ),
+                Triple(
+                    parseStatementImport(
+                        "dollar.csv",
+                        "Date,Payee,Amount\n11/01/2026,Market,12.34\n",
+                        currencyFractionDigits = 2,
+                        numberFormat = "comma-dot",
+                    ),
+                    displaySettings("USD", "$", 2),
+                    listOf(1_234L),
+                ),
+                Triple(
+                    parseStatementImport(
+                        "dinar.csv",
+                        "Date,Payee,Amount\n11/01/2026,Market,12.345\n",
+                        currencyFractionDigits = 3,
+                        numberFormat = "comma-dot",
+                    ),
+                    displaySettings("KWD", "KD", 3),
+                    listOf(12_345L),
+                ),
+            )
+
+        cases.forEach { (parsed, settings, expectedAmounts) ->
+            val preview = parsed.transactions.map { row -> formatCurrency(row.amountMinor, settings) }
+            val importItems = parsed.toStatementImportItems()
+
+            assertEquals(expectedAmounts, parsed.transactions.map { it.amountMinor })
+            assertEquals(parsed.transactions.map { it.amountMinor }, importItems.map { it.amountMinor })
+            assertEquals(preview, importItems.map { formatCurrency(it.amountMinor, settings) })
+        }
+    }
+
+    @Test
     fun parsesZeroDecimalCurrencyAndUsesTheSameAmountInThePreview() {
         val parsed =
             parseStatementImport(
@@ -46,6 +120,17 @@ class StatementImportTest {
                 numberFormat = "comma-dot",
             )
         assertEquals(listOf(1_234L, -23_500L), csv.transactions.map { it.amountMinor })
+        val threeDecimalSettings =
+            BudgetDisplaySettings(
+                currencyCode = "KWD",
+                currencySymbol = "KD",
+                currencyFractionDigits = 3,
+                numberFormat = "comma-dot",
+                hideFraction = false,
+                currencySymbolPosition = "before",
+                currencySpaceBetweenAmountAndSymbol = false,
+            )
+        assertEquals("KD1.234", formatCurrency(csv.transactions.first().amountMinor, threeDecimalSettings))
 
         assertThrows(StatementImportParseException::class.java) {
             parseStatementImport(
@@ -284,4 +369,18 @@ class StatementImportTest {
             parseStatementImport("statement.csv", "Merchant,Amount\nMarket,12.00")
         }
     }
+
+    private fun displaySettings(
+        currencyCode: String,
+        currencySymbol: String,
+        currencyFractionDigits: Int,
+    ) = BudgetDisplaySettings(
+        currencyCode = currencyCode,
+        currencySymbol = currencySymbol,
+        currencyFractionDigits = currencyFractionDigits,
+        numberFormat = "comma-dot",
+        hideFraction = false,
+        currencySymbolPosition = "before",
+        currencySpaceBetweenAmountAndSymbol = false,
+    )
 }

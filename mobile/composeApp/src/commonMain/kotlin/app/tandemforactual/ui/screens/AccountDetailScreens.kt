@@ -302,15 +302,7 @@ internal fun AccountDetailScreen(
                         mobileSession.importStatementTransactions(
                             state.selectedBudgetId,
                             liveAccount.id,
-                            parsed.transactions.map { row ->
-                                app.tandemforactual.api.client.StatementImportItem(
-                                    date = row.date,
-                                    amountMinor = row.amountMinor,
-                                    payeeName = row.payeeName,
-                                    notes = row.notes,
-                                    importedId = row.importedId,
-                                )
-                            },
+                            parsed.toStatementImportItems(),
                             state.encryptedPassword.takeIf(String::isNotBlank),
                         )
                     if (imported != null) {

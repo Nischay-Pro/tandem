@@ -5,11 +5,20 @@ export const SUPPORTED_ACTUAL_SERVER_VERSION = "26.11.0";
 export const ACTUAL_SESSION_OPERATION_TIMEOUT_MS = 5 * 60 * 1_000;
 export const ACTUAL_SESSION_TOKEN_REJECTED_MESSAGE =
   "Actual rejected ACTUAL_SESSION_TOKEN. Replace the token and restart Tandem.";
+export const ACTUAL_PRINCIPAL_SESSION_EXPIRED_MESSAGE =
+  "Actual sign-in expired. Sign in again to continue.";
 
 export class ActualSessionTokenRejectedError extends OperatorMessageError {
   constructor() {
     super(ACTUAL_SESSION_TOKEN_REJECTED_MESSAGE);
     this.name = "ActualSessionTokenRejectedError";
+  }
+}
+
+export class ActualPrincipalSessionExpiredError extends Error {
+  constructor() {
+    super(ACTUAL_PRINCIPAL_SESSION_EXPIRED_MESSAGE);
+    this.name = "ActualPrincipalSessionExpiredError";
   }
 }
 
@@ -496,9 +505,8 @@ export class ActualSession {
       this.principalSessions?.sessionToken(principalId),
       this.principalSessions?.dataDir(principalId),
     ]);
-    if (!sessionToken || !dataDir) {
-      throw new ActualSessionTokenRejectedError();
-    }
+    if (!sessionToken) throw new ActualPrincipalSessionExpiredError();
+    if (!dataDir) throw new Error("Actual account data directory is missing");
     if (activeActualSession === this.#sessionId) {
       await this.#shutdownActivePrincipal();
     }
@@ -614,6 +622,9 @@ export class ActualSession {
       !isActualAuthenticationFailure(error)
     ) {
       return error;
+    }
+    if (this.#activePrincipalId !== undefined) {
+      return new ActualPrincipalSessionExpiredError();
     }
     this.#readinessErrorMessage = ACTUAL_SESSION_TOKEN_REJECTED_MESSAGE;
     if (!this.#sessionTokenErrorLogged) {

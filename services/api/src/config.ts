@@ -1,4 +1,3 @@
-import { Buffer } from "node:buffer";
 import { readFileSync } from "node:fs";
 import { isIP } from "node:net";
 import { isAbsolute } from "node:path";
@@ -8,6 +7,7 @@ import { OperatorMessageError } from "./operator-message-error.js";
 export interface ApiConfig {
   databaseUrl: string;
   authTokenEncryptionKey: string;
+  authTokenEncryptionKeyPrevious?: string;
   host: string;
   port: number;
   trustProxy: false | string[];
@@ -50,11 +50,29 @@ export function parseApiConfig(environment: Environment): ApiConfig {
   if (!authTokenEncryptionKey) {
     throw new OperatorMessageError("AUTH_TOKEN_ENCRYPTION_KEY is required");
   }
-  if (Buffer.byteLength(authTokenEncryptionKey, "utf8") < 32) {
+  if (!/^[a-fA-F0-9]{64}$/.test(authTokenEncryptionKey)) {
     throw new OperatorMessageError(
-      "AUTH_TOKEN_ENCRYPTION_KEY must contain at least 32 bytes",
+      "AUTH_TOKEN_ENCRYPTION_KEY must be 64 hexadecimal characters encoding 32 bytes",
     );
   }
+  if (hasObviousLowEntropyHexPattern(authTokenEncryptionKey)) {
+    throw new OperatorMessageError(
+      "AUTH_TOKEN_ENCRYPTION_KEY must not contain obvious low-entropy patterns; generate a random 32-byte value",
+    );
+  }
+  const previousEncryptionKey =
+    readSecret(environment, "AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS")?.trim() ||
+    undefined;
+  if (previousEncryptionKey !== undefined) {
+    validateEncryptionKey(
+      previousEncryptionKey,
+      "AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS",
+    );
+  }
+  const authTokenEncryptionKeyPrevious =
+    previousEncryptionKey === authTokenEncryptionKey
+      ? undefined
+      : previousEncryptionKey;
 
   const host = environment.HOST?.trim() || "0.0.0.0";
   const rawPort = environment.PORT?.trim() || "19753";
@@ -79,12 +97,41 @@ export function parseApiConfig(environment: Environment): ApiConfig {
   return {
     databaseUrl,
     authTokenEncryptionKey,
+    ...(authTokenEncryptionKeyPrevious === undefined
+      ? {}
+      : { authTokenEncryptionKeyPrevious }),
     host,
     port,
     trustProxy: trustedProxyAddresses,
     changeFeedEpoch,
     ...(actual === undefined ? {} : { actual }),
   };
+}
+
+function hasObviousLowEntropyHexPattern(value: string): boolean {
+  const normalized = value.toLowerCase();
+  if (new Set(normalized).size < 8) return true;
+  for (let patternLength = 1; patternLength <= 16; patternLength *= 2) {
+    const pattern = normalized.slice(0, patternLength);
+    if (pattern.repeat(64 / patternLength) === normalized) return true;
+  }
+  return false;
+}
+
+function validateEncryptionKey(
+  value: string,
+  name: "AUTH_TOKEN_ENCRYPTION_KEY" | "AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS",
+): void {
+  if (!/^[a-fA-F0-9]{64}$/.test(value)) {
+    throw new OperatorMessageError(
+      `${name} must be 64 hexadecimal characters encoding 32 bytes`,
+    );
+  }
+  if (hasObviousLowEntropyHexPattern(value)) {
+    throw new OperatorMessageError(
+      `${name} must not contain obvious low-entropy patterns; generate a random 32-byte value`,
+    );
+  }
 }
 
 function parseActualConnection(
@@ -172,6 +219,7 @@ function readSecret(
   name:
     | "DATABASE_URL"
     | "AUTH_TOKEN_ENCRYPTION_KEY"
+    | "AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS"
     | "ACTUAL_SERVER_PASSWORD"
     | "ACTUAL_SESSION_TOKEN",
 ): string | undefined {

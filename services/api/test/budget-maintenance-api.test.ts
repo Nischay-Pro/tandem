@@ -1532,7 +1532,7 @@ describe("Actual budget maintenance API", () => {
     );
   });
 
-  it("imports statement rows through Actual with dedupe ids and an open budget account", async () => {
+  it("imports statement rows through Actual without rescaling minor units", async () => {
     const fake = createFake();
     const transactions = [
       {
@@ -1547,6 +1547,18 @@ describe("Actual budget maintenance API", () => {
         amountMinor: 25_000,
         payeeName: "Employer",
         importedId: "statement-row-2",
+      },
+      {
+        date: "2026-11-03",
+        amountMinor: 1_500,
+        payeeName: "Market",
+        importedId: "statement-row-3",
+      },
+      {
+        date: "2026-11-04",
+        amountMinor: -12_345,
+        payeeName: "Transit",
+        importedId: "statement-row-4",
       },
     ];
 
@@ -1576,6 +1588,22 @@ describe("Actual budget maintenance API", () => {
           payee_name: "Employer",
           notes: undefined,
           imported_id: "statement-row-2",
+        },
+        {
+          account: "source",
+          date: "2026-11-03",
+          amount: 1_500,
+          payee_name: "Market",
+          notes: undefined,
+          imported_id: "statement-row-3",
+        },
+        {
+          account: "source",
+          date: "2026-11-04",
+          amount: -12_345,
+          payee_name: "Transit",
+          notes: undefined,
+          imported_id: "statement-row-4",
         },
       ],
       { defaultCleared: false },
@@ -1655,6 +1683,27 @@ describe("Actual budget maintenance API", () => {
       updated: 1,
       errors: ["Skipped unsupported row"],
     });
+  });
+
+  it("rejects statement dates before 1995 and allows far-future dates", async () => {
+    const fake = createFake();
+    const row: StatementTransactionImport = {
+      date: "2062-03-04",
+      amountMinor: -1200,
+      payeeName: "Market",
+      importedId: "row-far-future",
+    };
+
+    await fake.api.importStatementTransactions("budget-1", "source", [row]);
+    expect(fake.client.importTransactions).toHaveBeenCalledTimes(1);
+
+    const beforeMinimumFake = createFake();
+    await expect(
+      beforeMinimumFake.api.importStatementTransactions("budget-1", "source", [
+        { ...row, date: "1994-12-31", importedId: "row-before-minimum" },
+      ]),
+    ).rejects.toThrow("date must be on or after 1995-01-01");
+    expect(beforeMinimumFake.client.importTransactions).not.toHaveBeenCalled();
   });
 
   it("clears a sole payee category action and ignores rules without a default category", async () => {

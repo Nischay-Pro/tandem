@@ -38,6 +38,8 @@ internal expect fun platformFormatDate(
 
 internal expect fun platformFormatDateAtEpochMilliseconds(epochMilliseconds: Long): String
 
+internal expect fun platformIsoDateAtEpochMilliseconds(epochMilliseconds: Long): String
+
 internal expect fun platformTodayIsoDate(): String
 
 internal expect fun platformFormatMonth(

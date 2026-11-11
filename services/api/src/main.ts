@@ -11,7 +11,10 @@ import {
   type ApiRuntime,
 } from "./server.js";
 import type { SignalRegistrar } from "./server.js";
-import { ActualSession } from "./actual/actual-session.js";
+import {
+  ActualPrincipalSessionExpiredError,
+  ActualSession,
+} from "./actual/actual-session.js";
 import { createTransactionApi } from "./actual/transaction-api.js";
 import { createBudgetMaintenanceApi } from "./actual/budget-maintenance-api.js";
 import { TransactionReconciler } from "./actual/transaction-reconciler.js";
@@ -24,12 +27,14 @@ import { ActualLoginMethodsReader } from "./auth/actual-login-methods.js";
 import { ActualPasswordLogin } from "./auth/actual-password-login.js";
 import { ActualOpenIdLogin } from "./auth/actual-openid-login.js";
 import { runAsActualPrincipal } from "./auth/actual-principal-context.js";
+import { InvalidStoredActualSessionCredentialError } from "./auth/actual-session-vault.js";
 
 export async function runApi(
   environment: Environment,
   createDatabase: (
     connectionString: string,
     authTokenEncryptionKey: string,
+    authTokenEncryptionKeyPrevious?: string,
   ) => Database,
   registerSignalHandler: SignalRegistrar,
 ) {
@@ -37,6 +42,7 @@ export async function runApi(
   const database = createDatabase(
     config.databaseUrl,
     config.authTokenEncryptionKey,
+    config.authTokenEncryptionKeyPrevious,
   );
   const runtime = createActualRuntime(
     config.actual,
@@ -61,8 +67,17 @@ function createActualRuntime(
     undefined,
     undefined,
     {
-      sessionToken: async (principalId) =>
-        (await database.actualSessionVault?.read(principalId))?.sessionToken,
+      sessionToken: async (principalId) => {
+        try {
+          return (await database.actualSessionVault?.read(principalId))
+            ?.sessionToken;
+        } catch (error) {
+          if (error instanceof InvalidStoredActualSessionCredentialError) {
+            throw new ActualPrincipalSessionExpiredError();
+          }
+          throw error;
+        }
+      },
       dataDir: async (principalId) => {
         const accountStorage = join(
           actualConfig.dataDir,
@@ -78,7 +93,8 @@ function createActualRuntime(
   const passwordLogin = new ActualPasswordLogin(actualConfig.serverURL);
   const transactions = createActualTransactionStore();
   const budgetCatalogReader = new ActualBudgetCatalogReader(session);
-  let startupSessionRequired = Boolean(actualConfig.sessionToken);
+  let startupActualReady = !actualConfig.sessionToken;
+  let startupActualReadinessMessage: string | undefined;
   const openIdLogin = actualConfig.publicURL
     ? new ActualOpenIdLogin(
         passwordLogin,
@@ -121,10 +137,10 @@ function createActualRuntime(
     budgetMaintenanceApi: createBudgetMaintenanceApi(database, session),
     budgetReadApi,
     actualReadiness: () => ({
-      ready: !startupSessionRequired || session.isReady,
-      ...(startupSessionRequired && session.readinessMessage !== undefined
-        ? { message: session.readinessMessage }
-        : {}),
+      ready: startupActualReady,
+      ...(startupActualReadinessMessage === undefined
+        ? {}
+        : { message: startupActualReadinessMessage }),
     }),
     readActualLoginMethods: async () => {
       const methods = await loginMethods.read();
@@ -164,8 +180,11 @@ function createActualRuntime(
       await database.actualSessionVault?.save({ principalId, sessionToken });
     },
     start: async () => {
-      startupSessionRequired = Boolean(actualConfig.sessionToken);
       await session.start();
+      if (actualConfig.sessionToken) {
+        startupActualReady = session.isReady;
+        startupActualReadinessMessage = session.readinessMessage;
+      }
     },
     close: () => session.close(),
   };

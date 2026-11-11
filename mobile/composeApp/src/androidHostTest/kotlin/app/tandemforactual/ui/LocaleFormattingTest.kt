@@ -1,7 +1,9 @@
 package app.tandemforactual.ui
 
 import app.tandemforactual.data.store.BudgetDisplaySettings
+import java.time.Instant
 import java.util.Locale
+import java.util.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -20,6 +22,39 @@ class LocaleFormattingTest {
             val expected = "14 May 2026"
             assertEquals(expected, platformFormatDate(2026, 5, 14, includeYear = true))
             assertEquals(expected, formatLiveDate("2026-05-14"))
+        }
+    }
+
+    @Test
+    fun epochDateFormattingUsesTheLocalDayAcrossUtcMidnight() {
+        val previousLocale = Locale.getDefault()
+        val previousTimeZone = TimeZone.getDefault()
+        val instant = Instant.parse("2026-01-01T00:30:00Z").toEpochMilli()
+        try {
+            Locale.setDefault(Locale.US)
+            TimeZone.setDefault(TimeZone.getTimeZone("America/Los_Angeles"))
+            assertEquals("Dec 31, 2025", platformFormatDateAtEpochMilliseconds(instant))
+
+            TimeZone.setDefault(TimeZone.getTimeZone("Pacific/Kiritimati"))
+            assertEquals("Jan 1, 2026", platformFormatDateAtEpochMilliseconds(instant))
+        } finally {
+            TimeZone.setDefault(previousTimeZone)
+            Locale.setDefault(previousLocale)
+        }
+    }
+
+    @Test
+    fun isoDateFormattingUsesTheLocalDayAcrossUtcMidnight() {
+        val previousTimeZone = TimeZone.getDefault()
+        val instant = Instant.parse("2026-01-01T00:30:00Z").toEpochMilli()
+        try {
+            TimeZone.setDefault(TimeZone.getTimeZone("America/Los_Angeles"))
+            assertEquals("2025-12-31", platformIsoDateAtEpochMilliseconds(instant))
+
+            TimeZone.setDefault(TimeZone.getTimeZone("Pacific/Kiritimati"))
+            assertEquals("2026-01-01", platformIsoDateAtEpochMilliseconds(instant))
+        } finally {
+            TimeZone.setDefault(previousTimeZone)
         }
     }
 
@@ -180,6 +215,81 @@ class LocaleFormattingTest {
         assertNull(platformParseDecimalMinorUnits("12,34.56", indian))
         assertEquals(123_456L, platformParseDecimalMinorUnits("123,456", displaySettings("JPY", "comma-dot", "¥", 0)))
         assertNull(platformParseDecimalMinorUnits("123.45", displaySettings("JPY", "comma-dot", "¥", 0)))
+    }
+
+    @Test
+    fun amountParserHandlesAllNumberFormatsAtZeroTwoAndThreeFractionDigits() {
+        val formats =
+            listOf(
+                Triple("comma-dot", '.', ','),
+                Triple("dot-comma", ',', '.'),
+                Triple("space-comma", ',', '\u202f'),
+                Triple("apostrophe-dot", '.', '\u2019'),
+                Triple("comma-dot-in", '.', ','),
+            )
+
+        formats.forEach { (numberFormat, decimalMark, groupingMark) ->
+            listOf(0, 2, 3).forEach { fractionDigits ->
+                val settings = displaySettings("USD", numberFormat, currencyFractionDigits = fractionDigits)
+                val groupedInteger = "1${groupingMark}234${groupingMark}567"
+                val malformedGrouping = "1234${groupingMark}567"
+                val expectedGroupedMinorUnits = "1234567${"0".repeat(fractionDigits)}".toLong()
+
+                assertEquals(
+                    expectedGroupedMinorUnits,
+                    platformParseDecimalMinorUnits(groupedInteger, settings),
+                    "$numberFormat/$fractionDigits grouped integer",
+                )
+                assertNull(
+                    platformParseDecimalMinorUnits(malformedGrouping, settings),
+                    "$numberFormat/$fractionDigits malformed grouping",
+                )
+                assertEquals(
+                    123_456_789L,
+                    platformParseDecimalMinorUnits(platformFormatDecimal(123_456_789L, settings), settings),
+                    "$numberFormat/$fractionDigits formatted round trip",
+                )
+
+                if (fractionDigits == 0) {
+                    assertNull(
+                        platformParseDecimalMinorUnits("12${decimalMark}34", settings),
+                        "$numberFormat rejects decimal mark for whole currency",
+                    )
+                } else {
+                    val fractionalDigits = "123".take(fractionDigits)
+                    val validAmount = "12${decimalMark}$fractionalDigits"
+                    val expectedMinorUnits = "12$fractionalDigits".toLong()
+                    val groupingMarkAsDecimal =
+                        if (fractionDigits == 3 && groupingMark in setOf('.', ',')) {
+                            "12${groupingMark}$fractionalDigits"
+                        } else {
+                            "12${groupingMark}${fractionalDigits.take(2)}"
+                        }
+                    assertEquals(
+                        expectedMinorUnits,
+                        platformParseDecimalMinorUnits(validAmount, settings),
+                        "$numberFormat/$fractionDigits typed decimal",
+                    )
+                    assertEquals(
+                        "1234567$fractionalDigits".toLong(),
+                        platformParseDecimalMinorUnits("1${groupingMark}234${groupingMark}567${decimalMark}$fractionalDigits", settings),
+                        "$numberFormat/$fractionDigits typed grouping and decimal",
+                    )
+                    assertNull(
+                        platformParseDecimalMinorUnits(groupingMarkAsDecimal, settings),
+                        "$numberFormat/$fractionDigits grouping mark is not a decimal",
+                    )
+                    assertNull(
+                        platformParseDecimalMinorUnits("12${decimalMark}${fractionalDigits}0", settings),
+                        "$numberFormat/$fractionDigits excess fractional digit",
+                    )
+                    assertNull(
+                        platformParseDecimalMinorUnits("1234${groupingMark}567${decimalMark}$fractionalDigits", settings),
+                        "$numberFormat/$fractionDigits malformed grouped decimal",
+                    )
+                }
+            }
+        }
     }
 
     @Test

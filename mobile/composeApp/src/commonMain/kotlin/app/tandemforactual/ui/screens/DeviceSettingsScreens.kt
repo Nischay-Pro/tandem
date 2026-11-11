@@ -158,7 +158,7 @@ internal fun ServerDeviceScreen(
             DestructiveConfirmationDialog(
                 title = "Remove this device?",
                 message =
-                    "This revokes this device’s access on the server and clears its saved sign-in. You’ll need to sign in again to connect.",
+                    "This revokes this device’s access on the server and clears its saved sign-in. You’ll need to sign in again to connect. ${pendingDeviceChangeNotice()}",
                 confirmLabel = "Remove device",
                 dismissLabel = "Cancel",
                 enabled = !mobileSession.isRevokingDevice,
@@ -172,7 +172,7 @@ internal fun ServerDeviceScreen(
             DestructiveConfirmationDialog(
                 title = "Forget this device here?",
                 message =
-                    "This clears the sign-in saved on this device. Tandem will still allow it until its owner removes it there.",
+                    "This clears the sign-in saved on this device. Tandem will still allow it until its owner removes it there. ${pendingDeviceChangeNotice()}",
                 confirmLabel = "Forget here",
                 dismissLabel = "Cancel",
                 onDismissRequest = { confirmation = "" },

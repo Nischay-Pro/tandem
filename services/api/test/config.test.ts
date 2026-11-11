@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 import { parseApiConfig as parseRawApiConfig } from "../src/config.js";
 
 const databaseUrl = "postgresql://tandem:local-test@localhost:5432/tandem";
-const testAuthTokenEncryptionKey = "synthetic-session-token-encryption-key-32";
+const testAuthTokenEncryptionKey =
+  "5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c";
 
 function parseApiConfig(environment: Record<string, string | undefined>) {
   return parseRawApiConfig({
@@ -277,22 +278,85 @@ describe("parseApiConfig", () => {
     expect(() => parseApiConfig({})).toThrow("DATABASE_URL is required");
   });
 
-  it("requires an independent auth-token encryption key with at least 32 bytes", () => {
+  it("requires an independent 32-byte auth-token encryption key encoded as hex", () => {
     expect(() => parseRawApiConfig({ DATABASE_URL: databaseUrl })).toThrow(
       "AUTH_TOKEN_ENCRYPTION_KEY is required",
+    );
+    for (const invalidKey of [
+      "x".repeat(31),
+      "x".repeat(32),
+      "g".repeat(64),
+      "a".repeat(63),
+    ]) {
+      expect(() =>
+        parseApiConfig({
+          DATABASE_URL: databaseUrl,
+          AUTH_TOKEN_ENCRYPTION_KEY: invalidKey,
+        }),
+      ).toThrow(
+        "AUTH_TOKEN_ENCRYPTION_KEY must be 64 hexadecimal characters encoding 32 bytes",
+      );
+    }
+    expect(
+      parseApiConfig({
+        DATABASE_URL: databaseUrl,
+        AUTH_TOKEN_ENCRYPTION_KEY: testAuthTokenEncryptionKey.toUpperCase(),
+      }).authTokenEncryptionKey,
+    ).toBe(testAuthTokenEncryptionKey.toUpperCase());
+  });
+
+  it("rejects obvious low-entropy repeated hex patterns", () => {
+    for (const lowEntropyKey of [
+      "a".repeat(64),
+      "ab".repeat(32),
+      "0123".repeat(16),
+      "01234567".repeat(8),
+      "0123456789abcdef".repeat(4),
+      "0123456".repeat(10).slice(0, 64),
+    ]) {
+      expect(() =>
+        parseApiConfig({
+          DATABASE_URL: databaseUrl,
+          AUTH_TOKEN_ENCRYPTION_KEY: lowEntropyKey,
+        }),
+      ).toThrow(
+        "AUTH_TOKEN_ENCRYPTION_KEY must not contain obvious low-entropy patterns; generate a random 32-byte value",
+      );
+    }
+  });
+
+  it("accepts an optional previous session encryption key", () => {
+    const previousKey =
+      "4b20f1d87e39a6c0542fb718a6d3e90c1375b2e94f06ca85d1273e8b6c491a20";
+
+    expect(
+      parseApiConfig({
+        DATABASE_URL: databaseUrl,
+        AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS: previousKey,
+      }).authTokenEncryptionKeyPrevious,
+    ).toBe(previousKey);
+    expect(
+      parseApiConfig({
+        DATABASE_URL: databaseUrl,
+        AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS: testAuthTokenEncryptionKey,
+      }),
+    ).not.toHaveProperty("authTokenEncryptionKeyPrevious");
+    expect(() =>
+      parseApiConfig({
+        DATABASE_URL: databaseUrl,
+        AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS: "not-a-key",
+      }),
+    ).toThrow(
+      "AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS must be 64 hexadecimal characters encoding 32 bytes",
     );
     expect(() =>
       parseApiConfig({
         DATABASE_URL: databaseUrl,
-        AUTH_TOKEN_ENCRYPTION_KEY: "x".repeat(31),
+        AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS: "ab".repeat(32),
       }),
-    ).toThrow("AUTH_TOKEN_ENCRYPTION_KEY must contain at least 32 bytes");
-    expect(
-      parseApiConfig({
-        DATABASE_URL: databaseUrl,
-        AUTH_TOKEN_ENCRYPTION_KEY: "x".repeat(32),
-      }).authTokenEncryptionKey,
-    ).toBe("x".repeat(32));
+    ).toThrow(
+      "AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS must not contain obvious low-entropy patterns; generate a random 32-byte value",
+    );
   });
 
   it("reads the database URL and auth encryption key from secret files", () => {
@@ -315,6 +379,37 @@ describe("parseApiConfig", () => {
         });
       },
     );
+  });
+
+  it("reads the previous auth encryption key from a secret file", () => {
+    const previousKey =
+      "4b20f1d87e39a6c0542fb718a6d3e90c1375b2e94f06ca85d1273e8b6c491a20";
+    withSecretFiles(
+      { AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS: `${previousKey}\n` },
+      (paths) => {
+        expect(
+          parseApiConfig({
+            DATABASE_URL: databaseUrl,
+            AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS: undefined,
+            AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE:
+              paths.AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS,
+          }).authTokenEncryptionKeyPrevious,
+        ).toBe(previousKey);
+      },
+    );
+  });
+
+  it("treats an empty previous-key secret file as rotation disabled", () => {
+    withSecretFiles({ AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS: "" }, (paths) => {
+      expect(
+        parseApiConfig({
+          DATABASE_URL: databaseUrl,
+          AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS: undefined,
+          AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE:
+            paths.AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS,
+        }),
+      ).not.toHaveProperty("authTokenEncryptionKeyPrevious");
+    });
   });
 
   it("rejects the removed shared Actual password secret", () => {

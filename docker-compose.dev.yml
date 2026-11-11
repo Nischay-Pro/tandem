@@ -25,7 +25,7 @@ services:
       dockerfile: services/api/Dockerfile.dev
     environment:
       DATABASE_URL: postgresql://tandem:${POSTGRES_PASSWORD:-development-only-password}@postgres:5432/tandem
-      AUTH_TOKEN_ENCRYPTION_KEY: ${AUTH_TOKEN_ENCRYPTION_KEY:-development-only-auth-token-encryption-key}
+      AUTH_TOKEN_ENCRYPTION_KEY: ${AUTH_TOKEN_ENCRYPTION_KEY:-5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c}
       HOST: 0.0.0.0
       PORT: 19753
       CHANGE_FEED_EPOCH: ${CHANGE_FEED_EPOCH:-default}
@@ -52,7 +52,7 @@ services:
     command: ["pnpm", "check:all"]
     environment:
       DATABASE_URL: postgresql://tandem:${POSTGRES_PASSWORD:-development-only-password}@postgres:5432/tandem
-      AUTH_TOKEN_ENCRYPTION_KEY: ${AUTH_TOKEN_ENCRYPTION_KEY:-development-only-auth-token-encryption-key}
+      AUTH_TOKEN_ENCRYPTION_KEY: ${AUTH_TOKEN_ENCRYPTION_KEY:-5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c}
     volumes:
       - ./.dev-tmp/stryker:/workspace/.dev-tmp/stryker
     depends_on:
@@ -91,7 +91,7 @@ services:
     environment:
       HOME: /home/node
       DATABASE_URL: postgresql://tandem:${POSTGRES_PASSWORD:-development-only-password}@postgres:5432/tandem
-      AUTH_TOKEN_ENCRYPTION_KEY: ${AUTH_TOKEN_ENCRYPTION_KEY:-development-only-auth-token-encryption-key}
+      AUTH_TOKEN_ENCRYPTION_KEY: ${AUTH_TOKEN_ENCRYPTION_KEY:-5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c}
       ACTUAL_SERVER_URL: http://actual-compat-server:5006
       ACTUAL_COMPAT_TEST_PASSWORD: compatibility-test-only-password
       ACTUAL_API_DATA_DIR: /actual-api-data/device-one

@@ -211,6 +211,24 @@ describe("transaction snapshots and merge planning", () => {
     );
   });
 
+  it("accepts future dates without a global upper bound", () => {
+    const futureDate = "2062-03-04";
+    const create = {
+      account: "account-1",
+      amount: 100,
+      date: futureDate,
+      payee: null,
+      category: null,
+      notes: "Future dated transaction",
+      cleared: false,
+    };
+
+    expect(parseTransactionCreateInput(create).date).toBe(futureDate);
+    expect(parseTransactionPatch({ date: futureDate })).toEqual({
+      date: futureDate,
+    });
+  });
+
   it("rejects transaction create payloads with missing fields", () => {
     const input = {
       account: "account-1",
@@ -475,6 +493,11 @@ describe("transaction snapshots and merge planning", () => {
     expect(
       parseTransactionSnapshot(legacySnapshot as unknown as JsonValue),
     ).toEqual(snapshot);
+    const olderSnapshot: Partial<TransactionSnapshot> = { ...snapshot };
+    delete olderSnapshot.reconciled;
+    expect(
+      parseTransactionSnapshot(olderSnapshot as unknown as JsonValue),
+    ).toEqual({ ...snapshot, reconciled: null });
     expect(() =>
       parseTransactionSnapshot({
         ...snapshot,
@@ -494,7 +517,7 @@ describe("transaction snapshots and merge planning", () => {
     delete missingFields.reconciled;
     expect(() =>
       parseTransactionSnapshot(missingFields as unknown as JsonValue),
-    ).toThrow("baseSnapshot is missing fields: reconciled, parentId");
+    ).toThrow("baseSnapshot is missing fields: parentId");
     expect(() =>
       parseTransactionSnapshot({
         ...snapshot,

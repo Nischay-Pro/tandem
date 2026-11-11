@@ -2,12 +2,21 @@ package app.tandemforactual.ui
 
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.ui.model.LiveAccountSummary
+import kotlinx.cinterop.ExperimentalForeignApi
+import platform.CoreFoundation.CFRelease
+import platform.CoreFoundation.CFStringCreateWithCString
+import platform.CoreFoundation.CFTimeZoneCopyDefault
+import platform.CoreFoundation.CFTimeZoneCreateWithName
+import platform.CoreFoundation.CFTimeZoneSetDefault
+import platform.CoreFoundation.kCFStringEncodingUTF8
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+@OptIn(ExperimentalForeignApi::class)
 class IosLocaleFormattingTest {
     @Test
     fun cachedIosFormattersPreserveBudgetCurrencyAndNumberRules() {
@@ -53,6 +62,101 @@ class IosLocaleFormattingTest {
     }
 
     @Test
+    fun amountParserUsesZeroTwoAndThreeDigitCurrenciesOnIos() {
+        val yen = settings("comma-dot", fractionDigits = 0).copy(currencyCode = "JPY", currencySymbol = "¥")
+        val usd = settings("comma-dot")
+        val threeDigitUs = settings("comma-dot", fractionDigits = 3)
+        val threeDigitGerman = settings("dot-comma", fractionDigits = 3)
+
+        assertEquals(1_500L, platformParseDecimalMinorUnits("1,500", yen))
+        assertNull(platformParseDecimalMinorUnits("1.50", yen))
+        assertEquals(1_250L, platformParseDecimalMinorUnits("12.50", usd))
+        assertNull(platformParseDecimalMinorUnits("12,50", usd))
+        assertEquals(12_345L, platformParseDecimalMinorUnits("12.345", threeDigitUs))
+        assertNull(platformParseDecimalMinorUnits("12,345", threeDigitUs))
+        assertEquals(12_345L, platformParseDecimalMinorUnits("12,345", threeDigitGerman))
+        assertNull(platformParseDecimalMinorUnits("12.345", threeDigitGerman))
+    }
+
+    @Test
+    fun amountParserHandlesAllNumberFormatsAtZeroTwoAndThreeFractionDigits() {
+        val formats =
+            listOf(
+                Triple("comma-dot", '.', ','),
+                Triple("dot-comma", ',', '.'),
+                Triple("space-comma", ',', '\u202f'),
+                Triple("apostrophe-dot", '.', '\u2019'),
+                Triple("comma-dot-in", '.', ','),
+            )
+
+        formats.forEach { (numberFormat, decimalMark, groupingMark) ->
+            listOf(0, 2, 3).forEach { fractionDigits ->
+                val displaySettings = settings(numberFormat, fractionDigits)
+                val groupedInteger = "1${groupingMark}234${groupingMark}567"
+                val malformedGrouping = "1234${groupingMark}567"
+                val expectedGroupedMinorUnits = "1234567${"0".repeat(fractionDigits)}".toLong()
+
+                assertEquals(
+                    expectedGroupedMinorUnits,
+                    platformParseDecimalMinorUnits(groupedInteger, displaySettings),
+                    "$numberFormat/$fractionDigits grouped integer",
+                )
+                assertNull(
+                    platformParseDecimalMinorUnits(malformedGrouping, displaySettings),
+                    "$numberFormat/$fractionDigits malformed grouping",
+                )
+                assertEquals(
+                    123_456_789L,
+                    platformParseDecimalMinorUnits(platformFormatDecimal(123_456_789L, displaySettings), displaySettings),
+                    "$numberFormat/$fractionDigits formatted round trip",
+                )
+
+                if (fractionDigits == 0) {
+                    assertNull(
+                        platformParseDecimalMinorUnits("12${decimalMark}34", displaySettings),
+                        "$numberFormat rejects decimal mark for whole currency",
+                    )
+                } else {
+                    val fractionalDigits = "123".take(fractionDigits)
+                    val validAmount = "12${decimalMark}$fractionalDigits"
+                    val expectedMinorUnits = "12$fractionalDigits".toLong()
+                    val groupingMarkAsDecimal =
+                        if (fractionDigits == 3 && groupingMark in setOf('.', ',')) {
+                            "12${groupingMark}$fractionalDigits"
+                        } else {
+                            "12${groupingMark}${fractionalDigits.take(2)}"
+                        }
+                    assertEquals(
+                        expectedMinorUnits,
+                        platformParseDecimalMinorUnits(validAmount, displaySettings),
+                        "$numberFormat/$fractionDigits typed decimal",
+                    )
+                    assertEquals(
+                        "1234567$fractionalDigits".toLong(),
+                        platformParseDecimalMinorUnits(
+                            "1${groupingMark}234${groupingMark}567${decimalMark}$fractionalDigits",
+                            displaySettings,
+                        ),
+                        "$numberFormat/$fractionDigits typed grouping and decimal",
+                    )
+                    assertNull(
+                        platformParseDecimalMinorUnits(groupingMarkAsDecimal, displaySettings),
+                        "$numberFormat/$fractionDigits grouping mark is not a decimal",
+                    )
+                    assertNull(
+                        platformParseDecimalMinorUnits("12${decimalMark}${fractionalDigits}0", displaySettings),
+                        "$numberFormat/$fractionDigits excess fractional digit",
+                    )
+                    assertNull(
+                        platformParseDecimalMinorUnits("1234${groupingMark}567${decimalMark}$fractionalDigits", displaySettings),
+                        "$numberFormat/$fractionDigits malformed grouped decimal",
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
     fun invalidAmountGuidanceAndConfirmationUseTheIosBudgetFormat() {
         val german = settings("dot-comma")
         val yen =
@@ -81,6 +185,48 @@ class IosLocaleFormattingTest {
     }
 
     @Test
+    fun cachedEpochDateFormatterTracksTheCurrentTimeZoneAcrossUtcMidnight() {
+        val previousTimeZone = CFTimeZoneCopyDefault()
+        val instant = 1_767_227_400_000L // 2026-01-01T00:30:00Z
+        try {
+            setDefaultTimeZone("America/Los_Angeles")
+            val westCoastDate = platformFormatDateAtEpochMilliseconds(instant)
+
+            setDefaultTimeZone("Pacific/Kiritimati")
+            val eastDate = platformFormatDateAtEpochMilliseconds(instant)
+
+            assertNotEquals(westCoastDate, eastDate)
+        } finally {
+            CFTimeZoneSetDefault(previousTimeZone)
+            CFRelease(previousTimeZone)
+        }
+    }
+
+    @Test
+    fun cachedIsoDateFormatterTracksTheLocalDayAcrossUtcMidnight() {
+        val previousTimeZone = CFTimeZoneCopyDefault()
+        val instant = 1_767_227_400_000L // 2026-01-01T00:30:00Z
+        try {
+            setDefaultTimeZone("America/Los_Angeles")
+            assertEquals("2025-12-31", platformIsoDateAtEpochMilliseconds(instant))
+
+            setDefaultTimeZone("Pacific/Kiritimati")
+            assertEquals("2026-01-01", platformIsoDateAtEpochMilliseconds(instant))
+        } finally {
+            CFTimeZoneSetDefault(previousTimeZone)
+            CFRelease(previousTimeZone)
+        }
+    }
+
+    private fun setDefaultTimeZone(identifier: String) {
+        val name = CFStringCreateWithCString(null, identifier, kCFStringEncodingUTF8)!!
+        val timeZone = CFTimeZoneCreateWithName(null, name, true)!!
+        CFTimeZoneSetDefault(timeZone)
+        CFRelease(timeZone)
+        CFRelease(name)
+    }
+
+    @Test
     fun accountCardKeepsItsSyncSubtitleOnIos() {
         val checking = LiveAccountSummary("checking", "Checking", 12_300, "checking", offBudget = false)
         val closed = LiveAccountSummary("closed", "Closed", 0, "savings", offBudget = false, closed = true)
@@ -92,14 +238,16 @@ class IosLocaleFormattingTest {
         assertNull(accountListSubtitle(closed, 1_794_087_360_000))
     }
 
-    private fun settings(numberFormat: String) =
-        BudgetDisplaySettings(
-            currencyCode = "USD",
-            currencySymbol = "$",
-            currencyFractionDigits = 2,
-            numberFormat = numberFormat,
-            hideFraction = false,
-            currencySymbolPosition = "before",
-            currencySpaceBetweenAmountAndSymbol = false,
-        )
+    private fun settings(
+        numberFormat: String,
+        fractionDigits: Int = 2,
+    ) = BudgetDisplaySettings(
+        currencyCode = "USD",
+        currencySymbol = "$",
+        currencyFractionDigits = fractionDigits,
+        numberFormat = numberFormat,
+        hideFraction = false,
+        currencySymbolPosition = "before",
+        currencySpaceBetweenAmountAndSymbol = false,
+    )
 }

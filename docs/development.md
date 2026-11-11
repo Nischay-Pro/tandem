@@ -72,12 +72,15 @@ To enable the Actual-backed budget routes, set `ACTUAL_SERVER_URL` to the
 address reachable by the API. Set `ACTUAL_PUBLIC_URL` to test Actual OpenID
 sign-in; password sign-in does not need it. The Docker development Compose file
 supplies a development-only `AUTH_TOKEN_ENCRYPTION_KEY`. Production deployments
-must provide a private random key to encrypt Actual session tokens stored in
-PostgreSQL. The API accepts only the server release pinned in
-`services/api/src/actual/actual-session.ts`. The API's local Actual workspace may
-hold decrypted budget data. Actual account passwords are sent only for sign-in
-and are not retained. Encrypted budgets may
-send their separate budget password per request in
+must provide a private, randomly generated 32-byte key encoded as 64 hex
+characters to encrypt Actual session tokens stored in PostgreSQL. Generate it
+with `openssl rand -hex 32` and store it in the deployment's secret file. The
+API rejects obvious repeated or low-variation hex patterns but cannot prove a
+key's entropy; the operator must generate the key randomly. The API accepts
+only the server release pinned in `services/api/src/actual/actual-session.ts`.
+The API's local Actual workspace may hold decrypted budget data. Actual
+account passwords are sent only for sign-in and are not retained. Encrypted
+budgets may send their separate budget password per request in
 `X-Budget-Encryption-Password`; that value is never written to PostgreSQL.
 Treat the workspace, PostgreSQL data, and their backups as financial data.
 Keep `CHANGE_FEED_EPOCH` stable during normal restarts. After restoring an older
@@ -87,7 +90,7 @@ snapshot; the epoch must be backed up separately from PostgreSQL.
 
 ## Code quality
 
-Run the Compose integration-test command above for the per-change gate. Running `pnpm check:all` directly also requires `DATABASE_URL` to point to a disposable PostgreSQL database and `AUTH_TOKEN_ENCRYPTION_KEY` to contain at least 32 bytes. Run `pnpm test:mutation` for incremental mutation testing or `pnpm test:mutation:full` to force the full configured set.
+Run the Compose integration-test command above for the per-change gate. Running `pnpm check:all` directly also requires `DATABASE_URL` to point to a disposable PostgreSQL database and `AUTH_TOKEN_ENCRYPTION_KEY` to contain a randomly generated 32-byte key encoded as 64 hexadecimal characters. Run `pnpm test:mutation` for incremental mutation testing or `pnpm test:mutation:full` to force the full configured set.
 
 Install the local pre-commit checks once with:
 

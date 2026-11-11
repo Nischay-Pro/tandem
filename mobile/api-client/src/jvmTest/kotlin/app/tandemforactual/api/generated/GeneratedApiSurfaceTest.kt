@@ -96,7 +96,12 @@ class GeneratedApiSurfaceTest {
                 assertTrue(AuthenticationApi.completeActualOpenIdReturn("state-1", "token-1").getOrNull()?.isSuccessful == true)
                 assertTrue(
                     AuthenticationApi
-                        .completeActualOpenIdSignIn(buildJsonObject { put("code", "C".repeat(43)) })
+                        .completeActualOpenIdSignIn(
+                            buildJsonObject {
+                                put("code", "C".repeat(43))
+                                put("codeVerifier", "V".repeat(43))
+                            },
+                        )
                         .getOrNull()
                         ?.isSuccessful == true,
                 )

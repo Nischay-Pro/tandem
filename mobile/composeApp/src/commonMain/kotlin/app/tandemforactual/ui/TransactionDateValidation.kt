@@ -2,20 +2,17 @@ package app.tandemforactual.ui
 
 internal const val MIN_TRANSACTION_DATE = "1995-01-01"
 internal const val TRANSACTION_DATE_CONFIRMATION_YEARS = 1
-internal const val MAX_TRANSACTION_DATE_YEARS_AHEAD = 5
 
 internal enum class TransactionDateValidationStatus {
     VALID,
     INVALID,
     BEFORE_MINIMUM,
     CONFIRMATION_REQUIRED,
-    AFTER_MAXIMUM,
 }
 
 internal data class TransactionDateValidation(
     val status: TransactionDateValidationStatus,
     val date: String? = null,
-    val maximumDate: String? = null,
 )
 
 /** Validates the shared create and edit transaction date policy against the device's current date. */
@@ -27,14 +24,12 @@ internal fun validateTransactionDate(
     val date = normalizeTransactionDate(value) ?: return TransactionDateValidation(TransactionDateValidationStatus.INVALID)
     val currentDate = normalizeTransactionDate(today) ?: return TransactionDateValidation(TransactionDateValidationStatus.INVALID)
     val confirmationBoundary = addCalendarYears(currentDate, TRANSACTION_DATE_CONFIRMATION_YEARS)
-    val maximumDate = addCalendarYears(currentDate, MAX_TRANSACTION_DATE_YEARS_AHEAD)
 
     return when {
-        date < MIN_TRANSACTION_DATE -> TransactionDateValidation(TransactionDateValidationStatus.BEFORE_MINIMUM, date, maximumDate)
-        date > maximumDate -> TransactionDateValidation(TransactionDateValidationStatus.AFTER_MAXIMUM, date, maximumDate)
+        date < MIN_TRANSACTION_DATE -> TransactionDateValidation(TransactionDateValidationStatus.BEFORE_MINIMUM, date)
         date > confirmationBoundary && confirmedFutureDate != date ->
-            TransactionDateValidation(TransactionDateValidationStatus.CONFIRMATION_REQUIRED, date, maximumDate)
-        else -> TransactionDateValidation(TransactionDateValidationStatus.VALID, date, maximumDate)
+            TransactionDateValidation(TransactionDateValidationStatus.CONFIRMATION_REQUIRED, date)
+        else -> TransactionDateValidation(TransactionDateValidationStatus.VALID, date)
     }
 }
 
@@ -45,8 +40,6 @@ internal fun transactionDateValidationMessage(validation: TransactionDateValidat
         TransactionDateValidationStatus.BEFORE_MINIMUM ->
             "Choose a date on or after ${displayTransactionDate(MIN_TRANSACTION_DATE)}."
         TransactionDateValidationStatus.CONFIRMATION_REQUIRED -> "Confirm this future date before saving."
-        TransactionDateValidationStatus.AFTER_MAXIMUM ->
-            "Choose a date within five years of today. Later dates are blocked to catch year typos."
     }
 
 internal fun normalizeTransactionDate(value: String): String? {

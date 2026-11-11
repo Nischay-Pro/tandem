@@ -49,4 +49,35 @@ describe("RequestRateLimiter", () => {
     expect(limiter.reserveRequest("second").allowed).toBe(true);
     expect(limiter.reserveRequest("first").allowed).toBe(true);
   });
+
+  it("shares an IPv6 rate-limit window across each canonical /64 prefix", () => {
+    const limiter = new RequestRateLimiter(1, 1_000, 10, () => 10);
+
+    expect(limiter.reserveRequest("2001:db8:0:1::1").allowed).toBe(true);
+    expect(limiter.reserveRequest("2001:0DB8:0000:0001:aaaa::2").allowed).toBe(
+      false,
+    );
+    expect(limiter.reserveRequest("2001:db8:0:1:0:0:0:3").allowed).toBe(false);
+    expect(limiter.reserveRequest("2001:db8:0:2::1").allowed).toBe(true);
+  });
+
+  it("ignores IPv6 scope IDs and keeps mapped IPv4 addresses distinct", () => {
+    const limiter = new RequestRateLimiter(1, 1_000, 10, () => 10);
+
+    expect(limiter.reserveRequest("fe80::1%eth0").allowed).toBe(true);
+    expect(limiter.reserveRequest("fe80:0:0:0:abcd::2%eth1").allowed).toBe(
+      false,
+    );
+    expect(limiter.reserveRequest("::ffff:192.0.2.1").allowed).toBe(true);
+    expect(limiter.reserveRequest("192.0.2.1").allowed).toBe(false);
+    expect(limiter.reserveRequest("::ffff:c000:201").allowed).toBe(false);
+    expect(limiter.reserveRequest("::ffff:192.0.2.2").allowed).toBe(true);
+  });
+
+  it("does not combine separate IPv4 clients", () => {
+    const limiter = new RequestRateLimiter(1, 1_000, 10, () => 10);
+
+    expect(limiter.reserveRequest("192.0.2.1").allowed).toBe(true);
+    expect(limiter.reserveRequest("192.0.2.2").allowed).toBe(true);
+  });
 });

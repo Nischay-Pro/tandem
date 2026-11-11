@@ -5,7 +5,7 @@ import kotlin.test.assertEquals
 
 class TransactionDateValidationTest {
     @Test
-    fun enforcesTheMinimumAndMaximumTransactionDates() {
+    fun enforcesTheActualMinimumAndAcceptsFarFutureDatesAfterConfirmation() {
         assertEquals(
             TransactionDateValidationStatus.BEFORE_MINIMUM,
             validateTransactionDate("1994-12-31", "2026-11-10").status,
@@ -16,22 +16,21 @@ class TransactionDateValidationTest {
         )
         assertEquals(
             TransactionDateValidationStatus.CONFIRMATION_REQUIRED,
-            validateTransactionDate("2031-11-10", "2026-11-10").status,
-        )
-        assertEquals(
-            TransactionDateValidationStatus.VALID,
-            validateTransactionDate("2031-11-10", "2026-11-10", confirmedFutureDate = "2031-11-10").status,
-        )
-        val tooFarAhead = validateTransactionDate("2031-11-11", "2026-11-10")
-        assertEquals(TransactionDateValidationStatus.AFTER_MAXIMUM, tooFarAhead.status)
-        assertEquals("2031-11-10", tooFarAhead.maximumDate)
-        assertEquals(
-            TransactionDateValidationStatus.AFTER_MAXIMUM,
             validateTransactionDate("2062-03-04", "2026-11-10").status,
         )
         assertEquals(
-            "Choose a date within five years of today. Later dates are blocked to catch year typos.",
-            transactionDateValidationMessage(tooFarAhead),
+            TransactionDateValidationStatus.VALID,
+            validateTransactionDate(
+                "2062-03-04",
+                "2026-11-10",
+                confirmedFutureDate = "2062-03-04",
+            ).status,
+        )
+        assertEquals(
+            "Choose a date on or after ${displayTransactionDate("1995-01-01")}.",
+            transactionDateValidationMessage(
+                validateTransactionDate("1994-12-31", "2026-11-10"),
+            ),
         )
     }
 
@@ -48,16 +47,24 @@ class TransactionDateValidationTest {
         )
         assertEquals(
             TransactionDateValidationStatus.VALID,
-            validateTransactionDate(futureDate, "2026-11-10", confirmedFutureDate = futureDate).status,
+            validateTransactionDate(
+                futureDate,
+                "2026-11-10",
+                confirmedFutureDate = futureDate,
+            ).status,
         )
         assertEquals(
             TransactionDateValidationStatus.CONFIRMATION_REQUIRED,
-            validateTransactionDate(futureDate, "2026-11-10", confirmedFutureDate = "2027-11-12").status,
+            validateTransactionDate(
+                futureDate,
+                "2026-11-10",
+                confirmedFutureDate = "2027-11-12",
+            ).status,
         )
     }
 
     @Test
-    fun anniversaryBoundariesClampToTheLastDayOfFebruaryInNonLeapYears() {
+    fun anniversaryConfirmationBoundaryClampsToTheLastDayOfFebruary() {
         assertEquals(
             TransactionDateValidationStatus.VALID,
             validateTransactionDate("2025-02-28", "2024-02-29").status,
@@ -65,14 +72,6 @@ class TransactionDateValidationTest {
         assertEquals(
             TransactionDateValidationStatus.CONFIRMATION_REQUIRED,
             validateTransactionDate("2025-03-01", "2024-02-29").status,
-        )
-        assertEquals(
-            "2029-02-28",
-            validateTransactionDate("2029-02-28", "2024-02-29").maximumDate,
-        )
-        assertEquals(
-            TransactionDateValidationStatus.AFTER_MAXIMUM,
-            validateTransactionDate("2029-03-01", "2024-02-29").status,
         )
     }
 

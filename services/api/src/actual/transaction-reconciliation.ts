@@ -38,6 +38,13 @@ export interface TransactionCreateInput {
 export const MAX_TRANSACTION_AMOUNT = 1_000_000_000;
 // Actual 26.11.0 silently drops transactions dated before 1995-01-01.
 export const MIN_TRANSACTION_DATE = "1995-01-01";
+export function validateTransactionDate(value: unknown): string {
+  const date = requiredDate(value);
+  if (date < MIN_TRANSACTION_DATE) {
+    throw new Error(`date must be on or after ${MIN_TRANSACTION_DATE}`);
+  }
+  return date;
+}
 
 export function isTandemTransactionId(value: string): boolean {
   return /^tandem:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(
@@ -106,6 +113,20 @@ const SNAPSHOT_FIELDS: readonly (keyof TransactionSnapshot)[] = [
   "subtransactions",
 ];
 
+const OPTIONAL_SNAPSHOT_FIELDS: readonly (keyof TransactionSnapshot)[] = [
+  "payee",
+  "category",
+  "notes",
+  "cleared",
+  "reconciled",
+  "importedId",
+  "importedPayee",
+  "startingBalance",
+  "schedule",
+  "transferId",
+  "subtransactions",
+];
+
 const DELETION_COMPARISON_FIELDS: readonly (keyof TransactionSnapshot)[] = [
   "account",
   "amount",
@@ -168,7 +189,9 @@ export function parseTransactionSnapshot(
   }
 
   const missing = SNAPSHOT_FIELDS.filter(
-    (field) => field !== "subtransactions" && !Object.hasOwn(record, field),
+    (field) =>
+      !OPTIONAL_SNAPSHOT_FIELDS.includes(field) &&
+      !Object.hasOwn(record, field),
   );
   if (missing.length > 0) {
     throw new Error(`baseSnapshot is missing fields: ${missing.join(", ")}`);
@@ -179,22 +202,16 @@ export function parseTransactionSnapshot(
     account: requiredString(record.account, "baseSnapshot.account"),
     amount: requiredInteger(record.amount, "baseSnapshot.amount"),
     date: requiredDate(record.date),
-    payee: nullableString(record.payee, "baseSnapshot.payee"),
-    category: nullableString(record.category, "baseSnapshot.category"),
-    notes: normalizeEmptyNote(nullableText(record.notes, "baseSnapshot.notes")),
-    cleared: nullableBoolean(record.cleared, "baseSnapshot.cleared"),
-    reconciled: nullableBoolean(record.reconciled, "baseSnapshot.reconciled"),
-    importedId: nullableString(record.importedId, "baseSnapshot.importedId"),
-    importedPayee: nullableText(
-      record.importedPayee,
-      "baseSnapshot.importedPayee",
-    ),
-    startingBalance: nullableBoolean(
-      record.startingBalance,
-      "baseSnapshot.startingBalance",
-    ),
-    schedule: nullableString(record.schedule, "baseSnapshot.schedule"),
-    transferId: nullableString(record.transferId, "baseSnapshot.transferId"),
+    payee: optionalSnapshotString(record, "payee"),
+    category: optionalSnapshotString(record, "category"),
+    notes: normalizeEmptyNote(optionalSnapshotText(record, "notes")),
+    cleared: optionalSnapshotBoolean(record, "cleared"),
+    reconciled: optionalSnapshotBoolean(record, "reconciled"),
+    importedId: optionalSnapshotString(record, "importedId"),
+    importedPayee: optionalSnapshotText(record, "importedPayee"),
+    startingBalance: optionalSnapshotBoolean(record, "startingBalance"),
+    schedule: optionalSnapshotString(record, "schedule"),
+    transferId: optionalSnapshotString(record, "transferId"),
     isParent: requiredBoolean(record.isParent, "baseSnapshot.isParent"),
     isChild: requiredBoolean(record.isChild, "baseSnapshot.isChild"),
     parentId: nullableString(record.parentId, "baseSnapshot.parentId"),
@@ -203,6 +220,19 @@ export function parseTransactionSnapshot(
         ? []
         : requiredSubtransactions(record.subtransactions),
   };
+}
+
+export function matchesTransactionRevision(
+  source: JsonValue,
+  snapshot: TransactionSnapshot,
+  revision: string,
+): boolean {
+  if (createTransactionRevision(snapshot) === revision) return true;
+  return (
+    createHash("sha256")
+      .update(canonicalSnapshotShape(source))
+      .digest("hex") === revision
+  );
 }
 
 export function parseTransactionPatch(value: JsonValue): TransactionPatch {
@@ -539,11 +569,7 @@ function requiredTransactionAmount(value: unknown, name: string): number {
 }
 
 function requiredTransactionDate(value: unknown): string {
-  const date = requiredDate(value);
-  if (date < MIN_TRANSACTION_DATE) {
-    throw new Error(`date must be on or after ${MIN_TRANSACTION_DATE}`);
-  }
-  return date;
+  return validateTransactionDate(value);
 }
 
 function requiredDate(value: unknown): string {
@@ -568,6 +594,33 @@ function optionalBoolean(value: unknown, name: string): boolean | null {
 
 function nullableBoolean(value: unknown, name: string): boolean | null {
   return value === null ? null : requiredBoolean(value, name);
+}
+
+function optionalSnapshotString(
+  record: Record<string, unknown>,
+  field: string,
+): string | null {
+  return Object.hasOwn(record, field)
+    ? nullableString(record[field], `baseSnapshot.${field}`)
+    : null;
+}
+
+function optionalSnapshotText(
+  record: Record<string, unknown>,
+  field: string,
+): string | null {
+  return Object.hasOwn(record, field)
+    ? nullableText(record[field], `baseSnapshot.${field}`)
+    : null;
+}
+
+function optionalSnapshotBoolean(
+  record: Record<string, unknown>,
+  field: string,
+): boolean | null {
+  return Object.hasOwn(record, field)
+    ? nullableBoolean(record[field], `baseSnapshot.${field}`)
+    : null;
 }
 
 function requiredBoolean(value: unknown, name: string): boolean {
@@ -600,6 +653,32 @@ function normalizeSnapshotValue(
 
 function canonicalSnapshot(snapshot: TransactionSnapshot): string {
   return JSON.stringify(canonicalSnapshotValue(snapshot))!;
+}
+
+function canonicalSnapshotShape(value: JsonValue): string {
+  return JSON.stringify(canonicalSnapshotShapeValue(value))!;
+}
+
+function canonicalSnapshotShapeValue(value: unknown): Record<string, unknown> {
+  const record = asRecord(value, "baseSnapshot");
+  const canonical: Record<string, unknown> = {};
+  for (const field of SNAPSHOT_FIELDS) {
+    if (!Object.hasOwn(record, field)) continue;
+    if (field === "subtransactions") {
+      if (!Array.isArray(record.subtransactions)) {
+        throw new Error("baseSnapshot.subtransactions must be an array");
+      }
+      canonical[field] = record.subtransactions.map(
+        canonicalSnapshotShapeValue,
+      );
+      continue;
+    }
+
+    const valueForField = normalizeSnapshotValue(field, record[field]);
+    canonicalScalar(valueForField);
+    canonical[field] = valueForField;
+  }
+  return canonical;
 }
 
 function canonicalSnapshotValue(

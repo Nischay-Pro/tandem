@@ -13,7 +13,8 @@ import { ActualCompatibilityError } from "../src/actual/actual-session.js";
 const deviceAuth = {
   authenticate: vi.fn(async () => undefined),
 } as unknown as DeviceAuthorization;
-const testAuthTokenEncryptionKey = "synthetic-session-token-encryption-key-32";
+const testAuthTokenEncryptionKey =
+  "5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c";
 
 function parseApiConfig(environment: Environment) {
   return parseRawApiConfig({

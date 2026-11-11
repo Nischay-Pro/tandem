@@ -12,6 +12,10 @@ import app.tandemforactual.data.database.openTandemDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -23,6 +27,21 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 
 class LocalBudgetRepositoryTest {
+    @Test
+    fun localBudgetDataGuardDetectsCachedSnapshotState() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 200L }
+
+                assertFalse(repository.hasAnyLocalBudgetData())
+                repository.applySnapshot(BUDGET, GENERATION, "c1", emptyList())
+                assertTrue(repository.hasAnyLocalBudgetData())
+            } finally {
+                database.close()
+            }
+        }
+
     @Test
     fun unresolvedWriteGuardTracksQueuedWritesUntilTheyAreDiscarded() =
         runBlocking {
@@ -310,6 +329,101 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
+    fun budgetMutationOutboxRecoversAcrossRestartAndDiscardsSafelyWhenClockMovesBackwards() =
+        runBlocking {
+            val databaseFile = File.createTempFile("tandem-budget-mutations-", ".db")
+            databaseFile.delete()
+            var clock = 500L
+            val firstOperationId = "budget-mutation-first"
+            val secondOperationId = "budget-mutation-second"
+            val first =
+                LocalBudgetMutationOutboxItem(
+                    operationId = firstOperationId,
+                    budgetId = BUDGET,
+                    action = "RENAME_CATEGORY",
+                    recordId = "category-first",
+                    patchJson = """{"name":"First"}""",
+                    createdAtEpochMs = 100L,
+                )
+            val second =
+                first.copy(
+                    operationId = secondOperationId,
+                    action = "HIDE_CATEGORY",
+                    recordId = "category-second",
+                    patchJson = """{"hidden":true}""",
+                    createdAtEpochMs = 101L,
+                )
+            val initialMetadata =
+                """{"waitingForConnection":true,"operationOrder":["$firstOperationId","$secondOperationId"]}"""
+            val postDiscardMetadata =
+                """{"waitingForConnection":true,"operationOrder":["$secondOperationId"]}"""
+
+            try {
+                val initialDatabase = persistentDatabase(databaseFile.absolutePath)
+                try {
+                    val repository = LocalBudgetRepository(initialDatabase) { clock }
+                    repository.replaceBudgetMutationQueue(listOf(first, second), initialMetadata)
+                    assertTrue(repository.beginBudgetMutation(firstOperationId))
+                    assertEquals(1, initialDatabase.outboxDao().find(firstOperationId)?.attemptCount)
+                } finally {
+                    initialDatabase.close()
+                }
+
+                // A device clock can move backwards while a write is in flight.
+                clock = 50L
+                val reopenedDatabase = persistentDatabase(databaseFile.absolutePath)
+                try {
+                    val repository = LocalBudgetRepository(reopenedDatabase) { clock }
+                    assertEquals(1, repository.recoverInterruptedWrites())
+
+                    val recovered = repository.readBudgetMutationQueue()
+                    assertEquals(listOf(firstOperationId, secondOperationId), recovered.items.map { it.operationId })
+                    assertEquals(initialMetadata, recovered.metadataJson)
+                    val uncertain = assertNotNull(reopenedDatabase.outboxDao().find(firstOperationId))
+                    assertEquals("uncertain", uncertain.status)
+                    assertEquals("budget-mutation:$firstOperationId", uncertain.idempotencyKey)
+                    assertEquals(first.patchJson, uncertain.patchJson)
+                    assertEquals(1, uncertain.attemptCount)
+                    assertEquals("process-restarted-during-send", uncertain.lastErrorCode)
+                    val stillQueued = assertNotNull(reopenedDatabase.outboxDao().find(secondOperationId))
+                    assertEquals("queued", stillQueued.status)
+                    assertEquals(second.patchJson, stillQueued.patchJson)
+
+                    repository.retryBudgetMutationAfterReview(firstOperationId)
+                    assertTrue(repository.beginBudgetMutation(firstOperationId))
+                    repository.markBudgetMutationConflict(firstOperationId, "http-409")
+                    assertEquals("conflict", reopenedDatabase.outboxDao().find(firstOperationId)?.status)
+
+                    repository.discardWrite(firstOperationId)
+                    repository.replaceBudgetMutationQueue(listOf(second), postDiscardMetadata)
+                    val remaining = repository.readBudgetMutationQueue()
+                    assertEquals(listOf(secondOperationId), remaining.items.map { it.operationId })
+                    assertEquals(postDiscardMetadata, remaining.metadataJson)
+                    assertEquals("discarded", reopenedDatabase.outboxDao().find(firstOperationId)?.status)
+                    assertEquals(0, repository.pruneTerminalWrites())
+                } finally {
+                    reopenedDatabase.close()
+                }
+
+                val afterDiscardDatabase = persistentDatabase(databaseFile.absolutePath)
+                try {
+                    val repository = LocalBudgetRepository(afterDiscardDatabase) { clock }
+                    val recovered = repository.readBudgetMutationQueue()
+                    assertEquals(listOf(secondOperationId), recovered.items.map { it.operationId })
+                    assertEquals(postDiscardMetadata, recovered.metadataJson)
+                    assertEquals("discarded", afterDiscardDatabase.outboxDao().find(firstOperationId)?.status)
+                    assertEquals("queued", afterDiscardDatabase.outboxDao().find(secondOperationId)?.status)
+                } finally {
+                    afterDiscardDatabase.close()
+                }
+            } finally {
+                File(databaseFile.absolutePath + "-wal").delete()
+                File(databaseFile.absolutePath + "-shm").delete()
+                databaseFile.delete()
+            }
+        }
+
+    @Test
     fun remapPendingCategoryReferencesRewritesMatchingQueuedTransactionsOnly() =
         runBlocking {
             val database = newDatabase()
@@ -483,6 +597,39 @@ class LocalBudgetRepositoryTest {
                 )
             } finally {
                 connection.close()
+            }
+        }
+
+    @Test
+    fun roomMigrationsFromEverySavedVersionPreserveBudgetMutationOutboxRows() =
+        runBlocking {
+            for (schemaVersion in 1..5) {
+                val databaseFile = File.createTempFile("tandem-schema-$schemaVersion-", ".db")
+                databaseFile.delete()
+                try {
+                    createLegacyDatabaseWithBudgetMutation(schemaVersion, databaseFile.absolutePath)
+
+                    val migratedDatabase = persistentDatabase(databaseFile.absolutePath)
+                    try {
+                        val repository = LocalBudgetRepository(migratedDatabase) { 1_000L }
+                        val restored = repository.readBudgetMutationQueue()
+                        val operation = assertNotNull(migratedDatabase.outboxDao().find("migration-budget-write"))
+
+                        assertEquals(listOf("migration-budget-write"), restored.items.map { it.operationId }, "schema $schemaVersion")
+                        assertEquals("{\"operationOrder\":[\"migration-budget-write\"]}", restored.metadataJson)
+                        assertEquals("uncertain", operation.status)
+                        assertEquals("budget-mutation:migration-budget-write", operation.idempotencyKey)
+                        assertEquals("{\"name\":\"Needs review\"}", operation.patchJson)
+                        assertEquals(2, operation.attemptCount)
+                        assertEquals("network-timeout", operation.lastErrorCode)
+                    } finally {
+                        migratedDatabase.close()
+                    }
+                } finally {
+                    File(databaseFile.absolutePath + "-wal").delete()
+                    File(databaseFile.absolutePath + "-shm").delete()
+                    databaseFile.delete()
+                }
             }
         }
 
@@ -2678,6 +2825,90 @@ class LocalBudgetRepositoryTest {
                 .databaseBuilder<TandemDatabase>(name = path)
                 .setQueryCoroutineContext(Dispatchers.IO),
         )
+
+    private fun createLegacyDatabaseWithBudgetMutation(
+        schemaVersion: Int,
+        path: String,
+    ) {
+        val schemaFile =
+            listOf(
+                File("schemas/app.tandemforactual.data.database.TandemDatabase/$schemaVersion.json"),
+                File("data/schemas/app.tandemforactual.data.database.TandemDatabase/$schemaVersion.json"),
+                File("mobile/data/schemas/app.tandemforactual.data.database.TandemDatabase/$schemaVersion.json"),
+            ).firstOrNull(File::isFile) ?: error("Room schema $schemaVersion.json was not found")
+        val schema =
+            Json
+                .parseToJsonElement(schemaFile.readText())
+                .jsonObject
+                .getValue("database")
+                .jsonObject
+        val connection = BundledSQLiteDriver().open(path)
+        try {
+            val entities = schema.getValue("entities").jsonArray
+            entities.forEach { entityValue ->
+                val entity = entityValue.jsonObject
+                val tableName = entity.getValue("tableName").jsonPrimitive.content
+                val createTable =
+                    entity
+                        .getValue("createSql")
+                        .jsonPrimitive
+                        .content
+                        .replace("\${TABLE_NAME}", tableName)
+                connection.prepare(createTable).use { it.step() }
+                entity["indices"]?.jsonArray?.forEach { indexValue ->
+                    val createIndex =
+                        indexValue
+                            .jsonObject
+                            .getValue("createSql")
+                            .jsonPrimitive
+                            .content
+                            .replace("\${TABLE_NAME}", tableName)
+                    connection.prepare(createIndex).use { it.step() }
+                }
+            }
+            schema.getValue("setupQueries").jsonArray.forEach { query ->
+                connection.prepare(query.jsonPrimitive.content).use { it.step() }
+            }
+            connection
+                .prepare(
+                    """
+                    INSERT INTO sync_outbox (
+                        operationId, idempotencyKey, budgetId, recordType, recordId, action,
+                        baseRevision, baseSnapshotJson, patchJson, optimisticJson,
+                        optimisticRecordDate, optimisticAccountId, optimisticCategoryId, optimisticPayeeId,
+                        optimisticAmountMinor, optimisticBudgetMonth, status, attemptCount,
+                        serverOperationId, lastErrorCode, createdAtEpochMs, updatedAtEpochMs
+                    ) VALUES (
+                        'migration-budget-write', 'budget-mutation:migration-budget-write', '$BUDGET',
+                        'budget-mutation', 'category-migration', 'RENAME_CATEGORY', NULL, NULL,
+                        '{"name":"Needs review"}', NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                        'uncertain', 2, NULL, 'network-timeout', 100, 150
+                    )
+                    """.trimIndent(),
+                ).use { it.step() }
+            connection
+                .prepare(
+                    """
+                    INSERT INTO sync_outbox (
+                        operationId, idempotencyKey, budgetId, recordType, recordId, action,
+                        baseRevision, baseSnapshotJson, patchJson, optimisticJson,
+                        optimisticRecordDate, optimisticAccountId, optimisticCategoryId, optimisticPayeeId,
+                        optimisticAmountMinor, optimisticBudgetMonth, status, attemptCount,
+                        serverOperationId, lastErrorCode, createdAtEpochMs, updatedAtEpochMs
+                    ) VALUES (
+                        'tandem-budget-mutation-metadata', 'tandem-budget-mutation-metadata-v1',
+                        '__tandem_budget_mutation_metadata__', 'budget-mutation-metadata',
+                        '__queue__', 'METADATA', NULL, NULL,
+                        '{"operationOrder":["migration-budget-write"]}', NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                        'committed', 0, NULL, NULL, 100, 100
+                    )
+                    """.trimIndent(),
+                ).use { it.step() }
+            connection.prepare("PRAGMA user_version = $schemaVersion").use { it.step() }
+        } finally {
+            connection.close()
+        }
+    }
 
     private fun outboxOperation(
         operationId: String,

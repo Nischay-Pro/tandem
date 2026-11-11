@@ -100,6 +100,8 @@ kotlin {
     getByName("androidHostTest") {
       dependencies {
         implementation(kotlin("test"))
+        implementation(libs.room3Runtime)
+        implementation(libs.sqliteFramework)
         implementation(libs.composeUiTestJunit4)
         implementation(libs.composeUiTestManifest)
         implementation(libs.robolectric)

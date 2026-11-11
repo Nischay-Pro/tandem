@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ActualPostWriteSyncError,
@@ -73,6 +73,12 @@ function createSnapshot(
     subtransactions: [],
     ...overrides,
   };
+}
+
+function createLegacyTransactionRevision(
+  snapshot: Record<string, unknown>,
+): string {
+  return createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
 }
 
 function actualFrom(snapshot: TransactionSnapshot): Record<string, unknown> {
@@ -679,6 +685,60 @@ describe("Actual transaction reconciliation", () => {
       account: "account-1",
     });
     expect(harness.syncPredicateResults).toEqual([true]);
+  });
+
+  it("rejects create and edit dates before 1995 before journaling", async () => {
+    const requests: TransactionReconciliationRequest[] = [
+      createCreateRequest({
+        patch: {
+          account: "account-1",
+          amount: -1250,
+          date: "1994-12-31",
+          payee: "payee-1",
+          category: "category-1",
+          notes: "Created from Tandem",
+          cleared: false,
+        },
+      }),
+      createRequest({ patch: { date: "1994-12-31" } }),
+    ];
+
+    for (const request of requests) {
+      const harness = createHarness(request);
+
+      await expect(harness.reconciler.submit(request)).rejects.toThrow(
+        "date must be on or after 1995-01-01",
+      );
+      expect(harness.journal.operation).toBeUndefined();
+      expect(harness.sessionCalls).toEqual([]);
+    }
+  });
+
+  it("accepts far-future transaction create and edit dates", async () => {
+    const futureDate = "2062-03-04";
+    const requests: TransactionReconciliationRequest[] = [
+      createCreateRequest({
+        patch: {
+          account: "account-1",
+          amount: -1250,
+          date: futureDate,
+          payee: "payee-1",
+          category: "category-1",
+          notes: "Created from Tandem",
+          cleared: false,
+        },
+      }),
+      createRequest({ patch: { date: futureDate } }),
+    ];
+
+    for (const request of requests) {
+      const harness = createHarness(request);
+
+      const result = await harness.reconciler.submit(request);
+
+      expect(result.operation.status).toBe("committed");
+      expect(harness.actual).toMatchObject({ date: futureDate });
+    }
   });
 
   it("rejects an invalid Actual reference before writing and journals it as rejected", async () => {
@@ -1415,26 +1475,48 @@ describe("Actual transaction reconciliation", () => {
     expect(harness.actual).toMatchObject({ notes: "Updated note" });
   });
 
-  it("rejects an edit whose changed reference no longer exists without writing", async () => {
-    const request = createRequest({ patch: { category: "removed-category" } });
-    const harness = createHarness(request);
-    const update = vi.spyOn(harness.store, "update");
-    const actualBefore = harness.actual;
-    vi.spyOn(harness.store, "validateUpdateInput").mockResolvedValue({
+  it.each([
+    {
+      label: "account",
+      patch: { account: "removed-account" },
+      code: "account-not-found",
+      message: "Account does not exist in this budget",
+    },
+    {
+      label: "payee",
+      patch: { payee: "removed-payee" },
+      code: "payee-not-found",
+      message: "Payee does not exist in this budget",
+    },
+    {
+      label: "category",
+      patch: { category: "removed-category" },
       code: "category-not-found",
       message: "Category does not exist in this budget",
-    });
+    },
+  ] as const)(
+    "rejects an edit whose changed $label reference no longer exists without writing",
+    async ({ patch, code, message }) => {
+      const request = createRequest({ patch });
+      const harness = createHarness(request);
+      const update = vi.spyOn(harness.store, "update");
+      const actualBefore = harness.actual;
+      vi.spyOn(harness.store, "validateUpdateInput").mockResolvedValue({
+        code,
+        message,
+      });
 
-    const result = await harness.reconciler.submit(request);
+      const result = await harness.reconciler.submit(request);
 
-    expect(result.operation).toMatchObject({
-      status: "rejected",
-      errorCode: "category-not-found",
-    });
-    expect(result.conflict).toBeNull();
-    expect(update).not.toHaveBeenCalled();
-    expect(harness.actual).toEqual(actualBefore);
-  });
+      expect(result.operation).toMatchObject({
+        status: "rejected",
+        errorCode: code,
+      });
+      expect(result.conflict).toBeNull();
+      expect(update).not.toHaveBeenCalled();
+      expect(harness.actual).toEqual(actualBefore);
+    },
+  );
 
   it("records an update conflict when Actual deleted the transaction", async () => {
     const request = createRequest();
@@ -2669,6 +2751,90 @@ describe("Actual transaction reconciliation", () => {
     expect(harness.sessionCalls).toHaveLength(0);
   });
 
+  it("accepts a legacy snapshot and rebuilds its current revision before applying an edit", async () => {
+    const request = createRequest();
+    const oldSnapshot = { ...(request.baseSnapshot as object) } as Record<
+      string,
+      unknown
+    >;
+    delete oldSnapshot.reconciled;
+    const legacyRequest: TransactionUpdateRequest = {
+      ...request,
+      baseSnapshot: oldSnapshot as JsonValue,
+      baseRevision: createLegacyTransactionRevision(oldSnapshot),
+    };
+    const harness = createHarness(legacyRequest);
+
+    const result = await harness.reconciler.submit(legacyRequest);
+
+    expect(result.operation.status).toBe("committed");
+    expect(harness.actual).toMatchObject({ amount: 1200 });
+    expect(harness.journal.operation).toMatchObject({
+      baseRevision: legacyRequest.baseRevision,
+      baseSnapshot: oldSnapshot,
+      status: "committed",
+    });
+  });
+
+  it("requeues an uncertain delete from a legacy snapshot after read-back confirms the base", async () => {
+    const request = createRequest({ action: "delete", patch: {} });
+    const oldSnapshot = { ...(request.baseSnapshot as object) } as Record<
+      string,
+      unknown
+    >;
+    delete oldSnapshot.reconciled;
+    const legacyRequest: TransactionUpdateRequest = {
+      ...request,
+      baseSnapshot: oldSnapshot as JsonValue,
+      baseRevision: createLegacyTransactionRevision(oldSnapshot),
+    };
+    const harness = createHarness(legacyRequest, {
+      initialStatus: "uncertain",
+    });
+    const operation = createOperation(
+      operationInputFor(legacyRequest),
+      "uncertain",
+    );
+    harness.journal.operation = operation;
+
+    const result = await harness.reconciler.checkOperationStatus(
+      request.operationId,
+    );
+
+    expect(result?.operation).toMatchObject({
+      status: "queued",
+      errorCode: "actual-readback-not-applied",
+    });
+    expect(harness.sessionCalls).toHaveLength(1);
+  });
+
+  it("keeps an uncertain operation when its legacy snapshot is malformed", async () => {
+    const request = createRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    const malformedSnapshot = {
+      ...(request.baseSnapshot as object),
+      amount: "1500",
+    } as JsonValue;
+    const operation = createOperation(
+      {
+        ...operationInputFor(request),
+        baseSnapshot: malformedSnapshot,
+      },
+      "uncertain",
+    );
+    harness.journal.operation = operation;
+    const read = vi.spyOn(harness.store, "read");
+
+    const result = await harness.reconciler.checkOperationStatus(
+      request.operationId,
+    );
+
+    expect(result?.operation).toEqual(operation);
+    expect(result?.operation.status).toBe("uncertain");
+    expect(harness.sessionCalls).toHaveLength(0);
+    expect(read).not.toHaveBeenCalled();
+  });
+
   it("returns an uncertain operation with an unsupported journal action", async () => {
     const request = createRequest();
     const harness = createHarness(request, { initialStatus: "uncertain" });
@@ -2713,6 +2879,32 @@ describe("Actual transaction reconciliation", () => {
         options: { encryptionPassword: "budget-password" },
       },
     ]);
+  });
+
+  it("records an uncertain create as a conflict when status read-back finds different data", async () => {
+    const request = createCreateRequest();
+    const harness = createHarness(request, { initialStatus: "uncertain" });
+    harness.journal.operation = createOperation(
+      operationInputFor(request),
+      "uncertain",
+    );
+    harness.actual = actualCreateFrom(request, { amount: -1300 });
+    const create = vi.spyOn(harness.store, "create");
+
+    const result = await harness.reconciler.checkOperationStatus(
+      request.operationId,
+    );
+
+    expect(result?.operation).toMatchObject({
+      status: "conflict",
+      errorCode: "conflict-detected",
+    });
+    expect(result?.conflict).toMatchObject({
+      conflictType: "transaction-id-already-exists",
+      conflictingFields: ["amount"],
+    });
+    expect(harness.journal.operation?.status).toBe("conflict");
+    expect(create).not.toHaveBeenCalled();
   });
 
   it("keeps an uncertain create when its stored transaction ID is missing", async () => {

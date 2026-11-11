@@ -11,7 +11,8 @@ let pool: PoolType | undefined;
 let adminPool: PoolType | undefined;
 let schemaName: string | undefined;
 let authorization: DeviceAuthorization;
-const authTokenEncryptionKey = "synthetic-session-token-encryption-key-32";
+const authTokenEncryptionKey =
+  "5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c";
 
 describe("PostgreSQL authentication integration", () => {
   beforeAll(async () => {
