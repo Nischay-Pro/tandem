@@ -109,6 +109,44 @@ class StatementImportTest {
     }
 
     @Test
+    fun zeroDecimalCurrencyUsesTheConfiguredGroupingMarkAndRejectsTheDecimalMark() {
+        val usFormatted =
+            parseStatementImport(
+                "yen-us-format.qif",
+                "!Type:Bank\nD11/01/2026\nT1,234\nPMarket\n^\n",
+                currencyFractionDigits = 0,
+                numberFormat = "comma-dot",
+            )
+        assertEquals(1_234L, usFormatted.transactions.single().amountMinor)
+
+        val europeanFormatted =
+            parseStatementImport(
+                "yen-european-format.qif",
+                "!Type:Bank\nD11/01/2026\nT1.234\nPMarket\n^\n",
+                currencyFractionDigits = 0,
+                numberFormat = "dot-comma",
+            )
+        assertEquals(1_234L, europeanFormatted.transactions.single().amountMinor)
+
+        assertThrows(StatementImportParseException::class.java) {
+            parseStatementImport(
+                "yen-us-decimal.qif",
+                "!Type:Bank\nD11/01/2026\nT1.234\nPMarket\n^\n",
+                currencyFractionDigits = 0,
+                numberFormat = "comma-dot",
+            )
+        }
+        assertThrows(StatementImportParseException::class.java) {
+            parseStatementImport(
+                "yen-european-decimal.qif",
+                "!Type:Bank\nD11/01/2026\nT1,234\nPMarket\n^\n",
+                currencyFractionDigits = 0,
+                numberFormat = "dot-comma",
+            )
+        }
+    }
+
+    @Test
     fun parsesThreeDecimalAmountsInCsvQifAndOfx() {
         val csv =
             parseStatementImport(

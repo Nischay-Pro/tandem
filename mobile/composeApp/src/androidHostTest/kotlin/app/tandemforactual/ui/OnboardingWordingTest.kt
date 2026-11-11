@@ -35,10 +35,10 @@ class OnboardingWordingTest {
         composeTestRule.onNodeWithText("Use your budget offline").assertExists()
         composeTestRule.onNodeWithText("Edits wait on this device until they sync").assertExists()
         composeTestRule.onNodeWithText("Nothing is lost silently").assertExists()
-        listOf("Connect", "Budget", "Sync").forEach { step ->
+        listOf("Server", "Sign in", "Budget", "First sync").forEach { step ->
             composeTestRule.onNodeWithText(step).assertExists()
         }
-        composeTestRule.onNodeWithContentDescription("Step 1 of 3: Connect").assertExists()
+        composeTestRule.onNodeWithContentDescription("Step 1 of 4: Server").assertExists()
         composeTestRule.onNodeWithText("Before you start").assertDoesNotExist()
         composeTestRule.onNodeWithText("How to set up a server").assertDoesNotExist()
         composeTestRule.onAllNodesWithText("Get started").assertCountEquals(1)
@@ -59,61 +59,58 @@ class OnboardingWordingTest {
     }
 
     @Test
-    fun notificationPromptAppearsInlineOnlyAfterSuccessfulFirstSync() {
+    fun notificationScreenRequestsPermissionOnlyAfterTap() {
         val state = AppState()
         var permissionRequests = 0
-
-        assertFalse(shouldShowFirstSyncNotificationPrompt(syncComplete = false, alreadyCompleted = false, permissionEnabled = false))
-        assertTrue(shouldShowFirstSyncNotificationPrompt(syncComplete = true, alreadyCompleted = false, permissionEnabled = false))
+        var selectedTab: AppRoute? = null
+        val navigation = noOpNavigation().copy(selectTab = { selectedTab = it })
 
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                FirstSyncNotificationPrompt(
-                    onEnable = { finishNotificationOnboarding(state) { permissionRequests += 1 } },
-                    onNotNow = { finishNotificationOnboarding(state, onRequestPermission = null) },
-                )
+                NotificationOnboardingScreen(state, navigation) { permissionRequests += 1 }
             }
         }
 
+        composeTestRule.onNodeWithText("Stay in the loop").assertExists()
+        composeTestRule
+            .onNodeWithText("Tandem can alert you when an edit needs review, is rejected, or has an unknown status.")
+            .assertExists()
+        composeTestRule.onNodeWithText("You can change this later in Settings.").assertExists()
         assertEquals(0, permissionRequests)
-        composeTestRule.onNodeWithText("Notifications").assertExists()
-        composeTestRule.onNodeWithText("Get alerts when a change needs your attention.").assertExists()
-        composeTestRule.onNodeWithText("Turn on").performClick()
+        composeTestRule.onNodeWithText("Allow notifications").performClick()
 
         assertEquals(1, permissionRequests)
         assertTrue(state.hasCompletedNotificationOnboarding)
+        assertEquals(AppRoute.BUDGET, selectedTab)
     }
 
     @Test
     fun notNowContinuesWithoutRequestingPermissionAndPersistsChoice() {
         val state = AppState()
         var permissionRequests = 0
+        var selectedTab: AppRoute? = null
+        val navigation = noOpNavigation().copy(selectTab = { selectedTab = it })
 
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                FirstSyncNotificationPrompt(
-                    onEnable = { finishNotificationOnboarding(state) { permissionRequests += 1 } },
-                    onNotNow = { finishNotificationOnboarding(state, onRequestPermission = null) },
-                )
+                NotificationOnboardingScreen(state, navigation) { permissionRequests += 1 }
             }
         }
         composeTestRule.onNodeWithText("Not now").performClick()
 
         assertEquals(0, permissionRequests)
         assertTrue(state.hasCompletedNotificationOnboarding)
+        assertEquals(AppRoute.BUDGET, selectedTab)
         val restoredState = AppState().apply { restorePersistentSettings(state.persistentSettings()) }
         assertTrue(restoredState.hasCompletedNotificationOnboarding)
     }
 
     @Test
     fun notificationPermissionOrPreviousChoiceSkipsOnboarding() {
-        assertFalse(shouldShowFirstSyncNotificationPrompt(syncComplete = true, alreadyCompleted = false, permissionEnabled = true))
-        assertFalse(shouldShowFirstSyncNotificationPrompt(syncComplete = true, alreadyCompleted = true, permissionEnabled = false))
-        assertTrue(shouldShowFirstSyncNotificationPrompt(syncComplete = true, alreadyCompleted = false, permissionEnabled = null))
-        assertFalse(firstSyncCanFinish(syncComplete = true, alreadyCompleted = false, permissionEnabled = false))
-        assertTrue(firstSyncCanFinish(syncComplete = true, alreadyCompleted = true, permissionEnabled = false))
-        assertTrue(firstSyncCanFinish(syncComplete = true, alreadyCompleted = false, permissionEnabled = true))
-        assertFalse(firstSyncCanFinish(syncComplete = false, alreadyCompleted = true, permissionEnabled = true))
+        assertFalse(shouldShowNotificationOnboarding(alreadyCompleted = false, permissionEnabled = true))
+        assertFalse(shouldShowNotificationOnboarding(alreadyCompleted = true, permissionEnabled = false))
+        assertTrue(shouldShowNotificationOnboarding(alreadyCompleted = false, permissionEnabled = false))
+        assertTrue(shouldShowNotificationOnboarding(alreadyCompleted = false, permissionEnabled = null))
     }
 
     @Test

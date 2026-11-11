@@ -1517,6 +1517,7 @@ internal fun AppRoute.showsBottomNavigation(): Boolean =
         AppRoute.SIGN_IN,
         AppRoute.BUDGET_CHOOSER,
         AppRoute.FIRST_SYNC,
+        AppRoute.NOTIFICATION_ONBOARDING,
         AppRoute.NEW_TRANSACTION,
         AppRoute.EDIT_TRANSACTION,
         AppRoute.CHOOSE_PAYEE,

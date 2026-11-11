@@ -96,9 +96,10 @@ internal fun ScreenContent(
                 mobileSession = mobileSession,
                 navigation = navigation,
                 onRetrySync = onRetrySync,
-                onRequestNotificationPermission = onRequestNotificationPermission,
                 notificationPermissionEnabled = notificationPermissionEnabled,
             )
+        AppRoute.NOTIFICATION_ONBOARDING ->
+            NotificationOnboardingScreen(state, navigation, onRequestNotificationPermission)
         AppRoute.BUDGET ->
             BudgetScreen(
                 state,

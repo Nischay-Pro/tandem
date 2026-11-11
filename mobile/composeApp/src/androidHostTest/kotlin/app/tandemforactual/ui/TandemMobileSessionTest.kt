@@ -470,7 +470,7 @@ class TandemMobileSessionTest {
     }
 
     @Test
-    fun budgetQueueReadFailureDoesNotOverwriteSavedChangesAndCanRetry() =
+    fun budgetQueueReadFailureAgainstRoomDoesNotOverwriteSavedChangesAndCanRetry() =
         runBlocking {
             val savedMove =
                 QueuedBudgetReorder(
@@ -484,26 +484,49 @@ class TandemMobileSessionTest {
                     operationId = "operation-1",
                 )
             val savedState = BudgetReorderQueueState().enqueue(savedMove)
-            val persistence =
-                InMemoryBudgetMutationQueuePersistence(
-                    items = listOf(budgetMutationItem(savedMove)),
-                    metadataJson = encodeBudgetReorderQueueMetadata(savedState),
-                    readFailuresRemaining = 1,
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 10L }
+                repository.replaceBudgetMutationQueue(
+                    listOf(budgetMutationItem(savedMove)),
+                    encodeBudgetReorderQueueMetadata(savedState),
                 )
-            val session =
-                TandemMobileSession(
-                    apiClient = TandemApiClient(),
-                    database = null,
-                    nowEpochMillis = { 10L },
-                    budgetMutationQueuePersistenceOverride = persistence,
+                var failNextRead = true
+                val persistence =
+                    object : BudgetMutationQueuePersistence {
+                        override suspend fun read(): LocalBudgetMutationQueueSnapshot {
+                            if (failNextRead) {
+                                failNextRead = false
+                                error("temporary local read failure")
+                            }
+                            return repository.readBudgetMutationQueue()
+                        }
+
+                        override suspend fun replace(
+                            items: List<LocalBudgetMutationOutboxItem>,
+                            metadataJson: String,
+                            supersededOperationIds: Set<String>,
+                        ) = repository.replaceBudgetMutationQueue(items, metadataJson, supersededOperationIds)
+                    }
+                val session =
+                    TandemMobileSession(
+                        apiClient = TandemApiClient(),
+                        database = null,
+                        nowEpochMillis = { 20L },
+                        budgetMutationQueuePersistenceOverride = persistence,
+                    )
+
+                assertFalse(session.restoreBudgetReorderQueue())
+                assertEquals(listOf("operation-1"), repository.readBudgetMutationQueue().items.map { it.operationId })
+
+                assertTrue(session.restoreBudgetReorderQueue())
+                assertEquals(
+                    listOf("operation-1"),
+                    session.budgetReorderMovesFor("budget-1", "group-1").map { it.operationId },
                 )
-
-            assertFalse(session.restoreBudgetReorderQueue())
-            assertEquals(0, persistence.replaceCount)
-            assertEquals(listOf("operation-1"), persistence.items.map { it.operationId })
-
-            assertTrue(session.restoreBudgetReorderQueue())
-            assertEquals(listOf("operation-1"), session.budgetReorderMovesFor("budget-1", "group-1").map { it.operationId })
+            } finally {
+                database.close()
+            }
         }
 
     @Test

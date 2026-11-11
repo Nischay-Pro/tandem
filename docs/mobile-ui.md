@@ -37,13 +37,13 @@ follows the selected light, dark, or system mode alongside the Compose screens.
 
 ## Wording
 
-The first-run welcome screen gives three short benefits and shows three setup
-steps: Connect (server address and Actual sign-in), Budget, and Sync. The server
-address and sign-in method are on one screen. After a successful first sync, an
-optional notification prompt appears in that same screen. “Turn on” requests
-system permission; “Not now” keeps setup moving. Tandem does not repeat the
-prompt after either choice. If the system permission can no longer be requested,
-the platform action opens notification settings.
+The first-run welcome screen gives three short benefits and shows four setup
+steps: Server, Sign in, Budget, and First sync. After a successful first sync,
+Tandem offers one optional “Stay in the loop” screen. The notification
+permission request happens only after “Allow notifications” is tapped; “Not
+now” continues directly to the budget. Tandem does not repeat the onboarding
+prompt after either choice. If the system permission was denied and can no
+longer be requested, the platform action opens notification settings.
 
 | Idea                                      | Use                                                                                      | Avoid                                         |
 | ----------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------- |

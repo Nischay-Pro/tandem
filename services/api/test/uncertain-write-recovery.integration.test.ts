@@ -288,4 +288,41 @@ describe("uncertain transaction recovery through the API", () => {
     },
     30_000,
   );
+
+  it("keeps a lease-expired update uncertain when read-back finds a third value", async () => {
+    const base = createBaseSnapshot(`recovery-${randomUUID()}`);
+    const budgetId = `recovery-budget-${randomUUID()}`;
+    const input = createWriteInput(base, budgetId);
+    const writes = { count: 0 };
+    const { app, transactions } = await createRecoveryApp(input, base, writes);
+
+    try {
+      await expireClaimedLease(input, async () => {
+        await transactions.update(base.id, { amount: -1300 });
+      });
+
+      const status = await app.inject(statusRequest(input.operationId));
+
+      expect(status.statusCode).toBe(200);
+      expect(status.json().operation).toMatchObject({
+        status: "uncertain",
+        errorCode: "claim-lease-expired",
+      });
+      expect(writes.count).toBe(1);
+      await expect(transactions.read(base.id)).resolves.toMatchObject({
+        amount: -1300,
+      });
+
+      const retry = await app.inject(retryRequest(input));
+
+      expect(retry.statusCode).toBe(200);
+      expect(retry.json().operation.status).toBe("uncertain");
+      expect(writes.count).toBe(1);
+      await expect(transactions.read(base.id)).resolves.toMatchObject({
+        amount: -1300,
+      });
+    } finally {
+      await app.close();
+    }
+  }, 30_000);
 });

@@ -146,6 +146,7 @@ internal enum class AppRoute(
     SIGN_IN("Sign in"),
     BUDGET_CHOOSER("Budgets"),
     FIRST_SYNC("Preparing budget"),
+    NOTIFICATION_ONBOARDING("Stay in the loop"),
     BUDGET("Budget"),
     CATEGORY_GROUP("Essentials"),
     CATEGORY_DETAIL("Rent"),

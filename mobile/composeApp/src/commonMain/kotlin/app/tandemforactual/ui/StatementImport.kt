@@ -660,8 +660,12 @@ private fun parseMoney(
                 }
             }
             fractionLength == 3 && currencyFractionDigits == 0 -> {
-                if (!isGroupedInteger(numeric)) throw invalidAmount(trimmed, "Check its separators.")
-                null
+                when {
+                    numeric[lastSeparator] == groupingSeparatorFor(numberFormat) && isGroupedInteger(numeric) -> null
+                    numeric[lastSeparator] == decimalSeparatorFor(numberFormat) ->
+                        throw invalidAmount(trimmed, "Check its decimal places.")
+                    else -> throw invalidAmount(trimmed, "Check its separators.")
+                }
             }
             fractionLength == 3 && currencyFractionDigits != 3 -> throw invalidAmount(trimmed, "Check its decimal places.")
             else -> throw invalidAmount(trimmed, "Check its decimal places.")

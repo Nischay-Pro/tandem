@@ -432,7 +432,6 @@ internal fun FirstSyncScreen(
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
     onRetrySync: () -> Unit,
-    onRequestNotificationPermission: (() -> Unit)?,
     notificationPermissionEnabled: Boolean?,
 ) {
     val palette = tandemPalette
@@ -498,46 +497,22 @@ internal fun FirstSyncScreen(
                 }
             }
         }
-        AnimatedReveal(
-            visible =
-                shouldShowFirstSyncNotificationPrompt(
-                    mobileSession.syncComplete,
-                    state.hasCompletedNotificationOnboarding,
-                    notificationPermissionEnabled,
-                ),
-        ) {
-            FirstSyncNotificationPrompt(
-                onEnable = { finishNotificationOnboarding(state, onRequestNotificationPermission) },
-                onNotNow = { finishNotificationOnboarding(state, onRequestPermission = null) },
-            )
-        }
-        PrimaryButton(
-            "Done",
-            enabled =
-                firstSyncCanFinish(
-                    mobileSession.syncComplete,
-                    state.hasCompletedNotificationOnboarding,
-                    notificationPermissionEnabled,
-                ),
-        ) {
-            state.hasCompletedNotificationOnboarding = true
+        PrimaryButton("Done", enabled = mobileSession.syncComplete) {
             selectLatestCachedMonth(state, mobileSession.budgetMonthIds, mobileSession.transactionRecords)
-            navigation.selectTab(AppRoute.BUDGET)
+            if (shouldShowNotificationOnboarding(state.hasCompletedNotificationOnboarding, notificationPermissionEnabled)) {
+                navigation.open(AppRoute.NOTIFICATION_ONBOARDING)
+            } else {
+                state.hasCompletedNotificationOnboarding = true
+                navigation.selectTab(AppRoute.BUDGET)
+            }
         }
     }
 }
 
-internal fun shouldShowFirstSyncNotificationPrompt(
-    syncComplete: Boolean,
+internal fun shouldShowNotificationOnboarding(
     alreadyCompleted: Boolean,
     permissionEnabled: Boolean?,
-): Boolean = syncComplete && !alreadyCompleted && permissionEnabled != true
-
-internal fun firstSyncCanFinish(
-    syncComplete: Boolean,
-    alreadyCompleted: Boolean,
-    permissionEnabled: Boolean?,
-): Boolean = syncComplete && (alreadyCompleted || permissionEnabled == true)
+): Boolean = !alreadyCompleted && permissionEnabled != true
 
 internal fun budgetPasswordRequired(
     isEncrypted: Boolean,
@@ -556,40 +531,57 @@ internal fun budgetOpenButtonEnabled(
         (!passwordRequired || budgetPassword.isNotBlank())
 
 @Composable
-internal fun FirstSyncNotificationPrompt(
-    onEnable: () -> Unit,
-    onNotNow: () -> Unit,
+internal fun NotificationOnboardingScreen(
+    state: AppState,
+    navigation: AppNavigation,
+    onRequestNotificationPermission: (() -> Unit)?,
 ) {
-    SurfaceCard {
-        Column(
-            Modifier.padding(TandemSpacing.large),
-            verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Lucide.Bell, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
-                LabelText("Notifications")
+    OnboardingLayout(
+        horizontalPadding = TandemSpacing.extraLarge,
+        content = {
+            Spacer(Modifier.height(14.dp))
+            Box(
+                Modifier
+                    .size(64.dp)
+                    .clip(RoundedCornerShape(TandemShapes.large))
+                    .background(tandemPalette.accent.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Lucide.Bell, contentDescription = null, modifier = Modifier.size(30.dp), tint = tandemPalette.accent)
             }
-            BodyText("Get alerts when a change needs your attention.")
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                SecondaryButton("Not now", modifier = Modifier.weight(1f), onClick = onNotNow)
-                PrimaryButton("Turn on", modifier = Modifier.weight(1f), onClick = onEnable)
+            Heading("Stay in the loop", "Get an alert when a change needs your attention.")
+            SurfaceCard {
+                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    BodyText("Tandem can alert you when an edit needs review, is rejected, or has an unknown status.")
+                    BodyText("You can change this later in Settings.")
+                }
             }
-        }
-    }
+        },
+        actions = {
+            PrimaryButton("Allow notifications", modifier = Modifier.fillMaxWidth()) {
+                finishNotificationOnboarding(state, navigation, onRequestNotificationPermission)
+            }
+            SecondaryButton("Not now", modifier = Modifier.fillMaxWidth()) {
+                finishNotificationOnboarding(state, navigation, onRequestPermission = null)
+            }
+        },
+    )
 }
 
 internal fun finishNotificationOnboarding(
     state: AppState,
+    navigation: AppNavigation,
     onRequestPermission: (() -> Unit)?,
 ) {
     state.hasCompletedNotificationOnboarding = true
     onRequestPermission?.invoke()
+    navigation.selectTab(AppRoute.BUDGET)
 }
 
 @Composable
 private fun SetupProgressIndicator() {
     val palette = tandemPalette
-    val steps = listOf("Connect", "Budget", "Sync")
+    val steps = listOf("Server", "Sign in", "Budget", "First sync")
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
