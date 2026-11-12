@@ -27,7 +27,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,8 +51,8 @@ import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.recordName
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
-import com.composables.icons.lucide.ChevronUp
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.X
 import kotlinx.coroutines.launch
 
@@ -249,22 +248,25 @@ internal fun AccountOptionsScreen(
                 .mapNotNull { record -> record.recordName()?.let { SelectorItem(record.recordId, it) } }
                 .distinctBy(SelectorItem::id)
         }
-    val reorderableAccounts =
-        remember(liveAccounts, liveAccount?.id) {
-            liveAccount
-                ?.let { selected ->
-                    liveAccounts
-                        .filter { it.closed == selected.closed && it.offBudget == selected.offBudget }
-                        .sortedWith(compareBy({ it.sortOrder ?: Long.MAX_VALUE }, { it.name.lowercase() }))
-                }.orEmpty()
-        }
-    val accountOrderIndex = reorderableAccounts.indexOfFirst { it.id == liveAccount?.id }
     val canClose = liveAccount != null && !liveAccount.closed && liveAccount.balanceMinor != null && !state.readOnlyMode
     PageColumn {
         if (accountName == null) {
             EmptyState("Account unavailable", "This account isn’t saved on this device.")
         } else {
-            Heading(accountName)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { Heading(accountName) }
+                if (liveAccount != null) {
+                    TandemIconButton(
+                        Lucide.Pencil,
+                        "Rename account",
+                        enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                    ) {
+                        renameValue = liveAccount.name
+                        mobileSession.clearBudgetActionMessage()
+                        renameDialog = true
+                    }
+                }
+            }
             SectionCard("Account", "Read-only details") {
                 ListRow("Name", "Account name", accountName)
                 DividerLine()
@@ -273,59 +275,6 @@ internal fun AccountOptionsScreen(
                 ListRow("Budget status", "Account scope", accountScope)
             }
             if (liveAccount != null) {
-                SectionCard(
-                    "Position in ${if (liveAccount.closed) {
-                        "closed accounts"
-                    } else if (liveAccount.offBudget) {
-                        "off-budget accounts"
-                    } else {
-                        "on-budget accounts"
-                    }}",
-                ) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                        TandemIconButton(
-                            Lucide.ChevronUp,
-                            "Move account up",
-                            enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction && accountOrderIndex > 0,
-                        ) {
-                            scope.launch {
-                                mobileSession.moveBudgetAccount(
-                                    state.selectedBudgetId,
-                                    liveAccount.id,
-                                    reorderableAccounts.getOrNull(accountOrderIndex - 1)?.id,
-                                    state.encryptedPassword.takeIf { it.isNotBlank() },
-                                )
-                            }
-                        }
-                        TandemIconButton(
-                            Lucide.ChevronDown,
-                            "Move account down",
-                            enabled =
-                                !state.readOnlyMode &&
-                                    !mobileSession.isPerformingBudgetAction &&
-                                    accountOrderIndex >= 0 &&
-                                    accountOrderIndex < reorderableAccounts.lastIndex,
-                        ) {
-                            scope.launch {
-                                mobileSession.moveBudgetAccount(
-                                    state.selectedBudgetId,
-                                    liveAccount.id,
-                                    reorderableAccounts.getOrNull(accountOrderIndex + 2)?.id,
-                                    state.encryptedPassword.takeIf { it.isNotBlank() },
-                                )
-                            }
-                        }
-                    }
-                }
-                SecondaryButton(
-                    "Rename account",
-                    enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
-                    onClick = {
-                        renameValue = liveAccount.name
-                        mobileSession.clearBudgetActionMessage()
-                        renameDialog = true
-                    },
-                )
                 if (liveAccount.closed) {
                     InlineMessage("This account is closed.", InlineMessageKind.INFO)
                     SecondaryButton(
@@ -345,16 +294,18 @@ internal fun AccountOptionsScreen(
                         },
                     )
                 } else {
-                    SecondaryButton(
+                    TandemActionButton(
                         "Close account",
+                        TandemActionButtonTone.DESTRUCTIVE,
+                        Modifier.fillMaxWidth(),
+                        icon = Lucide.X,
                         enabled = canClose && !mobileSession.isPerformingBudgetAction,
-                        onClick = {
-                            transferAccountId = ""
-                            transferCategoryId = ""
-                            mobileSession.clearBudgetActionMessage()
-                            confirmClose = true
-                        },
-                    )
+                    ) {
+                        transferAccountId = ""
+                        transferCategoryId = ""
+                        mobileSession.clearBudgetActionMessage()
+                        confirmClose = true
+                    }
                 }
                 budgetActionFeedbackMessage(mobileSession)
             }
@@ -436,18 +387,24 @@ internal fun AccountOptionsScreen(
             content = {
                 Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     if (nonZeroBalance) {
+                        InlineMessage(
+                            "Actual requires a non-zero balance to move to another open account before it can close this account. Choose any destination account; the budget category is optional.",
+                            InlineMessageKind.INFO,
+                        )
                         AccountActionDropdown(
-                            title = "Move balance to",
+                            title = "Transfer balance to",
                             selectedLabel = transferAccounts.firstOrNull { it.id == transferAccountId }?.name ?: "Choose account",
                             options = transferAccounts.map { it.name to it.id },
                             onSelect = { transferAccountId = it.orEmpty() },
                         )
-                        AccountActionDropdown(
-                            title = "Category",
-                            selectedLabel = transferCategories.firstOrNull { it.id == transferCategoryId }?.label ?: "Uncategorized",
-                            options = listOf("Uncategorized" to null) + transferCategories.map { it.label to it.id },
-                            onSelect = { transferCategoryId = it.orEmpty() },
-                        )
+                        if (transferAccountId.isNotBlank()) {
+                            AccountActionDropdown(
+                                title = "Budget category (optional)",
+                                selectedLabel = transferCategories.firstOrNull { it.id == transferCategoryId }?.label ?: "Uncategorized",
+                                options = listOf("Uncategorized" to null) + transferCategories.map { it.label to it.id },
+                                onSelect = { transferCategoryId = it.orEmpty() },
+                            )
+                        }
                     }
                     budgetActionFeedbackMessage(mobileSession)
                 }

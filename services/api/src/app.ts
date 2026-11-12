@@ -1691,7 +1691,7 @@ interface BudgetCategoryGroupCreateBody {
 }
 
 interface BudgetCategoryGroupActionBody {
-  action: "rename" | "hide" | "show" | "move";
+  action: "rename" | "hide" | "show" | "move" | "delete";
   name?: string;
   targetId?: string | null;
 }
@@ -3340,7 +3340,7 @@ function registerBudgetMaintenanceRoutes(
         tags: ["Budgets"],
         operationId: "manageBudgetCategoryGroup",
         summary:
-          "Rename, hide, show, or reorder an Actual Budget category group",
+          "Rename, hide, show, reorder, or delete an Actual Budget category group",
         security: [{ bearerAuth: [] }],
         params: categoryGroupParamsSchema,
         headers: headersSchema,
@@ -3349,7 +3349,7 @@ function registerBudgetMaintenanceRoutes(
           properties: {
             action: {
               type: "string",
-              enum: ["rename", "hide", "show", "move"],
+              enum: ["rename", "hide", "show", "move", "delete"],
             },
             name: {
               type: "string",

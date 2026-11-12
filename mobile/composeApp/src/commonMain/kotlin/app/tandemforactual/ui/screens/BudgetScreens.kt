@@ -179,7 +179,12 @@ internal fun BudgetScreen(
     val isTrackingBudget = isLiveBudget && state.budgetDisplaySettings?.budgetType == "tracking"
     val compact = state.homeLayout == "Compact"
     val sectionSpacing = if (compact) 10.dp else 16.dp
-    val groups = liveBudgetMonth?.groups.orEmpty()
+    val pendingDeletedGroupIds =
+        mobileSession
+            .pendingBudgetMutationsFor(state.selectedBudgetId)
+            .filter { it.kind == BudgetReorderKind.DELETE_CATEGORY_GROUP }
+            .mapTo(mutableSetOf()) { it.itemId }
+    val groups = liveBudgetMonth?.groups.orEmpty().filterNot { it.id in pendingDeletedGroupIds }
     val queuedGroupMoves = mobileSession.budgetReorderMovesFor(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
     val groupReorderStatus = mobileSession.budgetReorderStatus(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
     val orderedGroupIds =
@@ -497,6 +502,15 @@ internal fun BudgetScreen(
                                                     if (isLiveBudget &&
                                                         !state.readOnlyMode
                                                     ) {
+                                                        if (!isReordering) {
+                                                            state.collapseBudgetSections(
+                                                                orderedGroups
+                                                                    .asSequence()
+                                                                    .filterNot { it.id == group.id }
+                                                                    .map { "live:${state.selectedBudgetId}:group:${it.id}" }
+                                                                    .toList(),
+                                                            )
+                                                        }
                                                         selectedGroupOrderId = if (isReordering) null else group.id
                                                     }
                                                 },

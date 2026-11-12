@@ -31,6 +31,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
@@ -56,7 +57,10 @@ import com.composables.icons.lucide.EyeOff
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Plus
+import com.composables.icons.lucide.Trash2
 import kotlinx.coroutines.launch
+
+private const val UNSELECTED_GROUP_DELETE_DESTINATION = "__choose_group_delete_destination__"
 
 internal fun reorderItemToIndex(
     itemIds: List<String>,
@@ -108,10 +112,35 @@ internal fun CategoryGroupScreen(
     var showHidden by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
     var selectedCategoryOrderId by rememberSaveable(state.selectedBudgetId, group?.id) { mutableStateOf<String?>(null) }
     var showGroupDialog by rememberSaveable(state.selectedBudgetId, group?.id) { mutableStateOf(false) }
+    var showDeleteGroupDialog by rememberSaveable(state.selectedBudgetId, group?.id) { mutableStateOf(false) }
+    var deleteGroupDestinationId by
+        rememberSaveable(state.selectedBudgetId, group?.id) {
+            mutableStateOf(UNSELECTED_GROUP_DELETE_DESTINATION)
+        }
     var showCreateCategoryDialog by rememberSaveable(state.selectedBudgetId, group?.id) { mutableStateOf(false) }
     var groupNameDraft by rememberSaveable(state.selectedBudgetId, group?.id) { mutableStateOf(group?.name.orEmpty()) }
     var newCategoryName by rememberSaveable(state.selectedBudgetId, group?.id) { mutableStateOf("") }
     val categoryScopeId = group?.id.orEmpty()
+    val groupDeleteDestinations =
+        remember(groups, group?.id) {
+            groups
+                .filter { it.id != group?.id && it.isIncome == group?.isIncome }
+                .flatMap { destinationGroup ->
+                    destinationGroup.categories.map { category ->
+                        SelectorItem(category.id, "${category.name} · ${destinationGroup.name}")
+                    }
+                }
+        }
+    val groupHasCategories =
+        remember(group?.id, group?.categories, mobileSession.categoryRecords) {
+            group?.categories?.isNotEmpty() == true ||
+                mobileSession.categoryRecords.any { record ->
+                    val body = record.recordBody()
+                    record.recordType == "category" &&
+                        body?.booleanValue("deleted") != true &&
+                        (body?.stringValue("group") ?: body?.stringValue("group_id")) == group?.id
+                }
+        }
     val queuedCategoryMoves = mobileSession.budgetReorderMovesFor(state.selectedBudgetId, categoryScopeId)
     val categoryMoveStatus = mobileSession.budgetReorderStatus(state.selectedBudgetId, categoryScopeId)
     val serverCategoryOrder = group?.categories.orEmpty().map { it.id }
@@ -555,7 +584,7 @@ internal fun CategoryGroupScreen(
             title = "Edit category group",
             name = groupNameDraft,
             onNameChange = { groupNameDraft = it },
-            busy = false,
+            busy = mobileSession.isPerformingBudgetAction || state.readOnlyMode,
             message = mobileSession.budgetActionMessage,
             messageKind = mobileSession.budgetActionMessageKind,
             messageActionLabel = mobileSession.budgetActionMessageActionLabel,
@@ -576,13 +605,86 @@ internal fun CategoryGroupScreen(
                     }
                 }
             },
+            onDelete = {
+                deleteGroupDestinationId = UNSELECTED_GROUP_DELETE_DESTINATION
+                showGroupDialog = false
+                showDeleteGroupDialog = true
+            },
         )
+        if (showDeleteGroupDialog) {
+            DestructiveConfirmationDialog(
+                title = "Delete ${group.name}?",
+                message =
+                    if (groupHasCategories) {
+                        "The group’s categories will be deleted. Move their budget and transaction history to another category, or leave transactions unassigned."
+                    } else {
+                        "This category group is empty."
+                    },
+                confirmLabel = "Delete group",
+                dismissLabel = "Keep group",
+                enabled =
+                    !state.readOnlyMode &&
+                        !mobileSession.isPerformingBudgetAction &&
+                        (!groupHasCategories || deleteGroupDestinationId != UNSELECTED_GROUP_DELETE_DESTINATION),
+                content = {
+                    if (groupHasCategories) {
+                        AccountActionDropdown(
+                            title = "Reassign to",
+                            selectedLabel =
+                                when {
+                                    deleteGroupDestinationId == UNSELECTED_GROUP_DELETE_DESTINATION -> "Choose destination"
+                                    deleteGroupDestinationId.isBlank() -> "Leave unassigned"
+                                    else ->
+                                        groupDeleteDestinations.firstOrNull { it.id == deleteGroupDestinationId }?.label
+                                            ?: "Leave unassigned"
+                                },
+                            options =
+                                listOf("Leave unassigned" to null) +
+                                    groupDeleteDestinations.map { it.label to it.id },
+                            onSelect = { deleteGroupDestinationId = it.orEmpty() },
+                        )
+                        InlineMessage(
+                            when {
+                                deleteGroupDestinationId == UNSELECTED_GROUP_DELETE_DESTINATION ->
+                                    "Choose a destination or leave transactions unassigned."
+                                deleteGroupDestinationId.isBlank() ->
+                                    "Transactions become unassigned; deleted-category budget amounts are removed."
+                                else ->
+                                    "Budget amounts and transaction history will move to the selected category."
+                            },
+                            InlineMessageKind.INFO,
+                        )
+                    }
+                    budgetActionFeedbackMessage(mobileSession)
+                },
+                onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) showDeleteGroupDialog = false },
+                onConfirm = {
+                    scope.launch {
+                        val deleted =
+                            mobileSession.enqueueBudgetCategoryGroupDelete(
+                                state.selectedBudgetId,
+                                group.id,
+                                deleteGroupDestinationId
+                                    .takeUnless {
+                                        it.isBlank() || it == UNSELECTED_GROUP_DELETE_DESTINATION
+                                    },
+                                groups.map { it.id },
+                                state.encryptedPassword.takeIf(String::isNotBlank),
+                            )
+                        if (deleted) {
+                            showDeleteGroupDialog = false
+                            navigation.back()
+                        }
+                    }
+                },
+            )
+        }
         CategoryGroupNameDialog(
             visible = showCreateCategoryDialog,
             title = "Add category",
             name = newCategoryName,
             onNameChange = { newCategoryName = it },
-            busy = false,
+            busy = mobileSession.isPerformingBudgetAction || state.readOnlyMode,
             message = mobileSession.budgetActionMessage,
             messageKind = mobileSession.budgetActionMessageKind,
             messageActionLabel = mobileSession.budgetActionMessageActionLabel,
@@ -666,6 +768,7 @@ internal fun CategoryGroupNameDialog(
     saveLabel: String = "Save",
     onDismiss: () -> Unit,
     onSave: () -> Unit,
+    onDelete: (() -> Unit)? = null,
 ) {
     TandemTaskSheet(
         visible = visible,
@@ -684,6 +787,16 @@ internal fun CategoryGroupNameDialog(
                     ToggleRow("Income group", "For income categories", isIncome, !busy, onIncomeChange)
                 }
                 message?.let { InlineMessage(it, messageKind, actionLabel = messageActionLabel, onAction = onMessageAction) }
+                onDelete?.let { delete ->
+                    TandemActionButton(
+                        "Delete group",
+                        TandemActionButtonTone.DESTRUCTIVE,
+                        Modifier.fillMaxWidth(),
+                        icon = Lucide.Trash2,
+                        enabled = !busy,
+                        onClick = delete,
+                    )
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     TandemActionButton("Cancel", TandemActionButtonTone.NEUTRAL, Modifier.weight(1f), enabled = !busy, onClick = onDismiss)
                     TandemActionButton(

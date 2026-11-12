@@ -19,6 +19,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
@@ -82,6 +83,50 @@ class AccountListPresentationTest {
 
         composeTestRule.onNodeWithText("Credit · Closed").assertExists()
         composeTestRule.onNodeWithContentDescription("Negative balance, -\$4.00").assertExists()
+    }
+
+    @Test
+    fun accountReorderKeepsOtherGroupsInTheirExistingSlots() {
+        assertEquals(
+            listOf("savings-2", "checking-1", "savings-1", "checking-2"),
+            reorderAccountsWithinSlots(
+                accountIds = listOf("savings-1", "checking-1", "savings-2", "checking-2"),
+                movableIds = listOf("savings-1", "savings-2"),
+                reorderedMovableIds = listOf("savings-2", "savings-1"),
+            ),
+        )
+    }
+
+    @Test
+    fun accountReorderModeShowsEditAndAccessibleDragHandle() {
+        var edited = false
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                AccountSummaryCard(
+                    account =
+                        AccountListItemUi(
+                            id = "checking",
+                            name = "Checking",
+                            typeLabel = "Checking",
+                            status = "Last synced today",
+                            balance = "\$10.00",
+                            offBudget = false,
+                            accountType = "checking",
+                            balanceMinor = 1000,
+                        ),
+                    merchantArtwork = null,
+                    isReordering = true,
+                    canMoveDown = true,
+                    onClick = {},
+                    onEdit = { edited = true },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("Edit Checking").assertExists().performClick()
+        composeTestRule.onNodeWithContentDescription("Drag to reorder Checking").assertExists()
+        composeTestRule.onNodeWithContentDescription("Balance, \$10.00").assertDoesNotExist()
+        assertTrue(edited)
     }
 
     @Test

@@ -134,6 +134,7 @@ internal enum class BudgetReorderKind {
     REFRESH_CATEGORY_RENAME,
     MOVE_CATEGORY_TO_GROUP,
     DELETE_CATEGORY,
+    DELETE_CATEGORY_GROUP,
     HIDE_CATEGORY_GROUP,
     SHOW_CATEGORY_GROUP,
     CREATE_PAYEE,
@@ -325,6 +326,7 @@ internal data class BudgetReorderQueueState(
                     BudgetReorderKind.SHOW_CATEGORY,
                     BudgetReorderKind.CREATE_CATEGORY_GROUP,
                     BudgetReorderKind.CREATE_CATEGORY,
+                    BudgetReorderKind.MOVE_ACCOUNT,
                 )
         return copy(
             moves = moves + move.copy(requiresEncryptionPassword = move.requiresEncryptionPassword || move.encryptionPassword != null),
@@ -945,6 +947,7 @@ internal fun budgetMutationFailureMessage(
             BudgetReorderKind.RENAME_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_RENAME -> "Couldn’t rename this category."
             BudgetReorderKind.MOVE_CATEGORY_TO_GROUP -> "Couldn’t move this category."
             BudgetReorderKind.DELETE_CATEGORY -> "Couldn’t delete this category."
+            BudgetReorderKind.DELETE_CATEGORY_GROUP -> "Couldn’t delete this category group."
             BudgetReorderKind.HIDE_CATEGORY_GROUP, BudgetReorderKind.SHOW_CATEGORY_GROUP ->
                 "Couldn’t update this category group’s visibility."
             BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE -> "Couldn’t refresh the new category group."

@@ -1461,6 +1461,12 @@ describe("budget maintenance routes", () => {
         action: vi.mocked(fake.budgetMaintenanceApi.manageCategoryGroup),
       },
       {
+        method: "PATCH" as const,
+        url: `/api/v1/budgets/${budgetId}/category-groups/group-1`,
+        payload: { action: "delete", targetId: "category-2" },
+        action: vi.mocked(fake.budgetMaintenanceApi.manageCategoryGroup),
+      },
+      {
         method: "POST" as const,
         url: `/api/v1/budgets/${budgetId}/categories/category-1/actions`,
         payload: { action: "hide" },

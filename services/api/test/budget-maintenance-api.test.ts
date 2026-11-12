@@ -35,6 +35,13 @@ function createFake() {
       hidden: false,
     },
     {
+      id: "expense-3",
+      name: "Expense 3",
+      is_income: false,
+      group_id: "group-2",
+      hidden: false,
+    },
+    {
       id: "income",
       name: "Income",
       is_income: true,
@@ -140,6 +147,7 @@ function createFake() {
     ]),
     createCategoryGroup: vi.fn(async () => "new-group"),
     updateCategoryGroup: vi.fn(async () => undefined),
+    deleteCategoryGroup: vi.fn(async () => undefined),
     createCategory: vi.fn(async () => "new-category"),
     getPayees: vi.fn(async () => [...payees]),
     getPayeeRules: vi.fn(async () => [...rules]),
@@ -547,6 +555,33 @@ describe("Actual budget maintenance API", () => {
         id: "group-1",
         targetId: null,
       },
+    );
+    await fake.api.manageCategoryGroup("budget-1", "group-1", "delete");
+    expect(fake.client.deleteCategoryGroup).toHaveBeenCalledWith(
+      "group-1",
+      undefined,
+    );
+    await expect(
+      fake.api.manageCategoryGroup(
+        "budget-1",
+        "group-1",
+        "delete",
+        undefined,
+        "expense",
+      ),
+    ).rejects.toThrow(
+      "Choose a visible category outside this group with the same income type",
+    );
+    await fake.api.manageCategoryGroup(
+      "budget-1",
+      "group-1",
+      "delete",
+      undefined,
+      "expense-3",
+    );
+    expect(fake.client.deleteCategoryGroup).toHaveBeenCalledWith(
+      "group-1",
+      "expense-3",
     );
 
     await fake.api.manageCategory("budget-1", "expense", "hide");

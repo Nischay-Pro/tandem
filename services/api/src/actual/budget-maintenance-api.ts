@@ -281,9 +281,9 @@ export interface BudgetMaintenanceApiPort {
   manageCategoryGroup(
     budgetId: string,
     groupId: string,
-    action: "rename" | "hide" | "show" | "move",
+    action: "rename" | "hide" | "show" | "move" | "delete",
     name?: string,
-    targetGroupId?: string | null,
+    targetId?: string | null,
     encryptionPassword?: string,
   ): Promise<void>;
   manageCategory(
@@ -459,6 +459,7 @@ type ActualBudgetMaintenanceClient = Pick<
   | "getCategoryGroups"
   | "createCategoryGroup"
   | "updateCategoryGroup"
+  | "deleteCategoryGroup"
   | "setBudgetAmount"
   | "setBudgetCarryover"
   | "holdBudgetForNextMonth"
@@ -1550,7 +1551,7 @@ export function createBudgetMaintenanceApi(
       groupId,
       action,
       name,
-      targetGroupId,
+      targetId,
       encryptionPassword,
     ) {
       return locks.withBudgetLock(budgetId, () =>
@@ -1592,15 +1593,45 @@ export function createBudgetMaintenanceApi(
               });
               return;
             }
-            if (targetGroupId === groupId) {
+            if (action === "delete") {
+              const categories = await getAllCategories(client);
+              const groupCategories = categories.filter(
+                (category) => category.group_id === groupId,
+              );
+              if (targetId != null) {
+                const destination = categories.find(
+                  (category) => category.id === targetId && !category.hidden,
+                );
+                const destinationGroup = groups.find(
+                  (candidate) =>
+                    candidate.id === destination?.group_id && !candidate.hidden,
+                );
+                if (
+                  !destination ||
+                  !destinationGroup ||
+                  groupCategories.some(
+                    (category) =>
+                      category.id === destination.id ||
+                      category.is_income !== destination.is_income,
+                  )
+                ) {
+                  throw new BudgetMaintenanceInputError(
+                    "Choose a visible category outside this group with the same income type",
+                  );
+                }
+              }
+              await client.deleteCategoryGroup(groupId, targetId ?? undefined);
+              return;
+            }
+            if (targetId === groupId) {
               throw new BudgetMaintenanceInputError(
                 "Choose a different category group position",
               );
             }
             if (
-              targetGroupId !== null &&
-              targetGroupId !== undefined &&
-              !groups.some((candidate) => candidate.id === targetGroupId)
+              targetId !== null &&
+              targetId !== undefined &&
+              !groups.some((candidate) => candidate.id === targetId)
             ) {
               throw new BudgetMaintenanceInputError(
                 "Choose a category group in this budget",
@@ -1614,7 +1645,7 @@ export function createBudgetMaintenanceApi(
             }
             await internal.send("category-group-move", {
               id: groupId,
-              targetId: targetGroupId ?? null,
+              targetId: targetId ?? null,
             });
           },
           writeOptions(encryptionPassword),

@@ -192,7 +192,7 @@ internal fun SyncCenterScreen(
                         )
                     }
                 }
-                items(budgetMutations, key = { "budget-mutation:${it.kind}:${it.scopeId}:${it.itemId}:${it.name}" }) { mutation ->
+                items(budgetMutations, key = { "budget-mutation:${it.operationId}" }) { mutation ->
                     val categoryName = mobileSession.categoryRecords.firstOrNull { it.recordId == mutation.itemId }?.recordName()
                     val groupName = mobileSession.categoryGroupRecords.firstOrNull { it.recordId == mutation.itemId }?.recordName()
                     val accountName = mobileSession.accountRecords.firstOrNull { it.recordId == mutation.itemId }?.recordName()
@@ -226,6 +226,7 @@ internal fun SyncCenterScreen(
                             BudgetReorderKind.SHOW_CATEGORY, BudgetReorderKind.SHOW_CATEGORY_GROUP -> "Show · $itemName"
                             BudgetReorderKind.MOVE_CATEGORY_TO_GROUP -> "Move · $itemName"
                             BudgetReorderKind.DELETE_CATEGORY -> "Delete · $itemName"
+                            BudgetReorderKind.DELETE_CATEGORY_GROUP -> "Delete group · $itemName"
                             BudgetReorderKind.CATEGORY, BudgetReorderKind.CATEGORY_GROUP -> "Reorder · $itemName"
                             else -> itemName
                         }

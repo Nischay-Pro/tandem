@@ -604,6 +604,12 @@ internal fun AppState.toggleBudgetSection(sectionKey: String) {
     collapsedBudgetSections = collapsed.joinToString("\u001f")
 }
 
+internal fun AppState.collapseBudgetSections(sectionKeys: Iterable<String>) {
+    val collapsed = collapsedBudgetSections.split('\u001f').filter(String::isNotBlank).toMutableSet()
+    collapsed.addAll(sectionKeys)
+    collapsedBudgetSections = collapsed.joinToString("\u001f")
+}
+
 internal fun AppState.isCategoryPinned(categoryId: String): Boolean =
     pinnedCategoryIds.split('\u001f').any { it == categoryPinKey(categoryId) || it == categoryId }
 

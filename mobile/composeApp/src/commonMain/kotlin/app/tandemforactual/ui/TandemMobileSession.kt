@@ -1419,6 +1419,34 @@ internal class TandemMobileSession(
         }
     }
 
+    suspend fun enqueueBudgetCategoryGroupDelete(
+        budgetId: String,
+        groupId: String,
+        transferCategoryId: String?,
+        currentOrder: List<String>,
+        encryptionPassword: String?,
+    ): Boolean {
+        if (budgetId.isBlank() || groupId.isBlank()) {
+            budgetActionMessage = "Open a budget before deleting this category group."
+            return false
+        }
+        if (refuseWriteInReadOnlyMode()) return false
+        budgetActionMessage = null
+        return persistBudgetReorderQueueMutation { queue ->
+            queue.enqueueIfMissing(
+                QueuedBudgetReorder(
+                    budgetId = budgetId,
+                    scopeId = BUDGET_GROUP_ORDER_SCOPE,
+                    kind = BudgetReorderKind.DELETE_CATEGORY_GROUP,
+                    itemId = queue.resolveCategoryGroupId(budgetId, groupId),
+                    targetId = transferCategoryId?.let { queue.resolveCategoryId(budgetId, it) },
+                    desiredOrder = currentOrder,
+                    encryptionPassword = encryptionPassword,
+                ),
+            )
+        }
+    }
+
     suspend fun enqueueBudgetCategoryCreate(
         budgetId: String,
         groupId: String,
@@ -1786,6 +1814,16 @@ internal class TandemMobileSession(
                                     "rename",
                                     request.name,
                                     null,
+                                    request.encryptionPassword,
+                                    request.operationId,
+                                )
+                            BudgetReorderKind.DELETE_CATEGORY_GROUP ->
+                                manageBudgetCategoryGroup(
+                                    request.budgetId,
+                                    request.itemId,
+                                    "delete",
+                                    null,
+                                    request.targetId,
                                     request.encryptionPassword,
                                     request.operationId,
                                 )
@@ -3090,15 +3128,39 @@ internal class TandemMobileSession(
         accountId: String,
         targetAccountId: String?,
         encryptionPassword: String?,
-    ): Boolean =
-        enqueueOfflineBudgetMutation(
-            budgetId,
-            BudgetReorderKind.MOVE_ACCOUNT,
-            accountId,
-            "accounts",
-            buildJsonObject { put("targetAccountId", targetAccountId?.let(::JsonPrimitive) ?: JsonNull) },
-            encryptionPassword,
-        )
+        desiredOrder: List<String> = emptyList(),
+    ): Boolean {
+        val payload = buildJsonObject { put("targetAccountId", targetAccountId?.let(::JsonPrimitive) ?: JsonNull) }
+        if (desiredOrder.isEmpty()) {
+            return enqueueOfflineBudgetMutation(
+                budgetId,
+                BudgetReorderKind.MOVE_ACCOUNT,
+                accountId,
+                "accounts",
+                payload,
+                encryptionPassword,
+            )
+        }
+        if (budgetId.isBlank() || accountId.isBlank() || refuseWriteInReadOnlyMode()) return false
+        if (!apiClient.isAuthenticated || !isCurrentIdentityCacheOwner()) {
+            budgetActionMessage = "Sign in to the server and account that own this budget before changing it."
+            return false
+        }
+        return persistBudgetReorderQueueMutation { queue ->
+            queue.enqueueIfMissing(
+                QueuedBudgetReorder(
+                    budgetId = budgetId,
+                    scopeId = "accounts",
+                    kind = BudgetReorderKind.MOVE_ACCOUNT,
+                    itemId = accountId,
+                    targetId = targetAccountId,
+                    desiredOrder = desiredOrder,
+                    encryptionPassword = encryptionPassword,
+                    payloadJson = payload.toString(),
+                ),
+            )
+        }
+    }
 
     suspend fun markTransactionsReconciled(
         budgetId: String,
