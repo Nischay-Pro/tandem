@@ -1,0 +1,11 @@
+[Unit]
+Description=Back up Tandem and the Actual workspace
+Wants=network-online.target
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/tandem
+EnvironmentFile=/etc/tandem/backup.env
+ExecStart=/opt/tandem/deploy/backup-scheduled.sh

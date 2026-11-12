@@ -206,6 +206,58 @@ workspace is archived and is restarted afterward.
 deploy/backup.sh /secure/tandem-backups/tandem-2026-11-01
 ```
 
+### Back up on a schedule
+
+The supplied systemd timer runs one backup each day at 03:00, with up to a
+15-minute randomized delay. It stops the API briefly while it captures the
+PostgreSQL database and Actual workspace, then starts the API again. Choose a
+quiet time for the deployment. The backup directory should be on protected
+storage separate from the Compose volumes and, for disaster recovery, copied
+off the host. A practical starting point is to keep at least 30 daily backup
+pairs; retain older verified copies on a separate protected destination when
+longer history is needed. Keep the auth encryption key with the protected
+database backups; without it, saved Actual sign-in sessions in those backups
+cannot be decrypted.
+
+From the Tandem checkout, edit the service paths if the checkout is not at
+`/opt/tandem`. Create the root-readable environment file. Omit the GnuPG line
+if you intentionally store backups on encrypted storage instead of encrypting
+each backup file:
+
+```sh
+sudo install -d -m 700 /etc/tandem /secure/tandem-backups
+sudo tee /etc/tandem/backup.env >/dev/null <<'EOF'
+TANDEM_COMPOSE_PROJECT=tandem
+TANDEM_ENV_FILE=/opt/tandem/deploy/compose/.env
+TANDEM_BACKUP_DIRECTORY=/secure/tandem-backups
+TANDEM_BACKUP_GPG_PASSPHRASE_FILE=/secure/tandem-backup-keys/passphrase
+EOF
+sudo chmod 600 /etc/tandem/backup.env
+sudo install -m 644 deploy/systemd/tandem-backup.service /etc/systemd/system/
+sudo install -m 644 deploy/systemd/tandem-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now tandem-backup.timer
+```
+
+Run the service once to verify the paths and credentials. A successful run
+creates a timestamped backup pair and atomically updates
+`tandem-backup.last-success`. The status command checks that marker, confirms
+both backup files still exist and are non-empty, and fails when the last
+successful run is older than 26 hours:
+
+```sh
+sudo systemctl start tandem-backup.service
+sudo /opt/tandem/deploy/backup-status.sh /secure/tandem-backups
+sudo systemctl status tandem-backup.service --no-pager
+sudo journalctl -u tandem-backup.service --since today
+```
+
+The marker is only updated after both files are written and the API has been
+restarted successfully. A failed run leaves the prior marker unchanged, so the
+status check will fail once that backup becomes stale. Monitor the timer and
+status command with the host's normal alerting. To inspect the next scheduled
+run, use `systemctl list-timers tandem-backup.timer`.
+
 To write encrypted `.gpg` files instead, pass the passphrase-file path to the
 backup script. The backup stream is encrypted before it is written to disk:
 
@@ -251,6 +303,8 @@ Then start and verify the API using the commands above. Confirm that an
 authorized client performs a fresh snapshot before returning the deployment
 to normal use. Test backups by restoring them to a separate disposable Compose
 project regularly; never test restore against a user's only copy.
+Use a separate private Compose project for the restore test and verify its
+readiness endpoint and a budget read before relying on the backup set.
 
 ## Release checks
 

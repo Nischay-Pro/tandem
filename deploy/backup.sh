@@ -47,6 +47,8 @@ else
   postgres_output="${backup_prefix}.postgres.dump"
   workspace_output="${backup_prefix}.actual-workspace.tar.gz"
 fi
+last_success_file="${backup_dir}/tandem-backup.last-success"
+last_success_tmp="${last_success_file}.tmp.$$"
 
 compose=(docker compose -p "$compose_project" --project-directory "$project_root" --env-file "$env_file" -f "$compose_file")
 api_id="$("${compose[@]}" ps --all -q api)"
@@ -60,9 +62,22 @@ if [[ -n "$api_id" ]] && "${compose[@]}" ps --status running -q api | grep -q .;
 fi
 restart_api() {
   local status=$?
-  rm -f "$postgres_tmp" "$workspace_tmp"
+  rm -f "$postgres_tmp" "$workspace_tmp" "$last_success_tmp"
   if [[ "$api_was_running" == true ]]; then
     "${compose[@]}" start api >/dev/null || status=$?
+  fi
+  if (( status == 0 )); then
+    if ! {
+      printf '%s\n%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" "$(basename "$backup_prefix")" \
+        > "$last_success_tmp" &&
+        chmod 600 "$last_success_tmp" &&
+        mv -f "$last_success_tmp" "$last_success_file"
+    }; then
+      echo "The backup files were written, but the last-success marker could not be updated." >&2
+      status=1
+    else
+      echo "Last successful backup recorded in $last_success_file"
+    fi
   fi
   return "$status"
 }

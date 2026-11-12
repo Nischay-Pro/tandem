@@ -23,6 +23,7 @@ cleanup() {
   rm -f \
     "$scratch_root/tandem-backup.postgres.dump" \
     "$scratch_root/tandem-backup.actual-workspace.tar.gz" \
+    "$scratch_root/tandem-backup.last-success" \
     "$scratch_root"/tandem-backup*.postgres.dump \
     "$scratch_root"/tandem-backup*.actual-workspace.tar.gz \
     "$scratch_root"/tandem-backup*.postgres.dump.gpg \
@@ -34,6 +35,7 @@ cleanup() {
     "$scratch_root/release-check-wrong-backup-passphrase" \
     "$scratch_root/encrypted-restore.log" \
     "$scratch_root"/corrupt-restore-*
+  rm -rf "$scratch_root/scheduled-backups" "$scratch_root/stale-backups"
   rm -rf "$scratch_root/docker-fail-workspace-restore"
   rm -f "$scratch_root/interrupted-restore.log"
   rm -f "$restore_tmp_dir"/*
@@ -103,6 +105,43 @@ wait_for_api() {
   return 1
 }
 wait_for_api
+
+scheduled_backup_dir="$scratch_root/scheduled-backups"
+TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" \
+  TANDEM_BACKUP_DIRECTORY="$scheduled_backup_dir" \
+  "$project_root/deploy/backup-scheduled.sh"
+wait_for_api
+TANDEM_BACKUP_MAX_AGE_HOURS=26 \
+  "$project_root/deploy/backup-status.sh" "$scheduled_backup_dir"
+scheduled_marker="$scheduled_backup_dir/tandem-backup.last-success"
+scheduled_marker_before_failure="$(cat "$scheduled_marker")"
+if TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" \
+  TANDEM_BACKUP_DIRECTORY="$scheduled_backup_dir" \
+  TANDEM_BACKUP_GPG_PASSPHRASE_FILE="$secret_dir/missing-passphrase" \
+  "$project_root/deploy/backup-scheduled.sh" >/dev/null 2>&1; then
+  echo "The scheduled backup accepted a missing encryption passphrase file." >&2
+  exit 1
+fi
+if [[ "$(cat "$scheduled_marker")" != "$scheduled_marker_before_failure" ]]; then
+  echo "A failed scheduled backup replaced the last-success marker." >&2
+  exit 1
+fi
+"$project_root/deploy/backup-status.sh" "$scheduled_backup_dir"
+
+stale_backup_dir="$scratch_root/stale-backups"
+mkdir -m 700 -p "$stale_backup_dir"
+scheduled_prefix="$(sed -n '2p' "$scheduled_marker")"
+for suffix in .postgres.dump .actual-workspace.tar.gz; do
+  cp "$scheduled_backup_dir/$scheduled_prefix$suffix" "$stale_backup_dir/"
+done
+{
+  echo "2000-01-01T00:00:00Z"
+  echo "$scheduled_prefix"
+} > "$stale_backup_dir/tandem-backup.last-success"
+if "$project_root/deploy/backup-status.sh" "$stale_backup_dir" >/dev/null 2>&1; then
+  echo "The backup status check accepted an old success marker." >&2
+  exit 1
+fi
 
 create_test_device() {
   local name="$1"
