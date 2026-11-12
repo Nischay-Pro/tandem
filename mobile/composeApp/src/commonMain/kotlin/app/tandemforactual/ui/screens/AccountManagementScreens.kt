@@ -384,6 +384,7 @@ internal fun AccountOptionsScreen(
             enabled =
                 !mobileSession.isPerformingBudgetAction &&
                     (!nonZeroBalance || transferAccountId.isNotBlank()),
+            dismissEnabled = !mobileSession.isPerformingBudgetAction,
             content = {
                 Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     if (nonZeroBalance) {

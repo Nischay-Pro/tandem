@@ -19,6 +19,7 @@ internal fun DestructiveConfirmationDialog(
     confirmLabel: String,
     dismissLabel: String,
     enabled: Boolean = true,
+    dismissEnabled: Boolean = enabled,
     messageKind: InlineMessageKind? = null,
     messageActionLabel: String? = null,
     onMessageAction: (() -> Unit)? = null,
@@ -32,7 +33,7 @@ internal fun DestructiveConfirmationDialog(
             TandemModalHeader(
                 title = title,
                 titleSize = TandemTypography.cardTitle,
-                enabled = enabled,
+                enabled = dismissEnabled,
                 onClose = onDismissRequest,
             )
         },
@@ -52,7 +53,7 @@ internal fun DestructiveConfirmationDialog(
             }
         },
         dismissButton = {
-            TextButton(enabled = enabled, onClick = onDismissRequest) {
+            TextButton(enabled = dismissEnabled, onClick = onDismissRequest) {
                 Text(dismissLabel, color = tandemPalette.accent)
             }
         },
