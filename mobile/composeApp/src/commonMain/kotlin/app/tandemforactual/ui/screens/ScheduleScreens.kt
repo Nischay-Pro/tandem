@@ -866,14 +866,14 @@ internal fun ScheduleDatePickerDialog(
                     onClose = onDismiss,
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    TandemIconButton(Lucide.ChevronLeft, "Previous month", sizeDp = 40, iconSizeDp = 18) {
+                    TandemIconButton(Lucide.ChevronLeft, "Previous month", onClick = {
                         if (visibleMonth == 1) {
                             visibleMonth = 12
                             visibleYear -= 1
                         } else {
                             visibleMonth -= 1
                         }
-                    }
+                    })
                     Text(
                         formatMonth(visibleYear, visibleMonth),
                         Modifier.weight(1f),
@@ -881,14 +881,14 @@ internal fun ScheduleDatePickerDialog(
                         textAlign = TextAlign.Center,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    TandemIconButton(Lucide.ChevronRight, "Next month", sizeDp = 40, iconSizeDp = 18) {
+                    TandemIconButton(Lucide.ChevronRight, "Next month", onClick = {
                         if (visibleMonth == 12) {
                             visibleMonth = 1
                             visibleYear += 1
                         } else {
                             visibleMonth += 1
                         }
-                    }
+                    })
                 }
                 Row(Modifier.fillMaxWidth()) {
                     (0..6).forEach { column ->

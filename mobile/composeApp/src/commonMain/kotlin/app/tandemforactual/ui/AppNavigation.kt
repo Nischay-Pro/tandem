@@ -265,7 +265,6 @@ internal fun AppHeader(
                 icon = Lucide.ChevronLeft,
                 contentDescription = "Back",
                 onClick = onBack,
-                iconSizeDp = 24,
             )
             Spacer(Modifier.width(6.dp))
         }
