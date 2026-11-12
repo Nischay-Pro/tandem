@@ -1,308 +1,42 @@
 # Tandem for Actual Budget
 
-A local-first app for Actual Budget. Tandem provides Android and iOS apps while Actual remains the authoritative budget engine and data store.
+Your budget, everywhere. Access your Actual Budget finances on your phone, even
+when you are offline.
 
-**Tandem is not affiliated with, endorsed by, or supported by Actual Budget.** Actual Budget is a trademark of its respective owners.
+Tandem is a mobile app and a small server that connects it to your own Actual
+Budget service. Actual remains the source of truth. Tandem keeps a local copy on
+the phone and syncs saved changes with Actual when the connection returns.
 
-## Overview
+## Get started
 
-Tandem keeps a local copy of budget data on the phone so people can open a previously synced budget without a connection. It supports budget and account views, transaction creation and editing, conflict review, and settings for appearance, layout, motion, sync, and alerts.
+1. Run an Actual Budget server.
+2. Set up Tandem's API gateway by following the [server installation guide](docs/deploy/install.md).
+3. Open Tandem, enter the gateway address, and sign in with your Actual account.
 
-Tandem is under active development and is not a production release. Actual password and OpenID sign-in, cached startup, transaction, and scheduled-sync flows are implemented. Android builds and Kotlin iOS frameworks compile; running and validating the iOS app still requires macOS and Xcode.
+The API image is currently built from this repository; there is no published
+prebuilt image yet. See the [deployment configuration](docs/deploy/configuration.md)
+and [troubleshooting guide](docs/deploy/troubleshooting.md) for server settings
+and connection problems.
 
-## How sync works
+## How it works
 
-Actual remains the source of truth. The Android and iOS apps sync through the Tandem API and keep budget snapshots in Room, so previously synced data remains readable offline. The API uses Actual's official Node.js package to read and update budgets. It keeps a short-lived snapshot in process memory for paging; PostgreSQL stores sign-in credentials and the write-recovery journal, not a second copy of the budget.
+The phone stores its budget copy locally. The Tandem API uses Actual's supported
+Node client to read and write budgets. This gives Tandem a server-side trust
+boundary; review [architecture and data privacy](docs/concepts/architecture-and-trust.md)
+before deploying it. For Actual's encrypted budgets, see the
+[compatibility notes](docs/concepts/actual-compatibility.md).
 
-Tandem uses this service because Actual does not provide a budget REST API and its official programmatic API is Node.js-only. The service gives both mobile platforms one supported Actual integration and centralizes sign-in, budget access, and write reconciliation. It must be trusted with readable budget data, including when an Actual budget is end-to-end encrypted. See [Architectural design](docs/architectural-design.md) for the rationale, tradeoffs, and a side-by-side diagram of unencrypted and encrypted budget flows.
+## Build from source
 
-## Requirements
+See [mobile build and test instructions](docs/develop/build-and-test.md), the
+[toolchain reference](docs/develop/toolchain.md), and the
+[API reference](docs/develop/api-reference.md). The machine-readable API
+contract remains at [`docs/api/openapi-v1.json`](docs/api/openapi-v1.json).
 
-- A reachable self-hosted Actual Budget server. The verified compatibility baseline is Actual `26.11.0` with `@actual-app/api` `26.11.0`.
-- Docker Engine with Docker Compose for a container deployment, or Node.js `26.13.0`, pnpm `12.16.1`, and PostgreSQL `18.6` for a host-process deployment.
-- A reverse proxy with HTTPS for access from phones. Keep the Tandem API and PostgreSQL off the public internet; route the API through the same trusted proxy used for Actual.
-- For Android development: Android Studio, Android SDK, and the Java/Gradle toolchain documented in [`docs/mobile-api-client.md`](docs/mobile-api-client.md).
-- For iOS development: macOS with Xcode.
-- For mobile builds, install Node.js `26.13.0` and pnpm `12.16.1`; Gradle generates Tandem's offline merchant artwork from the pinned TheSVG package.
+## Documentation
 
-## Getting started
-
-### 1. Set up Actual Budget
-
-Set up a self-hosted Actual server using the [official installation guide](https://actualbudget.org/docs/install/). Use the supported `26.11.0` server release and have its address and your Actual sign-in ready.
-
-### 2. Run the Tandem API
-
-Tandem does not publish a prebuilt API image yet. From the root of the Tandem repository, build the image on the deployment host (or build it elsewhere and transfer it there):
-
-```sh
-docker build \
-  --tag tandem-for-actual-api:26.11.0-local \
-  --file services/api/Dockerfile \
-  .
-```
-
-#### If Actual already runs in Docker Compose
-
-Change to the directory containing your existing `docker-compose.yml` (use its actual filename if different). Leave the existing Actual service configuration in place. Add the two Tandem service definitions under its existing `services:` section, and merge the `volumes:` and `networks:` entries below into the corresponding top-level sections. The example assumes your Actual service is named `actual-server` and listens on port `5006` inside Compose. Check the service name with `docker compose config --services`; set `ACTUAL_SERVER_URL` below to `http://<that-service-name>:5006` if it differs.
-
-```yaml
-services:
-  tandem-postgres:
-    image: postgres:18.6-alpine3.24@sha256:123b17998ccaf47e53b502e8c6a1e79afd8f579c6f3eec83c563da026f957395
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: tandem
-      POSTGRES_USER: tandem
-      POSTGRES_PASSWORD_FILE: /run/secrets/tandem_postgres_password
-    volumes:
-      - tandem-postgres-data:/var/lib/postgresql
-    healthcheck:
-      test:
-        ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    networks:
-      - tandem-data
-    secrets:
-      - tandem_postgres_password
-
-  tandem-api:
-    image: tandem-for-actual-api:26.11.0-local
-    restart: unless-stopped
-    init: true
-    read_only: true
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,size=16m
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    environment:
-      DATABASE_URL_FILE: /run/secrets/tandem_database_url
-      AUTH_TOKEN_ENCRYPTION_KEY_FILE: /run/secrets/tandem_auth_token_encryption_key
-      AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE: /run/secrets/tandem_auth_token_encryption_key_previous
-      HOST: 0.0.0.0
-      PORT: 19753
-      TRUST_PROXY: ${TRUST_PROXY:?Set TRUST_PROXY to the proxy IP or narrow CIDR in .env.tandem}
-      ACTUAL_SERVER_URL: ${ACTUAL_SERVER_URL:-http://actual-server:5006}
-      ACTUAL_PUBLIC_URL: ${ACTUAL_PUBLIC_URL:-}
-      ACTUAL_API_DATA_DIR: /data/actual-api
-    depends_on:
-      tandem-postgres:
-        condition: service_healthy
-    volumes:
-      - tandem-actual-workspace:/data/actual-api
-    expose:
-      - "19753"
-    networks:
-      - tandem-data
-      - default
-    secrets:
-      - tandem_database_url
-      - tandem_auth_token_encryption_key
-      - tandem_auth_token_encryption_key_previous
-
-secrets:
-  tandem_postgres_password:
-    file: ${TANDEM_POSTGRES_PASSWORD_FILE:?Set TANDEM_POSTGRES_PASSWORD_FILE in .env.tandem}
-  tandem_database_url:
-    file: ${TANDEM_DATABASE_URL_FILE:?Set TANDEM_DATABASE_URL_FILE in .env.tandem}
-  tandem_auth_token_encryption_key:
-    file: ${TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_FILE:?Set TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_FILE in .env.tandem}
-  tandem_auth_token_encryption_key_previous:
-    file: ${TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE:?Set TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE in .env.tandem}
-
-volumes:
-  tandem-postgres-data:
-  tandem-actual-workspace:
-
-networks:
-  tandem-data:
-    internal: true
-```
-
-The API joins the Compose project's `default` network so it can reach Actual and a proxy in the same project. PostgreSQL is isolated on `tandem-data`. If Actual or the proxy uses a named network, replace `default` under `tandem-api` with the shared network name and ensure the Actual service and proxy join it too. `expose` makes the API available to containers on that network without publishing a host port. If the reverse proxy runs directly on the host, add `ports: ["127.0.0.1:19753:19753"]` to `tandem-api` and point the proxy at `127.0.0.1:19753`.
-
-Tandem does not need a shared Actual server password. Each person signs in from the app with their Actual password or OpenID provider. Set `ACTUAL_PUBLIC_URL` to the public Tandem URL for OpenID; leave it empty if you only use password sign-in.
-
-Keep Tandem's secret files in a private directory beside your Compose file. Compose mounts them read-only at `/run/secrets`; Tandem reads the values from those files, so they do not appear in the container environment. Create the directory and generate the database password, database URL, and encrypted-session key. The session key is 32 random bytes encoded as 64 hexadecimal characters and is used directly by AES-256-GCM; it is not a human passphrase, so password stretching does not apply. Key rotation is supported; the deployment guide explains when to put the old key in the previous-key file.
-
-When updating an existing Compose setup, add the previous-key file, its
-`.env.tandem` path, and the matching secret mount before recreating the API.
-Keep the previous-key file at zero bytes outside a key rotation.
-
-```sh
-mkdir -p .tandem-secrets
-chmod 700 .tandem-secrets
-tandem_db_password="$(openssl rand -hex 32)"
-printf '%s' "$tandem_db_password" > .tandem-secrets/postgres_password
-printf 'postgresql://tandem:%s@tandem-postgres:5432/tandem' "$tandem_db_password" > .tandem-secrets/database_url
-openssl rand -hex 32 > .tandem-secrets/auth_token_encryption_key
-touch .tandem-secrets/auth_token_encryption_key_previous
-sudo chown root:1000 .tandem-secrets/*
-sudo chmod 0440 .tandem-secrets/*
-unset tandem_db_password
-```
-
-The API runs as UID/GID 1000 in the supplied image. On a Linux host using rootful Docker, keep the files owned by `root:1000` with mode `0440`, so the API can read them through its group. Keep the directory private (`chmod 700 .tandem-secrets`) as an additional layer. If you change the API's runtime GID, use that GID instead of `1000`. See the [deployment guide](deploy/README.md) for key rotation and deployment details.
-
-The separate `.env.tandem` file contains paths and non-secret settings only:
-
-```dotenv
-TANDEM_POSTGRES_PASSWORD_FILE=.tandem-secrets/postgres_password
-TANDEM_DATABASE_URL_FILE=.tandem-secrets/database_url
-TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_FILE=.tandem-secrets/auth_token_encryption_key
-TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE=.tandem-secrets/auth_token_encryption_key_previous
-ACTUAL_SERVER_URL=http://actual-server:5006
-ACTUAL_PUBLIC_URL=https://budget.example.com
-# Required when using this reverse-proxy deployment; use the proxy IP or a
-# narrow CIDR as seen by the Tandem API container.
-TRUST_PROXY=
-```
-
-Set the Actual service name and URL for your Compose network. `ACTUAL_PUBLIC_URL` is the HTTPS address that reaches Tandem through your reverse proxy. The auth encryption key protects Actual session tokens stored by Tandem; keep it stable and private. Restrict `.env.tandem` to the deployment account with `chmod 600 .env.tandem`. If the existing Actual stack has an `.env` file, pass both files so its current settings remain available and Tandem's paths are added:
-
-```sh
-docker compose \
-  --env-file .env \
-  --env-file .env.tandem \
-  -f docker-compose.yml \
-  up -d tandem-postgres tandem-api
-```
-
-Use your actual Compose filename in place of `docker-compose.yml`. If your Actual Compose file reads values from an existing `.env`, include `--env-file .env` on each Compose command; if it does not, use only `--env-file .env.tandem`. Add an Nginx `/api/v1/` route to `http://tandem-api:19753` before the existing Actual catch-all. In [`deploy/nginx/tandem-upstreams.conf.example`](deploy/nginx/tandem-upstreams.conf.example), change the upstream target from `api:19753` to `tandem-api:19753` to match this example service name. Keep TLS termination in the existing proxy and set the required `TRUST_PROXY` value to its exact container IP or a narrow subnet so Fastify can honor forwarded client addresses. Do not publish PostgreSQL or expose the API directly to the internet.
-
-The image tag in the Compose service must match the tag used by `docker build`. When updating Tandem later, build from the Tandem repository root, then run Compose from the Actual deployment directory to recreate only the API service:
-
-```sh
-docker build --tag tandem-for-actual-api:26.11.0-local --file services/api/Dockerfile .
-# From the directory containing your Actual Compose file:
-docker compose --env-file .env --env-file .env.tandem -f docker-compose.yml up -d tandem-api
-```
-
-Check readiness through the HTTPS address configured in the reverse proxy:
-
-```sh
-curl --fail https://budget.example.com/api/v1/health/ready
-```
-
-Open Tandem, enter the public Tandem API address, then sign in with the Actual password or OpenID option configured on your Actual server. Tandem lists the budgets available to that Actual account.
-
-#### If you do not use the same Compose project as Actual
-
-You can run Tandem in its own production Compose project. Clone this repository on the host, create the external network shared with Actual and your reverse proxy, then configure the deployment. The [deployment guide's start steps](deploy/README.md#start-the-service) show how to create the secret files; `.env` contains their paths. See the [configuration reference](docs/deploy/configuration.md) for settings and the [troubleshooting guide](docs/deploy/troubleshooting.md) for connection and readiness failures. The Compose file builds the API image and keeps PostgreSQL and the Actual workspace on persistent volumes:
-
-```sh
-docker network create tandem-edge
-cp deploy/compose/.env.example deploy/compose/.env
-chmod 600 deploy/compose/.env
-docker compose \
-  --project-directory "$PWD" \
-  --env-file deploy/compose/.env \
-  -f deploy/compose/production.yml \
-  up -d --build
-```
-
-Attach the Actual server and reverse proxy to `tandem-edge` (prefer adding the network to their Compose services so it survives container recreation). Set `ACTUAL_SERVER_URL` to the Actual service name and port on that network. Add the Tandem Nginx location before Actual's existing catch-all. The full network, proxy, backup, and restore steps are in [`deploy/README.md`](deploy/README.md).
-
-#### If you do not run Docker
-
-Install the pinned Node.js and pnpm versions from [`mise.toml`](mise.toml), plus PostgreSQL `18.6`. Create a dedicated PostgreSQL database and an OS account for Tandem. From the repository root, build the API and run it under a process supervisor such as systemd:
-
-```sh
-mise install
-pnpm install --frozen-lockfile
-pnpm --filter @tandem-for-actual/api build
-
-sudo -u postgres createuser --pwprompt tandem
-sudo -u postgres createdb --owner=tandem tandem
-sudo install -d -o tandem -g tandem -m 0700 /var/lib/tandem/actual-api
-
-export DATABASE_URL='postgresql://tandem:<url-safe-password>@127.0.0.1:5432/tandem'
-export AUTH_TOKEN_ENCRYPTION_KEY='<64-hex-character-random-value>'
-export HOST=127.0.0.1
-export PORT=19753
-export TRUST_PROXY=127.0.0.1
-export ACTUAL_SERVER_URL='http://127.0.0.1:5006'
-export ACTUAL_API_DATA_DIR='/var/lib/tandem/actual-api'
-export ACTUAL_PUBLIC_URL='https://budget.example.com'
-node services/api/dist/entrypoint.js
-```
-
-Store environment values in the supervisor's protected environment file instead of a shell history, keep `ACTUAL_API_DATA_DIR` on persistent storage, and place the API behind the HTTPS reverse proxy. Set `ACTUAL_SERVER_URL` to the Actual address reachable from the host process. Set `ACTUAL_PUBLIC_URL` to the public Tandem address when enabling OpenID sign-in. If Nginx runs on the same host, proxy `/api/v1/` to `http://127.0.0.1:19753` and keep `HOST=127.0.0.1`. The `pnpm api:dev` command is for development only; it does not replace a production process supervisor.
-
-### 3. Build and run Android
-
-From the repository root, install the pinned JavaScript packages used by the mobile resource generator:
-
-```sh
-mise install
-pnpm install --frozen-lockfile
-```
-
-Then from the `mobile/` directory:
-
-```sh
-./gradlew :androidApp:assembleDebug
-adb reverse tcp:19753 tcp:19753
-adb install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk
-```
-
-Open Tandem, enter the Tandem API address reachable from the Android device, then sign in to Actual. For a local development API, use `adb reverse tcp:19753 tcp:19753` and `http://127.0.0.1:19753`; for a deployment, use the HTTPS URL configured in the reverse proxy.
-
-The app warns that HTTP does not encrypt passwords or session tokens. The `adb reverse` HTTP address is for trusted local development over USB; use HTTPS for any remote or shared network.
-
-### Build iOS
-
-After installing the pinned JavaScript packages above, on macOS with Xcode installed, from the `mobile/` directory:
-
-```sh
-xcodebuild \
-  -project iosApp/TandemForActual.xcodeproj \
-  -scheme TandemForActual \
-  -destination 'generic/platform=iOS Simulator' \
-  build
-```
-
-## Development checks
-
-Install the local Git hooks once after cloning the repository:
-
-```sh
-./scripts/install-git-hooks.sh
-```
-
-The pre-commit hook checks formatting and mobile source rules. When Kotlin
-files are staged, it runs KtLint and compiles the shared Android sources with
-`:composeApp:compileAndroidMain` and `:composeApp:compileAndroidHostTest`. It
-runs ESLint when JavaScript or TypeScript files are staged. Before a push, the
-hook runs TypeScript checks, mobile tests and coverage gates, Android lint and
-release assembly, and Kotlin compilation for Android and iOS targets. The
-hooks find a standard Android SDK location automatically; set `ANDROID_HOME`
-when yours is installed elsewhere. CI on macOS remains responsible for the
-Xcode app build and iOS simulator tests. When mobile code is staged, the
-pre-commit hook refuses to compile against other unstaged or untracked mobile
-files. The pre-push hook requires a clean `mobile/` tree, so its compilation
-checks match the source in the pushed commit. Install project dependencies
-before running the hooks.
-
-Run the API checks in the disposable Docker environment:
-
-```sh
-pnpm test:integration
-```
-
-Verify the pinned Actual integration and production deployment workflow:
-
-```sh
-./scripts/test-actual-compatibility.sh
-./scripts/test-production-deployment.sh
-```
-
-Integration checks use synthetic budgets. Project-owned executable API code has a 100% line-coverage gate. See [`docs/actual-compatibility.md`](docs/actual-compatibility.md), [`docs/mobile-sync.md`](docs/mobile-sync.md), and [`docs/development.md`](docs/development.md) for implementation and testing details.
+The [documentation index](docs/README.md) lists every guide by audience.
 
 ## License
 
-Licensed under AGPL-3.0-or-later. See [`LICENSE`](LICENSE).
+Tandem is licensed under AGPL-3.0-or-later. See [`LICENSE`](LICENSE).

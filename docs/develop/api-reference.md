@@ -340,5 +340,5 @@ response against the contract served by the running version.
 The shared mobile client applies snapshots and paged changes to a local SQLite
 database and polls durable operation status after uncertain writes. Its lifecycle
 and recovery behavior are documented in
-[`docs/mobile-sync.md`](../mobile-sync.md). The current transaction operation
+[offline sync and conflict handling](../using/offline-sync-and-conflicts.md). The current transaction operation
 endpoint supports stable-ID transaction creation, updates, and deletions.

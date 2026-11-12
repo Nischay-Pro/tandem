@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep mobile UI wording aligned with docs/mobile-ui.md."""
+"""Keep mobile UI wording aligned with docs/develop/ui-writing.md."""
 
 from __future__ import annotations
 
@@ -204,7 +204,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--wording-doc",
         type=Path,
-        default=ROOT / "docs" / "mobile-ui.md",
+        default=ROOT / "docs" / "develop" / "ui-writing.md",
         help="wording guide whose preferred terms must be present",
     )
     parser.add_argument(

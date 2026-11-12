@@ -38,7 +38,7 @@ Actual session token.
 
 The supplied Compose file mounts the PostgreSQL password, database URL, API
 encryption keys and optional Actual session token from
-`deploy/compose/secrets/`. Create them using the [start steps](../../deploy/README.md#start-the-service).
+`deploy/compose/secrets/`. Create them using the [start steps](install.md#start-the-service).
 
 ## Check the configuration
 
@@ -51,4 +51,4 @@ curl --fail https://budget.example.com/api/v1/health/ready
 ```
 
 If the check fails, use the [troubleshooting guide](troubleshooting.md). For
-network and proxy setup, see the [deployment guide](../../deploy/README.md).
+network and proxy setup, see the [installation guide](install.md).

@@ -1,7 +1,7 @@
 # Generated Kotlin API client
 
 The mobile API client is generated from the checked-in
-[`docs/api/openapi-v1.json`](api/openapi-v1.json) contract. The generator runs
+[`docs/api/openapi-v1.json`](../api/openapi-v1.json) contract. The generator runs
 as part of Gradle compilation; generated sources stay under `mobile/api-client/build`
 and are not committed. The OpenAPI drift check remains the source-of-truth gate
 for route changes.
@@ -12,7 +12,7 @@ handwritten adapter between generated endpoint calls and the shared data
 module's sync protocol. The Compose app calls these APIs to sign in, list
 available budgets, perform the initial local sync, and display recent
 transactions from the local database. The persistence and sync lifecycle are
-documented in [`docs/mobile-sync.md`](mobile-sync.md).
+documented in [offline sync and conflict handling](../using/offline-sync-and-conflicts.md).
 
 The module targets Android (minSdk 26, compileSdk 36) and iOS (device ARM64 and
 Apple Silicon simulator). The pinned generator's stable release does

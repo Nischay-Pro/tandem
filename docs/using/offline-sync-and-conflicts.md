@@ -194,7 +194,7 @@ multi-instance invalidation keeps the visible screens current.
 
 Actual-encrypted budgets are decrypted by Actual's API for the temporary
 in-memory snapshot and the mobile cache. Actual's encryption therefore does not
-protect those working copies. See [the architecture notes](architectural-design.md)
+protect those working copies. See [the architecture notes](../concepts/architecture-and-trust.md)
 for the server trust boundary and the fully encrypted alternative.
 
 “Forget this device” revokes the server token before removing the local

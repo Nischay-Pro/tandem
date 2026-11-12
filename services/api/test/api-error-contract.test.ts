@@ -166,13 +166,13 @@ describe("API error contract", () => {
     }
 
     const apiReadme = await readFile(
-      new URL("../../../docs/api/README.md", import.meta.url),
+      new URL("../../../docs/develop/api-reference.md", import.meta.url),
       "utf8",
     );
     for (const status of errorStatuses) {
       expect(
         apiReadme,
-        `docs/api/README.md is missing HTTP ${status}`,
+        `docs/develop/api-reference.md is missing HTTP ${status}`,
       ).toContain(`| \`${status}\` |`);
     }
   });

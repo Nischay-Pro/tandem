@@ -29,7 +29,7 @@ operations through one queue, checks the server release once per session, and
 calls `downloadBudget()` before each budget operation. Successful writes can
 request an explicit `sync()` after the operation. A failed sync is surfaced as
 an uncertain outcome; the adapter does not retry it. The durable operation
-journal and write recovery policy are documented in [the architectural design](architectural-design.md).
+journal and write recovery policy are documented in [the architecture and trust notes](architecture-and-trust.md).
 
 ## Budget snapshot cache
 

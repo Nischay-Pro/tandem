@@ -26,11 +26,11 @@ runs the forced full mutation suite weekly and on manual dispatch. Its HTML
 report and temporary worktree are generated locally.
 
 The generated KMP API client and its pinned Gradle toolchain are documented in
-[`docs/mobile-api-client.md`](mobile-api-client.md). Android and JVM compilation
+[`toolchain.md`](toolchain.md). Android and JVM compilation
 and tests run in the mobile CI job. iOS device and Apple Silicon simulator
 compilation run on the macOS CI runner with Xcode. The local-first repository,
 sync coordinator, and sync triggers are described in
-[`docs/mobile-sync.md`](mobile-sync.md). Use an Android emulator or connected
+[offline sync and conflict handling](../using/offline-sync-and-conflicts.md). Use an Android emulator or connected
 device configured through Android Studio or the Android SDK command-line tools.
 The shared Compose app can sign in through Tandem, load
 the signed-in account's budget catalog, and sync budget data locally. Budget, account,
@@ -52,7 +52,7 @@ adb shell am start -n app.tandemforactual.android/.MainActivity --ez preview tru
 ```
 
 The project uses the pinned Gradle 9.8.2 / Java 25 toolchain documented in
-[`docs/mobile-api-client.md`](mobile-api-client.md). Gradle and the Android SDK
+[`toolchain.md`](toolchain.md). Gradle and the Android SDK
 may be installed locally or supplied by a development container. Use ADB touch,
 swipe, and Back inputs to inspect flows. Keep exported captures out of source
 control. The `preview` launch extra opens the synthetic budget overview; without
