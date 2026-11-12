@@ -13,28 +13,28 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.TandemShapes
+import app.tandemforactual.ui.TandemSpacing
 import app.tandemforactual.ui.TandemTypography
 import app.tandemforactual.ui.tandemPalette
 
 @Composable
 internal fun AvailableAmountPill(
     amount: String,
-    isOverdrawn: Boolean,
+    isOverspent: Boolean,
 ) {
     val palette = tandemPalette
-    val label = if (isOverdrawn) "Overspent, $amount available" else "$amount available"
+    val label = if (isOverspent) "Overspent, $amount available" else "$amount available"
     Row(
         Modifier
             .clearAndSetSemantics { contentDescription = label }
             .clip(RoundedCornerShape(TandemShapes.pill))
             .background(palette.raised)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.extraSmall),
     ) {
         Text(
             amount,
-            color = if (isOverdrawn) palette.negative else palette.positive,
+            color = if (isOverspent) palette.negative else palette.positive,
             fontSize = TandemTypography.label,
             fontWeight = FontWeight.SemiBold,
         )

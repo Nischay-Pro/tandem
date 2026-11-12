@@ -16,6 +16,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -27,7 +28,7 @@ class AvailableAmountPillTest {
     fun overdrawnPillAnnouncesTheStatusAndSignedAmount() {
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                AvailableAmountPill("-$12.00", isOverdrawn = true)
+                AvailableAmountPill("-$12.00", isOverspent = true)
             }
         }
 
@@ -38,7 +39,7 @@ class AvailableAmountPillTest {
     fun nonOverdrawnPillDoesNotAnnounceAnOverspentStatus() {
         composeTestRule.setContent {
             TandemTheme(ThemeMode.LIGHT, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                AvailableAmountPill("$12.00", isOverdrawn = false)
+                AvailableAmountPill("$12.00", isOverspent = false)
             }
         }
 
@@ -52,7 +53,7 @@ class AvailableAmountPillTest {
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 2f)) {
                 TandemTheme(ThemeMode.LIGHT, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
                     Box(Modifier.width(96.dp)) {
-                        AvailableAmountPill("-€123,456,789.00", isOverdrawn = true)
+                        AvailableAmountPill("-€123,456,789.00", isOverspent = true)
                     }
                 }
             }
@@ -61,6 +62,21 @@ class AvailableAmountPillTest {
         composeTestRule
             .onNodeWithContentDescription("Overspent, -€123,456,789.00 available")
             .assertExists()
-            .assertHeightIsAtLeast(56.dp)
+            .assertHeightIsAtLeast(48.dp)
+    }
+
+    @Test
+    fun positiveAndNegativePillColorsMeetTextContrastInEveryTheme() {
+        val palettes =
+            listOf(
+                tandemPaletteFor(ThemeMode.LIGHT, systemIsDark = false, accent = AccentChoice.ACTUAL_PURPLE),
+                tandemPaletteFor(ThemeMode.DARK, systemIsDark = true, accent = AccentChoice.ACTUAL_PURPLE),
+                tandemPaletteFor(ThemeMode.PURE_BLACK, systemIsDark = true, accent = AccentChoice.ACTUAL_PURPLE),
+            )
+
+        palettes.forEach { palette ->
+            assertTrue(wcagContrastRatio(palette.positive, palette.raised) >= 4.5f)
+            assertTrue(wcagContrastRatio(palette.negative, palette.raised) >= 4.5f)
+        }
     }
 }

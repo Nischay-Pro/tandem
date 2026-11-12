@@ -73,10 +73,10 @@ internal fun TransactionRow(
             secondaryLabel,
             amountText.takeUnless { activityStyle },
             leading =
-                if (selectionMode) {
-                    RowLeading.Icon(if (selected) Lucide.Check else Lucide.Square)
-                } else {
-                    RowLeading.Merchant(transaction.merchantIcon, fallback = transaction.categoryIcon ?: Lucide.Receipt)
+                when {
+                    selectionMode -> RowLeading.Icon(if (selected) Lucide.Check else Lucide.Square)
+                    activityStyle -> activityTransactionLeading(transaction)
+                    else -> RowLeading.Merchant(transaction.merchantIcon, fallback = transaction.categoryIcon ?: Lucide.Receipt)
                 },
             options =
                 ListRowOptions(
@@ -125,6 +125,20 @@ internal fun activityTransactionSubtitle(
     ).joinToString(" · ")
 }
 
+internal fun activityTransactionLeading(transaction: TransactionItem): RowLeading {
+    val merchantIcon = transaction.merchantIcon
+    if (merchantIcon != null) {
+        return RowLeading.Merchant(merchantIcon, fallback = transaction.categoryIcon ?: Lucide.Receipt)
+    }
+    val payeeInitial =
+        transaction.payee
+            .trim()
+            .firstOrNull()
+            ?.uppercaseChar()
+            ?.toString() ?: "?"
+    return RowLeading.Letter(transaction.icon.ifBlank { payeeInitial })
+}
+
 internal fun activityAmountFractionRange(
     value: String,
     fractionDigits: Int,
@@ -161,9 +175,9 @@ internal fun activityAmountAccessibilityDescription(
     amountMinorUnits: Long,
 ): String =
     when {
-        amountMinorUnits > 0 -> "$value, money in"
-        amountMinorUnits < 0 -> "$value, money out"
-        else -> value
+        amountMinorUnits > 0 -> "Income, $value"
+        amountMinorUnits < 0 -> "Spending, $value"
+        else -> "No money moved, $value"
     }
 
 @Composable

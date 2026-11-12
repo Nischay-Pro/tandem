@@ -1,6 +1,7 @@
 package app.tandemforactual.ui
 
 import app.tandemforactual.data.database.SearchableBudgetTransaction
+import app.tandemforactual.ui.components.RowLeading
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -40,9 +41,24 @@ class ActivitySearchTest {
 
     @Test
     fun activityAmountAccessibilityIncludesDirectionWithoutDependingOnColor() {
-        assertEquals("+$12.34, money in", activityAmountAccessibilityDescription("+$12.34", 1_234))
-        assertEquals("-$12.34, money out", activityAmountAccessibilityDescription("-$12.34", -1_234))
-        assertEquals("$0.00", activityAmountAccessibilityDescription("$0.00", 0))
+        assertEquals("Income, +$12.34", activityAmountAccessibilityDescription("+$12.34", 1_234))
+        assertEquals("Spending, -$12.34", activityAmountAccessibilityDescription("-$12.34", -1_234))
+        assertEquals("No money moved, $0.00", activityAmountAccessibilityDescription("$0.00", 0))
+    }
+
+    @Test
+    fun activityRowsUsePayeeInitialWhenMerchantArtworkIsUnavailable() {
+        val transaction =
+            TransactionItem(
+                payee = "Costco Gas",
+                category = "Fuel",
+                dateLabel = "May 14, 2026",
+                amountMinorUnits = -1_170,
+                icon = "C",
+            )
+
+        assertEquals(RowLeading.Letter("C"), activityTransactionLeading(transaction))
+        assertEquals(RowLeading.Letter("C"), activityTransactionLeading(transaction.copy(icon = "")))
     }
 
     @Test

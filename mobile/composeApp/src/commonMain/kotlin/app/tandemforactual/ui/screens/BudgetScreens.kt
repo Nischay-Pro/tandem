@@ -639,7 +639,7 @@ internal fun BudgetScreen(
                                             if (category.pendingChanges) PendingBudgetSyncIcon()
                                             AvailableAmountPill(
                                                 state.formatCurrency(category.balanceMinor),
-                                                isOverdrawn = category.balanceMinor < 0,
+                                                isOverspent = category.balanceMinor < 0,
                                             )
                                         }
                                     },

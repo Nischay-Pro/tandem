@@ -40,6 +40,11 @@ LAYOUT_CONTRACTS = {
         re.compile(r"TandemLayout\.compactListRowVerticalInset"),
         re.compile(r"Arrangement\.spacedBy\(TandemLayout\.listRowGap\)"),
     ),
+    UI_ROOT / "components/AvailableAmountPill.kt": (
+        re.compile(r"RoundedCornerShape\(TandemShapes\.pill\)"),
+        re.compile(r"\.background\(palette\.raised\)"),
+        re.compile(r"padding\(horizontal\s*=\s*TandemSpacing\.medium,\s*vertical\s*=\s*TandemSpacing\.extraSmall\)"),
+    ),
     UI_ROOT / "screens/SettingsScreen.kt": (
         re.compile(r"heightIn\(min\s*=\s*TandemLayout\.listRowMinHeight\)"),
         re.compile(r"horizontal\s*=\s*TandemLayout\.listRowHorizontalInset"),
