@@ -2,7 +2,7 @@
 set -euo pipefail
 
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-scratch_root="$project_root/.dev-tmp/release-check"
+scratch_root="${TANDEM_RELEASE_CHECK_DIRECTORY:-$project_root/.dev-tmp/release-check}"
 mkdir -p "$scratch_root"
 env_file="$(mktemp "$scratch_root/production.XXXXXX.env")"
 chmod 600 "$env_file"
@@ -23,6 +23,16 @@ full_disk_host_port="${TEST_FULL_DISK_API_HOST_PORT:-$(find_available_local_port
 full_disk_env_file="$scratch_root/full-disk.env"
 full_disk_compose=()
 compose=(docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml")
+
+start_compose_stack() {
+  local compose_variable="$1"
+  local -n selected_compose="$compose_variable"
+  if [[ "${TANDEM_API_IMAGE_PREBUILT:-false}" == "true" ]]; then
+    "${selected_compose[@]}" up --pull never --no-build --detach
+  else
+    "${selected_compose[@]}" up --build --detach
+  fi
+}
 
 cleanup() {
   if ((${#full_disk_compose[@]})); then
@@ -77,6 +87,7 @@ DATABASE_URL_FILE=$secret_dir/database_url
 AUTH_TOKEN_ENCRYPTION_KEY_FILE=$secret_dir/auth_token_encryption_key
 AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE=$secret_dir/auth_token_encryption_key_previous
 ACTUAL_SESSION_TOKEN_FILE=$secret_dir/actual_session_token
+TANDEM_API_IMAGE=tandem-for-actual-api:release-check
 TEST_API_HOST_PORT=$test_api_host_port
 TRUST_PROXY=127.0.0.1
 TANDEM_EDGE_NETWORK=$edge_network
@@ -85,12 +96,12 @@ ACTUAL_PUBLIC_URL=
 EOF
 
 docker network create "$edge_network" >/dev/null
-if TRUST_PROXY= "${compose[@]}" config --quiet >/dev/null 2>&1; then
-  echo "Production Compose accepted an empty TRUST_PROXY value." >&2
+if ! TRUST_PROXY= "${compose[@]}" config --quiet; then
+  echo "Production Compose rejected the safe empty TRUST_PROXY default." >&2
   exit 1
 fi
 "${compose[@]}" config --quiet
-"${compose[@]}" up --build --detach
+start_compose_stack compose
 api_id="$("${compose[@]}" ps -q api)"
 api_environment="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$api_id")"
 if [[ "$api_environment" == *"$test_secret"* || "$api_environment" == *"$auth_key"* ]]; then
@@ -497,6 +508,7 @@ DATABASE_URL_FILE=$secret_dir/database_url
 AUTH_TOKEN_ENCRYPTION_KEY_FILE=$secret_dir/auth_token_encryption_key
 AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE=$secret_dir/auth_token_encryption_key_previous
 ACTUAL_SESSION_TOKEN_FILE=$secret_dir/actual_session_token
+TANDEM_API_IMAGE=tandem-for-actual-api:release-check
 TEST_API_HOST_PORT=$full_disk_host_port
 TRUST_PROXY=127.0.0.1
 TANDEM_EDGE_NETWORK=$full_disk_edge_network
@@ -507,7 +519,7 @@ chmod 600 "$full_disk_env_file"
 full_disk_compose=(env "TEST_API_HOST_PORT=$full_disk_host_port" docker compose -p "$full_disk_project" --project-directory "$project_root" --env-file "$full_disk_env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml" -f "$project_root/deploy/compose/production-full-disk-check.yml")
 docker network create "$full_disk_edge_network" >/dev/null
 "${full_disk_compose[@]}" config --quiet
-"${full_disk_compose[@]}" up --build --detach
+start_compose_stack full_disk_compose
 
 wait_for_full_disk_api() {
   for _ in $(seq 1 60); do

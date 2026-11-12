@@ -19,5 +19,28 @@ Before deployment:
   backup files. See [key configuration](configuration.md) and
   [backup and restore](backup-restore.md).
 
+## Verify a published API image
+
+Nightly API images are built from a main commit after that exact commit passes
+CI. The workflow tests the candidate with the production Compose stack before
+publishing it, then attaches GitHub build provenance. Verify a digest-pinned
+image before deploying it:
+
+```sh
+cosign verify \
+  --certificate-identity 'https://github.com/Nischay-Pro/tandem/.github/workflows/nightly-api.yml@refs/heads/main' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/nischay-pro/tandem-api@sha256:IMAGE_DIGEST
+
+gh attestation verify \
+  oci://ghcr.io/nischay-pro/tandem-api@sha256:IMAGE_DIGEST \
+  --repo Nischay-Pro/tandem
+```
+
+Replace `IMAGE_DIGEST` with the 64 hexadecimal characters from `TANDEM_API_IMAGE`.
+The [setup command](install.md#start-a-new-deployment) selects the current
+nightly digest and records it in `.env`; it does not silently update a running
+installation.
+
 For user-side offline behavior and status messages, see
 [Offline sync and conflicts](../using/offline-sync-and-conflicts.md).

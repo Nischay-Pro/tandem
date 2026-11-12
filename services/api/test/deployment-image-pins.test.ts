@@ -39,4 +39,19 @@ describe("deployment image digests", () => {
       }
     }
   });
+
+  it("keeps production pull-only and source builds in the disposable check overlay", async () => {
+    const production = await readFile(
+      new URL("../../../deploy/compose/production.yml", import.meta.url),
+      "utf8",
+    );
+    const checkOverlay = await readFile(
+      new URL("../../../deploy/compose/production-check.yml", import.meta.url),
+      "utf8",
+    );
+
+    expect(production).toContain("image: ${TANDEM_API_IMAGE:");
+    expect(production).not.toMatch(/^\s+build:/m);
+    expect(checkOverlay).toContain("dockerfile: services/api/Dockerfile");
+  });
 });

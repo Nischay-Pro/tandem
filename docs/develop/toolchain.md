@@ -37,6 +37,13 @@ Update them in one tested toolchain change.
 
 ## Build and lint
 
+The fast GitHub Actions syntax and expression check is pinned to actionlint
+1.7.12. Run it from the repository root with:
+
+```sh
+./scripts/check-github-workflows.sh
+```
+
 From `mobile/`:
 
 ```sh

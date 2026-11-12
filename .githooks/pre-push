@@ -26,6 +26,11 @@ python3 scripts/check-mobile-design-tokens.py
 python3 scripts/check-mobile-ui-vocabulary.py
 node scripts/check-docs.mjs
 node --test scripts/check-docs.test.mjs
+if ! command -v go >/dev/null 2>&1; then
+  printf '%s\n' 'Workflow checks need Go to run the pinned actionlint version.' >&2
+  exit 1
+fi
+"$repo_root/scripts/check-github-workflows.sh"
 
 if [ -z "${ANDROID_HOME:-}" ]; then
   if [ -n "${ANDROID_SDK_ROOT:-}" ]; then

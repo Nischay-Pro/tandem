@@ -16,17 +16,17 @@ chmod 600 /secure/tandem-backup-keys/passphrase
 
 Keep that passphrase in a password manager or another protected location,
 separate from the backup files. Do not put it in `.env`, the backup directory,
-or the same storage account as the backups. Back up `deploy/compose/.env` and
-`deploy/compose/secrets/` separately in an approved secrets manager. The `.env`
-contains non-secret configuration and secret-file paths; the secret files contain
-the database password and auth encryption key.
+or the same storage account as the backups. Back up `tandem/deploy/compose/.env`
+and `tandem/deploy/compose/secrets/` separately in an approved secrets manager.
+The `.env` contains non-secret configuration and secret-file paths; the secret
+files contain the database password and auth encryption key.
 
 Run a backup to a protected prefix in a directory accessible only to the
 operator; output files are created with mode 600. The API is briefly stopped while its Actual
 workspace is archived and is restarted afterward.
 
 ```sh
-deploy/backup.sh /secure/tandem-backups/tandem-2026-11-01
+tandem/deploy/backup.sh /secure/tandem-backups/tandem-2026-11-01
 ```
 
 ### Back up on a schedule
@@ -42,10 +42,10 @@ longer history is needed. Keep the auth encryption key with the protected
 database backups; without it, saved Actual sign-in sessions in those backups
 cannot be decrypted.
 
-From the Tandem checkout, edit the service paths if the checkout is not at
-`/opt/tandem`. Create the root-readable environment file. Omit the GnuPG line
-if you intentionally store backups on encrypted storage instead of encrypting
-each backup file:
+The setup command downloads the backup and systemd files into `tandem/deploy/`.
+For a standard installation at `/opt/tandem`, create the root-readable
+environment file. Omit the GnuPG line if you intentionally store backups on
+encrypted storage instead of encrypting each backup file:
 
 ```sh
 sudo install -d -m 700 /etc/tandem /secure/tandem-backups
@@ -56,8 +56,8 @@ TANDEM_BACKUP_DIRECTORY=/secure/tandem-backups
 TANDEM_BACKUP_GPG_PASSPHRASE_FILE=/secure/tandem-backup-keys/passphrase
 EOF
 sudo chmod 600 /etc/tandem/backup.env
-sudo install -m 644 deploy/systemd/tandem-backup.service /etc/systemd/system/
-sudo install -m 644 deploy/systemd/tandem-backup.timer /etc/systemd/system/
+sudo install -m 644 /opt/tandem/deploy/systemd/tandem-backup.service /etc/systemd/system/
+sudo install -m 644 /opt/tandem/deploy/systemd/tandem-backup.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now tandem-backup.timer
 ```
@@ -86,7 +86,7 @@ backup script. The backup stream is encrypted before it is written to disk:
 
 ```sh
 TANDEM_BACKUP_GPG_PASSPHRASE_FILE=/secure/tandem-backup-keys/passphrase \
-  deploy/backup.sh /secure/tandem-backups/tandem-2026-11-01-encrypted
+  tandem/deploy/backup.sh /secure/tandem-backups/tandem-2026-11-01-encrypted
 ```
 
 Restore either a plaintext pair or an encrypted `.gpg` pair during a
@@ -108,7 +108,7 @@ the exact prefix printed by `restore.sh` (shown here with an example timestamp
 and process ID):
 
 ```sh
-deploy/restore.sh /secure/tandem-backups/tandem-2026-11-01.before-restore-20261112T061249Z-12345
+tandem/deploy/restore.sh /secure/tandem-backups/tandem-2026-11-01.before-restore-20261112T061249Z-12345
 ```
 
 The restore script leaves the API stopped until you explicitly start and
@@ -120,7 +120,7 @@ created:
 
 ```sh
 TANDEM_BACKUP_GPG_PASSPHRASE_FILE=/secure/tandem-backup-keys/passphrase \
-  deploy/restore.sh /secure/tandem-backups/tandem-2026-11-01-encrypted
+  tandem/deploy/restore.sh /secure/tandem-backups/tandem-2026-11-01-encrypted
 ```
 
 Then start and verify the API using the commands above. Confirm that an

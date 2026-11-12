@@ -1,4 +1,7 @@
 services:
   api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
     ports:
       - "127.0.0.1:${TEST_API_HOST_PORT:-19754}:19753"

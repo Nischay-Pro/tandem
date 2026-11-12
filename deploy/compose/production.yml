@@ -23,9 +23,7 @@ services:
       - postgres_password
 
   api:
-    build:
-      context: .
-      dockerfile: services/api/Dockerfile
+    image: ${TANDEM_API_IMAGE:?Run the setup command to choose a digest-pinned API image}
     restart: unless-stopped
     init: true
     read_only: true
@@ -41,7 +39,7 @@ services:
       AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE: /run/secrets/auth_token_encryption_key_previous
       HOST: 0.0.0.0
       PORT: 19753
-      TRUST_PROXY: ${TRUST_PROXY:?Set TRUST_PROXY to the reverse proxy IP or narrow CIDR in deploy/compose/.env}
+      TRUST_PROXY: ${TRUST_PROXY:-}
       ACTUAL_SERVER_URL: ${ACTUAL_SERVER_URL:-}
       ACTUAL_SESSION_TOKEN_FILE: /run/secrets/actual_session_token
       ACTUAL_PUBLIC_URL: ${ACTUAL_PUBLIC_URL:-}

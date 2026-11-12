@@ -1,0 +1,421 @@
+name: Nightly API and Android artifacts
+
+on:
+  schedule:
+    - cron: "23 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-api-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  require_green_main_ci:
+    name: Require green CI for the current main commit
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      eligible: ${{ steps.check.outputs.eligible }}
+      source_sha: ${{ steps.check.outputs.source_sha }}
+    steps:
+      - name: Check out the scheduled source commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Wait for this exact main commit to pass CI
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          source_sha="$(git rev-parse HEAD)"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            echo "Nightly publishing only runs from main; this dispatch will not publish."
+            exit 0
+          fi
+
+          for _ in $(seq 1 110); do
+            current_main="$(git ls-remote origin refs/heads/main | awk 'NR == 1 { print $1 }')"
+            if [[ "$current_main" != "$source_sha" ]]; then
+              echo "eligible=false" >> "$GITHUB_OUTPUT"
+              echo "main moved from $source_sha to $current_main; skipping stale nightly work."
+              exit 0
+            fi
+
+            runs="$(gh run list --workflow ci.yml --branch main --commit "$source_sha" \
+              --json databaseId,status,conclusion,event)"
+            run="$(jq -c '[.[] | select(.event == "push")][0] // empty' <<<"$runs")"
+            status="$(jq -r '.status // "missing"' <<<"${run:-{}}")"
+            conclusion="$(jq -r '.conclusion // ""' <<<"${run:-{}}")"
+
+            if [[ "$status" == "completed" ]]; then
+              if [[ "$conclusion" == "success" ]]; then
+                echo "eligible=true" >> "$GITHUB_OUTPUT"
+                echo "CI passed for $source_sha."
+                exit 0
+              fi
+              if [[ "$conclusion" == "cancelled" || "$conclusion" == "skipped" ]]; then
+                echo "eligible=false" >> "$GITHUB_OUTPUT"
+                echo "CI ended as $conclusion; no nightly artifacts will be published."
+                exit 0
+              fi
+              echo "CI concluded $conclusion for $source_sha." >&2
+              exit 1
+            fi
+
+            echo "CI status for $source_sha is $status; checking again in 30 seconds."
+            sleep 30
+          done
+
+          echo "Timed out waiting for CI to finish for $source_sha." >&2
+          exit 1
+
+  build_and_smoke_candidate:
+    name: Build and test the API image before publishing
+    needs: require_green_main_ci
+    if: needs.require_green_main_ci.outputs.eligible == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the tested source commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.require_green_main_ci.outputs.source_sha }}
+          persist-credentials: false
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build the Linux x86_64 candidate image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: services/api/Dockerfile
+          platforms: linux/amd64
+          tags: ghcr.io/nischay-pro/tandem-api:candidate-${{ needs.require_green_main_ci.outputs.source_sha }}
+          load: true
+          cache-from: type=gha,scope=tandem-api-nightly
+          cache-to: type=gha,scope=tandem-api-nightly,mode=max
+
+      - name: Exercise the candidate through the production Compose stack
+        env:
+          TANDEM_API_IMAGE: ghcr.io/nischay-pro/tandem-api:candidate-${{ needs.require_green_main_ci.outputs.source_sha }}
+          TANDEM_API_IMAGE_PREBUILT: "true"
+          TANDEM_RELEASE_CHECK_DIRECTORY: ${{ runner.temp }}/tandem-release-check
+        run: ./scripts/test-production-deployment.sh
+
+  publish_api_image:
+    name: Publish multi-architecture API image and provenance
+    needs:
+      - require_green_main_ci
+      - build_and_smoke_candidate
+    if: needs.require_green_main_ci.outputs.eligible == 'true' && needs.build_and_smoke_candidate.result == 'success'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+      packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      source_sha: ${{ needs.require_green_main_ci.outputs.source_sha }}
+    steps:
+      - name: Check out the tested source commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.require_green_main_ci.outputs.source_sha }}
+          persist-credentials: false
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Sign in to GitHub Container Registry
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Set nightly tag
+        id: date
+        run: echo "value=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push the API image
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: services/api/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/nischay-pro/tandem-api:nightly
+            ghcr.io/nischay-pro/tandem-api:nightly-${{ steps.date.outputs.value }}
+            ghcr.io/nischay-pro/tandem-api:sha-${{ needs.require_green_main_ci.outputs.source_sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ needs.require_green_main_ci.outputs.source_sha }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=tandem-api-nightly
+          cache-to: type=gha,scope=tandem-api-nightly,mode=max
+
+      - name: Attest the published image digest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/nischay-pro/tandem-api
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Sign the published image digest with GitHub OIDC
+        env:
+          COSIGN_YES: "true"
+          IMAGE: ghcr.io/nischay-pro/tandem-api
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign "$IMAGE@$IMAGE_DIGEST"
+
+      - name: Verify the image can be pulled anonymously
+        env:
+          IMAGE: ghcr.io/nischay-pro/tandem-api
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          anonymous_config="$(mktemp -d)"
+          trap 'rm -rf "$anonymous_config"' EXIT
+          DOCKER_CONFIG="$anonymous_config" docker pull "$IMAGE@$IMAGE_DIGEST"
+
+      - name: Verify the published build attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh attestation verify
+          oci://ghcr.io/nischay-pro/tandem-api@${{ steps.build.outputs.digest }}
+          --repo ${{ github.repository }}
+
+      - name: Verify the published Cosign signature
+        env:
+          IMAGE: ghcr.io/nischay-pro/tandem-api
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          cosign verify \
+            --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/nightly-api.yml@refs/heads/main" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "$IMAGE@$IMAGE_DIGEST"
+
+      - name: Retain the fourteen latest dated nightly images
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          versions="$RUNNER_TEMP/tandem-api-versions.json"
+          gh api --paginate --slurp \
+            "users/${GITHUB_REPOSITORY_OWNER}/packages/container/tandem-api/versions?per_page=100" \
+            > "$versions"
+          while IFS= read -r version_id; do
+            [[ -z "$version_id" ]] && continue
+            gh api --method DELETE \
+              "users/${GITHUB_REPOSITORY_OWNER}/packages/container/tandem-api/versions/$version_id" \
+              >/dev/null
+          done < <(node scripts/prune-nightly-api-versions.mjs "$versions")
+
+  nightly_android_and_compose:
+    name: Build downloadable Android APK and pinned Compose bundle
+    needs:
+      - require_green_main_ci
+      - publish_api_image
+    if: needs.publish_api_image.result == 'success'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      TANDEM_PREGENERATED_ICON_PACK: "true"
+    steps:
+      - name: Check out the tested source commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.require_green_main_ci.outputs.source_sha }}
+          persist-credentials: false
+
+      - name: Set up mobile build tools
+        uses: ./.github/actions/setup-mobile-build
+        with:
+          gradle_cache_encryption_key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          setup_node: "true"
+          setup_android: "true"
+
+      - name: Generate merchant icon resources
+        run: node scripts/generate-thesvg-icon-pack.mjs --output mobile/composeApp/build/generated/thesvg-icon-pack/composeResources
+
+      - name: Write the separate nightly signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_NIGHTLY_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$KEYSTORE_BASE64" ]]; then
+            echo "Configure ANDROID_NIGHTLY_KEYSTORE_BASE64 before publishing a nightly APK." >&2
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/tandem-nightly.p12"
+          chmod 600 "$RUNNER_TEMP/tandem-nightly.p12"
+
+      - name: Set the nightly Android version
+        id: version
+        run: |
+          printf 'date_code=%s\n' "$(date -u +%y%m%d)" >> "$GITHUB_OUTPUT"
+          printf 'sequence=%03d\n' "$((GITHUB_RUN_NUMBER % 1000))" >> "$GITHUB_OUTPUT"
+
+      - name: Assemble and verify signed nightly Android APK
+        working-directory: mobile
+        env:
+          TANDEM_ANDROID_NIGHTLY_KEYSTORE: ${{ runner.temp }}/tandem-nightly.p12
+          TANDEM_ANDROID_NIGHTLY_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_NIGHTLY_KEYSTORE_PASSWORD }}
+          TANDEM_ANDROID_NIGHTLY_KEY_ALIAS: ${{ secrets.ANDROID_NIGHTLY_KEY_ALIAS }}
+          TANDEM_ANDROID_NIGHTLY_KEY_PASSWORD: ${{ secrets.ANDROID_NIGHTLY_KEY_PASSWORD }}
+          NIGHTLY_VERSION_CODE: ${{ format('{0}{1}', steps.version.outputs.date_code, steps.version.outputs.sequence) }}
+          NIGHTLY_VERSION_NAME: 0.1.0-nightly.${{ github.run_number }}
+        run: ./gradlew :androidApp:assembleRelease -PtandemVersionCode="$NIGHTLY_VERSION_CODE" -PtandemVersionName="$NIGHTLY_VERSION_NAME"
+
+      - name: Verify APK signature and write checksum
+        env:
+          NIGHTLY_VERSION_CODE: ${{ format('{0}{1}', steps.version.outputs.date_code, steps.version.outputs.sequence) }}
+          NIGHTLY_VERSION_NAME: 0.1.0-nightly.${{ github.run_number }}
+          SOURCE_SHA: ${{ needs.publish_api_image.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          apk=mobile/androidApp/build/outputs/apk/release/androidApp-release.apk
+          apksigner verify --verbose --print-certs "$apk"
+          test "$(apkanalyzer manifest application-id "$apk")" = "app.tandemforactual.android"
+          test "$(apkanalyzer manifest version-code "$apk")" = "$NIGHTLY_VERSION_CODE"
+          test "$(apkanalyzer manifest version-name "$apk")" = "$NIGHTLY_VERSION_NAME"
+          mkdir -p "$RUNNER_TEMP/nightly-release"
+          apk_name="Tandem-$NIGHTLY_VERSION_NAME-$SOURCE_SHA.apk"
+          cp "$apk" "$RUNNER_TEMP/nightly-release/$apk_name"
+          (
+            cd "$RUNNER_TEMP/nightly-release"
+            sha256sum "$apk_name" > "$apk_name.sha256"
+          )
+          printf '%s\n' "$NIGHTLY_VERSION_CODE" > "$RUNNER_TEMP/nightly-release/version-code.txt"
+          printf '%s\n' "$SOURCE_SHA" > "$RUNNER_TEMP/nightly-release/source-commit.txt"
+
+      - name: Create digest-pinned Compose bundle
+        env:
+          IMAGE_DIGEST: ${{ needs.publish_api_image.outputs.digest }}
+          SOURCE_SHA: ${{ needs.publish_api_image.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          bundle="$RUNNER_TEMP/tandem-nightly-$SOURCE_SHA"
+          node scripts/render-pinned-compose.mjs \
+            "ghcr.io/nischay-pro/tandem-api@$IMAGE_DIGEST" \
+            "$bundle"
+          TANDEM_API_IMAGE="ghcr.io/nischay-pro/tandem-api@$IMAGE_DIGEST" \
+            docker compose --project-directory "$bundle" \
+              --env-file "$bundle/.env.example" \
+              -f "$bundle/production.yml" config --quiet
+      - name: Move the rolling nightly tag to this tested commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.publish_api_image.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          ref="repos/$GITHUB_REPOSITORY/git/ref/tags/nightly"
+          if gh api "$ref" >/dev/null 2>&1; then
+            gh api --method PATCH "$ref" -f sha="$SOURCE_SHA" -F force=true >/dev/null
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref=refs/tags/nightly -f sha="$SOURCE_SHA" >/dev/null
+          fi
+
+      - name: Create or update the rolling nightly prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.publish_api_image.outputs.source_sha }}
+          NIGHTLY_VERSION_NAME: 0.1.0-nightly.${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          release_notes=$(printf 'Android nightly %s\n\nSource commit: %s\n\nThis is a prerelease build. iOS builds are currently available from source only.' "$NIGHTLY_VERSION_NAME" "$SOURCE_SHA")
+          if gh release view nightly >/dev/null 2>&1; then
+            gh release edit nightly --title "Tandem $NIGHTLY_VERSION_NAME" --notes "$release_notes" --prerelease
+          else
+            gh release create nightly \
+              --target "$SOURCE_SHA" \
+              --title "Tandem $NIGHTLY_VERSION_NAME" \
+              --notes "$release_notes" \
+              --prerelease \
+              --latest=false
+          fi
+          gh release upload nightly \
+            "$RUNNER_TEMP/nightly-release/Tandem-$NIGHTLY_VERSION_NAME-$SOURCE_SHA.apk" \
+            "$RUNNER_TEMP/nightly-release/Tandem-$NIGHTLY_VERSION_NAME-$SOURCE_SHA.apk.sha256" \
+            --clobber
+
+      - name: Upload installable Android APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tandem-android-nightly-${{ needs.publish_api_image.outputs.source_sha }}
+          path: ${{ runner.temp }}/nightly-release/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload digest-pinned Compose bundle
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tandem-compose-nightly-${{ needs.publish_api_image.outputs.source_sha }}
+          path: ${{ runner.temp }}/tandem-nightly-${{ needs.publish_api_image.outputs.source_sha }}
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 14
+
+  report_nightly_failure:
+    name: Report failed nightly build
+    needs:
+      - require_green_main_ci
+      - build_and_smoke_candidate
+      - publish_api_image
+      - nightly_android_and_compose
+    if: >-
+      always() &&
+      (needs.require_green_main_ci.result == 'failure' ||
+       needs.build_and_smoke_candidate.result == 'failure' ||
+       needs.publish_api_image.result == 'failure' ||
+       needs.nightly_android_and_compose.result == 'failure')
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open one public issue for this failed source commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          title="Nightly build failed for $SOURCE_SHA"
+          existing="$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')"
+          if [[ -n "$existing" ]]; then
+            echo "Issue #$existing already tracks this nightly failure."
+            exit 0
+          fi
+          body_file="$(mktemp)"
+          trap 'rm -f "$body_file"' EXIT
+          printf 'The nightly Android and API release workflow failed for source commit %s.\n\nWorkflow run: %s/%s/actions/runs/%s\n\nReview the failed job logs, fix the release gate, then rerun the workflow.\n' \
+            "$SOURCE_SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > "$body_file"
+          gh issue create --title "$title" --body-file "$body_file"

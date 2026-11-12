@@ -24,6 +24,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Lint GitHub Actions workflows
+        run: ./scripts/check-github-workflows.sh
+
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -456,8 +459,10 @@ jobs:
 
       - name: Check deployment scripts and Compose configuration
         run: |
-          bash -n deploy/backup.sh deploy/restore.sh scripts/test-production-deployment.sh scripts/test-dockerignore-secrets.sh
-          TRUST_PROXY=127.0.0.1/32 docker compose --env-file deploy/compose/.env.example -f deploy/compose/production.yml config --quiet
+          bash -n deploy/backup.sh deploy/restore.sh deploy/tandem-setup.sh scripts/test-production-deployment.sh scripts/test-dockerignore-secrets.sh scripts/test-tandem-setup.sh
+          node --test scripts/render-pinned-compose.test.mjs scripts/prune-nightly-api-versions.test.mjs
+          ./scripts/test-tandem-setup.sh
+          TANDEM_API_IMAGE=tandem-api:configuration-check TRUST_PROXY=127.0.0.1/32 docker compose --project-directory "$PWD" --env-file deploy/compose/.env.example -f deploy/compose/production.yml config --quiet
 
       - name: Verify secrets are excluded from Docker build contexts
         run: ./scripts/test-dockerignore-secrets.sh

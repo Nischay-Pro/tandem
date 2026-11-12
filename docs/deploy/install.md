@@ -1,10 +1,9 @@
 # Tandem deployment
 
-Production Compose runs the API and PostgreSQL on a private network. The API
-image builds from the pinned Node and pnpm versions, compiles TypeScript in a
-build stage, and runs as the unprivileged `node` user in a read-only container.
-PostgreSQL is not published to the host. The API is reachable only from the
-external Docker network used by the reverse proxy.
+Production Compose runs the API and PostgreSQL on a private network. The setup
+command selects a nightly API image by digest and creates the protected secret
+files. PostgreSQL is not published to the host. The API is reachable only from
+the external Docker network used by the reverse proxy.
 
 Run one API process. Snapshot paging state is held in a bounded in-memory cache;
 multiple replicas would not share a page generation and could repeatedly force
@@ -14,40 +13,84 @@ See the [configuration reference](configuration.md),
 [reverse-proxy guide](reverse-proxy.md), and
 [troubleshooting guide](troubleshooting.md) for the next steps.
 
-## Start the service
+## Start a new deployment
 
-Create a dedicated edge network, a private directory for Compose secrets, and
-the deployment environment file:
+Before starting, install Docker Engine with Compose v2 and Buildx, plus `curl`,
+`openssl`, and `sudo`. Use a Linux host with rootful Docker so the API can read
+the secret files as its unprivileged container user.
+
+1. Download and run the setup command from the directory where you want the
+   deployment files:
 
 ```sh
-docker network create tandem-edge
-cp deploy/compose/.env.example deploy/compose/.env
-chmod 600 deploy/compose/.env
-mkdir -p deploy/compose/secrets
-chmod 700 deploy/compose/secrets
-postgres_password="$(openssl rand -hex 32)"
-printf '%s' "$postgres_password" > deploy/compose/secrets/postgres_password
-printf 'postgresql://tandem:%s@postgres:5432/tandem' "$postgres_password" > deploy/compose/secrets/database_url
-openssl rand -hex 32 > deploy/compose/secrets/auth_token_encryption_key
-touch deploy/compose/secrets/auth_token_encryption_key_previous
-touch deploy/compose/secrets/actual_session_token
-sudo chown root:1000 deploy/compose/secrets/*
-sudo chmod 0440 deploy/compose/secrets/*
-unset postgres_password
+curl --fail --silent --show-error --location \
+  https://raw.githubusercontent.com/Nischay-Pro/tandem/main/deploy/tandem-setup.sh \
+  --output tandem-setup.sh
+bash tandem-setup.sh
 ```
 
+The command downloads the production Compose file, resolves the public nightly
+image to a digest, creates the `tandem-edge` network if needed, and asks for
+the Actual URL, public Tandem URL and reverse proxy IP/CIDR. It writes files to
+`./tandem` by default. It also downloads the backup, restore, systemd and proxy
+examples into `tandem/deploy/`. Settings and secrets are stored in
+`tandem/deploy/compose/`. The command never replaces an existing `.env` file or
+secret. Running it again leaves an existing installation unchanged.
+
+Check that the API image is pinned and the secret files exist:
+
+```sh
+grep '^TANDEM_API_IMAGE=.*@sha256:' tandem/deploy/compose/.env
+test -s tandem/deploy/compose/secrets/postgres_password
+test -s tandem/deploy/compose/secrets/database_url
+test -s tandem/deploy/compose/secrets/auth_token_encryption_key
+```
+
+2. Start the services and check their health:
+
+```sh
+docker compose --project-directory "$PWD/tandem" \
+  --env-file "$PWD/tandem/deploy/compose/.env" \
+  -f "$PWD/tandem/deploy/compose/production.yml" up -d
+docker compose --project-directory "$PWD/tandem" \
+  --env-file "$PWD/tandem/deploy/compose/.env" \
+  -f "$PWD/tandem/deploy/compose/production.yml" ps
+```
+
+The `api` and `postgres` services should report healthy. If setup cannot read
+the nightly image without credentials, check the network and the image
+package's public visibility. If Compose reports a missing image setting, rerun
+setup from the same directory or restore its `.env` file.
+
+3. Configure TLS using the [reverse-proxy guide](reverse-proxy.md), then check
+   readiness:
+
+```sh
+curl --fail https://budget.example.com/api/v1/health/ready
+```
+
+The response should be `{"status":"ok"}` as JSON. If this URL returns the
+Actual web page, the reverse proxy is sending `/api/v1/` to Actual instead of
+the Tandem API. Add the API locations from
+[`deploy/nginx/tandem-locations.conf.example`](../../deploy/nginx/tandem-locations.conf.example)
+to the same TLS server block as Actual.
+
+### If Actual already runs in Compose
+
+Keep the generated Tandem Compose file as a separate stack. Attach the Actual
+service and reverse proxy to the external `tandem-edge` network, then set
+`ACTUAL_SERVER_URL` to the Actual service name and port if the API needs an
+operator-managed Actual session. This reuses the production Compose file and
+avoids duplicating its API or PostgreSQL definitions.
+
+The downloaded Nginx examples are under `tandem/deploy/nginx/`.
+
 Compose secrets are mounted read-only inside the containers. The `.env` file
-contains their paths, not their values; the API reads the database URL, Actual
-session token, and auth encryption key from those mounted files. The Actual
-session-token file is empty by default, which leaves normal per-person sign-in
-unchanged. The API runs as UID/GID 1000 in
-the supplied image. On a Linux host using rootful Docker, the files are owned by
-`root:1000` and use mode `0440`: the API can read them through its group, while
-other host users cannot read them through file permissions. Keep the secrets
-directory private (`chmod 700 deploy/compose/secrets`) as an additional layer.
-If you change the API's runtime GID, use that GID instead of `1000`. Actual
-account passwords are entered in Tandem and are not deployment secrets. Do not
-change the secret paths in `.env` unless you move these files.
+contains file paths, not secret values. The Actual session-token file is empty
+by default, which leaves per-person sign-in unchanged. The API runs as
+UID/GID 1000. On a Linux host using rootful Docker, setup creates secret files
+owned by `root:1000` with mode `0440` and keeps the secret directory private.
+Actual account passwords are entered in Tandem and are not deployment secrets.
 
 ### Optional operator-managed Actual session
 
@@ -59,7 +102,7 @@ start an Actual session before anyone signs in. It is not sent to the app.
 To obtain one, sign in to the Actual web app in a browser. Open that browser's
 developer tools and find IndexedDB database `actual`, object store
 `asyncStorage`, key `user-token`. Copy the value into
-`deploy/compose/secrets/actual_session_token`; do not put it in `.env`, shell
+`tandem/deploy/compose/secrets/actual_session_token`; do not put it in `.env`, shell
 history, a command-line argument, or a tracked file. Keep the existing
 `root:1000` ownership and `0440` mode, then restart the API. The token grants
 the same budget access as that Actual account. If it expires or is revoked,
@@ -73,8 +116,8 @@ operation. To rotate keys, generate a new 32-byte key and replace the current
 and previous files while preserving their ownership and mode. For example:
 
 ```sh
-sudo install -o root -g 1000 -m 0440 /secure/new-auth-key deploy/compose/secrets/auth_token_encryption_key
-sudo install -o root -g 1000 -m 0440 /secure/old-auth-key deploy/compose/secrets/auth_token_encryption_key_previous
+sudo install -o root -g 1000 -m 0440 /secure/new-auth-key tandem/deploy/compose/secrets/auth_token_encryption_key
+sudo install -o root -g 1000 -m 0440 /secure/old-auth-key tandem/deploy/compose/secrets/auth_token_encryption_key_previous
 ```
 
 Restart the API and wait for it to become healthy; startup re-encrypts every
@@ -85,52 +128,31 @@ healthy again. To clear the previous-key file, install an empty file with the
 same ownership and permissions:
 
 ```sh
-sudo install -o root -g 1000 -m 0440 /dev/null deploy/compose/secrets/auth_token_encryption_key_previous
+sudo install -o root -g 1000 -m 0440 /dev/null tandem/deploy/compose/secrets/auth_token_encryption_key_previous
 ```
 
 Keep the old key in protected backup storage while any database backup may still
 contain tokens encrypted with it.
 
 Set `ACTUAL_SERVER_URL` to the Actual service address. Set `ACTUAL_PUBLIC_URL` to
-the public Tandem URL to enable OpenID sign-in. When enabled,
-the server release must match
+the public Tandem URL to enable OpenID sign-in. When enabled, the server release must match
 [Actual compatibility](../concepts/actual-compatibility.md).
 
-When moving an existing deployment to this Compose file, populate the secret
-files with the credentials already in use. In particular, the Postgres
-password secret and database URL must match the existing database role; setting
-`POSTGRES_PASSWORD_FILE` does not rotate a password in an initialized volume.
-Create the new `auth_token_encryption_key_previous` secret file as zero bytes
-unless you are rotating keys, and keep its path in `.env`. Apply the
-`root:1000` ownership and `0440` mode before starting the API. The existing
-PostgreSQL and Actual workspace volumes are preserved.
-Keep the `actual-workspace` named volume while any write operation is
-uncertain. It contains Actual's local budget data, including writes that may
-not yet have reached the budget file; deleting it can discard those changes.
+When updating an existing deployment, do not run first-install setup against
+its data directory. Preserve its `.env`, secret files, Compose project name and
+named volumes. The Postgres password secret and database URL must match the
+existing database role; changing `POSTGRES_PASSWORD_FILE` does not rotate a
+password in an initialized volume. Set `TANDEM_API_IMAGE` to the new
+digest-pinned image. Keep the `actual-workspace` volume while any write
+operation is uncertain; it can contain Actual data that has not reached the
+budget file yet.
 
-The production Postgres and Node images are pinned by multi-platform registry
-digests. Review and update those digests together with their version tags when
-adopting a new image release.
-
-Configure the TLS reverse proxy using the [reverse-proxy guide](reverse-proxy.md). Set `TRUST_PROXY` to the proxy address the API sees.
-
-Start and verify:
-
-```sh
-docker compose --project-directory "$PWD" \
-  --env-file deploy/compose/.env \
-  -f deploy/compose/production.yml up -d --build
-docker compose --project-directory "$PWD" \
-  --env-file deploy/compose/.env \
-  -f deploy/compose/production.yml ps
-curl --fail https://budget.example.com/api/v1/health/ready
-```
-
-The response should be `{"status":"ok"}` as JSON. If this URL returns the
-Actual web page, the reverse proxy is sending `/api/v1/` to Actual instead of
-the Tandem API. Add the API locations from
-[`deploy/nginx/tandem-locations.conf.example`](../../deploy/nginx/tandem-locations.conf.example)
-to the same TLS server block as Actual.
+Setup resolves the current nightly API image once and records its digest in
+`deploy/compose/.env`, so a later nightly does not silently replace the
+installed image. To update, select and verify a new digest, edit
+`TANDEM_API_IMAGE`, then run Compose `up -d`. An empty `TRUST_PROXY` is the safe default: forwarded
+client-address headers are ignored. Set it to the reverse proxy's IP or narrow
+CIDR if rate limits should use the client address.
 
 The API has Docker liveness/readiness checks; readiness verifies PostgreSQL can
 write to its volume and checks free space on the Actual workspace volume.
@@ -147,12 +169,12 @@ If readiness or a write returns `server_storage_full`, Tandem has stopped
 accepting writes until the server has free space. Check both named volumes:
 
 ```sh
-docker compose --project-directory "$PWD" \
-  --env-file deploy/compose/.env \
-  -f deploy/compose/production.yml exec postgres df -h /var/lib/postgresql
-docker compose --project-directory "$PWD" \
-  --env-file deploy/compose/.env \
-  -f deploy/compose/production.yml exec api df -h /data/actual-api
+docker compose --project-directory "$PWD/tandem" \
+  --env-file "$PWD/tandem/deploy/compose/.env" \
+  -f "$PWD/tandem/deploy/compose/production.yml" exec postgres df -h /var/lib/postgresql
+docker compose --project-directory "$PWD/tandem" \
+  --env-file "$PWD/tandem/deploy/compose/.env" \
+  -f "$PWD/tandem/deploy/compose/production.yml" exec api df -h /data/actual-api
 ```
 
 Free space on the host or expand the volume, then check `/api/v1/health/ready`

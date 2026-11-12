@@ -58,6 +58,15 @@ swipe, and Back inputs to inspect flows. Keep exported captures out of source
 control. The `preview` launch extra opens the synthetic budget overview; without
 it the app opens its welcome screen.
 
+### Downloadable builds
+
+The nightly workflow publishes a signed Android prerelease with a SHA-256
+checksum at [GitHub Releases](https://github.com/Nischay-Pro/tandem/releases/tag/nightly).
+Verify the checksum before installing the APK. The nightly signing key is
+separate from any future stable-release key. iOS builds are currently built
+from source; distribution requires an Apple Developer account, signing
+certificates, provisioning profiles, and a TestFlight upload process.
+
 `services/api/Dockerfile.dev` is only for development and tests; it includes the full toolchain. The production image will be separate and contain runtime dependencies only.
 
 Start the API with:
