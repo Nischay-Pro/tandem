@@ -6,8 +6,34 @@ import test from "node:test";
 import {
   findBrokenLinks,
   findStaleTerms,
+  markdownFiles,
   versionMentionErrors,
 } from "./check-docs.mjs";
+
+test("discovers Markdown files without Git and skips generated data", () => {
+  const root = mkdtempSync(join(tmpdir(), "tandem-doc-files-"));
+  try {
+    mkdirSync(join(root, "docs", "nested"), { recursive: true });
+    mkdirSync(join(root, ".dev-tmp"), { recursive: true });
+    mkdirSync(join(root, "node_modules", "package"), { recursive: true });
+    writeFileSync(join(root, ".dockerignore"), "/STATUS.md\n");
+    writeFileSync(join(root, "README.md"), "# Tandem\n");
+    writeFileSync(join(root, "docs", "nested", "guide.md"), "# Guide\n");
+    writeFileSync(join(root, ".dev-tmp", "local.md"), "# Local\n");
+    writeFileSync(join(root, "STATUS.md"), "# Local status\n");
+    writeFileSync(
+      join(root, "node_modules", "package", "README.md"),
+      "# Generated dependency\n",
+    );
+
+    assert.deepEqual(markdownFiles(root, "git-executable-not-installed"), [
+      "README.md",
+      join("docs", "nested", "guide.md"),
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("checks local file links and GitHub-style heading anchors", () => {
   const root = mkdtempSync(join(tmpdir(), "tandem-doc-links-"));

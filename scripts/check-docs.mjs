@@ -1,19 +1,75 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import process from "node:process";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-function markdownFiles() {
-  return execFileSync(
-    "git",
-    ["ls-files", "--cached", "--others", "--exclude-standard", "--", "*.md"],
-    { cwd: root, encoding: "utf8" },
-  )
-    .split("\n")
-    .filter(Boolean);
+const ignoredMarkdownDirectories = new Set([
+  ".dev-tmp",
+  ".git",
+  ".gradle",
+  ".pnpm-store",
+  "DerivedData",
+  "Pods",
+  "build",
+  "coverage",
+  "dist",
+  "node_modules",
+]);
+
+export function markdownFiles(repoRoot = root, gitExecutable = "git") {
+  try {
+    return execFileSync(
+      gitExecutable,
+      ["ls-files", "--cached", "--others", "--exclude-standard", "--", "*.md"],
+      { cwd: repoRoot, encoding: "utf8" },
+    )
+      .split("\n")
+      .filter(Boolean);
+  } catch (error) {
+    if (error.code !== "ENOENT" && error.status !== 128) throw error;
+  }
+
+  const dockerIgnoredPaths = new Set(
+    (existsSync(join(repoRoot, ".dockerignore"))
+      ? readFileSync(join(repoRoot, ".dockerignore"), "utf8")
+      : ""
+    )
+      .split("\n")
+      .map((pattern) => pattern.trim())
+      .filter(
+        (pattern) =>
+          pattern &&
+          !pattern.startsWith("#") &&
+          !pattern.startsWith("!") &&
+          !/[?*]/.test(pattern),
+      )
+      .map((pattern) => pattern.replace(/^\/+|\/+$/g, "")),
+  );
+  const files = [];
+  function walk(directory, relativeDirectory = "") {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.isDirectory() && ignoredMarkdownDirectories.has(entry.name)) {
+        continue;
+      }
+      const relativePath = relativeDirectory
+        ? join(relativeDirectory, entry.name)
+        : entry.name;
+      if (dockerIgnoredPaths.has(relativePath)) continue;
+      if (entry.isDirectory()) {
+        walk(join(directory, entry.name), relativePath);
+      } else if (
+        entry.isFile() &&
+        extname(entry.name).toLowerCase() === ".md"
+      ) {
+        files.push(relativePath);
+      }
+    }
+  }
+  walk(repoRoot);
+  return files.sort();
 }
 
 function withoutCode(text) {
@@ -372,7 +428,7 @@ export function checkVersions(repoRoot = root) {
 }
 
 function run() {
-  const files = markdownFiles();
+  const files = markdownFiles(root);
   const errors = [
     ...findBrokenLinks(root, files),
     ...findStaleTerms(root, files),
