@@ -62,6 +62,45 @@ describe("Actual password sign-in", () => {
     );
   });
 
+  it("maps Actual's invalid-password HTTP 400 response to rejected credentials", async () => {
+    const login = new ActualPasswordLogin(
+      "https://actual.example",
+      vi.fn<typeof fetch>(async () =>
+        jsonResponse({ status: "error", reason: "invalid-password" }, 400),
+      ),
+    );
+
+    await expect(login.signIn("wrong-password")).rejects.toBeInstanceOf(
+      ActualPasswordRejectedError,
+    );
+  });
+
+  it("does not treat unrelated Actual HTTP 400 responses as bad credentials", async () => {
+    const login = new ActualPasswordLogin(
+      "https://actual.example",
+      vi.fn<typeof fetch>(async () =>
+        jsonResponse({ status: "error", reason: "invalid-token" }, 400),
+      ),
+    );
+
+    await expect(login.signIn("synthetic-password")).rejects.toBeInstanceOf(
+      ActualPasswordUnavailableError,
+    );
+  });
+
+  it("fails closed when an Actual HTTP 400 response is not valid JSON", async () => {
+    const login = new ActualPasswordLogin(
+      "https://actual.example",
+      vi.fn<typeof fetch>(
+        async () => new Response("not-json", { status: 400 }),
+      ),
+    );
+
+    await expect(login.signIn("synthetic-password")).rejects.toBeInstanceOf(
+      ActualPasswordUnavailableError,
+    );
+  });
+
   it.each(["", "x".repeat(1_025)])(
     "rejects a password outside the supported length: %s",
     async (password) => {

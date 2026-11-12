@@ -56,6 +56,22 @@ export class ActualPasswordLogin {
     if (response.status === 401 || response.status === 403) {
       throw new ActualPasswordRejectedError();
     }
+    if (response.status === 400) {
+      let value: unknown;
+      try {
+        value = await response.json();
+      } catch {
+        throw new ActualPasswordUnavailableError();
+      }
+      if (
+        isRecord(value) &&
+        value.status === "error" &&
+        value.reason === "invalid-password"
+      ) {
+        throw new ActualPasswordRejectedError();
+      }
+      throw new ActualPasswordUnavailableError();
+    }
     if (!response.ok) throw new ActualPasswordUnavailableError();
 
     let value: unknown;
