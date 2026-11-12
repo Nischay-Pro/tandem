@@ -63,20 +63,121 @@ fi
 
 chmod 600 "$postgres_input" "$workspace_input"
 compose=(docker compose -p "$compose_project" --project-directory "$project_root" --env-file "$env_file" -f "$compose_file")
-api_id="$("${compose[@]}" ps -q api)"
+api_id="$("${compose[@]}" ps --all -q api)"
 if [[ -z "$api_id" ]]; then
   echo "The API container must already exist before restore." >&2
   exit 1
 fi
 "${compose[@]}" exec -T postgres pg_restore --list < "$postgres_input" >/dev/null
 tar -tzf "$workspace_input" >/dev/null
+
+safety_prefix="${backup_prefix}.before-restore-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+if [[ "$has_encrypted_backup" == true ]]; then
+  TANDEM_COMPOSE_PROJECT="$compose_project" TANDEM_ENV_FILE="$env_file" \
+    TANDEM_BACKUP_GPG_PASSPHRASE_FILE="$backup_gpg_passphrase_file" \
+    "$project_root/deploy/backup.sh" "$safety_prefix"
+else
+  TANDEM_COMPOSE_PROJECT="$compose_project" TANDEM_ENV_FILE="$env_file" \
+    "$project_root/deploy/backup.sh" "$safety_prefix"
+fi
+echo "Safety backup prefix: $safety_prefix"
+
 "${compose[@]}" stop api
+restore_started=true
+restore_completed=false
+report_interrupted_restore() {
+  local status=$?
+  trap - EXIT
+  if [[ "$restore_started" == true && "$restore_completed" != true ]]; then
+    echo "Restore did not complete. Keep the API stopped until you recover the pre-restore state." >&2
+    printf 'To recover the pre-restore data, run: "%s" "%s"\n' \
+      "$project_root/deploy/restore.sh" "$safety_prefix" >&2
+  fi
+  if [[ -n "$postgres_tmp" || -n "$workspace_tmp" ]]; then
+    rm -f "$postgres_tmp" "$workspace_tmp"
+  fi
+  exit "$status"
+}
+trap report_interrupted_restore EXIT
+
 "${compose[@]}" exec -T postgres sh -ec \
   'pg_restore --exit-on-error --single-transaction --clean --if-exists --no-owner --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' \
   < "$postgres_input"
 docker run --rm -i --volumes-from "$api_id" --entrypoint sh \
   node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 -ec \
-  'mkdir -p /data/actual-api/.restore && find /data/actual-api/.restore -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + && tar -xzf - --no-same-owner -C /data/actual-api/.restore && find /data/actual-api -mindepth 1 -maxdepth 1 ! -name .restore -exec rm -rf -- {} + && find /data/actual-api/.restore -mindepth 1 -maxdepth 1 -exec mv -t /data/actual-api -- {} + && rmdir /data/actual-api/.restore && chown -R node:node /data/actual-api' \
+  'set -eu
+  workspace=/data/actual-api
+  restore_id="$(cat /proc/sys/kernel/random/uuid)"
+  staged="$workspace/.restore-new-$restore_id"
+  previous="$workspace/.restore-previous-$restore_id"
+  state=preparing
+
+  entry_count() {
+    count=0
+    for entry in "$1"/* "$1"/.[!.]* "$1"/..?*; do
+      [ -e "$entry" ] || [ -L "$entry" ] || continue
+      [ "$entry" = "$staged" ] && continue
+      [ "$entry" = "$previous" ] && continue
+      count=$((count + 1))
+    done
+    printf "%s" "$count"
+  }
+
+  rollback() {
+    status=$?
+    trap - EXIT
+    if [ "$state" = installing ]; then
+      for entry in "$workspace"/* "$workspace"/.[!.]* "$workspace"/..?*; do
+        [ -e "$entry" ] || [ -L "$entry" ] || continue
+        [ "$entry" = "$staged" ] && continue
+        [ "$entry" = "$previous" ] && continue
+        rm -rf -- "$entry"
+      done
+    fi
+    if [ "$state" != committed ] && [ -d "$previous" ]; then
+      for entry in "$previous"/* "$previous"/.[!.]* "$previous"/..?*; do
+        [ -e "$entry" ] || [ -L "$entry" ] || continue
+        mv -- "$entry" "$workspace/"
+      done
+    fi
+    rm -rf -- "$staged"
+    exit "$status"
+  }
+  trap rollback EXIT
+
+  mkdir -m 700 "$staged"
+  tar -xzf - --no-same-owner -C "$staged"
+  expected_count="$(entry_count "$staged")"
+  [ "$expected_count" -gt 0 ] || { echo "The restored Actual workspace archive is empty." >&2; exit 1; }
+  mkdir -m 700 "$previous"
+
+  state=installing
+  for entry in "$workspace"/* "$workspace"/.[!.]* "$workspace"/..?*; do
+    [ -e "$entry" ] || [ -L "$entry" ] || continue
+    [ "$entry" = "$staged" ] && continue
+    [ "$entry" = "$previous" ] && continue
+    mv -- "$entry" "$previous/"
+  done
+
+  for entry in "$staged"/* "$staged"/.[!.]* "$staged"/..?*; do
+    [ -e "$entry" ] || [ -L "$entry" ] || continue
+    mv -- "$entry" "$workspace/"
+  done
+  actual_count="$(entry_count "$workspace")"
+  [ "$actual_count" -eq "$expected_count" ] || {
+    echo "The restored Actual workspace could not be verified; the old workspace is being put back." >&2
+    exit 1
+  }
+
+  state=committed
+  rm -rf -- "$previous" "$staged"
+  chown -R node:node "$workspace"
+  trap - EXIT' \
   < "$workspace_input"
+restore_completed=true
+if [[ -n "$postgres_tmp" || -n "$workspace_tmp" ]]; then
+  rm -f "$postgres_tmp" "$workspace_tmp"
+fi
+trap - EXIT
 echo "Database and Actual workspace restored. Start and verify the API now:"
 echo "  docker compose --project-directory '$project_root' --env-file '$env_file' -f '$compose_file' up -d api"

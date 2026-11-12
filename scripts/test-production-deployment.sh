@@ -23,10 +23,19 @@ cleanup() {
   rm -f \
     "$scratch_root/tandem-backup.postgres.dump" \
     "$scratch_root/tandem-backup.actual-workspace.tar.gz" \
+    "$scratch_root"/tandem-backup*.postgres.dump \
+    "$scratch_root"/tandem-backup*.actual-workspace.tar.gz \
+    "$scratch_root"/tandem-backup*.postgres.dump.gpg \
+    "$scratch_root"/tandem-backup*.actual-workspace.tar.gz.gpg \
     "$scratch_root/tandem-encrypted-backup.postgres.dump.gpg" \
     "$scratch_root/tandem-encrypted-backup.actual-workspace.tar.gz.gpg" \
+    "$scratch_root"/tandem-encrypted-backup*.postgres.dump.gpg \
+    "$scratch_root"/tandem-encrypted-backup*.actual-workspace.tar.gz.gpg \
     "$scratch_root/release-check-wrong-backup-passphrase" \
+    "$scratch_root/encrypted-restore.log" \
     "$scratch_root"/corrupt-restore-*
+  rm -rf "$scratch_root/docker-fail-workspace-restore"
+  rm -f "$scratch_root/interrupted-restore.log"
   rm -f "$restore_tmp_dir"/*
   rmdir "$restore_tmp_dir" >/dev/null 2>&1 || true
 }
@@ -144,6 +153,61 @@ wait_for_api
 third_token="$(create_test_device 'Post-backup tablet')"
 "${compose[@]}" exec -T api node --input-type=module -e \
   "import { writeFileSync } from 'node:fs'; writeFileSync('/data/actual-api/release-check.txt', 'after backup');"
+real_docker="$(command -v docker)"
+docker_shim_dir="$scratch_root/docker-fail-workspace-restore"
+mkdir -p "$docker_shim_dir"
+cat > "$docker_shim_dir/docker" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+previous_arg=""
+for argument in "$@"; do
+  if [[ "$previous_arg" == "--volumes-from" && "$argument" != *":ro" ]]; then
+    echo "Injected failure before installing the restored Actual workspace." >&2
+    exit 97
+  fi
+  previous_arg="$argument"
+done
+exec "$REAL_DOCKER" "$@"
+SH
+chmod 700 "$docker_shim_dir/docker"
+interrupted_restore_log="$scratch_root/interrupted-restore.log"
+if REAL_DOCKER="$real_docker" PATH="$docker_shim_dir:$PATH" \
+  TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" \
+  "$project_root/deploy/restore.sh" "$scratch_root/tandem-backup" \
+  >"$interrupted_restore_log" 2>&1; then
+  echo "The injected interruption unexpectedly completed the restore." >&2
+  exit 1
+fi
+if ! grep -Fq "Injected failure before installing the restored Actual workspace." "$interrupted_restore_log"; then
+  cat "$interrupted_restore_log" >&2
+  echo "The restore failed before reaching the injected interruption point." >&2
+  exit 1
+fi
+safety_prefix="$(sed -n 's/^Safety backup prefix: //p' "$interrupted_restore_log" | tail -n 1)"
+if [[ -z "$safety_prefix" || ! -f "${safety_prefix}.postgres.dump" || \
+  ! -f "${safety_prefix}.actual-workspace.tar.gz" ]]; then
+  echo "An interrupted restore did not leave its complete safety backup." >&2
+  exit 1
+fi
+TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" \
+  "$project_root/deploy/restore.sh" "$safety_prefix"
+"${compose[@]}" up --detach api
+wait_for_api
+recovered_devices="$(curl --silent --show-error --fail "http://127.0.0.1:$test_api_host_port/api/v1/devices" \
+  --header "Authorization: Bearer $phone_token")"
+if [[ "$recovered_devices" != *'Release check phone'* || \
+  "$recovered_devices" != *'Release check tablet'* || \
+  "$recovered_devices" != *'Post-backup tablet'* ]]; then
+  echo "Restoring the safety copy did not recover the pre-restore PostgreSQL state." >&2
+  exit 1
+fi
+recovered_workspace="$("${compose[@]}" exec -T api node --input-type=module -e \
+  "import { readFileSync } from 'node:fs'; process.stdout.write(readFileSync('/data/actual-api/release-check.txt', 'utf8'));")"
+if [[ "$recovered_workspace" != "after backup" ]]; then
+  echo "Restoring the safety copy did not recover the pre-restore Actual workspace." >&2
+  exit 1
+fi
+
 TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" \
   "$project_root/deploy/restore.sh" "$scratch_root/tandem-backup"
 "${compose[@]}" up --detach api
@@ -182,6 +246,8 @@ assert_corrupt_restore_is_rejected() {
   local kind="$1"
   local truncation="$2"
   local corrupt_prefix="$scratch_root/corrupt-restore-$kind-$truncation"
+  local restore_log="${corrupt_prefix}.restore.log"
+  local safety_prefix
   cp "${scratch_root}/tandem-backup.postgres.dump" "${corrupt_prefix}.postgres.dump"
   cp "${scratch_root}/tandem-backup.actual-workspace.tar.gz" "${corrupt_prefix}.actual-workspace.tar.gz"
   if [[ "$kind" == postgres ]]; then
@@ -226,9 +292,22 @@ assert_corrupt_restore_is_rejected() {
   fi
 
   if TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" \
-    "$project_root/deploy/restore.sh" "$corrupt_prefix"; then
+    "$project_root/deploy/restore.sh" "$corrupt_prefix" \
+    >"$restore_log" 2>&1; then
     echo "Production restore accepted a truncated $kind backup ($truncation)." >&2
     exit 1
+  fi
+
+  if [[ "$kind" == postgres && "$truncation" == mid-file ]]; then
+    safety_prefix="$(sed -n 's/^Safety backup prefix: //p' "$restore_log" | tail -n 1)"
+    if ! grep -Fq "Restore did not complete. Keep the API stopped" "$restore_log" || \
+      ! grep -Fq "To recover the pre-restore data, run:" "$restore_log" || \
+      [[ -z "$safety_prefix" || ! -f "${safety_prefix}.postgres.dump" || \
+        ! -f "${safety_prefix}.actual-workspace.tar.gz" ]]; then
+      cat "$restore_log" >&2
+      echo "A failed transactional restore did not explain how to recover its safety copy." >&2
+      exit 1
+    fi
   fi
 
   local running_api_id devices workspace
@@ -288,7 +367,22 @@ fi
 wait_for_api 15
 encrypted_post_backup_token="$(create_test_device 'Post-encrypted-backup tablet')"
 docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml" exec -T api node --input-type=module -e "import { writeFileSync } from 'node:fs'; writeFileSync('/data/actual-api/release-check.txt', 'after encrypted backup');"
-TMPDIR="$restore_tmp_dir" TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" TANDEM_BACKUP_GPG_PASSPHRASE_FILE="$backup_passphrase_file" "$project_root/deploy/restore.sh" "$scratch_root/tandem-encrypted-backup"
+if ! TMPDIR="$restore_tmp_dir" TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" TANDEM_BACKUP_GPG_PASSPHRASE_FILE="$backup_passphrase_file" \
+  "$project_root/deploy/restore.sh" "$scratch_root/tandem-encrypted-backup" \
+  >"$scratch_root/encrypted-restore.log" 2>&1; then
+  cat "$scratch_root/encrypted-restore.log" >&2
+  exit 1
+fi
+cat "$scratch_root/encrypted-restore.log"
+encrypted_safety_prefix="$(sed -n 's/^Safety backup prefix: //p' "$scratch_root/encrypted-restore.log" | tail -n 1)"
+if [[ -z "$encrypted_safety_prefix" || \
+  ! -f "${encrypted_safety_prefix}.postgres.dump.gpg" || \
+  ! -f "${encrypted_safety_prefix}.actual-workspace.tar.gz.gpg" || \
+  -e "${encrypted_safety_prefix}.postgres.dump" || \
+  -e "${encrypted_safety_prefix}.actual-workspace.tar.gz" ]]; then
+  echo "Encrypted restore did not leave a paired, encrypted safety backup." >&2
+  exit 1
+fi
 if [[ -n "$(find "$restore_tmp_dir" -mindepth 1 -maxdepth 1 -type f -print -quit)" ]]; then
   echo "A successful encrypted restore left decrypted temporary files." >&2
   exit 1

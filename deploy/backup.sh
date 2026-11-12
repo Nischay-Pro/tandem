@@ -49,7 +49,7 @@ else
 fi
 
 compose=(docker compose -p "$compose_project" --project-directory "$project_root" --env-file "$env_file" -f "$compose_file")
-api_id="$("${compose[@]}" ps -q api)"
+api_id="$("${compose[@]}" ps --all -q api)"
 if [[ -z "$api_id" ]]; then
   echo "The API container is unavailable; cannot back up its Actual workspace." >&2
   exit 1
