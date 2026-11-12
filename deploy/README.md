@@ -298,11 +298,9 @@ and checked in a staging folder; the old workspace is moved aside and is only
 removed after the restored files are in place and counted. A rejected archive
 leaves the current database and workspace in place and the API running. A
 restore interrupted after the database step can leave the API stopped and the
-database and workspace from different backups. Use the printed safety prefix
-to put both back together:
-
-Use the exact prefix printed by `restore.sh` (shown here with example
-timestamp and process ID):
+database and workspace from different backups. To restore the safety copy, use
+the exact prefix printed by `restore.sh` (shown here with an example timestamp
+and process ID):
 
 ```sh
 deploy/restore.sh /secure/tandem-backups/tandem-2026-11-01.before-restore-20261112T061249Z-12345
@@ -311,6 +309,9 @@ deploy/restore.sh /secure/tandem-backups/tandem-2026-11-01.before-restore-202611
 The restore script leaves the API stopped until you explicitly start and
 verify it. Its new process starts with an empty snapshot cache, so clients
 receive a fresh generation and resync automatically.
+
+For an encrypted backup, provide the same passphrase file used when it was
+created:
 
 ```sh
 TANDEM_BACKUP_GPG_PASSPHRASE_FILE=/secure/tandem-backup-keys/passphrase \

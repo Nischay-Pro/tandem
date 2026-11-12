@@ -16,6 +16,8 @@ fi
 python3 scripts/check-mobile-ui-apostrophes.py
 python3 scripts/check-mobile-design-tokens.py
 python3 scripts/check-mobile-ui-vocabulary.py
+node scripts/check-docs.mjs
+node --test scripts/check-docs.test.mjs
 
 staged_javascript=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(cjs|js|jsx|mjs|cts|mts|ts|tsx)$' || true)
 if [ -n "$staged_javascript" ]; then

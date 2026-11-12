@@ -24,6 +24,8 @@ fi
 python3 scripts/check-mobile-ui-apostrophes.py
 python3 scripts/check-mobile-design-tokens.py
 python3 scripts/check-mobile-ui-vocabulary.py
+node scripts/check-docs.mjs
+node --test scripts/check-docs.test.mjs
 
 if [ -z "${ANDROID_HOME:-}" ]; then
   if [ -n "${ANDROID_SDK_ROOT:-}" ]; then

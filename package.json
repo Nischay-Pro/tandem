@@ -15,13 +15,14 @@
     "api:openapi:check": "pnpm --filter @tandem-for-actual/api openapi:check",
     "lint": "eslint .",
     "format:check": "node scripts/check-prettier-files.mjs node_modules/.bin/prettier --all",
+    "docs:check": "node scripts/check-docs.mjs",
     "typecheck": "pnpm --recursive --if-present typecheck",
     "test": "pnpm --recursive --if-present test",
     "test:coverage": "pnpm --recursive --if-present test:coverage",
     "test:mutation": "pnpm --filter @tandem-for-actual/api test:mutation",
     "test:mutation:full": "pnpm --filter @tandem-for-actual/api test:mutation:full",
     "test:integration": "docker compose -f docker-compose.dev.yml --profile test run --build --rm integration-tests",
-    "check:all": "pnpm api:openapi:check && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:coverage"
+    "check:all": "pnpm api:openapi:check && pnpm docs:check && node --test scripts/check-docs.test.mjs && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:coverage"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

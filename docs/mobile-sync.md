@@ -22,7 +22,7 @@ The UI reads local records. The coordinator sends changes through the Tandem
 API, which uses Actual's supported Node API package (`@actual-app/api`) to read
 and write budgets. The API keeps only a bounded, temporary snapshot in memory
 to serve pages consistently. PostgreSQL does not store a budget projection or
-row-level change feed; it still stores the write-recovery journal. The package
+row-level change events; it still stores the write-recovery journal. The package
 runs inside the Tandem API service, not as a separate network service. Tandem
 does not write directly to Actual's database.
 

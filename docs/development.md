@@ -2,7 +2,7 @@
 
 ## API checks
 
-The API checks run inside Docker because the development environment may not have Node.js installed. The toolchain is pinned to Node.js 26.13.0 LTS, pnpm 12.16.1, and PostgreSQL 18.6 on Alpine 3.24. These are the latest stable releases verified for this stack; PostgreSQL 19 is still a release candidate, so it is not used for this financial-data service.
+The API checks run inside Docker because the development environment may not have Node.js installed. The toolchain uses Node.js 26.13.0, pnpm 12.16.1, and PostgreSQL 18.6 on Alpine 3.24. These versions are pinned in the toolchain and deployment files; the documentation check verifies the versions shown here.
 
 ```sh
 docker compose -f docker-compose.dev.yml --profile test run --build --rm integration-tests
@@ -51,7 +51,7 @@ adb install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk
 adb shell am start -n app.tandemforactual.android/.MainActivity --ez preview true
 ```
 
-The project uses the pinned Gradle 9.8.2 / Java 27 toolchain documented in
+The project uses the pinned Gradle 9.8.2 / Java 25 toolchain documented in
 [`docs/mobile-api-client.md`](mobile-api-client.md). Gradle and the Android SDK
 may be installed locally or supplied by a development container. Use ADB touch,
 swipe, and Back inputs to inspect flows. Keep exported captures out of source
