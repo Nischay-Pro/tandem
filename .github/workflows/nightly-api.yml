@@ -43,6 +43,21 @@ jobs:
             exit 0
           fi
 
+          current_main="$(git ls-remote origin refs/heads/main | awk 'NR == 1 { print $1 }')"
+          if [[ "$current_main" != "$source_sha" ]]; then
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            echo "main moved from $source_sha to $current_main; skipping stale nightly work."
+            exit 0
+          fi
+
+          nightly_refs="$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/nightly")"
+          last_nightly_sha="$(jq -r '[.[] | select(.ref == "refs/tags/nightly") | .object.sha][0] // empty' <<<"$nightly_refs")"
+          if [[ "$last_nightly_sha" == "$source_sha" ]]; then
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            echo "No new main commit since the last nightly ($source_sha); skipping this run."
+            exit 0
+          fi
+
           for _ in $(seq 1 110); do
             current_main="$(git ls-remote origin refs/heads/main | awk 'NR == 1 { print $1 }')"
             if [[ "$current_main" != "$source_sha" ]]; then
@@ -155,6 +170,12 @@ jobs:
         id: date
         run: echo "value=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
 
+      - name: Set immutable short-SHA tag
+        id: tags
+        env:
+          SOURCE_SHA: ${{ needs.require_green_main_ci.outputs.source_sha }}
+        run: echo "short_sha=$(git rev-parse --short=12 "$SOURCE_SHA")" >> "$GITHUB_OUTPUT"
+
       - name: Build and push the API image
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -166,7 +187,7 @@ jobs:
           tags: |
             ghcr.io/nischay-pro/tandem-api:nightly
             ghcr.io/nischay-pro/tandem-api:nightly-${{ steps.date.outputs.value }}
-            ghcr.io/nischay-pro/tandem-api:sha-${{ needs.require_green_main_ci.outputs.source_sha }}
+            ghcr.io/nischay-pro/tandem-api:sha-${{ steps.tags.outputs.short_sha }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ needs.require_green_main_ci.outputs.source_sha }}
