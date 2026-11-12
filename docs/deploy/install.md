@@ -1,9 +1,10 @@
 # Tandem deployment
 
 Production Compose runs the API and PostgreSQL on a private network. The setup
-command selects a nightly API image by digest and creates the protected secret
-files. PostgreSQL is not published to the host. The API is reachable only from
-the external Docker network used by the reverse proxy.
+command downloads the Compose bundle published by the nightly workflow, whose
+API image is pinned by digest, and creates the protected secret files.
+PostgreSQL is not published to the host. The API is reachable only from the
+external Docker network used by the reverse proxy.
 
 Run one API process. Snapshot paging state is held in a bounded in-memory cache;
 multiple replicas would not share a page generation and could repeatedly force
@@ -15,9 +16,9 @@ See the [configuration reference](configuration.md),
 
 ## Start a new deployment
 
-Before starting, install Docker Engine with Compose v2 and Buildx, plus `curl`,
-`openssl`, and `sudo`. Use a Linux host with rootful Docker so the API can read
-the secret files as its unprivileged container user.
+Before starting, install Docker Engine with Compose v2, plus `curl`, `jq`,
+`openssl`, `sudo`, and `tar`. Use a Linux host with rootful Docker so the
+API can read the secret files as its unprivileged container user.
 
 1. Download and run the setup command from the directory where you want the
    deployment files:
@@ -29,18 +30,20 @@ curl --fail --silent --show-error --location \
 bash tandem-setup.sh
 ```
 
-The command downloads the production Compose file, resolves the public nightly
-image to a digest, creates the `tandem-edge` network if needed, and asks for
-the Actual URL, public Tandem URL and reverse proxy IP/CIDR. It writes files to
-`./tandem` by default. It also downloads the backup, restore, systemd and proxy
-examples into `tandem/deploy/`. Settings and secrets are stored in
-`tandem/deploy/compose/`. The command never replaces an existing `.env` file or
-secret. Running it again leaves an existing installation unchanged.
+The command gets the latest nightly release's Compose bundle, which contains
+the exact digest-pinned Compose file tested with that API commit. It creates
+the `tandem-edge` network if needed and asks for the Actual URL, public Tandem
+URL and reverse proxy IP/CIDR. It writes files to `./tandem` by default. It
+also downloads the backup, restore, systemd and proxy examples into
+`tandem/deploy/`. Settings and secrets are stored in `tandem/deploy/compose/`.
+The command never replaces an existing `.env` file or secret. Running it again
+leaves an existing installation unchanged.
 
 Check that the API image is pinned and the secret files exist:
 
 ```sh
-grep '^TANDEM_API_IMAGE=.*@sha256:' tandem/deploy/compose/.env
+grep -Eq '^[[:space:]]+image: ghcr.io/nischay-pro/tandem-api@sha256:[a-f0-9]{64}$' \
+  tandem/deploy/compose/production.yml
 test -s tandem/deploy/compose/secrets/postgres_password
 test -s tandem/deploy/compose/secrets/database_url
 test -s tandem/deploy/compose/secrets/auth_token_encryption_key
@@ -57,10 +60,12 @@ docker compose --project-directory "$PWD/tandem" \
   -f "$PWD/tandem/deploy/compose/production.yml" ps
 ```
 
-The `tandem-api` and `tandem-postgres` services should report healthy. If setup cannot read
-the nightly image without credentials, check the network and the image
-package's public visibility. If Compose reports a missing image setting, rerun
-setup from the same directory or restore its `.env` file.
+The `tandem-api` and `tandem-postgres` services should report healthy. If setup
+cannot download the nightly Compose bundle, check access to GitHub Releases
+and the nightly prerelease. If Compose cannot pull the API image, check network
+access and the package's public visibility. If the downloaded file is missing
+or invalid, keep any running deployment unchanged and retry after the nightly
+release is healthy.
 
 3. Configure TLS using the [reverse-proxy guide](reverse-proxy.md), then check
    readiness:
@@ -192,19 +197,18 @@ When enabled, the server release must match
 
 When updating an existing deployment, do not run first-install setup against
 its data directory. Preserve its `.env`, secret files, Compose project name and
-`tandem-postgres-data` and `tandem-actual-workspace` volumes. The Postgres password secret and database URL must match the
-existing database role; changing `TANDEM_POSTGRES_PASSWORD_FILE` does not rotate a
-password in an initialized volume. Set `TANDEM_API_IMAGE` to the new
-digest-pinned image. Keep the `tandem-actual-workspace` volume while any write
-operation is uncertain; it can contain Actual data that has not reached the
-budget file yet.
+`tandem-postgres-data` and `tandem-actual-workspace` volumes. The Postgres
+password secret must still match the initialized database role. Follow the
+[upgrade steps](upgrade.md) to replace only the API service's Compose image
+reference. Keep the `tandem-actual-workspace` volume while any write operation
+is uncertain; it can contain Actual data that has not reached the budget file
+yet.
 
-Setup resolves the current nightly API image once and records its digest in
-`deploy/compose/.env`, so a later nightly does not silently replace the
-installed image. To update, select and verify a new digest, edit
-`TANDEM_API_IMAGE`, then run Compose `up -d`. An empty `TANDEM_TRUST_PROXY` is
-the safe default: forwarded client-address headers are ignored. Set it to the
-reverse proxy's IP or narrow CIDR if rate limits should use the client address.
+The installed Compose file is pinned to the exact digest in its nightly
+release bundle. A later nightly does not silently replace it. An empty
+`TANDEM_TRUST_PROXY` is the safe default: forwarded client-address headers are
+ignored. Set it to the reverse proxy's IP or narrow CIDR if rate limits should
+use the client address.
 
 The API has Docker liveness/readiness checks; readiness verifies PostgreSQL can
 write to its volume and checks free space on the Actual workspace volume.

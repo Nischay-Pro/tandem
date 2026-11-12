@@ -1,8 +1,9 @@
 # Upgrade or roll back Tandem
 
-The setup command pins the API image by digest. A later nightly does not
-silently change the installed version. Upgrade the API after reviewing and
-verifying the new digest; keep PostgreSQL and the Actual workspace volume.
+The setup command installs a Compose file from a nightly release with the API
+image pinned by digest. A later nightly does not silently change the installed
+version. Upgrade the API after reviewing and verifying the new digest; keep
+PostgreSQL and the Actual workspace volume.
 
 ## Upgrade
 
@@ -30,17 +31,18 @@ verifying the new digest; keep PostgreSQL and the Actual workspace volume.
    `/opt/tandem` with the install directory if needed:
 
    ```sh
-   environment_file=/opt/tandem/deploy/compose/.env
-   current_image="$(sed -n 's/^TANDEM_API_IMAGE=//p' "$environment_file")"
+   compose_file=/opt/tandem/deploy/compose/production.yml
+   current_image="$(sed -nE 's/^[[:space:]]*image:[[:space:]]*(ghcr\.io\/nischay-pro\/tandem-api@sha256:[a-f0-9]{64})[[:space:]]*$/\1/p' "$compose_file")"
+   test -n "$current_image"
    printf '%s\n' "$current_image" > /secure/tandem-previous-api-image
    chmod 600 /secure/tandem-previous-api-image
-   sudo sed -i "s|^TANDEM_API_IMAGE=.*$|TANDEM_API_IMAGE=$pinned_image|" "$environment_file"
+   sudo sed -i "s|image: $current_image|image: $pinned_image|" "$compose_file"
    docker compose --project-directory /opt/tandem \
-     --env-file "$environment_file" \
-     -f /opt/tandem/deploy/compose/production.yml pull tandem-api
+     --env-file /opt/tandem/deploy/compose/.env \
+     -f "$compose_file" pull tandem-api
    docker compose --project-directory /opt/tandem \
-     --env-file "$environment_file" \
-     -f /opt/tandem/deploy/compose/production.yml up -d tandem-api
+     --env-file /opt/tandem/deploy/compose/.env \
+     -f "$compose_file" up -d tandem-api
    ```
 
    **Check:** the API reports healthy:
@@ -64,18 +66,20 @@ verifying the new digest; keep PostgreSQL and the Actual workspace volume.
 ## Roll back
 
 Restore the prior digest from `/secure/tandem-previous-api-image` in
-`TANDEM_API_IMAGE`, then pull and recreate only the API:
+`production.yml`, then pull and recreate only the API:
 
 ```sh
 previous_image="$(cat /secure/tandem-previous-api-image)"
-sudo sed -i "s|^TANDEM_API_IMAGE=.*$|TANDEM_API_IMAGE=$previous_image|" \
-  /opt/tandem/deploy/compose/.env
+compose_file=/opt/tandem/deploy/compose/production.yml
+current_image="$(sed -nE 's/^[[:space:]]*image:[[:space:]]*(ghcr\.io\/nischay-pro\/tandem-api@sha256:[a-f0-9]{64})[[:space:]]*$/\1/p' "$compose_file")"
+test -n "$current_image"
+sudo sed -i "s|image: $current_image|image: $previous_image|" "$compose_file"
 docker compose --project-directory /opt/tandem \
   --env-file /opt/tandem/deploy/compose/.env \
-  -f /opt/tandem/deploy/compose/production.yml pull tandem-api
+  -f "$compose_file" pull tandem-api
 docker compose --project-directory /opt/tandem \
   --env-file /opt/tandem/deploy/compose/.env \
-  -f /opt/tandem/deploy/compose/production.yml up -d tandem-api
+  -f "$compose_file" up -d tandem-api
 ```
 
 Do not use `docker compose down --volumes`. If a release's notes say its data

@@ -13,11 +13,13 @@ the phone and syncs saved changes with Actual when the connection returns.
 2. Set up Tandem's API gateway by following the [server installation guide](docs/deploy/install.md).
 3. Open Tandem, enter the gateway address, and sign in with your Actual account.
 
-The API image is currently built from this repository; there is no published
-prebuilt image yet. See the [deployment configuration](docs/deploy/configuration.md)
-and [troubleshooting guide](docs/deploy/troubleshooting.md) for server settings
-and connection problems. The [operator guides](docs/README.md#run-tandem) also
-cover proxy setup, upgrades, backups, and restores.
+The [server installation guide](docs/deploy/install.md) uses one setup command
+to install the latest published nightly Compose bundle with its API image pinned
+by digest. It stops safely if that release bundle is not available yet. See the
+[deployment configuration](docs/deploy/configuration.md) and
+[troubleshooting guide](docs/deploy/troubleshooting.md) for server settings and
+connection problems. The [operator guides](docs/README.md#run-tandem) also cover
+proxy setup, upgrades, backups, and restores.
 
 ## How it works
 

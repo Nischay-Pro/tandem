@@ -37,9 +37,10 @@ gh attestation verify \
   --repo Nischay-Pro/tandem
 ```
 
-Replace `IMAGE_DIGEST` with the 64 hexadecimal characters from `TANDEM_API_IMAGE`.
-The [setup command](install.md#start-a-new-deployment) selects the current
-nightly digest and records it in `.env`; it does not silently update a running
+Replace `IMAGE_DIGEST` with the 64 hexadecimal characters from the API image
+reference in `deploy/compose/production.yml`. The
+[setup command](install.md#start-a-new-deployment) installs the Compose bundle
+from the current nightly release; it does not silently update a running
 installation.
 
 For user-side offline behavior and status messages, see
