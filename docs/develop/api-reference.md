@@ -44,9 +44,13 @@ keeping the same envelope.
 The shared response schema requires `error.code` and `error.message` and rejects
 additional fields. The examples use lowercase snake case; clients should treat
 codes as opaque strings because operation-specific codes may keep their
-established spelling. The API also sets an `X-Request-ID` header on every
-response; use it to correlate a failure with the single structured request log
-entry.
+established spelling. Fastify errors use the same envelope: invalid requests
+map to `400`, unsupported media types to `415`, oversized bodies to `413`, and
+unknown routes to `404`. Unclassified exceptions use a fixed `500` response;
+framework statuses without a documented response are normalized to `500`.
+Exception messages and stack traces are never returned. The API also sets an
+`X-Request-ID` header on every response; use it to correlate a failure with the
+single structured request log entry.
 
 ## Implemented endpoints
 
@@ -202,8 +206,9 @@ Each API response includes an `X-Request-ID`. The API writes one JSON request lo
 with that ID, the method, route template, status, and duration. It does not log
 request headers, query values, bodies, exception messages, or stack traces.
 Direct `409` and `5xx` responses add their structured error code; unexpected
-exceptions add only the error type. Protect server logs as operational data and
-do not publish them with user-facing diagnostics.
+exceptions add the safe error type. The logged error code is the standardized
+response code, not text copied from the exception. Protect server logs as
+operational data and do not publish them with user-facing diagnostics.
 
 Startup failures use distinct process exit codes:
 

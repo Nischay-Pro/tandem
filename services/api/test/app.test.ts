@@ -160,6 +160,7 @@ describe("health routes and OpenAPI", () => {
       method: "GET",
       route: "/api/v1/budgets",
       statusCode: 500,
+      errorCode: "internal_error",
       errorType: "Error",
       msg: "API request failed",
     });
@@ -170,6 +171,89 @@ describe("health routes and OpenAPI", () => {
     expect(lines[0]).not.toContain("must-not-be-logged");
     expect(lines[0]).not.toContain(testAccessToken);
     await app.close();
+  });
+
+  it("normalizes unexpected framework statuses to documented API statuses", async () => {
+    const thrownErrors = [
+      Object.assign(new Error("private validation details"), {
+        statusCode: 422,
+        code: "FST_ERR_VALIDATION",
+      }),
+      Object.assign(new Error("private unsupported status details"), {
+        statusCode: 418,
+        code: "FST_ERR_UNDOCUMENTED_STATUS",
+      }),
+      Object.assign(new Error("private upstream details"), {
+        statusCode: 502,
+        code: "FST_ERR_BAD_GATEWAY",
+      }),
+      Object.assign(new Error("private service details"), {
+        statusCode: 503,
+        code: "FST_ERR_SERVICE_UNAVAILABLE",
+      }),
+    ];
+    let thrownErrorIndex = 0;
+    const app = await buildApiApp(
+      {
+        ping: vi.fn<() => Promise<void>>(),
+        close: vi.fn<() => Promise<void>>(),
+      },
+      {
+        deviceAuth: createDeviceAuth({
+          authenticate: vi.fn(async () => {
+            throw thrownErrors[thrownErrorIndex++];
+          }),
+        }),
+      },
+    );
+
+    try {
+      const responses = [];
+      for (let index = 0; index < thrownErrors.length; index += 1) {
+        responses.push(
+          await app.inject({
+            method: "GET",
+            url: "/api/v1/budgets",
+            headers: { authorization: `Bearer ${testAccessToken}` },
+          }),
+        );
+      }
+
+      expect(responses.map((response) => response.statusCode)).toEqual([
+        400, 500, 502, 503,
+      ]);
+      expect(responses.map((response) => response.json())).toEqual([
+        {
+          error: {
+            code: "invalid_request",
+            message: "Check the request details and try again.",
+          },
+        },
+        {
+          error: {
+            code: "internal_error",
+            message: "Tandem couldn’t complete the request. Try again shortly.",
+          },
+        },
+        {
+          error: {
+            code: "actual_operation_failed",
+            message: "The Actual Budget operation could not be completed.",
+          },
+        },
+        {
+          error: {
+            code: "actual_unavailable",
+            message: "Check the server connection and try again.",
+          },
+        },
+      ]);
+      expect(
+        responses.map((response) => response.body).join("\n"),
+      ).not.toContain("private");
+    } finally {
+      await app.close();
+    }
   });
 
   it("logs safe types for thrown non-errors and malformed Error constructor names", async () => {

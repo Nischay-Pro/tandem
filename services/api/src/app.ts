@@ -5242,12 +5242,25 @@ function registerBudgetReadRoutes(
 }
 
 function safeHttpStatus(statusCode: number | undefined): number {
-  return Number.isInteger(statusCode) &&
-    statusCode !== undefined &&
-    statusCode >= 400 &&
-    statusCode <= 599
-    ? statusCode
-    : 500;
+  switch (statusCode) {
+    case 400:
+    case 401:
+    case 404:
+    case 409:
+    case 413:
+    case 415:
+    case 429:
+    case 500:
+    case 502:
+    case 503:
+      return statusCode;
+    case 422:
+      // Validation failures use the API's documented BadRequest status.
+      return 400;
+    default:
+      // Never emit a framework status without a corresponding API response.
+      return 500;
+  }
 }
 
 export function frameworkErrorStatus(error: unknown): number | undefined {
@@ -5287,10 +5300,14 @@ export function safeFrameworkErrorResponse(
   }
   switch (statusCode) {
     case 400:
-    case 422:
       return {
         code: "invalid_request",
         message: "Check the request details and try again.",
+      };
+    case 401:
+      return {
+        code: "invalid_device_credential",
+        message: "Valid device credentials are required.",
       };
     case 404:
       return {
@@ -5308,6 +5325,16 @@ export function safeFrameworkErrorResponse(
       return {
         code: "rate_limited",
         message: "Too many requests. Wait a moment, then try again.",
+      };
+    case 502:
+      return {
+        code: "actual_operation_failed",
+        message: "The Actual Budget operation could not be completed.",
+      };
+    case 503:
+      return {
+        code: "actual_unavailable",
+        message: "Check the server connection and try again.",
       };
     default:
       return {

@@ -36,8 +36,11 @@ describe("framework error mapping", () => {
     expect(safeFrameworkErrorResponse(400)).toMatchObject({
       code: "invalid_request",
     });
+    expect(safeFrameworkErrorResponse(401)).toMatchObject({
+      code: "invalid_device_credential",
+    });
     expect(safeFrameworkErrorResponse(422)).toMatchObject({
-      code: "invalid_request",
+      code: "internal_error",
     });
     expect(safeFrameworkErrorResponse(404)).toMatchObject({
       code: "route_not_found",

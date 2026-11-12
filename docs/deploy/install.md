@@ -211,11 +211,14 @@ write to its volume and checks free space on the Actual workspace volume.
 PostgreSQL has its own `pg_isready` check. Compose starts the API after
 PostgreSQL is healthy, restarts failed services, gives the API 45 seconds to
 shut down, and uses its init process to forward container signals. API startup
-runs and validates migrations before listening. Unknown database/driver errors
-and unexpected request exceptions are logged by error type only; messages,
-stack traces, and connection strings are omitted. Neither the database nor API
-ports are published on the host. Allow resource monitoring and persistent
-volume monitoring at the Docker host level.
+runs and validates migrations before listening. Unknown database or driver
+startup failures are logged by error type only. Unexpected request exceptions
+use a fixed error response and are logged with a safe error type. API request
+logs also include the request ID, method, route template, status, duration, and
+standardized response error code. Messages, stack traces, request data, and
+connection strings are omitted. Neither the database nor API ports are
+published on the host. Allow resource monitoring and persistent volume
+monitoring at the Docker host level.
 
 If readiness or a write returns `server_storage_full`, Tandem has stopped
 accepting writes until the server has free space. Check both named volumes:
