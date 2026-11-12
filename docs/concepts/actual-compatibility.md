@@ -74,79 +74,8 @@ process. This queue coordinates one Tandem API process. Cross-process and
 multi-replica serialization will use the PostgreSQL coordination layer; it is
 not claimed by this in-process session.
 
-## Disposable compatibility test
-
-Run:
-
-```sh
-./scripts/test-actual-compatibility.sh
-```
-
-The script starts the pinned official Actual image on an internal Docker
-network, initializes a test-only password through the same bootstrap route used
-by Actual's UI, and runs against synthetic budget data in isolated temporary
-workspaces. It removes those workspaces and stops its isolated Compose project
-when the check completes. It never connects to Tandem's configured production
-Actual server or uses a real budget.
-
-The test creates, updates, and deletes a synthetic ordinary transaction
-through `@actual-app/api`. It syncs the update and verifies it from a second
-local data directory, deletes it from that second client, syncs again, then
-verifies its absence from a third independent local data directory.
-
-The suite also gives two independent local workspaces the same baseline
-transaction, edits its amount in both workspaces without synchronizing the
-first edit, then synchronizes the copies in sequence. Actual reconciles the
-same-field edits to one amount, and both workspaces converge on that value.
-The test intentionally does not prescribe which edit wins: it verifies Actual's
-observed merge and convergence behavior, not a stable conflict-winner contract.
-This covers one offline transaction-amount conflict; it does not establish
-concurrent network-write safety, behavior for every field or entity, or a
-publicly supported incremental change cursor.
-
-The direct snapshot spike seeds 15,000 transactions across 2019–2025, reads
-them through `ActualBudgetSnapshotReader` and the supported API, closes the
-session, and reads them again after reopening a fresh session from the same
-local workspace. The measured snapshot contained 15,116 records and serialized
-to 8,644,137 JSON bytes. In this disposable local Docker run, the first read
-took 436 ms and the reopened-session read took 453 ms; both returned the same
-transaction revision digest. These figures cover server-side API reads and
-JSON serialization in this local environment, not transfer to or parsing on a
-phone. The test verifies session restart against the persisted local workspace,
-not an operating-system process restart. A full snapshot is about 8.6 MB, so
-the service checks for changes at a 15-second freshness interval and sends a
-full snapshot only when records changed or the cache was lost. Measure transfer
-and client parsing on representative networks before increasing the sync rate.
-
-The test also creates a synthetic transfer payee, sets its `transfer_acct`
-through `updatePayee`, and adds a transaction with `runTransfers: true`. Actual
-creates the paired transaction and each leg points to the other leg's ID; the
-outgoing leg keeps that link after download into the second workspace. The
-reconciliation flow edits one transfer leg through Actual's public
-`updateTransaction` method and verifies that Actual updates its counterpart,
-then deletes the other leg and verifies that Actual removes both. Split
-creation is verified through Actual's grouped transaction result and public AQL
-read. The adapter edits split parents and children through Actual's public
-transaction methods. Parent deletion cascades through Actual's split group;
-child deletion follows Actual's native split recalculation behavior. A change to
-the split's parent/child structure between read and write is recorded as a
-conflict.
-
-The encrypted fixture uses the pinned package's internal `key-make` handler to
-enable encryption on synthetic data because the public API has no encryption
-toggle. This is test setup only; production adapter reads and writes use the
-public API methods and do not access Actual's SQLite files or internal
-database.
-
-The same run obtains a disposable Actual server session token from its login
-endpoint, initializes a separate `@actual-app/api` workspace with that token
-and no server password, and reads the budget catalog. This verifies the
-supported session-token path against the pinned Actual release. The suite also
-opens an existing synthetic budget using only that token, creates and reads a
-transaction, synchronizes it, and deletes it. The token is issued by the test
-server's password login; this verifies token-only API read/write behavior, not
-the full OpenID-only server configuration or an OpenID-issued token's budget
-read/write path.
+The adapter's disposable integration test and its verified coverage are
+documented in [Actual compatibility tests](../develop/actual-compatibility-tests.md).
 
 ## Verified upstream evidence
 

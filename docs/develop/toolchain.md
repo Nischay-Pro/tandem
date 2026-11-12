@@ -14,6 +14,9 @@ available budgets, perform the initial local sync, and display recent
 transactions from the local database. The persistence and sync lifecycle are
 documented in [offline sync and conflict handling](../using/offline-sync-and-conflicts.md).
 
+For a source build, see [Build Tandem from source](build-from-source.md). For
+the test commands and platform coverage, see [Test Tandem](testing.md).
+
 The module targets Android (compileSdk 37, minSdk 26) and iOS (device ARM64 and
 Apple Silicon simulator). The pinned generator's stable release does
 not publish an Intel iOS simulator variant, so the client does not declare that
@@ -22,6 +25,9 @@ build cannot validate Apple toolchains.
 
 ## Pinned toolchain
 
+- Node.js 26.13.0
+- pnpm 12.16.1
+- PostgreSQL 18.6
 - Kotlin Multiplatform Gradle plugin: 2.4.21
 - Android Gradle plugin: 9.5.0
 - Gradle wrapper: 9.8.2
@@ -32,8 +38,9 @@ build cannot validate Apple toolchains.
 - Android compile SDK: 37, minSdk: 26
 
 These are the versions used by the build and CI. The documentation check compares
-them with the version catalog, Gradle wrapper, Android build files, and CI setup.
-Update them in one tested toolchain change.
+them with the package manifests, Dockerfiles, Compose files, version catalog,
+Gradle wrapper, Android build files, and CI setup. Update them in one tested
+toolchain change.
 
 ## Build and lint
 

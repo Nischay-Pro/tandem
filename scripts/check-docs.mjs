@@ -27,7 +27,8 @@ export function markdownFiles(repoRoot = root, gitExecutable = "git") {
       { cwd: repoRoot, encoding: "utf8" },
     )
       .split("\n")
-      .filter(Boolean);
+      .filter(Boolean)
+      .filter((file) => existsSync(resolve(repoRoot, file)));
   } catch (error) {
     if (error.code !== "ENOENT" && error.status !== 128) throw error;
   }
@@ -370,24 +371,24 @@ export function checkVersions(repoRoot = root) {
 
   const checks = [
     [
-      "docs/develop/build-and-test.md",
+      "docs/develop/toolchain.md",
       "Node.js",
       /\bNode\.js\s+\x60?(\d+(?:\.\d+){1,2})/gi,
       versions.node,
     ],
     [
-      "docs/develop/build-and-test.md",
+      "docs/develop/toolchain.md",
       "pnpm",
       /\bpnpm\s+\x60?(\d+(?:\.\d+){1,2})/g,
       versions.pnpm,
     ],
     [
-      "docs/develop/build-and-test.md",
+      "docs/develop/toolchain.md",
       "PostgreSQL",
       /\bPostgreSQL\s+\x60?(\d+\.\d+(?:\.\d+)?)/gi,
       versions.postgres,
     ],
-    ["docs/develop/build-and-test.md", "Java", /Java\s+(\d+)/i, versions.java],
+    ["docs/develop/toolchain.md", "Java", /Java\s+(\d+)/i, versions.java],
     [
       "docs/develop/toolchain.md",
       "Kotlin plugin",

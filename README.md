@@ -11,7 +11,7 @@ the phone and syncs saved changes with Actual when the connection returns.
 
 1. Run an Actual Budget server.
 2. Set up Tandem's API gateway by following the [server installation guide](docs/deploy/install.md).
-3. Open Tandem, enter the gateway address, and sign in with your Actual account.
+3. [Install the Android app](docs/using/install-app.md), enter the Actual server address, and sign in with your Actual account.
 
 The [server installation guide](docs/deploy/install.md) uses one setup command
 to install the latest published nightly Compose bundle with its API image pinned
@@ -31,7 +31,8 @@ before deploying it. For Actual's encrypted budgets, see the
 
 ## Build from source
 
-See [mobile build and test instructions](docs/develop/build-and-test.md), the
+See [build instructions](docs/develop/build-from-source.md),
+[testing instructions](docs/develop/testing.md), the
 [toolchain reference](docs/develop/toolchain.md), and the
 [API reference](docs/develop/api-reference.md). The machine-readable API
 contract remains at [`docs/api/openapi-v1.json`](docs/api/openapi-v1.json).

@@ -2,6 +2,10 @@
 
 For operators routing a public HTTPS address to Tandem and Actual.
 
+You need an existing TLS server block for Actual, an Nginx container on the
+same private Docker network as Tandem and Actual, and a domain that resolves
+to the proxy.
+
 ## Steps
 
 1. **Join the services to one private network.** Attach Nginx, the Tandem API,

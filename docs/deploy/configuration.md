@@ -56,7 +56,87 @@ variables.
 The supplied Compose file mounts the PostgreSQL password, database URL, API
 encryption keys and optional Actual session token from
 `tandem/deploy/compose/secrets/`. Create them using the
-[start steps](install.md#start-a-new-deployment).
+[installation steps](install.md#install-and-start).
+
+## Optional operator-managed Actual session
+
+Leave `TANDEM_ACTUAL_SESSION_TOKEN_FILE` pointing to the supplied empty file
+for normal per-person sign-in. An operator-managed token is only for a setup
+where the API must open an Actual session before anyone signs in. Anyone with
+this token can access the budgets of that Actual account. Protect it like a
+password and keep it in the secret file, never `.env`, shell history, or a
+command-line argument. When it is replaced or revoked, recreate the API and
+check readiness.
+
+## Rotate the session encryption key
+
+The 32-byte `AUTH_TOKEN_ENCRYPTION_KEY` encrypts Actual session tokens stored in
+PostgreSQL. Keep it stable during normal operation. Before rotating, make a
+verified database backup and copy the current key into protected storage. The
+key is required to read tokens in that backup. For an installation at
+`/opt/tandem`, for example:
+
+```sh
+sudo install -d -m 700 /secure/tandem-key-backups
+sudo install -o root -g root -m 600 \
+  /opt/tandem/deploy/compose/secrets/auth_token_encryption_key \
+  /secure/tandem-key-backups/auth_token_encryption_key
+```
+
+Replace `/opt/tandem` with the installation directory. Keep this copy separate
+from the live secret directory and protect it with the database backup.
+
+1. Create a new random key in protected storage:
+
+   ```sh
+   openssl rand -hex 32 > /secure/new-auth-key
+   chmod 600 /secure/new-auth-key
+   ```
+
+   **Check:** the file contains 64 hexadecimal characters. If it does not,
+   generate it again; do not replace the current key.
+
+2. Install the new key as current and the former key as previous, preserving
+   the API's owner and mode:
+
+   ```sh
+   sudo install -o root -g 1000 -m 0440 /secure/new-auth-key \
+     /opt/tandem/deploy/compose/secrets/auth_token_encryption_key
+   sudo install -o root -g 1000 -m 0440 \
+     /secure/tandem-key-backups/auth_token_encryption_key \
+     /opt/tandem/deploy/compose/secrets/auth_token_encryption_key_previous
+   ```
+
+   Replace `/opt/tandem` if Tandem is installed elsewhere. Recreate the API
+   service so it reads the new secret files:
+
+   ```sh
+   docker compose --project-directory /opt/tandem \
+     --env-file /opt/tandem/deploy/compose/.env \
+     -f /opt/tandem/deploy/compose/production.yml \
+     up -d --force-recreate tandem-api
+   ```
+
+   For a Compose include, run `up -d --force-recreate tandem-api` through the
+   existing Actual project instead.
+
+   **Check:** the API reports healthy and existing users can still access
+   their budgets. If startup fails, restore the old key as current, empty the
+   previous-key file, recreate the API, and stop before attempting another
+   rotation.
+
+3. After startup confirms that stored tokens were re-encrypted, replace the
+   previous-key file with an empty file:
+
+   ```sh
+   sudo install -o root -g 1000 -m 0440 /dev/null \
+     /opt/tandem/deploy/compose/secrets/auth_token_encryption_key_previous
+   ```
+
+   Recreate the API service again using the same Compose command from step 2.
+   **Check:** readiness succeeds and the app still signs in. Keep the old key in
+   protected backup storage while any database backup may still contain tokens
+   encrypted with it.
 
 ## Check the configuration
 
@@ -71,4 +151,4 @@ curl --fail https://budget.example.com/api/v1/health/ready
 ```
 
 If the check fails, use the [troubleshooting guide](troubleshooting.md). For
-network and proxy setup, see the [installation guide](install.md).
+network and proxy setup, see [Reverse proxy setup](reverse-proxy.md).

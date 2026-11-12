@@ -1,260 +1,152 @@
-# Tandem deployment
+# Install Tandem
 
-Production Compose runs the API and PostgreSQL on a private network. The setup
-command downloads the Compose bundle published by the nightly workflow, whose
-API image is pinned by digest, and creates the protected secret files.
-PostgreSQL is not published to the host. The API is reachable only from the
-external Docker network used by the reverse proxy.
+For operators adding Tandem beside an existing Actual Budget server. This guide
+installs one Tandem API and its PostgreSQL database with the latest published
+nightly Compose bundle. The setup command stops without changing a deployment if
+that bundle is unavailable.
 
-Run one API process. Snapshot paging state is held in a bounded in-memory cache;
-multiple replicas would not share a page generation and could repeatedly force
-mobile clients to restart their snapshot download.
+## What you need
 
-See the [configuration reference](configuration.md),
-[reverse-proxy guide](reverse-proxy.md), and
-[troubleshooting guide](troubleshooting.md) for the next steps.
+- A Linux host with rootful Docker Engine and Docker Compose v2.
+- `curl`, `docker`, `jq`, `openssl`, `sha256sum`, `sudo`, and `tar`.
+- An Actual server reachable from the Tandem host.
+- A domain and HTTPS reverse proxy for remote phone connections.
 
-## Start a new deployment
+## Install and start
 
-Before starting, install Docker Engine with Compose v2, plus `curl`, `jq`,
-`openssl`, `sudo`, and `tar`. Use a Linux host with rootful Docker so the
-API can read the secret files as its unprivileged container user.
+1. **Download and run the setup command** from the directory where you want the
+   installation files:
 
-1. Download and run the setup command from the directory where you want the
-   deployment files:
+   ```sh
+   curl --fail --silent --show-error --location \
+     https://raw.githubusercontent.com/Nischay-Pro/tandem/main/deploy/tandem-setup.sh \
+     --output tandem-setup.sh
+   bash tandem-setup.sh
+   ```
 
-```sh
-curl --fail --silent --show-error --location \
-  https://raw.githubusercontent.com/Nischay-Pro/tandem/main/deploy/tandem-setup.sh \
-  --output tandem-setup.sh
-bash tandem-setup.sh
-```
+   The command downloads the latest nightly Compose bundle, verifies its
+   SHA-256 checksum, asks for the Actual URL, public Tandem URL, and proxy
+   address, then creates `./tandem/`. It writes generated secret files under
+   `tandem/deploy/compose/secrets/`; `.env` contains settings and secret-file
+   paths, not secret values. The command does not replace an existing `.env`,
+   secret, or Compose file.
 
-The command gets the latest nightly release's Compose bundle, which contains
-the exact digest-pinned Compose file tested with that API commit. It creates
-the `tandem-edge` network if needed and asks for the Actual URL, public Tandem
-URL and reverse proxy IP/CIDR. It writes files to `./tandem` by default. It
-also downloads the backup, restore, systemd and proxy examples into
-`tandem/deploy/`. Settings and secrets are stored in `tandem/deploy/compose/`.
-The command never replaces an existing `.env` file or secret. Running it again
-leaves an existing installation unchanged.
+   **Check:** the pinned image and required secret files are present:
 
-Check that the API image is pinned and the secret files exist:
+   ```sh
+   grep -Eq '^[[:space:]]+image: ghcr.io/nischay-pro/tandem-api@sha256:[a-f0-9]{64}$' \
+     tandem/deploy/compose/production.yml
+   test -s tandem/deploy/compose/secrets/postgres_password
+   test -s tandem/deploy/compose/secrets/database_url
+   test -s tandem/deploy/compose/secrets/auth_token_encryption_key
+   ```
 
-```sh
-grep -Eq '^[[:space:]]+image: ghcr.io/nischay-pro/tandem-api@sha256:[a-f0-9]{64}$' \
-  tandem/deploy/compose/production.yml
-test -s tandem/deploy/compose/secrets/postgres_password
-test -s tandem/deploy/compose/secrets/database_url
-test -s tandem/deploy/compose/secrets/auth_token_encryption_key
-```
+   If the command reports that no Compose bundle is available, leave any
+   existing deployment running and retry after the nightly release is
+   published. If a check fails, do not start Compose; see
+   [Troubleshooting](troubleshooting.md).
 
-2. Start the services and check their health:
+2. **If Actual already runs in Compose, include Tandem in that project.** From
+   the directory containing the existing Compose file, add:
 
-```sh
-docker compose --project-directory "$PWD/tandem" \
-  --env-file "$PWD/tandem/deploy/compose/.env" \
-  -f "$PWD/tandem/deploy/compose/production.yml" up -d
-docker compose --project-directory "$PWD/tandem" \
-  --env-file "$PWD/tandem/deploy/compose/.env" \
-  -f "$PWD/tandem/deploy/compose/production.yml" ps
-```
+   ```yaml
+   include:
+     - path: ./tandem/deploy/compose/production.yml
+       project_directory: ./tandem
+       env_file: ./tandem/deploy/compose/.env
+   ```
 
-The `tandem-api` and `tandem-postgres` services should report healthy. If setup
-cannot download the nightly Compose bundle, check access to GitHub Releases
-and the nightly prerelease. If Compose cannot pull the API image, check network
-access and the package's public visibility. If the downloaded file is missing
-or invalid, keep any running deployment unchanged and retry after the nightly
-release is healthy.
+   Replace `./tandem` with the directory created by setup. Add the external
+   `tandem-edge` network to the existing Actual and reverse-proxy services,
+   preserving their other networks:
 
-3. Configure TLS using the [reverse-proxy guide](reverse-proxy.md), then check
-   readiness:
+   ```yaml
+   services:
+     actual:
+       networks:
+         - default
+         - tandem-edge
+     nginx:
+       networks:
+         - default
+         - tandem-edge
 
-```sh
-curl --fail https://budget.example.com/api/v1/health/ready
-```
+   networks:
+     tandem-edge:
+       name: tandem-edge
+       external: true
+   ```
 
-The response should be `{"status":"ok"}` as JSON. If this URL returns the
-Actual web page, the reverse proxy is sending `/api/v1/` to Actual instead of
-the Tandem API. Add the API locations from
-[`deploy/nginx/tandem-locations.conf.example`](../../deploy/nginx/tandem-locations.conf.example)
-to the same TLS server block as Actual.
+   Use the service names from your Compose file. In
+   `tandem/deploy/compose/.env`, set `TANDEM_ACTUAL_SERVER_URL` to the Actual
+   service address reachable on `tandem-edge`, for example
+   `http://actual:5006`. Keep `TANDEM_ACTUAL_PUBLIC_URL` set to the public HTTPS
+   Tandem address if people sign in through Actual OpenID. Setup creates the
+   `tandem-edge` network.
 
-### If Actual already runs in Compose
+   **Check:** render the merged project and confirm it includes the existing
+   Actual service plus `tandem-api` and `tandem-postgres`:
 
-Include the generated production file from the Compose project that already
-runs Actual. This adds its API and PostgreSQL services to that project while
-keeping `deploy/compose/production.yml` as the only Tandem service definition.
-Docker Compose 2.20.3 or newer is required for `include` ([Compose include
-reference](https://docs.docker.com/compose/how-tos/multiple-compose-files/include/)).
-From the directory containing your existing Compose file, add:
+   ```sh
+   docker compose -f compose.yml config --services
+   ```
 
-```yaml
-include:
-  - path: ./tandem/deploy/compose/production.yml
-    project_directory: ./tandem
-    env_file: ./tandem/deploy/compose/.env
-```
+   If Compose cannot resolve `include.path` or the services do not appear,
+   check the setup directory and `env_file` path. Compose `include` requires
+   version 2.20.3 or newer. If the proxy cannot reach the API, follow
+   [Reverse proxy setup](reverse-proxy.md).
 
-Replace `./tandem` with the directory created by the setup command. Add the
-external network to the existing Actual and reverse-proxy services, preserving
-any networks they already use:
+3. **Start Tandem and check health.** For a standalone installation, run:
 
-```yaml
-services:
-  actual:
-    networks:
-      - default
-      - tandem-edge
-  nginx:
-    networks:
-      - default
-      - tandem-edge
+   ```sh
+   docker compose --project-directory "$PWD/tandem" \
+     --env-file "$PWD/tandem/deploy/compose/.env" \
+     -f "$PWD/tandem/deploy/compose/production.yml" up -d
+   docker compose --project-directory "$PWD/tandem" \
+     --env-file "$PWD/tandem/deploy/compose/.env" \
+     -f "$PWD/tandem/deploy/compose/production.yml" ps
+   ```
 
-networks:
-  tandem-edge:
-    name: tandem-edge
-    external: true
-```
+   If you use Compose `include`, run `up -d` from the existing project instead.
+   The included API joins the external `tandem-edge` network automatically.
 
-Use the actual service names from your Compose file in this example. The setup
-command creates `tandem-edge`. `project_directory` keeps the included service's
-volume and secret paths relative to the setup directory. The included API joins
-the external network automatically. Set
-`TANDEM_ACTUAL_SERVER_URL` in `tandem/deploy/compose/.env` to the Actual service
-name and port reachable on that network, such as `http://actual:5006`. Set
-`TANDEM_ACTUAL_PUBLIC_URL` to the HTTPS Tandem address when the Actual server
-offers OpenID sign-in. Set `TANDEM_TRUST_PROXY` to the reverse proxy's exact address or a
-narrow CIDR on `tandem-edge`; do not trust all forwarded addresses.
+   **Check:** `tandem-api` and `tandem-postgres` report `healthy`. If not, read
+   their logs and use [Troubleshooting](troubleshooting.md). Do not delete the
+   `tandem-postgres-data` or `tandem-actual-workspace` volumes; they hold the
+   Tandem database and Actual working copy.
 
-**Check:** render the merged project and confirm it has one `actual` service,
-one `tandem-api`, and one `tandem-postgres` service:
+4. **Route the API through HTTPS.** Add the Tandem locations to the same TLS
+   server block as Actual. Follow [Reverse proxy setup](reverse-proxy.md) and
+   keep `/api/v1/` routed to Tandem before Actual's catch-all.
 
-```sh
-docker compose -f compose.yml config --services
-```
+   **Check:** from a device that can reach the public address, run:
 
-The list should contain the existing Actual and proxy services plus
-`tandem-api` and `tandem-postgres`. If it does not, check that `include.path` and `env_file` point to
-the setup directory. If the proxy cannot reach the API, attach both to
-`tandem-edge` and follow the [reverse-proxy guide](reverse-proxy.md).
+   ```sh
+   curl --fail https://budget.example.com/api/v1/health/ready
+   ```
 
-The downloaded Nginx examples are under `tandem/deploy/nginx/`.
+   The response should be `{"status":"ok"}`. If Actual's website appears,
+   the proxy sent `/api/v1/` to the wrong service. If readiness fails, keep the
+   volumes and follow [Troubleshooting](troubleshooting.md).
 
-Compose secrets are mounted read-only inside the containers. The `.env` file
-contains file paths, not secret values. The Actual session-token file is empty
-by default, which leaves per-person sign-in unchanged. The API runs as
-UID/GID 1000. On a Linux host using rootful Docker, setup creates secret files
-owned by `root:1000` with mode `0440` and keeps the secret directory private.
-Actual account passwords are entered in Tandem and are not deployment secrets.
+5. **Sign in and sync a budget.** Enter the public Tandem address in the app,
+   sign in with the Actual account, choose a budget, and complete its first
+   sync.
 
-### Optional operator-managed Actual session
+   **Check:** the budget opens and its saved transactions appear. If sign-in
+   fails while Actual's website works, compare the Actual service address with
+   [Actual compatibility](../concepts/actual-compatibility.md).
 
-Most deployments should leave `actual_session_token` empty. Tandem users sign
-in through Actual, and Tandem keeps each user's session token encrypted in
-PostgreSQL. An operator-managed token is only needed when the API itself must
-start an Actual session before anyone signs in. It is not sent to the app.
+## Where to go next
 
-To obtain one, sign in to the Actual web app in a browser. Open that browser's
-developer tools and find IndexedDB database `actual`, object store
-`asyncStorage`, key `user-token`. Copy the value into
-`tandem/deploy/compose/secrets/actual_session_token`; do not put it in `.env`, shell
-history, a command-line argument, or a tracked file. Keep the existing
-`root:1000` ownership and `0440` mode, then restart the API. The token grants
-the same budget access as that Actual account. If it expires or is revoked,
-Tandem reports it in readiness and the API log; replace the secret and restart
-the API. Tandem does not refresh operator-managed tokens automatically.
+- Change environment settings with the [configuration reference](configuration.md).
+- Set up backups before relying on the service:
+  [Back up and restore](backup-restore.md).
+- Review the [trust and security guide](trust.md).
+- Upgrade a running installation with the [upgrade guide](upgrade.md). Do not
+  run first-install setup against its existing data directory.
 
-The auth encryption key must remain stable between rotations. Keep a protected
-copy with the database backups. The always-mounted
-`auth_token_encryption_key_previous` file should be zero bytes during normal
-operation. To rotate keys, generate a new 32-byte key and replace the current
-and previous files while preserving their ownership and mode. For example:
-
-```sh
-sudo install -o root -g 1000 -m 0440 /secure/new-auth-key tandem/deploy/compose/secrets/auth_token_encryption_key
-sudo install -o root -g 1000 -m 0440 /secure/old-auth-key tandem/deploy/compose/secrets/auth_token_encryption_key_previous
-```
-
-Restart the API and wait for it to become healthy; startup re-encrypts every
-stored Actual session in one transaction and fails without changing the rows if
-any cannot be decrypted. Then replace the previous-key file with an empty file
-using the same owner and mode, then restart the API and confirm it becomes
-healthy again. To clear the previous-key file, install an empty file with the
-same ownership and permissions:
-
-```sh
-sudo install -o root -g 1000 -m 0440 /dev/null tandem/deploy/compose/secrets/auth_token_encryption_key_previous
-```
-
-Keep the old key in protected backup storage while any database backup may still
-contain tokens encrypted with it.
-
-Set `TANDEM_ACTUAL_SERVER_URL` to the Actual service address. Set
-`TANDEM_ACTUAL_PUBLIC_URL` to the public Tandem URL to enable OpenID sign-in.
-When enabled, the server release must match
-[Actual compatibility](../concepts/actual-compatibility.md).
-
-When updating an existing deployment, do not run first-install setup against
-its data directory. Preserve its `.env`, secret files, Compose project name and
-`tandem-postgres-data` and `tandem-actual-workspace` volumes. The Postgres
-password secret must still match the initialized database role. Follow the
-[upgrade steps](upgrade.md) to replace only the API service's Compose image
-reference. Keep the `tandem-actual-workspace` volume while any write operation
-is uncertain; it can contain Actual data that has not reached the budget file
-yet.
-
-The installed Compose file is pinned to the exact digest in its nightly
-release bundle. A later nightly does not silently replace it. An empty
-`TANDEM_TRUST_PROXY` is the safe default: forwarded client-address headers are
-ignored. Set it to the reverse proxy's IP or narrow CIDR if rate limits should
-use the client address.
-
-The API has Docker liveness/readiness checks; readiness verifies PostgreSQL can
-write to its volume and checks free space on the Actual workspace volume.
-PostgreSQL has its own `pg_isready` check. Compose starts the API after
-PostgreSQL is healthy, restarts failed services, gives the API 45 seconds to
-shut down, and uses its init process to forward container signals. API startup
-runs the idempotent schema bootstrap before listening. Unknown database or driver
-startup failures are logged by error type only. Unexpected request exceptions
-use a fixed error response and are logged with a safe error type. API request
-logs also include the request ID, method, route template, status, duration, and
-standardized response error code. Messages, stack traces, request data, and
-connection strings are omitted. Neither the database nor API ports are
-published on the host. Allow resource monitoring and persistent volume
-monitoring at the Docker host level.
-
-If readiness or a write returns `server_storage_full`, Tandem has stopped
-accepting writes until the server has free space. Check both named volumes:
-
-```sh
-docker compose --project-directory "$PWD/tandem" \
-  --env-file "$PWD/tandem/deploy/compose/.env" \
-  -f "$PWD/tandem/deploy/compose/production.yml" exec tandem-postgres df -h /var/lib/postgresql
-docker compose --project-directory "$PWD/tandem" \
-  --env-file "$PWD/tandem/deploy/compose/.env" \
-  -f "$PWD/tandem/deploy/compose/production.yml" exec tandem-api df -h /data/actual-api
-```
-
-Free space on the host or expand the volume, then check `/api/v1/health/ready`
-again; readiness recovers after PostgreSQL can write and the Actual workspace
-has free blocks. Do not remove `tandem-postgres-data` or
-`tandem-actual-workspace` to recover: they contain Tandem's database and local
-Actual budget files.
-
-In Tandem, enter the public API address and sign in with the Actual account.
-Available budgets come from that account's Actual budget catalog.
-
-For remote sign-in, use HTTPS. HTTP does not encrypt the Actual password or
-session credentials in transit; use it only on a trusted local network. The
-Actual OpenID callback URL carries a short-lived Actual session token in its
-query string, so this example disables access logging and suppresses
-non-emergency error logs for that callback path. Custom reverse proxies must
-also omit its query string from access and error logs.
-
-## Back up and restore
-
-See the [backup and restore guide](backup-restore.md) for manual and scheduled
-backups, encrypted archives, restore safety copies, and recovery checks.
-
-For build and release validation, see [Build and test](../develop/build-and-test.md).
+The installed Compose file is pinned to the exact API image digest in its
+nightly release bundle; it does not update automatically. Keep the Actual
+workspace volume while any write status is uncertain, because it can contain
+changes not yet synced to the Actual budget file.

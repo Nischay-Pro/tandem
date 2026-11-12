@@ -5,6 +5,12 @@ image pinned by digest. A later nightly does not silently change the installed
 version. Upgrade the API after reviewing and verifying the new digest; keep
 PostgreSQL and the Actual workspace volume.
 
+For operators with a running Tandem deployment. You need access to the host,
+Docker Compose, Docker Buildx, GitHub CLI with `gh attestation`, and a verified
+backup. The commands below show a standalone install at `/opt/tandem`; for an
+installation included in the Actual Compose project, update the same Tandem
+Compose file but run Compose commands from that existing project.
+
 ## Upgrade
 
 1. **Back up first.** Create and verify a backup using
@@ -81,6 +87,10 @@ docker compose --project-directory /opt/tandem \
   --env-file /opt/tandem/deploy/compose/.env \
   -f "$compose_file" up -d tandem-api
 ```
+
+**Check:** readiness returns `{"status":"ok"}` and the app can read a budget.
+If rollback does not restore service, keep both volumes intact and restore the
+verified backup with [Back up and restore](backup-restore.md).
 
 Do not use `docker compose down --volumes`. If a release's notes say its data
 changes cannot be rolled back, restore the verified backup instead. Keep the
