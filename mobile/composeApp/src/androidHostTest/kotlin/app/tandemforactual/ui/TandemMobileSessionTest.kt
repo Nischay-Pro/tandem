@@ -5,6 +5,7 @@ import androidx.sqlite.driver.AndroidSQLiteDriver
 import app.tandemforactual.api.client.StatementImportItem
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
+import app.tandemforactual.api.generated.Api
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.TandemDatabase
@@ -17,6 +18,13 @@ import app.tandemforactual.data.store.LocalRecordProjection
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
 import app.tandemforactual.data.store.RemoteBudgetRecord
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.plugins.DefaultRequest
+import io.ktor.client.plugins.compression.ContentEncoding
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.http.takeFrom
+import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -300,6 +308,64 @@ class TandemMobileSessionTest {
                 assertEquals(9_000L, session.pendingCategoryBudgetOverrides("budget-1", "2026-11")["category-1"])
                 assertEquals("Travel card", session.accountRecordsWithPendingCreates("budget-1", emptyList()).single().displayName)
             } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun bankSyncAndStatementPreviewRequireTandemWhenTheServerIsOffline() =
+        runBlocking {
+            val database = newDatabase()
+            val serverUrl = "http://127.0.0.1:1"
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val engine = MockEngine { throw IllegalStateException("offline") }
+            Api.updateClient(
+                createHttpClient = {
+                    HttpClient(engine) {
+                        followRedirects = false
+                        install(ContentNegotiation) { json(Api.json) }
+                        install(ContentEncoding) {
+                            gzip()
+                            deflate()
+                        }
+                        install(DefaultRequest) { url.takeFrom(Api.baseUrl) }
+                    }
+                },
+            )
+            try {
+                val preferences = AppPreferencesStore(database)
+                val repository = LocalBudgetRepository(database) { 1_000L }
+                seedCachedBudget(repository, preferences, withPendingWrite = false)
+                preferences.putValue("internal:budget-cache-owner-v1", cacheOwner(serverUrl, "principal-old"))
+                val credentialStore = memoryCredentialStore(storedSession(serverUrl, "principal-old"))
+                val session =
+                    TandemMobileSession(
+                        TandemApiClient(allowInsecurePrivateNetwork = true),
+                        database,
+                        { 1_000L },
+                        credentialStore,
+                    )
+                assertEquals(serverUrl, session.restoreStoredSession())
+                session.setBudgetActionRoute(AppRouteEntry(AppRoute.BUDGET, 1))
+
+                assertFalse(session.runBankSync("budget-1", null))
+
+                assertFalse(session.isServerReachable)
+                assertEquals(
+                    "Tandem isn’t responding at this address. Check the server address.",
+                    session.budgetActionMessage,
+                )
+                assertEquals("Try again", session.budgetActionMessageActionLabel)
+
+                val preview = session.previewStatementImportTransactions("budget-1", "account-1", listOf("import-1"), null)
+                assertFalse(preview.serverChecked)
+                assertFalse(session.isServerReachable)
+                assertTrue(repository.readBudgetMutationQueue().items.isEmpty())
+            } finally {
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                Api.updateClient(createHttpClient = { previousClient })
                 database.close()
             }
         }
