@@ -10,6 +10,10 @@ Run one API process. Snapshot paging state is held in a bounded in-memory cache;
 multiple replicas would not share a page generation and could repeatedly force
 mobile clients to restart their snapshot download.
 
+See the [server configuration reference](../docs/deploy/configuration.md) for
+settings and the [troubleshooting guide](../docs/deploy/troubleshooting.md) for
+connection and readiness failures.
+
 ## Start the service
 
 Create a dedicated edge network, a private directory for Compose secrets, and

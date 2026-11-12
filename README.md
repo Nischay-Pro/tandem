@@ -192,7 +192,7 @@ Open Tandem, enter the public Tandem API address, then sign in with the Actual p
 
 #### If you do not use the same Compose project as Actual
 
-You can run Tandem in its own production Compose project. Clone this repository on the host, create the external network shared with Actual and your reverse proxy, then configure the deployment. The [deployment guide's start steps](deploy/README.md#start-the-service) show how to create the secret files; `.env` contains their paths. The Compose file builds the API image and keeps PostgreSQL and the Actual workspace on persistent volumes:
+You can run Tandem in its own production Compose project. Clone this repository on the host, create the external network shared with Actual and your reverse proxy, then configure the deployment. The [deployment guide's start steps](deploy/README.md#start-the-service) show how to create the secret files; `.env` contains their paths. See the [configuration reference](docs/deploy/configuration.md) for settings and the [troubleshooting guide](docs/deploy/troubleshooting.md) for connection and readiness failures. The Compose file builds the API image and keeps PostgreSQL and the Actual workspace on persistent volumes:
 
 ```sh
 docker network create tandem-edge
