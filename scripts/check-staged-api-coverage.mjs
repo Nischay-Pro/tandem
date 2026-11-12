@@ -36,10 +36,16 @@ for (const source of stagedSources) {
     (file) => !file.endsWith(".integration.test.ts"),
   );
 
+  const integrationTests = matchingTests.filter((file) =>
+    file.endsWith(".integration.test.ts"),
+  );
+
   if (
     ["src/main.ts", "src/server.ts"].includes(modulePath) &&
-    matchingTests.some((file) => file.endsWith(".integration.test.ts"))
+    integrationTests.length > 0
   ) {
+    for (const test of integrationTests)
+      assertNoUnstagedChange(path.relative(repoRoot, test));
     process.stdout.write(
       "API coverage: production startup wiring is checked by the database-backed integration suite in CI.\n",
     );
@@ -47,18 +53,26 @@ for (const source of stagedSources) {
   }
 
   if (modulePath === "src/schema/bootstrap.ts") {
-    const integrationTests = matchingTests.filter((file) =>
-      file.endsWith(".integration.test.ts"),
-    );
     if (integrationTests.length === 0) {
       throw new Error(
         "Schema bootstrap changes require a PostgreSQL integration test",
       );
     }
     for (const test of matchingTests)
-      assertNoUnstagedChange(`services/api/${test}`);
+      assertNoUnstagedChange(path.relative(repoRoot, test));
 
     if (!process.env.DATABASE_URL) {
+      const relativeTests = unitTests.map((file) =>
+        path.relative(apiRoot, file),
+      );
+      if (relativeTests.length > 0) {
+        const result = spawnSync(vitest, ["run", ...relativeTests], {
+          cwd: apiRoot,
+          stdio: "inherit",
+        });
+        if (result.error) throw result.error;
+        if (result.status !== 0) process.exit(result.status ?? 1);
+      }
       process.stdout.write(
         "API coverage: schema bootstrap is covered by PostgreSQL integration tests in CI; set DATABASE_URL to run them locally.\n",
       );
@@ -96,7 +110,7 @@ for (const source of stagedSources) {
       );
     }
     for (const test of integrationTests)
-      assertNoUnstagedChange(`services/api/${test}`);
+      assertNoUnstagedChange(path.relative(repoRoot, test));
 
     if (!process.env.DATABASE_URL) {
       process.stdout.write(
@@ -127,7 +141,7 @@ for (const source of stagedSources) {
 
   const relativeTests = unitTests.map((file) => path.relative(apiRoot, file));
   for (const test of relativeTests)
-    assertNoUnstagedChange(`services/api/${test}`);
+    assertNoUnstagedChange(path.join("services/api", test));
 
   process.stdout.write(
     `API coverage: checking ${modulePath} with ${relativeTests.join(", ")}\n`,
