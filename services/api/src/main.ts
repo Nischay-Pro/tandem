@@ -1,9 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import * as actualApi from "@actual-app/api";
 import { createHash } from "node:crypto";
-import { statfsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { join } from "node:path";
 import { createPostgresDatabase, type Database } from "./database.js";
 import { parseApiConfig, type ApiConfig, type Environment } from "./config.js";
 import {
@@ -29,23 +28,7 @@ import { ActualPasswordLogin } from "./auth/actual-password-login.js";
 import { ActualOpenIdLogin } from "./auth/actual-openid-login.js";
 import { runAsActualPrincipal } from "./auth/actual-principal-context.js";
 import { InvalidStoredActualSessionCredentialError } from "./auth/actual-session-vault.js";
-
-function actualWorkspaceHasFreeSpace(dataDir: string): boolean {
-  let storagePath = resolve(dataDir);
-  while (true) {
-    try {
-      return statfsSync(storagePath).bavail > 0;
-    } catch (error) {
-      const code =
-        typeof error === "object" && error !== null && "code" in error
-          ? error.code
-          : undefined;
-      const parent = dirname(storagePath);
-      if (code !== "ENOENT" || parent === storagePath) throw error;
-      storagePath = parent;
-    }
-  }
-}
+import { readActualStorageReadiness } from "./actual-storage-readiness.js";
 
 export async function runApi(
   environment: Environment,
@@ -154,33 +137,13 @@ function createActualRuntime(
     ),
     budgetMaintenanceApi: createBudgetMaintenanceApi(database, session),
     budgetReadApi,
-    actualReadiness: () => {
-      if (!startupActualReady) {
-        return {
-          ready: false,
-          ...(startupActualReadinessMessage === undefined
-            ? {}
-            : { message: startupActualReadinessMessage }),
-        };
-      }
-      try {
-        if (!actualWorkspaceHasFreeSpace(actualConfig.dataDir)) {
-          return {
-            ready: false,
-            code: "server_storage_full",
-            message:
-              "Tandem server storage is full. Free disk space on the server and try again.",
-          };
-        }
-      } catch {
-        return {
-          ready: false,
-          message:
-            "Tandem could not check available server storage. Check the server and try again.",
-        };
-      }
-      return { ready: true };
-    },
+    actualReadiness: () =>
+      readActualStorageReadiness(actualConfig.dataDir, {
+        ready: startupActualReady,
+        ...(startupActualReadinessMessage === undefined
+          ? {}
+          : { message: startupActualReadinessMessage }),
+      }),
     readActualLoginMethods: async () => {
       const methods = await loginMethods.read();
       if (actualConfig.publicURL) return methods;
