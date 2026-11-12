@@ -53,12 +53,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.components.TandemBackButton
 import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.TandemModalCloseButton
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
 import com.composables.icons.lucide.ChevronDown
-import com.composables.icons.lucide.ChevronLeft
 import com.composables.icons.lucide.Cloud
 import com.composables.icons.lucide.CloudAlert
 import com.composables.icons.lucide.CloudOff
@@ -261,11 +261,7 @@ internal fun AppHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showBack && !route.isTransactionForm()) {
-            TandemIconButton(
-                icon = Lucide.ChevronLeft,
-                contentDescription = "Back",
-                onClick = onBack,
-            )
+            TandemBackButton(onClick = onBack)
             Spacer(Modifier.width(6.dp))
         }
         Column(

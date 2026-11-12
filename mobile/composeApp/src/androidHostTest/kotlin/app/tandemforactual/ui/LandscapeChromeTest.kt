@@ -1,8 +1,13 @@
 package app.tandemforactual.ui
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.test.assertHeightIsEqualTo
+import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.components.PeriodStepper
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -21,25 +26,36 @@ class LandscapeChromeTest {
         var backRequested = false
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                AppHeader(
-                    route = AppRoute.FIRST_SYNC,
-                    state = AppState(),
-                    showBack = true,
-                    onBack = { backRequested = true },
-                    onSync = {},
-                    syncStatus = MainCloudStatus.OFF,
-                    pendingWriteStatuses = emptyList(),
-                    onBudget = {},
-                    actualConnected = false,
-                    liveAccounts = emptyList(),
-                    liveBudgetMonth = null,
-                    activitySelectionTotalMinor = null,
-                    conflictTitle = null,
-                )
+                Column {
+                    AppHeader(
+                        route = AppRoute.FIRST_SYNC,
+                        state = AppState(),
+                        showBack = true,
+                        onBack = { backRequested = true },
+                        onSync = {},
+                        syncStatus = MainCloudStatus.OFF,
+                        pendingWriteStatuses = emptyList(),
+                        onBudget = {},
+                        actualConnected = false,
+                        liveAccounts = emptyList(),
+                        liveBudgetMonth = null,
+                        activitySelectionTotalMinor = null,
+                        conflictTitle = null,
+                    )
+                    PeriodStepper("November 2026", "Previous month", "Next month", {}, {})
+                }
             }
         }
 
-        composeTestRule.onNodeWithContentDescription("Back").performClick()
+        composeTestRule
+            .onNodeWithContentDescription("Back")
+            .assertWidthIsEqualTo(44.dp)
+            .assertHeightIsEqualTo(44.dp)
+            .performClick()
+        composeTestRule
+            .onNodeWithContentDescription("Previous month")
+            .assertWidthIsEqualTo(44.dp)
+            .assertHeightIsEqualTo(44.dp)
 
         assertTrue(backRequested)
     }

@@ -56,6 +56,7 @@ import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.components.TandemChoiceDialog
 import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.TandemModalHeader
+import app.tandemforactual.ui.components.TandemNavigationChevronButton
 import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.LiveScheduleSummary
@@ -866,7 +867,7 @@ internal fun ScheduleDatePickerDialog(
                     onClose = onDismiss,
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    TandemIconButton(Lucide.ChevronLeft, "Previous month", onClick = {
+                    TandemNavigationChevronButton(Lucide.ChevronLeft, "Previous month", onClick = {
                         if (visibleMonth == 1) {
                             visibleMonth = 12
                             visibleYear -= 1
@@ -881,7 +882,7 @@ internal fun ScheduleDatePickerDialog(
                         textAlign = TextAlign.Center,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    TandemIconButton(Lucide.ChevronRight, "Next month", onClick = {
+                    TandemNavigationChevronButton(Lucide.ChevronRight, "Next month", onClick = {
                         if (visibleMonth == 12) {
                             visibleMonth = 1
                             visibleYear += 1

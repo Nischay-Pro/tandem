@@ -214,6 +214,40 @@ internal fun TandemIconButton(
 }
 
 @Composable
+internal fun TandemNavigationChevronButton(
+    icon: ImageVector,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    TandemIconButton(
+        icon = icon,
+        contentDescription = contentDescription,
+        modifier = modifier,
+        sizeDp = 44,
+        iconSizeDp = 22,
+        enabled = enabled,
+        onClick = onClick,
+    )
+}
+
+@Composable
+internal fun TandemBackButton(
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    TandemNavigationChevronButton(
+        icon = Lucide.ChevronLeft,
+        contentDescription = "Back",
+        modifier = modifier,
+        enabled = enabled,
+        onClick = onClick,
+    )
+}
+
+@Composable
 internal fun TandemModalCloseButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
@@ -367,7 +401,7 @@ internal fun PeriodStepper(
     onNext: () -> Unit,
 ) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        TandemIconButton(Lucide.ChevronLeft, previousLabel, onClick = onPrevious)
+        TandemNavigationChevronButton(Lucide.ChevronLeft, previousLabel, onClick = onPrevious)
         Text(
             title,
             modifier = Modifier.weight(1f),
@@ -376,7 +410,7 @@ internal fun PeriodStepper(
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center,
         )
-        TandemIconButton(Lucide.ChevronRight, nextLabel, onClick = onNext)
+        TandemNavigationChevronButton(Lucide.ChevronRight, nextLabel, onClick = onNext)
     }
 }
 
