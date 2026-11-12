@@ -48,7 +48,7 @@ case "$url" in
   */production.yml)
     cat > "$destination" <<'YAML'
 services:
-  api:
+  tandem-api:
     image: ${TANDEM_API_IMAGE:?Run setup}
 YAML
     ;;
@@ -92,8 +92,8 @@ printf '%s' "$answers" |
 environment_file="$install_directory/deploy/compose/.env"
 secret_directory="$install_directory/deploy/compose/secrets"
 grep -Fq "TANDEM_API_IMAGE=$registry@$expected_digest" "$environment_file"
-grep -Fq 'TRUST_PROXY=10.0.0.2/32' "$environment_file"
-grep -Fq 'POSTGRES_PASSWORD_FILE=deploy/compose/secrets/postgres_password' "$environment_file"
+grep -Fq 'TANDEM_TRUST_PROXY=10.0.0.2/32' "$environment_file"
+grep -Fq 'TANDEM_POSTGRES_PASSWORD_FILE=deploy/compose/secrets/postgres_password' "$environment_file"
 test -s "$secret_directory/postgres_password"
 test -s "$secret_directory/database_url"
 test -s "$secret_directory/auth_token_encryption_key"

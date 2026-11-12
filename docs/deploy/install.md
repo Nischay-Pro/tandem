@@ -57,7 +57,7 @@ docker compose --project-directory "$PWD/tandem" \
   -f "$PWD/tandem/deploy/compose/production.yml" ps
 ```
 
-The `api` and `postgres` services should report healthy. If setup cannot read
+The `tandem-api` and `tandem-postgres` services should report healthy. If setup cannot read
 the nightly image without credentials, check the network and the image
 package's public visibility. If Compose reports a missing image setting, rerun
 setup from the same directory or restore its `.env` file.
@@ -77,11 +77,62 @@ to the same TLS server block as Actual.
 
 ### If Actual already runs in Compose
 
-Keep the generated Tandem Compose file as a separate stack. Attach the Actual
-service and reverse proxy to the external `tandem-edge` network, then set
-`ACTUAL_SERVER_URL` to the Actual service name and port if the API needs an
-operator-managed Actual session. This reuses the production Compose file and
-avoids duplicating its API or PostgreSQL definitions.
+Include the generated production file from the Compose project that already
+runs Actual. This adds its API and PostgreSQL services to that project while
+keeping `deploy/compose/production.yml` as the only Tandem service definition.
+Docker Compose 2.20.3 or newer is required for `include` ([Compose include
+reference](https://docs.docker.com/compose/how-tos/multiple-compose-files/include/)).
+From the directory containing your existing Compose file, add:
+
+```yaml
+include:
+  - path: ./tandem/deploy/compose/production.yml
+    project_directory: ./tandem
+    env_file: ./tandem/deploy/compose/.env
+```
+
+Replace `./tandem` with the directory created by the setup command. Add the
+external network to the existing Actual and reverse-proxy services, preserving
+any networks they already use:
+
+```yaml
+services:
+  actual:
+    networks:
+      - default
+      - tandem-edge
+  nginx:
+    networks:
+      - default
+      - tandem-edge
+
+networks:
+  tandem-edge:
+    name: tandem-edge
+    external: true
+```
+
+Use the actual service names from your Compose file in this example. The setup
+command creates `tandem-edge`. `project_directory` keeps the included service's
+volume and secret paths relative to the setup directory. The included API joins
+the external network automatically. Set
+`TANDEM_ACTUAL_SERVER_URL` in `tandem/deploy/compose/.env` to the Actual service
+name and port reachable on that network, such as `http://actual:5006`. Set
+`TANDEM_ACTUAL_PUBLIC_URL` to the HTTPS Tandem address when the Actual server
+offers OpenID sign-in. Set `TANDEM_TRUST_PROXY` to the reverse proxy's exact address or a
+narrow CIDR on `tandem-edge`; do not trust all forwarded addresses.
+
+**Check:** render the merged project and confirm it has one `actual` service,
+one `tandem-api`, and one `tandem-postgres` service:
+
+```sh
+docker compose -f compose.yml config --services
+```
+
+The list should contain the existing Actual and proxy services plus
+`tandem-api` and `tandem-postgres`. If it does not, check that `include.path` and `env_file` point to
+the setup directory. If the proxy cannot reach the API, attach both to
+`tandem-edge` and follow the [reverse-proxy guide](reverse-proxy.md).
 
 The downloaded Nginx examples are under `tandem/deploy/nginx/`.
 
@@ -134,25 +185,26 @@ sudo install -o root -g 1000 -m 0440 /dev/null tandem/deploy/compose/secrets/aut
 Keep the old key in protected backup storage while any database backup may still
 contain tokens encrypted with it.
 
-Set `ACTUAL_SERVER_URL` to the Actual service address. Set `ACTUAL_PUBLIC_URL` to
-the public Tandem URL to enable OpenID sign-in. When enabled, the server release must match
+Set `TANDEM_ACTUAL_SERVER_URL` to the Actual service address. Set
+`TANDEM_ACTUAL_PUBLIC_URL` to the public Tandem URL to enable OpenID sign-in.
+When enabled, the server release must match
 [Actual compatibility](../concepts/actual-compatibility.md).
 
 When updating an existing deployment, do not run first-install setup against
 its data directory. Preserve its `.env`, secret files, Compose project name and
-named volumes. The Postgres password secret and database URL must match the
-existing database role; changing `POSTGRES_PASSWORD_FILE` does not rotate a
+`tandem-postgres-data` and `tandem-actual-workspace` volumes. The Postgres password secret and database URL must match the
+existing database role; changing `TANDEM_POSTGRES_PASSWORD_FILE` does not rotate a
 password in an initialized volume. Set `TANDEM_API_IMAGE` to the new
-digest-pinned image. Keep the `actual-workspace` volume while any write
+digest-pinned image. Keep the `tandem-actual-workspace` volume while any write
 operation is uncertain; it can contain Actual data that has not reached the
 budget file yet.
 
 Setup resolves the current nightly API image once and records its digest in
 `deploy/compose/.env`, so a later nightly does not silently replace the
 installed image. To update, select and verify a new digest, edit
-`TANDEM_API_IMAGE`, then run Compose `up -d`. An empty `TRUST_PROXY` is the safe default: forwarded
-client-address headers are ignored. Set it to the reverse proxy's IP or narrow
-CIDR if rate limits should use the client address.
+`TANDEM_API_IMAGE`, then run Compose `up -d`. An empty `TANDEM_TRUST_PROXY` is
+the safe default: forwarded client-address headers are ignored. Set it to the
+reverse proxy's IP or narrow CIDR if rate limits should use the client address.
 
 The API has Docker liveness/readiness checks; readiness verifies PostgreSQL can
 write to its volume and checks free space on the Actual workspace volume.
@@ -171,16 +223,17 @@ accepting writes until the server has free space. Check both named volumes:
 ```sh
 docker compose --project-directory "$PWD/tandem" \
   --env-file "$PWD/tandem/deploy/compose/.env" \
-  -f "$PWD/tandem/deploy/compose/production.yml" exec postgres df -h /var/lib/postgresql
+  -f "$PWD/tandem/deploy/compose/production.yml" exec tandem-postgres df -h /var/lib/postgresql
 docker compose --project-directory "$PWD/tandem" \
   --env-file "$PWD/tandem/deploy/compose/.env" \
-  -f "$PWD/tandem/deploy/compose/production.yml" exec api df -h /data/actual-api
+  -f "$PWD/tandem/deploy/compose/production.yml" exec tandem-api df -h /data/actual-api
 ```
 
 Free space on the host or expand the volume, then check `/api/v1/health/ready`
 again; readiness recovers after PostgreSQL can write and the Actual workspace
-has free blocks. Do not remove `postgres-data` or `actual-workspace` to recover:
-they contain the operation journal and local Actual budget files.
+has free blocks. Do not remove `tandem-postgres-data` or
+`tandem-actual-workspace` to recover: they contain Tandem's database and local
+Actual budget files.
 
 In Tandem, enter the public API address and sign in with the Actual account.
 Available budgets come from that account's Actual budget catalog.

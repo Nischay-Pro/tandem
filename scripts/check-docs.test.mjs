@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   findBrokenLinks,
   findStaleTerms,
+  findUnindexedDocs,
   markdownFiles,
   versionMentionErrors,
 } from "./check-docs.mjs";
@@ -30,6 +31,34 @@ test("discovers Markdown files without Git and skips generated data", () => {
       "README.md",
       join("docs", "nested", "guide.md"),
     ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("requires every prose page under docs to appear in its index", () => {
+  const root = mkdtempSync(join(tmpdir(), "tandem-doc-index-"));
+  try {
+    mkdirSync(join(root, "docs", "deploy"), { recursive: true });
+    writeFileSync(
+      join(root, "docs", "README.md"),
+      "[Install](deploy/install.md)\n",
+    );
+    writeFileSync(join(root, "docs", "deploy", "install.md"), "# Install\n");
+    writeFileSync(join(root, "docs", "deploy", "backup.md"), "# Backup\n");
+
+    assert.deepEqual(
+      findUnindexedDocs(root, [
+        "docs/README.md",
+        "docs/deploy/install.md",
+        "docs/deploy/backup.md",
+      ]),
+      ["docs/README.md is missing index entry for docs/deploy/backup.md."],
+    );
+    assert.deepEqual(
+      findUnindexedDocs(root, ["docs/README.md", "docs/deploy/install.md"]),
+      [],
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { basename, dirname, extname, join, resolve } from "node:path";
+import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import process from "node:process";
 
@@ -157,6 +157,44 @@ export function findBrokenLinks(repoRoot, files) {
     }
   }
   return errors;
+}
+
+export function findUnindexedDocs(repoRoot, files) {
+  const indexFile = "docs/README.md";
+  if (!files.includes(indexFile)) return [indexFile + " is missing."];
+
+  const indexPath = resolve(repoRoot, indexFile);
+  const indexText = readFileSync(indexPath, "utf8");
+  const indexedFiles = new Set();
+  const linkPattern =
+    /!?\[[^\]]*\]\(\s*(<[^>]+>|[^)\s]+)(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)/g;
+  for (const match of withoutCode(indexText).matchAll(linkPattern)) {
+    const href = match[1].replace(/^<|>$/g, "");
+    if (/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(href)) continue;
+    const hash = href.indexOf("#");
+    const path = (hash < 0 ? href : href.slice(0, hash)).split("?")[0];
+    if (!path.toLowerCase().endsWith(".md")) continue;
+    try {
+      indexedFiles.add(
+        relative(
+          repoRoot,
+          resolve(dirname(indexPath), decodeURIComponent(path)),
+        ).replace(/\\/g, "/"),
+      );
+    } catch {
+      // findBrokenLinks reports malformed escapes with the source line.
+    }
+  }
+
+  return files
+    .filter(
+      (file) =>
+        file.startsWith("docs/") &&
+        extname(file).toLowerCase() === ".md" &&
+        file !== indexFile &&
+        !indexedFiles.has(file.replace(/\\/g, "/")),
+    )
+    .map((file) => indexFile + " is missing index entry for " + file + ".");
 }
 
 export function findStaleTerms(repoRoot, files) {
@@ -431,6 +469,7 @@ function run() {
   const files = markdownFiles(root);
   const errors = [
     ...findBrokenLinks(root, files),
+    ...findUnindexedDocs(root, files),
     ...findStaleTerms(root, files),
     ...checkVersions(),
   ];

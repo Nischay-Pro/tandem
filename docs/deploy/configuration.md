@@ -24,19 +24,31 @@ For each setting with a secret-file form, provide either the direct value or
 the `_FILE` path, never both. File paths are resolved inside the API container.
 The API removes one trailing newline from a secret file. `ACTUAL_SERVER_PASSWORD`
 is not supported; people sign in through Tandem, or an operator configures an
-Actual session token.
+Actual session token. The supplied Compose file maps the Tandem-prefixed values
+below to these API settings.
 
 ## Compose settings
 
-| Setting               | Required or default | Purpose                                                                               |
-| --------------------- | ------------------- | ------------------------------------------------------------------------------------- |
-| `POSTGRES_DB`         | `tandem`            | Database created for Tandem.                                                          |
-| `POSTGRES_USER`       | `tandem`            | PostgreSQL role used by Tandem.                                                       |
-| `TANDEM_API_IMAGE`    | Required            | GHCR API image reference pinned by digest. Setup resolves the nightly digest.         |
-| `TANDEM_EDGE_NETWORK` | `tandem-edge`       | Existing Docker network shared by the API, Actual and reverse proxy.                  |
-| `TRUST_PROXY`         | Empty               | Proxy address or narrow CIDR used by the API; empty disables forwarded-address trust. |
-| `ACTUAL_SERVER_URL`   | Empty               | Actual service address on the shared Docker network.                                  |
-| `ACTUAL_PUBLIC_URL`   | Empty               | Public Tandem URL; set it to enable OpenID sign-in.                                   |
+| Setting                                          | Required or default                                         | Purpose                                                                                          |
+| ------------------------------------------------ | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `TANDEM_POSTGRES_DB`                             | `tandem`                                                    | Tandem database name; prefixed to avoid collisions with an existing Compose project's variables. |
+| `TANDEM_POSTGRES_USER`                           | `tandem`                                                    | Tandem database role; prefixed to avoid collisions with an existing Compose project's variables. |
+| `TANDEM_API_IMAGE`                               | Required                                                    | GHCR API image reference pinned by digest. Setup resolves the nightly digest.                    |
+| `TANDEM_POSTGRES_PASSWORD_FILE`                  | `deploy/compose/secrets/postgres_password`                  | Host path to the Postgres password file.                                                         |
+| `TANDEM_DATABASE_URL_FILE`                       | `deploy/compose/secrets/database_url`                       | Host path to Tandem's PostgreSQL connection URL file.                                            |
+| `TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_FILE`          | `deploy/compose/secrets/auth_token_encryption_key`          | Host path to the key that encrypts saved Actual sessions.                                        |
+| `TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE` | `deploy/compose/secrets/auth_token_encryption_key_previous` | Host path to the previous key; the supplied empty file is used outside key rotation.             |
+| `TANDEM_ACTUAL_SESSION_TOKEN_FILE`               | `deploy/compose/secrets/actual_session_token` (empty)       | Host path to an optional operator-managed Actual session token.                                  |
+| `TANDEM_EDGE_NETWORK`                            | `tandem-edge`                                               | External Docker network shared by Tandem, Actual and the reverse proxy.                          |
+| `TANDEM_TRUST_PROXY`                             | Empty                                                       | Proxy IP or narrow CIDR as seen by the API; empty disables forwarded-address trust.              |
+| `TANDEM_ACTUAL_SERVER_URL`                       | Empty                                                       | Actual service address reachable on the shared Docker network.                                   |
+| `TANDEM_ACTUAL_PUBLIC_URL`                       | Empty                                                       | Public Tandem HTTPS URL used for Actual OpenID sign-in.                                          |
+
+The setup command creates the secret files and preserves an existing `.env`.
+The API and Postgres service names, Compose secret keys, networks, and volumes
+use Tandem-specific names so they can be included beside an existing Actual
+Compose project without taking over its common service names or environment
+variables.
 
 The supplied Compose file mounts the PostgreSQL password, database URL, API
 encryption keys and optional Actual session token from

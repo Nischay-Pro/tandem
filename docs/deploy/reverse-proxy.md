@@ -13,8 +13,8 @@ For operators routing a public HTTPS address to Tandem and Actual.
 
 2. **Add the upstreams.** Copy the declarations from
    [`deploy/nginx/tandem-upstreams.conf.example`](../../deploy/nginx/tandem-upstreams.conf.example)
-   into Nginx's `http {}` section. Change `api:19753` to the Tandem service name
-   used by your Compose file when needed.
+   into Nginx's `http {}` section. The supplied Compose service is
+   `tandem-api:19753`; use that name on the shared network.
 
    **Check:** Nginx can resolve the API and Actual service names on the shared
    network. If not, check their Compose network memberships.
@@ -27,7 +27,7 @@ For operators routing a public HTTPS address to Tandem and Actual.
    **Check:** `nginx -t` succeeds. If the API path displays Actual's web page,
    move the Tandem locations above the Actual catch-all.
 
-4. **Set proxy trust and reload Nginx.** Set `TRUST_PROXY` to the exact proxy
+4. **Set proxy trust and reload Nginx.** Set `TANDEM_TRUST_PROXY` to the exact proxy
    address or narrow CIDR the API sees. If a CDN sits in front, configure Nginx
    real-IP handling for only that upstream. Keep the API private; do not trust
    all forwarded headers.

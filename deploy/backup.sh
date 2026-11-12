@@ -51,20 +51,20 @@ last_success_file="${backup_dir}/tandem-backup.last-success"
 last_success_tmp="${last_success_file}.tmp.$$"
 
 compose=(docker compose -p "$compose_project" --project-directory "$project_root" --env-file "$env_file" -f "$compose_file")
-api_id="$("${compose[@]}" ps --all -q api)"
+api_id="$("${compose[@]}" ps --all -q tandem-api)"
 if [[ -z "$api_id" ]]; then
   echo "The API container is unavailable; cannot back up its Actual workspace." >&2
   exit 1
 fi
 api_was_running=false
-if [[ -n "$api_id" ]] && "${compose[@]}" ps --status running -q api | grep -q .; then
+if [[ -n "$api_id" ]] && "${compose[@]}" ps --status running -q tandem-api | grep -q .; then
   api_was_running=true
 fi
 restart_api() {
   local status=$?
   rm -f "$postgres_tmp" "$workspace_tmp" "$last_success_tmp"
   if [[ "$api_was_running" == true ]]; then
-    "${compose[@]}" start api >/dev/null || status=$?
+    "${compose[@]}" start tandem-api >/dev/null || status=$?
   fi
   if (( status == 0 )); then
     if ! {
@@ -84,15 +84,15 @@ restart_api() {
 trap restart_api EXIT
 
 if [[ "$api_was_running" == true ]]; then
-  "${compose[@]}" stop api
+  "${compose[@]}" stop tandem-api
 fi
 if [[ -n "$backup_gpg_passphrase_file" ]]; then
-  "${compose[@]}" exec -T postgres sh -ec \
+  "${compose[@]}" exec -T tandem-postgres sh -ec \
     'pg_dump --format=custom --no-owner --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' \
     | gpg --batch --yes --pinentry-mode loopback --passphrase-file "$backup_gpg_passphrase_file" \
       --symmetric --cipher-algo AES256 --output "$postgres_tmp"
 else
-  "${compose[@]}" exec -T postgres sh -ec \
+  "${compose[@]}" exec -T tandem-postgres sh -ec \
     'pg_dump --format=custom --no-owner --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' \
     > "$postgres_tmp"
 fi

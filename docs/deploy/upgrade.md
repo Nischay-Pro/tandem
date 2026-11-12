@@ -37,10 +37,10 @@ verifying the new digest; keep PostgreSQL and the Actual workspace volume.
    sudo sed -i "s|^TANDEM_API_IMAGE=.*$|TANDEM_API_IMAGE=$pinned_image|" "$environment_file"
    docker compose --project-directory /opt/tandem \
      --env-file "$environment_file" \
-     -f /opt/tandem/deploy/compose/production.yml pull api
+     -f /opt/tandem/deploy/compose/production.yml pull tandem-api
    docker compose --project-directory /opt/tandem \
      --env-file "$environment_file" \
-     -f /opt/tandem/deploy/compose/production.yml up -d api
+     -f /opt/tandem/deploy/compose/production.yml up -d tandem-api
    ```
 
    **Check:** the API reports healthy:
@@ -72,10 +72,10 @@ sudo sed -i "s|^TANDEM_API_IMAGE=.*$|TANDEM_API_IMAGE=$previous_image|" \
   /opt/tandem/deploy/compose/.env
 docker compose --project-directory /opt/tandem \
   --env-file /opt/tandem/deploy/compose/.env \
-  -f /opt/tandem/deploy/compose/production.yml pull api
+  -f /opt/tandem/deploy/compose/production.yml pull tandem-api
 docker compose --project-directory /opt/tandem \
   --env-file /opt/tandem/deploy/compose/.env \
-  -f /opt/tandem/deploy/compose/production.yml up -d api
+  -f /opt/tandem/deploy/compose/production.yml up -d tandem-api
 ```
 
 Do not use `docker compose down --volumes`. If a release's notes say its data

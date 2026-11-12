@@ -63,12 +63,12 @@ fi
 
 chmod 600 "$postgres_input" "$workspace_input"
 compose=(docker compose -p "$compose_project" --project-directory "$project_root" --env-file "$env_file" -f "$compose_file")
-api_id="$("${compose[@]}" ps --all -q api)"
+api_id="$("${compose[@]}" ps --all -q tandem-api)"
 if [[ -z "$api_id" ]]; then
   echo "The API container must already exist before restore." >&2
   exit 1
 fi
-"${compose[@]}" exec -T postgres pg_restore --list < "$postgres_input" >/dev/null
+"${compose[@]}" exec -T tandem-postgres pg_restore --list < "$postgres_input" >/dev/null
 tar -tzf "$workspace_input" >/dev/null
 
 safety_prefix="${backup_prefix}.before-restore-$(date -u +%Y%m%dT%H%M%SZ)-$$"
@@ -82,7 +82,7 @@ else
 fi
 echo "Safety backup prefix: $safety_prefix"
 
-"${compose[@]}" stop api
+"${compose[@]}" stop tandem-api
 restore_started=true
 restore_completed=false
 report_interrupted_restore() {
@@ -100,7 +100,7 @@ report_interrupted_restore() {
 }
 trap report_interrupted_restore EXIT
 
-"${compose[@]}" exec -T postgres sh -ec \
+"${compose[@]}" exec -T tandem-postgres sh -ec \
   'pg_restore --exit-on-error --single-transaction --clean --if-exists --no-owner --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' \
   < "$postgres_input"
 docker run --rm -i --volumes-from "$api_id" --entrypoint sh \
@@ -180,4 +180,4 @@ if [[ -n "$postgres_tmp" || -n "$workspace_tmp" ]]; then
 fi
 trap - EXIT
 echo "Database and Actual workspace restored. Start and verify the API now:"
-echo "  docker compose --project-directory '$project_root' --env-file '$env_file' -f '$compose_file' up -d api"
+echo "  docker compose --project-directory '$project_root' --env-file '$env_file' -f '$compose_file' up -d tandem-api"

@@ -44,7 +44,9 @@ test("writes a usable pinned Compose bundle without an API image setting", async
     assert.ok(!compose.includes("${TANDEM_API_IMAGE"));
     assert.ok(!environment.includes("TANDEM_API_IMAGE="));
     assert.ok(
-      environment.includes("POSTGRES_PASSWORD_FILE=secrets/postgres_password"),
+      environment.includes(
+        "TANDEM_POSTGRES_PASSWORD_FILE=secrets/postgres_password",
+      ),
     );
     assert.ok(readme.includes(image));
     assert.ok(readme.includes("contains no credentials"));

@@ -320,6 +320,7 @@ jobs:
         env:
           IMAGE_DIGEST: ${{ needs.publish_api_image.outputs.digest }}
           SOURCE_SHA: ${{ needs.publish_api_image.outputs.source_sha }}
+          NIGHTLY_VERSION_NAME: 0.1.0-nightly.${{ github.run_number }}
         run: |
           set -euo pipefail
           bundle="$RUNNER_TEMP/tandem-nightly-$SOURCE_SHA"
@@ -330,6 +331,12 @@ jobs:
             docker compose --project-directory "$bundle" \
               --env-file "$bundle/.env.example" \
               -f "$bundle/production.yml" config --quiet
+          archive="$RUNNER_TEMP/nightly-release/Tandem-compose-$NIGHTLY_VERSION_NAME-$SOURCE_SHA.tar.gz"
+          tar -czf "$archive" -C "$RUNNER_TEMP" "tandem-nightly-$SOURCE_SHA"
+          (
+            cd "$RUNNER_TEMP/nightly-release"
+            sha256sum "$(basename "$archive")" > "$(basename "$archive").sha256"
+          )
       - name: Move the rolling nightly tag to this tested commit
         env:
           GH_TOKEN: ${{ github.token }}
@@ -365,6 +372,8 @@ jobs:
           gh release upload nightly \
             "$RUNNER_TEMP/nightly-release/Tandem-$NIGHTLY_VERSION_NAME-$SOURCE_SHA.apk" \
             "$RUNNER_TEMP/nightly-release/Tandem-$NIGHTLY_VERSION_NAME-$SOURCE_SHA.apk.sha256" \
+            "$RUNNER_TEMP/nightly-release/Tandem-compose-$NIGHTLY_VERSION_NAME-$SOURCE_SHA.tar.gz" \
+            "$RUNNER_TEMP/nightly-release/Tandem-compose-$NIGHTLY_VERSION_NAME-$SOURCE_SHA.tar.gz.sha256" \
             --clobber
 
       - name: Upload installable Android APK

@@ -122,25 +122,25 @@ else
   ensure_secret postgres_password "$postgres_password"
 fi
 
-ensure_secret database_url "postgresql://tandem:${postgres_password}@postgres:5432/tandem"
+ensure_secret database_url "postgresql://tandem:${postgres_password}@tandem-postgres:5432/tandem"
 ensure_secret auth_token_encryption_key "$(openssl rand -hex 32)"
 ensure_secret auth_token_encryption_key_previous ""
 ensure_secret actual_session_token ""
 unset postgres_password
 
 cat > "$temporary_directory/.env" <<EOF
-POSTGRES_DB=tandem
-POSTGRES_USER=tandem
+TANDEM_POSTGRES_DB=tandem
+TANDEM_POSTGRES_USER=tandem
 TANDEM_API_IMAGE=$api_image
-POSTGRES_PASSWORD_FILE=deploy/compose/secrets/postgres_password
-DATABASE_URL_FILE=deploy/compose/secrets/database_url
-ACTUAL_SESSION_TOKEN_FILE=deploy/compose/secrets/actual_session_token
-AUTH_TOKEN_ENCRYPTION_KEY_FILE=deploy/compose/secrets/auth_token_encryption_key
-AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE=deploy/compose/secrets/auth_token_encryption_key_previous
-TRUST_PROXY=$trust_proxy
+TANDEM_POSTGRES_PASSWORD_FILE=deploy/compose/secrets/postgres_password
+TANDEM_DATABASE_URL_FILE=deploy/compose/secrets/database_url
+TANDEM_ACTUAL_SESSION_TOKEN_FILE=deploy/compose/secrets/actual_session_token
+TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_FILE=deploy/compose/secrets/auth_token_encryption_key
+TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE=deploy/compose/secrets/auth_token_encryption_key_previous
+TANDEM_TRUST_PROXY=$trust_proxy
 TANDEM_EDGE_NETWORK=tandem-edge
-ACTUAL_SERVER_URL=$actual_server_url
-ACTUAL_PUBLIC_URL=$actual_public_url
+TANDEM_ACTUAL_SERVER_URL=$actual_server_url
+TANDEM_ACTUAL_PUBLIC_URL=$actual_public_url
 EOF
 chmod 600 "$temporary_directory/.env"
 

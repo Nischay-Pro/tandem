@@ -11,7 +11,7 @@ Before deployment:
   how unencrypted and encrypted budgets pass through the service.
 - Keep PostgreSQL and the API off public host ports; route app traffic through
   HTTPS at a trusted reverse proxy.
-- Set `TRUST_PROXY` to the proxy address or a narrow CIDR. Keep callback query
+- Set `TANDEM_TRUST_PROXY` to the proxy address or a narrow CIDR. Keep callback query
   strings out of access and error logs.
 - Protect the Actual workspace volume and backup files. Backups can contain
   readable budget data; file permissions alone do not encrypt them.
