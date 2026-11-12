@@ -17,6 +17,34 @@ class LandscapeChromeTest {
     val composeTestRule = createComposeRule()
 
     @Test
+    fun preparingBudgetHeaderExposesBackAction() {
+        var backRequested = false
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                AppHeader(
+                    route = AppRoute.FIRST_SYNC,
+                    state = AppState(),
+                    showBack = true,
+                    onBack = { backRequested = true },
+                    onSync = {},
+                    syncStatus = MainCloudStatus.OFF,
+                    pendingWriteStatuses = emptyList(),
+                    onBudget = {},
+                    actualConnected = false,
+                    liveAccounts = emptyList(),
+                    liveBudgetMonth = null,
+                    activitySelectionTotalMinor = null,
+                    conflictTitle = null,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("Back").performClick()
+
+        assertTrue(backRequested)
+    }
+
+    @Test
     fun sideRailExposesAllPrimaryTabsAccessibly() {
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {

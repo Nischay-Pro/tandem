@@ -428,7 +428,7 @@ internal fun AccountDetailScreen(
                             parsed.toStatementImportItems(),
                             state.encryptedPassword.takeIf(String::isNotBlank),
                         )
-                    if (imported != null) {
+                    if (imported) {
                         showStatementImportDialog = false
                     }
                 }
@@ -538,12 +538,16 @@ internal fun StatementImportDialog(
                 parseResult?.let { result ->
                     ListRow("Transactions", trailing = result.transactions.size.toString(), leading = RowLeading.Icon(Lucide.Receipt))
                     importPreview?.let { preview ->
-                        ListRow(
-                            "New in Actual",
-                            trailing = preview.newRowCount(result.transactions.size).toString(),
-                            leading = RowLeading.None,
-                        )
-                        ListRow("Already in Actual", trailing = preview.existingImportedIds.size.toString(), leading = RowLeading.None)
+                        if (preview.serverChecked) {
+                            ListRow(
+                                "New in Actual",
+                                trailing = preview.newRowCount(result.transactions.size).toString(),
+                                leading = RowLeading.None,
+                            )
+                            ListRow("Already in Actual", trailing = preview.existingImportedIds.size.toString(), leading = RowLeading.None)
+                        } else {
+                            InlineMessage("Duplicates will be checked when this device syncs.", InlineMessageKind.INFO)
+                        }
                     }
                     if (result.skippedRows > 0) {
                         val skippedCount = statementCount(result.skippedRows, "row")

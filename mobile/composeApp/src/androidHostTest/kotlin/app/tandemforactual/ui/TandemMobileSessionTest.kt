@@ -2,6 +2,7 @@ package app.tandemforactual.ui
 
 import androidx.room3.Room
 import androidx.sqlite.driver.AndroidSQLiteDriver
+import app.tandemforactual.api.client.StatementImportItem
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.data.database.BudgetRecordEntity
@@ -68,14 +69,36 @@ class TandemMobileSessionTest {
                         expectedNextDate = "2026-11-16",
                     ),
                 )
+                assertTrue(
+                    session.manageBudgetSchedule(
+                        budgetId = "budget-1",
+                        scheduleId = "schedule-edit",
+                        action = "edit",
+                        name = null,
+                        encryptionPassword = null,
+                        fields = Json.parseToJsonElement("""{"name":"Offline insurance"}""").jsonObject,
+                    ),
+                )
+                assertTrue(
+                    session.manageBudgetSchedule(
+                        budgetId = "budget-1",
+                        scheduleId = "schedule-delete",
+                        action = "delete",
+                        name = null,
+                        encryptionPassword = null,
+                    ),
+                )
 
                 val queuedActions = repository.readScheduleActionQueue()
-                assertEquals(setOf("schedule-post", "schedule-skip"), queuedActions.map { it.recordId }.toSet())
+                assertEquals(
+                    setOf("schedule-post", "schedule-skip", "schedule-edit", "schedule-delete"),
+                    queuedActions.map { it.recordId }.toSet(),
+                )
                 assertTrue(queuedActions.all { it.status == "queued" })
-                assertEquals(setOf("post", "skip"), queuedActions.map { it.action }.toSet())
+                assertEquals(setOf("post", "skip", "edit", "delete"), queuedActions.map { it.action }.toSet())
                 assertEquals(
                     mapOf("schedule-post" to "2026-11-15", "schedule-skip" to "2026-11-16"),
-                    queuedActions.associate { operation ->
+                    queuedActions.filter { it.action in setOf("post", "skip") }.associate { operation ->
                         operation.recordId to
                             Json
                                 .parseToJsonElement(operation.patchJson)
@@ -84,6 +107,111 @@ class TandemMobileSessionTest {
                                 ?.content
                     },
                 )
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun newPayeeIsSavedAndAvailableFromTheLocalQueueWithoutAConnection() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val preferences = AppPreferencesStore(database)
+                val repository = LocalBudgetRepository(database) { 1_000L }
+                seedCachedBudget(repository, preferences, withPendingWrite = false)
+                val credentialStore = memoryCredentialStore(storedSession("https://offline.example.test", "principal-old"))
+                val apiClient = TandemApiClient()
+                val session = TandemMobileSession(apiClient, database, { 1_000L }, credentialStore)
+                assertEquals("https://offline.example.test", session.restoreStoredSession())
+
+                val localPayeeId = session.createBudgetPayee("budget-1", "Corner Market", null)
+
+                assertNotNull(localPayeeId)
+                assertTrue(localPayeeId.startsWith("local-payee-"))
+                assertEquals("Corner Market", session.payeeRecords.single().displayName)
+                val queued = repository.readBudgetMutationQueue().items.single()
+                val queuedPayee = decodeBudgetReorderQueue(queued.patchJson).moves.single()
+                assertEquals(BudgetReorderKind.CREATE_PAYEE, queuedPayee.kind)
+                assertEquals(localPayeeId, queuedPayee.itemId)
+
+                val restoredSession = TandemMobileSession(apiClient, database, { 1_000L }, credentialStore)
+                assertTrue(restoredSession.restoreStoredSession() != null)
+                assertTrue(restoredSession.restoreBudgetReorderQueue())
+                restoredSession.loadLocalRecords("budget-1")
+
+                assertEquals(localPayeeId, restoredSession.payeeRecords.single().recordId)
+                assertEquals("Corner Market", restoredSession.payeeRecords.single().displayName)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun budgetAccountPayeeAmountAndStatementChangesQueueWithoutAConnection() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val preferences = AppPreferencesStore(database)
+                val repository = LocalBudgetRepository(database) { 1_000L }
+                seedCachedBudget(repository, preferences, withPendingWrite = false)
+                val credentialStore = memoryCredentialStore(storedSession("https://offline.example.test", "principal-old"))
+                val session = TandemMobileSession(TandemApiClient(), database, { 1_000L }, credentialStore)
+                assertEquals("https://offline.example.test", session.restoreStoredSession())
+
+                assertTrue(session.setBudgetCategoryAmount("budget-1", "category-1", "2026-11", 12_500, null))
+                assertTrue(session.setBudgetCategoryCarryover("budget-1", "category-1", "2026-11", true, null))
+                assertTrue(session.copyBudgetMonth("budget-1", "2026-11", null))
+                assertTrue(session.applyBudgetTemplate("budget-1", "2026-11", listOf("category-1" to 9_000), null))
+                assertTrue(session.holdBudgetForNextMonth("budget-1", "2026-11", 500, null))
+                assertTrue(session.resetBudgetHold("budget-1", "2026-11", null))
+                assertTrue(session.moveBudgetMoney("budget-1", "2026-11", "category-1", "category-2", 250, null))
+                assertTrue(session.createBudgetAccount("budget-1", "Travel card", false, null, null))
+                assertTrue(session.closeBudgetAccount("budget-1", "account-1", null, null, null))
+                assertTrue(session.renameBudgetAccount("budget-1", "account-1", "Daily checking", null))
+                assertTrue(session.reopenBudgetAccount("budget-1", "account-1", null))
+                assertTrue(session.moveBudgetAccount("budget-1", "account-1", "account-2", null))
+                assertTrue(session.manageBudgetPayee("budget-1", "payee-1", "rename", "Corner Market", null, null))
+                assertTrue(session.manageBudgetPayee("budget-1", "payee-1", "merge", null, "payee-2", null))
+                assertTrue(session.manageBudgetPayee("budget-1", "payee-1", "delete", null, null, null))
+                assertTrue(session.manageBudgetPayee("budget-1", "payee-1", "default-category", null, null, null, "category-1"))
+                assertTrue(
+                    session.importStatementTransactions(
+                        "budget-1",
+                        "account-1",
+                        listOf(StatementImportItem("2026-11-01", -1_250, "Corner Market", null, "import-1")),
+                        null,
+                    ),
+                )
+
+                val queued = repository.readBudgetMutationQueue().items
+                val operations = queued.flatMap { decodeBudgetReorderQueue(it.patchJson).moves }
+                assertEquals(17, operations.size)
+                assertEquals(
+                    setOf(
+                        BudgetReorderKind.SET_CATEGORY_AMOUNT,
+                        BudgetReorderKind.SET_CATEGORY_CARRYOVER,
+                        BudgetReorderKind.COPY_BUDGET_MONTH,
+                        BudgetReorderKind.APPLY_BUDGET_TEMPLATE,
+                        BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH,
+                        BudgetReorderKind.RESET_BUDGET_HOLD,
+                        BudgetReorderKind.MOVE_BUDGET_MONEY,
+                        BudgetReorderKind.CREATE_ACCOUNT,
+                        BudgetReorderKind.CLOSE_ACCOUNT,
+                        BudgetReorderKind.RENAME_ACCOUNT,
+                        BudgetReorderKind.REOPEN_ACCOUNT,
+                        BudgetReorderKind.MOVE_ACCOUNT,
+                        BudgetReorderKind.RENAME_PAYEE,
+                        BudgetReorderKind.MERGE_PAYEE,
+                        BudgetReorderKind.DELETE_PAYEE,
+                        BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY,
+                        BudgetReorderKind.IMPORT_STATEMENT,
+                    ),
+                    operations.map { it.kind }.toSet(),
+                )
+                assertTrue(queued.all { it.status == "queued" })
+                assertEquals(9_000L, session.pendingCategoryBudgetOverrides("budget-1", "2026-11")["category-1"])
+                assertEquals("Travel card", session.accountRecordsWithPendingCreates("budget-1", emptyList()).single().displayName)
             } finally {
                 database.close()
             }

@@ -158,10 +158,13 @@ internal fun UpcomingSchedulesScreen(
         mutableStateOf(schedules.firstOrNull { it.id == selectedScheduleId }?.payeeId.orEmpty())
     }
     val selectedSchedule = schedules.firstOrNull { it.id == selectedScheduleId }
-    val pendingScheduleAction = selectedSchedule?.let { mobileSession.pendingScheduleActionFor(state.selectedBudgetId, it.id) }
+    val pendingScheduleActions =
+        selectedSchedule?.let { mobileSession.pendingScheduleActionsFor(state.selectedBudgetId, it.id) }.orEmpty()
     val pendingActionBlocksChoice =
-        pendingScheduleAction != null &&
-            !mobileSession.scheduleActionCanBeReplaced(pendingScheduleAction, selectedSchedule.nextDate)
+        pendingScheduleActions.size > 1 ||
+            pendingScheduleActions.any { pendingAction ->
+                selectedSchedule != null && !mobileSession.scheduleActionCanBeReplaced(pendingAction, selectedSchedule.nextDate)
+            }
     val dateValue =
         remember(selectedSchedule?.id, selectedSchedule?.dateValueJson) {
             selectedSchedule?.dateValueJson?.let { runCatching { Json.parseToJsonElement(it) }.getOrNull() }
@@ -232,9 +235,9 @@ internal fun UpcomingSchedulesScreen(
         } else {
             items(schedules.size, key = { index -> schedules[index].id }) { index ->
                 val schedule = schedules[index]
-                val pendingAction = mobileSession.pendingScheduleActionFor(state.selectedBudgetId, schedule.id)
+                val pendingActions = mobileSession.pendingScheduleActionsFor(state.selectedBudgetId, schedule.id)
                 SurfaceCard {
-                    if (pendingAction != null) {
+                    pendingActions.forEach { pendingAction ->
                         InlineMessage(
                             text = mobileSession.scheduleActionStatusMessage(pendingAction),
                             kind =
@@ -243,10 +246,10 @@ internal fun UpcomingSchedulesScreen(
                                 } else {
                                     InlineMessageKind.INFO
                                 },
-                            actionLabel = if (pendingAction.status == "uncertain") "Check status" else null,
+                            actionLabel = mobileSession.scheduleActionStatusActionLabel(pendingAction),
                             onAction =
-                                if (pendingAction.status == "uncertain") {
-                                    { mobileSession.retryScheduleActionStatus(pendingAction.operationId) }
+                                if (mobileSession.scheduleActionStatusActionLabel(pendingAction) != null) {
+                                    { mobileSession.performScheduleActionStatusAction(pendingAction) }
                                 } else {
                                     null
                                 },
@@ -292,6 +295,9 @@ internal fun UpcomingSchedulesScreen(
         onDismissRequest = {
             if (!mobileSession.isPerformingBudgetAction) {
                 showScheduleEditor = false
+                showDeleteScheduleConfirmation = false
+                selectedScheduleId = null
+                dialogMode = "menu"
                 state.pendingScheduleToOpenId = null
             }
         },
@@ -646,14 +652,14 @@ internal fun UpcomingSchedulesScreen(
                         }
                         else -> {
                             budgetActionFeedbackMessage(mobileSession)
-                            pendingScheduleAction?.let { pending ->
+                            pendingScheduleActions.forEach { pending ->
                                 InlineMessage(
                                     text = mobileSession.scheduleActionStatusMessage(pending),
                                     kind = InlineMessageKind.WARNING,
-                                    actionLabel = if (pending.status == "uncertain") "Check status" else null,
+                                    actionLabel = mobileSession.scheduleActionStatusActionLabel(pending),
                                     onAction =
-                                        if (pending.status == "uncertain") {
-                                            { mobileSession.retryScheduleActionStatus(pending.operationId) }
+                                        if (mobileSession.scheduleActionStatusActionLabel(pending) != null) {
+                                            { mobileSession.performScheduleActionStatusAction(pending) }
                                         } else {
                                             null
                                         },
@@ -720,6 +726,7 @@ internal fun UpcomingSchedulesScreen(
                                 icon = Lucide.Trash2,
                                 enabled = !mobileSession.isPerformingBudgetAction,
                             ) {
+                                mobileSession.clearBudgetActionMessage()
                                 dialogMode = "delete"
                                 showDeleteScheduleConfirmation = true
                             }

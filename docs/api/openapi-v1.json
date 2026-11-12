@@ -2915,9 +2915,10 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "status": { "type": "string", "enum": ["ok"] }
+                    "status": { "type": "string", "enum": ["ok"] },
+                    "accountId": { "type": "string", "minLength": 1 }
                   },
-                  "required": ["status"],
+                  "required": ["status", "accountId"],
                   "additionalProperties": false
                 }
               }

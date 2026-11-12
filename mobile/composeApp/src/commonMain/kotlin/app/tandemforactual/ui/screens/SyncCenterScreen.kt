@@ -149,13 +149,21 @@ internal fun SyncCenterScreen(
                     }
                 }
                 items(scheduleActions, key = { "schedule-action:${it.operationId}" }) { operation ->
-                    val actionName = if (operation.action == "skip") "Skip scheduled transaction" else "Post scheduled transaction"
+                    val actionName =
+                        when (operation.action) {
+                            "skip" -> "Skip scheduled transaction"
+                            "post" -> "Post scheduled transaction"
+                            "edit" -> "Edit schedule"
+                            "delete" -> "Delete schedule"
+                            else -> "Scheduled change"
+                        }
                     val statusMessage = mobileSession.scheduleActionStatusMessage(operation)
+                    val statusActionLabel = mobileSession.scheduleActionStatusActionLabel(operation)
                     SurfaceCard {
                         ListRow(
                             actionName,
                             statusMessage,
-                            if (operation.status == "uncertain") "Check status" else "Pending",
+                            statusActionLabel ?: "Pending",
                             leading =
                                 RowLeading.Icon(
                                     if (operation.status in setOf("uncertain", "conflict", "rejected")) {
@@ -174,8 +182,10 @@ internal fun SyncCenterScreen(
                                         },
                                 ),
                             onClick =
-                                if (operation.status == "uncertain") {
-                                    { mobileSession.retryScheduleActionStatus(operation.operationId) }
+                                if (statusActionLabel !=
+                                    null
+                                ) {
+                                    ({ mobileSession.performScheduleActionStatusAction(operation) })
                                 } else {
                                     null
                                 },
@@ -185,12 +195,32 @@ internal fun SyncCenterScreen(
                 items(budgetMutations, key = { "budget-mutation:${it.kind}:${it.scopeId}:${it.itemId}:${it.name}" }) { mutation ->
                     val categoryName = mobileSession.categoryRecords.firstOrNull { it.recordId == mutation.itemId }?.recordName()
                     val groupName = mobileSession.categoryGroupRecords.firstOrNull { it.recordId == mutation.itemId }?.recordName()
-                    val itemName = mutation.name ?: categoryName ?: groupName ?: "budget item"
+                    val accountName = mobileSession.accountRecords.firstOrNull { it.recordId == mutation.itemId }?.recordName()
+                    val payeeName = mobileSession.payeeRecords.firstOrNull { it.recordId == mutation.itemId }?.recordName()
+                    val itemName = mutation.name ?: categoryName ?: groupName ?: accountName ?: payeeName ?: "budget item"
                     val title =
                         when (mutation.kind) {
                             BudgetReorderKind.CREATE_CATEGORY_GROUP -> "Add group · $itemName"
                             BudgetReorderKind.RENAME_CATEGORY_GROUP -> "Rename group · $itemName"
                             BudgetReorderKind.CREATE_CATEGORY -> "Add category · $itemName"
+                            BudgetReorderKind.CREATE_PAYEE -> "Add payee · $itemName"
+                            BudgetReorderKind.CREATE_ACCOUNT -> "Add account · $itemName"
+                            BudgetReorderKind.CLOSE_ACCOUNT -> "Close account · $itemName"
+                            BudgetReorderKind.RENAME_ACCOUNT -> "Rename account · $itemName"
+                            BudgetReorderKind.REOPEN_ACCOUNT -> "Reopen account · $itemName"
+                            BudgetReorderKind.MOVE_ACCOUNT -> "Reorder account · $itemName"
+                            BudgetReorderKind.SET_CATEGORY_AMOUNT -> "Assign money · $itemName"
+                            BudgetReorderKind.SET_CATEGORY_CARRYOVER -> "Update carryover · $itemName"
+                            BudgetReorderKind.COPY_BUDGET_MONTH -> "Copy assignments · $itemName"
+                            BudgetReorderKind.APPLY_BUDGET_TEMPLATE -> "Apply template · $itemName"
+                            BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH -> "Hold money · $itemName"
+                            BudgetReorderKind.RESET_BUDGET_HOLD -> "Reset hold · $itemName"
+                            BudgetReorderKind.MOVE_BUDGET_MONEY -> "Move money · $itemName"
+                            BudgetReorderKind.RENAME_PAYEE -> "Rename payee · $itemName"
+                            BudgetReorderKind.MERGE_PAYEE -> "Merge payee · $itemName"
+                            BudgetReorderKind.DELETE_PAYEE -> "Delete payee · $itemName"
+                            BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY -> "Update payee · $itemName"
+                            BudgetReorderKind.IMPORT_STATEMENT -> "Import statement · ${mutation.name ?: "transactions"}"
                             BudgetReorderKind.RENAME_CATEGORY -> "Rename category · $itemName"
                             BudgetReorderKind.HIDE_CATEGORY, BudgetReorderKind.HIDE_CATEGORY_GROUP -> "Hide · $itemName"
                             BudgetReorderKind.SHOW_CATEGORY, BudgetReorderKind.SHOW_CATEGORY_GROUP -> "Show · $itemName"
@@ -261,6 +291,24 @@ internal fun budgetMutationTitle(
         "CREATE_CATEGORY_GROUP" -> "Add group · $itemName"
         "RENAME_CATEGORY_GROUP", "REFRESH_CATEGORY_GROUP_RENAME" -> "Rename group · $itemName"
         "CREATE_CATEGORY", "REFRESH_CATEGORY_CREATE" -> "Add category · $itemName"
+        "CREATE_PAYEE" -> "Add payee · $itemName"
+        "CREATE_ACCOUNT" -> "Add account · $itemName"
+        "CLOSE_ACCOUNT" -> "Close account · $itemName"
+        "RENAME_ACCOUNT" -> "Rename account · $itemName"
+        "REOPEN_ACCOUNT" -> "Reopen account · $itemName"
+        "MOVE_ACCOUNT" -> "Reorder account · $itemName"
+        "SET_CATEGORY_AMOUNT" -> "Assign money · $itemName"
+        "SET_CATEGORY_CARRYOVER" -> "Update carryover · $itemName"
+        "COPY_BUDGET_MONTH" -> "Copy assignments · $itemName"
+        "APPLY_BUDGET_TEMPLATE" -> "Apply template · $itemName"
+        "HOLD_BUDGET_NEXT_MONTH" -> "Hold money · $itemName"
+        "RESET_BUDGET_HOLD" -> "Reset hold · $itemName"
+        "MOVE_BUDGET_MONEY" -> "Move money · $itemName"
+        "RENAME_PAYEE" -> "Rename payee · $itemName"
+        "MERGE_PAYEE" -> "Merge payee · $itemName"
+        "DELETE_PAYEE" -> "Delete payee · $itemName"
+        "SET_PAYEE_DEFAULT_CATEGORY" -> "Update payee · $itemName"
+        "IMPORT_STATEMENT" -> "Import statement · $itemName"
         "RENAME_CATEGORY", "REFRESH_CATEGORY_RENAME" -> "Rename category · $itemName"
         "HIDE_CATEGORY", "HIDE_CATEGORY_GROUP" -> "Hide · $itemName"
         "SHOW_CATEGORY", "SHOW_CATEGORY_GROUP" -> "Show · $itemName"

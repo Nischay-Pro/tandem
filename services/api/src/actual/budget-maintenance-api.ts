@@ -241,7 +241,7 @@ export interface BudgetMaintenanceApiPort {
     offbudget: boolean,
     accountGroupId?: string | null,
     encryptionPassword?: string,
-  ): Promise<void>;
+  ): Promise<string>;
   closeAccount(
     budgetId: string,
     accountId: string,
@@ -739,6 +739,7 @@ export function createBudgetMaintenanceApi(
                 account_group_id: accountGroupId,
               });
             }
+            return accountId;
           },
           writeOptions(encryptionPassword),
         ),

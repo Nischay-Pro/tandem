@@ -8,6 +8,22 @@ import kotlin.test.assertTrue
 
 class AppStateTest {
     @Test
+    fun backRequestsWaitForOpeningTransitionsAndQueueBehindBackAnimations() {
+        assertEquals(
+            BackRequestDisposition.DEFER_UNTIL_ROUTE_TRANSITION_FINISHES,
+            backRequestDisposition(routeTransitionInputBlocked = true, backButtonTransitionRunning = false),
+        )
+        assertEquals(
+            BackRequestDisposition.QUEUE_AFTER_BACK_TRANSITION,
+            backRequestDisposition(routeTransitionInputBlocked = true, backButtonTransitionRunning = true),
+        )
+        assertEquals(
+            BackRequestDisposition.START,
+            backRequestDisposition(routeTransitionInputBlocked = false, backButtonTransitionRunning = false),
+        )
+    }
+
+    @Test
     fun newInstallFollowsTheSystemAppearanceByDefault() {
         assertEquals(ThemeMode.SYSTEM, AppState().theme)
     }

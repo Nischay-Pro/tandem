@@ -131,20 +131,32 @@ journal entry. Updates, deletes, snapshots, and change-feed reconciliation use
 that same identifier. Transaction edits support amount, payee, category, date,
 account, and notes. Amounts stay in integer minor units.
 
-## What is available offline
+## Offline behavior
 
-| Screen or data      | Local behavior                                                                                                                         |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Budget              | Reads the cached month plan, category groups, and categories                                                                           |
-| Accounts            | Reads cached accounts and their latest Actual balances                                                                                 |
-| Activity and search | Uses the complete cached transaction set; the Activity overview shows its 50 newest rows                                               |
-| Reports             | Recomputes totals from Room's indexed transaction columns                                                                              |
-| Currency display    | Uses Actual's symbol, precision, and format preferences; device locale supplies separators when Actual has no number-format preference |
-| Upcoming bills      | Due-date data is not included in the current mobile sync                                                                               |
+Offline access starts after a successful sync on this device. Tandem opens the
+saved copy for the same server and Actual account; it does not use a different
+account's cache. Local changes stay on this device until Tandem can confirm
+them with Actual. The **Pending Changes** screen shows queued work and changes
+that need review.
+
+| Area                                            | Works offline                                                                                                                                           | Needs a connection                                                                                                            |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Budget, accounts, activity, search, and reports | Read the saved budget, transactions, account balances, schedules, and reports. Search reads the local transaction set.                                  | First sign-in, loading a budget that has never synced here, and refreshing data from Actual.                                  |
+| Transactions                                    | Add, edit, and delete transactions in the local outbox. A transaction using a payee or account being created offline waits for that item to sync first. | Actual must confirm queued writes before they are considered synced. Conflicts stay available for review.                     |
+| Payees and categories                           | Create payees and queue category or payee changes, including supported group, visibility, and assignment changes.                                       | Tandem sends the queued operations to Actual and checks the result when online.                                               |
+| Budget plan                                     | Queue assigned amounts, carryover, copy-last-month, templates, next-month holds, hold resets, and moves between categories.                             | Actual must accept the queued plan changes before they are shared with other devices.                                         |
+| Accounts                                        | Queue account creation, rename, close, reopen, and ordering changes. Local transactions can refer to a newly queued account.                            | Account changes are applied and confirmed by Actual when connected.                                                           |
+| Schedules                                       | View synced schedules and queue edits, deletes, posts, and skips for existing schedules.                                                                | Add a new schedule in Actual Budget; Tandem does not currently create schedules. Actual must confirm queued schedule actions. |
+| Statement import                                | Parse a statement and queue its transactions. If offline, duplicate checking is deferred until sync.                                                    | Actual checks imported IDs and accepts or rejects the rows when the queued import is sent.                                    |
+| Bank sync and sign-in                           | The cached budget remains readable.                                                                                                                     | Sign-in, budget discovery, and bank sync through Actual require a connection.                                                 |
+| Encrypted budgets                               | Read an already cached copy.                                                                                                                            | A budget password is required for foreground sync. Tandem never saves that password; background sync skips encrypted budgets. |
+| Currency and reports                            | Use Actual's saved currency settings and calculate reports from Room's indexed transaction columns.                                                     | No connection is needed to display the cached values.                                                                         |
 
 When a budget has no saved selection, Tandem opens the most recently synced
-local budget. It uses saved catalog metadata for its name and encryption state,
-and discovers cached budgets from Room if that metadata is missing.
+local budget. A prior successful sync is enough to open the local copy, even if
+its change-feed cursor must be rebuilt later. Tandem uses saved catalog
+metadata for its name and encryption state, and discovers cached budgets from
+Room if that metadata is missing.
 
 ## Refresh schedule
 

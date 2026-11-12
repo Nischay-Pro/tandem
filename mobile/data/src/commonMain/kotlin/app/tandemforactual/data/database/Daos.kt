@@ -367,6 +367,15 @@ interface BudgetRecordDao {
     @Upsert
     suspend fun put(record: BudgetRecordEntity)
 
+    @Query(
+        "DELETE FROM budget_records WHERE budgetId = :budgetId AND recordType = :recordType AND recordId = :recordId AND localJson IS NOT NULL",
+    )
+    suspend fun deleteLocalOverlay(
+        budgetId: String,
+        recordType: String,
+        recordId: String,
+    ): Int
+
     @Upsert
     suspend fun putAll(records: List<BudgetRecordEntity>)
 
@@ -570,7 +579,7 @@ interface BudgetSyncStateDao {
     suspend fun find(budgetId: String): BudgetSyncStateEntity?
 
     @Query(
-        "SELECT * FROM budget_sync_state WHERE generation != '' AND cursor IS NOT NULL ORDER BY COALESCE(lastSyncedAtEpochMs, 0) DESC, budgetId ASC",
+        "SELECT * FROM budget_sync_state WHERE generation != '' AND lastSyncedAtEpochMs IS NOT NULL ORDER BY lastSyncedAtEpochMs DESC, budgetId ASC",
     )
     suspend fun findCachedBudgets(): List<BudgetSyncStateEntity>
 

@@ -274,28 +274,36 @@ class LocalBudgetRepository(
             requireIdentifier(item.scheduleId, "scheduleId")
             requireIdentifier(item.action, "action")
             val outbox = database.outboxDao()
-            val existing =
+            val activeForSchedule =
                 outbox
                     .findByRecordType(SCHEDULE_ACTION_RECORD_TYPE)
-                    .firstOrNull {
+                    .filter {
                         it.budgetId == item.budgetId &&
                             it.recordId == item.scheduleId &&
                             it.status in setOf("queued", "sending", "uncertain", "conflict", "rejected")
                     }
-            if (existing != null) {
-                if (existing.status == "queued" && existing.action == item.action && existing.patchJson == item.payloadJson) {
-                    return@withWriteTransaction existing
-                }
-                if (existing.status == "conflict" && existing.lastErrorCode == "schedule_changed") {
-                    val oldDate = scheduleActionExpectedDate(existing.patchJson)
-                    val refreshedDate = scheduleActionExpectedDate(item.payloadJson)
-                    if (oldDate.isNullOrBlank() || refreshedDate.isNullOrBlank() || oldDate == refreshedDate) {
+            activeForSchedule
+                .firstOrNull { it.action == item.action && it.patchJson == item.payloadJson }
+                ?.let { existing ->
+                    if (existing.status in setOf("queued", "sending")) return@withWriteTransaction existing
+                    if (existing.status != "conflict" || existing.lastErrorCode != "schedule_changed") {
                         throw LocalOperationConflictException()
                     }
-                    outbox.put(existing.copy(status = "discarded", updatedAtEpochMs = now()))
-                } else {
+                }
+            val staleDateConflict =
+                activeForSchedule.firstOrNull {
+                    it.status == "conflict" &&
+                        it.lastErrorCode == "schedule_changed" &&
+                        it.action == item.action &&
+                        item.action in setOf("post", "skip")
+                }
+            if (staleDateConflict != null) {
+                val oldDate = scheduleActionExpectedDate(staleDateConflict.patchJson)
+                val refreshedDate = scheduleActionExpectedDate(item.payloadJson)
+                if (oldDate.isNullOrBlank() || refreshedDate.isNullOrBlank() || oldDate == refreshedDate) {
                     throw LocalOperationConflictException()
                 }
+                outbox.put(staleDateConflict.copy(status = "discarded", updatedAtEpochMs = now()))
             }
             val operation =
                 OutboxOperationEntity(
@@ -324,6 +332,14 @@ class LocalBudgetRepository(
                 )
             outbox.insert(operation)
             operation
+        }
+
+    suspend fun cancelQueuedScheduleAction(operationId: String): Boolean =
+        database.withWriteTransaction {
+            val outbox = database.outboxDao()
+            val operation = outbox.find(operationId) ?: return@withWriteTransaction false
+            if (operation.recordType != SCHEDULE_ACTION_RECORD_TYPE) return@withWriteTransaction false
+            outbox.deleteQueuedOperation(operationId) == 1
         }
 
     suspend fun beginScheduleAction(operationId: String): Boolean =
@@ -758,6 +774,125 @@ class LocalBudgetRepository(
         recordId: String,
     ): BudgetRecordEntity? = database.budgetRecordDao().find(budgetId, recordType, recordId)
 
+    suspend fun saveLocalPayee(
+        budgetId: String,
+        payeeId: String,
+        name: String,
+    ) {
+        requireIdentifier(budgetId, "budgetId")
+        requireIdentifier(payeeId, "payeeId")
+        require(name.isNotBlank())
+        database.withWriteTransaction {
+            val dao = database.budgetRecordDao()
+            val localJson =
+                buildJsonObject {
+                    put("id", payeeId)
+                    put("name", name)
+                }.toString()
+            val existing = dao.find(budgetId, "payee", payeeId)
+            if (existing != null) {
+                dao.put(existing.copy(localJson = localJson, localDeleted = false, remoteDeleted = false, displayName = name))
+            } else {
+                dao.put(
+                    BudgetRecordEntity(
+                        budgetId = budgetId,
+                        recordType = "payee",
+                        recordId = payeeId,
+                        remoteJson = null,
+                        remoteRevision = null,
+                        localJson = localJson,
+                        localDeleted = false,
+                        remoteDeleted = false,
+                        syncGeneration = "local-payee",
+                        recordDate = null,
+                        accountId = null,
+                        categoryId = null,
+                        payeeId = null,
+                        amountMinor = null,
+                        budgetMonth = null,
+                        displayName = name,
+                    ),
+                )
+            }
+        }
+    }
+
+    suspend fun remapPendingPayeeReferences(
+        budgetId: String,
+        temporaryPayeeId: String,
+        actualPayeeId: String,
+    ): Int {
+        requireIdentifier(budgetId, "budgetId")
+        requireIdentifier(temporaryPayeeId, "temporaryPayeeId")
+        requireIdentifier(actualPayeeId, "actualPayeeId")
+        return database.withWriteTransaction {
+            val outbox = database.outboxDao()
+            val records = database.budgetRecordDao()
+            var updatedCount = 0
+            outbox
+                .findPending(budgetId)
+                .filter { it.recordType == "transaction" && it.status == LocalWriteStatus.QUEUED.name.lowercase() }
+                .forEach { operation ->
+                    val patch = rewritePayeeReference(operation.patchJson, temporaryPayeeId, actualPayeeId) ?: return@forEach
+                    val optimistic = operation.optimisticJson?.let { rewritePayeeReference(it, temporaryPayeeId, actualPayeeId) }
+                    outbox.put(
+                        operation.copy(
+                            patchJson = patch,
+                            optimisticJson = optimistic,
+                            optimisticPayeeId =
+                                if (operation.optimisticPayeeId == temporaryPayeeId) actualPayeeId else operation.optimisticPayeeId,
+                            updatedAtEpochMs = now(),
+                        ),
+                    )
+                    val localRecord = records.find(budgetId, "transaction", operation.recordId)
+                    if (localRecord?.localJson != null && optimistic != null) {
+                        records.put(localRecord.copy(localJson = optimistic, payeeId = actualPayeeId))
+                    }
+                    updatedCount += 1
+                }
+            records.deleteLocalOverlay(budgetId, "payee", temporaryPayeeId)
+            updatedCount
+        }
+    }
+
+    suspend fun remapPendingAccountReferences(
+        budgetId: String,
+        temporaryAccountId: String,
+        actualAccountId: String,
+    ): Int {
+        requireIdentifier(budgetId, "budgetId")
+        requireIdentifier(temporaryAccountId, "temporaryAccountId")
+        requireIdentifier(actualAccountId, "actualAccountId")
+        return database.withWriteTransaction {
+            val outbox = database.outboxDao()
+            val records = database.budgetRecordDao()
+            var updatedCount = 0
+            outbox
+                .findPending(budgetId)
+                .filter { it.recordType == "transaction" && it.status == LocalWriteStatus.QUEUED.name.lowercase() }
+                .forEach { operation ->
+                    val patch = rewriteReference(operation.patchJson, "account", temporaryAccountId, actualAccountId) ?: return@forEach
+                    val optimistic = operation.optimisticJson?.let { rewriteReference(it, "account", temporaryAccountId, actualAccountId) }
+                    outbox.put(
+                        operation.copy(
+                            patchJson = patch,
+                            optimisticJson = optimistic,
+                            optimisticAccountId =
+                                if (operation.optimisticAccountId == temporaryAccountId) actualAccountId else operation.optimisticAccountId,
+                            updatedAtEpochMs = now(),
+                        ),
+                    )
+                    val localRecord = records.find(budgetId, "transaction", operation.recordId)
+                    if (localRecord?.localJson != null && optimistic != null) {
+                        records.put(localRecord.copy(localJson = optimistic, accountId = actualAccountId))
+                    }
+                    updatedCount += 1
+                }
+            records.deleteLocalOverlay(budgetId, "account", temporaryAccountId)
+            updatedCount
+        }
+    }
+
     suspend fun readSyncState(budgetId: String): BudgetSyncStateEntity? = database.budgetSyncStateDao().find(budgetId)
 
     /** Lists local snapshots with a completed sync checkpoint, newest successful sync first. */
@@ -787,6 +922,13 @@ class LocalBudgetRepository(
     suspend fun readSyncCheckpoint(budgetId: String): BudgetSyncCheckpoint? {
         requireIdentifier(budgetId, "budgetId")
         return database.budgetSyncStateDao().find(budgetId)?.let { BudgetSyncCheckpoint(it.generation, it.cursor) }
+    }
+
+    /** A successful local snapshot remains usable when its sync cursor needs to be rebuilt. */
+    suspend fun hasCachedSnapshot(budgetId: String): Boolean {
+        requireIdentifier(budgetId, "budgetId")
+        val state = database.budgetSyncStateDao().find(budgetId) ?: return false
+        return state.generation.isNotBlank() && state.lastSyncedAtEpochMs != null
     }
 
     suspend fun readPendingWrites(budgetId: String): List<OutboxOperationEntity> {
@@ -1844,6 +1986,31 @@ class LocalBudgetRepository(
                 return@runCatching null
             }
             JsonObject(body + ("category" to JsonPrimitive(actualCategoryId))).toString()
+        }.getOrNull()
+
+    private fun rewritePayeeReference(
+        bodyJson: String,
+        temporaryPayeeId: String,
+        actualPayeeId: String,
+    ): String? =
+        runCatching {
+            val body = Json.parseToJsonElement(bodyJson).jsonObject
+            if (body["payee"]?.let { (it as? JsonPrimitive)?.contentOrNull } != temporaryPayeeId) {
+                return@runCatching null
+            }
+            JsonObject(body + ("payee" to JsonPrimitive(actualPayeeId))).toString()
+        }.getOrNull()
+
+    private fun rewriteReference(
+        bodyJson: String,
+        field: String,
+        temporaryId: String,
+        actualId: String,
+    ): String? =
+        runCatching {
+            val body = Json.parseToJsonElement(bodyJson).jsonObject
+            if ((body[field] as? JsonPrimitive)?.contentOrNull != temporaryId) return@runCatching null
+            JsonObject(body + (field to JsonPrimitive(actualId))).toString()
         }.getOrNull()
 
     private fun RemoteBudgetRecord.toEntity(

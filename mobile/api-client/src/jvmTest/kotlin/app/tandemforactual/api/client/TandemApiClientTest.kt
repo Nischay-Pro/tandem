@@ -343,7 +343,7 @@ class TandemApiClientTest {
             val engine =
                 MockEngine { request ->
                     requests += request
-                    respond("""{"status":"ok"}""", headers = jsonHeaders())
+                    respond("""{"status":"ok","accountId":"account-created"}""", headers = jsonHeaders())
                 }
             val previousClient = Api.client
             val previousBaseUrl = Api.baseUrl
@@ -879,6 +879,8 @@ class TandemApiClientTest {
                     respond(
                         if (request.url.encodedPath.endsWith("/categories") && request.method == HttpMethod.Post) {
                             """{"status":"ok","categoryId":"category-created"}"""
+                        } else if (request.url.encodedPath.endsWith("/accounts") && request.method == HttpMethod.Post) {
+                            """{"status":"ok","accountId":"account-created"}"""
                         } else if (request.url.encodedPath.endsWith("/payees") && request.method == HttpMethod.Post) {
                             """{"status":"ok","payeeId":"payee-created"}"""
                         } else if (request.url.encodedPath.endsWith("/category-groups") && request.method == HttpMethod.Post) {
@@ -896,7 +898,10 @@ class TandemApiClientTest {
             try {
                 client.restoreSession("https://tandem.example", "device-token")
                 client.runBudgetBankSync("budget-1", null)
-                client.createBudgetAccount("budget-1", "Savings", true, "credit-group", "budget-password")
+                assertEquals(
+                    "account-created",
+                    client.createBudgetAccount("budget-1", "Savings", true, "credit-group", "budget-password"),
+                )
                 client.closeBudgetAccount("budget-1", "account-1", "account-2", "category-1", "budget-password")
                 client.renameBudgetAccount("budget-1", "account-1", "Daily checking", null)
                 client.reopenBudgetAccount("budget-1", "account-1", null)
@@ -1210,7 +1215,7 @@ class TandemApiClientTest {
                             )
                         } else {
                             respond(
-                                """{"status":"ok"}""",
+                                """{"status":"ok","accountId":"account-created"}""",
                                 headers = jsonHeaders(),
                             )
                         }
@@ -1256,7 +1261,7 @@ class TandemApiClientTest {
                             jsonHeaders(),
                         )
                     } else {
-                        respond("""{"status":"ok"}""", headers = jsonHeaders())
+                        respond("""{"status":"ok","accountId":"account-created"}""", headers = jsonHeaders())
                     }
                 }
             val previousClient = Api.client

@@ -42,7 +42,7 @@ async function createApi(
       updated: 0,
       errors: [],
     })),
-    createAccount: vi.fn(async () => undefined),
+    createAccount: vi.fn(async () => "account-created"),
     createCategory: vi.fn(async () => "category-created"),
     createCategoryGroup: vi.fn(async () => "category-group-created"),
     manageCategoryGroup: vi.fn(async () => undefined),
@@ -817,6 +817,10 @@ describe("budget maintenance routes", () => {
     });
 
     expect(first.statusCode).toBe(200);
+    expect(first.json()).toEqual({
+      status: "ok",
+      accountId: "account-created",
+    });
     expect(replay.statusCode).toBe(200);
     expect(replay.json()).toEqual(first.json());
     expect(fake.budgetMaintenanceApi.createAccount).toHaveBeenCalledTimes(1);
@@ -986,7 +990,10 @@ describe("budget maintenance routes", () => {
     });
 
     expect(corrected.statusCode).toBe(200);
-    expect(corrected.json()).toEqual({ status: "ok" });
+    expect(corrected.json()).toEqual({
+      status: "ok",
+      accountId: "account-created",
+    });
     expect(fake.budgetMaintenanceApi.createAccount).toHaveBeenCalledTimes(2);
     await fake.app.close();
   });

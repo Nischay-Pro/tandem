@@ -136,6 +136,24 @@ internal enum class BudgetReorderKind {
     DELETE_CATEGORY,
     HIDE_CATEGORY_GROUP,
     SHOW_CATEGORY_GROUP,
+    CREATE_PAYEE,
+    SET_CATEGORY_AMOUNT,
+    SET_CATEGORY_CARRYOVER,
+    COPY_BUDGET_MONTH,
+    APPLY_BUDGET_TEMPLATE,
+    HOLD_BUDGET_NEXT_MONTH,
+    RESET_BUDGET_HOLD,
+    MOVE_BUDGET_MONEY,
+    CREATE_ACCOUNT,
+    CLOSE_ACCOUNT,
+    RENAME_ACCOUNT,
+    REOPEN_ACCOUNT,
+    MOVE_ACCOUNT,
+    RENAME_PAYEE,
+    MERGE_PAYEE,
+    DELETE_PAYEE,
+    SET_PAYEE_DEFAULT_CATEGORY,
+    IMPORT_STATEMENT,
 }
 
 internal data class QueuedBudgetReorder(
@@ -152,6 +170,7 @@ internal data class QueuedBudgetReorder(
     val refreshOnly: Boolean = false,
     val refreshBeforeSend: Boolean = false,
     val requiresEncryptionPassword: Boolean = false,
+    val payloadJson: String? = null,
     val operationId: String = Uuid.random().toString(),
 )
 
@@ -929,6 +948,24 @@ internal fun budgetMutationFailureMessage(
             BudgetReorderKind.HIDE_CATEGORY_GROUP, BudgetReorderKind.SHOW_CATEGORY_GROUP ->
                 "Couldn’t update this category group’s visibility."
             BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE -> "Couldn’t refresh the new category group."
+            BudgetReorderKind.CREATE_PAYEE -> "Couldn’t add this payee."
+            BudgetReorderKind.SET_CATEGORY_AMOUNT -> "Couldn’t update the assigned amount."
+            BudgetReorderKind.SET_CATEGORY_CARRYOVER -> "Couldn’t update carryover."
+            BudgetReorderKind.COPY_BUDGET_MONTH -> "Couldn’t copy last month’s assignments."
+            BudgetReorderKind.APPLY_BUDGET_TEMPLATE -> "Couldn’t apply this template."
+            BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH -> "Couldn’t hold this money for next month."
+            BudgetReorderKind.RESET_BUDGET_HOLD -> "Couldn’t reset the next-month hold."
+            BudgetReorderKind.MOVE_BUDGET_MONEY -> "Couldn’t move money between categories."
+            BudgetReorderKind.CREATE_ACCOUNT -> "Couldn’t add this account."
+            BudgetReorderKind.CLOSE_ACCOUNT -> "Couldn’t close this account."
+            BudgetReorderKind.RENAME_ACCOUNT -> "Couldn’t rename this account."
+            BudgetReorderKind.REOPEN_ACCOUNT -> "Couldn’t reopen this account."
+            BudgetReorderKind.MOVE_ACCOUNT -> "Couldn’t reorder this account."
+            BudgetReorderKind.RENAME_PAYEE -> "Couldn’t rename this payee."
+            BudgetReorderKind.MERGE_PAYEE -> "Couldn’t merge this payee."
+            BudgetReorderKind.DELETE_PAYEE -> "Couldn’t delete this payee."
+            BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY -> "Couldn’t update this payee’s category."
+            BudgetReorderKind.IMPORT_STATEMENT -> "Couldn’t import this statement."
         }
     return if (detail == null) fallback else "$detail."
 }
@@ -1047,6 +1084,7 @@ internal fun encodeBudgetReorderQueue(state: BudgetReorderQueueState): String =
                             put("refreshOnly", move.refreshOnly)
                             put("refreshBeforeSend", move.refreshBeforeSend)
                             put("requiresEncryptionPassword", move.requiresEncryptionPassword || move.encryptionPassword != null)
+                            put("payloadJson", move.payloadJson?.let(::JsonPrimitive) ?: JsonNull)
                         },
                     )
                 }
@@ -1124,6 +1162,7 @@ internal fun decodeBudgetReorderQueue(encoded: String?): BudgetReorderQueueState
                     refreshOnly = move["refreshOnly"]?.let { (it as? JsonPrimitive)?.booleanOrNull } ?: false,
                     refreshBeforeSend = move["refreshBeforeSend"]?.let { (it as? JsonPrimitive)?.booleanOrNull } ?: false,
                     requiresEncryptionPassword = move["requiresEncryptionPassword"]?.let { (it as? JsonPrimitive)?.booleanOrNull } ?: false,
+                    payloadJson = move.queueString("payloadJson"),
                     operationId = move.queueString("operationId") ?: Uuid.random().toString(),
                 )
             }.orEmpty()

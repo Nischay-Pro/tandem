@@ -172,6 +172,7 @@ fun TandemApp(
     var backGestureCancelJob by remember { mutableStateOf<Job?>(null) }
     var backButtonTransitionRunning by remember { mutableStateOf(false) }
     var queuedBackPresses by remember { mutableStateOf(0) }
+    var pendingBackAfterRouteTransition by remember { mutableStateOf(false) }
     var skipNextRouteTransition by remember { mutableStateOf(false) }
     var showDiscardTransactionDialog by rememberSaveable { mutableStateOf(false) }
     var transactionSheetClosing by remember { mutableStateOf(false) }
@@ -434,6 +435,7 @@ fun TandemApp(
         }
     }
     val selectTab: (AppRoute) -> Unit = { selectedTab ->
+        state.pendingScheduleToOpenId = null
         val tabSelection = selectAppTabNavigation(backStack.toList(), savedTabBackStacks, selectedTab, newRouteEntry)
         if (tabSelection.backStack != backStack.toList()) {
             routeTransitionDirection = 0f
@@ -443,21 +445,27 @@ fun TandemApp(
         savedTabBackStacks = tabSelection.savedTabBackStacks
     }
     val performBack: () -> Unit = {
-        if (beginRouteTransition()) {
-            if (backButtonTransitionRunning) {
+        when (backRequestDisposition(routeTransitionInputBlocked, backButtonTransitionRunning)) {
+            BackRequestDisposition.QUEUE_AFTER_BACK_TRANSITION -> {
                 queuedBackPresses += 1
-            } else {
-                val backAnimationWasRunning = backGestureCancelJob != null
-                backGestureCancelJob?.cancel()
-                backGestureCancelJob = null
-                if (backGestureCommitPending || backAnimationWasRunning) {
-                    backGestureCommitPending = false
-                    backGestureProgress = 1f
-                    skipNextRouteTransition = true
-                    popRoute()
-                } else if (backStack.size > 1) {
-                    // Button back runs the same route pair and progress transform as predictive back.
-                    startBackButtonTransition()
+            }
+            BackRequestDisposition.DEFER_UNTIL_ROUTE_TRANSITION_FINISHES -> {
+                pendingBackAfterRouteTransition = true
+            }
+            BackRequestDisposition.START -> {
+                if (beginRouteTransition()) {
+                    val backAnimationWasRunning = backGestureCancelJob != null
+                    backGestureCancelJob?.cancel()
+                    backGestureCancelJob = null
+                    if (backGestureCommitPending || backAnimationWasRunning) {
+                        backGestureCommitPending = false
+                        backGestureProgress = 1f
+                        skipNextRouteTransition = true
+                        popRoute()
+                    } else if (backStack.size > 1) {
+                        // Button back runs the same route pair and progress transform as predictive back.
+                        startBackButtonTransition()
+                    }
                 }
             }
         }
@@ -489,9 +497,16 @@ fun TandemApp(
             performBack()
         }
     }
+    LaunchedEffect(routeTransitionInputBlocked, backButtonTransitionRunning, pendingBackAfterRouteTransition) {
+        if (!routeTransitionInputBlocked && !backButtonTransitionRunning && pendingBackAfterRouteTransition) {
+            pendingBackAfterRouteTransition = false
+            handleBack()
+        }
+    }
     val navigation =
         AppNavigation(
             open = { next ->
+                if (next != AppRoute.SCHEDULES) state.pendingScheduleToOpenId = null
                 if (beginRouteTransition()) {
                     coroutineScope.launch {
                         // Finish the opening pointer dispatch before swapping in interactive content.
@@ -528,11 +543,13 @@ fun TandemApp(
                 }
             },
             reset = { next ->
+                state.pendingScheduleToOpenId = null
                 routeTransitionDirection = 0f
                 backStack.clear()
                 backStack.add(newRouteEntry(next))
             },
             replaceTop = { next ->
+                if (next != AppRoute.SCHEDULES) state.pendingScheduleToOpenId = null
                 routeTransitionDirection = 1f
                 if (backStack.isNotEmpty()) backStack.removeAt(backStack.lastIndex)
                 backStack.add(newRouteEntry(next))
@@ -734,7 +751,7 @@ fun TandemApp(
     val activityTransactionRecords = mobileSession.activityTransactionRecords
     val activityTransactionRecordsVersion = mobileSession.activityTransactionRecordsVersion
     val activityTransactionRecordsSnapshot = activityTransactionRecords.toList()
-    val accountRecords = mobileSession.accountRecords
+    val accountRecords = mobileSession.accountRecordsWithPendingCreates(state.selectedBudgetId, mobileSession.accountRecords)
     val payeeRecords = mobileSession.payeeRecords
     val categoryRecords = mobileSession.categoryRecords
     val displaySettings = mobileSession.budgetDisplaySettings
@@ -778,18 +795,26 @@ fun TandemApp(
                 )
             }
     }
-    LaunchedEffect(accountRecords) {
+    val accountNameOverrides = mobileSession.accountNameOverridesFor(state.selectedBudgetId)
+    val accountClosedOverrides = mobileSession.accountClosedOverridesFor(state.selectedBudgetId)
+    LaunchedEffect(accountRecords, accountNameOverrides, accountClosedOverrides) {
         liveAccounts =
             withContext(Dispatchers.Default) {
-                liveAccountSummaries(accountRecords, mobileSession.accountGroupRecords)
+                liveAccountSummaries(accountRecords, mobileSession.accountGroupRecords, accountNameOverrides, accountClosedOverrides)
             }
     }
-    LaunchedEffect(mobileSession.scheduleRecords, mobileSession.payeeRecords, accountRecords) {
+    LaunchedEffect(
+        mobileSession.scheduleRecords,
+        mobileSession.payeeRecords,
+        accountRecords,
+        mobileSession.pendingScheduleActions,
+    ) {
         val schedules = mobileSession.scheduleRecords
         val payees = mobileSession.payeeRecords
+        val pendingScheduleActions = mobileSession.pendingScheduleActions
         liveSchedules =
             withContext(Dispatchers.Default) {
-                liveScheduleSummaries(schedules, payees, accountRecords)
+                liveScheduleSummaries(schedules, payees, accountRecords, pendingScheduleActions)
             }
     }
     var liveBudgetMonth by remember { mutableStateOf<LiveBudgetMonthSummary?>(null) }
@@ -801,6 +826,8 @@ fun TandemApp(
     val deletedCategoryIds = mobileSession.deletedCategoryIdsFor(state.selectedBudgetId)
     val pendingCategoryGroups = mobileSession.pendingCategoryGroupCreatesFor(state.selectedBudgetId)
     val pendingCategories = mobileSession.pendingCategoryCreatesFor(state.selectedBudgetId)
+    val categoryBudgetOverrides = mobileSession.pendingCategoryBudgetOverrides(state.selectedBudgetId, state.selectedMonthId)
+    val categoryCarryoverOverrides = mobileSession.pendingCategoryCarryoverOverrides(state.selectedBudgetId, state.selectedMonthId)
     LaunchedEffect(
         mobileSession.selectedBudgetMonthRecord,
         mobileSession.categoryRecords,
@@ -813,6 +840,8 @@ fun TandemApp(
         deletedCategoryIds,
         pendingCategoryGroups,
         pendingCategories,
+        categoryBudgetOverrides,
+        categoryCarryoverOverrides,
         state.selectedMonthId,
     ) {
         val monthRecord = mobileSession.selectedBudgetMonthRecord?.takeIf { it.recordId == state.selectedMonthId }
@@ -832,6 +861,8 @@ fun TandemApp(
                     deletedCategoryIds,
                     pendingCategoryGroups,
                     pendingCategories,
+                    categoryBudgetOverrides,
+                    categoryCarryoverOverrides,
                 )
             }
     }
@@ -916,7 +947,7 @@ fun TandemApp(
                 }
                 !selected.isEncrypted || state.encryptedPassword.isNotBlank() -> {
                     state.pendingBudgetSelectionOrigin = previousSelection
-                    navigation.replaceTop(AppRoute.FIRST_SYNC)
+                    navigation.open(AppRoute.FIRST_SYNC)
                 }
             }
         }

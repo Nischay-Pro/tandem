@@ -66,6 +66,15 @@ const statusOk = {
   required: ["status"],
   additionalProperties: false,
 };
+const accountCreatedResponse = {
+  type: "object",
+  properties: {
+    status: { type: "string", const: "ok" },
+    accountId: { type: "string", minLength: 1 },
+  },
+  required: ["status", "accountId"],
+  additionalProperties: false,
+};
 
 const statusNotReady = {
   type: "object",
@@ -2260,7 +2269,10 @@ function registerBudgetMaintenanceRoutes(
           required: ["name", "offbudget"],
           additionalProperties: false,
         },
-        response: commonResponseSchema,
+        response: {
+          ...commonResponseSchema,
+          200: accountCreatedResponse,
+        },
       },
       attachValidation: true,
     },
@@ -2287,14 +2299,14 @@ function registerBudgetMaintenanceRoutes(
             accountGroupId: request.body.accountGroupId ?? null,
           },
           async () => {
-            await maintenanceApi.createAccount(
+            const accountId = await maintenanceApi.createAccount(
               request.params.budgetId,
               name,
               request.body.offbudget,
               request.body.accountGroupId ?? null,
               request.headers["x-budget-encryption-password"],
             );
-            return { status: "ok" };
+            return { status: "ok", accountId };
           },
         );
         logBudgetMaintenanceEvent(

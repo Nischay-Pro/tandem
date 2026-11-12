@@ -1,6 +1,7 @@
 package app.tandemforactual.ui.model
 
 import app.tandemforactual.data.database.BudgetRecordEntity
+import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.ui.BudgetReorderKind
 import app.tandemforactual.ui.BudgetReorderQueueState
 import app.tandemforactual.ui.QueuedBudgetReorder
@@ -282,7 +283,80 @@ class LiveBudgetModelsTest {
         assertTrue(upcoming.first().canSkip)
         assertFalse(upcoming.last().canSkip)
     }
+
+    @Test
+    fun appliesQueuedScheduleEditsAndDeletesToTheLocalUpcomingList() {
+        val schedules =
+            listOf(
+                record(
+                    type = "schedule",
+                    id = "rent",
+                    json =
+                        """{"id":"rent","name":"Rent","payee":"landlord","account":"checking","amount":150000,"next_date":"2026-11-15","date":{"frequency":"monthly","start":"2026-11-15"}}""",
+                ),
+                record(
+                    type = "schedule",
+                    id = "utility",
+                    json =
+                        """{"id":"utility","name":"Power","payee":"utility","account":"checking","amount":5000,"next_date":"2026-11-18","date":{"frequency":"monthly","start":"2026-11-18"}}""",
+                ),
+            )
+        val queuedActions =
+            listOf(
+                scheduleAction(
+                    id = "edit-rent",
+                    recordId = "rent",
+                    action = "edit",
+                    patchJson =
+                        """{"fields":{"name":"New Rent","accountId":"checking","payeeId":"landlord","amountMinor":165000,"amountOp":"is","date":{"frequency":"monthly","start":"2026-11-20"}}}""",
+                ),
+                scheduleAction(id = "delete-utility", recordId = "utility", action = "delete", patchJson = "{}"),
+            )
+
+        val upcoming =
+            liveScheduleSummaries(
+                schedules,
+                listOf(record(type = "payee", id = "landlord", name = "North Apartments")),
+                listOf(record(type = "account", id = "checking", name = "Household Checking")),
+                queuedActions,
+            )
+
+        assertEquals(listOf("rent"), upcoming.map { it.id })
+        assertEquals("New Rent", upcoming.single().name)
+        assertEquals("2026-11-20", upcoming.single().nextDate)
+        assertEquals(165_000L, upcoming.single().amountMinor)
+    }
 }
+
+private fun scheduleAction(
+    id: String,
+    recordId: String,
+    action: String,
+    patchJson: String,
+) = OutboxOperationEntity(
+    operationId = id,
+    idempotencyKey = "schedule-action:$id",
+    budgetId = "budget",
+    recordType = "schedule-action",
+    recordId = recordId,
+    action = action,
+    baseRevision = null,
+    baseSnapshotJson = null,
+    patchJson = patchJson,
+    optimisticJson = null,
+    optimisticRecordDate = null,
+    optimisticAccountId = null,
+    optimisticCategoryId = null,
+    optimisticPayeeId = null,
+    optimisticAmountMinor = null,
+    optimisticBudgetMonth = null,
+    status = "queued",
+    attemptCount = 0,
+    serverOperationId = null,
+    lastErrorCode = null,
+    createdAtEpochMs = 1L,
+    updatedAtEpochMs = 1L,
+)
 
 private fun record(
     type: String,

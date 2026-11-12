@@ -766,6 +766,22 @@ internal data class AppNavigation(
     val backToList: () -> Unit,
 )
 
+internal enum class BackRequestDisposition {
+    START,
+    DEFER_UNTIL_ROUTE_TRANSITION_FINISHES,
+    QUEUE_AFTER_BACK_TRANSITION,
+}
+
+internal fun backRequestDisposition(
+    routeTransitionInputBlocked: Boolean,
+    backButtonTransitionRunning: Boolean,
+): BackRequestDisposition =
+    when {
+        backButtonTransitionRunning -> BackRequestDisposition.QUEUE_AFTER_BACK_TRANSITION
+        routeTransitionInputBlocked -> BackRequestDisposition.DEFER_UNTIL_ROUTE_TRANSITION_FINISHES
+        else -> BackRequestDisposition.START
+    }
+
 internal data class AppRouteEntry(
     val route: AppRoute,
     val id: Long,

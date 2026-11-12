@@ -28,7 +28,7 @@ import kotlin.test.fail
 
 class LocalBudgetRepositoryTest {
     @Test
-    fun scheduleActionsPersistIdempotentlyAndRejectCompetingActionsUntilReview() =
+    fun scheduleActionsQueueInOrderAndRetainIdempotency() =
         runBlocking {
             val database = newDatabase()
             try {
@@ -46,13 +46,13 @@ class LocalBudgetRepositoryTest {
                 val duplicate = repository.enqueueScheduleAction(post.copy(operationId = "schedule-post-duplicate"))
 
                 assertEquals(created.operationId, duplicate.operationId)
-                assertEquals("queued", repository.readScheduleActionQueue().single().status)
-                assertFailsWith<LocalOperationConflictException> {
+                val followup =
                     repository.enqueueScheduleAction(
                         post.copy(operationId = "schedule-skip-2", action = "skip"),
                     )
-                    Unit
-                }
+                assertEquals(listOf("post", "skip"), repository.readScheduleActionQueue().map { it.action })
+                assertTrue(repository.cancelQueuedScheduleAction(followup.operationId))
+                assertEquals(listOf(created.operationId), repository.readScheduleActionQueue().map { it.operationId })
 
                 assertTrue(repository.beginScheduleAction(created.operationId))
                 repository.markScheduleActionConflict(created.operationId, "schedule_changed")
@@ -83,6 +83,10 @@ class LocalBudgetRepositoryTest {
                 assertEquals("schedule-post-refreshed", refreshedPost.operationId)
                 assertEquals("discarded", database.outboxDao().find(created.operationId)?.status)
                 assertEquals(listOf(refreshedPost.operationId), repository.readScheduleActionQueue().map { it.operationId })
+
+                assertTrue(repository.beginScheduleAction(refreshedPost.operationId))
+                repository.returnScheduleActionToQueue(refreshedPost.operationId, "network-error")
+                assertFalse(repository.cancelQueuedScheduleAction(refreshedPost.operationId))
             } finally {
                 database.close()
             }
@@ -690,6 +694,94 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
+    fun remapPendingPayeeReferencesRewritesQueuedTransactionsAfterOfflinePayeeCreate() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 200L }
+                repository.applySnapshot(
+                    BUDGET,
+                    GENERATION,
+                    "c1",
+                    listOf(transaction(recordId = "txn-payee", payeeId = "temporary-payee")),
+                )
+                repository.enqueueWrite(
+                    updateRequest(
+                        operationId = "op-payee-remap",
+                        idempotencyKey = "key-payee-remap",
+                        recordId = "txn-payee",
+                        patch = """{"payee":"temporary-payee"}""",
+                        optimistic = """{"id":"txn-payee","amount":1200,"payee":"temporary-payee"}""",
+                        projection =
+                            LocalRecordProjection(
+                                recordDate = "2026-10-01",
+                                accountId = "checking",
+                                categoryId = "food",
+                                payeeId = "temporary-payee",
+                                amountMinor = 1200L,
+                                budgetMonth = null,
+                            ),
+                    ),
+                )
+
+                assertEquals(1, repository.remapPendingPayeeReferences(BUDGET, "temporary-payee", "actual-payee"))
+
+                val remapped = repository.findWrite("op-payee-remap")
+                assertNotNull(remapped)
+                assertEquals("""{"payee":"actual-payee"}""", remapped.patchJson)
+                assertEquals("""{"id":"txn-payee","amount":1200,"payee":"actual-payee"}""", remapped.optimisticJson)
+                assertEquals("actual-payee", remapped.optimisticPayeeId)
+                assertEquals("actual-payee", repository.findRecord(BUDGET, "transaction", "txn-payee")?.payeeId)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun remapPendingAccountReferencesRewritesQueuedTransactionsAfterOfflineAccountCreate() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 200L }
+                repository.applySnapshot(
+                    BUDGET,
+                    GENERATION,
+                    "c1",
+                    listOf(transaction(recordId = "txn-account", accountId = "temporary-account")),
+                )
+                repository.enqueueWrite(
+                    updateRequest(
+                        operationId = "op-account-remap",
+                        idempotencyKey = "key-account-remap",
+                        recordId = "txn-account",
+                        patch = """{"account":"temporary-account"}""",
+                        optimistic = """{"id":"txn-account","amount":1200,"account":"temporary-account"}""",
+                        projection =
+                            LocalRecordProjection(
+                                recordDate = "2026-10-01",
+                                accountId = "temporary-account",
+                                categoryId = "food",
+                                payeeId = null,
+                                amountMinor = 1200L,
+                                budgetMonth = null,
+                            ),
+                    ),
+                )
+
+                assertEquals(1, repository.remapPendingAccountReferences(BUDGET, "temporary-account", "actual-account"))
+
+                val remapped = repository.findWrite("op-account-remap")
+                assertNotNull(remapped)
+                assertEquals("""{"account":"actual-account"}""", remapped.patchJson)
+                assertEquals("""{"id":"txn-account","amount":1200,"account":"actual-account"}""", remapped.optimisticJson)
+                assertEquals("actual-account", remapped.optimisticAccountId)
+                assertEquals("actual-account", repository.findRecord(BUDGET, "transaction", "txn-account")?.accountId)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun clearedAccountBalanceAggregatesOnlyVisibleClearedTransactions() =
         runBlocking {
             val database = newDatabase()
@@ -998,7 +1090,10 @@ class LocalBudgetRepositoryTest {
                 repository.applySnapshot("newer-budget", GENERATION, "c1", emptyList())
                 now = 300L
                 repository.markSyncFailed("newer-budget", "connection-lost")
+                val newestState = assertNotNull(database.budgetSyncStateDao().find("newer-budget"))
+                database.budgetSyncStateDao().put(newestState.copy(cursor = null))
 
+                assertTrue(repository.hasCachedSnapshot("newer-budget"))
                 assertEquals(listOf("newer-budget", "older-budget"), repository.findCachedBudgetIds())
             } finally {
                 database.close()

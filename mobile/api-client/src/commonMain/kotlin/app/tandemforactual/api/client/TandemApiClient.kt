@@ -74,6 +74,7 @@ data class StatementImportSummary(
 
 data class StatementImportPreview(
     val existingImportedIds: Set<String>,
+    val serverChecked: Boolean = true,
 ) {
     fun newRowCount(totalRows: Int): Int = (totalRows - existingImportedIds.size).coerceAtLeast(0)
 }
@@ -431,6 +432,7 @@ class TandemApiClient(
         accountId: String,
         transactions: List<StatementImportItem>,
         encryptionPassword: String?,
+        idempotencyKeyOverride: String? = null,
     ): StatementImportSummary {
         require(transactions.isNotEmpty() && transactions.size <= 1_000)
         val requestBody =
@@ -467,7 +469,7 @@ class TandemApiClient(
                     },
                 ).toString(),
             )
-        return withMaintenanceOperation(signature) { idempotencyKey ->
+        return withMaintenanceOperation(signature, idempotencyKeyOverride) { idempotencyKey ->
             withGeneratedApi {
                 val payload =
                     unwrap(
@@ -528,27 +530,33 @@ class TandemApiClient(
         offbudget: Boolean,
         accountGroupId: String?,
         encryptionPassword: String?,
-    ) {
+        idempotencyKeyOverride: String? = null,
+    ): String =
         withMaintenanceOperation(
             maintenanceSignature("account-create", budgetId, name, offbudget.toString(), accountGroupId.orEmpty()),
+            idempotencyKeyOverride,
         ) { idempotencyKey ->
             withGeneratedApi {
-                requireOk(
-                    BudgetsApi.createBudgetAccount(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
-                        budgetId = budgetId,
-                        body =
-                            buildJsonObject {
-                                put("name", name)
-                                put("offbudget", offbudget)
-                                if (accountGroupId == null) put("accountGroupId", JsonNull) else put("accountGroupId", accountGroupId)
-                            }.toMap(),
-                    ),
-                )
+                val payload =
+                    unwrap(
+                        BudgetsApi.createBudgetAccount(
+                            xBudgetEncryptionPassword = encryptionPassword,
+                            idempotencyKey = idempotencyKey,
+                            budgetId = budgetId,
+                            body =
+                                buildJsonObject {
+                                    put("name", name)
+                                    put("offbudget", offbudget)
+                                    if (accountGroupId == null) put("accountGroupId", JsonNull) else put("accountGroupId", accountGroupId)
+                                }.toMap(),
+                        ),
+                    )
+                if (payload["status"]?.jsonPrimitive?.contentOrNull != "ok") {
+                    throw TandemApiProtocolException("Account creation response has an invalid status")
+                }
+                payload.requiredString("accountId")
             }
         }
-    }
 
     suspend fun closeBudgetAccount(
         budgetId: String,
@@ -556,9 +564,11 @@ class TandemApiClient(
         transferAccountId: String?,
         transferCategoryId: String?,
         encryptionPassword: String?,
+        idempotencyKeyOverride: String? = null,
     ) {
         withMaintenanceOperation(
             maintenanceSignature("account-close", budgetId, accountId, transferAccountId, transferCategoryId),
+            idempotencyKeyOverride,
         ) { idempotencyKey ->
             withGeneratedApi {
                 requireOk(
@@ -583,8 +593,12 @@ class TandemApiClient(
         accountId: String,
         name: String,
         encryptionPassword: String?,
+        idempotencyKeyOverride: String? = null,
     ) {
-        withMaintenanceOperation(maintenanceSignature("account-rename", budgetId, accountId, name)) { idempotencyKey ->
+        withMaintenanceOperation(
+            maintenanceSignature("account-rename", budgetId, accountId, name),
+            idempotencyKeyOverride,
+        ) { idempotencyKey ->
             withGeneratedApi {
                 requireOk(
                     BudgetsApi.renameBudgetAccount(
@@ -603,8 +617,9 @@ class TandemApiClient(
         budgetId: String,
         accountId: String,
         encryptionPassword: String?,
+        idempotencyKeyOverride: String? = null,
     ) {
-        withMaintenanceOperation(maintenanceSignature("account-reopen", budgetId, accountId)) { idempotencyKey ->
+        withMaintenanceOperation(maintenanceSignature("account-reopen", budgetId, accountId), idempotencyKeyOverride) { idempotencyKey ->
             withGeneratedApi {
                 requireOk(
                     BudgetsApi.reopenBudgetAccount(
@@ -623,8 +638,12 @@ class TandemApiClient(
         accountId: String,
         targetAccountId: String?,
         encryptionPassword: String?,
+        idempotencyKeyOverride: String? = null,
     ) {
-        withMaintenanceOperation(maintenanceSignature("account-move", budgetId, accountId, targetAccountId)) { idempotencyKey ->
+        withMaintenanceOperation(
+            maintenanceSignature("account-move", budgetId, accountId, targetAccountId),
+            idempotencyKeyOverride,
+        ) { idempotencyKey ->
             withGeneratedApi {
                 requireOk(
                     BudgetsApi.moveBudgetAccount(
@@ -804,8 +823,9 @@ class TandemApiClient(
         budgetId: String,
         name: String,
         encryptionPassword: String?,
+        idempotencyKeyOverride: String? = null,
     ): String =
-        withMaintenanceOperation(maintenanceSignature("payee-create", budgetId, name)) { idempotencyKey ->
+        withMaintenanceOperation(maintenanceSignature("payee-create", budgetId, name), idempotencyKeyOverride) { idempotencyKey ->
             withGeneratedApi {
                 BudgetsApi
                     .createBudgetPayee(
@@ -833,9 +853,11 @@ class TandemApiClient(
         month: String,
         amountMinor: Long,
         encryptionPassword: String?,
+        idempotencyKeyOverride: String? = null,
     ) {
         withMaintenanceOperation(
             maintenanceSignature("category-budget-amount", budgetId, categoryId, month, amountMinor.toString()),
+            idempotencyKeyOverride,
         ) { idempotencyKey ->
             withGeneratedApi {
                 requireOk(
@@ -861,9 +883,11 @@ class TandemApiClient(
         month: String,
         enabled: Boolean,
         encryptionPassword: String?,
+        idempotencyKeyOverride: String? = null,
     ) {
         withMaintenanceOperation(
             maintenanceSignature("category-carryover", budgetId, categoryId, month, enabled.toString()),
+            idempotencyKeyOverride,
         ) { idempotencyKey ->
             withGeneratedApi {
                 requireOk(
@@ -887,8 +911,12 @@ class TandemApiClient(
         budgetId: String,
         month: String,
         encryptionPassword: String?,
+        idempotencyKeyOverride: String? = null,
     ) {
-        withMaintenanceOperation(maintenanceSignature("budget-month-copy-last", budgetId, month)) { idempotencyKey ->
+        withMaintenanceOperation(
+            maintenanceSignature("budget-month-copy-last", budgetId, month),
+            idempotencyKeyOverride,
+        ) { idempotencyKey ->
             withGeneratedApi {
                 requireOk(
                     BudgetsApi.manageBudgetMonth(
@@ -908,6 +936,7 @@ class TandemApiClient(
         month: String,
         assignments: List<Pair<String, Long>>,
         encryptionPassword: String?,
+        idempotencyKeyOverride: String? = null,
     ) {
         require(assignments.isNotEmpty() && assignments.size <= 500)
         withMaintenanceOperation(
@@ -925,6 +954,7 @@ class TandemApiClient(
                         },
                     ).toString(),
             ),
+            idempotencyKeyOverride,
         ) { idempotencyKey ->
             withGeneratedApi {
                 requireOk(
@@ -959,9 +989,11 @@ class TandemApiClient(
         month: String,
         amountMinor: Long,
         encryptionPassword: String?,
+        idempotencyKeyOverride: String? = null,
     ) {
         withMaintenanceOperation(
             maintenanceSignature("budget-month-hold-next", budgetId, month, amountMinor.toString()),
+            idempotencyKeyOverride,
         ) { idempotencyKey ->
             withGeneratedApi {
                 requireOk(
@@ -985,8 +1017,12 @@ class TandemApiClient(
         budgetId: String,
         month: String,
         encryptionPassword: String?,
+        idempotencyKeyOverride: String? = null,
     ) {
-        withMaintenanceOperation(maintenanceSignature("budget-month-reset-hold", budgetId, month)) { idempotencyKey ->
+        withMaintenanceOperation(
+            maintenanceSignature("budget-month-reset-hold", budgetId, month),
+            idempotencyKeyOverride,
+        ) { idempotencyKey ->
             withGeneratedApi {
                 requireOk(
                     BudgetsApi.manageBudgetMonth(
@@ -1008,6 +1044,7 @@ class TandemApiClient(
         toCategoryId: String,
         amountMinor: Long,
         encryptionPassword: String?,
+        idempotencyKeyOverride: String? = null,
     ) {
         withMaintenanceOperation(
             maintenanceSignature(
@@ -1018,6 +1055,7 @@ class TandemApiClient(
                 toCategoryId,
                 amountMinor.toString(),
             ),
+            idempotencyKeyOverride,
         ) { idempotencyKey ->
             withGeneratedApi {
                 requireOk(
@@ -1111,9 +1149,11 @@ class TandemApiClient(
         targetPayeeId: String?,
         encryptionPassword: String?,
         categoryId: String? = null,
+        idempotencyKeyOverride: String? = null,
     ) {
         withMaintenanceOperation(
             maintenanceSignature("payee-$action", budgetId, payeeId, name, targetPayeeId, categoryId),
+            idempotencyKeyOverride,
         ) { idempotencyKey ->
             withGeneratedApi {
                 requireOk(
