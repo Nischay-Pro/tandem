@@ -2004,6 +2004,37 @@ describe("budget maintenance routes", () => {
     await fake.app.close();
   });
 
+  it("does not replay a schedule action for a different displayed occurrence", async () => {
+    const fake = await createApi();
+    const request = (expectedNextDate: string) =>
+      fake.app.inject({
+        method: "POST" as const,
+        url: `/api/v1/budgets/${budgetId}/schedules/schedule-1/actions`,
+        headers: {
+          ...testHeaders(),
+          "idempotency-key": "schedule-post-occurrence",
+        },
+        payload: { action: "post", expectedNextDate },
+      });
+
+    const firstOccurrence = await request("2026-11-15");
+    const differentOccurrence = await request("2026-12-15");
+
+    expect(firstOccurrence.statusCode).toBe(200);
+    expect(differentOccurrence.statusCode).toBe(409);
+    expect(differentOccurrence.json().error.code).toBe(
+      "idempotency_key_reused",
+    );
+    expect(fake.budgetMaintenanceApi.postSchedule).toHaveBeenCalledOnce();
+    expect(fake.budgetMaintenanceApi.postSchedule).toHaveBeenCalledWith(
+      budgetId,
+      "schedule-1",
+      "2026-11-15",
+      undefined,
+    );
+    await fake.app.close();
+  });
+
   it("requires a valid expected date for post and skip actions", async () => {
     const fake = await createApi();
     const path = `/api/v1/budgets/${budgetId}/schedules/schedule-1/actions`;

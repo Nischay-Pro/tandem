@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { pools, applyMigrations } = vi.hoisted(() => ({
+const { pools, ensureSchema } = vi.hoisted(() => ({
   pools: [] as FakePool[],
-  applyMigrations: vi.fn(),
+  ensureSchema: vi.fn(),
 }));
 
 vi.mock("pg", () => ({
@@ -26,7 +26,7 @@ vi.mock("pg", () => ({
   },
 }));
 
-vi.mock("../src/schema/migrator.js", () => ({ applyMigrations }));
+vi.mock("../src/schema/bootstrap.js", () => ({ ensureSchema }));
 
 import { createPostgresDatabase } from "../src/database.js";
 import { InMemoryBudgetProjectionStore } from "../src/budget-projection/in-memory-budget-projection-store.js";
@@ -34,10 +34,10 @@ import { InMemoryBudgetProjectionStore } from "../src/budget-projection/in-memor
 describe("PostgreSQL database wiring", () => {
   beforeEach(() => {
     pools.length = 0;
-    applyMigrations.mockReset();
+    ensureSchema.mockReset();
   });
 
-  it("shares readiness checks, migrates, locks, and closes both pools", async () => {
+  it("shares readiness checks, initializes schema, locks, and closes both pools", async () => {
     const database = createPostgresDatabase("postgres://test/db", "test-key");
     const applicationPool = pools[0]!;
     const readinessPool = pools[1]!;
@@ -64,8 +64,8 @@ describe("PostgreSQL database wiring", () => {
     expect(readinessPool.connect).toHaveBeenCalledTimes(2);
     expect(readinessPool.clientQuery).toHaveBeenCalledTimes(8);
 
-    await database.migrate();
-    expect(applyMigrations).toHaveBeenCalledWith(applicationPool);
+    await database.ensureSchema();
+    expect(ensureSchema).toHaveBeenCalledWith(applicationPool);
 
     await expect(
       database.withBudgetLock("budget-one", async () => "locked"),

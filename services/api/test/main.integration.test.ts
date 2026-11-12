@@ -688,7 +688,7 @@ describe("API bootstrap integration", () => {
       const database = {
         ping: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
         close: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
-        migrate: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+        ensureSchema: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
         journal: {
           expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
         },
@@ -733,14 +733,14 @@ describe("API bootstrap integration", () => {
     }
   });
 
-  it("logs the safe migration-history diagnostic from a production startup failure", async () => {
+  it("preserves an incompatible pre-release schema on startup failure", async () => {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) {
       throw new Error(
         "DATABASE_URL is required; run this test with docker compose",
       );
     }
-    const schemaName = `main_migration_failure_${randomUUID().replaceAll("-", "")}`;
+    const schemaName = `main_schema_mismatch_${randomUUID().replaceAll("-", "")}`;
     await adminPool.query(`CREATE SCHEMA ${schemaName}`);
     const isolatedUrl = new URL(connectionString);
     isolatedUrl.searchParams.set("options", `-c search_path=${schemaName}`);
@@ -753,14 +753,13 @@ describe("API bootstrap integration", () => {
       .mockImplementation(() => {});
 
     try {
-      await isolatedPool.query(`CREATE TABLE tandem_migrations (
-        position integer PRIMARY KEY CHECK (position > 0),
-        name text NOT NULL UNIQUE,
-        applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
+      await isolatedPool.query(`CREATE TABLE tandem_devices (
+        device_id uuid PRIMARY KEY,
+        preserved_marker text NOT NULL
       )`);
       await isolatedPool.query(
-        "INSERT INTO tandem_migrations (position, name) VALUES (1, $1)",
-        ["20261101000000-older-schema"],
+        "INSERT INTO tandem_devices (device_id, preserved_marker) VALUES ($1, $2)",
+        [randomUUID(), "keep-this-row"],
       );
 
       const port = await findAvailablePort();
@@ -780,10 +779,14 @@ describe("API bootstrap integration", () => {
 
       expect(error).toBeInstanceOf(OperatorMessageError);
       expect(consoleError).toHaveBeenCalledWith("API startup failed", {
-        message: expect.stringContaining(
-          "Tandem migration history mismatch at position 1: expected 20261101000000-initial-schema, found 20261101000000-older-schema",
-        ),
+        message: expect.stringContaining("does not match this 0.1.0 schema"),
       });
+      const preservedRows = await isolatedPool.query<{
+        preserved_marker: string;
+      }>("SELECT preserved_marker FROM tandem_devices");
+      expect(preservedRows.rows).toEqual([
+        { preserved_marker: "keep-this-row" },
+      ]);
     } finally {
       vi.restoreAllMocks();
       await isolatedPool.end();
@@ -815,7 +818,7 @@ describe("API bootstrap integration", () => {
     const database = {
       ping: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
       close: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
-      migrate: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      ensureSchema: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
       journal: {
         expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
       },

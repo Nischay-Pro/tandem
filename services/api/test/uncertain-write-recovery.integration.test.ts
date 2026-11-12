@@ -337,7 +337,7 @@ describe("uncertain transaction recovery through the API", () => {
       max: 2,
       options: searchPath,
     });
-    await database.migrate();
+    await database.ensureSchema();
   }, 30_000);
 
   afterAll(async () => {

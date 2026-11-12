@@ -62,7 +62,7 @@ describe("transaction request validation integration", () => {
       process.env.AUTH_TOKEN_ENCRYPTION_KEY ??
         "5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c",
     );
-    await database.migrate();
+    await database.ensureSchema();
   }, 30_000);
 
   afterAll(async () => {

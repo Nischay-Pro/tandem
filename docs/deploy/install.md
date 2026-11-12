@@ -211,7 +211,7 @@ write to its volume and checks free space on the Actual workspace volume.
 PostgreSQL has its own `pg_isready` check. Compose starts the API after
 PostgreSQL is healthy, restarts failed services, gives the API 45 seconds to
 shut down, and uses its init process to forward container signals. API startup
-runs and validates migrations before listening. Unknown database or driver
+runs the idempotent schema bootstrap before listening. Unknown database or driver
 startup failures are logged by error type only. Unexpected request exceptions
 use a fixed error response and are logged with a safe error type. API request
 logs also include the request ID, method, route template, status, duration, and

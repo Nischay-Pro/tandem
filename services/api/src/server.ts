@@ -52,7 +52,7 @@ export async function startApiServer(
   const leaseReaper = new WriteLeaseReaper(database.journal);
 
   try {
-    await database.migrate();
+    await database.ensureSchema();
     await leaseReaper.start();
     startupPhase = "actual";
     await runtime.start?.();

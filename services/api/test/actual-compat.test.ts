@@ -153,7 +153,7 @@ describe.skipIf(!compatibilityTestEnabled)(
         isolatedUrl.toString(),
         authTokenEncryptionKey,
       );
-      await database.migrate();
+      await database.ensureSchema();
     }, 30_000);
 
     afterAll(async () => {

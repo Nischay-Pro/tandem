@@ -4,7 +4,7 @@ import { PostgresDeviceAuthStore } from "./auth/postgres-device-auth-store.js";
 import { PostgresActualSessionVault } from "./auth/actual-session-vault.js";
 import { READINESS_TIMEOUT_MS } from "./config.js";
 import { withBudgetLock } from "./database/budget-lock.js";
-import { applyMigrations } from "./schema/migrator.js";
+import { ensureSchema as bootstrapSchema } from "./schema/bootstrap.js";
 import { InMemoryBudgetProjectionStore } from "./budget-projection/in-memory-budget-projection-store.js";
 import type { BudgetProjectionStore } from "./budget-projection/contracts.js";
 import type { DurableWriteJournal } from "./write-journal/contracts.js";
@@ -26,7 +26,7 @@ export interface ServerDatabase extends HealthDatabase {
     PostgresActualSessionVault,
     "save" | "readLatest" | "read"
   >;
-  migrate(): Promise<void>;
+  ensureSchema(): Promise<void>;
 }
 
 export interface Database extends ServerDatabase {
@@ -103,8 +103,8 @@ export function createPostgresDatabase(
     async close() {
       await Promise.all([pool.end(), readinessPool.end()]);
     },
-    async migrate() {
-      await applyMigrations(pool);
+    async ensureSchema() {
+      await bootstrapSchema(pool);
       await actualSessionVault.reencryptStoredTokensWithCurrentKey();
     },
     journal,

@@ -42,7 +42,7 @@ describe("API server lifecycle integration", () => {
     const database: ServerDatabase = {
       ping: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
       close,
-      migrate: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      ensureSchema: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
       journal: { expireLeases },
       deviceAuth,
     };
@@ -75,7 +75,7 @@ describe("API server lifecycle integration", () => {
     const database: ServerDatabase = {
       ping: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
       close: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
-      migrate: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      ensureSchema: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
       journal: {
         expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
       },
@@ -103,7 +103,7 @@ describe("API server lifecycle integration", () => {
     const database: ServerDatabase = {
       ping: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
       close: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
-      migrate: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      ensureSchema: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
       journal: { expireLeases },
       deviceAuth,
     };
@@ -133,7 +133,7 @@ describe("API server lifecycle integration", () => {
     const database: ServerDatabase = {
       ping: vi.fn<() => Promise<void>>(),
       close,
-      migrate: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      ensureSchema: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
       journal: { expireLeases },
       deviceAuth,
     };
@@ -155,7 +155,7 @@ describe("API server lifecycle integration", () => {
     const database: ServerDatabase = {
       ping: vi.fn<() => Promise<void>>(),
       close,
-      migrate: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      ensureSchema: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
       journal: {
         expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
       },
@@ -176,7 +176,7 @@ describe("API server lifecycle integration", () => {
     const database: ServerDatabase = {
       ping: vi.fn<() => Promise<void>>(),
       close,
-      migrate: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      ensureSchema: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
       journal: {
         expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
       },
@@ -201,13 +201,13 @@ describe("API server lifecycle integration", () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
-  it("closes the database when startup migration fails", async () => {
-    const migrationError = new Error("synthetic migration failure");
+  it("closes the database when startup schema initialization fails", async () => {
+    const schemaError = new Error("synthetic schema setup failure");
     const close = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
     const database: ServerDatabase = {
       ping: vi.fn<() => Promise<void>>(),
       close,
-      migrate: vi.fn<() => Promise<void>>().mockRejectedValue(migrationError),
+      ensureSchema: vi.fn<() => Promise<void>>().mockRejectedValue(schemaError),
       journal: {
         expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
       },
@@ -220,10 +220,10 @@ describe("API server lifecycle integration", () => {
     };
 
     await expect(startApiServer(config, database, vi.fn())).rejects.toBe(
-      migrationError,
+      schemaError,
     );
-    expect(startupExitCodeFor(migrationError)).toBe(3);
-    expect(productionStartupExitCode(migrationError)).toBe(3);
+    expect(startupExitCodeFor(schemaError)).toBe(3);
+    expect(productionStartupExitCode(schemaError)).toBe(3);
     expect(close).toHaveBeenCalledOnce();
   });
 
@@ -233,7 +233,9 @@ describe("API server lifecycle integration", () => {
     const database: ServerDatabase = {
       ping: vi.fn<() => Promise<void>>(),
       close,
-      migrate: vi.fn<() => Promise<void>>().mockRejectedValue(startupFailure),
+      ensureSchema: vi
+        .fn<() => Promise<void>>()
+        .mockRejectedValue(startupFailure),
       journal: {
         expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
       },
@@ -263,7 +265,7 @@ describe("API server lifecycle integration", () => {
     const database: ServerDatabase = {
       ping: vi.fn<() => Promise<void>>(),
       close: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
-      migrate: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      ensureSchema: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
       journal: {
         expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
       },
@@ -301,7 +303,7 @@ describe("API server lifecycle integration", () => {
       close: vi
         .fn<() => Promise<void>>()
         .mockRejectedValue("synthetic database close failure"),
-      migrate: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      ensureSchema: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
       journal: {
         expireLeases: vi.fn<() => Promise<number>>().mockResolvedValue(0),
       },

@@ -13,13 +13,6 @@ import {
 } from "../src/actual/transaction-reconciliation.js";
 import type { ActualTransactionStore } from "../src/actual/transaction-store.js";
 import { createPostgresDatabase, type Database } from "../src/database.js";
-import {
-  MIGRATIONS,
-  applyMigrations,
-  readMigrationOrder,
-  validateMigrationOrder,
-  type Migration,
-} from "../src/schema/migrator.js";
 import type {
   ActualWriteEvidence,
   ConflictInput,
@@ -100,7 +93,7 @@ describe("durable write journal integration", () => {
       max: 3,
       options: searchPath,
     });
-    await database.migrate();
+    await database.ensureSchema();
   }, 30_000);
 
   afterAll(async () => {
@@ -110,15 +103,14 @@ describe("durable write journal integration", () => {
     await adminPool?.end();
   });
 
-  it("applies ordered schema migrations idempotently", async () => {
-    await database.migrate();
-    const order = await readMigrationOrder();
-    const result = await inspectionPool.query<{ count: string }>(
-      "SELECT count(*)::text AS count FROM tandem_migrations",
+  it("reuses the baseline schema without adding migration history", async () => {
+    await database.ensureSchema();
+    const tables = await inspectionPool.query<{ relation: string | null }>(
+      `SELECT to_regclass('tandem_devices')::text AS relation`,
     );
-    expect(order).toHaveLength(MIGRATIONS.length);
-    expect(order).toEqual(MIGRATIONS.map(({ name }) => name));
-    expect(result.rows[0]?.count).toBe(String(MIGRATIONS.length));
+    const history = await inspectionPool.query<{ relation: string | null }>(
+      `SELECT to_regclass('tandem_migrations')::text AS relation`,
+    );
     const retentionColumn = await inspectionPool.query<{
       found_column: string | null;
     }>(
@@ -127,242 +119,154 @@ describe("durable write journal integration", () => {
          AND table_name = 'tandem_operations'
          AND column_name = 'payload_compacted_at'`,
     );
+
+    expect(tables.rows[0]?.relation).toBe("tandem_devices");
+    expect(history.rows[0]?.relation).toBeNull();
     expect(retentionColumn.rows[0]?.found_column).toBe("payload_compacted_at");
   });
 
-  it("rejects an earlier pre-release identity without skipping the expanded schema", async () => {
+  it("preserves saved device rows and any pre-existing legacy history on restart", async () => {
+    const deviceId = randomUUID();
+    const historyName = `legacy-${randomUUID()}`;
+    await inspectionPool.query(
+      `INSERT INTO tandem_devices (device_id, principal_id, device_name, credential_hash, budget_ids)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        deviceId,
+        "schema-test",
+        "Schema test device",
+        "a".repeat(64),
+        ["budget-1"],
+      ],
+    );
+    await inspectionPool.query(`CREATE TABLE tandem_migrations (
+      position integer PRIMARY KEY,
+      name text NOT NULL UNIQUE,
+      applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
+    )`);
+    await inspectionPool.query(
+      "INSERT INTO tandem_migrations (position, name) VALUES (1, $1)",
+      [historyName],
+    );
+
+    await database.ensureSchema();
+
+    const devices = await inspectionPool.query<{
+      device_id: string;
+      device_name: string;
+    }>(
+      "SELECT device_id, device_name FROM tandem_devices WHERE device_id = $1",
+      [deviceId],
+    );
+    const history = await inspectionPool.query<{ name: string }>(
+      "SELECT name FROM tandem_migrations WHERE position = 1",
+    );
+    expect(devices.rows).toEqual([
+      { device_id: deviceId, device_name: "Schema test device" },
+    ]);
+    expect(history.rows).toEqual([{ name: historyName }]);
+  });
+
+  it("rejects a changed integrity constraint without discarding stored rows", async () => {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) {
-      throw new Error("Migration test configuration is incomplete");
+      throw new Error("DATABASE_URL is required to test an isolated schema");
     }
-    const schemaName = `migration_pre_release_${randomUUID().replaceAll("-", "")}`;
-    await inspectionPool.query(`CREATE SCHEMA ${schemaName}`);
+    const schemaName = `schema_constraint_${randomUUID().replaceAll("-", "")}`;
+    await adminPool.query(`CREATE SCHEMA ${schemaName}`);
+    const isolatedUrl = new URL(connectionString);
+    isolatedUrl.searchParams.set("options", `-c search_path=${schemaName}`);
     const isolatedPool = new Pool({
-      connectionString,
-      max: 2,
-      options: `-c search_path=${schemaName}`,
+      connectionString: isolatedUrl.toString(),
+      max: 1,
     });
-
-    try {
-      await isolatedPool.query(`CREATE TABLE tandem_migrations (
-        position integer PRIMARY KEY CHECK (position > 0),
-        name text NOT NULL UNIQUE,
-        applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
-      )`);
-      await isolatedPool.query(
-        "INSERT INTO tandem_migrations (position, name) VALUES (1, $1)",
-        ["20261031120000-durable-write-journal"],
-      );
-
-      await expect(applyMigrations(isolatedPool)).rejects.toThrow(
-        /pre-release Tandem database/i,
-      );
-      const tables = await isolatedPool.query<{
-        devices: string | null;
-        operations: string | null;
-      }>(`SELECT to_regclass('tandem_devices') AS devices,
-        to_regclass('tandem_operations') AS operations`);
-      expect(tables.rows[0]).toEqual({
-        devices: null,
-        operations: null,
-      });
-    } finally {
-      await isolatedPool.end();
-      await inspectionPool.query(`DROP SCHEMA ${schemaName} CASCADE`);
-    }
-  });
-
-  it("validates migration manifest ordering", async () => {
-    const migration = MIGRATIONS[0];
-    if (!migration) {
-      throw new Error("Migration test configuration is incomplete");
-    }
-    expect(() =>
-      validateMigrationOrder([migration], [migration.name]),
-    ).not.toThrow();
-    expect(() =>
-      validateMigrationOrder([migration, migration], [migration.name]),
-    ).toThrow("duplicate names");
-    expect(() =>
-      validateMigrationOrder([migration], [migration.name, migration.name]),
-    ).toThrow("ORDER contains duplicate");
-    expect(() => validateMigrationOrder([], [migration.name])).toThrow(
-      "do not match",
+    const isolatedDatabase = createPostgresDatabase(
+      isolatedUrl.toString(),
+      process.env.AUTH_TOKEN_ENCRYPTION_KEY ??
+        "5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c",
     );
-    expect(() => validateMigrationOrder([migration], ["unexpected"])).toThrow(
-      "ORDER mismatch",
-    );
-  });
-
-  it("runs and rolls back an ordered migration transactionally in an isolated schema", async () => {
-    const connectionString = process.env.DATABASE_URL;
-    if (!connectionString) {
-      throw new Error("DATABASE_URL disappeared during migration test");
-    }
-    const schemaName = `migration_test_${randomUUID().replaceAll("-", "")}`;
-    await inspectionPool.query(`CREATE SCHEMA ${schemaName}`);
-    const isolatedPool = new Pool({
-      connectionString,
-      max: 2,
-      options: `-c search_path=${schemaName}`,
-    });
-    const brokenMigration: Migration = {
-      name: "20261031120001-synthetic-rollback-probe",
-      async up(client) {
-        await client.query("CREATE TABLE tandem_rollback_probe (id integer)");
-        throw new Error("synthetic migration failure");
-      },
-      async down() {
-        await Promise.resolve();
-      },
-    };
+    const deviceId = randomUUID();
 
     try {
-      await expect(
-        applyMigrations(
-          isolatedPool,
-          [brokenMigration],
-          [brokenMigration.name],
-        ),
-      ).rejects.toThrow("synthetic migration failure");
-      const result = await isolatedPool.query<{ relation: string | null }>(
-        "SELECT to_regclass('tandem_rollback_probe') AS relation",
-      );
-      expect(result.rows[0]?.relation).toBeNull();
-      const history = await isolatedPool.query<{ count: string }>(
-        "SELECT count(*)::text AS count FROM tandem_migrations",
-      );
-      expect(history.rows[0]?.count).toBe("0");
-    } finally {
-      await isolatedPool.end();
-      await inspectionPool.query(`DROP SCHEMA ${schemaName} CASCADE`);
-    }
-  });
-
-  it("can reverse and reapply the single initial schema in an isolated schema", async () => {
-    const connectionString = process.env.DATABASE_URL;
-    const migration = MIGRATIONS[0];
-    if (!connectionString || !migration) {
-      throw new Error("Migration test configuration is incomplete");
-    }
-    const schemaName = `migration_revert_${randomUUID().replaceAll("-", "")}`;
-    await inspectionPool.query(`CREATE SCHEMA ${schemaName}`);
-    const isolatedPool = new Pool({
-      connectionString,
-      max: 2,
-      options: `-c search_path=${schemaName}`,
-    });
-
-    try {
-      await applyMigrations(isolatedPool, [migration], [migration.name]);
-      const before = await isolatedPool.query<{ relation: string | null }>(
-        "SELECT to_regclass('tandem_operations') AS relation",
-      );
-      expect(before.rows[0]?.relation).toBe("tandem_operations");
-      const deviceTable = await isolatedPool.query<{
-        relation: string | null;
-      }>("SELECT to_regclass('tandem_devices') AS relation");
-      const actualSessionTable = await isolatedPool.query<{
-        relation: string | null;
-      }>("SELECT to_regclass('tandem_actual_sessions') AS relation");
-      expect(deviceTable.rows[0]?.relation).toBe("tandem_devices");
-      expect(actualSessionTable.rows[0]?.relation).toBe(
-        "tandem_actual_sessions",
-      );
-
-      const client = await isolatedPool.connect();
-      try {
-        await client.query("BEGIN");
-        await migration.down(client);
-        await client.query("DELETE FROM tandem_migrations WHERE name = $1", [
-          migration.name,
-        ]);
-        await client.query("COMMIT");
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      } finally {
-        client.release();
-      }
-
-      const after = await isolatedPool.query<{ relation: string | null }>(
-        "SELECT to_regclass('tandem_operations') AS relation",
-      );
-      expect(after.rows[0]?.relation).toBeNull();
-      const afterDevice = await isolatedPool.query<{
-        relation: string | null;
-      }>("SELECT to_regclass('tandem_devices') AS relation");
-      const afterActualSession = await isolatedPool.query<{
-        relation: string | null;
-      }>("SELECT to_regclass('tandem_actual_sessions') AS relation");
-      expect(afterDevice.rows[0]?.relation).toBeNull();
-      expect(afterActualSession.rows[0]?.relation).toBeNull();
-      await applyMigrations(isolatedPool, [migration], [migration.name]);
-      const reapplied = await isolatedPool.query<{ relation: string | null }>(
-        "SELECT to_regclass('tandem_operations') AS relation",
-      );
-      expect(reapplied.rows[0]?.relation).toBe("tandem_operations");
-    } finally {
-      await isolatedPool.end();
-      await inspectionPool.query(`DROP SCHEMA ${schemaName} CASCADE`);
-    }
-  });
-
-  it("fails closed when stored migration history diverges from the ORDER manifest", async () => {
-    const connectionString = process.env.DATABASE_URL;
-    const migration = MIGRATIONS[0];
-    if (!connectionString || !migration) {
-      throw new Error("Migration test configuration is incomplete");
-    }
-    const schemaName = `migration_order_${randomUUID().replaceAll("-", "")}`;
-    await inspectionPool.query(`CREATE SCHEMA ${schemaName}`);
-    const isolatedPool = new Pool({
-      connectionString,
-      max: 2,
-      options: `-c search_path=${schemaName}`,
-    });
-
-    try {
-      await applyMigrations(isolatedPool, [migration], [migration.name]);
+      await isolatedDatabase.ensureSchema();
       await isolatedPool.query(
-        "UPDATE tandem_migrations SET name = 'unexpected-migration'",
+        `INSERT INTO tandem_devices (device_id, principal_id, device_name, credential_hash, budget_ids)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          deviceId,
+          "schema-test",
+          "Constraint test device",
+          "b".repeat(64),
+          ["budget-2"],
+        ],
       );
-      await expect(
-        applyMigrations(isolatedPool, [migration], [migration.name]),
-      ).rejects.toThrow("Tandem migration history mismatch");
+      await isolatedPool.query(
+        "ALTER TABLE tandem_devices DROP CONSTRAINT tandem_devices_credential_hash_check",
+      );
 
-      await isolatedPool.query("UPDATE tandem_migrations SET name = $1", [
-        "sensitive migration name",
+      await expect(isolatedDatabase.ensureSchema()).rejects.toThrow(
+        /missing or changed constraints: tandem_devices\.tandem_devices_credential_hash_check/i,
+      );
+      const preserved = await isolatedPool.query<{ device_name: string }>(
+        "SELECT device_name FROM tandem_devices WHERE device_id = $1",
+        [deviceId],
+      );
+      expect(preserved.rows).toEqual([
+        { device_name: "Constraint test device" },
       ]);
-      await expect(
-        applyMigrations(isolatedPool, [migration], [migration.name]),
-      ).rejects.toThrow("found [invalid migration name]");
-
-      await isolatedPool.query(
-        "UPDATE tandem_migrations SET name = $1, position = 2",
-        [migration.name],
-      );
-      await expect(
-        applyMigrations(isolatedPool, [migration], [migration.name]),
-      ).rejects.toThrow("Corrupted migrations");
-
-      await isolatedPool.query("UPDATE tandem_migrations SET position = 1");
-      await isolatedPool.query(
-        "INSERT INTO tandem_migrations (position, name) VALUES (2, 'stale-migration')",
-      );
-      await expect(
-        applyMigrations(isolatedPool, [migration], [migration.name]),
-      ).rejects.toThrow("Tandem database has migrations newer than this API");
-
-      await isolatedPool.query(
-        "UPDATE tandem_migrations SET position = 3 WHERE name = 'stale-migration'",
-      );
-      await expect(
-        applyMigrations(isolatedPool, [migration], [migration.name]),
-      ).rejects.toThrow("expected migration <end>");
     } finally {
+      await isolatedDatabase.close();
       await isolatedPool.end();
-      await inspectionPool.query(`DROP SCHEMA ${schemaName} CASCADE`);
+      await adminPool.query(`DROP SCHEMA ${schemaName} CASCADE`);
+    }
+  });
+
+  it("refuses a partial existing schema without changing its data", async () => {
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error("DATABASE_URL is required to test an isolated schema");
+    }
+    const schemaName = `schema_partial_${randomUUID().replaceAll("-", "")}`;
+    await adminPool.query(`CREATE SCHEMA ${schemaName}`);
+    const partialUrl = new URL(connectionString);
+    partialUrl.searchParams.set("options", `-c search_path=${schemaName}`);
+    const partialPool = new Pool({
+      connectionString: partialUrl.toString(),
+      max: 1,
+    });
+    const partialDatabase = createPostgresDatabase(
+      partialUrl.toString(),
+      process.env.AUTH_TOKEN_ENCRYPTION_KEY ??
+        "5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c",
+    );
+    const deviceId = randomUUID();
+
+    try {
+      await partialPool.query(`CREATE TABLE tandem_devices (
+        device_id uuid PRIMARY KEY,
+        marker text NOT NULL
+      )`);
+      await partialPool.query(
+        "INSERT INTO tandem_devices (device_id, marker) VALUES ($1, $2)",
+        [deviceId, "preserve-this-row"],
+      );
+
+      await expect(partialDatabase.ensureSchema()).rejects.toThrow(
+        /does not match this 0\.1\.0 schema.*No data was changed/i,
+      );
+      const preserved = await partialPool.query<{ marker: string }>(
+        "SELECT marker FROM tandem_devices WHERE device_id = $1",
+        [deviceId],
+      );
+      const missing = await partialPool.query<{ relation: string | null }>(
+        `SELECT to_regclass('tandem_operations')::text AS relation`,
+      );
+      expect(preserved.rows).toEqual([{ marker: "preserve-this-row" }]);
+      expect(missing.rows[0]?.relation).toBeNull();
+    } finally {
+      await partialDatabase.close();
+      await partialPool.end();
+      await adminPool.query(`DROP SCHEMA ${schemaName} CASCADE`);
     }
   });
 

@@ -203,7 +203,7 @@ describe("PostgresActualSessionVault", () => {
     ).resolves.toEqual(credential);
   });
 
-  it("reads legacy raw ciphertext so the key identifier needs no database migration", async () => {
+  it("reads legacy raw ciphertext without changing the stored schema", async () => {
     const store = createVaultPool();
     const credential = {
       principalId: "actual-user:legacy-envelope",

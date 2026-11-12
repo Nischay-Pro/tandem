@@ -212,12 +212,12 @@ operational data and do not publish them with user-facing diagnostics.
 
 Startup failures use distinct process exit codes:
 
-| Exit code | Meaning                                                              |
-| --------- | -------------------------------------------------------------------- |
-| `1`       | Unexpected API startup, listener, or shutdown failure.               |
-| `2`       | Invalid configuration.                                               |
-| `3`       | PostgreSQL connection, migration, or write-journal recovery failure. |
-| `4`       | Actual Budget session startup failure.                               |
+| Exit code | Meaning                                                                 |
+| --------- | ----------------------------------------------------------------------- |
+| `1`       | Unexpected API startup, listener, or shutdown failure.                  |
+| `2`       | Invalid configuration.                                                  |
+| `3`       | PostgreSQL connection, schema setup, or write-journal recovery failure. |
+| `4`       | Actual Budget session startup failure.                                  |
 
 The budget snapshot and change endpoints use the same device scope and may also
 receive `X-Budget-Encryption-Password` for an encrypted budget. Actual's public

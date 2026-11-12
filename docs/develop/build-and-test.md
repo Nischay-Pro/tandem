@@ -10,8 +10,8 @@ docker compose -f docker-compose.dev.yml --profile test run --build --rm integra
 
 The integration-test profile runs formatting, lint, typecheck, and API tests against PostgreSQL. Coverage enforces 100% lines, statements, functions, and branches for API source. Use a disposable PostgreSQL database with synthetic data only.
 
-Startup diagnostics include application-controlled configuration and migration
-history messages. PostgreSQL driver failures and other unknown errors log only
+Startup diagnostics include application-controlled configuration and schema
+compatibility messages. PostgreSQL driver failures and other unknown errors log only
 their error type so connection details and credentials are not copied into logs.
 
 GitHub Actions runs the same Compose quality gate for pushes and pull requests with read-only repository permissions.
@@ -121,21 +121,17 @@ clean `mobile/` tree so its compilation checks match the source in the pushed
 commit. The hooks detect common Android SDK install locations; set
 `ANDROID_HOME` if yours is elsewhere.
 
-## Database migrations
+## Database schema
 
-The current unreleased point release has one timestamped migration in
-`services/api/src/schema/migrations/`, listed in that directory's `ORDER`
-manifest. It has explicit `up` and `down` functions, runs transactionally at API
-startup, and the migrator rejects database history that does not match the
-manifest. Migration changes must include PostgreSQL integration coverage and
-keep the manifest and registered migration list in sync. The migration is
-copied into the compiled output by the API build so startup behavior is the same
-in development and production. Because this release is still unreleased, the
-current migration identity was changed when its schema expanded. A database
-from the earlier pre-release identity now fails startup with an explicit history
-mismatch; use a compatible build or recreate that pre-release Tandem
-database. The service never silently treats changed migration contents as
-already applied.
+Tandem 0.1.0 uses one idempotent schema bootstrap at API startup. Fresh
+databases receive the current tables and indexes; the service does not create a
+schema-version table or run versioned migration scripts. On later starts, it
+checks that existing Tandem tables have the expected columns and types, then
+reuses them without dropping, renaming, or altering populated tables. If an
+existing pre-release database is incomplete or incompatible, startup stops
+with a message that no data was changed. Back up the database before changing
+API versions, and keep the backup until the new version is confirmed healthy.
+Schema behavior is tested against disposable PostgreSQL schemas.
 
 ## Journal data sensitivity
 

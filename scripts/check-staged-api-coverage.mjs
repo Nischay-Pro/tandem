@@ -46,6 +46,46 @@ for (const source of stagedSources) {
     continue;
   }
 
+  if (modulePath === "src/schema/bootstrap.ts") {
+    const integrationTests = matchingTests.filter((file) =>
+      file.endsWith(".integration.test.ts"),
+    );
+    if (integrationTests.length === 0) {
+      throw new Error(
+        "Schema bootstrap changes require a PostgreSQL integration test",
+      );
+    }
+    for (const test of matchingTests)
+      assertNoUnstagedChange(`services/api/${test}`);
+
+    if (!process.env.DATABASE_URL) {
+      process.stdout.write(
+        "API coverage: schema bootstrap is covered by PostgreSQL integration tests in CI; set DATABASE_URL to run them locally.\n",
+      );
+      continue;
+    }
+
+    process.stdout.write(
+      `API coverage: checking ${modulePath} with the database-backed suite\n`,
+    );
+    const relativeTests = matchingTests.map((file) =>
+      path.relative(apiRoot, file),
+    );
+    const result = spawnSync(
+      vitest,
+      [
+        "run",
+        "--coverage.enabled",
+        `--coverage.include=${modulePath}`,
+        ...relativeTests,
+      ],
+      { cwd: apiRoot, stdio: "inherit" },
+    );
+    if (result.error) throw result.error;
+    if (result.status !== 0) process.exit(result.status ?? 1);
+    continue;
+  }
+
   if (modulePath === "src/write-journal/postgres-write-journal.ts") {
     const integrationTests = matchingTests.filter((file) =>
       file.endsWith(".integration.test.ts"),

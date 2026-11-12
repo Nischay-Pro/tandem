@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createPostgresDatabase } from "../src/database.js";
 import { withBudgetLock } from "../src/database/budget-lock.js";
-import { applyMigrations, MIGRATIONS } from "../src/schema/migrator.js";
 import { Pool as PostgresPool } from "pg";
 import type { Pool } from "pg";
 
@@ -271,77 +270,5 @@ describe("PostgreSQL connection integration", () => {
       withBudgetLock(pool, "synthetic-budget", async () => "completed"),
     ).rejects.toThrow("Could not confirm release of the budget advisory lock");
     expect(release).toHaveBeenCalledWith(true);
-  });
-
-  it("releases the migration connection when the advisory lock cannot be acquired", async () => {
-    const lockError = new Error("synthetic migration lock failure");
-    const query = vi.fn().mockRejectedValue(lockError);
-    const release = vi.fn();
-    const pool = {
-      connect: vi.fn().mockResolvedValue({ query, release }),
-    } as unknown as Pool;
-    const migrationName = MIGRATIONS[0]?.name;
-    if (!migrationName) {
-      throw new Error("Expected at least one ordered schema migration");
-    }
-
-    await expect(
-      applyMigrations(
-        pool,
-        MIGRATIONS,
-        MIGRATIONS.map(({ name }) => name),
-      ),
-    ).rejects.toBe(lockError);
-    expect(query).toHaveBeenCalledOnce();
-    expect(release).toHaveBeenCalledWith(true);
-  });
-
-  it("destroys the migration connection when lock release is not confirmed", async () => {
-    const query = vi.fn().mockImplementation(async (sql: string) => {
-      if (sql.includes("pg_advisory_unlock")) {
-        return { rows: [{ unlocked: false }], rowCount: 1 };
-      }
-      if (sql.includes("SELECT position")) {
-        return { rows: [], rowCount: 0 };
-      }
-      return { rows: [], rowCount: 1 };
-    });
-    const release = vi.fn();
-    const pool = {
-      connect: vi.fn().mockResolvedValue({ query, release }),
-    } as unknown as Pool;
-
-    await expect(applyMigrations(pool, [], [])).rejects.toThrow(
-      "Could not confirm release of the migration advisory lock",
-    );
-    expect(release).toHaveBeenCalledWith(true);
-  });
-
-  it("preserves a migration error and reports lock cleanup failure separately", async () => {
-    const primaryError = new Error("migration inspection failed");
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
-    const query = vi.fn().mockImplementation(async (sql: string) => {
-      if (sql.includes("SELECT position")) {
-        throw primaryError;
-      }
-      if (sql.includes("pg_advisory_unlock")) {
-        return { rows: [{ unlocked: false }], rowCount: 1 };
-      }
-      return { rows: [], rowCount: 1 };
-    });
-    const release = vi.fn();
-    const pool = {
-      connect: vi.fn().mockResolvedValue({ query, release }),
-    } as unknown as Pool;
-
-    await expect(applyMigrations(pool, [], [])).rejects.toBe(primaryError);
-    expect(consoleError).toHaveBeenCalledWith("Migration cleanup also failed", {
-      primaryError: "Error",
-      cleanupError: "Error",
-    });
-    expect(release).toHaveBeenCalledWith(true);
-    consoleError.mockRestore();
   });
 });

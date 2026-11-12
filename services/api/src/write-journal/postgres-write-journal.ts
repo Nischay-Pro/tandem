@@ -710,7 +710,7 @@ async function selectOperation(
 
 function mapOperation(row: OperationRow): WriteOperation {
   // For uncertain rows, actual_result stores the tagged write receipt in the
-  // existing JSON column so this point release does not add a migration.
+  // existing JSON column so this point release needs no additional schema change.
   const writeEvidence =
     row.status === "uncertain" ? parseWriteEvidence(row.actual_result) : null;
   return {

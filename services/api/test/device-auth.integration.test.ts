@@ -5,7 +5,7 @@ import type { Pool as PoolType } from "pg";
 import { DeviceAuthorization, hashSecret } from "../src/auth/device-auth.js";
 import { PostgresActualSessionVault } from "../src/auth/actual-session-vault.js";
 import { PostgresDeviceAuthStore } from "../src/auth/postgres-device-auth-store.js";
-import { MIGRATIONS, applyMigrations } from "../src/schema/migrator.js";
+import { ensureSchema } from "../src/schema/bootstrap.js";
 
 let pool: PoolType | undefined;
 let adminPool: PoolType | undefined;
@@ -30,7 +30,7 @@ describe("PostgreSQL authentication integration", () => {
       max: 4,
       options: `-c search_path=${schemaName}`,
     });
-    await applyMigrations(pool, MIGRATIONS);
+    await ensureSchema(pool);
     authorization = new DeviceAuthorization(new PostgresDeviceAuthStore(pool));
   }, 30_000);
 
@@ -101,11 +101,7 @@ describe("PostgreSQL authentication integration", () => {
     ).rejects.toThrow();
   });
 
-  it("creates only the consolidated initial database schema", async () => {
-    const migrations = await pool!.query<{ count: string }>(
-      "SELECT count(*)::text AS count FROM tandem_migrations",
-    );
-    expect(migrations.rows[0]?.count).toBe("1");
+  it("creates the schema without a migration-history table", async () => {
     const tables = await pool!.query<{
       devices: string | null;
       actual_sessions: string | null;
@@ -116,5 +112,9 @@ describe("PostgreSQL authentication integration", () => {
       devices: "tandem_devices",
       actual_sessions: "tandem_actual_sessions",
     });
+    const history = await pool!.query<{ table_name: string | null }>(
+      "SELECT to_regclass('tandem_migrations')::text AS table_name",
+    );
+    expect(history.rows[0]?.table_name).toBeNull();
   });
 });
