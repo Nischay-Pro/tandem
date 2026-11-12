@@ -703,7 +703,10 @@ class LocalBudgetRepositoryTest {
                     BUDGET,
                     GENERATION,
                     "c1",
-                    listOf(transaction(recordId = "txn-payee", payeeId = "temporary-payee")),
+                    listOf(
+                        transaction(recordId = "txn-payee", payeeId = "temporary-payee"),
+                        transaction(recordId = "txn-other-payee", payeeId = "other-payee"),
+                    ),
                 )
                 repository.enqueueWrite(
                     updateRequest(
@@ -723,6 +726,24 @@ class LocalBudgetRepositoryTest {
                             ),
                     ),
                 )
+                repository.enqueueWrite(
+                    updateRequest(
+                        operationId = "op-other-payee",
+                        idempotencyKey = "key-other-payee",
+                        recordId = "txn-other-payee",
+                        patch = """{"payee":"other-payee"}""",
+                        optimistic = """{"id":"txn-other-payee","amount":1200,"payee":"other-payee"}""",
+                        projection =
+                            LocalRecordProjection(
+                                recordDate = "2026-10-01",
+                                accountId = "checking",
+                                categoryId = "food",
+                                payeeId = "other-payee",
+                                amountMinor = 1200L,
+                                budgetMonth = null,
+                            ),
+                    ),
+                )
 
                 assertEquals(1, repository.remapPendingPayeeReferences(BUDGET, "temporary-payee", "actual-payee"))
 
@@ -732,6 +753,30 @@ class LocalBudgetRepositoryTest {
                 assertEquals("""{"id":"txn-payee","amount":1200,"payee":"actual-payee"}""", remapped.optimisticJson)
                 assertEquals("actual-payee", remapped.optimisticPayeeId)
                 assertEquals("actual-payee", repository.findRecord(BUDGET, "transaction", "txn-payee")?.payeeId)
+                assertEquals("other-payee", repository.findWrite("op-other-payee")?.optimisticPayeeId)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun saveLocalPayeeCreatesAndUpdatesTheLocalPayeeRecord() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 200L }
+
+                repository.saveLocalPayee(BUDGET, "temporary-payee", "Corner Market")
+                val created = assertNotNull(repository.findRecord(BUDGET, "payee", "temporary-payee"))
+                assertEquals("{\"id\":\"temporary-payee\",\"name\":\"Corner Market\"}", created.localJson)
+                assertEquals("Corner Market", created.displayName)
+                assertFalse(created.localDeleted)
+                assertFalse(created.remoteDeleted)
+
+                repository.saveLocalPayee(BUDGET, "temporary-payee", "Corner Market Grocery")
+                val updated = assertNotNull(repository.findRecord(BUDGET, "payee", "temporary-payee"))
+                assertEquals("{\"id\":\"temporary-payee\",\"name\":\"Corner Market Grocery\"}", updated.localJson)
+                assertEquals("Corner Market Grocery", updated.displayName)
             } finally {
                 database.close()
             }
