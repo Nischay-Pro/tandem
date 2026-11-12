@@ -432,6 +432,13 @@ export function checkVersions(repoRoot = root) {
     ],
     [
       "docs/develop/toolchain.md",
+      "Android module SDK targets",
+      /Android \(compileSdk\s+(\d+),\s*minSdk\s+(\d+)\)/i,
+      versions.compileSdk,
+      versions.minSdk,
+    ],
+    [
+      "docs/develop/toolchain.md",
       "Android SDK",
       /Android compile SDK:\s*(\d+),\s*minSdk:\s*(\d+)/i,
       versions.compileSdk,

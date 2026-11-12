@@ -14,7 +14,7 @@ available budgets, perform the initial local sync, and display recent
 transactions from the local database. The persistence and sync lifecycle are
 documented in [offline sync and conflict handling](../using/offline-sync-and-conflicts.md).
 
-The module targets Android (minSdk 26, compileSdk 36) and iOS (device ARM64 and
+The module targets Android (compileSdk 37, minSdk 26) and iOS (device ARM64 and
 Apple Silicon simulator). The pinned generator's stable release does
 not publish an Intel iOS simulator variant, so the client does not declare that
 target. iOS framework compilation and Xcode integration run on macOS; a Linux

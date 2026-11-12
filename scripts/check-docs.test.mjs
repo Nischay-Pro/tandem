@@ -145,6 +145,34 @@ test("accepts source-aligned versions and reports stale or missing versions", ()
   );
 });
 
+test("checks inline Android SDK targets as well as the toolchain summary", () => {
+  const pattern = /Android \(compileSdk\s+(\d+),\s*minSdk\s+(\d+)\)/gi;
+  assert.deepEqual(
+    versionMentionErrors(
+      "toolchain.md",
+      "Android module SDK targets",
+      "The module targets Android (compileSdk 37, minSdk 26).",
+      pattern,
+      "37",
+      "26",
+    ),
+    [],
+  );
+  assert.deepEqual(
+    versionMentionErrors(
+      "toolchain.md",
+      "Android module SDK targets",
+      "Targets Android (compileSdk 37, minSdk 26), while another module uses Android (compileSdk 36, minSdk 26).",
+      pattern,
+      "37",
+      "26",
+    ),
+    [
+      "toolchain.md documents Android module SDK targets 36; source specifies 37.",
+    ],
+  );
+});
+
 test("flags retired terminology except in a history file", () => {
   const root = mkdtempSync(join(tmpdir(), "tandem-doc-terms-"));
   try {
