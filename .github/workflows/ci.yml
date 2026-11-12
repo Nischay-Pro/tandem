@@ -486,7 +486,7 @@ jobs:
           }
           EOF
           docker run --rm \
-            --add-host api:127.0.0.1 \
+            --add-host tandem-api:127.0.0.1 \
             --add-host actual-server:127.0.0.1 \
             -v "$GITHUB_WORKSPACE/deploy/nginx:/validation:ro" \
             -v "$RUNNER_TEMP/tandem-nginx-validation/nginx.conf:/tmp/nginx.conf:ro" \
