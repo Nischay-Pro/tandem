@@ -422,32 +422,6 @@ jobs:
         if: always()
         run: docker compose -f docker-compose.dev.yml down --volumes --remove-orphans
 
-  storage-benchmark:
-    name: Non-blocking API storage benchmark
-    runs-on: ubuntu-26.04
-    continue-on-error: true
-    timeout-minutes: 10
-    steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Prepare writable test workspaces
-        run: mkdir -p .dev-tmp/actual/api-workspace .dev-tmp/postgres .dev-tmp/stryker
-
-      - name: Measure retained change-feed storage
-        run: >-
-          docker compose -f docker-compose.dev.yml --profile test run --build --rm
-          -e RUN_STORAGE_BENCHMARK=true integration-tests
-          pnpm --filter @tandem-for-actual/api exec vitest run
-          test/budget-projection.integration.test.ts
-          -t "reduces retained feed storage for 100,000 current transaction bodies"
-
-      - name: Stop test services
-        if: always()
-        run: docker compose -f docker-compose.dev.yml down --volumes --remove-orphans
-
   deployment:
     name: Production image and disposable deployment gate
     runs-on: ubuntu-26.04
