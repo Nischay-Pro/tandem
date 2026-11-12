@@ -148,6 +148,93 @@ class TandemMobileSessionTest {
         }
 
     @Test
+    fun transactionCanUseOfflinePayeeAndStaysQueuedUntilThatPayeeSyncs() =
+        runBlocking {
+            val database = newDatabase()
+            val serverUrl = "http://127.0.0.1:1"
+            try {
+                val preferences = AppPreferencesStore(database)
+                val repository = LocalBudgetRepository(database) { 1_000L }
+                repository.applyFullSnapshot(
+                    budgetId = "budget-1",
+                    generation = "generation-1",
+                    cursor = "cursor-1",
+                    expectedCheckpoint = null,
+                    records =
+                        listOf(
+                            RemoteBudgetRecord(
+                                budgetId = "budget-1",
+                                recordType = "account",
+                                recordId = "account-1",
+                                revision = "account-revision-1",
+                                bodyJson = """{"id":"account-1","name":"Checking","offbudget":false}""",
+                                generation = "generation-1",
+                            ),
+                            RemoteBudgetRecord(
+                                budgetId = "budget-1",
+                                recordType = "category-group",
+                                recordId = "group-1",
+                                revision = "group-revision-1",
+                                bodyJson = """{"id":"group-1","name":"Daily"}""",
+                                generation = "generation-1",
+                            ),
+                            RemoteBudgetRecord(
+                                budgetId = "budget-1",
+                                recordType = "category",
+                                recordId = "category-1",
+                                revision = "category-revision-1",
+                                bodyJson = """{"id":"category-1","name":"Groceries","group":"group-1"}""",
+                                generation = "generation-1",
+                            ),
+                        ),
+                )
+                preferences.putValue("internal:budget-cache-owner-v1", cacheOwner(serverUrl, "principal-old"))
+                val credentialStore = memoryCredentialStore(storedSession(serverUrl, "principal-old"))
+                val apiClient = TandemApiClient(allowInsecurePrivateNetwork = true)
+                val session =
+                    TandemMobileSession(
+                        apiClient,
+                        database,
+                        { 1_000L },
+                        credentialStore,
+                        currentDateIso = { "2026-11-12" },
+                    )
+
+                assertEquals(serverUrl, session.restoreStoredSession())
+                session.loadLocalRecords("budget-1")
+                val localPayeeId = session.createBudgetPayee("budget-1", "Corner Market", null)
+                assertNotNull(localPayeeId)
+
+                assertTrue(
+                    session.createTransaction(
+                        budgetId = "budget-1",
+                        accountId = "account-1",
+                        payeeId = localPayeeId,
+                        categoryId = "category-1",
+                        amountText = "12.50",
+                        dateText = "2026-11-12",
+                        notes = "Groceries",
+                        encryptionPassword = null,
+                    ),
+                )
+
+                val queuedTransaction = repository.readPendingWrites("budget-1").single { it.recordType == "transaction" }
+                assertEquals("queued", queuedTransaction.status)
+                assertEquals(localPayeeId, queuedTransaction.optimisticPayeeId)
+                assertEquals(localPayeeId, repository.findRecord("budget-1", "transaction", queuedTransaction.recordId)?.payeeId)
+                assertTrue(
+                    repository
+                        .readBudgetMutationQueue()
+                        .items
+                        .flatMap { decodeBudgetReorderQueue(it.patchJson).moves }
+                        .any { it.kind == BudgetReorderKind.CREATE_PAYEE && it.itemId == localPayeeId },
+                )
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun budgetAccountPayeeAmountAndStatementChangesQueueWithoutAConnection() =
         runBlocking {
             val database = newDatabase()

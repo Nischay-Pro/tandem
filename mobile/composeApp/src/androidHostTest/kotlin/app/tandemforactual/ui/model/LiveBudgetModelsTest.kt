@@ -173,6 +173,105 @@ class LiveBudgetModelsTest {
     }
 
     @Test
+    fun projectsQueuedOfflineBudgetChangesAndClearsPendingMarksAfterSync() {
+        val originalMonth =
+            record(
+                type = "budget-month",
+                id = "2026-11",
+                json =
+                    """{"month":"2026-11","toBudget":6000,"forNextMonth":0,"totalBudgeted":5000,"categoryGroups":[{"id":"home","categories":[{"id":"rent","budgeted":2500,"activity":-2000,"balance":500,"carryover":true},{"id":"groceries","budgeted":1500,"activity":-800,"balance":700,"carryover":false},{"id":"dining","budgeted":1000,"activity":-700,"balance":300,"carryover":false}]}]}""",
+            )
+        val categories =
+            listOf(
+                record(type = "category", id = "rent", name = "Rent"),
+                record(type = "category", id = "groceries", name = "Groceries"),
+                record(type = "category", id = "dining", name = "Dining"),
+            )
+        val groups = listOf(record(type = "category-group", id = "home", name = "Home"))
+        val queuedMoves =
+            listOf(
+                queuedBudgetMutation(
+                    BudgetReorderKind.SET_CATEGORY_AMOUNT,
+                    itemId = "groceries",
+                    payload = """{"month":"2026-11","amountMinor":2400}""",
+                ),
+                queuedBudgetMutation(
+                    BudgetReorderKind.SET_CATEGORY_CARRYOVER,
+                    itemId = "dining",
+                    payload = """{"month":"2026-11","enabled":true}""",
+                ),
+                queuedBudgetMutation(
+                    BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH,
+                    itemId = "2026-11",
+                    payload = """{"month":"2026-11","amountMinor":1200}""",
+                ),
+                queuedBudgetMutation(
+                    BudgetReorderKind.MOVE_BUDGET_MONEY,
+                    itemId = "groceries:dining",
+                    payload =
+                        """{"month":"2026-11","fromCategoryId":"groceries","toCategoryId":"dining","amountMinor":300}""",
+                ),
+            )
+        val offlineQueue =
+            queuedMoves.fold(BudgetReorderQueueState()) { queue, move ->
+                queue.enqueue(move)
+            }
+        val waitingQueue = offlineQueue.waitForConnection(queuedMoves.first(), "Tandem is unavailable")
+
+        val optimistic =
+            liveBudgetMonthSummary(
+                monthRecord = originalMonth,
+                categoryRecords = categories,
+                categoryGroupRecords = groups,
+                pendingBudgetMutations = waitingQueue.moves,
+            )
+        val projected = requireNotNull(optimistic)
+
+        assertTrue(waitingQueue.waitingForConnection)
+        assertEquals(5_100L, projected.toBudgetMinor)
+        assertEquals(5_900L, projected.totalBudgetedMinor)
+        assertEquals(1_200L, projected.heldForNextMonthMinor)
+        assertTrue(projected.heldForNextMonthPending)
+        val projectedCategories =
+            projected.groups
+                .single()
+                .categories
+                .associateBy { it.id }
+        assertEquals(2_100L, projectedCategories["groceries"]?.assignedMinor)
+        assertEquals(1_300L, projectedCategories["groceries"]?.balanceMinor)
+        assertEquals(1_300L, projectedCategories["dining"]?.assignedMinor)
+        assertEquals(600L, projectedCategories["dining"]?.balanceMinor)
+        assertTrue(projectedCategories["groceries"]?.pendingChanges == true)
+        assertTrue(projectedCategories["dining"]?.pendingChanges == true)
+        assertFalse(projectedCategories["rent"]?.pendingChanges == true)
+        assertTrue(projectedCategories["dining"]?.carryover == true)
+
+        val syncedMonth =
+            record(
+                type = "budget-month",
+                id = "2026-11",
+                json =
+                    """{"month":"2026-11","toBudget":5100,"forNextMonth":1200,"totalBudgeted":5900,"categoryGroups":[{"id":"home","categories":[{"id":"rent","budgeted":2500,"activity":-2000,"balance":500,"carryover":true},{"id":"groceries","budgeted":2100,"activity":-800,"balance":1300,"carryover":false},{"id":"dining","budgeted":1300,"activity":-700,"balance":600,"carryover":true}]}]}""",
+            )
+        val afterSync = liveBudgetMonthSummary(syncedMonth, categories, groups)
+        val synced = requireNotNull(afterSync)
+
+        assertEquals(projected.toBudgetMinor, synced.toBudgetMinor)
+        assertEquals(projected.heldForNextMonthMinor, synced.heldForNextMonthMinor)
+        assertFalse(synced.heldForNextMonthPending)
+        val projectedCategoryList =
+            projected.groups
+                .single()
+                .categories
+                .map { it.copy(pendingChanges = false) }
+        val syncedCategoryList = synced.groups.single().categories
+        assertEquals(
+            projectedCategoryList,
+            syncedCategoryList,
+        )
+    }
+
+    @Test
     fun hidesQueuedCategoryCreateWhenItHasAlsoBeenQueuedForDeletion() {
         val month =
             record(
@@ -356,6 +455,21 @@ private fun scheduleAction(
     lastErrorCode = null,
     createdAtEpochMs = 1L,
     updatedAtEpochMs = 1L,
+)
+
+private fun queuedBudgetMutation(
+    kind: BudgetReorderKind,
+    itemId: String,
+    payload: String,
+) = QueuedBudgetReorder(
+    budgetId = "budget",
+    scopeId = "budget-2026-11",
+    kind = kind,
+    itemId = itemId,
+    targetId = null,
+    desiredOrder = emptyList(),
+    encryptionPassword = null,
+    payloadJson = payload,
 )
 
 private fun record(

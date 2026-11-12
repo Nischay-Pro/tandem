@@ -223,9 +223,9 @@ internal fun AccountDetailScreen(
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
-            statementImportPreviewError = error.userFacingMessage("Couldn’t check which rows are already in Actual. Try again.")
+            statementImportPreviewError = error.userFacingMessage(STATEMENT_IMPORT_CONNECTION_REQUIRED)
         } catch (_: Exception) {
-            statementImportPreviewError = "Couldn’t check which rows are already in Actual. Try again."
+            statementImportPreviewError = STATEMENT_IMPORT_CONNECTION_REQUIRED
         } finally {
             statementImportPreviewLoading = false
         }
@@ -546,7 +546,7 @@ internal fun StatementImportDialog(
                             )
                             ListRow("Already in Actual", trailing = preview.existingImportedIds.size.toString(), leading = RowLeading.None)
                         } else {
-                            InlineMessage("Duplicates will be checked when this device syncs.", InlineMessageKind.INFO)
+                            InlineMessage(STATEMENT_IMPORT_CONNECTION_REQUIRED, InlineMessageKind.ERROR)
                         }
                     }
                     if (result.skippedRows > 0) {
@@ -580,7 +580,7 @@ internal fun StatementImportDialog(
                         TandemActionButtonTone.PRIMARY,
                         modifier = Modifier.fillMaxWidth(),
                         icon = Lucide.Check,
-                        enabled = !busy && !state.readOnlyMode && importPreview != null && !importPreviewLoading,
+                        enabled = !busy && !state.readOnlyMode && importPreview?.serverChecked == true && !importPreviewLoading,
                         loading = busy,
                         onClick = { onImport(result) },
                     )
@@ -589,6 +589,9 @@ internal fun StatementImportDialog(
         }
     }
 }
+
+internal const val STATEMENT_IMPORT_CONNECTION_REQUIRED =
+    "Connect to Tandem to check for duplicates and import this statement."
 
 @Composable
 private fun StatementCsvColumnMappingEditor(

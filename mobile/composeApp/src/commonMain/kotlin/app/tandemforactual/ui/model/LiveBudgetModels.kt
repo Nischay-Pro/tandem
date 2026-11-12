@@ -2,6 +2,8 @@ package app.tandemforactual.ui.model
 
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.ui.BudgetReorderKind
+import app.tandemforactual.ui.QueuedBudgetReorder
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -30,6 +32,7 @@ internal data class LiveCategorySummary(
     val activityMinor: Long,
     val balanceMinor: Long,
     val carryover: Boolean = false,
+    val pendingChanges: Boolean = false,
 )
 
 internal data class PendingCategorySummary(
@@ -55,6 +58,7 @@ internal data class LiveBudgetMonthSummary(
     val totalSpentMinor: Long?,
     val groups: List<LiveCategoryGroupSummary>,
     val heldForNextMonthMinor: Long? = null,
+    val heldForNextMonthPending: Boolean = false,
 )
 
 internal data class LiveScheduleSummary(
@@ -147,11 +151,81 @@ internal fun liveBudgetMonthSummary(
     pendingCategories: List<PendingCategorySummary> = emptyList(),
     categoryBudgetOverrides: Map<String, Long> = emptyMap(),
     categoryCarryoverOverrides: Map<String, Boolean> = emptyMap(),
+    pendingBudgetMutations: List<QueuedBudgetReorder> = emptyList(),
 ): LiveBudgetMonthSummary? {
     monthRecord ?: return null
     val month = monthRecord.recordBody() ?: return null
     val categoryNames = categoryRecords.associate { it.recordId to (it.recordName() ?: it.recordId) }
     val groupNames = categoryGroupRecords.associate { it.recordId to (it.recordName() ?: it.recordId) }
+    val monthId = month.stringValue("month") ?: monthRecord.recordId
+    val matchingPlanMutations = pendingBudgetMutations.filter { it.isForBudgetMonth(monthId) }
+    val originalAssignments =
+        (month["categoryGroups"] as? JsonArray)
+            ?.flatMap { element ->
+                val group = element as? JsonObject ?: return@flatMap emptyList()
+                (group["categories"] as? JsonArray)
+                    ?.mapNotNull { categoryElement ->
+                        val category = categoryElement as? JsonObject ?: return@mapNotNull null
+                        val id = category.stringValue("id") ?: return@mapNotNull null
+                        id to (category.longValue("budgeted") ?: category.longValue("assigned") ?: 0L)
+                    }.orEmpty()
+            }.orEmpty()
+            .toMap()
+    val effectiveBudgetOverrides = categoryBudgetOverrides.toMutableMap()
+    val effectiveCarryoverOverrides = categoryCarryoverOverrides.toMutableMap()
+    val pendingCategoryIds = (categoryBudgetOverrides.keys + categoryCarryoverOverrides.keys).toMutableSet()
+    var heldForNextMonthOverride: Long? = null
+    var heldForNextMonthPending = false
+    if (matchingPlanMutations.isNotEmpty()) {
+        val replayedAssignments = originalAssignments.toMutableMap()
+        var replayedHold = month.longValue("forNextMonth")
+        matchingPlanMutations.forEach { move ->
+            val payload = move.payloadJson?.let(::parseQueuedBudgetPayload) ?: return@forEach
+            when (move.kind) {
+                BudgetReorderKind.SET_CATEGORY_AMOUNT -> {
+                    payload.longValue("amountMinor")?.let { amount ->
+                        replayedAssignments[move.itemId] = amount
+                        effectiveBudgetOverrides[move.itemId] = amount
+                        pendingCategoryIds += move.itemId
+                    }
+                }
+                BudgetReorderKind.APPLY_BUDGET_TEMPLATE -> {
+                    payload.assignmentEntries().forEach { (categoryId, amountMinor) ->
+                        replayedAssignments[categoryId] = amountMinor
+                        effectiveBudgetOverrides[categoryId] = amountMinor
+                        pendingCategoryIds += categoryId
+                    }
+                }
+                BudgetReorderKind.MOVE_BUDGET_MONEY -> {
+                    val fromCategoryId = payload.stringValue("fromCategoryId") ?: return@forEach
+                    val toCategoryId = payload.stringValue("toCategoryId") ?: return@forEach
+                    val amount = payload.longValue("amountMinor") ?: return@forEach
+                    replayedAssignments[fromCategoryId] = (replayedAssignments[fromCategoryId] ?: 0L) - amount
+                    replayedAssignments[toCategoryId] = (replayedAssignments[toCategoryId] ?: 0L) + amount
+                    effectiveBudgetOverrides[fromCategoryId] = replayedAssignments.getValue(fromCategoryId)
+                    effectiveBudgetOverrides[toCategoryId] = replayedAssignments.getValue(toCategoryId)
+                    pendingCategoryIds += fromCategoryId
+                    pendingCategoryIds += toCategoryId
+                }
+                BudgetReorderKind.SET_CATEGORY_CARRYOVER -> {
+                    payload.booleanValue("enabled")?.let { enabled ->
+                        effectiveCarryoverOverrides[move.itemId] = enabled
+                        pendingCategoryIds += move.itemId
+                    }
+                }
+                BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH -> {
+                    replayedHold = payload.longValue("amountMinor") ?: replayedHold
+                    heldForNextMonthPending = true
+                }
+                BudgetReorderKind.RESET_BUDGET_HOLD -> {
+                    replayedHold = 0L
+                    heldForNextMonthPending = true
+                }
+                else -> Unit
+            }
+        }
+        heldForNextMonthOverride = replayedHold
+    }
     var assignedDelta = 0L
     val groups =
         (month["categoryGroups"] as? JsonArray)
@@ -171,7 +245,7 @@ internal fun liveBudgetMonthSummary(
                             val isHidden = categoryVisibilityOverrides[categoryId] ?: category.booleanValue("hidden") ?: false
                             if (isHidden || category.booleanValue("deleted") == true) return@mapNotNull null
                             val originalAssigned = category.longValue("budgeted") ?: category.longValue("assigned") ?: 0
-                            val assigned = categoryBudgetOverrides[categoryId] ?: originalAssigned
+                            val assigned = effectiveBudgetOverrides[categoryId] ?: originalAssigned
                             assignedDelta += assigned - originalAssigned
                             val activity = category.longValue("activity") ?: category.longValue("spent") ?: 0
                             val originalBalance = category.longValue("balance") ?: (originalAssigned + activity)
@@ -183,7 +257,8 @@ internal fun liveBudgetMonthSummary(
                                 assignedMinor = assigned,
                                 activityMinor = activity,
                                 balanceMinor = originalBalance + (assigned - originalAssigned),
-                                carryover = categoryCarryoverOverrides[categoryId] ?: category.booleanValue("carryover") ?: false,
+                                carryover = effectiveCarryoverOverrides[categoryId] ?: category.booleanValue("carryover") ?: false,
+                                pendingChanges = categoryId in pendingCategoryIds,
                             )
                         }.orEmpty()
                 LiveCategoryGroupSummary(
@@ -276,6 +351,7 @@ internal fun liveBudgetMonthSummary(
                             activityMinor = activity,
                             balanceMinor = movedCategory?.balanceMinor ?: assigned + activity,
                             carryover = movedCategory?.carryover ?: body?.booleanValue("carryover") ?: false,
+                            pendingChanges = movedCategory?.pendingChanges ?: categoryId in pendingCategoryIds,
                         ),
             )
     }
@@ -294,9 +370,37 @@ internal fun liveBudgetMonthSummary(
         totalBudgetedMinor = month.longValue("totalBudgeted")?.plus(assignedDelta),
         totalSpentMinor = month.longValue("totalSpent"),
         groups = groupsWithPendingCategories,
-        heldForNextMonthMinor = month.longValue("forNextMonth"),
+        heldForNextMonthMinor = heldForNextMonthOverride ?: month.longValue("forNextMonth"),
+        heldForNextMonthPending = heldForNextMonthPending,
     )
 }
+
+private fun parseQueuedBudgetPayload(payload: String): JsonObject? =
+    runCatching { Json.parseToJsonElement(payload) as? JsonObject }.getOrNull()
+
+private val pendingBudgetPlanMutationKinds =
+    setOf(
+        BudgetReorderKind.SET_CATEGORY_AMOUNT,
+        BudgetReorderKind.SET_CATEGORY_CARRYOVER,
+        BudgetReorderKind.APPLY_BUDGET_TEMPLATE,
+        BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH,
+        BudgetReorderKind.RESET_BUDGET_HOLD,
+        BudgetReorderKind.MOVE_BUDGET_MONEY,
+    )
+
+private fun QueuedBudgetReorder.isForBudgetMonth(monthId: String): Boolean {
+    if (kind !in pendingBudgetPlanMutationKinds) return false
+    return payloadJson?.let(::parseQueuedBudgetPayload)?.stringValue("month") == monthId
+}
+
+private fun JsonObject.assignmentEntries(): List<Pair<String, Long>> =
+    (this["assignments"] as? JsonArray)
+        ?.mapNotNull { element ->
+            val assignment = element as? JsonObject ?: return@mapNotNull null
+            val categoryId = assignment.stringValue("categoryId") ?: return@mapNotNull null
+            val amountMinor = assignment.longValue("amountMinor") ?: return@mapNotNull null
+            categoryId to amountMinor
+        }.orEmpty()
 
 internal fun liveScheduleSummaries(
     scheduleRecords: List<BudgetRecordEntity>,

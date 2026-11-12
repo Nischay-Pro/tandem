@@ -67,6 +67,7 @@ import com.composables.icons.lucide.ChartNoAxesCombined
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
@@ -411,8 +412,21 @@ internal fun BudgetScreen(
                                             DividerLine()
                                             ListRow(
                                                 "Hold for next month",
-                                                trailing = state.formatCurrency(heldForNextMonthMinor),
                                                 leading = RowLeading.Icon(Lucide.CalendarDays),
+                                                trailingContent = {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+                                                    ) {
+                                                        if (liveBudgetMonth?.heldForNextMonthPending == true) PendingBudgetSyncIcon()
+                                                        Text(
+                                                            state.formatCurrency(heldForNextMonthMinor),
+                                                            color = palette.muted,
+                                                            fontSize = TandemTypography.compactBody,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                        )
+                                                    }
+                                                },
                                                 onClick = {
                                                     nextMonthHoldAmountMinor = readyToAssignMinor.coerceAtLeast(0)
                                                     holdCalculatorAccumulator = null
@@ -457,13 +471,27 @@ internal fun BudgetScreen(
                                             ListRow(
                                                 category.name,
                                                 group.name,
-                                                state.formatCurrency(category.balanceMinor),
                                                 leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
-                                            ) {
-                                                state.selectedCategoryGroupId = group.id
-                                                state.selectedCategoryId = category.id
-                                                navigation.open(AppRoute.CATEGORY_DETAIL)
-                                            }
+                                                trailingContent = {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+                                                    ) {
+                                                        if (category.pendingChanges) PendingBudgetSyncIcon()
+                                                        Text(
+                                                            state.formatCurrency(category.balanceMinor),
+                                                            color = palette.text,
+                                                            fontSize = TandemTypography.compactBody,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                        )
+                                                    }
+                                                },
+                                                onClick = {
+                                                    state.selectedCategoryGroupId = group.id
+                                                    state.selectedCategoryId = category.id
+                                                    navigation.open(AppRoute.CATEGORY_DETAIL)
+                                                },
+                                            )
                                         }
                                     }
                                 }
@@ -586,9 +614,13 @@ internal fun BudgetScreen(
                             SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
                                 ListRow(
                                     category.name,
-                                    "Assigned ${state.formatCurrency(category.assignedMinor)} · spent ${state.formatCurrency(
-                                        kotlin.math.abs(category.activityMinor),
-                                    )}",
+                                    buildString {
+                                        append("Assigned ")
+                                        append(state.formatCurrency(category.assignedMinor))
+                                        append(" · spent ")
+                                        append(state.formatCurrency(kotlin.math.abs(category.activityMinor)))
+                                        if (category.pendingChanges) append(" · Waiting to sync")
+                                    },
                                     leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
                                     options =
                                         ListRowOptions(
@@ -600,10 +632,16 @@ internal fun BudgetScreen(
                                         navigation.open(AppRoute.CATEGORY_DETAIL)
                                     },
                                     trailingContent = {
-                                        AvailableAmountPill(
-                                            state.formatCurrency(category.balanceMinor),
-                                            isOverdrawn = category.balanceMinor < 0,
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+                                        ) {
+                                            if (category.pendingChanges) PendingBudgetSyncIcon()
+                                            AvailableAmountPill(
+                                                state.formatCurrency(category.balanceMinor),
+                                                isOverdrawn = category.balanceMinor < 0,
+                                            )
+                                        }
                                     },
                                 )
                             }
@@ -963,8 +1001,21 @@ internal fun BudgetScreen(
                     )
                     ListRow(
                         "Held",
-                        trailing = state.formatCurrency(heldForNextMonthMinor),
                         leading = RowLeading.Icon(Lucide.CalendarDays),
+                        trailingContent = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+                            ) {
+                                if (liveBudgetMonth?.heldForNextMonthPending == true) PendingBudgetSyncIcon()
+                                Text(
+                                    state.formatCurrency(heldForNextMonthMinor),
+                                    color = palette.muted,
+                                    fontSize = TandemTypography.compactBody,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+                        },
                     )
                     if (readyToAssignMinor < 0) {
                         InfoBubble("This month is overbudgeted. Move money back before holding it for next month.")
@@ -1156,4 +1207,14 @@ private fun MonthPickerDialog(
             }
         }
     }
+}
+
+@Composable
+private fun PendingBudgetSyncIcon() {
+    Icon(
+        imageVector = Lucide.CloudSync,
+        contentDescription = "Waiting to sync",
+        modifier = Modifier.size(18.dp),
+        tint = tandemPalette.accent,
+    )
 }

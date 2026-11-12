@@ -826,6 +826,7 @@ fun TandemApp(
     val deletedCategoryIds = mobileSession.deletedCategoryIdsFor(state.selectedBudgetId)
     val pendingCategoryGroups = mobileSession.pendingCategoryGroupCreatesFor(state.selectedBudgetId)
     val pendingCategories = mobileSession.pendingCategoryCreatesFor(state.selectedBudgetId)
+    val pendingBudgetMutations = mobileSession.pendingBudgetMutationsFor(state.selectedBudgetId)
     val categoryBudgetOverrides = mobileSession.pendingCategoryBudgetOverrides(state.selectedBudgetId, state.selectedMonthId)
     val categoryCarryoverOverrides = mobileSession.pendingCategoryCarryoverOverrides(state.selectedBudgetId, state.selectedMonthId)
     LaunchedEffect(
@@ -840,6 +841,7 @@ fun TandemApp(
         deletedCategoryIds,
         pendingCategoryGroups,
         pendingCategories,
+        pendingBudgetMutations,
         categoryBudgetOverrides,
         categoryCarryoverOverrides,
         state.selectedMonthId,
@@ -863,6 +865,7 @@ fun TandemApp(
                     pendingCategories,
                     categoryBudgetOverrides,
                     categoryCarryoverOverrides,
+                    pendingBudgetMutations,
                 )
             }
     }

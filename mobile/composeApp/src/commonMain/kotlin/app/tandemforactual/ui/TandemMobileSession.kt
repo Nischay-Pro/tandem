@@ -4407,7 +4407,12 @@ internal class TandemMobileSession(
                         ),
                 ),
             )
-            val summary = if (categoryIsPending) null else synchronize(budgetId, encryptionPassword)
+            val summary =
+                if (hasPendingTransactionDependency(budgetId)) {
+                    null
+                } else {
+                    synchronize(budgetId, encryptionPassword)
+                }
             val savedWrite = localRepository.findWrite(operationId)
             transactionWriteMessage =
                 when (savedWrite?.status) {

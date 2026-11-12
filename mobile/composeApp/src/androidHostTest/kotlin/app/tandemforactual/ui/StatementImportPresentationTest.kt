@@ -59,6 +59,42 @@ class StatementImportPresentationTest {
     }
 
     @Test
+    fun serverUnreachableRequiresConnectionAndKeepsImportDisabled() {
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                StatementImportDialog(
+                    visible = true,
+                    state = AppState(),
+                    currencyDisplaySettings = usdSettings,
+                    accountName = "Checking",
+                    filename = "statement.csv",
+                    parseResult = parsedStatement,
+                    parseError = null,
+                    actionMessage = null,
+                    dateOrder = StatementDateOrder.MONTH_DAY_YEAR,
+                    csvLayout = null,
+                    csvMapping = StatementCsvColumnMapping(),
+                    showCsvMapping = false,
+                    importPreview = StatementImportPreview(emptySet(), serverChecked = false),
+                    importPreviewLoading = false,
+                    importPreviewError = null,
+                    busy = false,
+                    onDateOrderChange = {},
+                    onCsvMappingChange = {},
+                    onToggleCsvMapping = {},
+                    onRetryImportPreview = {},
+                    onDismiss = {},
+                    onDismissed = {},
+                    onImport = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText(STATEMENT_IMPORT_CONNECTION_REQUIRED).assertExists()
+        composeTestRule.onNodeWithText("Import 2 transactions").assertIsNotEnabled()
+    }
+
+    @Test
     fun successfulPreviewShowsExactCountsBeforeImport() {
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
