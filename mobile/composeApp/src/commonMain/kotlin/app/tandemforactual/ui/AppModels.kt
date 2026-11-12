@@ -781,7 +781,12 @@ internal enum class BackRequestDisposition {
 internal fun shouldRenderRouteHeader(
     route: AppRoute,
     hasStationaryTabShell: Boolean,
-): Boolean = hasStationaryTabShell || route == AppRoute.FIRST_SYNC
+): Boolean =
+    route != AppRoute.NOTIFICATION_ONBOARDING &&
+        (hasStationaryTabShell || route == AppRoute.FIRST_SYNC)
+
+internal fun shouldRenderStandaloneRouteHeader(route: AppRoute): Boolean =
+    route != AppRoute.NOTIFICATION_ONBOARDING && route != AppRoute.FIRST_SYNC
 
 internal fun backRequestDisposition(
     routeTransitionInputBlocked: Boolean,

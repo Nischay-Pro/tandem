@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -52,7 +53,6 @@ import app.tandemforactual.ui.components.PrimaryButton
 import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemLoadingIndicator
-import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Cloud
 import com.composables.icons.lucide.CloudSync
@@ -689,21 +689,15 @@ internal fun NotificationOnboardingScreen(
     onRequestNotificationPermission: (() -> Unit)?,
 ) {
     OnboardingLayout(
-        horizontalPadding = TandemSpacing.extraLarge,
         content = {
-            Spacer(Modifier.height(14.dp))
-            Box(
-                Modifier
-                    .size(64.dp)
-                    .clip(RoundedCornerShape(TandemShapes.large))
-                    .background(tandemPalette.accent.copy(alpha = 0.14f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Lucide.Bell, contentDescription = null, modifier = Modifier.size(30.dp), tint = tandemPalette.accent)
-            }
             Heading("Stay in the loop", "Get an alert when a change needs your attention.")
-            SurfaceCard {
-                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+            SurfaceCard(Modifier.testTag("notification-onboarding-info")) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(TandemSpacing.large),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                ) {
                     BodyText("Tandem can alert you when an edit needs review, is rejected, or has an unknown status.")
                     BodyText("You can change this later in Settings.")
                 }

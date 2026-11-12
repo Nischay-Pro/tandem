@@ -15,6 +15,19 @@ class AppStateTest {
     }
 
     @Test
+    fun notificationOnboardingDoesNotRepeatItsTitleInTheRouteHeader() {
+        assertFalse(shouldRenderRouteHeader(AppRoute.NOTIFICATION_ONBOARDING, hasStationaryTabShell = true))
+        assertFalse(shouldRenderStandaloneRouteHeader(AppRoute.NOTIFICATION_ONBOARDING))
+        assertTrue(shouldRenderStandaloneRouteHeader(AppRoute.BUDGET_CHOOSER))
+    }
+
+    @Test
+    fun firstSyncUsesOnlyTheSharedRouteHeader() {
+        assertTrue(shouldRenderRouteHeader(AppRoute.FIRST_SYNC, hasStationaryTabShell = false))
+        assertFalse(shouldRenderStandaloneRouteHeader(AppRoute.FIRST_SYNC))
+    }
+
+    @Test
     fun backRequestsWaitForOpeningTransitionsAndQueueBehindBackAnimations() {
         assertEquals(
             BackRequestDisposition.DEFER_UNTIL_ROUTE_TRANSITION_FINISHES,

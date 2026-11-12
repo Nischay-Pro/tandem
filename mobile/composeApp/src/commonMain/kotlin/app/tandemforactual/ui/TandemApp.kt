@@ -1257,7 +1257,7 @@ fun TandemApp(
                     LocalRouteLazyListState provides routeLazyListState,
                 ) {
                     Column(modifier = pageModifier.fillMaxSize()) {
-                        if (includeChrome) renderHeader(visibleRoute)
+                        if (includeChrome && shouldRenderStandaloneRouteHeader(visibleRoute)) renderHeader(visibleRoute)
                         Box(Modifier.weight(1f).fillMaxWidth()) {
                             ScreenContent(
                                 route = visibleRoute,

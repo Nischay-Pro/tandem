@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -98,6 +99,14 @@ class OnboardingWordingTest {
             .onNodeWithText("Tandem can alert you when an edit needs review, is rejected, or has an unknown status.")
             .assertExists()
         composeTestRule.onNodeWithText("You can change this later in Settings.").assertExists()
+        val cardBounds = composeTestRule.onNodeWithTag("notification-onboarding-info").fetchSemanticsNode().boundsInRoot
+        val messageBounds =
+            composeTestRule
+                .onNodeWithText("Tandem can alert you when an edit needs review, is rejected, or has an unknown status.")
+                .fetchSemanticsNode()
+                .boundsInRoot
+        assertTrue(messageBounds.left - cardBounds.left >= 16f)
+        assertTrue(cardBounds.right - messageBounds.right >= 16f)
         assertEquals(0, permissionRequests)
         composeTestRule.onNodeWithText("Allow notifications").performClick()
 
