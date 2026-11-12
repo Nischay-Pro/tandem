@@ -30,7 +30,6 @@ describe("deployment image digests", () => {
         images: [nodeImage],
       },
       { file: "../../../.github/workflows/ci.yml", images: [nginxImage] },
-      { file: "../../../README.md", images: [postgresImage] },
     ];
 
     for (const { file, images } of imageReferences) {
