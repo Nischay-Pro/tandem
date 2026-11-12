@@ -404,7 +404,12 @@ describe("health routes and OpenAPI", () => {
     });
 
     expect(response.statusCode).toBe(503);
-    expect(response.json()).toEqual({ status: "not_ready" });
+    expect(response.json()).toEqual({
+      error: {
+        code: "database_unavailable",
+        message: "Tandem could not reach its database. Try again shortly.",
+      },
+    });
     expect(response.body).not.toContain("secret connection details");
     await app.close();
   });
@@ -431,9 +436,11 @@ describe("health routes and OpenAPI", () => {
 
     expect(response.statusCode).toBe(503);
     expect(response.json()).toEqual({
-      status: "not_ready",
-      message:
-        "Actual rejected ACTUAL_SESSION_TOKEN. Replace the token and restart Tandem.",
+      error: {
+        code: "actual_unavailable",
+        message:
+          "Actual rejected ACTUAL_SESSION_TOKEN. Replace the token and restart Tandem.",
+      },
     });
     await app.close();
   });
@@ -453,7 +460,12 @@ describe("health routes and OpenAPI", () => {
     });
 
     expect(response.statusCode).toBe(503);
-    expect(response.json()).toEqual({ status: "not_ready" });
+    expect(response.json()).toEqual({
+      error: {
+        code: "actual_unavailable",
+        message: "Actual Budget is unavailable. Check the server connection.",
+      },
+    });
     await app.close();
   });
 
@@ -479,7 +491,12 @@ describe("health routes and OpenAPI", () => {
     });
 
     expect(response.statusCode).toBe(503);
-    expect(response.json()).toEqual({ status: "not_ready" });
+    expect(response.json()).toEqual({
+      error: {
+        code: "database_unavailable",
+        message: "Tandem could not reach its database. Try again shortly.",
+      },
+    });
     expect(ping).toHaveBeenCalledOnce();
     resolvePing();
     await app.close();

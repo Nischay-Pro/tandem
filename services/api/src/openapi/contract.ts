@@ -4,6 +4,7 @@ import { buildApiApp } from "../app.js";
 import type { TransactionApiPort } from "../actual/transaction-api.js";
 import type { DeviceAuthorization } from "../auth/device-auth.js";
 import type { ActualOpenIdLogin } from "../auth/actual-openid-login.js";
+import { withSharedApiErrorResponses } from "./error-responses.js";
 
 export interface OpenApiDocument {
   openapi: string;
@@ -34,7 +35,7 @@ export async function createOpenApiDocument(): Promise<OpenApiDocument> {
       method: "GET",
       url: "/api/v1/health/ready",
     });
-    return app.swagger() as OpenApiDocument;
+    return withSharedApiErrorResponses(app.swagger() as OpenApiDocument);
   } finally {
     await app.close();
   }

@@ -26,7 +26,7 @@ build cannot validate Apple toolchains.
 - Android Gradle plugin: 9.3.1 (latest version fully supported by Kotlin 2.4.21)
 - Gradle wrapper: 9.8.2 (current stable release; Kotlin 2.4.21's documented fully
   supported Gradle range ends at 9.7.0, so CI validates this newer combination)
-- OpenAPI KMP Gen: 1.5.0 (latest stable release; 1.6 is a release candidate)
+- OpenAPI KMP Gen: 1.6.0
 - ktlint Gradle plugin: 14.2.0
 - Kover: 0.9.11
 - JVM runtime: Java 27 (current stable runtime; Gradle 9.8.2 supports running on it)

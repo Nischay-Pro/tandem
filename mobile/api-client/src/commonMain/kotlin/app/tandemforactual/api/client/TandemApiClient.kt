@@ -5,7 +5,7 @@ import app.tandemforactual.api.generated.Auth
 import app.tandemforactual.api.generated.api.AuthenticationApi
 import app.tandemforactual.api.generated.api.BudgetsApi
 import app.tandemforactual.api.generated.api.TransactionsApi
-import app.tandemforactual.api.generated.models.ApiV1HealthReady200Response
+import app.tandemforactual.api.generated.models.ApiV1BudgetsBudgetIdPayeesRequest
 import arrow.core.Either
 import com.kroegerama.openapi.kmp.gen.companion.AuthItem
 import com.kroegerama.openapi.kmp.gen.companion.CallException
@@ -29,6 +29,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -679,7 +680,7 @@ class TandemApiClient(
                         idempotencyKey = operationKey,
                         budgetId = budgetId,
                         categoryId = categoryId,
-                        body = buildJsonObject { put("name", name) }.toMap(),
+                        body = ApiV1BudgetsBudgetIdPayeesRequest(name),
                     ),
                 )
             }
@@ -832,7 +833,7 @@ class TandemApiClient(
                         xBudgetEncryptionPassword = encryptionPassword,
                         idempotencyKey = idempotencyKey,
                         budgetId = budgetId,
-                        body = buildJsonObject { put("name", name) }.toMap(),
+                        body = ApiV1BudgetsBudgetIdPayeesRequest(name),
                     ).fold(
                         { error -> throw error.toTandemApiException() },
                         { response ->
@@ -1320,19 +1321,21 @@ class TandemApiClient(
         }
     }
 
-    private suspend fun unwrap(result: Either<CallException, HttpCallResponse<Map<String, JsonElement>>>): JsonObject =
+    private suspend inline fun <reified T> unwrap(result: Either<CallException, HttpCallResponse<T>>): JsonObject =
         result.fold(
             { error -> throw error.toTandemApiException() },
-            { response -> JsonObject(response.data) },
+            { response -> Json.encodeToJsonElement(response.data).jsonObject },
         )
 
-    private suspend fun requireOk(result: Either<CallException, HttpCallResponse<ApiV1HealthReady200Response>>) {
+    private suspend inline fun <reified T> requireOk(result: Either<CallException, HttpCallResponse<T>>) {
         result.fold(
             { error -> throw error.toTandemApiException() },
             { response ->
+                val statusObject = Json.encodeToJsonElement(response.data).jsonObject
+                val actualStatus = statusObject["status"]?.jsonPrimitive?.contentOrNull
                 verifyApiStatus(
                     isSuccessful = response.isSuccessful,
-                    hasExpectedStatus = response.data.status == ApiV1HealthReady200Response.Status.OK,
+                    hasExpectedStatus = actualStatus == "ok",
                 )
             },
         )

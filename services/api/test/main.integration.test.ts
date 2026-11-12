@@ -922,9 +922,11 @@ describe("API bootstrap integration", () => {
       });
       expect(readiness.statusCode).toBe(503);
       expect(readiness.json()).toEqual({
-        status: "not_ready",
-        message:
-          "Actual rejected ACTUAL_SESSION_TOKEN. Replace the token and restart Tandem.",
+        error: {
+          code: "actual_unavailable",
+          message:
+            "Actual rejected ACTUAL_SESSION_TOKEN. Replace the token and restart Tandem.",
+        },
       });
       expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
         sessionToken,

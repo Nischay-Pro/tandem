@@ -11,6 +11,43 @@ After changing route schemas, regenerate it with `pnpm api:openapi:generate`;
 `pnpm api:openapi:check` compares the checked-in file with the running route
 definitions and is part of `pnpm check:all`.
 
+### Error responses
+
+Every documented error response uses the same JSON envelope:
+
+```json
+{
+  "error": {
+    "code": "invalid_request",
+    "message": "Check the request details and try again."
+  }
+}
+```
+
+Operations reference named responses in the OpenAPI contract. The examples
+below show common codes; an operation may return a more specific `code` while
+keeping the same envelope.
+
+| HTTP  | Shared response        | Common error codes                                                           | Meaning                                                                  |
+| ----- | ---------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `400` | `BadRequest`           | `invalid_request`                                                            | Request body, path, query, or header is invalid.                         |
+| `401` | `Unauthorized`         | `invalid_device_credential`, `invalid_credentials`, `actual_sign_in_expired` | Credentials are missing, invalid, or expired.                            |
+| `404` | `NotFound`             | `not_found`, `route_not_found`                                               | The requested resource or API route was not found.                       |
+| `409` | `Conflict`             | `request_conflict`, `idempotency_key_reused`, `operation_id_reused`          | The request conflicts with the current resource or operation state.      |
+| `413` | `PayloadTooLarge`      | `request_too_large`                                                          | The request body exceeds the API size limit.                             |
+| `415` | `UnsupportedMediaType` | `unsupported_media_type`                                                     | Send request bodies as `application/json`.                               |
+| `429` | `TooManyRequests`      | `rate_limited`, `bank_sync_busy`                                             | Wait before retrying, or retry after the active bank sync finishes.      |
+| `500` | `InternalServerError`  | `internal_error`                                                             | Tandem could not complete the request. Details stay out of the response. |
+| `502` | `BadGateway`           | `actual_operation_failed`, `budget_sync_failed`                              | Actual could not complete the budget operation.                          |
+| `503` | `ServiceUnavailable`   | `actual_unavailable`, `actual_not_configured`, `database_unavailable`        | A required service is unavailable or not configured.                     |
+
+The shared response schema requires `error.code` and `error.message` and rejects
+additional fields. The examples use lowercase snake case; clients should treat
+codes as opaque strings because operation-specific codes may keep their
+established spelling. The API also sets an `X-Request-ID` header on every
+response; use it to correlate a failure with the single structured request log
+entry.
+
 ## Implemented endpoints
 
 | Method   | Path                                                                          | Purpose                                                            |

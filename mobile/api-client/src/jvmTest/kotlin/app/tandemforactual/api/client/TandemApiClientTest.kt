@@ -5,6 +5,7 @@ import app.tandemforactual.api.generated.Auth
 import app.tandemforactual.api.generated.api.AuthenticationApi
 import app.tandemforactual.api.generated.api.BudgetsApi
 import app.tandemforactual.api.generated.api.TransactionsApi
+import app.tandemforactual.api.generated.models.ApiV1BudgetsBudgetIdPayeesRequest
 import com.kroegerama.openapi.kmp.gen.companion.AuthPlugin
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -453,7 +454,7 @@ class TandemApiClientTest {
             try {
                 val signedIn = client.signInWithPassword("https://tandem.example/", "  actual-test-password  ", " Test phone ")
 
-                assertEquals("device-1", signedIn.deviceId)
+                assertEquals("6d860805-fdd6-4fe4-8e67-668c9900fe1f", signedIn.deviceId)
                 assertEquals("household-owner", signedIn.principalId)
                 assertEquals(listOf("budget-1", "budget-2"), signedIn.budgetIds)
                 assertTrue(client.isAuthenticated)
@@ -533,7 +534,7 @@ class TandemApiClientTest {
                 assertEquals("https://identity.example/sign-in", redirectUrl)
                 val signedIn = client.completeActualOpenIdSignIn("https://tandem.example", "C".repeat(43), verifier)
 
-                assertEquals("device-1", signedIn.deviceId)
+                assertEquals("6d860805-fdd6-4fe4-8e67-668c9900fe1f", signedIn.deviceId)
                 assertTrue(client.isAuthenticated)
                 assertEquals(
                     listOf("/api/v1/auth/openid/start", "/api/v1/auth/openid/complete"),
@@ -965,9 +966,18 @@ class TandemApiClientTest {
                     BudgetsApi.closeBudgetAccount(idempotencyKey = "direct-3", budgetId = "budget-1", accountId = "account-1")
                     BudgetsApi.renameBudgetAccount(idempotencyKey = "direct-4", budgetId = "budget-1", accountId = "account-1")
                     BudgetsApi.reopenBudgetAccount(idempotencyKey = "direct-5", budgetId = "budget-1", accountId = "account-1")
-                    BudgetsApi.renameBudgetCategory(idempotencyKey = "direct-6", budgetId = "budget-1", categoryId = "category-1")
+                    BudgetsApi.renameBudgetCategory(
+                        idempotencyKey = "direct-6",
+                        budgetId = "budget-1",
+                        categoryId = "category-1",
+                        body = ApiV1BudgetsBudgetIdPayeesRequest("Test category"),
+                    )
                     BudgetsApi.createBudgetCategory(idempotencyKey = "direct-7", budgetId = "budget-1")
-                    BudgetsApi.createBudgetPayee(idempotencyKey = "direct-8", budgetId = "budget-1")
+                    BudgetsApi.createBudgetPayee(
+                        idempotencyKey = "direct-8",
+                        budgetId = "budget-1",
+                        body = ApiV1BudgetsBudgetIdPayeesRequest("Test payee"),
+                    )
                     BudgetsApi.setBudgetCategoryAmount(idempotencyKey = "direct-9", budgetId = "budget-1", categoryId = "category-1")
                     BudgetsApi.setBudgetCategoryCarryover(
                         idempotencyKey = "direct-10",
@@ -1728,7 +1738,7 @@ class TandemApiClientTest {
     private fun jsonHeaders() = headersOf(HttpHeaders.ContentType, "application/json")
 
     private fun signedInResponse() =
-        """{"deviceId":"device-1","principalId":"household-owner","budgetIds":["budget-1","budget-2"],"accessToken":"test-device-token"}"""
+        """{"deviceId":"6d860805-fdd6-4fe4-8e67-668c9900fe1f","principalId":"household-owner","name":"Household owner","budgetIds":["budget-1","budget-2"],"accessToken":"test-device-token","tokenType":"Bearer","createdAt":"2026-11-11T12:00:00Z"}"""
 
     private fun budgetsResponse() =
         """{"budgets":[{"budgetId":"budget-1","name":"Household","isEncrypted":false},{"budgetId":"budget-2","name":"Travel","isEncrypted":true}]}"""

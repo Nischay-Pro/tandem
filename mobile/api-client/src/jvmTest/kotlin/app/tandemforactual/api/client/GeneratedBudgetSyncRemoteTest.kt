@@ -655,7 +655,7 @@ class GeneratedBudgetSyncRemoteTest {
         """{"transaction":{"id":"$TXN","name":"Corner Market","notes":"weekly groceries","account":"checking","amount":1200,"date":"2026-10-01","category":"food","payee":"market"},"revision":"revision-1"}"""
 
     private fun operationJson(status: String) =
-        """{"operation":{"operationId":"$OPERATION_ID","budgetId":"$BUDGET","transactionId":"$TXN","status":"$status","errorCode":null},"conflict":null}"""
+        """{"operation":{"operationId":"$OPERATION_ID","budgetId":"$BUDGET","action":"create","transactionId":"$TXN","baseRevision":"revision-1","baseSnapshot":{},"patch":{},"status":"$status","attemptCount":0,"errorCode":null,"actualResult":null,"createdAt":"2026-11-11T12:00:00Z","updatedAt":"2026-11-11T12:00:00Z","startedAt":null,"completedAt":null},"conflict":null}"""
 
     private fun jsonHeaders() = headersOf(HttpHeaders.ContentType, "application/json")
 

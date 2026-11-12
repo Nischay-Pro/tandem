@@ -24,6 +24,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlin.uuid.Uuid
 
@@ -209,10 +211,10 @@ class GeneratedBudgetSyncRemote(
         return BudgetSyncJson.parseTransaction(payload, transactionId)
     }
 
-    private suspend fun unwrap(result: Either<CallException, HttpCallResponse<Map<String, JsonElement>>>): Map<String, JsonElement> {
+    private suspend inline fun <reified T> unwrap(result: Either<CallException, HttpCallResponse<T>>): Map<String, JsonElement> {
         val error = result.swap().getOrNull()
         if (error != null) throw error.toBudgetSyncException()
-        return result.getOrNull()!!.data
+        return Json.encodeToJsonElement(result.getOrNull()!!.data).jsonObject.toMap()
     }
 
     private suspend fun <T> withApiRequest(block: suspend () -> T): T = apiClient.withGeneratedApi(block)

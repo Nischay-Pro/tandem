@@ -47,7 +47,14 @@ class GeneratedApiSurfaceTest {
             val engine =
                 MockEngine { request ->
                     capturedRequests += request
-                    val responseBody = """{"status":"ok"}"""
+                    val responseBody =
+                        when {
+                            request.url.encodedPath == "/api/v1/auth/openid/complete" ->
+                                """{"deviceId":"6d860805-fdd6-4fe4-8e67-668c9900fe1f","principalId":"household-owner","name":"Household owner","budgetIds":["budget-1"],"accessToken":"${"A".repeat(43)}","tokenType":"Bearer","createdAt":"2026-11-11T12:00:00Z"}"""
+                            request.url.encodedPath.startsWith("/api/v1/operations/") ->
+                                """{"operation":{"operationId":"6461dd06-cfe0-4854-9ced-16b7011fb87d","budgetId":"budget-1","action":"create","transactionId":"transaction-1","baseRevision":"revision-1","baseSnapshot":{},"patch":{},"status":"queued","attemptCount":0,"errorCode":null,"actualResult":null,"createdAt":"2026-11-11T12:00:00Z","updatedAt":"2026-11-11T12:00:00Z","startedAt":null,"completedAt":null},"conflict":null}"""
+                            else -> """{"status":"ok"}"""
+                        }
                     respond(
                         content = ByteReadChannel(gzip(responseBody)),
                         status = HttpStatusCode.OK,

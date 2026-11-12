@@ -3,6 +3,7 @@ import {
   errorCodeFromPayload,
   frameworkErrorCode,
   frameworkErrorStatus,
+  responseErrorCode,
   safeFrameworkErrorResponse,
 } from "../src/app.js";
 
@@ -69,6 +70,13 @@ describe("errorCodeFromPayload", () => {
     );
     expect(
       errorCodeFromPayload('{"error":{"code":"actual_unavailable"}}'),
+    ).toBe("actual_unavailable");
+  });
+
+  it("falls back to the HTTP status when a payload has no safe code", () => {
+    expect(responseErrorCode("not json", 503)).toBe("http_503");
+    expect(
+      responseErrorCode('{"error":{"code":"actual_unavailable"}}', 503),
     ).toBe("actual_unavailable");
   });
 });

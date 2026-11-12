@@ -49,6 +49,12 @@ import {
   BudgetProjectionInputError,
 } from "./budget-projection/contracts.js";
 import {
+  API_ERROR_SCHEMA,
+  API_ERROR_SCHEMA_REF,
+  buildOpenApiLocalReference,
+  withSharedApiErrorResponses,
+} from "./openapi/error-responses.js";
+import {
   IDEMPOTENCY_KEY_MAX_LENGTH,
   IdempotencyKeyReuseError,
   OperationIdReuseError,
@@ -59,6 +65,12 @@ import {
 } from "./write-journal/contracts.js";
 import { TransactionRequestValidationError } from "./actual/transaction-reconciler.js";
 import { MAX_TRANSACTION_AMOUNT } from "./actual/transaction-reconciliation.js";
+
+declare module "fastify" {
+  interface FastifySchema {
+    "x-tandem-rate-limited"?: boolean;
+  }
+}
 
 const statusOk = {
   type: "object",
@@ -76,15 +88,7 @@ const accountCreatedResponse = {
   additionalProperties: false,
 };
 
-const statusNotReady = {
-  type: "object",
-  properties: {
-    status: { type: "string", const: "not_ready" },
-    message: { type: "string" },
-  },
-  required: ["status"],
-  additionalProperties: false,
-};
+const errorSchema = API_ERROR_SCHEMA_REF;
 
 const budgetEncryptionHeaderSchema = {
   type: "object",
@@ -115,7 +119,7 @@ const readySchema: FastifySchema = {
   tags: ["Health"],
   operationId: "getReadiness",
   summary: "Check whether the API can reach its configured services",
-  response: { 200: statusOk, 503: statusNotReady },
+  response: { 200: statusOk, 503: errorSchema },
 };
 
 export interface ApiAppOptions {
@@ -159,6 +163,7 @@ export async function buildApiApp(
     genReqId: () => randomUUID(),
     trustProxy: options.trustProxy ?? false,
   });
+  app.addSchema(API_ERROR_SCHEMA);
   app.removeContentTypeParser("text/plain");
   app.addHook("onRequest", async (request, reply) => {
     requestStartedAt.set(request, performance.now());
@@ -185,7 +190,7 @@ export async function buildApiApp(
   app.addHook("onSend", async (request, reply, payload) => {
     const statusCode = reply.statusCode;
     if (statusCode === 409 || statusCode >= 500) {
-      const errorCode = errorCodeFromPayload(payload) ?? `http_${statusCode}`;
+      const errorCode = responseErrorCode(payload, statusCode);
       responseErrorCodes.set(request, errorCode);
     }
     return payload;
@@ -238,6 +243,11 @@ export async function buildApiApp(
   }
 
   await app.register(swagger, {
+    refResolver: {
+      buildLocalReference(schema, _baseUri, _fragment, index) {
+        return buildOpenApiLocalReference(schema, index);
+      },
+    },
     openapi: {
       openapi: "3.1.0",
       info: {
@@ -270,29 +280,40 @@ export async function buildApiApp(
     }),
   );
 
-  app.get<{ Reply: { status: "ok" | "not_ready" } }>(
+  app.get<{
+    Reply: { status: "ok" } | { error: { code: string; message: string } };
+  }>(
     "/api/v1/health/ready",
     { schema: readySchema },
     async (_request, reply) => {
       try {
         await pingWithTimeout(() => database.ping(), readinessTimeoutMs);
       } catch {
-        return reply.code(503).send({ status: "not_ready" });
+        return reply.code(503).send({
+          error: {
+            code: "database_unavailable",
+            message: "Tandem could not reach its database. Try again shortly.",
+          },
+        });
       }
       const actualReadiness = options.actualReadiness?.();
       if (actualReadiness && !actualReadiness.ready) {
         return reply.code(503).send({
-          status: "not_ready",
-          ...(actualReadiness.message === undefined
-            ? {}
-            : { message: actualReadiness.message }),
+          error: {
+            code: "actual_unavailable",
+            message:
+              actualReadiness.message ??
+              "Actual Budget is unavailable. Check the server connection.",
+          },
         });
       }
       return reply.code(200).send({ status: "ok" });
     },
   );
 
-  app.get("/api/v1/openapi.json", async () => app.swagger());
+  app.get("/api/v1/openapi.json", async () =>
+    withSharedApiErrorResponses(app.swagger() as never),
+  );
 
   app.get(
     "/api/v1/auth/methods",
@@ -301,6 +322,7 @@ export async function buildApiApp(
         tags: ["Authentication"],
         operationId: "getActualLoginMethods",
         summary: "Check the configured Actual server sign-in method",
+        "x-tandem-rate-limited": true,
         response: {
           200: {
             type: "object",
@@ -327,38 +349,8 @@ export async function buildApiApp(
             required: ["bootstrapped", "loginMethod", "availableLoginMethods"],
             additionalProperties: false,
           },
-          503: {
-            type: "object",
-            properties: {
-              error: {
-                type: "object",
-                properties: {
-                  code: { type: "string", const: "actual_unavailable" },
-                  message: { type: "string" },
-                },
-                required: ["code", "message"],
-                additionalProperties: false,
-              },
-            },
-            required: ["error"],
-            additionalProperties: false,
-          },
-          429: {
-            type: "object",
-            properties: {
-              error: {
-                type: "object",
-                properties: {
-                  code: { type: "string", const: "rate_limited" },
-                  message: { type: "string" },
-                },
-                required: ["code", "message"],
-                additionalProperties: false,
-              },
-            },
-            required: ["error"],
-            additionalProperties: false,
-          },
+          503: errorSchema,
+          429: errorSchema,
         },
       },
     },
@@ -433,22 +425,6 @@ function registerDeviceAuthorizationRoutes(
 ): void {
   const rateLimiter = new RequestRateLimiter(10, 60_000);
   let warnedAboutIgnoredForwardedFor = false;
-  const errorSchema = {
-    type: "object",
-    properties: {
-      error: {
-        type: "object",
-        properties: {
-          code: { type: "string" },
-          message: { type: "string" },
-        },
-        required: ["code", "message"],
-        additionalProperties: false,
-      },
-    },
-    required: ["error"],
-    additionalProperties: false,
-  };
   const deviceSchema = {
     type: "object",
     properties: {
@@ -475,6 +451,7 @@ function registerDeviceAuthorizationRoutes(
     tags: ["Authentication"],
     operationId: "signInWithActualPassword",
     summary: "Sign in with the Actual account password",
+    "x-tandem-rate-limited": true,
     body: {
       type: "object",
       properties: {
@@ -672,6 +649,7 @@ function registerDeviceAuthorizationRoutes(
           tags: ["Authentication"],
           operationId: "startActualOpenIdSignIn",
           summary: "Start Actual OpenID sign-in",
+          "x-tandem-rate-limited": true,
           body: {
             type: "object",
             properties: {
@@ -1120,22 +1098,6 @@ function registerTransactionRoutes(
   deviceAuth: DeviceAuthorization,
   transactionApi: TransactionApiPort | undefined,
 ): void {
-  const errorSchema = {
-    type: "object",
-    properties: {
-      error: {
-        type: "object",
-        properties: {
-          code: { type: "string" },
-          message: { type: "string" },
-        },
-        required: ["code", "message"],
-        additionalProperties: false,
-      },
-    },
-    required: ["error"],
-    additionalProperties: false,
-  };
   const nullableStringSchema = { type: ["string", "null"] };
   const nullableBooleanSchema = { type: ["boolean", "null"] };
   const transactionSnapshotSchema = {
@@ -1872,19 +1834,6 @@ function registerBudgetMaintenanceRoutes(
     },
     required: ["idempotency-key"],
     additionalProperties: true,
-  };
-  const errorSchema = {
-    type: "object",
-    properties: {
-      error: {
-        type: "object",
-        properties: { code: { type: "string" }, message: { type: "string" } },
-        required: ["code", "message"],
-        additionalProperties: false,
-      },
-    },
-    required: ["error"],
-    additionalProperties: false,
   };
   const commonResponseSchema = {
     200: statusOk,
@@ -4798,22 +4747,6 @@ function registerBudgetReadRoutes(
   deviceAuth: DeviceAuthorization,
   budgetReadApi: BudgetReadApiPort | undefined,
 ): void {
-  const errorSchema = {
-    type: "object",
-    properties: {
-      error: {
-        type: "object",
-        properties: {
-          code: { type: "string" },
-          message: { type: "string" },
-        },
-        required: ["code", "message"],
-        additionalProperties: false,
-      },
-    },
-    required: ["error"],
-    additionalProperties: false,
-  };
   const budgetParamsSchema = {
     type: "object",
     properties: {
@@ -5375,6 +5308,13 @@ export function errorCodeFromPayload(payload: unknown): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+export function responseErrorCode(
+  payload: unknown,
+  statusCode: number,
+): string {
+  return errorCodeFromPayload(payload) ?? `http_${statusCode}`;
 }
 
 function invalidBudgetRequest(reply: import("fastify").FastifyReply) {
