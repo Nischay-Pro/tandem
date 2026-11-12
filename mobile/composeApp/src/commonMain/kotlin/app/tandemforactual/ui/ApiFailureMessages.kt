@@ -18,12 +18,12 @@ internal fun apiFailureMessage(
     val effectiveStatus = apiFailureHttpStatus(errorCode, httpStatus)
     return when (errorCode) {
         "actual_only" ->
-            "We found your Actual Budget service. Make sure the Tandem API Gateway is running at /api/v1/."
+            "Actual Budget is responding here, but Tandem isn’t. Check that Tandem is running at this address."
         "address_unreachable", "network-error" -> "Tandem isn’t responding at this address. Check the server address."
         "actual_unavailable" -> "Tandem can’t connect to Actual. Check that the Actual server is running."
         "tandem_not_ready" -> "Tandem is starting up. Try again in a moment."
         "tandem_route_unavailable" ->
-            "The Tandem API Gateway isn’t available at this address. Check that it’s running at /api/v1/."
+            "Tandem isn’t available here. Check the server address."
         "invalid_credentials" -> "That password doesn’t match this Actual server. Check the password."
         "invalid_budget_password" -> "That password didn’t unlock this encrypted budget. Check the budget password."
         "invalid_device_credential", "sign_in_expired" -> "Your sign-in is no longer active. Sign in again."
@@ -61,7 +61,7 @@ internal fun apiFailureMessage(
                     "Tandem can’t verify this device. Sign in again."
                 403 ->
                     "This device doesn’t have access to this budget. Ask the budget owner to grant access."
-                404, 405 -> "The Tandem API Gateway isn’t available at this address. Check that it’s running at /api/v1/."
+                404, 405 -> "Tandem isn’t available here. Check the server address."
                 408, 425, 429 -> "Tandem couldn’t complete the request. Wait a moment before trying again."
                 in 500..599 -> "Tandem is temporarily unavailable. Try again shortly."
                 else -> fallback

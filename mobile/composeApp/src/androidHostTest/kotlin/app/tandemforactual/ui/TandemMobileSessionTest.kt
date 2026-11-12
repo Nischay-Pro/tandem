@@ -473,12 +473,12 @@ class TandemMobileSessionTest {
         val messages =
             listOf(
                 "actual_only" to
-                    (null to "We found your Actual Budget service. Make sure the Tandem API Gateway is running at /api/v1/."),
+                    (null to "Actual Budget is responding here, but Tandem isn’t. Check that Tandem is running at this address."),
                 "address_unreachable" to (null to "Tandem isn’t responding at this address. Check the server address."),
                 "actual_unavailable" to (null to "Tandem can’t connect to Actual. Check that the Actual server is running."),
                 "tandem_not_ready" to (null to "Tandem is starting up. Try again in a moment."),
                 "tandem_route_unavailable" to
-                    (null to "The Tandem API Gateway isn’t available at this address. Check that it’s running at /api/v1/."),
+                    (null to "Tandem isn’t available here. Check the server address."),
                 "sign_in_required" to (null to "Sign in to open your budgets."),
                 "invalid_credentials" to (null to "That password doesn’t match this Actual server. Check the password."),
                 "invalid_budget_password" to (null to "That password didn’t unlock this encrypted budget. Check the budget password."),
@@ -518,8 +518,8 @@ class TandemMobileSessionTest {
         val sharedOutages =
             listOf(
                 "network-error" to (null to "Tandem isn’t responding at this address. Check the server address."),
-                "http-404" to (404 to "The Tandem API Gateway isn’t available at this address. Check that it’s running at /api/v1/."),
-                "http-405" to (405 to "The Tandem API Gateway isn’t available at this address. Check that it’s running at /api/v1/."),
+                "http-404" to (404 to "Tandem isn’t available here. Check the server address."),
+                "http-405" to (405 to "Tandem isn’t available here. Check the server address."),
                 "http-400" to (400 to "Tandem couldn’t accept this request. Check the details."),
                 "http-422" to (422 to "Tandem couldn’t accept this request. Check the details."),
                 "http-408" to (408 to "Tandem couldn’t complete the request. Wait a moment before trying again."),

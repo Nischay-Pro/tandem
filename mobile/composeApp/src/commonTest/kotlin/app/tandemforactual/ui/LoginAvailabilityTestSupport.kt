@@ -147,7 +147,7 @@ internal fun assertLoginMethodsOutcomes(outcomes: LoginMethodsOutcomes) {
     )
 
     assertEquals(
-        "We found your Actual Budget service. Make sure the Tandem API Gateway is running at /api/v1/.",
+        "Actual Budget is responding here, but Tandem isn’t. Check that Tandem is running at this address.",
         outcomes.actualOnly.signInError,
     )
     assertFalse(outcomes.actualOnly.isServerReachable)
