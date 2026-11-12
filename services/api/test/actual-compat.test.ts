@@ -1789,6 +1789,102 @@ describe.skipIf(!compatibilityTestEnabled)(
       }
     }, 60_000);
 
+    it("replays a direct transaction create by its stable Actual imported ID", async () => {
+      if (!serverURL || !serverPassword || !firstDataDir) {
+        throw new Error(
+          "Actual direct-write compatibility configuration is missing",
+        );
+      }
+
+      await bootstrapDisposableServer(serverURL, serverPassword);
+      const dataDir = path.join(
+        firstDataDir,
+        `direct-create-retry-${randomUUID()}`,
+      );
+      await mkdir(dataDir, { recursive: true });
+      const device = createCompatibilitySession({
+        serverURL,
+        dataDir,
+        password: serverPassword,
+      });
+      const budgetName = `ABC direct create retry ${randomUUID()}`;
+      const accountName = `ABC retry account ${randomUUID()}`;
+      const transactionId = `tandem:${randomUUID()}`;
+      const date = "2026-11-12";
+      const transactionInput = {
+        account: "",
+        amount: -1234,
+        date,
+        payee: null,
+        category: null,
+        notes: "Direct Actual write retry",
+        cleared: false,
+      };
+      const transactionStore = createActualTransactionStore();
+
+      try {
+        await device.execute(
+          async () => {
+            await Actual.runImport(budgetName, async () => {
+              transactionInput.account = await Actual.createAccount(
+                { name: accountName, offbudget: false },
+                0,
+              );
+            });
+          },
+          { synchronizeAfterWrite: true },
+        );
+        const budget = (await device.execute(() => Actual.getBudgets())).find(
+          (candidate) => candidate.name === budgetName && candidate.groupId,
+        );
+        expect(budget?.groupId).toBeTruthy();
+        if (!budget?.groupId) {
+          throw new Error(
+            "Actual did not publish the direct-write test budget",
+          );
+        }
+
+        const results = await device.runBudget(
+          budget.groupId,
+          async () => {
+            const first = await transactionStore.create(
+              transactionId,
+              transactionInput,
+            );
+            const replay = await transactionStore.create(
+              transactionId,
+              transactionInput,
+            );
+            await expect(
+              transactionStore.create(transactionId, {
+                ...transactionInput,
+                amount: transactionInput.amount - 1,
+              }),
+            ).rejects.toMatchObject({
+              name: "ActualTransactionIdempotencyConflictError",
+              conflictingFields: ["amount"],
+            });
+            const rows = await Actual.getTransactions(
+              transactionInput.account,
+              date,
+              date,
+            );
+            return {
+              first,
+              replay,
+              matches: rows.filter((row) => row.imported_id === transactionId),
+            };
+          },
+          { synchronizeAfterWrite: true },
+        );
+
+        expect(results.matches).toHaveLength(1);
+        expect(results.replay).toEqual(results.first);
+      } finally {
+        await device.close();
+      }
+    }, 60_000);
+
     it("recovers an applied uncertain edit after the Tandem API process restarts", async () => {
       if (
         !serverURL ||

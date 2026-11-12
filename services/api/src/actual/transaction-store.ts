@@ -1,10 +1,18 @@
 import * as actualApi from "@actual-app/api";
 import {
   isTandemTransactionId,
+  snapshotActualTransaction,
   type TransactionCreateInput,
   type TransactionPatch,
   type TransactionSnapshot,
 } from "./transaction-reconciliation.js";
+
+export class ActualTransactionIdempotencyConflictError extends Error {
+  constructor(readonly conflictingFields: readonly string[]) {
+    super("Transaction ID is already used by a different Actual transaction");
+    this.name = "ActualTransactionIdempotencyConflictError";
+  }
+}
 
 export interface ActualTransactionStore {
   read(id: string): Promise<unknown | undefined>;
@@ -258,6 +266,22 @@ export function createActualTransactionStore(
       if (!isTandemTransactionId(id)) {
         throw new Error("New transactions require a Tandem transaction ID");
       }
+      const existing = await read(id);
+      if (existing !== undefined) {
+        const existingSnapshot = snapshotActualTransaction(existing);
+        const conflictingFields = transactionCreateMismatchFields(
+          existingSnapshot,
+          input,
+          id,
+        );
+        if (conflictingFields.length > 0) {
+          throw new ActualTransactionIdempotencyConflictError(
+            conflictingFields,
+          );
+        }
+        return existing;
+      }
+
       let transferPayee: boolean | undefined;
       if (input.payee !== null) {
         const validatedPayee = validatedPayeeTransfers.get(input);
@@ -302,6 +326,28 @@ export function createActualTransactionStore(
       return client.deleteTransaction(await resolveActualId(id));
     },
   };
+}
+
+function transactionCreateMismatchFields(
+  snapshot: TransactionSnapshot,
+  input: TransactionCreateInput,
+  transactionId: string,
+): string[] {
+  if (snapshot.id !== transactionId && snapshot.importedId !== transactionId) {
+    return ["$entity"];
+  }
+
+  const mismatches: string[] = [];
+  if (snapshot.account !== input.account) mismatches.push("account");
+  if (snapshot.amount !== input.amount) mismatches.push("amount");
+  if (snapshot.date !== input.date) mismatches.push("date");
+  if (snapshot.payee !== input.payee) mismatches.push("payee");
+  if (snapshot.category !== input.category) mismatches.push("category");
+  if (snapshot.notes !== (input.notes === "" ? null : input.notes)) {
+    mismatches.push("notes");
+  }
+  if (snapshot.cleared !== input.cleared) mismatches.push("cleared");
+  return mismatches;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

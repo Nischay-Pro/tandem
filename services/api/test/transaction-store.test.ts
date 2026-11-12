@@ -737,11 +737,37 @@ describe("Actual transaction store", () => {
     };
     const store = createActualTransactionStore(client);
 
-    await expect(store.create(id, input)).resolves.toMatchObject({
+    const created = await store.create(id, input);
+    expect(created).toMatchObject({
       id: "actual-generated-id",
       account: "account-1",
       imported_id: id,
     });
+    await expect(store.create(id, input)).resolves.toEqual(created);
+    await expect(
+      store.create(id, {
+        ...input,
+        account: "account-2",
+        amount: input.amount - 1,
+        date: "2026-11-02",
+        payee: "payee-2",
+        category: "category-2",
+        notes: "Different notes",
+        cleared: true,
+      }),
+    ).rejects.toMatchObject({
+      name: "ActualTransactionIdempotencyConflictError",
+      conflictingFields: [
+        "account",
+        "amount",
+        "date",
+        "payee",
+        "category",
+        "notes",
+        "cleared",
+      ],
+    });
+    expect(client.addTransactions).toHaveBeenCalledOnce();
     expect(client.addTransactions).toHaveBeenCalledWith(
       "account-1",
       [
@@ -763,19 +789,78 @@ describe("Actual transaction store", () => {
     });
   });
 
-  it("uses Actual's transfer payee hook to create both linked legs", async () => {
-    const id = "tandem:8c88495a-65d9-4531-8392-93bff2c65375";
-    const outgoing = {
-      id: "actual-transfer-out",
+  it("rejects a stable ID already owned by a different Actual transaction", async () => {
+    const id = "tandem:8c88495a-65d9-4531-8392-93bff2c65374";
+    const otherId = "tandem:8c88495a-65d9-4531-8392-93bff2c65375";
+    const store = createActualTransactionStore(
+      createClient({
+        data: [
+          {
+            id,
+            imported_id: otherId,
+            account: "account-1",
+            amount: -1250,
+            date: "2026-11-01",
+            payee: "payee-1",
+            category: "category-1",
+            notes: "Lunch",
+            cleared: false,
+          },
+        ],
+      }).client,
+    );
+
+    await expect(
+      store.create(id, {
+        account: "account-1",
+        amount: -1250,
+        date: "2026-11-01",
+        payee: "payee-1",
+        category: "category-1",
+        notes: "Lunch",
+        cleared: false,
+      }),
+    ).rejects.toMatchObject({
+      name: "ActualTransactionIdempotencyConflictError",
+      conflictingFields: ["$entity"],
+    });
+  });
+
+  it("treats an empty note as equivalent to Actual's null note on retry", async () => {
+    const id = "tandem:8c88495a-65d9-4531-8392-93bff2c65374";
+    const existing = {
+      id: "actual-generated-id",
+      imported_id: id,
       account: "account-1",
       amount: -1250,
       date: "2026-11-01",
-      payee: "transfer-payee",
-      imported_id: id,
-      transfer_id: "actual-transfer-in",
+      payee: null,
+      category: null,
+      notes: null,
+      cleared: false,
     };
+    const store = createActualTransactionStore(
+      createClient({ data: [existing] }).client,
+    );
+
+    await expect(
+      store.create(id, {
+        account: "account-1",
+        amount: -1250,
+        date: "2026-11-01",
+        payee: null,
+        category: null,
+        notes: "",
+        cleared: false,
+      }),
+    ).resolves.toEqual(existing);
+  });
+
+  it("uses Actual's transfer payee hook to create both linked legs", async () => {
+    const id = "tandem:8c88495a-65d9-4531-8392-93bff2c65375";
+    let outgoing: Record<string, unknown> | undefined;
     const fake = createClient(
-      { data: [outgoing] },
+      { data: [] },
       {
         accounts: [
           { id: "account-1", name: "Checking", closed: false },
@@ -790,6 +875,24 @@ describe("Actual transaction store", () => {
         ],
       },
     );
+    fake.client.aqlQuery.mockImplementation(async () => ({
+      data: outgoing ? [outgoing] : [],
+    }));
+    fake.client.addTransactions.mockImplementation(async () => {
+      outgoing = {
+        id: "actual-transfer-out",
+        account: "account-1",
+        amount: -1250,
+        date: "2026-11-01",
+        payee: "transfer-payee",
+        imported_id: id,
+        transfer_id: "actual-transfer-in",
+        notes: "Move to savings",
+        category: null,
+        cleared: false,
+      };
+      return "ok" as const;
+    });
     const store = createActualTransactionStore(fake.client);
     const input: TransactionCreateInput = {
       account: "account-1",
@@ -803,7 +906,8 @@ describe("Actual transaction store", () => {
 
     await expect(store.validateCreateInput(input)).resolves.toBeUndefined();
 
-    await expect(store.create(id, input)).resolves.toEqual(outgoing);
+    const created = await store.create(id, input);
+    expect(created).toEqual(outgoing);
     expect(fake.client.getPayees).toHaveBeenCalledOnce();
     expect(fake.client.addTransactions).toHaveBeenCalledWith(
       "account-1",
