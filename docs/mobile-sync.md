@@ -13,16 +13,18 @@ flowchart LR
   Worker[Android WorkManager or iOS background task] --> Sync
   Sync <--> Client[Generated API client]
   Client <--> API[Tandem API]
-  API <--> Projection[(Server projection and change feed)]
+  API <--> Snapshot[("Bounded in-memory snapshot cache")]
   API <--> ActualAPI["Actual API package in Tandem"]
   ActualAPI <--> Actual[Actual Budget server]
 ```
 
 The UI reads local records. The coordinator sends changes through the Tandem
 API, which uses Actual's supported Node API package (`@actual-app/api`) to read
-and write budgets, and maintains the server-side projection used for snapshots
-and change pages. The package runs inside the Tandem API service, not as a
-separate network service. Tandem does not write directly to Actual's database.
+and write budgets. The API keeps only a bounded, temporary snapshot in memory
+to serve pages consistently. PostgreSQL does not store a budget projection or
+row-level change feed; it still stores the write-recovery journal. The package
+runs inside the Tandem API service, not as a separate network service. Tandem
+does not write directly to Actual's database.
 
 ## First sync
 
@@ -80,22 +82,25 @@ work all use the same coordinator.
 flowchart TD
   Trigger[Manual, resume, network, or scheduled trigger] --> Ready{Sync enabled and session available?}
   Ready -->|No| Cache[Keep showing the local budget]
-  Ready -->|Yes| Cursor[Read saved cursor and pending writes]
-  Cursor --> Valid{Cursor still valid?}
-  Valid -->|Yes| Pages[Fetch change-feed pages]
-  Valid -->|No: expired or reset| Snapshot[Fetch a fresh snapshot]
-  Pages --> Apply[Apply records and cursor in one Room transaction]
-  Snapshot --> Apply
-  Apply --> UI[Room flows update the open screens]
+  Ready -->|Yes| Cursor[Read saved generation and pending writes]
+  Cursor --> Refresh[Ask the API to check Actual]
+  Refresh -->|Same snapshot| NoChange[Keep existing Room rows]
+  Refresh -->|Changed, restarted, or cache evicted| Snapshot[Fetch a fresh snapshot]
+  Snapshot --> Apply[Replace remote baseline in one Room transaction]
+  NoChange --> UI[Room flows update the open screens]
+  Apply --> UI
 ```
 
-Each paged run holds the server's `throughCursor` fixed. Tandem applies a page
-and its next cursor together; deleted records become tombstones. If the cursor
-expires or the server generation changes, the coordinator replaces the remote
-baseline from a fresh snapshot while retaining local pending edits. Every
-device keeps its own cursor over the shared change feed. See the
-[API contract](api/README.md#transaction-reads-and-reconciliation) for feed
-retention and reset behavior.
+Actual's supported API has no incremental message cursor. Tandem compares a
+fresh Actual read with the process-memory snapshot. If the record set changed,
+the API starts a new generation and the client downloads a complete snapshot;
+an unchanged check returns no row-level changes. API restart and cache eviction
+also start a new generation and require a full snapshot. The API cache is
+bounded to two budgets, so deployments should run one API process and expect a
+resync after restart. Room replaces only the remote baseline and retains local
+pending edits. The compatibility cursor fields remain in the API contract for
+existing clients, but the current server returns cursor `0` and no row-level
+deltas.
 
 ## Saving edits and resolving errors
 
@@ -127,8 +132,8 @@ discarded.
 
 Transaction creates use a stable `tandem:<uuid>` identifier. The API passes it
 to Actual as `imported_id` and reads the created row back before committing the
-journal entry. Updates, deletes, snapshots, and change-feed reconciliation use
-that same identifier. Transaction edits support amount, payee, category, date,
+journal entry. Updates, deletes, and snapshot reconciliation use that same
+identifier. Transaction edits support amount, payee, category, date,
 account, and notes. Amounts stay in integer minor units.
 
 ## Offline behavior
@@ -154,7 +159,7 @@ that need review.
 
 When a budget has no saved selection, Tandem opens the most recently synced
 local budget. A prior successful sync is enough to open the local copy, even if
-its change-feed cursor must be rebuilt later. Tandem uses saved catalog
+its remote snapshot generation must be refreshed later. Tandem uses saved catalog
 metadata for its name and encryption state, and discovers cached budgets from
 Room if that metadata is missing.
 
@@ -187,9 +192,9 @@ multi-instance invalidation keeps the visible screens current.
 | Budget password    | Sent only on requests that need it; never stored in Room or the outbox                          |
 | Cached budget      | Stored locally so the selected budget remains readable offline                                  |
 
-Actual-encrypted budgets are decrypted by Actual's API for Tandem's server-side
-projection and the mobile cache. Actual's encryption therefore does not protect
-those working copies. See [the architecture notes](architectural-design.md)
+Actual-encrypted budgets are decrypted by Actual's API for the temporary
+in-memory snapshot and the mobile cache. Actual's encryption therefore does not
+protect those working copies. See [the architecture notes](architectural-design.md)
 for the server trust boundary and the fully encrypted alternative.
 
 “Forget this device” revokes the server token before removing the local
@@ -198,13 +203,13 @@ revocation can be retried. Device tokens expire after 90 days of inactivity.
 
 ## Code map
 
-| Module                                  | Responsibility                                                                             |
-| --------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `mobile/data`                           | Room records, local overlays, change cursor, durable outbox, and sync coordinator          |
-| `mobile/api-client`                     | Generated OpenAPI client and adapter for the data module                                   |
-| `mobile/composeApp`                     | Shared Compose screens observing Room flows                                                |
-| `mobile/androidApp` and `mobile/iosApp` | Platform hosts, secure credential stores, and scheduled work                               |
-| `services/api`                          | Device authorization, budget projection, change feed, write journal, and Actual API access |
+| Module                                  | Responsibility                                                                       |
+| --------------------------------------- | ------------------------------------------------------------------------------------ |
+| `mobile/data`                           | Room records, local overlays, reset generation, durable outbox, and sync coordinator |
+| `mobile/api-client`                     | Generated OpenAPI client and adapter for the data module                             |
+| `mobile/composeApp`                     | Shared Compose screens observing Room flows                                          |
+| `mobile/androidApp` and `mobile/iosApp` | Platform hosts, secure credential stores, and scheduled work                         |
+| `services/api`                          | Device authorization, temporary snapshots, write journal, and Actual API access      |
 
 ## Local checks
 

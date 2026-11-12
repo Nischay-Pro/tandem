@@ -64,62 +64,9 @@ export async function up(client: PoolClient): Promise<void> {
     CHECK ((resolution_state = 'unresolved' AND resolution IS NULL AND resolved_at IS NULL)
       OR (resolution_state = 'resolved' AND resolution IS NOT NULL AND resolved_at IS NOT NULL))
   )`);
-  await client.query(`CREATE TABLE tandem_budget_sync_state (
-    budget_id text PRIMARY KEY CHECK (length(budget_id) BETWEEN 1 AND 500),
-    generation uuid NOT NULL,
-    feed_epoch text NOT NULL CHECK (length(feed_epoch) BETWEEN 1 AND 100),
-    cursor bigint NOT NULL DEFAULT 0 CHECK (cursor >= 0),
-    refreshed_at timestamptz NOT NULL DEFAULT clock_timestamp()
-  )`);
-  await client.query(`CREATE TABLE tandem_budget_records (
-    budget_id text NOT NULL REFERENCES tandem_budget_sync_state(budget_id) ON DELETE CASCADE,
-    entity_type text NOT NULL CHECK (entity_type IN (
-      'account', 'account-group', 'category', 'category-group',
-      'payee', 'rule', 'schedule', 'transaction', 'budget-month'
-    )),
-    entity_id text NOT NULL CHECK (length(entity_id) BETWEEN 1 AND 500),
-    revision char(64) NOT NULL CHECK (revision ~ '^[a-f0-9]{64}$'),
-    body jsonb,
-    is_deleted boolean NOT NULL DEFAULT false,
-    updated_cursor bigint NOT NULL CHECK (updated_cursor >= 0),
-    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    PRIMARY KEY (budget_id, entity_type, entity_id),
-    CHECK ((is_deleted AND body IS NULL)
-      OR (NOT is_deleted AND body IS NOT NULL AND jsonb_typeof(body) = 'object'))
-  )`);
-  await client.query(`CREATE TABLE tandem_budget_changes (
-    budget_id text NOT NULL REFERENCES tandem_budget_sync_state(budget_id) ON DELETE CASCADE,
-    cursor bigint NOT NULL CHECK (cursor > 0),
-    entity_type text NOT NULL CHECK (entity_type IN (
-      'account', 'account-group', 'category', 'category-group',
-      'payee', 'rule', 'schedule', 'transaction', 'budget-month'
-    )),
-    entity_id text NOT NULL CHECK (length(entity_id) BETWEEN 1 AND 500),
-    operation text NOT NULL CHECK (operation IN ('upsert', 'delete')),
-    revision char(64) NOT NULL CHECK (revision ~ '^[a-f0-9]{64}$'),
-    body jsonb,
-    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    PRIMARY KEY (budget_id, cursor),
-    CHECK ((operation = 'delete' AND body IS NULL)
-      OR (operation = 'upsert'
-        AND (body IS NULL OR jsonb_typeof(body) = 'object')))
-  )`);
-  await client.query(`CREATE INDEX tandem_budget_records_snapshot_keyset
-    ON tandem_budget_records (
-      budget_id,
-      entity_type COLLATE "C",
-      entity_id COLLATE "C"
-    ) WHERE is_deleted = false`);
-  await client.query(`CREATE INDEX tandem_budget_record_tombstone_retention
-    ON tandem_budget_records (budget_id, updated_cursor)
-    WHERE is_deleted = true`);
 }
 
 export async function down(client: PoolClient): Promise<void> {
-  await client.query("DROP TABLE tandem_budget_changes");
-  await client.query("DROP TABLE tandem_budget_records");
-  await client.query("DROP TABLE tandem_budget_sync_state");
   await client.query("DROP TABLE tandem_operation_conflicts");
   await client.query("DROP TABLE tandem_operations");
   await client.query("DROP TABLE tandem_actual_sessions");

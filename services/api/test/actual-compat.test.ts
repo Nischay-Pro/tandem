@@ -30,6 +30,7 @@ import {
 import { createActualTransactionStore } from "../src/actual/transaction-store.js";
 import { createPostgresDatabase } from "../src/database.js";
 import { BudgetReadApi } from "../src/budget-projection/budget-read-api.js";
+import { InMemoryBudgetProjectionStore } from "../src/budget-projection/in-memory-budget-projection-store.js";
 import { runApi } from "../src/main.js";
 import type { ShutdownSignal } from "../src/server.js";
 
@@ -486,7 +487,7 @@ describe.skipIf(!compatibilityTestEnabled)(
         const budgetReadApi = new BudgetReadApi(
           database,
           new ActualBudgetSnapshotReader(firstDevice),
-          database.budgetProjection,
+          new InMemoryBudgetProjectionStore(),
           "actual-compatibility",
         );
         const reconciliationApp = await buildApiApp(
@@ -1698,11 +1699,13 @@ describe.skipIf(!compatibilityTestEnabled)(
           changes: unknown[];
         };
         expect(firstChangePage).toMatchObject({
-          throughCursor: runtimeSnapshot.cursor,
-          hasMore: true,
+          throughCursor: "0",
+          nextCursor: "0",
+          hasMore: false,
           resetRequired: false,
+          changes: [],
         });
-        expect(firstChangePage.changes).toHaveLength(2);
+        expect(firstChangePage.changes).toHaveLength(0);
         const nextChangePageResponse = await productionApp.inject({
           method: "GET",
           url: `/api/v1/budgets/${budget.groupId}/changes?generation=${runtimeSnapshot.generation}&cursor=${firstChangePage.nextCursor}&throughCursor=${firstChangePage.throughCursor}&limit=2`,

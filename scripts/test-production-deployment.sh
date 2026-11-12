@@ -12,6 +12,7 @@ chmod 700 "$secret_dir"
 project="tandem-release-check"
 restore_tmp_dir="$scratch_root/restore-tmp"
 edge_network="${project}-edge"
+test_api_host_port="${TEST_API_HOST_PORT:-19754}"
 compose=(docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml")
 
 cleanup() {
@@ -52,7 +53,7 @@ DATABASE_URL_FILE=$secret_dir/database_url
 AUTH_TOKEN_ENCRYPTION_KEY_FILE=$secret_dir/auth_token_encryption_key
 AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE=$secret_dir/auth_token_encryption_key_previous
 ACTUAL_SESSION_TOKEN_FILE=$secret_dir/actual_session_token
-CHANGE_FEED_EPOCH=$test_epoch
+TEST_API_HOST_PORT=$test_api_host_port
 TRUST_PROXY=127.0.0.1
 TANDEM_EDGE_NETWORK=$edge_network
 ACTUAL_SERVER_URL=
@@ -83,7 +84,7 @@ fi
 wait_for_api() {
   local attempts="${1:-60}"
   for _ in $(seq 1 "$attempts"); do
-    if curl --silent --fail http://127.0.0.1:19754/api/v1/health/ready >/dev/null; then
+    if curl --silent --fail "http://127.0.0.1:$test_api_host_port/api/v1/health/ready" >/dev/null; then
       return 0
     fi
     sleep 1
@@ -112,7 +113,7 @@ SQL
 }
 
 login_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
-  --request POST http://127.0.0.1:19754/api/v1/auth/login \
+  --request POST "http://127.0.0.1:$test_api_host_port/api/v1/auth/login" \
   --header 'Content-Type: application/json' \
   --data '{"password":"unused-test-password","deviceName":"Release check phone"}')"
 if [[ "$login_status" != 503 ]]; then
@@ -122,14 +123,14 @@ fi
 
 phone_token="$(create_test_device 'Release check phone')"
 tablet_token="$(create_test_device 'Release check tablet')"
-device_list="$(curl --silent --show-error --fail http://127.0.0.1:19754/api/v1/devices \
+device_list="$(curl --silent --show-error --fail "http://127.0.0.1:$test_api_host_port/api/v1/devices" \
   --header "Authorization: Bearer $phone_token")"
 if [[ "$device_list" != *'Release check phone'* || "$device_list" != *'Release check tablet'* ]]; then
   echo "Production device listing did not return both paired synthetic devices." >&2
   exit 1
 fi
 
-unauthorized_status="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:19754/api/v1/devices)"
+unauthorized_status="$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:$test_api_host_port/api/v1/devices")"
 if [[ "$unauthorized_status" != 401 ]]; then
   echo "Unauthenticated device listing returned HTTP $unauthorized_status (expected 401)." >&2
   exit 1
@@ -144,10 +145,10 @@ third_token="$(create_test_device 'Post-backup tablet')"
 "${compose[@]}" exec -T api node --input-type=module -e \
   "import { writeFileSync } from 'node:fs'; writeFileSync('/data/actual-api/release-check.txt', 'after backup');"
 TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" \
-  "$project_root/deploy/restore.sh" "$scratch_root/tandem-backup" "$test_epoch-after-restore"
+  "$project_root/deploy/restore.sh" "$scratch_root/tandem-backup"
 "${compose[@]}" up --detach api
 wait_for_api
-device_list="$(curl --silent --show-error --fail http://127.0.0.1:19754/api/v1/devices \
+device_list="$(curl --silent --show-error --fail "http://127.0.0.1:$test_api_host_port/api/v1/devices" \
   --header "Authorization: Bearer $phone_token")"
 if [[ "$device_list" != *'Release check phone'* || "$device_list" != *'Release check tablet'* || "$device_list" == *'Post-backup tablet'* ]]; then
   echo "Production restore did not reinstate the backup's device state." >&2
@@ -166,7 +167,7 @@ if [[ "$current_workspace" != "node writable after restore" ]]; then
   exit 1
 fi
 restored_token_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
-  --header "Authorization: Bearer $third_token" http://127.0.0.1:19754/api/v1/devices)"
+  --header "Authorization: Bearer $third_token" "http://127.0.0.1:$test_api_host_port/api/v1/devices")"
 if [[ "$restored_token_status" != 401 ]]; then
   echo "A device created after the backup remained authorized after restore (HTTP $restored_token_status)." >&2
   exit 1
@@ -225,7 +226,7 @@ assert_corrupt_restore_is_rejected() {
   fi
 
   if TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" \
-    "$project_root/deploy/restore.sh" "$corrupt_prefix" "$test_epoch-corrupt-$kind-$truncation"; then
+    "$project_root/deploy/restore.sh" "$corrupt_prefix"; then
     echo "Production restore accepted a truncated $kind backup ($truncation)." >&2
     exit 1
   fi
@@ -246,7 +247,7 @@ assert_corrupt_restore_is_rejected() {
     echo "A rejected $kind backup stopped or replaced the running API ($truncation)." >&2
     exit 1
   fi
-  devices="$(curl --silent --show-error --fail http://127.0.0.1:19754/api/v1/devices \
+  devices="$(curl --silent --show-error --fail "http://127.0.0.1:$test_api_host_port/api/v1/devices" \
     --header "Authorization: Bearer $phone_token")"
   if [[ "$devices" != *'Release check phone'* || "$devices" != *'Release check tablet'* || "$devices" == *'Post-backup tablet'* ]]; then
     echo "A rejected $kind backup changed the live PostgreSQL device records ($truncation)." >&2
@@ -276,7 +277,7 @@ wrong_passphrase_file="$scratch_root/release-check-wrong-backup-passphrase"
 mkdir -m 700 -p "$restore_tmp_dir"
 printf '%s' 'incorrect synthetic passphrase' > "$wrong_passphrase_file"
 chmod 600 "$wrong_passphrase_file"
-if TMPDIR="$restore_tmp_dir" TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" TANDEM_BACKUP_GPG_PASSPHRASE_FILE="$wrong_passphrase_file" "$project_root/deploy/restore.sh" "$scratch_root/tandem-encrypted-backup" "$test_epoch-wrong-passphrase" >/dev/null 2>&1; then
+if TMPDIR="$restore_tmp_dir" TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" TANDEM_BACKUP_GPG_PASSPHRASE_FILE="$wrong_passphrase_file" "$project_root/deploy/restore.sh" "$scratch_root/tandem-encrypted-backup" >/dev/null 2>&1; then
   echo "Encrypted restore accepted an incorrect passphrase." >&2
   exit 1
 fi
@@ -287,14 +288,14 @@ fi
 wait_for_api 15
 encrypted_post_backup_token="$(create_test_device 'Post-encrypted-backup tablet')"
 docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml" exec -T api node --input-type=module -e "import { writeFileSync } from 'node:fs'; writeFileSync('/data/actual-api/release-check.txt', 'after encrypted backup');"
-TMPDIR="$restore_tmp_dir" TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" TANDEM_BACKUP_GPG_PASSPHRASE_FILE="$backup_passphrase_file" "$project_root/deploy/restore.sh" "$scratch_root/tandem-encrypted-backup" "$test_epoch-after-encrypted-restore"
+TMPDIR="$restore_tmp_dir" TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" TANDEM_BACKUP_GPG_PASSPHRASE_FILE="$backup_passphrase_file" "$project_root/deploy/restore.sh" "$scratch_root/tandem-encrypted-backup"
 if [[ -n "$(find "$restore_tmp_dir" -mindepth 1 -maxdepth 1 -type f -print -quit)" ]]; then
   echo "A successful encrypted restore left decrypted temporary files." >&2
   exit 1
 fi
 docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml" up --detach api
 wait_for_api
-encrypted_device_list="$(curl --silent --show-error --fail http://127.0.0.1:19754/api/v1/devices --header "Authorization: Bearer $phone_token")"
+encrypted_device_list="$(curl --silent --show-error --fail "http://127.0.0.1:$test_api_host_port/api/v1/devices" --header "Authorization: Bearer $phone_token")"
 if [[ "$encrypted_device_list" != *'Release check phone'* || "$encrypted_device_list" != *'Release check tablet'* || "$encrypted_device_list" == *'Post-encrypted-backup tablet'* ]]; then
   echo "Encrypted production restore did not reinstate its PostgreSQL backup." >&2
   exit 1
@@ -304,7 +305,7 @@ if [[ "$encrypted_workspace_value" != "before encrypted backup" ]]; then
   echo "Encrypted production restore did not reinstate its Actual workspace." >&2
   exit 1
 fi
-encrypted_token_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --header "Authorization: Bearer $encrypted_post_backup_token" http://127.0.0.1:19754/api/v1/devices)"
+encrypted_token_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --header "Authorization: Bearer $encrypted_post_backup_token" "http://127.0.0.1:$test_api_host_port/api/v1/devices")"
 if [[ "$encrypted_token_status" != 401 ]]; then
   echo "Encrypted restore kept a device created after the backup (HTTP $encrypted_token_status)." >&2
   exit 1
@@ -316,7 +317,7 @@ sleep 11
 docker exec --user 0 "$api_id" /bin/sh -c 'kill -KILL 1' >/dev/null 2>&1 || true
 wait_for_api
 
-device_list="$(curl --silent --show-error --fail http://127.0.0.1:19754/api/v1/devices \
+device_list="$(curl --silent --show-error --fail "http://127.0.0.1:$test_api_host_port/api/v1/devices" \
   --header "Authorization: Bearer $tablet_token")"
 if [[ "$device_list" != *'Release check phone'* || "$device_list" != *'Release check tablet'* ]]; then
   echo "Paired credentials did not survive the production API crash and restart." >&2

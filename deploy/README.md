@@ -6,6 +6,10 @@ build stage, and runs as the unprivileged `node` user in a read-only container.
 PostgreSQL is not published to the host. The API is reachable only from the
 external Docker network used by the reverse proxy.
 
+Run one API process. Snapshot paging state is held in a bounded in-memory cache;
+multiple replicas would not share a page generation and could repeatedly force
+mobile clients to restart their snapshot download.
+
 ## Start the service
 
 Create a dedicated edge network, a private directory for Compose secrets, and
@@ -83,10 +87,7 @@ sudo install -o root -g 1000 -m 0440 /dev/null deploy/compose/secrets/auth_token
 Keep the old key in protected backup storage while any database backup may still
 contain tokens encrypted with it.
 
-Set `CHANGE_FEED_EPOCH` in `deploy/compose/.env` to a random stable value. Keep
-it unchanged for ordinary restarts. Use a new value after restoring a database
-backup so mobile devices discard cursors from the pre-restore history. Set
-`ACTUAL_SERVER_URL` to the Actual service address. Set `ACTUAL_PUBLIC_URL` to
+Set `ACTUAL_SERVER_URL` to the Actual service address. Set `ACTUAL_PUBLIC_URL` to
 the public Tandem URL to enable OpenID sign-in. When enabled,
 the server release must match
 [`docs/actual-compatibility.md`](../docs/actual-compatibility.md).
@@ -194,7 +195,7 @@ Keep that passphrase in a password manager or another protected location,
 separate from the backup files. Do not put it in `.env`, the backup directory,
 or the same storage account as the backups. Back up `deploy/compose/.env` and
 `deploy/compose/secrets/` separately in an approved secrets manager. The `.env`
-contains the change-feed epoch and secret file paths; the secret files contain
+contains non-secret configuration and secret-file paths; the secret files contain
 the database password and auth encryption key.
 
 Run a backup to a protected prefix in a directory accessible only to the
@@ -220,14 +221,14 @@ The script validates both files before stopping the API. PostgreSQL restore
 runs in a single transaction with errors enabled, so a failed database restore
 rolls back its changes. A rejected archive leaves the existing database and
 workspace in place and the API running. A successful restore replaces the
-current PostgreSQL contents and Actual workspace. Afterward, set a new random
-`CHANGE_FEED_EPOCH` in `deploy/compose/.env` before starting the API. The
-restore script leaves the API stopped until that explicit step is complete.
+current PostgreSQL contents and Actual workspace. The restore script leaves
+the API stopped until you explicitly start and verify it. Its new process
+starts with an empty snapshot cache, so clients receive a fresh generation and
+resync automatically.
 
 ```sh
 TANDEM_BACKUP_GPG_PASSPHRASE_FILE=/secure/tandem-backup-keys/passphrase \
-  deploy/restore.sh /secure/tandem-backups/tandem-2026-11-01-encrypted \
-  new-random-epoch-20261101
+  deploy/restore.sh /secure/tandem-backups/tandem-2026-11-01-encrypted
 ```
 
 Then start and verify the API using the commands above. Confirm that an

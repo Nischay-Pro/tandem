@@ -5,10 +5,10 @@ import { PostgresActualSessionVault } from "./auth/actual-session-vault.js";
 import { READINESS_TIMEOUT_MS } from "./config.js";
 import { withBudgetLock } from "./database/budget-lock.js";
 import { applyMigrations } from "./schema/migrator.js";
+import { InMemoryBudgetProjectionStore } from "./budget-projection/in-memory-budget-projection-store.js";
+import type { BudgetProjectionStore } from "./budget-projection/contracts.js";
 import type { DurableWriteJournal } from "./write-journal/contracts.js";
 import { PostgresWriteJournal } from "./write-journal/postgres-write-journal.js";
-import { createPostgresBudgetProjectionStore } from "./budget-projection/postgres-budget-projection-store.js";
-import type { BudgetProjectionStore } from "./budget-projection/contracts.js";
 
 export interface HealthDatabase {
   ping(): Promise<void>;
@@ -55,7 +55,7 @@ export function createPostgresDatabase(
   });
 
   const journal = new PostgresWriteJournal(pool);
-  const budgetProjection = createPostgresBudgetProjectionStore(pool);
+  const budgetProjection = new InMemoryBudgetProjectionStore();
   const deviceAuth = new DeviceAuthorization(new PostgresDeviceAuthStore(pool));
   const actualSessionVault = new PostgresActualSessionVault(
     pool,
@@ -84,8 +84,8 @@ export function createPostgresDatabase(
       await actualSessionVault.reencryptStoredTokensWithCurrentKey();
     },
     journal,
-    maintenanceJournal: journal,
     budgetProjection,
+    maintenanceJournal: journal,
     deviceAuth,
     actualSessionVault,
     async withBudgetLock<T>(budgetId: string, work: () => Promise<T>) {

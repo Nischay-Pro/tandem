@@ -5008,7 +5008,7 @@ function registerBudgetReadRoutes(
       schema: {
         tags: ["Budgets"],
         operationId: "getBudgetSnapshot",
-        summary: "Refresh and read the complete budget projection",
+        summary: "Refresh and read a complete budget snapshot",
         security: [{ bearerAuth: [] }],
         params: budgetParamsSchema,
         headers: encryptionHeadersSchema,
@@ -5061,7 +5061,7 @@ function registerBudgetReadRoutes(
       schema: {
         tags: ["Budgets"],
         operationId: "getBudgetSnapshotPage",
-        summary: "Refresh and read a bounded page of the budget projection",
+        summary: "Read a bounded page from the current budget snapshot",
         security: [{ bearerAuth: [] }],
         params: budgetParamsSchema,
         headers: encryptionHeadersSchema,

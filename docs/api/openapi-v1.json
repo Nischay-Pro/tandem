@@ -3715,7 +3715,7 @@
     "/api/v1/budgets/{budgetId}/snapshot": {
       "get": {
         "operationId": "getBudgetSnapshot",
-        "summary": "Refresh and read the complete budget projection",
+        "summary": "Refresh and read a complete budget snapshot",
         "tags": ["Budgets"],
         "parameters": [
           {
@@ -3869,7 +3869,7 @@
     "/api/v1/budgets/{budgetId}/snapshot-pages": {
       "get": {
         "operationId": "getBudgetSnapshotPage",
-        "summary": "Refresh and read a bounded page of the budget projection",
+        "summary": "Read a bounded page from the current budget snapshot",
         "tags": ["Budgets"],
         "parameters": [
           {

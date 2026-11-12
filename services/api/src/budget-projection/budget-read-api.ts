@@ -153,7 +153,7 @@ export class BudgetReadApi implements BudgetReadApiPort {
         }
       }
 
-      const page = await this.store.readSnapshotPage({
+      const pageRequest = {
         budgetId: request.budgetId,
         generation,
         cursor,
@@ -162,7 +162,32 @@ export class BudgetReadApi implements BudgetReadApiPort {
           : { afterType: request.afterType }),
         ...(request.afterId === undefined ? {} : { afterId: request.afterId }),
         limit: request.limit,
-      });
+      };
+      let page = await this.store.readSnapshotPage(pageRequest);
+      if (!page) {
+        let result = await this.readSnapshot(
+          request.budgetId,
+          request.encryptionPassword,
+        );
+        displaySettings = result.displaySettings;
+        if (
+          result.unchanged &&
+          !(await this.store.readSnapshot(request.budgetId))
+        ) {
+          result = await this.readSnapshot(
+            request.budgetId,
+            request.encryptionPassword,
+            true,
+          );
+          displaySettings = result.displaySettings;
+        }
+        await this.store.applySnapshot(
+          request.budgetId,
+          this.feedEpoch,
+          result.records,
+        );
+        page = await this.store.readSnapshotPage(pageRequest);
+      }
       if (!page) throw new Error("Budget projection state was not created");
       return { ...page, displaySettings };
     });

@@ -83,10 +83,10 @@ account passwords are sent only for sign-in and are not retained. Encrypted
 budgets may send their separate budget password per request in
 `X-Budget-Encryption-Password`; that value is never written to PostgreSQL.
 Treat the workspace, PostgreSQL data, and their backups as financial data.
-Keep `CHANGE_FEED_EPOCH` stable during normal restarts. After restoring an older
-PostgreSQL backup, change it to a new value before starting the API. This
-invalidates prior mobile cursors and makes devices download a fresh server
-snapshot; the epoch must be backed up separately from PostgreSQL.
+Snapshot paging state lives only in API process memory. Restarting the API,
+restoring a backup, or evicting a budget from the bounded cache gives clients a
+new generation and makes them download a fresh snapshot. Room keeps local
+pending edits while replacing the remote baseline.
 
 ## Code quality
 

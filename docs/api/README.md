@@ -192,10 +192,11 @@ The Actual server must be the exact version supported by the API build; the API
 fails startup if it cannot verify that version. `ACTUAL_API_DATA_DIR` defaults
 to `/data/actual-api` and must be mounted on persistent storage. This workspace
 belongs to the official Node.js API and contains decrypted Actual budget files;
-protect it and its backups as financial data. PostgreSQL stores a readable
-projection of budget records, including records from encrypted budgets. Device
-Room caches also contain readable data. Neither the Actual password nor session
-token is sent to mobile devices.
+protect it and its backups as financial data. The API keeps a bounded,
+temporary snapshot cache in process memory; PostgreSQL stores encrypted session
+credentials and the write-recovery journal, which can contain financial data.
+Device Room caches also contain readable data. Neither the Actual password nor
+session token is sent to mobile devices.
 
 Each API response includes an `X-Request-ID`. The API writes one JSON request log
 with that ID, the method, route template, status, and duration. It does not log
@@ -215,11 +216,10 @@ Startup failures use distinct process exit codes:
 
 The budget snapshot and change endpoints use the same device scope and may also
 receive `X-Budget-Encryption-Password` for an encrypted budget. Actual's public
-API has no incremental change feed, so each complete snapshot and each new
-changes poll asks the pinned Actual API to download the budget, reads supported
-Actual API entities, and diffs them into PostgreSQL. A request that continues a
-page with `throughCursor` reads the already-materialized change rows and does
-not start another Actual download.
+API has no incremental change cursor. The API refreshes a supported-API read
+when the 15-second snapshot freshness interval expires, compares it with the
+in-memory snapshot, and advances the generation when records differ. It does
+not persist budget records or row-level change events in PostgreSQL.
 
 `GET /api/v1/budgets/{budgetId}/snapshot` returns a complete set of records with
 their type, stable Actual ID (or month string), JSON body, and SHA-256 revision,
@@ -234,37 +234,28 @@ records. The response is `Cache-Control: no-store`.
 
 Start a change poll with
 `GET /api/v1/budgets/{budgetId}/changes?generation=<generation>&cursor=<cursor>`.
-The default page size is 100; `limit` accepts 1 through 500. The response gives
-`throughCursor`, a high-water mark fixed for that pagination run, `nextCursor`,
-and `hasMore`. While `hasMore` is true, request the next page with the same
-generation and `throughCursor`, and set `cursor` to `nextCursor`. Once the page
-is complete, omit `throughCursor` on the next poll so the API refreshes Actual
-again. Upserts carry the full current record body; deletions carry a tombstone
-with a null body. The latest upsert body is stored with the current projection
-and joined into its feed event; when a later update replaces it, the previous
-body moves to that historical event until it leaves retention.
+The response retains the existing cursor-shaped contract for mobile-client
+compatibility. The current implementation uses cursor `0` and returns no
+row-level changes. If the requested generation differs from the in-memory
+snapshot, or the cache is missing, it sets `resetRequired`; the client then
+fetches a complete snapshot. Snapshot pages remain stable only while served by
+the same API process and generation. The cache holds at most two budgets, so
+running multiple API replicas or paging after a restart/cache eviction can
+force another full snapshot.
 
-If `resetRequired` is true, or the returned generation differs from the local
-generation, discard the local remote-data baseline and fetch a complete
-snapshot. This also applies when the requested cursor is ahead of the server or
-its change history has expired. The server retains the newest 100,000 change
-events per budget; older mobile cursors get a reset instead of a partial feed.
-Local pending mobile operations must remain in the outbox while a remote
-snapshot is replaced.
-
-Set `CHANGE_FEED_EPOCH` to a stable installation value. When restoring an older
-PostgreSQL backup, rotate this value before starting the restored service; the
-next refresh creates new generations and forces clients to fetch snapshots.
-Keep the epoch outside the PostgreSQL backup. A restored database cannot infer
-that it has been rewound if both its records and change history are restored to
-an earlier point and the configured epoch is left unchanged.
+The mobile client must keep local pending operations while replacing its remote
+baseline. Deleted remote records are removed by the transactional baseline
+replacement, not represented as feed tombstones. The API process restart
+automatically creates a new generation; backup restore requires no cursor epoch
+setting because the snapshot cache is not persisted.
 
 These endpoints return the state in the Actual copy downloaded for that
 request. Actual offers no public revision-conditional reads or incremental
 feed, so a change made through another Actual client after the download is
 visible on the next refresh. Refresh failures return a structured `502` and do
-not advance the Tandem cursor. PostgreSQL stores a plaintext projection of
-budget data; protect its volume and backups as financial data.
+not advance the snapshot generation. PostgreSQL still contains encrypted
+session credentials and the write journal; protect its volume and backups as
+financial data.
 
 Use `GET /api/v1/budgets/{budgetId}/transactions/{transactionId}` to obtain the
 canonical transaction snapshot and its SHA-256 `revision`. Include

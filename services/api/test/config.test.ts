@@ -51,8 +51,17 @@ describe("parseApiConfig", () => {
       host: "0.0.0.0",
       port: 19753,
       trustProxy: false,
-      changeFeedEpoch: "default",
+      changeFeedEpoch: "process-memory",
     });
+  });
+
+  it("uses an internal in-memory feed namespace instead of external epoch config", () => {
+    expect(
+      parseApiConfig({
+        DATABASE_URL: databaseUrl,
+        CHANGE_FEED_EPOCH: "ignored-by-the-memory-cache",
+      }).changeFeedEpoch,
+    ).toBe("process-memory");
   });
 
   it("keeps Actual integration disabled when its URL is omitted", () => {
@@ -230,7 +239,7 @@ describe("parseApiConfig", () => {
       host: "127.0.0.1",
       port: 8090,
       trustProxy: false,
-      changeFeedEpoch: "default",
+      changeFeedEpoch: "process-memory",
     });
   });
 
@@ -279,27 +288,6 @@ describe("parseApiConfig", () => {
       parseApiConfig({ DATABASE_URL: databaseUrl, TRUST_PROXY: "  " })
         .trustProxy,
     ).toBe(false);
-  });
-
-  it("accepts a bounded change-feed epoch and rejects unsafe values", () => {
-    expect(
-      parseApiConfig({
-        DATABASE_URL: databaseUrl,
-        CHANGE_FEED_EPOCH: " restore-2026-11 ",
-      }).changeFeedEpoch,
-    ).toBe("restore-2026-11");
-    expect(() =>
-      parseApiConfig({
-        DATABASE_URL: databaseUrl,
-        CHANGE_FEED_EPOCH: "bad epoch",
-      }),
-    ).toThrow("CHANGE_FEED_EPOCH must contain 1 to 100 safe characters");
-    expect(() =>
-      parseApiConfig({
-        DATABASE_URL: databaseUrl,
-        CHANGE_FEED_EPOCH: "x".repeat(101),
-      }),
-    ).toThrow("CHANGE_FEED_EPOCH must contain 1 to 100 safe characters");
   });
 
   it("rejects a missing database URL", () => {

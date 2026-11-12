@@ -383,7 +383,9 @@ describe("budget read API", () => {
       { withBudgetLock: fake.lock } as BudgetLockPort,
       fake.reader,
       {
+        applySnapshot: fake.applySnapshot,
         applySnapshotForRefresh: fake.applySnapshotForRefresh,
+        readSnapshot: vi.fn(async () => undefined),
         readSnapshotPage: vi.fn(async () => undefined),
       } as unknown as BudgetProjectionStore,
       "feed-epoch-1",

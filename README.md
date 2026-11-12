@@ -12,7 +12,7 @@ Tandem is under active development and is not a production release. Actual passw
 
 ## How sync works
 
-Actual remains the source of truth. The Android and iOS apps sync through the Tandem API and keep budget snapshots in Room, so previously synced data remains readable offline. The API uses Actual's official Node.js package to read and update budgets, while PostgreSQL stores Tandem's budget projection, change-feed cursors, and write-recovery state.
+Actual remains the source of truth. The Android and iOS apps sync through the Tandem API and keep budget snapshots in Room, so previously synced data remains readable offline. The API uses Actual's official Node.js package to read and update budgets. It keeps a short-lived snapshot in process memory for paging; PostgreSQL stores sign-in credentials and the write-recovery journal, not a second copy of the budget.
 
 Tandem uses this service because Actual does not provide a budget REST API and its official programmatic API is Node.js-only. The service gives both mobile platforms one supported Actual integration and centralizes sign-in, budget access, and write reconciliation. It must be trusted with readable budget data, including when an Actual budget is end-to-end encrypted. See [Architectural design](docs/architectural-design.md) for the rationale, tradeoffs, and a side-by-side diagram of unencrypted and encrypted budget flows.
 
@@ -85,7 +85,6 @@ services:
       AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE: /run/secrets/tandem_auth_token_encryption_key_previous
       HOST: 0.0.0.0
       PORT: 19753
-      CHANGE_FEED_EPOCH: ${CHANGE_FEED_EPOCH:?Set CHANGE_FEED_EPOCH in .env.tandem}
       TRUST_PROXY: ${TRUST_PROXY:?Set TRUST_PROXY to the proxy IP or narrow CIDR in .env.tandem}
       ACTUAL_SERVER_URL: ${ACTUAL_SERVER_URL:-http://actual-server:5006}
       ACTUAL_PUBLIC_URL: ${ACTUAL_PUBLIC_URL:-}
@@ -156,7 +155,6 @@ TANDEM_POSTGRES_PASSWORD_FILE=.tandem-secrets/postgres_password
 TANDEM_DATABASE_URL_FILE=.tandem-secrets/database_url
 TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_FILE=.tandem-secrets/auth_token_encryption_key
 TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE=.tandem-secrets/auth_token_encryption_key_previous
-CHANGE_FEED_EPOCH=<paste-the-generated-change-feed-value>
 ACTUAL_SERVER_URL=http://actual-server:5006
 ACTUAL_PUBLIC_URL=https://budget.example.com
 # Required when using this reverse-proxy deployment; use the proxy IP or a
@@ -164,7 +162,7 @@ ACTUAL_PUBLIC_URL=https://budget.example.com
 TRUST_PROXY=
 ```
 
-Set the Actual service name and URL for your Compose network. `ACTUAL_PUBLIC_URL` is the HTTPS address that reaches Tandem through your reverse proxy. The auth encryption key protects Actual session tokens stored by Tandem; keep it stable and private. Restrict `.env.tandem` to the deployment account with `chmod 600 .env.tandem`. Keep `CHANGE_FEED_EPOCH` stable across normal restarts; see [deployment and restore guidance](deploy/README.md) before changing it or restoring a backup. If the existing Actual stack has an `.env` file, pass both files so its current settings remain available and Tandem's paths are added:
+Set the Actual service name and URL for your Compose network. `ACTUAL_PUBLIC_URL` is the HTTPS address that reaches Tandem through your reverse proxy. The auth encryption key protects Actual session tokens stored by Tandem; keep it stable and private. Restrict `.env.tandem` to the deployment account with `chmod 600 .env.tandem`. If the existing Actual stack has an `.env` file, pass both files so its current settings remain available and Tandem's paths are added:
 
 ```sh
 docker compose \
@@ -201,7 +199,7 @@ docker network create tandem-edge
 cp deploy/compose/.env.example deploy/compose/.env
 chmod 600 deploy/compose/.env
 # Edit deploy/compose/.env: set the DB credentials, auth encryption key,
-# stable change-feed epoch, Actual URLs, and external network name.
+# Actual URLs and external network name.
 docker compose \
   --project-directory "$PWD" \
   --env-file deploy/compose/.env \
@@ -226,7 +224,6 @@ sudo install -d -o tandem -g tandem -m 0700 /var/lib/tandem/actual-api
 
 export DATABASE_URL='postgresql://tandem:<url-safe-password>@127.0.0.1:5432/tandem'
 export AUTH_TOKEN_ENCRYPTION_KEY='<64-hex-character-random-value>'
-export CHANGE_FEED_EPOCH='<stable-random-value>'
 export HOST=127.0.0.1
 export PORT=19753
 export TRUST_PROXY=127.0.0.1

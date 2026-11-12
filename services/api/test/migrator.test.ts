@@ -66,10 +66,10 @@ describe("0.1.0 database schema", () => {
         expect.stringContaining("CREATE TABLE tandem_actual_sessions"),
         expect.stringContaining("CREATE TABLE tandem_operations"),
         expect.stringContaining("CREATE TABLE tandem_operation_conflicts"),
-        expect.stringContaining("CREATE TABLE tandem_budget_sync_state"),
-        expect.stringContaining("CREATE TABLE tandem_budget_records"),
-        expect.stringContaining("CREATE TABLE tandem_budget_changes"),
       ]),
+    );
+    expect(statements.join("\n")).not.toMatch(
+      /CREATE TABLE tandem_budget_(sync_state|records|changes)/,
     );
     const previousName = "com" + "panion";
     expect(statements.join("\n")).not.toMatch(new RegExp(previousName, "i"));

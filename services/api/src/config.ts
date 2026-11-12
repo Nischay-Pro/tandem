@@ -86,12 +86,7 @@ export function parseApiConfig(environment: Environment): ApiConfig {
   const trustedProxyAddresses = parseTrustedProxyAddresses(
     environment.TRUST_PROXY,
   );
-  const changeFeedEpoch = environment.CHANGE_FEED_EPOCH?.trim() || "default";
-  if (!/^[A-Za-z0-9._:-]{1,100}$/.test(changeFeedEpoch)) {
-    throw new OperatorMessageError(
-      "CHANGE_FEED_EPOCH must contain 1 to 100 safe characters",
-    );
-  }
+  const changeFeedEpoch = "process-memory";
   const actual = parseActualConnection(environment);
 
   return {

@@ -31,24 +31,25 @@ request an explicit `sync()` after the operation. A failed sync is surfaced as
 an uncertain outcome; the adapter does not retry it. The durable operation
 journal and write recovery policy are documented in [the architectural design](architectural-design.md).
 
-## Budget read projection
+## Budget snapshot cache
 
 The pinned API exposes `getAccounts`, `getAccountBalance`, account and category
 group reads, `getCategories`, `getPayees`, `getBudgetMonths`, and
 `getBudgetMonth`. Transactions use the package's public `q()`/`aqlQuery()`
 methods with `splits: "grouped"`, ordered by stable ID and paged with AQL's
-`limit`/`offset`. The projection does not open Actual's SQLite database. Its
-compatibility test exercises the complete snapshot and change-feed routes with
-synthetic accounts, visible and hidden categories, budget months, transactions,
-split children, and transfer legs.
+`limit`/`offset`. Snapshot reads do not open Actual's SQLite database. The
+compatibility test exercises complete snapshot reads with synthetic accounts,
+visible and hidden categories, budget months, transactions, split children,
+and transfer legs.
 
-Actual does not expose an incremental change feed through this API. Tandem
-refreshes and diffs a supported-API snapshot into PostgreSQL. Each successful
-refresh stores current records, emits entity changes and deletion tombstones,
-and advances the per-budget cursor in one PostgreSQL transaction. The change
-feed is therefore a Tandem projection, not Actual's synchronization
-protocol; refresh sees the copy downloaded for that request, with external
-edits appearing on a subsequent refresh.
+Actual does not expose an incremental change cursor through this API. Tandem
+keeps the latest supported-API snapshot in a bounded in-memory cache so it can
+page a consistent generation. When the record set changes, the cache advances
+the generation and clients replace their remote baseline with a full snapshot.
+An unchanged check returns no row-level changes. API restart or cache eviction
+also invalidates the generation and makes clients resync; pending Room overlays
+remain local. The cache is per process and currently holds two budgets, so run
+one API process rather than multiple replicas behind a load balancer.
 
 For an end-to-end encrypted budget, callers pass its encryption password to the
 specific `runBudget()` call that opens the budget. It is separate from the
@@ -57,12 +58,14 @@ Actual server login credential. The adapter forwards it to Actual's
 compatibility test verifies that the catalog identifies the encrypted budget,
 a snapshot request without the password fails, and snapshot and transaction
 reads with the password succeed. The Actual API opens a local working copy for
-these operations, while Tandem stores readable projected records in
-PostgreSQL. Actual's encryption therefore protects the budget on Actual's sync
-server, but does not make the Tandem API service an encrypted relay; deployers
-must trust and protect the service, its readable PostgreSQL projection, local
-Actual working copy, and the phones' offline caches. Production backups also
-contain these files: the backup script writes mode-600 plaintext by default,
+these operations. Tandem does not persist a second readable budget projection
+in PostgreSQL, but its write journal can still contain transaction values,
+notes, and base snapshots until that journal is removed. Actual's encryption
+therefore protects the budget on Actual's sync server, but does not make the
+Tandem API service an encrypted relay; deployers must trust and protect the
+service, its PostgreSQL journal and credentials, local Actual working copy,
+and the phones' offline caches. Production backups also contain these files:
+the backup script writes mode-600 plaintext by default,
 or can encrypt the exported files with GnuPG when configured. File permissions
 limit access to the operator account but do not encrypt backup contents.
 
@@ -110,10 +113,10 @@ took 436 ms and the reopened-session read took 453 ms; both returned the same
 transaction revision digest. These figures cover server-side API reads and
 JSON serialization in this local environment, not transfer to or parsing on a
 phone. The test verifies session restart against the persisted local workspace,
-not an operating-system process restart. A full snapshot is still about 8.6 MB,
-so this result does not justify replacing the incremental feed with full
-snapshots on every sync. Keep the existing projection/feed until a replacement
-has measured payload frequency, device costs, and service restart behavior.
+not an operating-system process restart. A full snapshot is about 8.6 MB, so
+the service checks for changes at a 15-second freshness interval and sends a
+full snapshot only when records changed or the cache was lost. Measure transfer
+and client parsing on representative networks before increasing the sync rate.
 
 The test also creates a synthetic transfer payee, sets its `transfer_acct`
 through `updatePayee`, and adds a transaction with `runTransfers: true`. Actual
