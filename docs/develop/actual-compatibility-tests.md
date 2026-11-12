@@ -24,14 +24,14 @@ test uses a disposable Actual server and synthetic budgets.
 
 ## Verified coverage
 
-| Area                 | What the disposable test checks                                                                                                           | Limit                                                                                                                     |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Transactions         | Create, update, sync, read from an independent workspace, and delete.                                                                     | One ordinary transaction path.                                                                                            |
-| Concurrent edits     | Two workspaces edit the same transaction amount and converge after sync.                                                                  | Confirms observed convergence; it does not establish which edit wins or cover every field and entity.                     |
-| Transfers and splits | Create paired transfer legs, update/delete transfers, create splits, edit split parents and children, and detect changed split structure. | Exercises the pinned Actual release only.                                                                                 |
-| Encrypted budgets    | Reads fail without the budget password and succeed when the password is supplied.                                                         | Test setup uses an internal Actual handler to create an encrypted synthetic fixture; production reads use the public API. |
-| Session token        | Reads the catalog and performs a transaction write using a token issued by the disposable server's password login.                        | Does not verify an OpenID-only server or an OpenID-issued token's budget read/write path.                                 |
-| Large snapshot       | Reads 15,000 synthetic transactions, then repeats after opening a fresh API session from the same local workspace.                        | Server-side read and JSON serialization only; it does not measure a process restart, network transfer, or phone parsing.  |
+| Area                 | What the disposable test checks                                                                                                                                                                                                                                                                                                      | Limit                                                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Transactions         | Create, update, sync, read from an independent workspace, and delete.                                                                                                                                                                                                                                                                | One ordinary transaction path.                                                                                            |
+| Concurrent edits     | Two workspaces edit the same transaction amount and converge after sync.                                                                                                                                                                                                                                                             | Confirms observed convergence; it does not establish which edit wins or cover every field and entity.                     |
+| Transfers and splits | Create paired transfer legs, update/delete transfers, create splits, edit split parents and children, and detect changed split structure.                                                                                                                                                                                            | Exercises the pinned Actual release only.                                                                                 |
+| Encrypted budgets    | Reads fail without the budget password and succeed when the password is supplied.                                                                                                                                                                                                                                                    | Test setup uses an internal Actual handler to create an encrypted synthetic fixture; production reads use the public API. |
+| Session token        | The automated suite checks catalog reads and transaction writes with a password-issued token. A separate live check used Actual 26.11.0 with OpenID enforced and password login disabled; Tandem used `ACTUAL_SESSION_TOKEN_FILE`, read a synthetic budget, wrote and synced a transaction, and an independent session read it back. | The OpenID-only check is a live verification, not a repeatable CI test.                                                   |
+| Large snapshot       | Reads 15,000 synthetic transactions, then repeats after opening a fresh API session from the same local workspace.                                                                                                                                                                                                                   | Server-side read and JSON serialization only; it does not measure a process restart, network transfer, or phone parsing.  |
 
 One local run returned 15,116 records and 8,644,137 JSON bytes. The first read
 took 436 ms and the reopened-session read took 453 ms with the same transaction
@@ -39,8 +39,12 @@ revision digest. Treat these numbers as one server-side datapoint, not a mobile
 performance guarantee. Measure transfer and parsing on representative phones
 and networks before changing sync intervals.
 
-The session-token test verifies a token issued by the disposable server's
-password login. It does not test an OpenID-only Actual configuration or an
-OpenID-issued token's budget read/write path. For the compatibility boundary,
-see [Actual compatibility](../concepts/actual-compatibility.md). For general
-developer checks, see [Test Tandem](testing.md).
+The automated session-token test uses a token issued by the disposable server's
+password login. Separately, on 2026-11-12, a live compatibility check used a
+disposable Actual 26.11.0 server with OpenID enforced and password login
+disabled. Tandem started with `ACTUAL_SESSION_TOKEN_FILE` and no Actual
+password, reported ready, read a synthetic budget, wrote and synced a
+transaction, and an independent session read it back using the OpenID-issued
+token. That OIDC-only check is not part of CI yet. For the compatibility
+boundary, see [Actual compatibility](../concepts/actual-compatibility.md). For
+general developer checks, see [Test Tandem](testing.md).
