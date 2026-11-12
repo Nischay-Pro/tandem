@@ -414,6 +414,58 @@ describe("health routes and OpenAPI", () => {
     await app.close();
   });
 
+  it("reports a full PostgreSQL volume as a storage failure", async () => {
+    const ping = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValue(
+        Object.assign(new Error("could not extend file"), { code: "53100" }),
+      );
+    const app = await buildApiApp({
+      ping,
+      close: vi.fn<() => Promise<void>>(),
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/health/ready",
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({
+      error: {
+        code: "server_storage_full",
+        message:
+          "Tandem server storage is full. Free disk space on the server and try again.",
+      },
+    });
+    await app.close();
+  });
+
+  it("maps storage-full errors raised outside an explicit route handler", async () => {
+    const app = await buildApiApp(
+      { ping: vi.fn(), close: vi.fn() },
+      {
+        deviceAuth: createDeviceAuth(),
+        actualOpenIdLogin: {
+          startBrowserHandoff: () => {
+            throw Object.assign(new Error("unexpected ENOSPC"), {
+              code: "ENOSPC",
+            });
+          },
+        } as unknown as ActualOpenIdLogin,
+      },
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/auth/openid/browser-start/${"S".repeat(43)}`,
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json().error.code).toBe("server_storage_full");
+    await app.close();
+  });
+
   it("reports a safe Actual credential problem from the readiness check", async () => {
     const app = await buildApiApp(
       {
@@ -709,6 +761,94 @@ describe("health routes and OpenAPI", () => {
     expect(notCreated.statusCode).toBe(503);
     expect(notCreated.json().error.code).toBe("actual_unavailable");
     await noDevice.close();
+  });
+
+  it("returns the storage-full response when sign-in cannot persist its device", async () => {
+    const fullDiskError = Object.assign(new Error("database is full"), {
+      code: "53100",
+    });
+    const database = () => ({ ping: vi.fn(), close: vi.fn() });
+    const expectedError = {
+      error: {
+        code: "server_storage_full",
+        message:
+          "Tandem server storage is full. Free disk space on the server and try again.",
+      },
+    };
+
+    const passwordLogin = await buildApiApp(database(), {
+      deviceAuth: createDeviceAuth({
+        createDevice: vi.fn(async () => {
+          throw fullDiskError;
+        }),
+      }),
+      signInWithActualPassword: async () => ({
+        principalId: "actual-user:synthetic",
+        sessionToken: "actual-session-token",
+        budgetIds: ["synthetic-budget"],
+      }),
+    });
+    const passwordResponse = await passwordLogin.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        password: "synthetic-password",
+        deviceName: "Synthetic phone",
+      },
+    });
+    expect(passwordResponse.statusCode).toBe(503);
+    expect(passwordResponse.json()).toEqual(expectedError);
+    await passwordLogin.close();
+
+    const openIdStart = await buildApiApp(database(), {
+      deviceAuth: createDeviceAuth(),
+      actualOpenIdLogin: {
+        start: async () => {
+          throw fullDiskError;
+        },
+      } as unknown as ActualOpenIdLogin,
+    });
+    const startResponse = await openIdStart.inject({
+      method: "POST",
+      url: "/api/v1/auth/openid/start",
+      payload: {
+        deviceName: "Synthetic phone",
+        codeChallenge: "H".repeat(43),
+        callbackState: "S".repeat(43),
+      },
+    });
+    expect(startResponse.statusCode).toBe(503);
+    expect(startResponse.json()).toEqual(expectedError);
+    await openIdStart.close();
+
+    const openIdComplete = await buildApiApp(database(), {
+      deviceAuth: createDeviceAuth({
+        createDevice: vi.fn(async () => {
+          throw fullDiskError;
+        }),
+      }),
+      actualOpenIdLogin: {
+        consume: () => ({
+          deviceName: "Synthetic phone",
+          grant: {
+            principalId: "actual-user:synthetic",
+            sessionToken: "actual-session-token",
+            budgetIds: ["synthetic-budget"],
+          },
+        }),
+      } as unknown as ActualOpenIdLogin,
+    });
+    const completeResponse = await openIdComplete.inject({
+      method: "POST",
+      url: "/api/v1/auth/openid/complete",
+      payload: {
+        code: "C".repeat(43),
+        codeVerifier: "V".repeat(64),
+      },
+    });
+    expect(completeResponse.statusCode).toBe(503);
+    expect(completeResponse.json()).toEqual(expectedError);
+    await openIdComplete.close();
   });
 
   it("rate-limits Actual sign-in attempts by client address", async () => {

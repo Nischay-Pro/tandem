@@ -1,0 +1,18 @@
+services:
+  api:
+    environment:
+      ACTUAL_SERVER_URL: http://127.0.0.1:1
+
+volumes:
+  postgres-data:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=128m
+  actual-workspace:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=8m

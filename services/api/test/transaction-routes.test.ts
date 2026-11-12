@@ -273,6 +273,33 @@ describe("transaction REST routes", () => {
     await app.close();
   });
 
+  it("returns an actionable error when transaction storage is full", async () => {
+    const fake = createApi({
+      submit: async () => {
+        throw Object.assign(new Error("could not extend file"), {
+          code: "53100",
+        });
+      },
+    });
+    const app = await fake.buildApp();
+    const response = await app.inject({
+      method: "POST",
+      url: `${transactionUrl}/operations`,
+      headers: { ...authHeaders, "idempotency-key": "request-1" },
+      payload: requestBody,
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({
+      error: {
+        code: "server_storage_full",
+        message:
+          "Tandem server storage is full. Free disk space on the server and try again.",
+      },
+    });
+    await app.close();
+  });
+
   it("returns 400 for malformed transaction paths or encryption headers", async () => {
     const fake = createApi();
     const app = await fake.buildApp();

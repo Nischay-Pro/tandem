@@ -36,6 +36,16 @@ for (const source of stagedSources) {
     (file) => !file.endsWith(".integration.test.ts"),
   );
 
+  if (
+    ["src/main.ts", "src/server.ts"].includes(modulePath) &&
+    matchingTests.some((file) => file.endsWith(".integration.test.ts"))
+  ) {
+    process.stdout.write(
+      "API coverage: production startup wiring is checked by the database-backed integration suite in CI.\n",
+    );
+    continue;
+  }
+
   if (modulePath === "src/write-journal/postgres-write-journal.ts") {
     const integrationTests = matchingTests.filter((file) =>
       file.endsWith(".integration.test.ts"),

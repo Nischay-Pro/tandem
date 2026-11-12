@@ -12,13 +12,26 @@ chmod 700 "$secret_dir"
 project="tandem-release-check"
 restore_tmp_dir="$scratch_root/restore-tmp"
 edge_network="${project}-edge"
-test_api_host_port="${TEST_API_HOST_PORT:-19754}"
+find_available_local_port() {
+  python3 -c 'import socket; sock = socket.socket(); sock.bind(("127.0.0.1", 0)); print(sock.getsockname()[1]); sock.close()'
+}
+
+test_api_host_port="${TEST_API_HOST_PORT:-$(find_available_local_port)}"
+full_disk_project="tandem-full-disk-check"
+full_disk_edge_network="${full_disk_project}-edge"
+full_disk_host_port="${TEST_FULL_DISK_API_HOST_PORT:-$(find_available_local_port)}"
+full_disk_env_file="$scratch_root/full-disk.env"
+full_disk_compose=()
 compose=(docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml")
 
 cleanup() {
+  if ((${#full_disk_compose[@]})); then
+    "${full_disk_compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
+  fi
   "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
+  docker network rm "$full_disk_edge_network" >/dev/null 2>&1 || true
   docker network rm "$edge_network" >/dev/null 2>&1 || true
-  rm -f "$env_file"
+  rm -f "$env_file" "$full_disk_env_file"
   rm -rf "$secret_dir"
   rm -f \
     "$scratch_root/tandem-backup.postgres.dump" \
@@ -127,6 +140,25 @@ if [[ "$(cat "$scheduled_marker")" != "$scheduled_marker_before_failure" ]]; the
   exit 1
 fi
 "$project_root/deploy/backup-status.sh" "$scheduled_backup_dir"
+
+# A host-side file-size limit simulates a backup destination that stops
+# accepting writes without filling the developer or CI filesystem. The backup
+# must fail, remove partial files, and restart the API it stopped.
+full_backup_prefix="$scratch_root/tandem-full-destination"
+full_backup_log="$scratch_root/full-destination-backup.log"
+if (
+  ulimit -f 8
+  TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" \
+    "$project_root/deploy/backup.sh" "$full_backup_prefix"
+) >"$full_backup_log" 2>&1; then
+  echo "The backup unexpectedly succeeded after its destination stopped accepting writes." >&2
+  exit 1
+fi
+wait_for_api 15
+if [[ -n "$(find "$scratch_root" -maxdepth 1 -type f -name 'tandem-full-destination*' -print -quit)" ]]; then
+  echo "A failed backup left a partial file that could be mistaken for a complete backup." >&2
+  exit 1
+fi
 
 stale_backup_dir="$scratch_root/stale-backups"
 mkdir -m 700 -p "$stale_backup_dir"
@@ -457,4 +489,110 @@ if [[ "$device_list" != *'Release check phone'* || "$device_list" != *'Release c
   exit 1
 fi
 
-echo "Production image passed health, sign-in routing, authorization, plaintext and encrypted backup/restore, wrong-passphrase and corrupt-restore safety, and crash-recovery checks."
+cat > "$full_disk_env_file" <<EOF
+POSTGRES_DB=tandem_release_check
+POSTGRES_USER=tandem_release_check
+POSTGRES_PASSWORD_FILE=$secret_dir/postgres_password
+DATABASE_URL_FILE=$secret_dir/database_url
+AUTH_TOKEN_ENCRYPTION_KEY_FILE=$secret_dir/auth_token_encryption_key
+AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE=$secret_dir/auth_token_encryption_key_previous
+ACTUAL_SESSION_TOKEN_FILE=$secret_dir/actual_session_token
+TEST_API_HOST_PORT=$full_disk_host_port
+TRUST_PROXY=127.0.0.1
+TANDEM_EDGE_NETWORK=$full_disk_edge_network
+ACTUAL_SERVER_URL=
+ACTUAL_PUBLIC_URL=
+EOF
+chmod 600 "$full_disk_env_file"
+full_disk_compose=(env "TEST_API_HOST_PORT=$full_disk_host_port" docker compose -p "$full_disk_project" --project-directory "$project_root" --env-file "$full_disk_env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml" -f "$project_root/deploy/compose/production-full-disk-check.yml")
+docker network create "$full_disk_edge_network" >/dev/null
+"${full_disk_compose[@]}" config --quiet
+"${full_disk_compose[@]}" up --build --detach
+
+wait_for_full_disk_api() {
+  for _ in $(seq 1 60); do
+    if curl --silent --fail "http://127.0.0.1:$full_disk_host_port/api/v1/health/ready" >/dev/null; then
+      return 0
+    fi
+    sleep 1
+  done
+  "${full_disk_compose[@]}" logs --no-color api postgres
+  echo "The full-disk test stack did not become ready." >&2
+  return 1
+}
+
+wait_for_full_disk_api
+full_disk_api_id="$("${full_disk_compose[@]}" ps -q api)"
+docker exec --user 0 "$full_disk_api_id" node --input-type=module -e '
+  import { openSync, closeSync, writeSync } from "node:fs";
+  const fd = openSync("/data/actual-api/full-disk-probe", "w");
+  const block = Buffer.alloc(1024 * 1024);
+  let filled = false;
+  try {
+    for (;;) {
+      try {
+        if (writeSync(fd, block) < block.length) { filled = true; break; }
+      } catch (error) {
+        if (error.code !== "ENOSPC") throw error;
+        filled = true;
+        break;
+      }
+    }
+  } finally {
+    closeSync(fd);
+  }
+  if (!filled) process.exit(2);
+'
+workspace_ready_status="$(curl --silent --show-error --output "$scratch_root/full-workspace-ready.json" --write-out '%{http_code}' "http://127.0.0.1:$full_disk_host_port/api/v1/health/ready")"
+if [[ "$workspace_ready_status" != 503 ]] || ! grep -Fq "Tandem server storage is full" "$scratch_root/full-workspace-ready.json"; then
+  echo "The API did not report a full Actual workspace volume as not ready." >&2
+  cat "$scratch_root/full-workspace-ready.json" >&2
+  exit 1
+fi
+docker exec --user 0 "$full_disk_api_id" node --input-type=module -e 'import { unlinkSync } from "node:fs"; unlinkSync("/data/actual-api/full-disk-probe");'
+wait_for_full_disk_api
+
+full_disk_postgres_id="$("${full_disk_compose[@]}" ps -q postgres)"
+full_disk_token="$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n' | cut -c1-43)"
+full_disk_credential_hash="$(printf '%s' "$full_disk_token" | sha256sum | cut -d ' ' -f1)"
+full_disk_device_id="$(cat /proc/sys/kernel/random/uuid)"
+"${full_disk_compose[@]}" exec -T postgres psql -U tandem_release_check -d tandem_release_check \
+  --set=device_id="$full_disk_device_id" \
+  --set=device_name='Full disk check phone' \
+  --set=credential_hash="$full_disk_credential_hash" >/dev/null <<'SQL'
+INSERT INTO tandem_devices (
+  device_id, principal_id, device_name, credential_hash, budget_ids, last_seen_at
+) VALUES (:'device_id'::uuid, 'release-check', :'device_name', :'credential_hash', ARRAY['*'], clock_timestamp());
+SQL
+if docker exec --user 0 "$full_disk_postgres_id" sh -c 'dd if=/dev/zero of=/var/lib/postgresql/full-disk-probe bs=1M >/dev/null 2>&1'; then
+  echo "The PostgreSQL volume filler unexpectedly completed without reaching its limit." >&2
+  exit 1
+fi
+postgres_ready_status="$(curl --silent --show-error --output "$scratch_root/full-postgres-ready.json" --write-out '%{http_code}' "http://127.0.0.1:$full_disk_host_port/api/v1/health/ready")"
+if [[ "$postgres_ready_status" != 503 ]] || ! grep -Fq "Tandem server storage is full" "$scratch_root/full-postgres-ready.json"; then
+  echo "The API did not report a full PostgreSQL volume as not ready." >&2
+  cat "$scratch_root/full-postgres-ready.json" >&2
+  exit 1
+fi
+full_disk_operation_id="$(cat /proc/sys/kernel/random/uuid)"
+full_disk_transaction_id="tandem:$full_disk_operation_id"
+full_disk_transaction_status="$(curl --silent --show-error --output "$scratch_root/full-postgres-write.json" --write-out '%{http_code}' \
+  --request POST "http://127.0.0.1:$full_disk_host_port/api/v1/budgets/release-check-budget/transactions/$full_disk_transaction_id/operations" \
+  --header "Authorization: Bearer $full_disk_token" \
+  --header "Content-Type: application/json" \
+  --header "Idempotency-Key: full-disk-$full_disk_operation_id" \
+  --data "{\"operationId\":\"$full_disk_operation_id\",\"action\":\"create\",\"patch\":{\"account\":\"synthetic-account\",\"amount\":-100,\"date\":\"$(date +%F)\",\"payee\":null,\"category\":null,\"notes\":\"full disk probe\",\"cleared\":false}}")"
+if [[ "$full_disk_transaction_status" != 503 ]] || ! grep -Fq '"code":"server_storage_full"' "$scratch_root/full-postgres-write.json"; then
+  echo "A transaction write to the full PostgreSQL volume did not return the storage-full error." >&2
+  cat "$scratch_root/full-postgres-write.json" >&2
+  exit 1
+fi
+docker exec --user 0 "$full_disk_postgres_id" rm -f /var/lib/postgresql/full-disk-probe
+wait_for_full_disk_api
+full_disk_operation_count="$("${full_disk_compose[@]}" exec -T postgres psql -U tandem_release_check -d tandem_release_check --tuples-only --no-align -c "SELECT count(*) FROM tandem_operations WHERE operation_id = '$full_disk_operation_id'::uuid" | tr -d '[:space:]')"
+if [[ "$full_disk_operation_count" != 0 ]]; then
+  echo "A request rejected for full storage left a partial PostgreSQL operation row." >&2
+  exit 1
+fi
+
+echo "Production image passed health, sign-in routing, authorization, plaintext and encrypted backup/restore, full-disk readiness and recovery, wrong-passphrase and corrupt-restore safety, and crash-recovery checks."

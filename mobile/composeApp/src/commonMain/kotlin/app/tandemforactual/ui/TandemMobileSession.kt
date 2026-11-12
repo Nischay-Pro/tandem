@@ -826,9 +826,9 @@ internal class TandemMobileSession(
                     persistBudgetReorderQueueNow(next)
                 } catch (error: CancellationException) {
                     throw error
-                } catch (_: Exception) {
+                } catch (error: Exception) {
                     setBudgetActionMessage(
-                        text = "Couldn’t save this change on this device.",
+                        text = localStorageFailureMessage(error, "Couldn’t save this change on this device."),
                         actionLabel = "Try again",
                         retryAction = { persistBudgetReorderQueueMutation(transform) },
                     )
@@ -1204,9 +1204,12 @@ internal class TandemMobileSession(
             true
         } catch (error: CancellationException) {
             throw error
-        } catch (_: Exception) {
+        } catch (error: Exception) {
             budgetMutationCorrectionMessage =
-                "Couldn’t save the corrected rename on this device. The rejected change is still available to review."
+                localStorageFailureMessage(
+                    error,
+                    "Couldn’t save the corrected rename on this device. The rejected change is still available to review.",
+                )
             false
         } finally {
             isPersistingBudgetMutation = false
@@ -3248,8 +3251,8 @@ internal class TandemMobileSession(
             return true
         } catch (error: CancellationException) {
             throw error
-        } catch (_: Exception) {
-            transactionWriteMessage = "Couldn’t queue reconciliation changes. Try again."
+        } catch (error: Exception) {
+            transactionWriteMessage = localStorageFailureMessage(error, "Couldn’t queue reconciliation changes. Try again.")
             return false
         } finally {
             isSavingTransaction = false
@@ -3732,8 +3735,8 @@ internal class TandemMobileSession(
             false
         } catch (error: CancellationException) {
             throw error
-        } catch (_: Exception) {
-            budgetActionMessage = "Couldn’t save this action on this device. Try again."
+        } catch (error: Exception) {
+            budgetActionMessage = localStorageFailureMessage(error, "Couldn’t save this action on this device. Try again.")
             false
         }
     }
@@ -4166,8 +4169,12 @@ internal class TandemMobileSession(
             transactionWriteMessage = pendingTransactionEditMessage()
             loadLocalRecords(budgetId)
             return false
-        } catch (_: Exception) {
-            transactionWriteMessage = "Tandem couldn’t save your edit. Check the budget and try again."
+        } catch (error: Exception) {
+            transactionWriteMessage =
+                localStorageFailureMessage(
+                    error,
+                    "Tandem couldn’t save your edit. Check the budget and try again.",
+                )
             loadLocalRecords(budgetId)
             return false
         } finally {
@@ -4204,8 +4211,12 @@ internal class TandemMobileSession(
                 return true
             } catch (error: CancellationException) {
                 throw error
-            } catch (_: Exception) {
-                transactionWriteMessage = "Tandem couldn’t remove this transaction. Open Pending Changes to check it."
+            } catch (error: Exception) {
+                transactionWriteMessage =
+                    localStorageFailureMessage(
+                        error,
+                        "Tandem couldn’t remove this transaction. Open Pending Changes to check it.",
+                    )
                 loadLocalRecords(budgetId)
                 return false
             } finally {
@@ -4248,8 +4259,12 @@ internal class TandemMobileSession(
             return true
         } catch (error: CancellationException) {
             throw error
-        } catch (_: Exception) {
-            transactionWriteMessage = "Tandem couldn’t delete this transaction. Open Pending Changes to check it."
+        } catch (error: Exception) {
+            transactionWriteMessage =
+                localStorageFailureMessage(
+                    error,
+                    "Tandem couldn’t delete this transaction. Open Pending Changes to check it.",
+                )
             loadLocalRecords(budgetId)
             return false
         } finally {
@@ -4432,8 +4447,12 @@ internal class TandemMobileSession(
             return savedWrite?.status in setOf("committed", "queued")
         } catch (error: CancellationException) {
             throw error
-        } catch (_: Exception) {
-            transactionWriteMessage = "Tandem couldn’t confirm the save. Check Activity before adding it again."
+        } catch (error: Exception) {
+            transactionWriteMessage =
+                localStorageFailureMessage(
+                    error,
+                    "Tandem couldn’t confirm the save. Check Activity before adding it again.",
+                )
             loadLocalRecords(budgetId)
             return false
         } finally {

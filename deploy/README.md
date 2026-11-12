@@ -155,7 +155,8 @@ the Tandem API. Add the API locations from
 [`nginx/tandem-locations.conf.example`](nginx/tandem-locations.conf.example)
 to the same TLS server block as Actual.
 
-The API has Docker liveness/readiness checks; readiness requires PostgreSQL.
+The API has Docker liveness/readiness checks; readiness verifies PostgreSQL can
+write to its volume and checks free space on the Actual workspace volume.
 PostgreSQL has its own `pg_isready` check. Compose starts the API after
 PostgreSQL is healthy, restarts failed services, gives the API 45 seconds to
 shut down, and uses its init process to forward container signals. API startup
@@ -164,6 +165,23 @@ and unexpected request exceptions are logged by error type only; messages,
 stack traces, and connection strings are omitted. Neither the database nor API
 ports are published on the host. Allow resource monitoring and persistent
 volume monitoring at the Docker host level.
+
+If readiness or a write returns `server_storage_full`, Tandem has stopped
+accepting writes until the server has free space. Check both named volumes:
+
+```sh
+docker compose --project-directory "$PWD" \
+  --env-file deploy/compose/.env \
+  -f deploy/compose/production.yml exec postgres df -h /var/lib/postgresql
+docker compose --project-directory "$PWD" \
+  --env-file deploy/compose/.env \
+  -f deploy/compose/production.yml exec api df -h /data/actual-api
+```
+
+Free space on the host or expand the volume, then check `/api/v1/health/ready`
+again; readiness recovers after PostgreSQL can write and the Actual workspace
+has free blocks. Do not remove `postgres-data` or `actual-workspace` to recover:
+they contain the operation journal and local Actual budget files.
 
 In Tandem, enter the public API address and sign in with the Actual account.
 Available budgets come from that account's Actual budget catalog.

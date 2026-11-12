@@ -55,6 +55,10 @@ import {
   withSharedApiErrorResponses,
 } from "./openapi/error-responses.js";
 import {
+  isStorageFullError,
+  SERVER_STORAGE_FULL_ERROR,
+} from "./storage-failure.js";
+import {
   IDEMPOTENCY_KEY_MAX_LENGTH,
   IdempotencyKeyReuseError,
   OperationIdReuseError,
@@ -124,7 +128,11 @@ const readySchema: FastifySchema = {
 
 export interface ApiAppOptions {
   readinessTimeoutMs?: number;
-  actualReadiness?: () => { ready: boolean; message?: string };
+  actualReadiness?: () => {
+    ready: boolean;
+    code?: string;
+    message?: string;
+  };
   readActualLoginMethods?: () => Promise<ActualLoginMethods>;
   signInWithActualPassword?: (password: string) => Promise<ActualPasswordGrant>;
   actualOpenIdLogin?: ActualOpenIdLogin;
@@ -170,6 +178,11 @@ export async function buildApiApp(
     reply.header("x-request-id", request.id);
   });
   app.setErrorHandler((error, request, reply) => {
+    if (isStorageFullError(error)) {
+      requestErrors.set(request, error);
+      reply.code(503).send({ error: SERVER_STORAGE_FULL_ERROR });
+      return;
+    }
     const statusCode = safeHttpStatus(frameworkErrorStatus(error));
     requestErrors.set(request, error);
     const response = safeFrameworkErrorResponse(
@@ -288,7 +301,10 @@ export async function buildApiApp(
     async (_request, reply) => {
       try {
         await pingWithTimeout(() => database.ping(), readinessTimeoutMs);
-      } catch {
+      } catch (error) {
+        if (isStorageFullError(error)) {
+          return reply.code(503).send({ error: SERVER_STORAGE_FULL_ERROR });
+        }
         return reply.code(503).send({
           error: {
             code: "database_unavailable",
@@ -300,7 +316,7 @@ export async function buildApiApp(
       if (actualReadiness && !actualReadiness.ready) {
         return reply.code(503).send({
           error: {
-            code: "actual_unavailable",
+            code: actualReadiness.code ?? "actual_unavailable",
             message:
               actualReadiness.message ??
               "Actual Budget is unavailable. Check the server connection.",
@@ -576,6 +592,9 @@ function registerDeviceAuthorizationRoutes(
           deviceName: request.body.deviceName,
         });
       } catch (error) {
+        if (isStorageFullError(error)) {
+          return reply.code(503).send({ error: SERVER_STORAGE_FULL_ERROR });
+        }
         if (error instanceof ActualPasswordRejectedError) {
           logSecurityAuditEvent({
             event: "device.sign_in",
@@ -721,7 +740,10 @@ function registerDeviceAuthorizationRoutes(
             request.body.codeChallenge,
             request.body.callbackState,
           );
-        } catch {
+        } catch (error) {
+          if (isStorageFullError(error)) {
+            return reply.code(503).send({ error: SERVER_STORAGE_FULL_ERROR });
+          }
           return reply.code(503).send({
             error: {
               code: "actual_unavailable",
@@ -944,7 +966,10 @@ function registerDeviceAuthorizationRoutes(
             deviceId: signedIn.deviceId,
           });
           return reply.code(201).send(signInResponse(signedIn));
-        } catch {
+        } catch (error) {
+          if (isStorageFullError(error)) {
+            return reply.code(503).send({ error: SERVER_STORAGE_FULL_ERROR });
+          }
           return reply.code(503).send({
             error: {
               code: "actual_unavailable",
@@ -5427,6 +5452,9 @@ function actualRequestFailed(
   reply: import("fastify").FastifyReply,
   error?: unknown,
 ) {
+  if (isStorageFullError(error)) {
+    return reply.code(503).send({ error: SERVER_STORAGE_FULL_ERROR });
+  }
   if (error instanceof ActualPrincipalSessionExpiredError) {
     return reply.code(401).send({
       error: {

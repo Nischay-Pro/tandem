@@ -64,15 +64,39 @@ export function createPostgresDatabase(
   );
   let readinessCheck: Promise<void> | undefined;
 
+  async function probeDatabaseWritable(): Promise<void> {
+    const client = await readinessPool.connect();
+    let releaseError: Error | undefined;
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "CREATE TEMP TABLE tandem_readiness_storage_probe (marker boolean) ON COMMIT DROP",
+      );
+      await client.query(
+        "INSERT INTO tandem_readiness_storage_probe (marker) VALUES (true)",
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        releaseError =
+          rollbackError instanceof Error
+            ? rollbackError
+            : new Error("Readiness probe rollback failed");
+      }
+      throw error;
+    } finally {
+      client.release(releaseError);
+    }
+  }
+
   return {
     ping() {
       if (!readinessCheck) {
-        readinessCheck = readinessPool
-          .query("SELECT 1")
-          .then(() => undefined)
-          .finally(() => {
-            readinessCheck = undefined;
-          });
+        readinessCheck = probeDatabaseWritable().finally(() => {
+          readinessCheck = undefined;
+        });
       }
       return readinessCheck;
     },

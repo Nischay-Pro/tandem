@@ -28,7 +28,7 @@ export interface ApiRuntime {
   budgetMaintenanceApi?: BudgetMaintenanceApiPort;
   budgetReadApi?: BudgetReadApiPort;
   start?(): Promise<void>;
-  actualReadiness?(): { ready: boolean; message?: string };
+  actualReadiness?(): { ready: boolean; code?: string; message?: string };
   readActualLoginMethods?(): Promise<
     import("./auth/actual-login-methods.js").ActualLoginMethods
   >;

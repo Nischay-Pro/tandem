@@ -1,6 +1,7 @@
 package app.tandemforactual.data.database
 
 import android.content.Context
+import androidx.room3.useWriterConnection
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.tandemforactual.data.store.LocalBudgetRepository
@@ -18,9 +19,72 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @RunWith(AndroidJUnit4::class)
 class AndroidDatabasePersistenceTest {
+    @Test
+    fun fullLocalDatabaseDoesNotPartiallyQueueWriteAndRemainsUsable() =
+        runBlocking {
+            val context = ApplicationProvider.getApplicationContext<Context>()
+            context.deleteDatabase(DATABASE_NAME)
+            val database = openTandemDatabase(tandemDatabaseBuilder(context))
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                repository.enqueueWrite(createRequest())
+                val pages =
+                    database.useWriterConnection { connection ->
+                        connection.usePrepared("PRAGMA page_count") { statement ->
+                            assertTrue(statement.step())
+                            statement.getLong(0)
+                        }
+                    }
+                database.useWriterConnection { connection ->
+                    connection.usePrepared("PRAGMA max_page_count = ${pages + 1}") { statement ->
+                        assertTrue(statement.step())
+                    }
+                }
+
+                val fullDiskError =
+                    runCatching {
+                        repository.enqueueWrite(
+                            createRequest().copy(
+                                operationId = "android-db-full-operation",
+                                idempotencyKey = "android-db-full-idempotency",
+                                recordId = "android-db-full-transaction",
+                                patchJson = """{"notes":"${"x".repeat(512 * 1024)}"}""",
+                                optimisticJson = """{"id":"android-db-full-transaction","notes":"${"x".repeat(512 * 1024)}"}""",
+                            ),
+                        )
+                    }.exceptionOrNull()
+                assertNotNull(fullDiskError)
+                assertTrue(fullDiskError.message.orEmpty().contains("full", ignoreCase = true))
+
+                assertEquals(listOf("android-db-operation"), repository.readPendingWrites(BUDGET_ID).map { it.operationId })
+                assertNull(repository.findRecord(BUDGET_ID, "transaction", "android-db-full-transaction"))
+
+                database.useWriterConnection { connection ->
+                    connection.usePrepared("PRAGMA max_page_count = ${pages + 1_000}") { statement ->
+                        assertTrue(statement.step())
+                    }
+                }
+                repository.enqueueWrite(
+                    createRequest().copy(
+                        operationId = "android-db-recovered-operation",
+                        idempotencyKey = "android-db-recovered-idempotency",
+                        recordId = "android-db-recovered-transaction",
+                        optimisticJson = """{"id":"android-db-recovered-transaction","amount":1200}""",
+                    ),
+                )
+                assertEquals(2, repository.readPendingWrites(BUDGET_ID).size)
+            } finally {
+                database.close()
+                context.deleteDatabase(DATABASE_NAME)
+            }
+            Unit
+        }
+
     @Test
     fun queuedWriteSurvivesAndroidDatabaseCloseAndReopen() =
         runBlocking {
