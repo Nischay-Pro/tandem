@@ -1399,7 +1399,7 @@ fun TandemApp(
                     .fillMaxSize()
                     .padding(start = if (showLandscapeRail) 80.dp else 0.dp),
             ) {
-                if (tabShellRoute != null) renderHeader(shellHeaderRoute)
+                if (shouldRenderRouteHeader(route, tabShellRoute != null)) renderHeader(shellHeaderRoute)
                 val transitionInputModifier =
                     Modifier.pointerInput(Unit) {
                         awaitEachGesture {

@@ -8,6 +8,13 @@ import kotlin.test.assertTrue
 
 class AppStateTest {
     @Test
+    fun preparingBudgetKeepsBackHeaderWhenOpenedWithoutATabShell() {
+        assertTrue(shouldRenderRouteHeader(AppRoute.FIRST_SYNC, hasStationaryTabShell = false))
+        assertTrue(shouldRenderRouteHeader(AppRoute.FIRST_SYNC, hasStationaryTabShell = true))
+        assertFalse(shouldRenderRouteHeader(AppRoute.BUDGET_CHOOSER, hasStationaryTabShell = false))
+    }
+
+    @Test
     fun backRequestsWaitForOpeningTransitionsAndQueueBehindBackAnimations() {
         assertEquals(
             BackRequestDisposition.DEFER_UNTIL_ROUTE_TRANSITION_FINISHES,

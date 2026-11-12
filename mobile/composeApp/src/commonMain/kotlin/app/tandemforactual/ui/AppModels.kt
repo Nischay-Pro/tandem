@@ -772,6 +772,11 @@ internal enum class BackRequestDisposition {
     QUEUE_AFTER_BACK_TRANSITION,
 }
 
+internal fun shouldRenderRouteHeader(
+    route: AppRoute,
+    hasStationaryTabShell: Boolean,
+): Boolean = hasStationaryTabShell || route == AppRoute.FIRST_SYNC
+
 internal fun backRequestDisposition(
     routeTransitionInputBlocked: Boolean,
     backButtonTransitionRunning: Boolean,
