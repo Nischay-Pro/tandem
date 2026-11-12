@@ -90,7 +90,7 @@ test("accepts source-aligned versions and reports stale or missing versions", ()
   );
 });
 
-test("flags retired terminology but permits it in a history file", () => {
+test("flags retired terminology except in a history file", () => {
   const root = mkdtempSync(join(tmpdir(), "tandem-doc-terms-"));
   try {
     writeFileSync(
@@ -101,11 +101,16 @@ test("flags retired terminology but permits it in a history file", () => {
       join(root, "HISTORY.md"),
       "Pairing was used in an old release.\n",
     );
+    writeFileSync(join(root, "decisions.md"), "Pairing remains a decision.\n");
 
-    assert.deepEqual(findStaleTerms(root, ["guide.md", "HISTORY.md"]), [
-      "guide.md: 1: stale term pairing",
-      "guide.md: 1: stale term change-feed",
-    ]);
+    assert.deepEqual(
+      findStaleTerms(root, ["guide.md", "HISTORY.md", "decisions.md"]),
+      [
+        "guide.md: 1: stale term pairing",
+        "guide.md: 1: stale term change-feed",
+        "decisions.md: 1: stale term Pairing",
+      ],
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

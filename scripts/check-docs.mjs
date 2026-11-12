@@ -105,7 +105,7 @@ export function findBrokenLinks(repoRoot, files) {
 
 export function findStaleTerms(repoRoot, files) {
   const staleTerm = /\b(pairing|change[ -]feed)\b/gi;
-  const history = /^(?:changelog|history|decisions)(?:[.-]|$)/i;
+  const history = /^(?:changelog|history)(?:[.-]|$)/i;
   const errors = [];
   for (const file of files) {
     if (history.test(basename(file))) continue;
