@@ -1,6 +1,8 @@
 package app.tandemforactual.ui
 
+import androidx.compose.runtime.Composable
 import app.tandemforactual.data.store.BudgetDisplaySettings
+import platform.Foundation.NSBundle
 import platform.Foundation.NSCalendar
 import platform.Foundation.NSCalendarUnitWeekday
 import platform.Foundation.NSDate
@@ -21,6 +23,10 @@ import kotlin.math.abs
 import kotlin.math.pow
 
 private const val APPLE_REFERENCE_DATE_UNIX_SECONDS = 978_307_200.0
+
+@Composable
+internal actual fun platformAppVersionName(): String =
+    NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String ?: "0.1.0"
 
 internal actual fun platformFormatCurrency(
     minorUnits: Long,

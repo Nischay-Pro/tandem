@@ -41,6 +41,7 @@ import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemLoadingIndicator
+import app.tandemforactual.ui.platformAppVersionName
 import com.composables.icons.lucide.CloudAlert
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Info
@@ -258,7 +259,7 @@ internal fun AboutScreen(
             ) {
                 TandemBrandMark(Modifier.size(84.dp), contentDescription = "Tandem app icon")
                 Text("Tandem", color = tandemPalette.text, fontSize = TandemTypography.pageTitle, fontWeight = FontWeight.Bold)
-                Badge("Version 0.1.0")
+                Badge("Version ${platformAppVersionName()}")
                 Text(
                     "Your budget stays on this device and remains available when Tandem is offline.",
                     color = tandemPalette.muted,

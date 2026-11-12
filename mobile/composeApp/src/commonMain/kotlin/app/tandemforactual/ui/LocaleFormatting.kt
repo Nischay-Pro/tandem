@@ -1,5 +1,6 @@
 package app.tandemforactual.ui
 
+import androidx.compose.runtime.Composable
 import app.tandemforactual.data.store.BudgetDisplaySettings
 
 internal data class CalendarDate(
@@ -7,6 +8,9 @@ internal data class CalendarDate(
     val month: Int,
     val day: Int,
 )
+
+@Composable
+internal expect fun platformAppVersionName(): String
 
 internal expect fun platformFormatCurrency(
     minorUnits: Long,

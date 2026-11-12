@@ -1,5 +1,9 @@
 package app.tandemforactual.ui
 
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import java.math.BigDecimal
 import java.text.DateFormat
@@ -10,6 +14,22 @@ import java.util.Calendar
 import java.util.Currency
 import java.util.Date
 import java.util.Locale
+
+@Composable
+@Suppress("DEPRECATION")
+internal actual fun platformAppVersionName(): String {
+    val context = LocalContext.current
+    val packageInfo =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.packageManager.getPackageInfo(
+                context.packageName,
+                PackageManager.PackageInfoFlags.of(0),
+            )
+        } else {
+            context.packageManager.getPackageInfo(context.packageName, 0)
+        }
+    return packageInfo.versionName ?: "0.1.0"
+}
 
 internal actual fun platformFormatCurrency(
     minorUnits: Long,
