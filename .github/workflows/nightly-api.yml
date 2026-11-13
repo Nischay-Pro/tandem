@@ -68,23 +68,20 @@ jobs:
 
             runs="$(gh run list --workflow ci.yml --branch main --commit "$source_sha" \
               --json databaseId,status,conclusion,event)"
-            run="$(jq -c '[.[] | select(.event == "push")][0] // empty' <<<"$runs")"
-            status="$(jq -r '.status // "missing"' <<<"${run:-{}}")"
-            conclusion="$(jq -r '.conclusion // ""' <<<"${run:-{}}")"
+            decision="$(node scripts/nightly-ci-status.mjs <<<"$runs")"
+            result="$(jq -r '.decision' <<<"$decision")"
+            status="$(jq -r '.status' <<<"$decision")"
+            conclusion="$(jq -r '.conclusion' <<<"$decision")"
 
-            if [[ "$status" == "completed" ]]; then
-              if [[ "$conclusion" == "success" ]]; then
-                echo "eligible=true" >> "$GITHUB_OUTPUT"
-                echo "CI passed for $source_sha."
-                exit 0
-              fi
-              if [[ "$conclusion" == "cancelled" || "$conclusion" == "skipped" ]]; then
-                echo "eligible=false" >> "$GITHUB_OUTPUT"
-                echo "CI ended as $conclusion; no nightly artifacts will be published."
-                exit 0
-              fi
-              echo "CI concluded $conclusion for $source_sha." >&2
-              exit 1
+            if [[ "$result" == "publish" ]]; then
+              echo "eligible=true" >> "$GITHUB_OUTPUT"
+              echo "CI passed for $source_sha."
+              exit 0
+            fi
+            if [[ "$result" == "skip" ]]; then
+              echo "eligible=false" >> "$GITHUB_OUTPUT"
+              echo "CI ended as $conclusion; skipping nightly publication."
+              exit 0
             fi
 
             echo "CI status for $source_sha is $status; checking again in 30 seconds."
@@ -439,7 +436,7 @@ jobs:
         run: |
           set -euo pipefail
           title="Nightly build failed for $SOURCE_SHA"
-          existing="$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')"
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')"
           if [[ -n "$existing" ]]; then
             echo "Issue #$existing already tracks this nightly failure."
             exit 0
@@ -448,4 +445,4 @@ jobs:
           trap 'rm -f "$body_file"' EXIT
           printf 'The nightly Android and API release workflow failed for source commit %s.\n\nWorkflow run: %s/%s/actions/runs/%s\n\nReview the failed job logs, fix the release gate, then rerun the workflow.\n' \
             "$SOURCE_SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > "$body_file"
-          gh issue create --title "$title" --body-file "$body_file"
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$body_file"

@@ -460,7 +460,7 @@ jobs:
       - name: Check deployment scripts and Compose configuration
         run: |
           bash -n deploy/backup.sh deploy/restore.sh deploy/tandem-setup.sh scripts/test-production-deployment.sh scripts/test-dockerignore-secrets.sh scripts/test-tandem-setup.sh
-          node --test scripts/render-pinned-compose.test.mjs scripts/prune-nightly-api-versions.test.mjs
+          node --test scripts/render-pinned-compose.test.mjs scripts/prune-nightly-api-versions.test.mjs scripts/nightly-ci-status.test.mjs
           ./scripts/test-tandem-setup.sh
           TANDEM_API_IMAGE=tandem-api:configuration-check TRUST_PROXY=127.0.0.1/32 docker compose --project-directory "$PWD" --env-file deploy/compose/.env.example -f deploy/compose/production.yml config --quiet
 
