@@ -28,6 +28,7 @@ start_compose_stack() {
   local compose_variable="$1"
   local -n selected_compose="$compose_variable"
   if [[ "${TANDEM_API_IMAGE_PREBUILT:-false}" == "true" ]]; then
+    "${selected_compose[@]}" pull tandem-postgres
     "${selected_compose[@]}" up --pull never --no-build --detach
   else
     "${selected_compose[@]}" up --build --detach
