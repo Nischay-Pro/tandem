@@ -25,7 +25,7 @@ build cannot validate Apple toolchains.
 
 ## Pinned toolchain
 
-- Node.js 26.13.0
+- Node.js 26.13.1
 - pnpm 12.16.1
 - PostgreSQL 18.6
 - Kotlin Multiplatform Gradle plugin: 2.4.21

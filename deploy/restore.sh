@@ -104,7 +104,7 @@ trap report_interrupted_restore EXIT
   'pg_restore --exit-on-error --single-transaction --clean --if-exists --no-owner --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' \
   < "$postgres_input"
 docker run --rm -i --volumes-from "$api_id" --entrypoint sh \
-  node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 -ec \
+  node:26.13.1-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc -ec \
   'set -eu
   workspace=/data/actual-api
   restore_id="$(cat /proc/sys/kernel/random/uuid)"

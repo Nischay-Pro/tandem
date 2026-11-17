@@ -29,7 +29,7 @@ PY
   if [[ -d "$scratch_root/compat-gate-postgres" ]]; then
     docker run --rm --user 0:0 \
       --volume "$scratch_root/compat-gate-postgres:/compat-postgres" \
-      --entrypoint sh node:26.13.0-trixie-slim -ec \
+      --entrypoint sh node:26.13.1-trixie-slim -ec \
       'find /compat-postgres -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +'
     rmdir "$scratch_root/compat-gate-postgres" 2>/dev/null || true
   fi
