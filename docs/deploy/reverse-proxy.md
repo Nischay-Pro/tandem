@@ -2,15 +2,27 @@
 
 For operators routing a public HTTPS address to Tandem and Actual.
 
-You need an existing TLS server block for Actual, an Nginx container on the
-same private Docker network as Tandem and Actual, and a domain that resolves
-to the proxy.
+You need an Nginx container on the same private Docker network as Tandem, an
+Actual server reachable from Tandem, and a domain that resolves to the proxy.
+If there is no existing TLS server block, automatic certificate issuance also
+requires the Certbot Nginx plugin in that container and inbound HTTP access on
+port 80.
+
+The setup command can add the Tandem route automatically when it finds one
+regular Docker Nginx container with a writable mounted config and one matching
+TLS server block. It backs up the config before editing, attaches Nginx to
+`tandem-edge`, and reuses the server's certificate. It leaves Nginx Proxy
+Manager, `nginx-proxy`, SWAG, and ambiguous or unmounted configurations
+unchanged. Use the steps below when setup reports that it skipped proxy
+configuration.
 
 ## Steps
 
-1. **Join the services to one private network.** Attach Nginx, the Tandem API,
-   and Actual to the same Docker network. If you use a different network name,
-   set `TANDEM_EDGE_NETWORK` and use that name in both services.
+1. **Join the services to one private network.** Tandem API joins
+   `tandem-edge` automatically. Attach Nginx to that network, and attach Actual
+   too if `TANDEM_ACTUAL_SERVER_URL` uses its internal Compose service name. If
+   you use a different network name, set `TANDEM_EDGE_NETWORK` and use that
+   name in both services.
 
    **Check:** `docker network inspect tandem-edge` lists the API and proxy.
    If it does not, attach both services to the same external network.

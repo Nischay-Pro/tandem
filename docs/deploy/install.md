@@ -25,11 +25,26 @@ that bundle is unavailable.
    ```
 
    The command downloads the latest nightly Compose bundle, verifies its
-   SHA-256 checksum, asks for the Actual URL, public Tandem URL, and proxy
-   address, then creates `./tandem/`. It writes generated secret files under
-   `tandem/deploy/compose/secrets/`; `.env` contains settings and secret-file
-   paths, not secret values. The command does not replace an existing `.env`,
-   secret, or Compose file.
+   SHA-256 checksum, and asks for the Actual URL, public Tandem URL, and proxy
+   address. A domain-only Actual URL is treated as HTTPS; the public Tandem URL
+   defaults to that same domain. It then creates `./tandem/` and writes
+   generated secret files under `tandem/deploy/compose/secrets/`; `.env`
+   contains settings and secret-file paths, not secret values. The command
+   does not replace an existing `.env`, secret, or Compose file.
+
+   Setup also looks for a Docker Nginx container with one TLS server block for
+   the public Tandem domain. For a regular Nginx image with a writable mounted
+   config, it backs up that file, adds the `/api/v1/` route, connects Nginx to
+   `tandem-edge`, writes a Compose override to retain that network on
+   recreation, and sets `TANDEM_TRUST_PROXY` to Nginx's detected address.
+   It reuses the existing TLS certificate, so a second Certbot request is not
+   needed. If there is no TLS vhost and the Nginx container has Certbot's Nginx
+   plugin and a writable `/etc/letsencrypt` mount, setup asks for a renewal
+   email, requests the certificate with Certbot, and installs a daily host
+   systemd renewal timer when systemd is available. Otherwise it leaves proxy
+   files untouched and prints the manual step. Nginx Proxy Manager,
+   `nginx-proxy`, and SWAG manage generated config themselves, so setup leaves
+   those proxy files untouched.
 
    **Check:** the pinned image and required secret files are present:
 
@@ -58,7 +73,11 @@ that bundle is unavailable.
 
    Replace `./tandem` with the directory created by setup. Add the external
    `tandem-edge` network to the existing Actual and reverse-proxy services,
-   preserving their other networks:
+   preserving their other networks. Setup automatically attaches a detected
+   regular Nginx container and writes a Compose override; attach Actual too
+   when `TANDEM_ACTUAL_SERVER_URL` uses its internal service name. If setup
+   reports that it skipped Nginx, use the manual steps in
+   [Reverse proxy setup](reverse-proxy.md):
 
    ```yaml
    services:

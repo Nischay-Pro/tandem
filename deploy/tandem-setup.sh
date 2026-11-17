@@ -19,6 +19,7 @@ readonly support_files=(
   systemd/tandem-backup.timer
   nginx/tandem-locations.conf.example
   nginx/tandem-upstreams.conf.example
+  configure-docker-nginx.sh
 )
 
 for required_command in curl docker jq openssl sha256sum sudo tar; do
@@ -141,31 +142,69 @@ for support_file in "${support_files[@]}"; do
   fi
 done
 read -r -p 'Actual server URL reachable by Tandem [blank for per-user sign-in]: ' actual_server_url
-read -r -p 'Public Tandem URL for Actual sign-in [optional]: ' actual_public_url
-read -r -p 'Reverse proxy IP/CIDR [blank disables forwarded-address trust]: ' trust_proxy
+if [[ "$actual_server_url" =~ ^[A-Za-z0-9.-]+\.[A-Za-z]{2,}(:[0-9]+)?(/.*)?$ ]]; then
+  actual_server_url="https://$actual_server_url"
+fi
+default_public_url=""
+if [[ "$actual_server_url" =~ ^https?://[A-Za-z0-9.-]+\.[A-Za-z]{2,}(:[0-9]+)?(/.*)?$ ]]; then
+  default_public_url="$(sed -E 's#^https?://([^/:]+).*#https://\1#' <<< "$actual_server_url")"
+fi
+read -r -p "Public Tandem URL for Actual sign-in [${default_public_url:-optional}]: " actual_public_url
+actual_public_url="${actual_public_url:-$default_public_url}"
+if [[ "$actual_public_url" =~ ^[A-Za-z0-9.-]+\.[A-Za-z]{2,}(:[0-9]+)?(/.*)?$ ]]; then
+  actual_public_url="https://$actual_public_url"
+fi
+read -r -p 'Reverse proxy IP/CIDR [auto-detected when Docker Nginx is found]: ' trust_proxy
 
 ensure_secret() {
   local name="$1"
   local value="$2"
   local mode="${3:-0440}"
   local destination="$secrets_directory/$name"
-  local temporary="$temporary_directory/$name"
+  local temporary
+  if [[ -L "$destination" ]]; then
+    printf 'Refusing to use symbolic link as secret file %s.\n' "$destination" >&2
+    exit 1
+  fi
   if [[ -e "$destination" ]]; then
+    if [[ ! -f "$destination" ]]; then
+      printf 'Refusing to use non-file secret path %s.\n' "$destination" >&2
+      exit 1
+    fi
     return
   fi
+  temporary="$(mktemp "$secrets_directory/.${name}.XXXXXX")"
   printf '%s' "$value" > "$temporary"
   chmod "$mode" "$temporary"
-  sudo chown root:1000 "$temporary"
   if ! ln "$temporary" "$destination" 2>/dev/null; then
-    if [[ ! -e "$destination" ]]; then
+    rm -f -- "$temporary"
+    if [[ ! -e "$destination" || -L "$destination" ]]; then
       printf 'Could not safely create secret file %s.\n' "$destination" >&2
       exit 1
     fi
+    if [[ ! -f "$destination" ]]; then
+      printf 'Refusing to use non-file secret path %s.\n' "$destination" >&2
+      exit 1
+    fi
+    return
   fi
+  if ! sudo chown root:1000 "$destination"; then
+    rm -f -- "$destination" "$temporary"
+    printf 'Could not safely set ownership on secret file %s.\n' "$destination" >&2
+    exit 1
+  fi
+  rm -f -- "$temporary"
 }
 
 postgres_password_file="$secrets_directory/postgres_password"
-if [[ -e "$postgres_password_file" ]]; then
+if [[ -L "$postgres_password_file" ]]; then
+  printf 'Refusing to use symbolic link as secret file %s.\n' "$postgres_password_file" >&2
+  exit 1
+elif [[ -e "$postgres_password_file" ]]; then
+  if [[ ! -f "$postgres_password_file" ]]; then
+    printf 'Refusing to use non-file secret path %s.\n' "$postgres_password_file" >&2
+    exit 1
+  fi
   postgres_password="$(sudo cat "$postgres_password_file")"
   if [[ -z "$postgres_password" ]]; then
     printf 'Existing Postgres password file is empty; refusing to replace or initialize it.\n' >&2
@@ -238,6 +277,11 @@ mv "$temporary_directory/.env" "$environment_file"
 
 if ! docker network inspect tandem-edge >/dev/null 2>&1; then
   docker network create tandem-edge >/dev/null
+fi
+
+if ! bash "$deployment_directory/configure-docker-nginx.sh" \
+  "$install_directory" "$actual_server_url" "$actual_public_url" "$trust_proxy"; then
+  printf 'Docker Nginx auto-configuration did not complete; follow the reverse-proxy guide before exposing Tandem.\n' >&2
 fi
 
 docker compose --project-directory "$install_directory" \
