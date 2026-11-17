@@ -108,15 +108,83 @@ elif len(selected) > 1:
 PY
 }
 
+map_container_config() {
+  docker inspect "$nginx_container" | jq -r --arg path "$1" '
+    .[0].Mounts
+    | map(. as $mount | select($mount.RW == true and
+        ($path == $mount.Destination or ($path | startswith(($mount.Destination | rtrimstr("/")) + "/")))))
+    | sort_by(.Destination | length)
+    | last
+    | if . == null then empty else [.Source, .Destination] | @tsv end
+  '
+}
+
+install_certbot_timer() {
+  local container_name docker_binary unit_name service_source timer_source
+  if ! command -v systemctl >/dev/null 2>&1 || ! sudo systemctl show-environment >/dev/null 2>&1; then
+    printf 'Certificate issued, but no host systemd manager is available for automatic renewal.\n' >&2
+    return 0
+  fi
+  container_name="$(docker inspect --format '{{.Name}}' "$nginx_container" | sed 's#^/##')"
+  if [[ ! "$container_name" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+    printf 'Certificate issued, but the Nginx container name is not safe for a renewal unit.\n' >&2
+    return 0
+  fi
+  docker_binary="$(command -v docker)"
+  unit_name="tandem-nginx-certbot-renew"
+  if sudo test -e "/etc/systemd/system/$unit_name.service" ||
+    sudo test -e "/etc/systemd/system/$unit_name.timer"; then
+    printf 'A systemd unit named %s already exists; leaving it unchanged.\n' "$unit_name" >&2
+    return 0
+  fi
+  service_source="$temporary_directory/$unit_name.service"
+  timer_source="$temporary_directory/$unit_name.timer"
+  cat > "$service_source" <<UNIT
+[Unit]
+Description=Renew Certbot certificates for Tandem Nginx
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=$docker_binary exec $container_name certbot renew --quiet
+UNIT
+  cat > "$timer_source" <<UNIT
+[Unit]
+Description=Daily renewal check for Tandem Nginx certificates
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=12h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+  if sudo install -m 0644 "$service_source" "/etc/systemd/system/$unit_name.service" &&
+    sudo install -m 0644 "$timer_source" "/etc/systemd/system/$unit_name.timer" &&
+    sudo systemctl daemon-reload && sudo systemctl enable --now "$unit_name.timer"; then
+    printf 'Installed the %s.timer systemd renewal schedule.\n' "$unit_name"
+    return 0
+  fi
+  sudo systemctl disable --now "$unit_name.timer" >/dev/null 2>&1 || true
+  sudo rm -f -- "/etc/systemd/system/$unit_name.service" "/etc/systemd/system/$unit_name.timer"
+  sudo systemctl daemon-reload >/dev/null 2>&1 || true
+  printf 'Certificate issued, but the automatic Certbot renewal timer could not be installed.\n' >&2
+}
+
 declare -a nginx_matches=()
 declare -a nginx_manager_images=()
 while read -r container_id container_image; do
   [[ -n "$container_id" ]] || continue
-  if [[ "$container_image" =~ [Nn]ginx.*([Pp]roxy[-_ ]?[Mm]anager|[Mm]anager) ]]; then
+  container_image_lower="${container_image,,}"
+  if [[ "$container_image_lower" == *nginx-proxy-manager* ||
+    "$container_image_lower" == *nginx-proxy* ||
+    "$container_image_lower" == *linuxserver/swag* ]]; then
     nginx_manager_images+=("$container_image")
     continue
   fi
-  [[ "${container_image,,}" == *nginx* ]] || continue
+  [[ "$container_image_lower" == *nginx* ]] || continue
   dump_file="$temporary_directory/nginx-$container_id.conf"
   if ! docker exec "$container_id" nginx -T > "$dump_file" 2>&1; then
     continue
@@ -148,20 +216,40 @@ if [[ "$container_config_path" == AMBIGUOUS || -z "$container_config_path" ]]; t
   printf 'Nginx has multiple matching server blocks for %s; refusing to edit an ambiguous proxy.\n' "$domain" >&2
   exit 0
 fi
+mount_mapping="$(map_container_config "$container_config_path")"
+if [[ -z "$mount_mapping" ]]; then
+  printf 'The matching Nginx configuration %s is not on a writable Docker mount; refusing a non-persistent edit.\n' \
+    "$container_config_path"
+  exit 0
+fi
 
 if [[ "$has_tls" != 1 ]]; then
   certbot_plugins="$temporary_directory/certbot-plugins.txt"
   if docker exec "$nginx_container" certbot plugins --text > "$certbot_plugins" 2>&1 &&
     grep -Eq '(^|[[:space:]])nginx([[:space:]]|$)' "$certbot_plugins"; then
+    certbot_storage_mounted="$(docker inspect "$nginx_container" | jq -r '
+      any(.[0].Mounts[]?; .RW == true and
+        (.Destination == "/etc/letsencrypt" or (.Destination | startswith("/etc/letsencrypt/"))))
+    ')"
+    if [[ "$certbot_storage_mounted" != true ]]; then
+      printf 'Certbot is installed, but /etc/letsencrypt is not on a writable Docker mount; refusing to issue a non-persistent certificate.\n' >&2
+      exit 0
+    fi
     read -r -p "Certbot email for $domain (blank skips certificate issuance): " certbot_email
     if [[ -n "$certbot_email" ]]; then
       docker exec "$nginx_container" certbot --nginx --non-interactive --agree-tos \
         --email "$certbot_email" --redirect -d "$domain"
+      install_certbot_timer
       docker exec "$nginx_container" nginx -t
       dump_file="$temporary_directory/nginx-$nginx_container.conf"
       docker exec "$nginx_container" nginx -T > "$dump_file" 2>&1
       config_match="$(analyze_nginx_dump "$dump_file")"
       IFS=$'\t' read -r container_config_path has_tls has_managed_routes <<< "$config_match"
+      mount_mapping="$(map_container_config "$container_config_path")"
+      if [[ "$has_tls" != 1 || -z "$mount_mapping" ]]; then
+        printf 'Certbot did not leave one persistent TLS vhost for %s; no Tandem route was added.\n' "$domain" >&2
+        exit 0
+      fi
     else
       printf 'No email supplied; Certbot did not run and the Nginx vhost was left unchanged.\n'
       exit 0
@@ -173,19 +261,6 @@ if [[ "$has_tls" != 1 ]]; then
   fi
 fi
 
-mount_mapping="$(docker inspect "$nginx_container" | jq -r --arg path "$container_config_path" '
-  .[0].Mounts
-  | map(. as $mount | select($mount.RW == true and
-      ($path == $mount.Destination or ($path | startswith(($mount.Destination | rtrimstr("/")) + "/")))))
-  | sort_by(.Destination | length)
-  | last
-  | if . == null then empty else [.Source, .Destination] | @tsv end
-')"
-if [[ -z "$mount_mapping" ]]; then
-  printf 'The matching Nginx configuration %s is not on a writable Docker mount; refusing a non-persistent edit.\n' \
-    "$container_config_path"
-  exit 0
-fi
 IFS=$'\t' read -r mount_source mount_destination <<< "$mount_mapping"
 if [[ "$container_config_path" == "$mount_destination" ]]; then
   host_config_file="$mount_source"
@@ -210,6 +285,47 @@ else
     location ^~ /api/v1/auth/actual-return/ {
         access_log off;
         error_log /dev/null emerg;
+        limit_req zone=tandem_setup_auth burst=5 nodelay;
+        limit_req_status 429;
+        resolver 127.0.0.11 valid=30s ipv6=off;
+        set $tandem_api tandem-api:19753;
+        proxy_pass http://$tandem_api;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header Cache-Control "no-store" always;
+    }
+
+    location = /api/v1/auth/login {
+        limit_req zone=tandem_setup_auth burst=5 nodelay;
+        limit_req_status 429;
+        resolver 127.0.0.11 valid=30s ipv6=off;
+        set $tandem_api tandem-api:19753;
+        proxy_pass http://$tandem_api;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header Cache-Control "no-store" always;
+    }
+
+    location = /api/v1/auth/openid/start {
+        limit_req zone=tandem_setup_auth burst=5 nodelay;
+        limit_req_status 429;
+        resolver 127.0.0.11 valid=30s ipv6=off;
+        set $tandem_api tandem-api:19753;
+        proxy_pass http://$tandem_api;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header Cache-Control "no-store" always;
+    }
+
+    location = /api/v1/auth/openid/complete {
+        limit_req zone=tandem_setup_auth burst=5 nodelay;
+        limit_req_status 429;
         resolver 127.0.0.11 valid=30s ipv6=off;
         set $tandem_api tandem-api:19753;
         proxy_pass http://$tandem_api;
@@ -221,6 +337,8 @@ else
     }
 
     location ^~ /api/v1/ {
+        limit_req zone=tandem_setup_api burst=60 nodelay;
+        limit_req_status 429;
         resolver 127.0.0.11 valid=30s ipv6=off;
         set $tandem_api tandem-api:19753;
         proxy_pass http://$tandem_api;
@@ -294,15 +412,15 @@ for match in re.finditer(r"\bserver\s*\{", text):
         for listen in listens
     ) or bool(re.search(r"(?m)^\s*ssl_certificate\s+", body))
     if has_tls:
-        matches.append((opening, closing, body))
+        matches.append((match.start(), opening, closing, body))
 
 if len(matches) != 1:
     raise SystemExit("Could not identify exactly one TLS server block in the mounted Nginx file.")
-opening, closing, body = matches[0]
+server_start, opening, closing, body = matches[0]
 if "TANDEM-SETUP-MANAGED-ROUTES" in body:
     print("")
     raise SystemExit(0)
-if re.search(r"(?m)^\s*location\s+(?:=\s+|\^~\s+)?/api/v1(?:/|\s|\{)", body):
+if re.search(r"(?m)^\s*location\b[^{};]*?/api/v1", body):
     raise SystemExit("An existing /api/v1 route is present; refusing to replace it.")
 
 mode = os.stat(config_path).st_mode & 0o777
@@ -310,6 +428,13 @@ metadata = os.stat(config_path)
 backup = f"{config_path}.tandem-setup-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.bak"
 shutil.copy2(config_path, backup)
 updated = text[:closing] + "\n" + route + "\n" + text[closing:]
+if "TANDEM-SETUP-MANAGED-LIMITS" not in text:
+    limits = (
+        "# TANDEM-SETUP-MANAGED-LIMITS\n"
+        "limit_req_zone $binary_remote_addr zone=tandem_setup_auth:10m rate=10r/m;\n"
+        "limit_req_zone $binary_remote_addr zone=tandem_setup_api:10m rate=600r/m;\n\n"
+    )
+    updated = updated[:server_start] + limits + updated[server_start:]
 directory = os.path.dirname(config_path)
 fd, temporary = tempfile.mkstemp(prefix=".tandem-nginx-", dir=directory)
 try:
@@ -371,7 +496,22 @@ if [[ -n "$compose_directory" && -n "$compose_service" && -d "$compose_directory
   "$compose_service" =~ ^[A-Za-z0-9_-]+$ ]]; then
   override_file="$compose_directory/compose.override.yaml"
   if [[ ! -e "$override_file" ]]; then
-    cat > "$temporary_directory/compose.override.yaml" <<YAML
+    if [[ "$proxy_ip" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
+      cat > "$temporary_directory/compose.override.yaml" <<YAML
+# Managed by Tandem setup to keep the Nginx network attachment after recreation.
+services:
+  $compose_service:
+    networks:
+      tandem-edge:
+        ipv4_address: "$proxy_ip"
+
+networks:
+  tandem-edge:
+    name: tandem-edge
+    external: true
+YAML
+    else
+      cat > "$temporary_directory/compose.override.yaml" <<YAML
 # Managed by Tandem setup to keep the Nginx network attachment after recreation.
 services:
   $compose_service:
@@ -383,6 +523,7 @@ networks:
     name: tandem-edge
     external: true
 YAML
+    fi
     if install -m 0644 "$temporary_directory/compose.override.yaml" "$override_file"; then
       if docker compose --project-directory "$compose_directory" config --quiet; then
         printf 'Added a Compose override for the Nginx tandem-edge network in %s.\n' "$compose_directory"
