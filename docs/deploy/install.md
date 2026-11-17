@@ -25,11 +25,23 @@ that bundle is unavailable.
    ```
 
    The command downloads the latest nightly Compose bundle, verifies its
-   SHA-256 checksum, asks for the Actual URL, public Tandem URL, and proxy
-   address, then creates `./tandem/`. It writes generated secret files under
-   `tandem/deploy/compose/secrets/`; `.env` contains settings and secret-file
-   paths, not secret values. The command does not replace an existing `.env`,
-   secret, or Compose file.
+   SHA-256 checksum, and asks for the Actual URL, public Tandem URL, and proxy
+   address. A domain-only Actual URL is treated as HTTPS; the public Tandem URL
+   defaults to that same domain. It then creates `./tandem/` and writes
+   generated secret files under `tandem/deploy/compose/secrets/`; `.env`
+   contains settings and secret-file paths, not secret values. The command
+   does not replace an existing `.env`, secret, or Compose file.
+
+   Setup also looks for a Docker Nginx container with one TLS server block for
+   the public Tandem domain. For a regular Nginx image with a writable mounted
+   config, it backs up that file, adds the `/api/v1/` route, connects Nginx to
+   `tandem-edge`, and sets `TANDEM_TRUST_PROXY` to Nginx's detected address.
+   It reuses the existing TLS certificate, so a second Certbot request is not
+   needed. If there is no TLS vhost and the Nginx container has Certbot's Nginx
+   plugin, setup asks for a renewal email and requests a certificate with
+   Certbot; otherwise it leaves proxy files untouched and prints the manual
+   step. Nginx Proxy Manager keeps its generated config under its own control,
+   so setup leaves that config untouched.
 
    **Check:** the pinned image and required secret files are present:
 

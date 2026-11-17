@@ -6,6 +6,13 @@ You need an existing TLS server block for Actual, an Nginx container on the
 same private Docker network as Tandem and Actual, and a domain that resolves
 to the proxy.
 
+The setup command can add the Tandem route automatically when it finds one
+regular Docker Nginx container with a writable mounted config and one matching
+TLS server block. It backs up the config before editing, attaches Nginx to
+`tandem-edge`, and reuses the server's certificate. It leaves Nginx Proxy
+Manager and ambiguous or unmounted configurations unchanged. Use the steps
+below when setup reports that it skipped proxy configuration.
+
 ## Steps
 
 1. **Join the services to one private network.** Attach Nginx, the Tandem API,
