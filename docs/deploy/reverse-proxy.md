@@ -3,15 +3,14 @@
 For operators routing a public HTTPS address to Tandem and Actual.
 
 You need an Nginx container on the same private Docker network as Tandem, an
-Actual server reachable from Tandem, and a domain that resolves to the proxy.
-If there is no existing TLS server block, automatic certificate issuance also
-requires the Certbot Nginx plugin in that container and inbound HTTP access on
-port 80.
+existing HTTPS server block for the public Tandem domain, an Actual server
+reachable from Tandem, and a domain that resolves to the proxy. Your existing
+certificate and renewal process continue to manage HTTPS.
 
 The setup command can add the Tandem route automatically when it finds one
 regular Docker Nginx container with a writable mounted config and one matching
-TLS server block. It backs up the config before editing, attaches Nginx to
-`tandem-edge`, and reuses the server's certificate. It leaves Nginx Proxy
+HTTPS server block. It backs up the config before editing and attaches Nginx to
+`tandem-edge`. It leaves certificates unchanged. It also leaves Nginx Proxy
 Manager, `nginx-proxy`, SWAG, and ambiguous or unmounted configurations
 unchanged. Use the steps below when setup reports that it skipped proxy
 configuration.
