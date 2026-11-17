@@ -363,7 +363,8 @@ jobs:
           set -euo pipefail
           ref="repos/$GITHUB_REPOSITORY/git/ref/tags/nightly"
           if gh api "$ref" >/dev/null 2>&1; then
-            gh api --method PATCH "$ref" -f sha="$SOURCE_SHA" -F force=true >/dev/null
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/nightly" \
+              -f sha="$SOURCE_SHA" -F force=true >/dev/null
           else
             gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
               -f ref=refs/tags/nightly -f sha="$SOURCE_SHA" >/dev/null
