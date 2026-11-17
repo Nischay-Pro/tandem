@@ -33,14 +33,17 @@ that bundle is unavailable.
    does not replace an existing `.env`, secret, or Compose file.
 
    Setup creates `tandem/compose.yml` as the start command for the pinned
-   Tandem Compose bundle. It also looks for a Docker Nginx container with one
-   existing HTTPS vhost for the public Tandem domain. For a regular Nginx image
-   with a writable mounted config, it backs up that file, adds the `/api/v1/`
-   route, connects Nginx to `tandem-edge`, writes a Compose override to retain
-   that network on recreation, and sets `TANDEM_TRUST_PROXY` to Nginx's
-   detected address. HTTPS and certificate renewal remain with your existing
-   setup. If Nginx is ambiguous, managed, unmounted, or has no matching
-   HTTPS vhost, setup leaves its config untouched and prints the manual step.
+   Tandem Compose bundle. It detects a matching HTTPS vhost in either a regular
+   Docker Nginx container or Ubuntu's host-installed Nginx. It backs up the
+   config before adding the `/api/v1/` route. For Docker Nginx, it connects the
+   container to `tandem-edge` and persists that network attachment. For host
+   Nginx, it publishes the API only on `127.0.0.1:19753` and configures the
+   route to use that loopback port. Both paths set `TANDEM_TRUST_PROXY` when
+   the proxy address can be detected. HTTPS and certificate renewal remain
+   with your existing setup. Rerunning the setup command refreshes its Nginx
+   helper and applies proxy configuration without replacing settings or
+   secrets. If Nginx is ambiguous, managed, or has no matching HTTPS vhost,
+   setup leaves its config untouched and prints the manual step.
 
    **Check:** the pinned image and required secret files are present:
 
@@ -70,7 +73,7 @@ that bundle is unavailable.
    Replace `./tandem` with the directory created by setup. Add the external
    `tandem-edge` network to the existing Actual and reverse-proxy services,
    preserving their other networks. Setup automatically attaches a detected
-   regular Nginx container and writes a Compose override; attach Actual too
+   regular Docker Nginx container and writes a Compose override; attach Actual too
    when `TANDEM_ACTUAL_SERVER_URL` uses its internal service name. If setup
    reports that it skipped Nginx, use the manual steps in
    [Reverse proxy setup](reverse-proxy.md):

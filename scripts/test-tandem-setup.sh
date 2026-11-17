@@ -72,6 +72,12 @@ services:
     image: ${TANDEM_API_IMAGE:?Run setup}
 YAML
     ;;
+  */configure-docker-nginx.sh)
+    cat > "$destination" <<'HELPER'
+#!/usr/bin/env bash
+printf 'configured\n' >> "$TANDEM_SETUP_TEST_HELPER_LOG"
+HELPER
+    ;;
   *.sh) printf '#!/usr/bin/env bash\nexit 0\n' > "$destination" ;;
   *.service|*.timer) printf '[Unit]\nDescription=Setup test\n' > "$destination" ;;
   *) printf '# Setup test fixture\n' > "$destination" ;;
@@ -118,6 +124,7 @@ printf '%s' "$answers" |
     TANDEM_DEPLOY_BASE_URL="https://downloads.invalid/deploy" \
     TANDEM_SETUP_TEST_BUNDLE="$test_root/compose-bundle.tar.gz" \
     TANDEM_SETUP_TEST_URL_LOG="$test_root/selected-url.log" \
+    TANDEM_SETUP_TEST_HELPER_LOG="$test_root/configure-helper.log" \
     bash "$project_root/deploy/tandem-setup.sh" > "$test_root/first-run.log"
 
 environment_file="$install_directory/deploy/compose/.env"
@@ -129,6 +136,7 @@ grep -Fq 'path: ./deploy/compose/production.yml' "$root_compose_file"
 grep -Fq 'env_file: ./deploy/compose/.env' "$root_compose_file"
 grep -Fq "image: $expected_image" "$compose_file"
 grep -Fq 'Tandem-compose-0.1.0-nightly.2-' "$test_root/selected-url.log"
+test "$(wc -l < "$test_root/configure-helper.log")" -eq 1
 if grep -Fq 'TANDEM_API_IMAGE=' "$environment_file"; then
   echo "The setup command should use the nightly release's pinned Compose image." >&2
   exit 1
@@ -156,12 +164,14 @@ printf '\n\n\n' |
   PATH="$fake_bin:$PATH" \
     TANDEM_INSTALL_DIRECTORY="$install_directory" \
     TANDEM_DEPLOY_BASE_URL="https://downloads.invalid/deploy" \
+    TANDEM_SETUP_TEST_HELPER_LOG="$test_root/configure-helper.log" \
     bash "$project_root/deploy/tandem-setup.sh" > "$test_root/second-run.log"
 
 test "$environment_before" = "$(sha256sum "$environment_file" | cut -d ' ' -f 1)"
 test "$postgres_before" = "$(sha256sum "$secret_directory/postgres_password" | cut -d ' ' -f 1)"
 test "$encryption_key_before" = "$(sha256sum "$secret_directory/auth_token_encryption_key" | cut -d ' ' -f 1)"
 grep -Fq 'Existing' "$test_root/second-run.log"
+test "$(wc -l < "$test_root/configure-helper.log")" -eq 2
 if grep -Eq '[0-9a-f]{64}' "$test_root/first-run.log"; then
   echo "The setup output exposed generated secret material." >&2
   exit 1

@@ -2,31 +2,33 @@
 
 For operators routing a public HTTPS address to Tandem and Actual.
 
-You need an Nginx container on the same private Docker network as Tandem, an
+You need either Ubuntu's host-installed Nginx or an Nginx container, an
 existing HTTPS server block for the public Tandem domain, an Actual server
 reachable from Tandem, and a domain that resolves to the proxy. Your existing
 certificate and renewal process continue to manage HTTPS.
 
 The setup command can add the Tandem route automatically when it finds one
-regular Docker Nginx container with a writable mounted config and one matching
-HTTPS server block. It backs up the config before editing and attaches Nginx to
-`tandem-edge`. It leaves certificates unchanged. It also leaves Nginx Proxy
-Manager, `nginx-proxy`, SWAG, and ambiguous or unmounted configurations
-unchanged. Use the steps below when setup reports that it skipped proxy
-configuration.
+matching HTTPS server block in host Nginx or in a regular Docker Nginx
+container. It backs up the config before editing and leaves certificates
+unchanged. For host Nginx, it publishes the API on `127.0.0.1:19753` and uses
+that loopback address. For Docker Nginx, it attaches the container to
+`tandem-edge`. It leaves Nginx Proxy Manager, `nginx-proxy`, SWAG, and
+ambiguous or unmounted configurations unchanged. Use the steps below when setup
+reports that it skipped proxy configuration.
 
 ## Steps
 
-1. **Join the services to one private network.** Tandem API joins
-   `tandem-edge` automatically. Attach Nginx to that network, and attach Actual
-   too if `TANDEM_ACTUAL_SERVER_URL` uses its internal Compose service name. If
-   you use a different network name, set `TANDEM_EDGE_NETWORK` and use that
-   name in both services.
+1. **Join the services to one private network when Nginx is in Docker.** Tandem
+   API joins `tandem-edge` automatically. Attach Nginx to that network, and
+   attach Actual too if `TANDEM_ACTUAL_SERVER_URL` uses its internal Compose
+   service name. If you use a different network name, set
+   `TANDEM_EDGE_NETWORK` and use that name in both services. Host-installed
+   Nginx uses the loopback-published API port instead.
 
    **Check:** `docker network inspect tandem-edge` lists the API and proxy.
    If it does not, attach both services to the same external network.
 
-2. **Add the upstreams.** Copy the declarations from
+2. **Add the upstreams for Docker Nginx.** Copy the declarations from
    [`deploy/nginx/tandem-upstreams.conf.example`](../../deploy/nginx/tandem-upstreams.conf.example)
    into Nginx's `http {}` section. The supplied Compose service is
    `tandem-api:19753`; use that name on the shared network.
@@ -37,7 +39,8 @@ configuration.
 3. **Route `/api/v1/` to Tandem.** Add the locations from
    [`deploy/nginx/tandem-locations.conf.example`](../../deploy/nginx/tandem-locations.conf.example)
    to the existing TLS server block, before Actual's catch-all route. Keep the
-   Actual `/` route and its existing COOP/COEP headers.
+   Actual `/` route and its existing COOP/COEP headers. For host-installed
+   Nginx, use `proxy_pass http://127.0.0.1:19753;` in the Tandem locations.
 
    **Check:** `nginx -t` succeeds. If the API path displays Actual's web page,
    move the Tandem locations above the Actual catch-all.

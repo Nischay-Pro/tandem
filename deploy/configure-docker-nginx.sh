@@ -9,7 +9,7 @@ readonly environment_file="$install_directory/deploy/compose/.env"
 readonly network_name="tandem-edge"
 
 if ! command -v python3 >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
-  printf 'Skipping Docker Nginx auto-configuration: python3 or jq is unavailable.\n'
+  printf 'Skipping Nginx auto-configuration: python3 or jq is unavailable.\n'
   exit 0
 fi
 
@@ -145,13 +145,25 @@ while read -r container_id container_image; do
   fi
 done < <(docker ps --no-trunc --format '{{.ID}} {{.Image}}')
 
+proxy_mode="docker"
+if ((${#nginx_matches[@]} == 0)) && command -v nginx >/dev/null 2>&1; then
+  host_dump_file="$temporary_directory/host-nginx.conf"
+  if sudo nginx -T > "$host_dump_file" 2>&1; then
+    host_match="$(analyze_nginx_dump "$host_dump_file")"
+    if [[ -n "$host_match" ]]; then
+      nginx_matches+=("host"$'\t''nginx (host package)'$'\t'"$host_match")
+      proxy_mode="host"
+    fi
+  fi
+fi
+
 if ((${#nginx_matches[@]} == 0)); then
   if ((${#nginx_manager_images[@]} > 0)); then
     printf 'Detected a managed Nginx proxy (%s); leaving its generated configuration untouched.\n' \
       "${nginx_manager_images[0]}"
     printf 'Configure /api/v1/ in that proxy and route it to tandem-api:19753 on the tandem-edge network.\n'
   else
-    printf 'No Docker Nginx server block matched %s; leaving proxy configuration unchanged.\n' "$domain"
+    printf 'No Docker or host Nginx server block matched %s; leaving proxy configuration unchanged.\n' "$domain"
   fi
   exit 0
 fi
@@ -161,15 +173,12 @@ if ((${#nginx_matches[@]} != 1)); then
 fi
 
 IFS=$'\t' read -r nginx_container nginx_image config_match <<< "${nginx_matches[0]}"
+if [[ "$nginx_container" == host ]]; then
+  proxy_mode="host"
+fi
 IFS=$'\t' read -r container_config_path has_tls has_managed_routes <<< "$config_match"
 if [[ "$container_config_path" == AMBIGUOUS || -z "$container_config_path" ]]; then
   printf 'Nginx has multiple matching server blocks for %s; refusing to edit an ambiguous proxy.\n' "$domain" >&2
-  exit 0
-fi
-mount_mapping="$(map_container_config "$container_config_path")"
-if [[ -z "$mount_mapping" ]]; then
-  printf 'The matching Nginx configuration %s is not on a writable Docker mount; refusing a non-persistent edit.\n' \
-    "$container_config_path"
   exit 0
 fi
 if [[ "$has_tls" != 1 ]]; then
@@ -178,11 +187,24 @@ if [[ "$has_tls" != 1 ]]; then
   exit 0
 fi
 
-IFS=$'\t' read -r mount_source mount_destination <<< "$mount_mapping"
-if [[ "$container_config_path" == "$mount_destination" ]]; then
-  host_config_file="$mount_source"
+if [[ "$proxy_mode" == docker ]]; then
+  mount_mapping="$(map_container_config "$container_config_path")"
+  if [[ -z "$mount_mapping" ]]; then
+    printf 'The matching Nginx configuration %s is not on a writable Docker mount; refusing a non-persistent edit.\n' \
+      "$container_config_path"
+    exit 0
+  fi
+  IFS=$'\t' read -r mount_source mount_destination <<< "$mount_mapping"
+  if [[ "$container_config_path" == "$mount_destination" ]]; then
+    host_config_file="$mount_source"
+  else
+    host_config_file="$mount_source/${container_config_path#"$mount_destination"/}"
+  fi
 else
-  host_config_file="$mount_source/${container_config_path#"$mount_destination"/}"
+  host_config_file="$(sudo readlink -f -- "$container_config_path")" || {
+    printf 'Could not resolve the host Nginx configuration path %s.\n' "$container_config_path" >&2
+    exit 0
+  }
 fi
 if ! sudo test -f "$host_config_file"; then
   printf 'Could not access the mounted Nginx configuration at %s; refusing to edit it.\n' "$host_config_file" >&2
@@ -267,6 +289,22 @@ else
     }
     # END TANDEM-SETUP-MANAGED-ROUTES
 NGINX
+  if [[ "$proxy_mode" == host ]]; then
+    python3 - "$route_file" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+routes = path.read_text(encoding="utf-8")
+routes = routes.replace("        resolver 127.0.0.11 valid=30s ipv6=off;\n", "")
+routes = routes.replace("        set $tandem_api tandem-api:19753;\n", "")
+routes = routes.replace(
+    "        proxy_pass http://$tandem_api;\n",
+    "        proxy_pass http://127.0.0.1:19753;\n",
+)
+path.write_text(routes, encoding="utf-8")
+PY
+  fi
   backup_path="$(sudo python3 - "$host_config_file" "$domain" "$route_file" <<'PY'
 import os
 import re
@@ -377,14 +415,88 @@ PY
     exit 0
   }
   if [[ -n "$backup_path" ]]; then
-    if ! docker exec "$nginx_container" nginx -t; then
+    if [[ "$proxy_mode" == docker ]]; then
+      nginx_test_command=(docker exec "$nginx_container" nginx -t)
+      nginx_reload_command=(docker exec "$nginx_container" nginx -s reload)
+    else
+      nginx_test_command=(sudo nginx -t)
+      nginx_reload_command=(sudo nginx -s reload)
+    fi
+    if ! "${nginx_test_command[@]}"; then
       sudo cp -- "$backup_path" "$host_config_file"
       printf 'Nginx validation failed; restored %s.\n' "$backup_path" >&2
       exit 0
     fi
-    docker exec "$nginx_container" nginx -s reload
+    if ! "${nginx_reload_command[@]}"; then
+      sudo cp -- "$backup_path" "$host_config_file"
+      printf 'Nginx reload failed; restored %s.\n' "$backup_path" >&2
+      exit 0
+    fi
     printf 'Added Tandem API routes to %s (backup: %s).\n' "$domain" "$backup_path"
   fi
+fi
+
+if [[ "$proxy_mode" == host ]]; then
+  network_gateway="$(docker network inspect "$network_name" | jq -r '
+    [.[0].IPAM.Config[]? | select((.Gateway // "") | test("^[0-9.]+$")) | .Gateway][0] // empty
+  ')"
+  if [[ -n "$network_gateway" && -z "$requested_trust_proxy" && -f "$environment_file" ]]; then
+    trust_proxy_value="127.0.0.1/32,$network_gateway/32"
+    temporary_environment="$temporary_directory/.env"
+    TANDEM_TRUST_PROXY_AUTO="$trust_proxy_value" awk '
+      BEGIN { updated = 0 }
+      /^TANDEM_TRUST_PROXY=/ {
+        print "TANDEM_TRUST_PROXY=" ENVIRON["TANDEM_TRUST_PROXY_AUTO"]
+        updated = 1
+        next
+      }
+      { print }
+      END { if (!updated) exit 1 }
+    ' "$environment_file" > "$temporary_environment"
+    chmod 600 "$temporary_environment"
+    mv -- "$temporary_environment" "$environment_file"
+    printf 'Set Tandem proxy trust to the host Nginx loopback and Docker gateway addresses.\n'
+  elif [[ -z "$requested_trust_proxy" ]]; then
+    printf 'Could not detect the Docker gateway for host Nginx. Set TANDEM_TRUST_PROXY to the immediate proxy address before relying on client IP rate limits.\n' >&2
+  fi
+
+  root_compose_file="$install_directory/compose.yml"
+  if [[ -f "$root_compose_file" ]]; then
+    if ! python3 - "$root_compose_file" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+marker = "# TANDEM-HOST-NGINX-PORT"
+port_mapping = '      - "127.0.0.1:19753:19753"'
+if marker in text:
+    raise SystemExit(0)
+if re.search(r"(?m)^services:\s*$", text):
+    if re.search(r"(?m)^  tandem-api:\s*$", text):
+        raise SystemExit("The root Compose file already defines tandem-api; refusing to add a duplicate port mapping.")
+    addition = f"\n  tandem-api:\n    ports:\n{port_mapping}\n"
+    text = re.sub(r"(?m)^services:\s*$", lambda match: match.group(0) + addition, text, count=1)
+else:
+    text = text.rstrip() + f"\n\n{marker}\nservices:\n  tandem-api:\n    ports:\n{port_mapping}\n"
+path.write_text(text, encoding="utf-8")
+PY
+    then
+      printf 'Could not add the loopback-only API port to %s; add 127.0.0.1:19753:19753 under tandem-api ports.\n' \
+        "$root_compose_file" >&2
+      exit 0
+    fi
+    if ! docker compose --project-directory "$install_directory" -f "$root_compose_file" config --quiet; then
+      printf 'The generated host Nginx Compose port did not validate. Check %s before starting Tandem.\n' \
+        "$root_compose_file" >&2
+      exit 0
+    fi
+    printf 'Published the Tandem API on loopback port 19753 for host Nginx.\n'
+  else
+    printf 'Could not find %s to publish the loopback API port for host Nginx.\n' "$root_compose_file" >&2
+  fi
+  exit 0
 fi
 
 network_json="$(docker inspect "$nginx_container" | jq -r '.[0].NetworkSettings.Networks // {}')"
