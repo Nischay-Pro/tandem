@@ -89,3 +89,15 @@ runs:
         packages: "platform-tools platforms;android-37.0 build-tools;37.0.0"
         accept-android-sdk-licenses: true
         log-accepted-android-sdk-licenses: false
+
+    - name: Add Android Build Tools to PATH
+      if: ${{ inputs.setup_android == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        android_sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+        if [[ -z "$android_sdk_root" ]]; then
+          echo "Android SDK setup did not provide ANDROID_HOME or ANDROID_SDK_ROOT." >&2
+          exit 1
+        fi
+        echo "$android_sdk_root/build-tools/37.0.0" >> "$GITHUB_PATH"
