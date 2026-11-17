@@ -2,6 +2,7 @@
 set -euo pipefail
 
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+real_docker="$(command -v docker)"
 test_root="$(mktemp -d)"
 cleanup() {
   rm -rf -- "$test_root"
@@ -16,7 +17,9 @@ cat > "$fake_bin/docker" <<'SH'
 set -euo pipefail
 case "${1-}" in
   ps)
-    printf 'fake-nginx nginx:1.30-alpine\n'
+    if [[ "${TANDEM_NGINX_TEST_HOST:-0}" != 1 ]]; then
+      printf 'fake-nginx nginx:1.30-alpine\n'
+    fi
     ;;
   exec)
     shift 2
@@ -46,7 +49,9 @@ case "${1-}" in
       }]'
     ;;
   network)
-    if [[ "${2-}" == "connect" ]]; then
+    if [[ "${2-}" == "inspect" ]]; then
+      printf '[{"IPAM":{"Config":[{"Gateway":"172.30.0.1"}]}}]'
+    elif [[ "${2-}" == "connect" ]]; then
       touch "$TANDEM_NGINX_TEST_NETWORK_STATE"
     fi
     ;;
@@ -60,7 +65,21 @@ cat > "$fake_bin/sudo" <<'SH'
 set -euo pipefail
 exec "$@"
 SH
-chmod +x "$fake_bin/docker" "$fake_bin/sudo"
+
+cat > "$fake_bin/nginx" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1-} ${2-}" in
+  "-T ")
+    printf '# configuration file %s:\n' "$TANDEM_NGINX_TEST_CONFIG_PATH"
+    cat "$TANDEM_NGINX_TEST_CONFIG"
+    ;;
+  "-t ") [[ "${TANDEM_NGINX_TEST_FAIL_CONFIG:-0}" != 1 ]] ;;
+  "-s reload") exit 0 ;;
+  *) printf 'Unexpected nginx command: %s\n' "$*" >&2; exit 1 ;;
+esac
+SH
+chmod +x "$fake_bin/docker" "$fake_bin/sudo" "$fake_bin/nginx"
 
 make_install_tree() {
   local root="$1"
@@ -142,4 +161,52 @@ cmp -s "$rollback_root/original.conf" "$rollback_root/nginx.conf"
 grep -Fq 'Nginx validation failed; restored' "$rollback_root/run.log"
 test ! -e "$rollback_root/network-attached"
 
-echo "Docker Nginx setup routes TLS vhosts, preserves a backup, persists the network, and leaves HTTP-only vhosts unchanged."
+host_root="$test_root/host-nginx"
+make_install_tree "$host_root"
+ln -s nginx.conf "$host_root/sites-enabled-budget.conf"
+mkdir -p "$host_root/install/deploy/compose"
+cat > "$host_root/install/deploy/compose/production.yml" <<'YAML'
+services:
+  tandem-api:
+    image: tandem-api:test
+    expose:
+      - "19753"
+    networks:
+      - tandem-edge
+
+networks:
+  tandem-edge:
+    name: tandem-edge
+    external: true
+YAML
+cat > "$host_root/install/compose.yml" <<'YAML'
+include:
+  - path: ./deploy/compose/production.yml
+    project_directory: .
+    env_file: ./deploy/compose/.env
+YAML
+TANDEM_NGINX_TEST_HOST=1 \
+  TANDEM_NGINX_TEST_CONFIG="$host_root/nginx.conf" \
+  TANDEM_NGINX_TEST_CONFIG_PATH="$host_root/sites-enabled-budget.conf" \
+  TANDEM_NGINX_TEST_COMPOSE_DIRECTORY="$host_root/actual-budget" \
+  TANDEM_NGINX_TEST_NETWORK_STATE="$host_root/network-attached" \
+  PATH="$fake_bin:$PATH" \
+  bash "$project_root/deploy/configure-docker-nginx.sh" \
+    "$host_root/install" "https://budget.nischay.pro" "https://budget.nischay.pro" "" \
+    > "$host_root/run.log"
+grep -Fq 'location ^~ /api/v1/' "$host_root/nginx.conf"
+grep -Fq 'proxy_pass http://127.0.0.1:19753;' "$host_root/nginx.conf"
+! grep -Fq 'resolver 127.0.0.11' "$host_root/nginx.conf"
+grep -Fq 'TANDEM_TRUST_PROXY=127.0.0.1/32,172.30.0.1/32' \
+  "$host_root/install/deploy/compose/.env"
+grep -Fq '# TANDEM-HOST-NGINX-PORT' "$host_root/install/compose.yml"
+grep -Fq '127.0.0.1:19753:19753' "$host_root/install/compose.yml"
+test -L "$host_root/sites-enabled-budget.conf"
+test ! -e "$host_root/network-attached"
+test -f "$host_root/nginx.conf.tandem-setup-"*.bak
+"$real_docker" compose --project-directory "$host_root/install" \
+  -f "$host_root/install/compose.yml" config --format json > "$host_root/compose.json"
+jq -e '.services["tandem-api"].ports | any(.host_ip == "127.0.0.1" and .published == "19753" and .target == 19753)' \
+  "$host_root/compose.json" >/dev/null
+
+echo "Docker and host Nginx setup tests pass: TLS routes are backed up and validated, host API access stays on loopback, and HTTP-only vhosts stay unchanged."

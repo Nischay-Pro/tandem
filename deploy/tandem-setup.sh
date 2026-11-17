@@ -39,6 +39,33 @@ if [[ -e "$environment_file" ]]; then
     exit 1
   fi
   printf 'Existing %s is unchanged. The setup command never replaces settings or secrets.\n' "$environment_file"
+  if [[ -L "$deployment_directory/configure-docker-nginx.sh" ]]; then
+    printf 'Refusing to replace symbolic link %s.\n' "$deployment_directory/configure-docker-nginx.sh" >&2
+    exit 1
+  fi
+  mkdir -p "$deployment_directory"
+  helper_temporary="$(mktemp "$deployment_directory/.configure-docker-nginx.XXXXXX")"
+  if ! curl --fail --silent --show-error --location \
+    "$deploy_base_url/configure-docker-nginx.sh" -o "$helper_temporary" ||
+    ! bash -n "$helper_temporary"; then
+    rm -f -- "$helper_temporary"
+    printf 'Could not update the Nginx setup helper; existing settings and services are unchanged.\n' >&2
+    exit 1
+  fi
+  chmod 755 "$helper_temporary"
+  mv -- "$helper_temporary" "$deployment_directory/configure-docker-nginx.sh"
+  read_environment_value() {
+    local key="$1"
+    awk -v key="$key" 'index($0, key "=") == 1 { print substr($0, length(key) + 2); exit }' \
+      "$environment_file"
+  }
+  actual_server_url="$(read_environment_value TANDEM_ACTUAL_SERVER_URL)"
+  actual_public_url="$(read_environment_value TANDEM_ACTUAL_PUBLIC_URL)"
+  trust_proxy="$(read_environment_value TANDEM_TRUST_PROXY)"
+  if ! bash "$deployment_directory/configure-docker-nginx.sh" \
+    "$install_directory" "$actual_server_url" "$actual_public_url" "$trust_proxy"; then
+    printf 'Nginx auto-configuration did not complete; follow the reverse-proxy guide before exposing Tandem.\n' >&2
+  fi
   if [[ -e "$root_compose_file" ]]; then
     printf 'Review it, then start with: docker compose --project-directory %q -f %q up -d\n' \
       "$install_directory" "$root_compose_file"
