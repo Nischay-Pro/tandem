@@ -10,6 +10,7 @@ compose_directory="$deployment_directory/compose"
 secrets_directory="$compose_directory/secrets"
 environment_file="$compose_directory/.env"
 compose_file="$compose_directory/production.yml"
+root_compose_file="$install_directory/compose.yml"
 readonly support_files=(
   backup.sh
   backup-scheduled.sh
@@ -38,8 +39,13 @@ if [[ -e "$environment_file" ]]; then
     exit 1
   fi
   printf 'Existing %s is unchanged. The setup command never replaces settings or secrets.\n' "$environment_file"
-  printf 'Review it, then start with: docker compose --project-directory %q --env-file %q -f %q up -d\n' \
-    "$install_directory" "$environment_file" "$compose_file"
+  if [[ -e "$root_compose_file" ]]; then
+    printf 'Review it, then start with: docker compose --project-directory %q -f %q up -d\n' \
+      "$install_directory" "$root_compose_file"
+  else
+    printf 'Review it, then start with: docker compose --project-directory %q --env-file %q -f %q up -d\n' \
+      "$install_directory" "$environment_file" "$compose_file"
+  fi
   exit 0
 fi
 
@@ -55,6 +61,10 @@ umask 077
 
 if [[ -e "$compose_file" ]]; then
   printf 'Refusing to replace existing %s. Move it aside before first-time setup.\n' "$compose_file" >&2
+  exit 1
+fi
+if [[ -e "$root_compose_file" ]]; then
+  printf 'Refusing to replace existing %s. Move it aside before first-time setup.\n' "$root_compose_file" >&2
   exit 1
 fi
 for support_file in "${support_files[@]}"; do
@@ -270,6 +280,13 @@ if [[ -e "$environment_file" ]]; then
   exit 1
 fi
 mv "$temporary_directory/production.yml" "$compose_file"
+cat > "$temporary_directory/compose.yml" <<'YAML'
+include:
+  - path: ./deploy/compose/production.yml
+    project_directory: .
+    env_file: ./deploy/compose/.env
+YAML
+mv "$temporary_directory/compose.yml" "$root_compose_file"
 for support_file in "${support_files[@]}"; do
   mv "$temporary_directory/$support_file" "$deployment_directory/$support_file"
 done
@@ -287,7 +304,9 @@ fi
 docker compose --project-directory "$install_directory" \
   --env-file "$environment_file" \
   -f "$compose_file" config --quiet
+docker compose --project-directory "$install_directory" \
+  -f "$root_compose_file" config --quiet
 
 printf '\nSetup is ready. The API image is pinned by digest in %s.\n' "$compose_file"
-printf 'Start Tandem with:\n  docker compose --project-directory %q --env-file %q -f %q up -d\n' \
-  "$install_directory" "$environment_file" "$compose_file"
+printf 'Start Tandem with:\n  docker compose --project-directory %q -f %q up -d\n' \
+  "$install_directory" "$root_compose_file"

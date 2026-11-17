@@ -32,19 +32,15 @@ that bundle is unavailable.
    contains settings and secret-file paths, not secret values. The command
    does not replace an existing `.env`, secret, or Compose file.
 
-   Setup also looks for a Docker Nginx container with one TLS server block for
-   the public Tandem domain. For a regular Nginx image with a writable mounted
-   config, it backs up that file, adds the `/api/v1/` route, connects Nginx to
-   `tandem-edge`, writes a Compose override to retain that network on
-   recreation, and sets `TANDEM_TRUST_PROXY` to Nginx's detected address.
-   It reuses the existing TLS certificate, so a second Certbot request is not
-   needed. If there is no TLS vhost and the Nginx container has Certbot's Nginx
-   plugin and a writable `/etc/letsencrypt` mount, setup asks for a renewal
-   email, requests the certificate with Certbot, and installs a daily host
-   systemd renewal timer when systemd is available. Otherwise it leaves proxy
-   files untouched and prints the manual step. Nginx Proxy Manager,
-   `nginx-proxy`, and SWAG manage generated config themselves, so setup leaves
-   those proxy files untouched.
+   Setup creates `tandem/compose.yml` as the start command for the pinned
+   Tandem Compose bundle. It also looks for a Docker Nginx container with one
+   existing HTTPS vhost for the public Tandem domain. For a regular Nginx image
+   with a writable mounted config, it backs up that file, adds the `/api/v1/`
+   route, connects Nginx to `tandem-edge`, writes a Compose override to retain
+   that network on recreation, and sets `TANDEM_TRUST_PROXY` to Nginx's
+   detected address. HTTPS and certificate renewal remain with your existing
+   setup. If Nginx is ambiguous, managed, unmounted, or has no matching
+   HTTPS vhost, setup leaves its config untouched and prints the manual step.
 
    **Check:** the pinned image and required secret files are present:
 
@@ -119,11 +115,9 @@ that bundle is unavailable.
 
    ```sh
    docker compose --project-directory "$PWD/tandem" \
-     --env-file "$PWD/tandem/deploy/compose/.env" \
-     -f "$PWD/tandem/deploy/compose/production.yml" up -d
+     -f "$PWD/tandem/compose.yml" up -d
    docker compose --project-directory "$PWD/tandem" \
-     --env-file "$PWD/tandem/deploy/compose/.env" \
-     -f "$PWD/tandem/deploy/compose/production.yml" ps
+     -f "$PWD/tandem/compose.yml" ps
    ```
 
    If you use Compose `include`, run `up -d` from the existing project instead.

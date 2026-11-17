@@ -122,7 +122,11 @@ printf '%s' "$answers" |
 
 environment_file="$install_directory/deploy/compose/.env"
 compose_file="$install_directory/deploy/compose/production.yml"
+root_compose_file="$install_directory/compose.yml"
 secret_directory="$install_directory/deploy/compose/secrets"
+test -s "$root_compose_file"
+grep -Fq 'path: ./deploy/compose/production.yml' "$root_compose_file"
+grep -Fq 'env_file: ./deploy/compose/.env' "$root_compose_file"
 grep -Fq "image: $expected_image" "$compose_file"
 grep -Fq 'Tandem-compose-0.1.0-nightly.2-' "$test_root/selected-url.log"
 if grep -Fq 'TANDEM_API_IMAGE=' "$environment_file"; then
