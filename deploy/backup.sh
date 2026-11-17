@@ -99,12 +99,12 @@ fi
 chmod 600 "$postgres_tmp"
 if [[ -n "$backup_gpg_passphrase_file" ]]; then
   docker run --rm --volumes-from "$api_id":ro --entrypoint tar \
-    node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 -czf - -C /data/actual-api . \
+    node:26.13.1-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc -czf - -C /data/actual-api . \
     | gpg --batch --yes --pinentry-mode loopback --passphrase-file "$backup_gpg_passphrase_file" \
       --symmetric --cipher-algo AES256 --output "$workspace_tmp"
 else
   docker run --rm --volumes-from "$api_id":ro --entrypoint tar \
-    node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 -czf - -C /data/actual-api . \
+    node:26.13.1-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc -czf - -C /data/actual-api . \
     > "$workspace_tmp"
 fi
 chmod 600 "$workspace_tmp"
