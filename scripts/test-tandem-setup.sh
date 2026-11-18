@@ -25,7 +25,8 @@ case "${1-} ${2-} ${3-}" in
   "buildx imagetools inspect")
     printf '%s' '{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json"}'
     ;;
-  "network inspect"*) exit 0 ;;
+  "network inspect"*) [[ "${TANDEM_SETUP_TEST_MISSING_NETWORK:-0}" != 1 ]] ;;
+  "network create"*) printf '%s\n' "$3" >> "$TANDEM_SETUP_TEST_NETWORK_LOG" ;;
   "compose --project-directory"*) exit 0 ;;
   *)
     printf 'Unexpected Docker command in setup test: %s\n' "$*" >&2
@@ -170,6 +171,8 @@ printf '\n\n\n' |
     TANDEM_INSTALL_DIRECTORY="$install_directory" \
     TANDEM_DEPLOY_BASE_URL="https://downloads.invalid/deploy" \
     TANDEM_SETUP_TEST_HELPER_LOG="$test_root/configure-helper.log" \
+    TANDEM_SETUP_TEST_MISSING_NETWORK=1 \
+    TANDEM_SETUP_TEST_NETWORK_LOG="$test_root/network.log" \
     bash "$project_root/deploy/tandem-setup.sh" > "$test_root/second-run.log"
 
 test "$environment_before" = "$(sha256sum "$environment_file" | cut -d ' ' -f 1)"
@@ -177,6 +180,8 @@ test "$postgres_before" = "$(sha256sum "$secret_directory/postgres_password" | c
 test "$encryption_key_before" = "$(sha256sum "$secret_directory/auth_token_encryption_key" | cut -d ' ' -f 1)"
 grep -Fq 'Existing' "$test_root/second-run.log"
 grep -Fq 'Updated deployment scripts and helper files' "$test_root/second-run.log"
+grep -Fq 'Created missing Docker network tandem-edge.' "$test_root/second-run.log"
+grep -Fxq 'tandem-edge' "$test_root/network.log"
 grep -Fq 'exit 0' "$install_directory/deploy/backup.sh"
 grep -Fq 'exit 0' "$install_directory/deploy/restore.sh"
 grep -Fq 'configured' "$install_directory/deploy/configure-docker-nginx.sh"

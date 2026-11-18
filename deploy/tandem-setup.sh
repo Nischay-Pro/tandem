@@ -118,6 +118,15 @@ if [[ -e "$environment_file" ]]; then
   actual_server_url="$(read_environment_value TANDEM_ACTUAL_SERVER_URL)"
   actual_public_url="$(read_environment_value TANDEM_ACTUAL_PUBLIC_URL)"
   trust_proxy="$(read_environment_value TANDEM_TRUST_PROXY)"
+  network_name="$(read_environment_value TANDEM_EDGE_NETWORK)"
+  network_name="${network_name:-tandem-edge}"
+  if ! docker network inspect "$network_name" >/dev/null 2>&1; then
+    if ! docker network create "$network_name" >/dev/null; then
+      printf 'Could not create the external Docker network %s.\n' "$network_name" >&2
+      exit 1
+    fi
+    printf 'Created missing Docker network %s.\n' "$network_name"
+  fi
   if ! bash "$deployment_directory/configure-docker-nginx.sh" \
     "$install_directory" "$actual_server_url" "$actual_public_url" "$trust_proxy"; then
     printf 'Nginx auto-configuration did not complete; follow the reverse-proxy guide before exposing Tandem.\n' >&2

@@ -6,7 +6,9 @@ readonly actual_server_url="${2:-}"
 readonly public_tandem_url="${3:-}"
 readonly requested_trust_proxy="${4:-}"
 readonly environment_file="$install_directory/deploy/compose/.env"
-readonly network_name="tandem-edge"
+network_name="$(awk -F= '$1 == "TANDEM_EDGE_NETWORK" { print $2; exit }' "$environment_file" 2>/dev/null || true)"
+network_name="${network_name:-tandem-edge}"
+readonly network_name
 
 if ! command -v python3 >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
   printf 'Skipping Nginx auto-configuration: python3 or jq is unavailable.\n'
