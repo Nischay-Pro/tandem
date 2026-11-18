@@ -89,7 +89,7 @@ TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_FILE=$secret_dir/auth_token_encryption_key
 TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE=$secret_dir/auth_token_encryption_key_previous
 TANDEM_ACTUAL_SESSION_TOKEN_FILE=$secret_dir/actual_session_token
 TANDEM_API_IMAGE=tandem-for-actual-api:release-check
-TEST_API_HOST_PORT=$test_api_host_port
+TANDEM_API_HOST_PORT=$test_api_host_port
 TANDEM_TRUST_PROXY=127.0.0.1
 TANDEM_EDGE_NETWORK=$edge_network
 TANDEM_ACTUAL_SERVER_URL=
@@ -102,6 +102,10 @@ if ! TANDEM_TRUST_PROXY= "${compose[@]}" config --quiet; then
   exit 1
 fi
 "${compose[@]}" config --quiet
+"${compose[@]}" config --format json > "$scratch_root/production-compose.json"
+jq -e --arg port "$test_api_host_port" \
+  '.services["tandem-api"].ports | any(.host_ip == "127.0.0.1" and .published == $port and .target == 19753)' \
+  "$scratch_root/production-compose.json" >/dev/null
 start_compose_stack compose
 api_id="$("${compose[@]}" ps -q tandem-api)"
 api_environment="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$api_id")"
@@ -510,14 +514,14 @@ TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_FILE=$secret_dir/auth_token_encryption_key
 TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE=$secret_dir/auth_token_encryption_key_previous
 TANDEM_ACTUAL_SESSION_TOKEN_FILE=$secret_dir/actual_session_token
 TANDEM_API_IMAGE=tandem-for-actual-api:release-check
-TEST_API_HOST_PORT=$full_disk_host_port
+TANDEM_API_HOST_PORT=$full_disk_host_port
 TANDEM_TRUST_PROXY=127.0.0.1
 TANDEM_EDGE_NETWORK=$full_disk_edge_network
 TANDEM_ACTUAL_SERVER_URL=
 TANDEM_ACTUAL_PUBLIC_URL=
 EOF
 chmod 600 "$full_disk_env_file"
-full_disk_compose=(env "TEST_API_HOST_PORT=$full_disk_host_port" docker compose -p "$full_disk_project" --project-directory "$project_root" --env-file "$full_disk_env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml" -f "$project_root/deploy/compose/production-full-disk-check.yml")
+full_disk_compose=(docker compose -p "$full_disk_project" --project-directory "$project_root" --env-file "$full_disk_env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml" -f "$project_root/deploy/compose/production-full-disk-check.yml")
 docker network create "$full_disk_edge_network" >/dev/null
 "${full_disk_compose[@]}" config --quiet
 start_compose_stack full_disk_compose

@@ -23,6 +23,73 @@ readonly support_files=(
   configure-docker-nginx.sh
 )
 
+refresh_support_files() {
+  local stage_directory="$deployment_directory/.refresh.XXXXXX"
+  local support_file destination destination_directory staged_file temporary_file mode
+
+  mkdir -p "$deployment_directory"
+  stage_directory="$(mktemp -d "$stage_directory")"
+  for support_file in "${support_files[@]}"; do
+    destination="$deployment_directory/$support_file"
+    if [[ -L "$destination" ]]; then
+      rm -rf -- "$stage_directory"
+      printf 'Refusing to replace symbolic link %s.\n' "$destination" >&2
+      return 1
+    fi
+    if [[ -e "$destination" && ! -f "$destination" ]]; then
+      rm -rf -- "$stage_directory"
+      printf 'Refusing to replace non-file path %s.\n' "$destination" >&2
+      return 1
+    fi
+    mkdir -p "$(dirname "$stage_directory/$support_file")"
+    if ! curl --fail --silent --show-error --location \
+      "$deploy_base_url/$support_file" -o "$stage_directory/$support_file" ||
+      [[ ! -s "$stage_directory/$support_file" ]]; then
+      rm -rf -- "$stage_directory"
+      printf 'Could not download updated deployment file %s; the existing deployment files are unchanged.\n' \
+        "$support_file" >&2
+      return 1
+    fi
+    if [[ "$support_file" == *.sh ]] && ! bash -n "$stage_directory/$support_file"; then
+      rm -rf -- "$stage_directory"
+      printf 'The downloaded deployment script %s failed its shell syntax check.\n' \
+        "$support_file" >&2
+      return 1
+    fi
+    if [[ "$support_file" == *.sh ]]; then
+      chmod 755 "$stage_directory/$support_file"
+    else
+      chmod 644 "$stage_directory/$support_file"
+    fi
+  done
+
+  for support_file in "${support_files[@]}"; do
+    destination="$deployment_directory/$support_file"
+    destination_directory="$(dirname "$destination")"
+    staged_file="$stage_directory/$support_file"
+    mkdir -p "$destination_directory"
+    if [[ "$support_file" == *.sh ]]; then
+      mode=755
+    else
+      mode=644
+    fi
+    temporary_file="$(mktemp "$destination_directory/.${support_file##*/}.refresh.XXXXXX")"
+    if ! cp -- "$staged_file" "$temporary_file" || ! chmod "$mode" "$temporary_file"; then
+      rm -f -- "$temporary_file"
+      rm -rf -- "$stage_directory"
+      printf 'Could not stage updated deployment file %s.\n' "$destination" >&2
+      return 1
+    fi
+    if ! mv -f -- "$temporary_file" "$destination"; then
+      rm -f -- "$temporary_file"
+      rm -rf -- "$stage_directory"
+      printf 'Could not replace deployment file %s.\n' "$destination" >&2
+      return 1
+    fi
+  done
+  rm -rf -- "$stage_directory"
+}
+
 for required_command in curl docker jq openssl sha256sum sudo tar; do
   if ! command -v "$required_command" >/dev/null 2>&1; then
     printf 'Required command not found: %s\n' "$required_command" >&2
@@ -39,21 +106,10 @@ if [[ -e "$environment_file" ]]; then
     exit 1
   fi
   printf 'Existing %s is unchanged. The setup command never replaces settings or secrets.\n' "$environment_file"
-  if [[ -L "$deployment_directory/configure-docker-nginx.sh" ]]; then
-    printf 'Refusing to replace symbolic link %s.\n' "$deployment_directory/configure-docker-nginx.sh" >&2
+  if ! refresh_support_files; then
     exit 1
   fi
-  mkdir -p "$deployment_directory"
-  helper_temporary="$(mktemp "$deployment_directory/.configure-docker-nginx.XXXXXX")"
-  if ! curl --fail --silent --show-error --location \
-    "$deploy_base_url/configure-docker-nginx.sh" -o "$helper_temporary" ||
-    ! bash -n "$helper_temporary"; then
-    rm -f -- "$helper_temporary"
-    printf 'Could not update the Nginx setup helper; existing settings and services are unchanged.\n' >&2
-    exit 1
-  fi
-  chmod 755 "$helper_temporary"
-  mv -- "$helper_temporary" "$deployment_directory/configure-docker-nginx.sh"
+  printf 'Updated deployment scripts and helper files. Existing settings and secrets are unchanged.\n'
   read_environment_value() {
     local key="$1"
     awk -v key="$key" 'index($0, key "=") == 1 { print substr($0, length(key) + 2); exit }' \

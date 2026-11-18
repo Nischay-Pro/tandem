@@ -11,7 +11,8 @@ The setup command can add the Tandem route automatically when it finds one
 matching HTTPS server block in host Nginx or in a regular Docker Nginx
 container. It backs up the config before editing and leaves certificates
 unchanged. For host Nginx, it publishes the API on `127.0.0.1:19753` and uses
-that loopback address. For Docker Nginx, it attaches the container to
+that loopback address. If port 19753 is busy, setup chooses a free loopback
+port and updates both Compose and Nginx. For Docker Nginx, it attaches the container to
 `tandem-edge`. It leaves Nginx Proxy Manager, `nginx-proxy`, SWAG, and
 ambiguous or unmounted configurations unchanged. Use the steps below when setup
 reports that it skipped proxy configuration.
@@ -40,7 +41,9 @@ reports that it skipped proxy configuration.
    [`deploy/nginx/tandem-locations.conf.example`](../../deploy/nginx/tandem-locations.conf.example)
    to the existing TLS server block, before Actual's catch-all route. Keep the
    Actual `/` route and its existing COOP/COEP headers. For host-installed
-   Nginx, use `proxy_pass http://127.0.0.1:19753;` in the Tandem locations.
+   Nginx, use `proxy_pass http://127.0.0.1:<TANDEM_API_HOST_PORT>;` in the
+   Tandem locations. Setup writes the selected port to
+   `tandem/deploy/compose/.env` (default `19753`).
 
    **Check:** `nginx -t` succeeds. If the API path displays Actual's web page,
    move the Tandem locations above the Actual catch-all.

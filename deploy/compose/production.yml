@@ -24,6 +24,8 @@ services:
 
   tandem-api:
     image: ${TANDEM_API_IMAGE:?Run the setup command to choose a digest-pinned API image}
+    ports:
+      - "127.0.0.1:${TANDEM_API_HOST_PORT:-19753}:19753"
     restart: unless-stopped
     init: true
     read_only: true
