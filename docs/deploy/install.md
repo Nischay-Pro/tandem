@@ -42,8 +42,9 @@ that bundle is unavailable.
    the proxy address can be detected. HTTPS and certificate renewal remain
    with your existing setup. Rerunning the setup command refreshes installed
    deployment scripts and helpers, preserves `.env` and secret files, and
-   reapplies proxy configuration. It does not replace the downloaded Compose
-   bundle. If Nginx is ambiguous, managed, or has no matching HTTPS vhost,
+   recreates the external Docker network if it is missing and reapplies proxy
+   configuration. It does not replace the downloaded Compose bundle. If Nginx
+   is ambiguous, managed, or has no matching HTTPS vhost,
    setup leaves its config untouched and prints the manual step.
 
    **Check:** the pinned image and required secret files are present:
