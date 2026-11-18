@@ -43,7 +43,7 @@ export function createPlanningOperations({
                 "Enter a budget amount up to 1,000,000,000 major units",
               );
             }
-            const categories = await client.getCategories({ hidden: true });
+            const categories = await client.getCategories();
             if (!categories.some((candidate) => candidate.id === categoryId)) {
               throw new BudgetMaintenanceInputError(
                 "Category does not exist in this budget",
