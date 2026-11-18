@@ -140,7 +140,12 @@ function createFake() {
       { id: "closed", closed: true },
     ]),
     getAccountBalance: vi.fn(async () => 0),
-    getCategories: vi.fn(async () => [...categories]),
+    getCategories: vi.fn(async (options?: { hidden?: boolean }) =>
+      categories.filter(
+        (category) =>
+          options?.hidden === undefined || category.hidden === options.hidden,
+      ),
+    ),
     getCategoryGroups: vi.fn(async () => [
       { id: "group-1", name: "Food", is_income: false, hidden: false },
       { id: "group-2", name: "Travel", is_income: false, hidden: false },
@@ -1554,7 +1559,7 @@ describe("Actual budget maintenance API", () => {
     expect(fake.client.deleteSchedule).toHaveBeenCalledOnce();
   });
 
-  it("sets the selected month's assigned category amount through Actual", async () => {
+  it("sets the selected month's visible category amount through Actual", async () => {
     const fake = createFake();
 
     await fake.api.setBudgetAmount("budget-1", "expense", "2026-11", 125_000);
@@ -1564,6 +1569,7 @@ describe("Actual budget maintenance API", () => {
       "expense",
       125_000,
     );
+    expect(fake.client.getCategories).toHaveBeenCalledWith();
     expect(fake.runBudgetCalls.at(-1)).toEqual({
       budgetId: "budget-1",
       options: { synchronizeAfterWrite: true },
