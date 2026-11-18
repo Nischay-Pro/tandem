@@ -142,6 +142,7 @@ if grep -Fq 'TANDEM_API_IMAGE=' "$environment_file"; then
   exit 1
 fi
 grep -Fq 'TANDEM_TRUST_PROXY=10.0.0.2/32' "$environment_file"
+grep -Fq 'TANDEM_API_HOST_PORT=19753' "$environment_file"
 grep -Fq 'TANDEM_ACTUAL_SERVER_URL=http://actual:5006' "$environment_file"
 grep -Fq 'TANDEM_ACTUAL_PUBLIC_URL=https://tandem.example.com' "$environment_file"
 grep -Fq 'TANDEM_EDGE_NETWORK=tandem-edge' "$environment_file"
@@ -160,6 +161,10 @@ test -s "$install_directory/deploy/nginx/tandem-locations.conf.example"
 environment_before="$(sha256sum "$environment_file" | cut -d ' ' -f 1)"
 postgres_before="$(sha256sum "$secret_directory/postgres_password" | cut -d ' ' -f 1)"
 encryption_key_before="$(sha256sum "$secret_directory/auth_token_encryption_key" | cut -d ' ' -f 1)"
+printf 'stale backup script\n' > "$install_directory/deploy/backup.sh"
+printf 'stale restore script\n' > "$install_directory/deploy/restore.sh"
+printf 'stale Nginx helper\n' > "$install_directory/deploy/configure-docker-nginx.sh"
+printf 'stale systemd timer\n' > "$install_directory/deploy/systemd/tandem-backup.timer"
 printf '\n\n\n' |
   PATH="$fake_bin:$PATH" \
     TANDEM_INSTALL_DIRECTORY="$install_directory" \
@@ -171,6 +176,11 @@ test "$environment_before" = "$(sha256sum "$environment_file" | cut -d ' ' -f 1)
 test "$postgres_before" = "$(sha256sum "$secret_directory/postgres_password" | cut -d ' ' -f 1)"
 test "$encryption_key_before" = "$(sha256sum "$secret_directory/auth_token_encryption_key" | cut -d ' ' -f 1)"
 grep -Fq 'Existing' "$test_root/second-run.log"
+grep -Fq 'Updated deployment scripts and helper files' "$test_root/second-run.log"
+grep -Fq 'exit 0' "$install_directory/deploy/backup.sh"
+grep -Fq 'exit 0' "$install_directory/deploy/restore.sh"
+grep -Fq 'configured' "$install_directory/deploy/configure-docker-nginx.sh"
+grep -Fq 'Description=Setup test' "$install_directory/deploy/systemd/tandem-backup.timer"
 test "$(wc -l < "$test_root/configure-helper.log")" -eq 2
 if grep -Eq '[0-9a-f]{64}' "$test_root/first-run.log"; then
   echo "The setup output exposed generated secret material." >&2
@@ -205,4 +215,4 @@ fi
 test ! -e "$checksum_failure_directory/deploy/compose/.env"
 grep -Fq 'failed its published SHA-256 check' "$test_root/checksum-failure.log"
 
-echo "Tandem setup installed the digest-pinned nightly bundle, preserved settings and secrets on rerun, and rejected unavailable or invalid bundles before installation."
+echo "Tandem setup installed the digest-pinned nightly bundle, refreshed deployment scripts without changing settings or secrets on rerun, and rejected unavailable or invalid bundles before installation."

@@ -22,6 +22,8 @@ if [[ ! "$url_for_domain" =~ ^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
   exit 0
 fi
 readonly domain="${url_for_domain,,}"
+host_api_port="$(awk -F= '$1 == "TANDEM_API_HOST_PORT" { print $2; exit }' "$environment_file" 2>/dev/null || true)"
+host_api_port="${host_api_port:-19753}"
 
 temporary_directory="$(mktemp -d)"
 cleanup() {
@@ -123,6 +125,125 @@ map_container_config() {
   '
 }
 
+update_managed_host_route_port() {
+  sudo python3 - "$1" "$2" <<'PY'
+from datetime import datetime, timezone
+import os
+from pathlib import Path
+import re
+import shutil
+import sys
+import tempfile
+
+path = Path(sys.argv[1])
+port = sys.argv[2]
+text = path.read_text(encoding="utf-8")
+start = text.find("# TANDEM-SETUP-MANAGED-ROUTES")
+end = text.find("# END TANDEM-SETUP-MANAGED-ROUTES", start)
+if start < 0 or end < 0:
+    raise SystemExit("The managed Tandem route block is incomplete.")
+end += len("# END TANDEM-SETUP-MANAGED-ROUTES")
+routes = text[start:end]
+updated_routes, replacements = re.subn(
+    r"proxy_pass http://127\.0\.0\.1:[0-9]+;",
+    f"proxy_pass http://127.0.0.1:{port};",
+    routes,
+)
+if replacements == 0:
+    raise SystemExit("No host Nginx upstream was found in the managed Tandem route block.")
+if updated_routes == routes:
+    raise SystemExit(0)
+updated = text[:start] + updated_routes + text[end:]
+metadata = path.stat()
+backup = path.with_name(
+    f"{path.name}.tandem-setup-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.bak"
+)
+shutil.copy2(path, backup)
+fd, temporary = tempfile.mkstemp(prefix=".tandem-nginx-", dir=path.parent)
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        stream.write(updated)
+    os.chown(temporary, metadata.st_uid, metadata.st_gid)
+    os.chmod(temporary, metadata.st_mode & 0o777)
+    os.replace(temporary, path)
+except BaseException:
+    try:
+        os.unlink(temporary)
+    except FileNotFoundError:
+        pass
+    raise
+print(backup)
+PY
+}
+
+set_environment_value() {
+  local key="$1"
+  local value="$2"
+  local temporary_environment="$temporary_directory/.env"
+  TANDEM_ENVIRONMENT_KEY="$key" TANDEM_ENVIRONMENT_VALUE="$value" awk '
+    BEGIN { updated = 0 }
+    {
+      prefix = ENVIRON["TANDEM_ENVIRONMENT_KEY"] "="
+      if (!updated && index($0, prefix) == 1) {
+        print prefix ENVIRON["TANDEM_ENVIRONMENT_VALUE"]
+        updated = 1
+        next
+      }
+      print
+    }
+    END {
+      if (!updated) print ENVIRON["TANDEM_ENVIRONMENT_KEY"] "=" ENVIRON["TANDEM_ENVIRONMENT_VALUE"]
+    }
+  ' "$environment_file" > "$temporary_environment"
+  chmod 600 "$temporary_environment"
+  mv -- "$temporary_environment" "$environment_file"
+}
+
+select_host_api_port() {
+  local tandem_api_port_is_published=false
+  local api_container_id
+  while read -r api_container_id; do
+    [[ -n "$api_container_id" ]] || continue
+    if docker inspect "$api_container_id" | jq -e --arg port "$host_api_port" '
+      any(.[0].HostConfig.PortBindings["19753/tcp"][]?;
+        .HostIp == "127.0.0.1" and .HostPort == $port)
+    ' >/dev/null; then
+      tandem_api_port_is_published=true
+      break
+    fi
+  done < <(docker ps --quiet \
+    --filter label=com.docker.compose.service=tandem-api \
+    --filter "label=com.docker.compose.project.working_dir=$install_directory")
+
+  if [[ "$tandem_api_port_is_published" != true ]] && ! python3 - "$host_api_port" <<'PY'
+import socket
+import sys
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+try:
+    sock.bind(("127.0.0.1", int(sys.argv[1])))
+except OSError:
+    raise SystemExit(1)
+finally:
+    sock.close()
+PY
+  then
+    local occupied_host_api_port="$host_api_port"
+    host_api_port="$(python3 - <<'PY'
+import socket
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.bind(("127.0.0.1", 0))
+print(sock.getsockname()[1])
+sock.close()
+PY
+)"
+    printf 'Loopback port %s is already in use; selected free port %s for Tandem.\n' \
+      "$occupied_host_api_port" "$host_api_port"
+  fi
+  set_environment_value TANDEM_API_HOST_PORT "$host_api_port"
+}
+
 declare -a nginx_matches=()
 declare -a nginx_manager_images=()
 while read -r container_id container_image; do
@@ -176,6 +297,12 @@ IFS=$'\t' read -r nginx_container nginx_image config_match <<< "${nginx_matches[
 if [[ "$nginx_container" == host ]]; then
   proxy_mode="host"
 fi
+if [[ "$proxy_mode" == host ]]; then
+  if [[ ! "$host_api_port" =~ ^[0-9]{1,5}$ ]] || ((host_api_port < 1 || host_api_port > 65535)); then
+    printf 'TANDEM_API_HOST_PORT must be a port from 1 to 65535; refusing host Nginx setup.\n' >&2
+    exit 0
+  fi
+fi
 IFS=$'\t' read -r container_config_path has_tls has_managed_routes <<< "$config_match"
 if [[ "$container_config_path" == AMBIGUOUS || -z "$container_config_path" ]]; then
   printf 'Nginx has multiple matching server blocks for %s; refusing to edit an ambiguous proxy.\n' "$domain" >&2
@@ -210,9 +337,34 @@ if ! sudo test -f "$host_config_file"; then
   printf 'Could not access the mounted Nginx configuration at %s; refusing to edit it.\n' "$host_config_file" >&2
   exit 0
 fi
+if [[ "$proxy_mode" == host ]]; then
+  select_host_api_port
+fi
 
 if [[ "$has_managed_routes" == 1 ]]; then
-  printf 'Tandem routes are already present in the Nginx vhost for %s.\n' "$domain"
+  if [[ "$proxy_mode" == host ]]; then
+    route_backup="$(update_managed_host_route_port "$host_config_file" "$host_api_port")" || {
+      printf 'Could not safely update the Tandem route to host port %s.\n' "$host_api_port" >&2
+      exit 0
+    }
+    if [[ -n "$route_backup" ]]; then
+      if ! sudo nginx -t; then
+        sudo cp -- "$route_backup" "$host_config_file"
+        printf 'Nginx validation failed; restored %s.\n' "$route_backup" >&2
+        exit 0
+      fi
+      if ! sudo nginx -s reload; then
+        sudo cp -- "$route_backup" "$host_config_file"
+        printf 'Nginx reload failed; restored %s.\n' "$route_backup" >&2
+        exit 0
+      fi
+      printf 'Updated Tandem routes to host port %s (backup: %s).\n' "$host_api_port" "$route_backup"
+    else
+      printf 'Tandem routes are already present in the Nginx vhost for %s.\n' "$domain"
+    fi
+  else
+    printf 'Tandem routes are already present in the Nginx vhost for %s.\n' "$domain"
+  fi
 else
   route_file="$temporary_directory/tandem-locations.conf"
   cat > "$route_file" <<'NGINX'
@@ -290,17 +442,18 @@ else
     # END TANDEM-SETUP-MANAGED-ROUTES
 NGINX
   if [[ "$proxy_mode" == host ]]; then
-    python3 - "$route_file" <<'PY'
+    python3 - "$route_file" "$host_api_port" <<'PY'
 from pathlib import Path
 import sys
 
 path = Path(sys.argv[1])
+port = sys.argv[2]
 routes = path.read_text(encoding="utf-8")
 routes = routes.replace("        resolver 127.0.0.11 valid=30s ipv6=off;\n", "")
 routes = routes.replace("        set $tandem_api tandem-api:19753;\n", "")
 routes = routes.replace(
     "        proxy_pass http://$tandem_api;\n",
-    "        proxy_pass http://127.0.0.1:19753;\n",
+    f"        proxy_pass http://127.0.0.1:{port};\n",
 )
 path.write_text(routes, encoding="utf-8")
 PY
@@ -460,9 +613,77 @@ if [[ "$proxy_mode" == host ]]; then
     printf 'Could not detect the Docker gateway for host Nginx. Set TANDEM_TRUST_PROXY to the immediate proxy address before relying on client IP rate limits.\n' >&2
   fi
 
+  production_compose_file="$install_directory/deploy/compose/production.yml"
+  if [[ -f "$production_compose_file" ]]; then
+    if ! python3 - "$production_compose_file" <<'PY'
+from datetime import datetime, timezone
+import os
+from pathlib import Path
+import re
+import shutil
+import sys
+import tempfile
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+lines = text.splitlines(keepends=True)
+start = next((i for i, line in enumerate(lines) if re.fullmatch(r"  tandem-api:\s*\n?", line)), None)
+if start is None:
+    raise SystemExit("Could not find the tandem-api service in production.yml.")
+end = next(
+    (
+        i
+        for i in range(start + 1, len(lines))
+        if re.match(r"^(?:\S[^\n]*:|  [A-Za-z0-9_-]+:\s*)\s*$", lines[i])
+    ),
+    len(lines),
+)
+service_lines = lines[start:end]
+service_text = "".join(service_lines)
+if re.search(r'127\.0\.0\.1:[^\s"\']*:19753', service_text):
+    raise SystemExit(0)
+port_entry = '      - "127.0.0.1:${TANDEM_API_HOST_PORT:-19753}:19753"\n'
+ports_index = next((i for i, line in enumerate(service_lines) if re.fullmatch(r"    ports:\s*\n?", line)), None)
+if ports_index is not None:
+    service_lines.insert(ports_index + 1, port_entry)
+else:
+    image_index = next((i for i, line in enumerate(service_lines) if line.startswith("    image:")), None)
+    if image_index is None:
+        raise SystemExit("Could not locate the tandem-api image setting in production.yml.")
+    service_lines[image_index + 1 : image_index + 1] = ["    ports:\n", port_entry]
+lines[start:end] = service_lines
+updated = "".join(lines)
+metadata = path.stat()
+backup = path.with_name(
+    f"{path.name}.tandem-setup-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.bak"
+)
+shutil.copy2(path, backup)
+fd, temporary = tempfile.mkstemp(prefix=".tandem-compose-", dir=path.parent)
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        stream.write(updated)
+    os.chown(temporary, metadata.st_uid, metadata.st_gid)
+    os.chmod(temporary, metadata.st_mode & 0o777)
+    os.replace(temporary, path)
+except BaseException:
+    try:
+        os.unlink(temporary)
+    except FileNotFoundError:
+        pass
+    raise
+PY
+    then
+      printf 'Could not add the loopback-only API port to %s.\n' "$production_compose_file" >&2
+      exit 0
+    fi
+  else
+    printf 'Could not find %s to publish the loopback API port for host Nginx.\n' \
+      "$production_compose_file" >&2
+    exit 0
+  fi
+
   root_compose_file="$install_directory/compose.yml"
-  if [[ -f "$root_compose_file" ]]; then
-    if ! python3 - "$root_compose_file" <<'PY'
+  if [[ -f "$root_compose_file" ]] && ! python3 - "$root_compose_file" <<'PY'
 from pathlib import Path
 import re
 import sys
@@ -470,32 +691,27 @@ import sys
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
 marker = "# TANDEM-HOST-NGINX-PORT"
-port_mapping = '      - "127.0.0.1:19753:19753"'
-if marker in text:
+if marker not in text:
     raise SystemExit(0)
-if re.search(r"(?m)^services:\s*$", text):
-    if re.search(r"(?m)^  tandem-api:\s*$", text):
-        raise SystemExit("The root Compose file already defines tandem-api; refusing to add a duplicate port mapping.")
-    addition = f"\n  tandem-api:\n    ports:\n{port_mapping}\n"
-    text = re.sub(r"(?m)^services:\s*$", lambda match: match.group(0) + addition, text, count=1)
-else:
-    text = text.rstrip() + f"\n\n{marker}\nservices:\n  tandem-api:\n    ports:\n{port_mapping}\n"
-path.write_text(text, encoding="utf-8")
+legacy_block = re.compile(
+    r'\n# TANDEM-HOST-NGINX-PORT\nservices:\n  tandem-api:\n    ports:\n      - "127\.0\.0\.1:19753:19753"\n?\s*\Z'
+)
+match = legacy_block.search(text)
+if match is None:
+    raise SystemExit("The generated Tandem host-port block was edited; refusing to remove user changes.")
+path.write_text(text[: match.start()].rstrip() + "\n", encoding="utf-8")
 PY
-    then
-      printf 'Could not add the loopback-only API port to %s; add 127.0.0.1:19753:19753 under tandem-api ports.\n' \
-        "$root_compose_file" >&2
-      exit 0
-    fi
-    if ! docker compose --project-directory "$install_directory" -f "$root_compose_file" config --quiet; then
-      printf 'The generated host Nginx Compose port did not validate. Check %s before starting Tandem.\n' \
-        "$root_compose_file" >&2
-      exit 0
-    fi
-    printf 'Published the Tandem API on loopback port 19753 for host Nginx.\n'
-  else
-    printf 'Could not find %s to publish the loopback API port for host Nginx.\n' "$root_compose_file" >&2
+  then
+    printf 'Could not remove the old Tandem host-port block from %s.\n' "$root_compose_file" >&2
+    exit 0
   fi
+
+  if ! docker compose --project-directory "$install_directory" -f "$root_compose_file" config --quiet; then
+    printf 'The Tandem Compose files did not validate. Check %s and %s before starting Tandem.\n' \
+      "$root_compose_file" "$production_compose_file" >&2
+    exit 0
+  fi
+  printf 'Published the Tandem API on loopback port %s for host Nginx.\n' "$host_api_port"
   exit 0
 fi
 
