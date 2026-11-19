@@ -26,6 +26,7 @@ import app.tandemforactual.data.database.tandemDatabaseBuilder
 import app.tandemforactual.ui.TandemApp
 import app.tandemforactual.ui.AuthReturnEvents
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
   private var appStartupComplete = false
@@ -36,6 +37,7 @@ class MainActivity : ComponentActivity() {
       notificationPermissionEnabled = granted && appNotificationsEnabled()
     }
   private val appResumeEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+  private val appInForeground = MutableStateFlow(false)
   private val networkRestoredEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
   private val syncSignalState = SyncSignalState<Network>()
   private var networkCallbackRegistered = false
@@ -88,6 +90,7 @@ class MainActivity : ComponentActivity() {
           appStartupComplete = true
         },
         appResumeEvents = appResumeEvents,
+        appInForeground = appInForeground,
         networkRestoredEvents = networkRestoredEvents,
       )
     }
@@ -167,6 +170,7 @@ class MainActivity : ComponentActivity() {
 
   override fun onStart() {
     super.onStart()
+    appInForeground.value = true
     if (!networkCallbackRegistered) {
       syncSignalState.onNetworkStarted(connectivityManager.activeNetwork)
       connectivityManager.registerDefaultNetworkCallback(networkCallback)
@@ -175,6 +179,7 @@ class MainActivity : ComponentActivity() {
   }
 
   override fun onStop() {
+    appInForeground.value = false
     if (networkCallbackRegistered) {
       connectivityManager.unregisterNetworkCallback(networkCallback)
       networkCallbackRegistered = false

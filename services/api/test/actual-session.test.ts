@@ -385,10 +385,15 @@ describe("ActualSession", () => {
     fake.setSyncTables(["transactions"]);
     await session.runBudgetSnapshot("budget-a", read);
     fake.setSyncTables([]);
+    expect(session.hasUnreadWrites("budget-a")).toBe(false);
     await session.runBudget("budget-a", async () => "written", {
       synchronizeAfterWrite: true,
     });
+    expect(session.hasUnreadWrites("budget-a")).toBe(true);
+    expect(session.hasUnreadWrites(" budget-a ")).toBe(true);
+    expect(session.hasUnreadWrites("budget-b")).toBe(false);
     await session.runBudgetSnapshot("budget-a", read);
+    expect(session.hasUnreadWrites("budget-a")).toBe(false);
     await session.runBudgetSnapshot("budget-a", read);
 
     expect(changed).toEqual([true, false, true, true, false]);

@@ -204,7 +204,9 @@ export class BudgetReadApi implements BudgetReadApiPort {
           this.feedEpoch,
           this.snapshotFreshnessMs,
         );
-        if (!isFresh) {
+        // A recent snapshot is reused only if Tandem has not written to the budget
+        // since. Otherwise the refresh after a reorder or edit would return the old state.
+        if (!isFresh || this.reader.hasUnreadWrites?.(request.budgetId)) {
           displaySettings = await this.refresh(
             request.budgetId,
             request.encryptionPassword,

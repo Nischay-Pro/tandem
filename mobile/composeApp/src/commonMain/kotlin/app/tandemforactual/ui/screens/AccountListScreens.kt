@@ -545,7 +545,7 @@ internal fun AccountsScreen(
     val queuedAccountOrder = budgetOrderForScreen(serverAccountOrder, accountOrderStatus, queuedAccountMoves)
     var selectedAccountOrderId by rememberSaveable(state.selectedBudgetId) { mutableStateOf<String?>(null) }
     val dragReorder = remember(state.selectedBudgetId) { DragReorderState() }
-    val accountOrderIds = dragReorder.displayOrder ?: queuedAccountOrder
+    val accountOrderIds = dragReorder.displayOrder ?: dragReorder.currentOrder(queuedAccountOrder)
     val orderedLiveAccounts =
         remember(liveAccounts, accountOrderIds) {
             orderAccountsForList(liveAccounts, accountOrderIds)
@@ -556,7 +556,7 @@ internal fun AccountsScreen(
         destinationIndex: Int,
         movableAccountIds: List<String>,
     ) {
-        val currentOrder = dragReorder.displayOrder ?: queuedAccountOrder
+        val currentOrder = dragReorder.displayOrder ?: dragReorder.currentOrder(queuedAccountOrder)
         val currentGroupOrder = currentOrder.filter { it in movableAccountIds }
         val nextGroupOrder = reorderItemToIndex(currentGroupOrder, accountId, destinationIndex)
         if (nextGroupOrder == currentGroupOrder) return
@@ -569,6 +569,7 @@ internal fun AccountsScreen(
                 itemTargetIdAfterMove(nextGroupOrder, accountId),
                 state.encryptedPassword.takeIf(String::isNotBlank),
                 nextFullOrder,
+                baseOrder = serverAccountOrder,
             )
         }
     }
@@ -726,7 +727,7 @@ internal fun AccountsScreen(
                 group.accounts.forEach { account ->
                     item(key = "account:${account.id}") {
                         val isReordering = selectedAccountOrderId == account.id
-                        val currentFullOrder = dragReorder.displayOrder ?: queuedAccountOrder
+                        val currentFullOrder = dragReorder.displayOrder ?: dragReorder.currentOrder(queuedAccountOrder)
                         val currentGroupOrder = currentFullOrder.filter { it in movableAccountIds }
                         val currentIndex = currentGroupOrder.indexOf(account.id)
                         val canMoveUp = currentIndex > 0
@@ -736,7 +737,7 @@ internal fun AccountsScreen(
                             selectedAccountOrderId = account.id
                             mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, "accounts")
                             mobileSession.clearBudgetActionMessage()
-                            val fullOrder = dragReorder.displayOrder ?: queuedAccountOrder
+                            val fullOrder = dragReorder.displayOrder ?: dragReorder.currentOrder(queuedAccountOrder)
                             dragReorder.start(
                                 itemOrder = fullOrder.filter { it in movableAccountIds },
                                 itemId = account.id,
@@ -756,13 +757,16 @@ internal fun AccountsScreen(
                             dragReorder.finish()?.let { result ->
                                 if (result.itemId == account.id && result.finalOrder != result.startingOrder) {
                                     scope.launch {
-                                        mobileSession.moveBudgetAccount(
-                                            state.selectedBudgetId,
-                                            result.itemId,
-                                            itemTargetIdAfterMove(result.finalOrder, result.itemId),
-                                            state.encryptedPassword.takeIf(String::isNotBlank),
-                                            result.finalDisplayOrder,
-                                        )
+                                        val saved =
+                                            mobileSession.moveBudgetAccount(
+                                                state.selectedBudgetId,
+                                                result.itemId,
+                                                itemTargetIdAfterMove(result.finalOrder, result.itemId),
+                                                state.encryptedPassword.takeIf(String::isNotBlank),
+                                                result.finalDisplayOrder,
+                                                baseOrder = serverAccountOrder,
+                                            )
+                                        if (!saved) dragReorder.releaseHeldDrop()
                                     }
                                 }
                             }

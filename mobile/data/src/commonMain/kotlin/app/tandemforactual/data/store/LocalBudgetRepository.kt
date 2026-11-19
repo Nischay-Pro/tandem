@@ -50,6 +50,9 @@ enum class LocalWriteStatus {
 
 private const val BUDGET_MUTATION_RECORD_TYPE = "budget-mutation"
 private const val SCHEDULE_ACTION_RECORD_TYPE = "schedule-action"
+
+/** Record types whose sends happen in their own queues rather than inside sync. */
+private val QUEUE_OWNED_RECORD_TYPES = listOf(BUDGET_MUTATION_RECORD_TYPE, SCHEDULE_ACTION_RECORD_TYPE)
 private const val BUDGET_MUTATION_METADATA_RECORD_TYPE = "budget-mutation-metadata"
 private const val BUDGET_MUTATION_METADATA_OPERATION_ID = "tandem-budget-mutation-metadata"
 private const val BUDGET_MUTATION_METADATA_IDEMPOTENCY_KEY = "tandem-budget-mutation-metadata-v1"
@@ -1409,9 +1412,32 @@ class LocalBudgetRepository(
         }
     }
 
+    /** Marks every in-flight write as uncertain. Call only when no sender in this process can still own one. */
     suspend fun recoverInterruptedWrites(): Int =
         database.withWriteTransaction {
             database.outboxDao().markInterruptedSendsUncertain(now())
+        }
+
+    /**
+     * Recovers writes that the sync coordinator sends while holding its process-wide lock.
+     *
+     * Budget mutations and schedule actions are sent by their own queues outside that lock, so a
+     * `sending` row of those types can belong to a request that is still in flight. Their queues
+     * recover them once when they load, before sending anything.
+     */
+    suspend fun recoverInterruptedSyncWrites(): Int =
+        database.withWriteTransaction {
+            database.outboxDao().markInterruptedSendsUncertainExceptRecordTypes(QUEUE_OWNED_RECORD_TYPES, now())
+        }
+
+    suspend fun recoverInterruptedBudgetMutations(): Int =
+        database.withWriteTransaction {
+            database.outboxDao().markInterruptedSendsUncertainForRecordTypes(listOf(BUDGET_MUTATION_RECORD_TYPE), now())
+        }
+
+    suspend fun recoverInterruptedScheduleActions(): Int =
+        database.withWriteTransaction {
+            database.outboxDao().markInterruptedSendsUncertainForRecordTypes(listOf(SCHEDULE_ACTION_RECORD_TYPE), now())
         }
 
     suspend fun returnWriteToQueue(

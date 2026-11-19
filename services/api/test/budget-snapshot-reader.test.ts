@@ -153,6 +153,20 @@ describe("Actual budget snapshot reader", () => {
     );
   });
 
+  it("reports unread Tandem writes only when the session tracks them", () => {
+    const fake = createApi();
+    const untracked = new ActualBudgetSnapshotReader(fake.session, fake.actual);
+    expect(untracked.hasUnreadWrites("budget-1")).toBe(false);
+
+    const hasUnreadWrites = vi.fn((syncId: string) => syncId === "budget-1");
+    const tracked = new ActualBudgetSnapshotReader(
+      { ...fake.session, hasUnreadWrites },
+      fake.actual,
+    );
+    expect(tracked.hasUnreadWrites("budget-1")).toBe(true);
+    expect(tracked.hasUnreadWrites("budget-2")).toBe(false);
+  });
+
   it("passes no encryption options for unencrypted snapshot reads", async () => {
     const fake = createApi();
     const reader = new ActualBudgetSnapshotReader(fake.session, fake.actual);

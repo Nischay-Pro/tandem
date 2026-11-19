@@ -869,6 +869,10 @@ internal fun budgetMutationChangeTitle(
         BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY -> "Set $itemName’s default category"
         BudgetReorderKind.IMPORT_STATEMENT -> "Import ${itemName.ifBlank { "transactions" }}"
         BudgetReorderKind.CATEGORY, BudgetReorderKind.CATEGORY_GROUP -> "Change the order of $itemName"
+        BudgetReorderKind.SET_ORDER -> {
+            val lists = mutation.orderBatchScopes().size
+            "Save the new order of ${if (lists == 1) "1 list" else "$lists lists"}"
+        }
         BudgetReorderKind.REFRESH_CATEGORY_CREATE, BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE -> "Finish adding $itemName"
     }
 }
@@ -921,6 +925,7 @@ internal fun budgetMutationPendingSummary(
         BudgetReorderKind.CATEGORY_GROUP,
         BudgetReorderKind.MOVE_ACCOUNT,
         BudgetReorderKind.MOVE_CATEGORY_TO_GROUP,
+        BudgetReorderKind.SET_ORDER,
         -> "Reorder"
         BudgetReorderKind.RENAME_CATEGORY,
         BudgetReorderKind.RENAME_CATEGORY_GROUP,
@@ -1077,6 +1082,7 @@ internal fun budgetMutationTitle(
         "RENAME_ACCOUNT" -> "Rename account · $itemName"
         "REOPEN_ACCOUNT" -> "Reopen account · $itemName"
         "MOVE_ACCOUNT" -> "Reorder account · $itemName"
+        "SET_ORDER" -> "Reorder · categories and accounts"
         "SET_CATEGORY_AMOUNT" -> "Assign money · $itemName"
         "SET_CATEGORY_CARRYOVER" -> "Update carryover · $itemName"
         "COPY_BUDGET_MONTH" -> "Copy assignments · $itemName"

@@ -27,6 +27,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlin.test.Test
@@ -51,6 +52,56 @@ class TandemApiClientTest {
                 client.manageBudgetSchedule("budget-1", "schedule-1", "skip", null, null)
             }
             Unit
+        }
+
+    @Test
+    fun savesEveryReorderedListInOneIdempotentRequest() =
+        runBlocking {
+            val requests = mutableListOf<HttpRequestData>()
+            val engine =
+                MockEngine { request ->
+                    requests += request
+                    respond(
+                        if (request.url.encodedPath ==
+                            "/api/v1/budgets"
+                        ) {
+                            budgetsResponse()
+                        } else {
+                            """{"status":"ok","categoryGroups":["g2","g1"]}"""
+                        },
+                        headers = jsonHeaders(),
+                    )
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            try {
+                client.restoreSession("https://tandem.example", "stored-device-token")
+                val order =
+                    buildJsonObject {
+                        put(
+                            "categoryGroups",
+                            buildJsonObject {
+                                put("baseOrder", kotlinx.serialization.json.JsonArray(listOf("g1", "g2").map(::JsonPrimitive)))
+                                put("order", kotlinx.serialization.json.JsonArray(listOf("g2", "g1").map(::JsonPrimitive)))
+                            },
+                        )
+                    }
+
+                client.setBudgetOrder("budget-1", order, "budget-password", "order-batch-1")
+
+                val request = requests.last()
+                assertEquals("PUT /api/v1/budgets/budget-1/order", "${request.method.value} ${request.url.encodedPath}")
+                assertEquals("order-batch-1", request.headers["Idempotency-Key"])
+                assertEquals("budget-password", request.headers["x-budget-encryption-password"])
+                assertTrue((request.body as TextContent).text.contains("\"order\":[\"g2\",\"g1\"]"))
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
         }
 
     @Test

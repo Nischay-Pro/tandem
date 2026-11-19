@@ -42,7 +42,7 @@ class BudgetSyncCoordinator(
                 require(reconcileUncertainOperationId == null || !sendQueuedWrites) {
                     "A status-only check cannot send queued writes"
                 }
-                repository.recoverInterruptedWrites()
+                repository.recoverInterruptedSyncWrites()
                 repository.pruneTerminalWrites()
                 val isOperationStatusCheck = reconcileUncertainOperationId != null
                 if (!isOperationStatusCheck) repository.markSyncStarted(budgetId)

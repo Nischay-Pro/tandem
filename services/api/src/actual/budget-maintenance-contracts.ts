@@ -4,6 +4,10 @@ import type {
   BudgetOperationOptions,
 } from "./actual-session.js";
 import type { BudgetLockPort } from "./transaction-reconciler.js";
+import type {
+  BudgetOrderBatch,
+  BudgetOrderBatchResult,
+} from "./budget-maintenance-order-api.js";
 import {
   MAX_TRANSACTION_AMOUNT,
   validateTransactionDate,
@@ -269,6 +273,15 @@ export interface BudgetMaintenanceApiPort {
     targetAccountId: string | null,
     encryptionPassword?: string,
   ): Promise<void>;
+  /**
+   * Merges a batch of reordered lists into Actual's live order under one lock
+   * and one sync, and returns the saved orders.
+   */
+  setOrders(
+    budgetId: string,
+    batch: BudgetOrderBatch,
+    encryptionPassword?: string,
+  ): Promise<BudgetOrderBatchResult>;
   renameCategory(
     budgetId: string,
     categoryId: string,
@@ -486,6 +499,8 @@ export type ActualBudgetMaintenanceClient = Pick<
   | "getSchedules"
   | "updateSchedule"
   | "deleteSchedule"
+  | "q"
+  | "aqlQuery"
 >;
 
 export async function getAllCategoryGroups(

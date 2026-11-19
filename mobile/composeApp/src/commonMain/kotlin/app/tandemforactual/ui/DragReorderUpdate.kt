@@ -60,7 +60,15 @@ internal fun toggleReorderSelection(
     tappedItemId: String,
 ): String? = if (selectedItemId == tappedItemId) null else tappedItemId
 
-/** Shared pointer-drag state for every reorderable list. */
+/**
+ * Shared pointer-drag state for every reorderable list.
+ *
+ * The dragged row follows the finger: its offset is the finger position minus the
+ * row's current layout position, so it stays under the finger when the list's
+ * layout changes mid-drag (for example, groups collapsing when a drag starts) and
+ * when rows have different heights. Swaps compare the finger with the other rows'
+ * current positions.
+ */
 internal class DragReorderState {
     var draggedItemId by mutableStateOf<String?>(null)
         private set
@@ -71,28 +79,58 @@ internal class DragReorderState {
     var displayOrder by mutableStateOf<List<String>?>(null)
         private set
 
-    var dragOffsetPx by mutableFloatStateOf(0f)
-        private set
+    /** Finger position (row centre at drag start plus the drag so far), in root coordinates. */
+    private var fingerY by mutableFloatStateOf(0f)
+
+    /** Where the layout currently places the dragged row's centre, in root coordinates. */
+    private var draggedLayoutCenter by mutableFloatStateOf(0f)
+
+    /** How far to shift the dragged row so it sits under the finger. */
+    val dragOffsetPx: Float
+        get() = if (draggedItemId == null) 0f else fingerY - draggedLayoutCenter
 
     private var startingOrder by mutableStateOf<List<String>>(emptyList())
     private var startingDisplayOrder by mutableStateOf<List<String>>(emptyList())
 
     private val measuredCenters = mutableMapOf<String, Float>()
-    private var initialCenters: Map<String, Float> = emptyMap()
+    private var originCenter = 0f
     private var totalDrag = 0f
+
+    /**
+     * The order just dropped, shown until the list's own order changes. Saving the
+     * drop is asynchronous, so without this the old order flashes back for a frame.
+     */
+    private var heldDropOrder: List<String>? = null
+    private var orderWhenDropped: List<String>? = null
 
     fun measure(
         id: String,
         center: Float,
     ) {
         measuredCenters[id] = center
+        if (id == draggedItemId) draggedLayoutCenter = center
     }
 
     fun forget(id: String) {
         measuredCenters.remove(id)
     }
 
-    fun currentOrder(fallback: List<String>): List<String> = reorderedItemIds ?: fallback
+    fun currentOrder(fallback: List<String>): List<String> {
+        reorderedItemIds?.let { return it }
+        val held = heldDropOrder ?: return fallback
+        if (orderWhenDropped != null && fallback != orderWhenDropped) {
+            // The list now reflects the drop (or something newer), so stop holding.
+            releaseHeldDrop()
+            return fallback
+        }
+        return held
+    }
+
+    /** Stops showing a dropped order, for example when saving it failed. */
+    fun releaseHeldDrop() {
+        heldDropOrder = null
+        orderWhenDropped = null
+    }
 
     fun start(
         itemOrder: List<String>,
@@ -100,30 +138,40 @@ internal class DragReorderState {
         fullDisplayOrder: List<String> = itemOrder,
     ) {
         if (itemId !in itemOrder) return
-        initialCenters = measuredCenters.toMap()
+        releaseHeldDrop()
+        originCenter = measuredCenters[itemId] ?: 0f
         totalDrag = 0f
+        fingerY = originCenter
+        draggedLayoutCenter = originCenter
         draggedItemId = itemId
         startingOrder = itemOrder
         reorderedItemIds = itemOrder
         startingDisplayOrder = fullDisplayOrder
         displayOrder = fullDisplayOrder
-        dragOffsetPx = 0f
     }
 
     fun dragBy(
         delta: Float,
-        rowCenters: Map<String, Float> = initialCenters,
+        rowCenters: Map<String, Float>? = null,
         fullDisplayOrderFor: (List<String>, List<String>) -> List<String> = { order, _ -> order },
     ) {
         val itemId = draggedItemId ?: return
         totalDrag += delta
-        val update = updateDragReorder(startingOrder, itemId, totalDrag, rowCenters)
-        reorderedItemIds = update.itemOrder
-        displayOrder = fullDisplayOrderFor(update.itemOrder, startingDisplayOrder)
-        dragOffsetPx = update.dragOffsetPx
+        fingerY = originCenter + totalDrag
+        // The finger started at the dragged row's centre, so that is its anchor.
+        val centers = rowCenters ?: (measuredCenters.toMap() + (itemId to originCenter))
+        val update = updateDragReorder(startingOrder, itemId, totalDrag, centers)
+        if (update.itemOrder != reorderedItemIds) {
+            reorderedItemIds = update.itemOrder
+            displayOrder = fullDisplayOrderFor(update.itemOrder, startingDisplayOrder)
+        }
     }
 
-    fun finish(): DragReorderResult? {
+    /**
+     * Ends the drag. [listOrder] is the order the list shows without the drag; the
+     * dropped order stays on screen until that changes.
+     */
+    fun finish(listOrder: List<String>? = null): DragReorderResult? {
         val itemId = draggedItemId ?: return null
         val result =
             DragReorderResult(
@@ -133,10 +181,14 @@ internal class DragReorderState {
                 startingDisplayOrder = startingDisplayOrder,
                 finalDisplayOrder = displayOrder ?: startingDisplayOrder,
             )
+        if (result.finalOrder != result.startingOrder) {
+            heldDropOrder = result.finalDisplayOrder
+            orderWhenDropped = listOrder ?: result.startingDisplayOrder
+        }
         draggedItemId = null
         reorderedItemIds = null
         displayOrder = null
-        dragOffsetPx = 0f
+        totalDrag = 0f
         startingOrder = emptyList()
         startingDisplayOrder = emptyList()
         return result
