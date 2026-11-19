@@ -38,6 +38,21 @@ jobs:
       - name: Check local documentation links and toolchain versions
         run: node scripts/check-docs.mjs
 
+  pr_title:
+    name: Conventional PR title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check Conventional Commit title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: python3 scripts/check-pr-title.py "$PR_TITLE"
+
   merchant_icon_pack:
     name: Generate merchant icon resources on Linux
     runs-on: ubuntu-26.04
@@ -496,3 +511,25 @@ jobs:
             -v "$GITHUB_WORKSPACE/deploy/nginx:/validation:ro" \
             -v "$RUNNER_TEMP/tandem-nginx-validation/nginx.conf:/tmp/nginx.conf:ro" \
             nginx:1.30.6-alpine3.24@sha256:e9b2d7624fd7957f4ed44ae0a272d93fb73aeb8512ba8916f8118ae6143fd115 nginx -t -c /tmp/nginx.conf
+
+  required_ci:
+    name: Required CI
+    needs:
+      - mobile
+      - deployment
+      - pr_title
+    if: always()
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Require all suites and the pull request title to pass
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MOBILE_RESULT: ${{ needs.mobile.result }}
+          DEPLOYMENT_RESULT: ${{ needs.deployment.result }}
+          PR_TITLE_RESULT: ${{ needs.pr_title.result }}
+        run: |
+          test "$MOBILE_RESULT" = success
+          test "$DEPLOYMENT_RESULT" = success
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            test "$PR_TITLE_RESULT" = success
+          fi
