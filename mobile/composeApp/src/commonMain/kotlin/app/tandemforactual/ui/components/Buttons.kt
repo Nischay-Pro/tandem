@@ -55,6 +55,7 @@ import app.tandemforactual.ui.TandemMotion
 import app.tandemforactual.ui.TandemShapes
 import app.tandemforactual.ui.TandemSpacing
 import app.tandemforactual.ui.TandemTypography
+import app.tandemforactual.ui.tandemAlloFamily
 import app.tandemforactual.ui.tandemMotionSpec
 import app.tandemforactual.ui.tandemPalette
 import app.tandemforactual.ui.tandemReduceMotion
@@ -293,6 +294,7 @@ internal fun TandemModalHeader(
             color = palette.text,
             fontSize = titleSize,
             fontWeight = FontWeight.Bold,
+            fontFamily = tandemAlloFamily(),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

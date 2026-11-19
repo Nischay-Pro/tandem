@@ -1,5 +1,6 @@
 package app.tandemforactual.ui
 
+import androidx.compose.ui.unit.em
 import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.ui.components.RowLeading
 import kotlin.test.Test
@@ -29,14 +30,14 @@ class ActivitySearchTest {
     }
 
     @Test
-    fun activityAmountsKeepDirectionAndRenderFractionSmaller() {
+    fun activityAmountsKeepDirectionAndRenderSmallerFractionDigits() {
         val amount = activityAmountAnnotatedString("+$1,234.56", fractionDigits = 2)
 
         assertEquals("+$1,234.56", amount.text)
         assertEquals(8..9, activityAmountFractionRange(amount.text, fractionDigits = 2))
         assertEquals(1, amount.spanStyles.size)
         val fractionStyle = amount.spanStyles.first().item
-        assertEquals(TandemTypography.caption, fractionStyle.fontSize)
+        assertEquals(0.75.em, fractionStyle.fontSize)
     }
 
     @Test

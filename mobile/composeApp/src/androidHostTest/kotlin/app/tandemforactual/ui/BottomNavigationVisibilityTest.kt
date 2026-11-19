@@ -18,8 +18,8 @@ class BottomNavigationVisibilityTest {
     }
 
     @Test
-    fun routeCountStaysWithinForty() {
-        assertTrue(AppRoute.entries.size <= 40)
+    fun routeCountStaysWithinFortyFive() {
+        assertTrue(AppRoute.entries.size <= 45)
     }
 
     @Test
@@ -91,6 +91,23 @@ class BottomNavigationVisibilityTest {
     }
 
     @Test
+    fun openingRecentsReturnsToUnfilteredActivityRoot() {
+        val activityStack =
+            listOf(
+                AppRouteEntry(AppRoute.BUDGET, 1),
+                AppRouteEntry(AppRoute.ACTIVITY, 2),
+                AppRouteEntry(AppRoute.ACTIVITY_SEARCH, 3),
+            )
+        var nextId = 10L
+
+        val selection =
+            selectAppTabRootNavigation(activityStack, "", AppRoute.ACTIVITY) { route -> AppRouteEntry(route, nextId++) }
+
+        assertEquals(listOf(AppRoute.BUDGET, AppRoute.ACTIVITY), selection.backStack.map { it.route })
+        assertTrue(decodeAppTabBackStacks(selection.savedTabBackStacks)[AppRoute.ACTIVITY] == null)
+    }
+
+    @Test
     fun browsingRoutesKeepBottomNavigation() {
         assertTrue(AppRoute.ACTIVITY_SEARCH.showsBottomNavigation())
         assertTrue(AppRoute.ACCOUNT_DETAIL.showsBottomNavigation())
@@ -104,6 +121,8 @@ class BottomNavigationVisibilityTest {
         assertFalse(AppRoute.CHOOSE_PAYEE.showsBottomNavigation())
         assertFalse(AppRoute.CHOOSE_CATEGORY.showsBottomNavigation())
         assertFalse(AppRoute.NOTIFICATION_ONBOARDING.showsBottomNavigation())
+        assertFalse(AppRoute.BUDGET_UNLOCK.showsBottomNavigation())
+        assertFalse(AppRoute.SETUP_COMPLETE.showsBottomNavigation())
     }
 
     @Test

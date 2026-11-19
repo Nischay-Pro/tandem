@@ -24,14 +24,22 @@ internal fun SurfaceCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     onClickLabel: String? = null,
+    animateSizeChanges: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val palette = tandemPalette
     Surface(
         modifier =
             modifier
-                .animateContentSize(animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS))
                 .then(
+                    if (animateSizeChanges) {
+                        Modifier.animateContentSize(
+                            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS),
+                        )
+                    } else {
+                        Modifier
+                    },
+                ).then(
                     if (onClick != null) {
                         Modifier.clickable(role = Role.Button, onClickLabel = onClickLabel, onClick = onClick)
                     } else {

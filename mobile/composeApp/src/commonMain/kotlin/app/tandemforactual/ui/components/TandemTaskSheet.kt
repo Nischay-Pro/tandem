@@ -34,6 +34,7 @@ internal fun TandemTaskSheet(
     onDismissRequest: () -> Unit,
     onDismissed: () -> Unit,
     fullScreen: Boolean = false,
+    dismissOnBackPress: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val visibleState = remember { MutableTransitionState(false) }
@@ -54,7 +55,11 @@ internal fun TandemTaskSheet(
     if (visibleState.currentState || visibleState.targetState) {
         Dialog(
             onDismissRequest = onDismissRequest,
-            properties = DialogProperties(usePlatformDefaultWidth = false),
+            properties =
+                DialogProperties(
+                    usePlatformDefaultWidth = false,
+                    dismissOnBackPress = dismissOnBackPress,
+                ),
         ) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
                 AnimatedVisibility(

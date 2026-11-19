@@ -4,7 +4,10 @@ package app.tandemforactual.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,16 +18,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.DropdownMenu
 import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -34,23 +38,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.ListRow
+import app.tandemforactual.ui.components.PrivacyAmountText
 import app.tandemforactual.ui.components.ReorderDragHandle
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SurfaceCard
@@ -73,6 +80,7 @@ import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.PiggyBank
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.RefreshCw
+import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.X
 import kotlinx.coroutines.flow.first
@@ -228,6 +236,8 @@ internal fun reorderAccountsWithinSlots(
 internal fun AccountSummaryCard(
     account: AccountListItemUi,
     merchantArtwork: DrawableResource?,
+    privacyModeEnabled: Boolean = false,
+    fractionDigits: Int = 2,
     modifier: Modifier = Modifier,
     isReordering: Boolean = false,
     canMoveUp: Boolean = false,
@@ -258,9 +268,13 @@ internal fun AccountSummaryCard(
                     .combinedClickable(
                         role = Role.Button,
                         onClickLabel = if (isReordering) "Finish reordering" else "Open ${account.name}",
-                        onLongClickLabel = "Reorder ${account.name}".takeIf { onLongClick != null },
                         onClick = onClick,
-                        onLongClick = onLongClick,
+                    ).then(
+                        if (onLongClick != null) {
+                            Modifier.reorderAccessibilityAction(account.name, onLongClick)
+                        } else {
+                            Modifier
+                        },
                     ).defaultMinSize(minHeight = TandemLayout.listRowMinHeight)
                     .padding(
                         horizontal = TandemLayout.listRowHorizontalInset,
@@ -319,6 +333,8 @@ internal fun AccountSummaryCard(
                     AccountBalanceText(
                         account = account,
                         color = balanceColor,
+                        privacyModeEnabled = privacyModeEnabled,
+                        fractionDigits = fractionDigits,
                         modifier = Modifier.fillMaxWidth(),
                         wrap = true,
                     )
@@ -347,7 +363,7 @@ internal fun AccountSummaryCard(
                     onDragStopped = onDragStopped,
                 )
             } else if (!stackBalance) {
-                AccountBalanceText(account, balanceColor)
+                AccountBalanceText(account, balanceColor, privacyModeEnabled, fractionDigits)
             }
         }
     }
@@ -357,18 +373,22 @@ internal fun AccountSummaryCard(
 private fun AccountBalanceText(
     account: AccountListItemUi,
     color: Color,
+    privacyModeEnabled: Boolean,
+    fractionDigits: Int = 2,
     modifier: Modifier = Modifier,
     wrap: Boolean = false,
 ) {
-    Text(
+    PrivacyAmountText(
         account.balance,
+        privacyModeEnabled = privacyModeEnabled,
+        fractionDigits = fractionDigits,
         modifier =
-            modifier.semantics {
-                contentDescription =
-                    accountBalanceAccessibilityDescription(
-                        account.balanceMinor,
-                        account.balance,
-                    )
+            if (privacyModeEnabled) {
+                modifier
+            } else {
+                modifier.semantics {
+                    contentDescription = accountBalanceAccessibilityDescription(account.balanceMinor, account.balance)
+                }
             },
         color = if (account.closed) tandemPalette.muted else color,
         fontSize = TandemTypography.compactBody,
@@ -377,6 +397,103 @@ private fun AccountBalanceText(
         maxLines = if (wrap) Int.MAX_VALUE else 2,
         overflow = TextOverflow.Ellipsis,
     )
+}
+
+private fun accountMatchesFilter(
+    account: AccountListItemUi,
+    groupName: String,
+    filter: String,
+    query: String,
+): Boolean {
+    val matchesType =
+        when (filter) {
+            "Bank" -> account.typeLabel in setOf("Checking", "Savings")
+            "Credit" -> account.typeLabel == "Credit"
+            "Other" -> account.typeLabel !in setOf("Checking", "Savings", "Credit")
+            else -> true
+        }
+    val matchesSearch =
+        query.isBlank() ||
+            account.name.contains(query, ignoreCase = true) ||
+            account.typeLabel.contains(query, ignoreCase = true) ||
+            account.status.contains(query, ignoreCase = true) ||
+            groupName.contains(query, ignoreCase = true)
+    return matchesType && matchesSearch
+}
+
+@Composable
+private fun AccountSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onClear: () -> Unit,
+) {
+    val palette = tandemPalette
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+        keyboardController?.show()
+    }
+    SurfaceCard {
+        Row(
+            Modifier.fillMaxWidth().defaultMinSize(minHeight = 52.dp).padding(horizontal = TandemSpacing.medium),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+        ) {
+            Icon(Lucide.Search, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.muted)
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier.weight(1f).focusRequester(focusRequester),
+                singleLine = true,
+                textStyle = TextStyle(color = palette.text, fontSize = TandemTypography.body),
+                cursorBrush = SolidColor(palette.accent),
+                decorationBox = { innerTextField ->
+                    Box {
+                        if (value.isEmpty()) {
+                            Text("Search accounts", color = palette.muted, fontSize = TandemTypography.body)
+                        }
+                        innerTextField()
+                    }
+                },
+            )
+            TandemIconButton(
+                Lucide.X,
+                "Clear account search",
+                sizeDp = 36,
+                iconSizeDp = 16,
+                enabled = value.isNotEmpty(),
+                onClick = onClear,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AccountFilterChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    val shape = CircleShape
+    Row(
+        Modifier
+            .clip(shape)
+            .background(if (selected) palette.accent else palette.surface)
+            .border(1.dp, if (selected) palette.accent else palette.border, shape)
+            .clickable(role = Role.Button, onClickLabel = "$label accounts", onClick = onClick)
+            .semantics { this.selected = selected }
+            .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            color = if (selected) palette.accentContent else palette.text,
+            fontSize = TandemTypography.label,
+            fontWeight = FontWeight.Medium,
+        )
+    }
 }
 
 @Composable
@@ -394,12 +511,30 @@ internal fun AccountsScreen(
     var newAccountOffBudget by rememberSaveable { mutableStateOf(false) }
     var newAccountGroupId by rememberSaveable { mutableStateOf("") }
     var accountGroupMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var accountSearchQuery by rememberSaveable(state.selectedBudgetId) { mutableStateOf("") }
+    LaunchedEffect(state.accountsSearchExpanded) {
+        if (!state.accountsSearchExpanded) accountSearchQuery = ""
+    }
+    var selectedAccountFilter by rememberSaveable(state.selectedBudgetId) { mutableStateOf("All") }
     val accountGroupOptions =
         remember(mobileSession.accountGroupRecords) {
             mobileSession.accountGroupRecords
                 .mapNotNull { record -> record.recordName()?.let { record.recordId to it } }
                 .sortedBy { it.second.lowercase() }
         }
+    LaunchedEffect(state.accountsRequestedAction) {
+        when (state.accountsRequestedAction) {
+            "add" -> {
+                newAccountName = ""
+                newAccountOffBudget = false
+                newAccountGroupId = ""
+                mobileSession.clearBudgetActionMessage()
+                addAccountDialog = true
+            }
+            "banks" -> showBankConnectionsDialog = true
+        }
+        state.accountsRequestedAction = null
+    }
     val isRefreshing = mobileSession.isSyncing || mobileSession.isPerformingBudgetAction
     val serverAccountOrder = remember(liveAccounts) { sortAccountsForList(liveAccounts).map { it.id } }
     val accountOrderStatus = mobileSession.budgetReorderStatus(state.selectedBudgetId, "accounts")
@@ -409,12 +544,8 @@ internal fun AccountsScreen(
             .filter { it.kind == BudgetReorderKind.MOVE_ACCOUNT }
     val queuedAccountOrder = budgetOrderForScreen(serverAccountOrder, accountOrderStatus, queuedAccountMoves)
     var selectedAccountOrderId by rememberSaveable(state.selectedBudgetId) { mutableStateOf<String?>(null) }
-    var draggedAccountId by remember(state.selectedBudgetId) { mutableStateOf<String?>(null) }
-    var draggedAccountOrderIds by remember(state.selectedBudgetId) { mutableStateOf<List<String>?>(null) }
-    var dragStartingAccountOrder by remember(state.selectedBudgetId) { mutableStateOf<List<String>>(emptyList()) }
-    var draggedAccountOffsetPx by remember(state.selectedBudgetId) { mutableFloatStateOf(0f) }
-    val accountRowCenters = remember(state.selectedBudgetId) { mutableStateMapOf<String, Float>() }
-    val accountOrderIds = draggedAccountOrderIds ?: queuedAccountOrder
+    val dragReorder = remember(state.selectedBudgetId) { DragReorderState() }
+    val accountOrderIds = dragReorder.displayOrder ?: queuedAccountOrder
     val orderedLiveAccounts =
         remember(liveAccounts, accountOrderIds) {
             orderAccountsForList(liveAccounts, accountOrderIds)
@@ -425,7 +556,7 @@ internal fun AccountsScreen(
         destinationIndex: Int,
         movableAccountIds: List<String>,
     ) {
-        val currentOrder = draggedAccountOrderIds ?: queuedAccountOrder
+        val currentOrder = dragReorder.displayOrder ?: queuedAccountOrder
         val currentGroupOrder = currentOrder.filter { it in movableAccountIds }
         val nextGroupOrder = reorderItemToIndex(currentGroupOrder, accountId, destinationIndex)
         if (nextGroupOrder == currentGroupOrder) return
@@ -442,7 +573,7 @@ internal fun AccountsScreen(
         }
     }
     val runBankSync: () -> Unit = {
-        if (!isRefreshing && !state.readOnlyMode && state.selectedBudgetId.isNotBlank()) {
+        if (!isRefreshing && mobileSession.isAuthenticated && !state.readOnlyMode && state.selectedBudgetId.isNotBlank()) {
             scope.launch {
                 mobileSession.runBankSync(
                     state.selectedBudgetId,
@@ -497,14 +628,50 @@ internal fun AccountsScreen(
                 )
             }
         }
+    val visibleGroups =
+        model.groups.mapNotNull { group ->
+            val accounts =
+                group.accounts.filter { account ->
+                    accountMatchesFilter(account, group.name, selectedAccountFilter, accountSearchQuery)
+                }
+            if (accounts.isEmpty()) {
+                null
+            } else {
+                group.copy(
+                    total = state.formatCurrency(accounts.sumOf { it.balanceMinor ?: 0L }),
+                    accounts = accounts,
+                )
+            }
+        }
 
     PageLazyColumn(
         verticalSpacing = TandemSpacing.small,
         isRefreshing = isRefreshing,
-        onRefresh = runBankSync.takeIf { isLiveBudget && !state.readOnlyMode },
+        onRefresh = runBankSync.takeIf { isLiveBudget && mobileSession.isAuthenticated && !state.readOnlyMode },
     ) {
         mobileSession.budgetActionMessage?.let {
             item(key = "account-action-message") { budgetActionFeedbackMessage(mobileSession) }
+        }
+        if (state.accountsSearchExpanded) {
+            item(key = "account-search-field") {
+                AccountSearchField(
+                    value = accountSearchQuery,
+                    onValueChange = { accountSearchQuery = it },
+                    onClear = { accountSearchQuery = "" },
+                )
+            }
+        }
+        item(key = "account-type-filters") {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+            ) {
+                listOf("All", "Bank", "Credit", "Other").forEach { filter ->
+                    AccountFilterChip(filter, selected = selectedAccountFilter == filter) {
+                        selectedAccountFilter = filter
+                    }
+                }
+            }
         }
         if (model.groups.isEmpty()) {
             item(key = "accounts-empty") {
@@ -522,134 +689,134 @@ internal fun AccountsScreen(
                     )
                 }
             }
+        } else if (visibleGroups.isEmpty()) {
+            item(key = "accounts-filter-empty") {
+                SurfaceCard {
+                    EmptyState(
+                        "No matching accounts",
+                        "Try a different search or account type.",
+                        modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                    )
+                }
+            }
         } else {
-            model.groups.forEach { group ->
+            visibleGroups.forEach { group ->
                 item(key = "account-group:${group.name}") {
-                    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                        Row(
-                            Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.small),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                group.name,
-                                color = tandemPalette.text,
-                                fontSize = TandemTypography.label,
-                                fontWeight = FontWeight.SemiBold,
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.small),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            group.name,
+                            color = tandemPalette.text,
+                            fontSize = TandemTypography.label,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.weight(1f))
+                        PrivacyAmountText(
+                            group.total,
+                            privacyModeEnabled = state.privacyModeEnabled,
+                            fractionDigits = state.currencyFractionDigitsForDisplay,
+                            color = tandemPalette.muted,
+                            fontSize = TandemTypography.caption,
+                        )
+                    }
+                }
+                val movableAccountIds = group.accounts.map(AccountListItemUi::id)
+                group.accounts.forEach { account ->
+                    item(key = "account:${account.id}") {
+                        val isReordering = selectedAccountOrderId == account.id
+                        val currentFullOrder = dragReorder.displayOrder ?: queuedAccountOrder
+                        val currentGroupOrder = currentFullOrder.filter { it in movableAccountIds }
+                        val currentIndex = currentGroupOrder.indexOf(account.id)
+                        val canMoveUp = currentIndex > 0
+                        val canMoveDown = currentIndex >= 0 && currentIndex < currentGroupOrder.lastIndex
+
+                        fun startDrag() {
+                            selectedAccountOrderId = account.id
+                            mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, "accounts")
+                            mobileSession.clearBudgetActionMessage()
+                            val fullOrder = dragReorder.displayOrder ?: queuedAccountOrder
+                            dragReorder.start(
+                                itemOrder = fullOrder.filter { it in movableAccountIds },
+                                itemId = account.id,
+                                fullDisplayOrder = fullOrder,
                             )
-                            Spacer(Modifier.weight(1f))
-                            Text(group.total, color = tandemPalette.muted, fontSize = TandemTypography.caption, maxLines = 1)
                         }
-                        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                            val movableAccountIds = group.accounts.map(AccountListItemUi::id)
-                            group.accounts.forEach { account ->
-                                val isReordering = selectedAccountOrderId == account.id
-                                val isDragging = draggedAccountId == account.id
-                                val currentFullOrder = draggedAccountOrderIds ?: queuedAccountOrder
-                                val currentGroupOrder = currentFullOrder.filter { it in movableAccountIds }
-                                val currentIndex = currentGroupOrder.indexOf(account.id)
-                                val canMoveUp = currentIndex > 0
-                                val canMoveDown = currentIndex >= 0 && currentIndex < currentGroupOrder.lastIndex
-                                val accountCardModifier =
-                                    Modifier
-                                        .onGloballyPositioned { coordinates ->
-                                            accountRowCenters[account.id] = coordinates.boundsInRoot().center.y
-                                        }.graphicsLayer {
-                                            translationY = if (isDragging) draggedAccountOffsetPx else 0f
-                                        }.zIndex(if (isDragging) 1f else 0f)
-                                AccountSummaryCard(
-                                    account = account,
-                                    merchantArtwork = merchantIconMatcher?.accountIconFor(account.name),
-                                    modifier = accountCardModifier,
-                                    isReordering = isReordering,
-                                    canMoveUp = canMoveUp,
-                                    canMoveDown = canMoveDown,
-                                    reorderEnabled = !state.readOnlyMode && !isRefreshing,
-                                    onClick = {
-                                        if (selectedAccountOrderId != null) {
-                                            selectedAccountOrderId = null
-                                        } else {
-                                            state.selectedAccountId = account.id
-                                            navigation.open(AppRoute.ACCOUNT_DETAIL)
-                                        }
-                                    },
-                                    onLongClick = {
-                                        if (!state.readOnlyMode && !isRefreshing && movableAccountIds.size > 1) {
-                                            selectedAccountOrderId = if (isReordering) null else account.id
-                                        }
-                                    },
-                                    onEdit = {
-                                        selectedAccountOrderId = null
-                                        state.selectedAccountId = account.id
-                                        navigation.open(AppRoute.ACCOUNT_OPTIONS)
-                                    },
-                                    onMoveUp = { enqueueAccountMove(account.id, currentIndex - 1, movableAccountIds) },
-                                    onMoveDown = { enqueueAccountMove(account.id, currentIndex + 1, movableAccountIds) },
-                                    onDragStarted = {
-                                        mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, "accounts")
-                                        mobileSession.clearBudgetActionMessage()
-                                        dragStartingAccountOrder = queuedAccountOrder
-                                        draggedAccountOrderIds = dragStartingAccountOrder
-                                        draggedAccountId = account.id
-                                        draggedAccountOffsetPx = 0f
-                                    },
-                                    onDragBy = { delta ->
-                                        if (draggedAccountId == account.id) {
-                                            draggedAccountOffsetPx += delta
-                                            val centers = accountRowCenters.toMap()
-                                            var baseCenter = centers[account.id]
-                                            while (baseCenter != null) {
-                                                val currentOrder = draggedAccountOrderIds ?: queuedAccountOrder
-                                                val groupOrder = currentOrder.filter { it in movableAccountIds }
-                                                val index = groupOrder.indexOf(account.id)
-                                                if (index < 0) break
-                                                val draggedCenter = baseCenter + draggedAccountOffsetPx
-                                                val nextId = groupOrder.getOrNull(index + 1)
-                                                val nextCenter = nextId?.let(centers::get)
-                                                if (nextCenter != null && draggedCenter > nextCenter) {
-                                                    val gap = nextCenter - baseCenter
-                                                    val nextGroupOrder = reorderItemToIndex(groupOrder, account.id, index + 1)
-                                                    draggedAccountOrderIds =
-                                                        reorderAccountsWithinSlots(currentOrder, movableAccountIds, nextGroupOrder)
-                                                    draggedAccountOffsetPx -= gap
-                                                    baseCenter = nextCenter
-                                                    continue
-                                                }
-                                                val previousId = groupOrder.getOrNull(index - 1)
-                                                val previousCenter = previousId?.let(centers::get)
-                                                if (previousCenter != null && draggedCenter < previousCenter) {
-                                                    val gap = baseCenter - previousCenter
-                                                    val nextGroupOrder = reorderItemToIndex(groupOrder, account.id, index - 1)
-                                                    draggedAccountOrderIds =
-                                                        reorderAccountsWithinSlots(currentOrder, movableAccountIds, nextGroupOrder)
-                                                    draggedAccountOffsetPx += gap
-                                                    baseCenter = previousCenter
-                                                    continue
-                                                }
-                                                break
-                                            }
-                                        }
-                                    },
-                                    onDragStopped = {
-                                        val finalOrder = draggedAccountOrderIds ?: queuedAccountOrder
-                                        val finalGroupOrder = finalOrder.filter { it in movableAccountIds }
-                                        if (draggedAccountId == account.id && finalOrder != dragStartingAccountOrder) {
-                                            scope.launch {
-                                                mobileSession.moveBudgetAccount(
-                                                    state.selectedBudgetId,
-                                                    account.id,
-                                                    itemTargetIdAfterMove(finalGroupOrder, account.id),
-                                                    state.encryptedPassword.takeIf(String::isNotBlank),
-                                                    finalOrder,
-                                                )
-                                            }
-                                        }
-                                        draggedAccountId = null
-                                        draggedAccountOrderIds = null
-                                        draggedAccountOffsetPx = 0f
-                                    },
-                                )
+
+                        fun dragBy(delta: Float) {
+                            if (dragReorder.draggedItemId == account.id) {
+                                dragReorder.dragBy(delta) { groupOrder, fullOrder ->
+                                    reorderAccountsWithinSlots(fullOrder, movableAccountIds, groupOrder)
+                                }
                             }
                         }
+
+                        fun dropDrag() {
+                            dragReorder.finish()?.let { result ->
+                                if (result.itemId == account.id && result.finalOrder != result.startingOrder) {
+                                    scope.launch {
+                                        mobileSession.moveBudgetAccount(
+                                            state.selectedBudgetId,
+                                            result.itemId,
+                                            itemTargetIdAfterMove(result.finalOrder, result.itemId),
+                                            state.encryptedPassword.takeIf(String::isNotBlank),
+                                            result.finalDisplayOrder,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        val accountCardModifier =
+                            dragReorderItemModifier(
+                                itemId = account.id,
+                                dragState = dragReorder,
+                                reduceMotion = tandemReduceMotion,
+                                dragEnabled =
+                                    !state.readOnlyMode &&
+                                        !isRefreshing &&
+                                        movableAccountIds.size > 1,
+                                onDragStarted = ::startDrag,
+                                onDragBy = ::dragBy,
+                                onDragStopped = ::dropDrag,
+                            )
+                        AccountSummaryCard(
+                            account = account,
+                            merchantArtwork = merchantIconMatcher?.accountIconFor(account.name),
+                            privacyModeEnabled = state.privacyModeEnabled,
+                            fractionDigits = state.currencyFractionDigitsForDisplay,
+                            modifier = accountCardModifier,
+                            isReordering = isReordering,
+                            canMoveUp = canMoveUp,
+                            canMoveDown = canMoveDown,
+                            reorderEnabled = !state.readOnlyMode && !isRefreshing,
+                            onClick = {
+                                if (reorderModeConsumesItemTap(selectedAccountOrderId)) {
+                                    selectedAccountOrderId = null
+                                } else {
+                                    state.selectedAccountId = account.id
+                                    navigation.open(AppRoute.ACCOUNT_DETAIL)
+                                }
+                            },
+                            onLongClick = {
+                                if (!state.readOnlyMode &&
+                                    !isRefreshing &&
+                                    (selectedAccountOrderId != null || movableAccountIds.size > 1)
+                                ) {
+                                    selectedAccountOrderId = account.id
+                                }
+                            },
+                            onEdit = {
+                                selectedAccountOrderId = null
+                                state.selectedAccountId = account.id
+                                navigation.open(AppRoute.ACCOUNT_OPTIONS)
+                            },
+                            onMoveUp = { enqueueAccountMove(account.id, currentIndex - 1, movableAccountIds) },
+                            onMoveDown = { enqueueAccountMove(account.id, currentIndex + 1, movableAccountIds) },
+                            onDragStarted = ::startDrag,
+                            onDragBy = ::dragBy,
+                            onDragStopped = ::dropDrag,
+                        )
                     }
                 }
             }
@@ -710,6 +877,7 @@ internal fun AccountsScreen(
                         modifier = Modifier.weight(1f),
                         color = tandemPalette.text,
                         fontSize = TandemTypography.sectionTitle,
+                        fontFamily = tandemAlloFamily(),
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                     )

@@ -1,9 +1,27 @@
 package app.tandemforactual.ui
 
 import kotlin.test.Test
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class TandemThemeContrastTest {
+    @Test
+    fun designPresetsHaveDistinctLightAndDarkSurfacePalettes() {
+        val modernLight = tandemPaletteFor(ThemeMode.LIGHT, systemIsDark = false, accent = AccentChoice.ACTUAL_PURPLE)
+        val clarityLight = tandemPaletteFor(ThemeMode.LIGHT, systemIsDark = false, accent = AccentChoice.CLARITY)
+        val warmLight = tandemPaletteFor(ThemeMode.LIGHT, systemIsDark = false, accent = AccentChoice.WARM)
+        val modernDark = tandemPaletteFor(ThemeMode.DARK, systemIsDark = true, accent = AccentChoice.ACTUAL_PURPLE)
+        val clarityDark = tandemPaletteFor(ThemeMode.DARK, systemIsDark = true, accent = AccentChoice.CLARITY)
+        val warmDark = tandemPaletteFor(ThemeMode.DARK, systemIsDark = true, accent = AccentChoice.WARM)
+
+        assertNotEquals(modernLight.background, clarityLight.background)
+        assertNotEquals(modernLight.background, warmLight.background)
+        assertNotEquals(clarityLight.background, warmLight.background)
+        assertNotEquals(modernDark.background, clarityDark.background)
+        assertNotEquals(modernDark.background, warmDark.background)
+        assertNotEquals(clarityDark.background, warmDark.background)
+    }
+
     @Test
     fun textAccentsAndStatusColorsMeetWcagContrastInEveryThemeAndAccent() {
         val themes = ThemeMode.entries.flatMap { mode -> listOf(mode to false, mode to true) }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -53,7 +54,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -66,6 +66,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.components.amountAnnotatedString
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
@@ -123,6 +124,7 @@ internal data class TextFieldOptions(
     val currencySymbol: String? = null,
     val currencySymbolAfter: Boolean = false,
     val currencySymbolSpace: Boolean = false,
+    val amountFractionDigits: Int? = null,
     val singleLine: Boolean = true,
     val isSecret: Boolean = false,
     val secretKeyboardType: KeyboardType = KeyboardType.Password,
@@ -137,6 +139,7 @@ internal fun currencySymbolTransformation(
     symbol: String,
     afterAmount: Boolean,
     addSpace: Boolean,
+    fractionDigits: Int = 0,
 ): VisualTransformation {
     val separator = if (addSpace) "\u202F" else ""
     return VisualTransformation { value ->
@@ -172,10 +175,15 @@ internal fun currencySymbolTransformation(
                             else -> (offset - insertionLength).coerceIn(0, original.length)
                         }
                 }
-            TransformedText(AnnotatedString(transformed), offsetMapping)
+            TransformedText(amountAnnotatedString(transformed, fractionDigits), offsetMapping)
         }
     }
 }
+
+internal fun amountFractionTransformation(fractionDigits: Int): VisualTransformation =
+    VisualTransformation { value ->
+        TransformedText(amountAnnotatedString(value.text, fractionDigits), OffsetMapping.Identity)
+    }
 
 @Composable
 internal fun TextFieldCard(
@@ -209,7 +217,9 @@ internal fun TextFieldCard(
                             options.currencySymbol,
                             options.currencySymbolAfter,
                             options.currencySymbolSpace,
+                            options.amountFractionDigits ?: 0,
                         )
+                    options.amountFractionDigits != null -> amountFractionTransformation(options.amountFractionDigits)
                     else -> VisualTransformation.None
                 },
             textStyle =
@@ -245,12 +255,101 @@ internal fun TextFieldCard(
 }
 
 @Composable
+internal fun MoneyAmountInput(
+    label: String,
+    value: String,
+    placeholder: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    fractionDigits: Int = 2,
+) {
+    val palette = tandemPalette
+    val entered = value.isNotBlank()
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+        FieldLabel(label)
+        AmountFieldShell(
+            fill = if (entered) palette.accent.copy(alpha = 0.08f) else palette.surface,
+            outline = if (entered) palette.accent else palette.border,
+        ) {
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                visualTransformation = amountFractionTransformation(fractionDigits),
+                textStyle =
+                    TextStyle(
+                        color = palette.accent,
+                        fontSize = TandemTypography.amountField,
+                        lineHeight = TandemTypography.amountFieldLineHeight,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                    ),
+                cursorBrush = SolidColor(palette.accent),
+                modifier = Modifier.fillMaxWidth().semantics { contentDescription = label },
+                decorationBox = { innerTextField ->
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        if (value.isEmpty() && placeholder.isNotEmpty()) {
+                            Text(
+                                placeholder,
+                                color = palette.muted,
+                                fontSize = TandemTypography.keypadNumber,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                        innerTextField()
+                    }
+                },
+            )
+        }
+    }
+}
+
+internal fun transactionTypeColor(
+    type: String,
+    palette: TandemPalette,
+) = when (type) {
+    "Income" -> palette.positive
+    "Transfer" -> palette.accent
+    else -> palette.negative
+}
+
+@Composable
+private fun AmountFieldShell(
+    fill: Color,
+    outline: Color,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val shape = RoundedCornerShape(TandemShapes.large)
+    Box(
+        modifier
+            .fillMaxWidth()
+            .heightIn(min = 88.dp)
+            .clip(shape)
+            .background(fill)
+            .border(1.5.dp, outline, shape)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(role = Role.Button, onClickLabel = "Enter amount", onClick = onClick)
+                } else {
+                    Modifier
+                },
+            ).padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+        contentAlignment = Alignment.Center,
+        content = content,
+    )
+}
+
+@Composable
 internal fun TransactionAmountField(
     amount: String,
     amountMinorUnits: Long,
     transactionType: String,
     neutralDisplay: Boolean = false,
     showCursor: Boolean = false,
+    fractionDigits: Int = 2,
     onShowKeypad: () -> Unit,
     amountColorOverride: Color? = null,
 ) {
@@ -259,10 +358,8 @@ internal fun TransactionAmountField(
     val amountColor =
         amountColorOverride ?: if (neutralDisplay) {
             palette.text
-        } else if (transactionType == "Income") {
-            palette.positive
         } else {
-            palette.negative
+            transactionTypeColor(transactionType, palette)
         }
     val outline = if (entered && !neutralDisplay) amountColor else palette.border
     val fill = if (entered && !neutralDisplay) amountColor.copy(alpha = 0.08f) else palette.surface
@@ -275,20 +372,13 @@ internal fun TransactionAmountField(
             animationSpec = infiniteRepeatable(tween(520), repeatMode = RepeatMode.Reverse),
             label = "amount-cursor-alpha",
         )
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = 88.dp)
-                .clip(RoundedCornerShape(TandemShapes.large))
-                .background(fill)
-                .border(1.5.dp, outline, RoundedCornerShape(TandemShapes.large))
-                .clickable(role = Role.Button, onClickLabel = "Enter amount", onClick = onShowKeypad)
-                .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
-        verticalAlignment = Alignment.CenterVertically,
+    AmountFieldShell(
+        fill = fill,
+        outline = outline,
+        onClick = onShowKeypad,
     ) {
         Text(
-            display,
+            amountAnnotatedString(display, fractionDigits),
             modifier =
                 Modifier
                     .fillMaxWidth()
@@ -324,7 +414,7 @@ internal fun TransactionTypeChip(
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
-    val typeTint = if (type == "Income") palette.positive else palette.negative
+    val typeTint = transactionTypeColor(type, palette)
     Row(
         modifier =
             Modifier

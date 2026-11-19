@@ -95,6 +95,25 @@ internal fun JsonObject.longValue(name: String): Long? =
 
 internal fun JsonObject.booleanValue(name: String): Boolean? = (this[name] as? JsonPrimitive)?.booleanOrNull
 
+internal fun budgetMonthCategoryCarryover(
+    remoteJson: String?,
+    categoryId: String,
+): Boolean? {
+    val month =
+        remoteJson
+            ?.let { runCatching { Json.parseToJsonElement(it) as? JsonObject }.getOrNull() }
+            ?: return null
+    val groups = month["categoryGroups"] as? JsonArray ?: return null
+    for (groupElement in groups) {
+        val categories = (groupElement as? JsonObject)?.get("categories") as? JsonArray ?: continue
+        for (categoryElement in categories) {
+            val category = categoryElement as? JsonObject ?: continue
+            if (category.stringValue("id") == categoryId) return category.booleanValue("carryover")
+        }
+    }
+    return null
+}
+
 internal fun liveAccountSummaries(
     accountRecords: List<BudgetRecordEntity>,
     accountGroupRecords: List<BudgetRecordEntity> = emptyList(),

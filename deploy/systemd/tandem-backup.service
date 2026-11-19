@@ -8,4 +8,4 @@ Requires=docker.service
 Type=oneshot
 WorkingDirectory=/opt/tandem
 EnvironmentFile=/etc/tandem/backup.env
-ExecStart=/opt/tandem/deploy/backup-scheduled.sh
+ExecStart=/opt/tandem-source/deploy/tandem-data.py scheduled-backup

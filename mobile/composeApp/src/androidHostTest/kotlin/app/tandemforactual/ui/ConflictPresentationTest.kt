@@ -3,7 +3,7 @@ package app.tandemforactual.ui
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -28,12 +28,11 @@ class ConflictPresentationTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun conflictActionsRequireTheLatestRevisionThatWasShownForReview() {
-        assertFalse(canResolveReviewedConflict(serverConfirmed = false, reviewedRevision = "rev-1", latestRevision = "rev-1"))
-        assertFalse(canResolveReviewedConflict(serverConfirmed = true, reviewedRevision = null, latestRevision = "rev-1"))
-        assertTrue(canResolveReviewedConflict(serverConfirmed = true, reviewedRevision = "rev-1", latestRevision = "rev-1"))
-        assertFalse(canResolveReviewedConflict(serverConfirmed = true, reviewedRevision = "rev-1", latestRevision = "rev-2"))
-        assertTrue(conflictReviewRevisionChanged(serverConfirmed = true, reviewedRevision = "rev-1", latestRevision = "rev-2"))
+    fun conflictActionsRequireReviewingTheExactSavedActualRevision() {
+        assertTrue(canResolveReviewedConflict(reviewedRevision = "rev-1", latestRevision = "rev-1"))
+        assertFalse(canResolveReviewedConflict(reviewedRevision = null, latestRevision = "rev-1"))
+        assertFalse(canResolveReviewedConflict(reviewedRevision = "rev-1", latestRevision = "rev-2"))
+        assertTrue(conflictReviewRevisionChanged(reviewedRevision = "rev-1", latestRevision = "rev-2"))
     }
 
     @Test
@@ -237,9 +236,9 @@ class ConflictPresentationTest {
     }
 
     @Test
-    fun keepActualActionCannotOpenItsDiscardConfirmationBeforeServerConfirmation() {
+    fun keepActualActionIsAvailableForAReviewedCachedVersionAndRechecksBeforeDiscarding() {
         var resolutionRequested = false
-        val canResolve = canResolveReviewedConflict(serverConfirmed = false, reviewedRevision = null, latestRevision = "revision-1")
+        val canResolve = canResolveReviewedConflict(reviewedRevision = "revision-1", latestRevision = "revision-1")
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
                 KeepLastSyncedConflictAction(
@@ -251,8 +250,8 @@ class ConflictPresentationTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Keep Actual’s version").assertIsNotEnabled().performClick()
-        composeTestRule.onNodeWithText("Discard your edit?").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Keep Actual’s version").assertIsEnabled().performClick()
+        composeTestRule.onNodeWithText("Discard your edit?").assertExists()
         assertFalse(resolutionRequested)
     }
 

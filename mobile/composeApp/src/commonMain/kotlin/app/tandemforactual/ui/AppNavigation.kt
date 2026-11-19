@@ -12,6 +12,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -22,16 +23,22 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.DropdownMenu
 import androidx.compose.material.Icon
+import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,13 +65,23 @@ import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.TandemModalCloseButton
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
+import app.tandemforactual.ui.reports.reportMonthLabel
+import app.tandemforactual.ui.reports.shiftReportMonthId
+import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
+import com.composables.icons.lucide.ChevronLeft
+import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Cloud
 import com.composables.icons.lucide.CloudAlert
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.CloudSync
+import com.composables.icons.lucide.EllipsisVertical
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
+import com.composables.icons.lucide.Search
+import com.composables.icons.lucide.Settings
+import com.composables.icons.lucide.Tags
+import com.composables.icons.lucide.X
 
 @Composable
 internal fun FloatingAction(
@@ -202,6 +219,7 @@ internal fun AppHeader(
     syncStatus: MainCloudStatus,
     pendingWriteStatuses: Collection<String>,
     onBudget: () -> Unit,
+    onOpenRoute: (AppRoute) -> Unit,
     actualConnected: Boolean,
     liveAccounts: List<LiveAccountSummary>,
     liveBudgetMonth: LiveBudgetMonthSummary?,
@@ -212,6 +230,7 @@ internal fun AppHeader(
     addTransactionEnabled: Boolean = true,
 ) {
     val palette = tandemPalette
+    var headerMenuExpanded by rememberSaveable(route) { mutableStateOf(false) }
     val headerFontScale = LocalDensity.current.fontScale
     val budgetHeaderSlotHeight = maxOf(88.dp, 88.dp * headerFontScale)
     val headerMinHeight =
@@ -252,83 +271,352 @@ internal fun AppHeader(
                     ?.title ?: route.title
             else -> route.title
         }
-    Row(
-        modifier =
+    if (route == AppRoute.BUDGET) {
+        Row(
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = headerMinHeight)
                 .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (showBack && !route.isTransactionForm()) {
-            TandemBackButton(onClick = onBack)
-            Spacer(Modifier.width(6.dp))
-        }
-        Column(
-            modifier =
-                Modifier.weight(1f).clickable(
-                    enabled = route.isTab(),
-                    role = Role.Button,
-                    onClickLabel = "Choose budget",
-                    onClick = onBudget,
-                ),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (headerTitle.isNotBlank()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+                Row(
+                    modifier = Modifier.padding(bottom = 4.dp).heightIn(min = 48.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text(
-                        text = headerTitle,
+                        headerTitle,
                         modifier = Modifier.weight(1f),
                         color = palette.text,
                         fontSize = TandemTypography.periodTitle,
                         fontWeight = FontWeight.SemiBold,
-                        maxLines = if (route == AppRoute.BUDGET) budgetHeaderTitleMaxLines() else 1,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    if (route == AppRoute.BUDGET) {
-                        Icon(
-                            Lucide.ChevronDown,
-                            contentDescription = null,
-                            modifier = Modifier.padding(start = TandemSpacing.xxSmall).size(16.dp),
-                            tint = palette.muted,
+                    if (onAddTransaction != null) {
+                        TandemIconButton(
+                            Lucide.Plus,
+                            if (addTransactionEnabled) "Add transaction" else "Read-only mode is on",
+                            enabled = addTransactionEnabled,
+                            iconSizeDp = 20,
+                            onClick = onAddTransaction,
+                        )
+                    }
+                    MainCloudStatusButton(syncStatus, pendingWriteStatuses, onSync)
+                    Box {
+                        TandemIconButton(
+                            Lucide.EllipsisVertical,
+                            "Budget options",
+                            onClick = { headerMenuExpanded = true },
+                        )
+                        BudgetHeaderMenu(
+                            expanded = headerMenuExpanded,
+                            state = state,
+                            onDismiss = { headerMenuExpanded = false },
+                            onSwitchBudget = {
+                                headerMenuExpanded = false
+                                onBudget()
+                            },
                         )
                     }
                 }
-                if (route == AppRoute.BUDGET) {
-                    Text(
-                        state.selectedMonth,
-                        color = palette.muted,
-                        fontSize = TandemTypography.caption,
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        Modifier.clickable(
+                            role = Role.Button,
+                            onClickLabel = "Choose month",
+                            onClick = { state.isBudgetMonthPickerOpen = true },
+                        ),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+                    ) {
+                        Text(
+                            state.selectedMonth,
+                            color = palette.text,
+                            fontSize = TandemTypography.action,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Icon(Lucide.ChevronDown, contentDescription = "Choose month", modifier = Modifier.size(20.dp), tint = palette.muted)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    TandemIconButton(
+                        Lucide.ChevronLeft,
+                        "Previous month",
+                        sizeDp = 36,
+                        iconSizeDp = 20,
+                        onClick = { state.shiftBudgetMonth(-1) },
+                    )
+                    TandemIconButton(
+                        Lucide.ChevronRight,
+                        "Next month",
+                        sizeDp = 36,
+                        iconSizeDp = 20,
+                        onClick = { state.shiftBudgetMonth(1) },
                     )
                 }
             }
         }
-        if (route == AppRoute.BUDGET && onAddTransaction != null) {
-            TandemIconButton(
-                icon = Lucide.Plus,
-                contentDescription = if (addTransactionEnabled) "Add transaction" else "Read-only mode is on",
-                onClickLabel = "Add transaction",
-                enabled = addTransactionEnabled,
-                iconSizeDp = 22,
-                onClick = onAddTransaction,
-            )
-        }
-        if (route.isTab()) {
-            MainCloudStatusButton(syncStatus, pendingWriteStatuses, onSync)
-        } else if (route == AppRoute.BUDGET_CHOOSER) {
-            Text(
-                when {
-                    actualConnected -> "Actual budgets"
-                    state.selectedBudgetId.isNotBlank() -> "Offline copy"
-                    else -> "Connect to Actual"
-                },
-                color = palette.muted,
-                fontSize = TandemTypography.micro,
-                fontWeight = FontWeight.Bold,
-            )
-        } else if (route.isTransactionForm()) {
-            TandemModalCloseButton(onClick = onBack)
+    } else {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = headerMinHeight)
+                    .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (showBack && !route.isTransactionForm()) {
+                TandemBackButton(onClick = onBack)
+                Spacer(Modifier.width(6.dp))
+            }
+            Column(
+                modifier =
+                    Modifier.weight(1f).clickable(
+                        interactionSource = null,
+                        indication = null,
+                        enabled = route.isTab() && route != AppRoute.ACCOUNTS,
+                        role = Role.Button,
+                        onClickLabel = "Choose budget",
+                        onClick = onBudget,
+                    ),
+            ) {
+                if (headerTitle.isNotBlank()) {
+                    Text(
+                        text = headerTitle,
+                        color = palette.text,
+                        fontSize = TandemTypography.periodTitle,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = tandemAlloFamily(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            when (route) {
+                AppRoute.CHOOSE_PAYEE -> {
+                    if (state.selectedBudgetId.isNotBlank() && state.transactionType != "Transfer") {
+                        TandemIconButton(
+                            Lucide.Tags,
+                            "Manage payees",
+                            onClick = { onOpenRoute(AppRoute.MANAGE_PAYEES) },
+                        )
+                    }
+                }
+                AppRoute.ACCOUNTS -> {
+                    TandemIconButton(
+                        if (state.accountsSearchExpanded) Lucide.X else Lucide.Search,
+                        if (state.accountsSearchExpanded) "Close account search" else "Search accounts",
+                        onClick = { state.accountsSearchExpanded = !state.accountsSearchExpanded },
+                    )
+                    Box {
+                        TandemIconButton(
+                            Lucide.EllipsisVertical,
+                            "Account options",
+                            onClick = { headerMenuExpanded = true },
+                        )
+                        AccountHeaderMenu(
+                            expanded = headerMenuExpanded,
+                            onDismiss = { headerMenuExpanded = false },
+                            onAddAccount = {
+                                headerMenuExpanded = false
+                                state.accountsRequestedAction = "add"
+                            },
+                            onManageBanks = {
+                                headerMenuExpanded = false
+                                state.accountsRequestedAction = "banks"
+                            },
+                            onSwitchBudget = {
+                                headerMenuExpanded = false
+                                onBudget()
+                            },
+                            onOpenSync = {
+                                headerMenuExpanded = false
+                                onOpenRoute(AppRoute.SYNC_CENTER)
+                            },
+                        )
+                    }
+                }
+                AppRoute.SYNC_CENTER -> {
+                    TandemIconButton(
+                        Lucide.Settings,
+                        "Sync settings",
+                        onClick = { onOpenRoute(AppRoute.SYNC_PREFERENCES) },
+                    )
+                }
+                AppRoute.BUDGET_CHOOSER -> {
+                    Text(
+                        when {
+                            actualConnected -> "Actual budgets"
+                            state.selectedBudgetId.isNotBlank() -> "Offline copy"
+                            else -> "Connect to Actual"
+                        },
+                        color = palette.muted,
+                        fontSize = TandemTypography.micro,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                else -> {
+                    if (route.isTab()) MainCloudStatusButton(syncStatus, pendingWriteStatuses, onSync)
+                    if (route.isTransactionForm()) TandemModalCloseButton(onClick = onBack)
+                }
+            }
         }
     }
+}
+
+@Composable
+private fun BudgetHeaderMenu(
+    expanded: Boolean,
+    state: AppState,
+    onDismiss: () -> Unit,
+    onSwitchBudget: () -> Unit,
+) {
+    TandemHeaderMenu(expanded = expanded, onDismiss = onDismiss) {
+        HeaderMenuAction("Switch budget", onClick = onSwitchBudget)
+        HeaderMenuDivider()
+        HeaderMenuLabel("Category amounts")
+        HeaderMenuChoice("Numbers", selected = !state.budgetShowProgressBars, onClick = {
+            state.budgetShowProgressBars = false
+            onDismiss()
+        })
+        HeaderMenuChoice("Progress bars", selected = state.budgetShowProgressBars, onClick = {
+            state.budgetShowProgressBars = true
+            onDismiss()
+        })
+        HeaderMenuDivider()
+        HeaderMenuLabel("Privacy")
+        HeaderMenuChoice("Hide amounts", selected = state.privacyModeEnabled, onClick = {
+            state.privacyModeEnabled = !state.privacyModeEnabled
+            onDismiss()
+        })
+    }
+}
+
+@Composable
+private fun AccountHeaderMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onAddAccount: () -> Unit,
+    onManageBanks: () -> Unit,
+    onSwitchBudget: () -> Unit,
+    onOpenSync: () -> Unit,
+) {
+    TandemHeaderMenu(expanded = expanded, onDismiss = onDismiss) {
+        HeaderMenuLabel("Account actions")
+        HeaderMenuAction("Add account", onClick = onAddAccount)
+        HeaderMenuAction("Manage bank connections", onClick = onManageBanks)
+        HeaderMenuDivider()
+        HeaderMenuAction("Switch budget", onClick = onSwitchBudget)
+        HeaderMenuAction("Sync Center", onClick = onOpenSync)
+    }
+}
+
+@Composable
+private fun TandemHeaderMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val palette = tandemPalette
+    val colors =
+        MaterialTheme.colors.copy(
+            surface = palette.surface,
+            background = palette.surface,
+            onSurface = palette.text,
+            isLight = true,
+        )
+    val shapes = MaterialTheme.shapes.copy(small = RoundedCornerShape(TandemShapes.large))
+    MaterialTheme(colors = colors, shapes = shapes) {
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = onDismiss,
+            modifier = Modifier.widthIn(min = 200.dp, max = 280.dp),
+        ) {
+            Column(Modifier.padding(vertical = TandemSpacing.extraSmall), content = content)
+        }
+    }
+}
+
+@Composable
+private fun HeaderMenuAction(
+    label: String,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 44.dp)
+            .clip(RoundedCornerShape(TandemShapes.control))
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            modifier = Modifier.weight(1f),
+            color = palette.text,
+            fontSize = TandemTypography.compactBody,
+            fontWeight = FontWeight.Medium,
+            maxLines = 2,
+        )
+        Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = palette.muted)
+    }
+}
+
+@Composable
+private fun HeaderMenuLabel(label: String) {
+    Text(
+        label,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.extraSmall),
+        color = tandemPalette.muted,
+        fontSize = TandemTypography.caption,
+        fontWeight = FontWeight.SemiBold,
+    )
+}
+
+@Composable
+private fun HeaderMenuDivider() {
+    androidx.compose.material.Divider(
+        modifier = Modifier.padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.extraSmall),
+        color = tandemPalette.border,
+        thickness = 1.dp,
+    )
+}
+
+@Composable
+private fun HeaderMenuChoice(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 44.dp)
+            .clip(RoundedCornerShape(TandemShapes.control))
+            .clickable(role = Role.RadioButton, onClick = onClick)
+            .semantics { this.selected = selected }
+            .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            modifier = Modifier.weight(1f),
+            color = if (selected) palette.accent else palette.text,
+            fontSize = TandemTypography.compactBody,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            maxLines = 2,
+        )
+        if (selected) Icon(Lucide.Check, contentDescription = "Selected", modifier = Modifier.size(18.dp), tint = palette.accent)
+    }
+}
+
+private fun AppState.shiftBudgetMonth(offset: Int) {
+    val monthId = shiftReportMonthId(selectedMonthId, offset) ?: return
+    selectedMonthId = monthId
+    selectedMonth = reportMonthLabel(monthId)
 }
 
 @Composable

@@ -11,9 +11,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir -p "$context_root/deploy/compose" "$context_root/certs" "$context_root/secrets" "$context_root/.tandem-secrets"
+mkdir -p "$context_root/deploy" "$context_root/certs" "$context_root/secrets" "$context_root/.tandem-secrets"
 cp "$project_root/.dockerignore" "$context_root/.dockerignore"
-cp "$project_root/deploy/compose/.env.example" "$context_root/deploy/compose/.env.example"
+cp "$project_root/deploy/example.env" "$context_root/deploy/example.env"
 cat > "$context_root/Dockerfile" <<'EOF'
 FROM node:26.13.1-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc
 WORKDIR /payload
@@ -22,10 +22,10 @@ EOF
 cat > "$context_root/.env" <<'EOF'
 DATABASE_URL=postgresql://canary-root-password
 EOF
-cat > "$context_root/deploy/compose/.env" <<'EOF'
+cat > "$context_root/deploy/.env" <<'EOF'
 ACTUAL_SERVER_PASSWORD=canary-actual-password
 EOF
-cat > "$context_root/deploy/compose/.env.local" <<'EOF'
+cat > "$context_root/deploy/.env.local" <<'EOF'
 LOCAL_SECRET=canary-local-secret
 EOF
 cat > "$context_root/server.key" <<'EOF'
@@ -45,8 +45,8 @@ docker build --quiet --tag "$image" "$context_root" >/dev/null
 docker run --rm --entrypoint /bin/sh "$image" -ec '
   for path in \
     /payload/.env \
-    /payload/deploy/compose/.env \
-    /payload/deploy/compose/.env.local \
+    /payload/deploy/.env \
+    /payload/deploy/.env.local \
     /payload/server.key \
     /payload/certs/server.pem \
     /payload/secrets/database.json \
@@ -56,6 +56,6 @@ docker run --rm --entrypoint /bin/sh "$image" -ec '
       exit 1
     fi
   done
-  test -f /payload/deploy/compose/.env.example
+  test -f /payload/deploy/example.env
 '
-echo "Docker build context excludes canary secrets and retains .env.example."
+echo "Docker build context excludes canary secrets and retains example.env."

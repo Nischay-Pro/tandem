@@ -49,6 +49,10 @@ android {
   }
 
   buildTypes {
+    getByName("debug") {
+      applicationIdSuffix = ".localtest"
+    }
+
     getByName("release") {
       isMinifyEnabled = true
       isShrinkResources = true

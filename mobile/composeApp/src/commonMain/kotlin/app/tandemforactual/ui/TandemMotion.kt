@@ -25,6 +25,7 @@ internal object TandemMotion {
     const val REVEAL_MILLIS = 200
     const val STATUS_CHANGE_MILLIS = 160
     const val CROSSFADE_MILLIS = 100
+    const val TAB_TRANSITION_MILLIS = 120
     const val BACK_CANCEL_MILLIS = 200
 
     val enterEasing = LinearOutSlowInEasing

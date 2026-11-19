@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.LabelText
 import app.tandemforactual.ui.components.SurfaceCard
+import app.tandemforactual.ui.components.amountAnnotatedString
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
@@ -68,8 +69,6 @@ internal fun AttentionBanner(
                     color = palette.muted,
                     fontSize = TandemTypography.micro,
                     lineHeight = TandemTypography.microLineHeight,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
             Text(
@@ -94,15 +93,16 @@ internal fun Heading(
     val palette = tandemPalette
     Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
         Text(
-            title,
+            amountAnnotatedString(title),
             color = palette.text,
             fontSize = TandemTypography.pageTitle,
             lineHeight = TandemTypography.headingLineHeight,
             fontWeight = FontWeight.Bold,
+            fontFamily = tandemAlloFamily(),
         )
         if (subtitle != null) {
             Text(
-                subtitle,
+                amountAnnotatedString(subtitle),
                 color = palette.muted,
                 fontSize = if (compactSubtitle) TandemTypography.compactBody else TandemTypography.body,
                 lineHeight = TandemTypography.bodyLineHeight,

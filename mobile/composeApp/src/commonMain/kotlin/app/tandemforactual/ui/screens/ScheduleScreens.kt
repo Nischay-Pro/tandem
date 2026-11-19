@@ -338,6 +338,7 @@ internal fun UpcomingSchedulesScreen(
                             modifier = Modifier.weight(1f),
                             color = tandemPalette.text,
                             fontSize = TandemTypography.sectionTitle,
+                            fontFamily = tandemAlloFamily(),
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -377,7 +378,10 @@ internal fun UpcomingSchedulesScreen(
                                     amountDraft = it
                                     clearEditError("amount")
                                 },
-                                TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)),
+                                TextFieldOptions(
+                                    amountFractionDigits = state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                ),
                             )
                             ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "amount"), "amount")
                             ScheduleChoiceField(
@@ -400,7 +404,10 @@ internal fun UpcomingSchedulesScreen(
                                         amountMaxDraft = it
                                         clearEditError("maximum")
                                     },
-                                    TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)),
+                                    TextFieldOptions(
+                                        amountFractionDigits = state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    ),
                                 )
                                 ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "maximum"), "maximum")
                             }

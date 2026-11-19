@@ -111,6 +111,7 @@ internal fun AccountReconcileDialog(
                             modifier = Modifier.weight(1f),
                             color = tandemPalette.text,
                             fontSize = TandemTypography.sectionTitle,
+                            fontFamily = tandemAlloFamily(),
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -127,6 +128,7 @@ internal fun AccountReconcileDialog(
                             currencySymbol = currencySymbol,
                             currencySymbolAfter = currencySymbolIsAfter,
                             currencySymbolSpace = currencySettings?.currencySpaceBetweenAmountAndSymbol == true,
+                            amountFractionDigits = state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         ),
                     )
@@ -329,6 +331,7 @@ internal fun AccountOptionsScreen(
                             modifier = Modifier.weight(1f),
                             color = tandemPalette.text,
                             fontSize = TandemTypography.sectionTitle,
+                            fontFamily = tandemAlloFamily(),
                             fontWeight = FontWeight.Bold,
                         )
                         TandemIconButton(

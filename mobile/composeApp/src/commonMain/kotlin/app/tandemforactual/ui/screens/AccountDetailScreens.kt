@@ -20,11 +20,14 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -56,6 +59,7 @@ import com.composables.icons.lucide.X
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -68,6 +72,7 @@ internal fun AccountDetailScreen(
     liveAccounts: List<LiveAccountSummary>,
     mobileSession: TandemMobileSession,
     merchantIconMatcher: MerchantIconMatcherPack?,
+    isForegroundRoute: Boolean,
 ) {
     val scope = rememberCoroutineScope()
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
@@ -82,9 +87,29 @@ internal fun AccountDetailScreen(
     }
     val liveAccount = liveAccounts.firstOrNull { it.id == state.selectedAccountId }
     val accountName = liveAccount?.name
-    var accountActivity by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(emptyList<TransactionItem>()) }
-    var accountActivityOffset by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(0) }
-    var accountActivityHasMore by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(false) }
+    val routeScrollState = LocalRouteScrollState.current
+    var pendingScrollRestore by
+        rememberSaveable(state.selectedBudgetId, state.selectedAccountId) {
+            mutableIntStateOf(-1)
+        }
+    var accountRouteWasCovered by
+        rememberSaveable(state.selectedBudgetId, state.selectedAccountId) {
+            mutableStateOf(false)
+        }
+    var accountActivity by
+        remember(mobileSession, state.selectedBudgetId, liveAccount?.id) {
+            mutableStateOf(
+                mobileSession.cachedAccountActivity(state.selectedBudgetId, liveAccount?.id.orEmpty())?.transactions.orEmpty(),
+            )
+        }
+    var accountActivityOffset by
+        remember(mobileSession, state.selectedBudgetId, liveAccount?.id) {
+            mutableStateOf(mobileSession.cachedAccountActivity(state.selectedBudgetId, liveAccount?.id.orEmpty())?.offset ?: 0)
+        }
+    var accountActivityHasMore by
+        remember(mobileSession, state.selectedBudgetId, liveAccount?.id) {
+            mutableStateOf(mobileSession.cachedAccountActivity(state.selectedBudgetId, liveAccount?.id.orEmpty())?.hasMore ?: false)
+        }
     var loadingOlderAccountActivity by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(false) }
     var clearedAccountBalanceMinor by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf<Long?>(null) }
     var showReconcileDialog by rememberSaveable(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(false) }
@@ -261,15 +286,47 @@ internal fun AccountDetailScreen(
                         merchantIconMatcher,
                     ).filterNot(TransactionItem::isSplitParent)
                 }
-            accountActivity =
+            val nextActivity =
                 if (accountActivityOffset == 0) {
                     page
                 } else {
                     (accountActivity + page).distinctBy(TransactionItem::recordId)
                 }
-            accountActivityHasMore = records.size == ACCOUNT_RECONCILIATION_PAGE_SIZE
+            val hasMore = records.size == ACCOUNT_RECONCILIATION_PAGE_SIZE
+            accountActivity = nextActivity
+            accountActivityHasMore = hasMore
+            mobileSession.cacheAccountActivity(
+                state.selectedBudgetId,
+                accountId,
+                AccountActivitySnapshot(nextActivity, accountActivityOffset, hasMore),
+            )
             loadingOlderAccountActivity = false
         }
+    }
+    LaunchedEffect(
+        isForegroundRoute,
+        pendingScrollRestore,
+        accountRouteWasCovered,
+        accountName,
+        accountActivity.size,
+        routeScrollState,
+    ) {
+        if (pendingScrollRestore < 0) return@LaunchedEffect
+        if (!isForegroundRoute) {
+            accountRouteWasCovered = true
+            return@LaunchedEffect
+        }
+        if (!accountRouteWasCovered || accountName == null || accountActivity.isEmpty()) return@LaunchedEffect
+
+        val scrollState = routeScrollState ?: return@LaunchedEffect
+        withFrameNanos { }
+        if (pendingScrollRestore > 0 && scrollState.maxValue == 0) {
+            snapshotFlow { scrollState.maxValue }.first { it > 0 }
+        }
+        withFrameNanos { }
+        scrollState.scrollTo(pendingScrollRestore.coerceAtMost(scrollState.maxValue))
+        pendingScrollRestore = -1
+        accountRouteWasCovered = false
     }
     LaunchedEffect(state.selectedBudgetId, liveAccount?.id) {
         val accountId = liveAccount?.id ?: return@LaunchedEffect
@@ -332,10 +389,13 @@ internal fun AccountDetailScreen(
                     EmptyState("No recent activity", modifier = Modifier.padding(TandemSpacing.large))
                 }
             } else {
-                SectionCard("Recent activity", action = "See all", onClick = { navigation.selectTab(AppRoute.ACTIVITY) }) {
+                SectionCard("Recent activity", action = "See all", onClick = { openRecentActivity(state, navigation) }) {
                     shownAccountActivity.take(6).forEachIndexed { index, item ->
                         if (index > 0) DividerLine()
-                        TransactionRow(item) { openTransaction(state, navigation, item, isLive = true) }
+                        TransactionRow(item) {
+                            pendingScrollRestore = routeScrollState?.value ?: -1
+                            openTransaction(state, navigation, item, isLive = true)
+                        }
                     }
                 }
             }
@@ -481,6 +541,7 @@ internal fun StatementImportDialog(
                         modifier = Modifier.weight(1f),
                         color = tandemPalette.text,
                         fontSize = TandemTypography.sectionTitle,
+                        fontFamily = tandemAlloFamily(),
                         fontWeight = FontWeight.Bold,
                     )
                     TandemIconButton(Lucide.X, "Close", sizeDp = 40, iconSizeDp = 18, enabled = !busy, onClick = onDismiss)

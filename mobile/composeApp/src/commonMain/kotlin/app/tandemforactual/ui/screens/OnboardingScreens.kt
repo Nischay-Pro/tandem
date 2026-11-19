@@ -5,6 +5,7 @@ package app.tandemforactual.ui
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,12 +14,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -31,33 +32,35 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.isLocalHttpHost
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.ui.components.AnimatedReveal
 import app.tandemforactual.ui.components.AnimatedStatusText
-import app.tandemforactual.ui.components.Badge
 import app.tandemforactual.ui.components.BodyText
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.LabelText
-import app.tandemforactual.ui.components.PrimaryButton
 import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SurfaceCard
+import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.TandemLoadingIndicator
+import com.composables.icons.lucide.Check
+import com.composables.icons.lucide.ChevronLeft
+import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleAlert
-import com.composables.icons.lucide.Cloud
-import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.ShieldCheck
 import kotlinx.coroutines.delay
 
 @Composable
@@ -96,123 +99,209 @@ internal fun WelcomeScreen(
     onOpenSetupGuide: () -> Unit,
 ) {
     OnboardingLayout(
-        verticalSpacing = TandemSpacing.large,
+        verticalSpacing = TandemSpacing.medium,
         horizontalPadding = TandemSpacing.extraLarge,
         content = {
-            TandemBrandMark(Modifier.size(72.dp))
-            Heading("Tandem for Actual Budget", "Connect Tandem to your existing Actual Budget.")
-            SetupProgressIndicator()
-            SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(TandemSpacing.large),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                ) {
-                    WelcomeBenefit(
-                        Lucide.Cloud,
-                        heading = "Your budget, everywhere.",
-                        supportingText = "Access your Actual Budget finances wherever life takes you.",
+            Column(
+                Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.large),
+            ) {
+                SetupBrandWordmark()
+                Spacer(Modifier.height(TandemSpacing.extraLarge))
+                WelcomeOrbitIllustration(Modifier.align(Alignment.CenterHorizontally))
+                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                    SetupHeadline(
+                        "Your budget.\nEverywhere.",
+                        "Access your Actual Budget anywhere. Make changes offline. Sync when ready.",
                     )
-                    WelcomeBenefit(
-                        Lucide.CloudSync,
-                        heading = "Offline by design.",
-                        supportingText = "Track transactions anytime, even without an internet connection.",
-                    )
-                    WelcomeBenefit(
-                        Lucide.ShieldCheck,
-                        heading = "Always in sync.",
-                        supportingText = "Seamlessly sync your changes with Actual Budget when you’re back online.",
-                    )
+                    signOutNotice?.let { InfoBubble(it) }
                 }
             }
-            SecondaryButton("Set up the Tandem API Gateway", modifier = Modifier.fillMaxWidth(), onClick = onOpenSetupGuide)
-            signOutNotice?.let { InfoBubble(it) }
         },
         actions = {
-            PrimaryButton("Get started", modifier = Modifier.fillMaxWidth()) {
-                navigation.open(AppRoute.SIGN_IN)
+            SetupPrimaryButton("Get started", modifier = Modifier.fillMaxWidth()) {
+                navigation.open(AppRoute.SERVER_ADDRESS)
             }
+            Text(
+                "Need help setting up the API Gateway?",
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable(role = Role.Button, onClickLabel = "Open API Gateway setup guide", onClick = onOpenSetupGuide)
+                        .padding(vertical = TandemSpacing.extraSmall),
+                color = tandemPalette.accent,
+                fontSize = TandemTypography.caption,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center,
+            )
         },
     )
 }
 
 @Composable
-private fun SetupProgressIndicator() {
+private fun SetupBrandWordmark() {
     val palette = tandemPalette
-    val steps = listOf("Server", "Sign in", "Budget", "First sync")
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clearAndSetSemantics {
-                    contentDescription = "Setup progress. Step 1 of 4: Server. Next: Sign in, Budget, First sync."
-                },
-        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
-        verticalAlignment = Alignment.Top,
+    Column(
+        verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
     ) {
-        steps.forEachIndexed { index, step ->
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
-                horizontalAlignment = Alignment.CenterHorizontally,
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(7.dp).clip(CircleShape).background(palette.accent))
+            Text("tandem", color = palette.text, fontSize = 21.sp, fontWeight = FontWeight.Bold, fontFamily = tandemAlloFamily())
+        }
+        Text("FOR ACTUAL BUDGET", color = palette.muted, fontSize = TandemTypography.micro, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun WelcomeOrbitIllustration(modifier: Modifier = Modifier) {
+    val palette = tandemPalette
+    Box(modifier.size(176.dp), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .size(168.dp)
+                .border(2.dp, palette.accent.copy(alpha = 0.2f), CircleShape),
+        )
+        Box(
+            Modifier
+                .size(136.dp)
+                .border(5.dp, palette.accent.copy(alpha = 0.85f), CircleShape),
+        )
+        Box(
+            Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(palette.accentSurface),
+            contentAlignment = Alignment.Center,
+        ) {
+            TandemBrandMark(Modifier.size(42.dp))
+        }
+    }
+}
+
+@Composable
+private fun SetupHeadline(
+    title: String,
+    supportingText: String,
+) {
+    val palette = tandemPalette
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+        Text(
+            title,
+            color = palette.text,
+            fontSize = 32.sp,
+            lineHeight = 38.sp,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = tandemAlloFamily(),
+        )
+        Text(
+            supportingText,
+            color = palette.muted,
+            fontSize = TandemTypography.body,
+            lineHeight = 22.sp,
+        )
+    }
+}
+
+@Composable
+private fun SetupStepHeader(
+    step: Int,
+    navigation: AppNavigation,
+    optional: Boolean = false,
+    onBack: (() -> Unit)? = null,
+) {
+    val palette = tandemPalette
+    val activeStep = step.coerceIn(1, 4)
+    val stepName = listOf("Server", "Sign in", "Budget", "First sync")[activeStep - 1]
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TandemIconButton(
+                Lucide.ChevronLeft,
+                contentDescription = "Back",
+                onClickLabel = "Back to previous setup step",
+                sizeDp = 44,
+                iconSizeDp = 24,
+                onClick = onBack ?: navigation.back,
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                if (optional) "OPTIONAL" else "${activeStep.toString().padStart(2, '0')} / 04",
+                color = palette.muted,
+                fontSize = TandemTypography.label,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+        if (!optional) {
+            Row(
+                Modifier
+                    .padding(start = 12.dp)
+                    .clearAndSetSemantics {
+                        contentDescription = "Setup progress. Step $activeStep of 4: $stepName."
+                    },
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
             ) {
-                Box(
-                    Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(if (index == 0) palette.accent else palette.surface)
-                        .border(1.dp, if (index == 0) palette.accent else palette.border, CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        "${index + 1}",
-                        color = if (index == 0) palette.accentContent else palette.muted,
-                        fontSize = TandemTypography.micro,
-                        fontWeight = FontWeight.SemiBold,
+                repeat(4) { index ->
+                    Box(
+                        Modifier
+                            .width(17.dp)
+                            .height(3.dp)
+                            .clip(CircleShape)
+                            .background(if (index < activeStep) palette.accent else palette.border),
                     )
                 }
-                Text(
-                    step,
-                    color = if (index == 0) palette.text else palette.muted,
-                    fontSize = TandemTypography.label,
-                    fontWeight = if (index == 0) FontWeight.SemiBold else FontWeight.Normal,
-                    maxLines = 1,
-                )
             }
         }
     }
 }
 
 @Composable
-private fun WelcomeBenefit(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    heading: String,
-    supportingText: String,
+private fun SetupPrimaryButton(
+    label: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    loading: Boolean = false,
+    onClick: () -> Unit,
 ) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            modifier = Modifier.padding(top = 2.dp).size(22.dp),
-            tint = tandemPalette.accent,
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
-            Text(
-                heading,
-                color = tandemPalette.text,
-                fontSize = TandemTypography.compactBody,
-                fontWeight = FontWeight.SemiBold,
-                lineHeight = TandemTypography.bodyLineHeight,
-            )
-            Text(
-                supportingText,
-                color = tandemPalette.muted,
-                fontSize = TandemTypography.compactBody,
-                lineHeight = TandemTypography.bodyLineHeight,
-            )
+    val palette = tandemPalette
+    val light = palette.background.luminance() >= 0.5f
+    val shape = RoundedCornerShape(TandemShapes.medium)
+    val background =
+        if (enabled) {
+            if (light) {
+                palette.text
+            } else {
+                palette.accent
+            }
+        } else {
+            palette.raised
         }
+    val foreground =
+        when {
+            !enabled -> palette.muted
+            light -> palette.background
+            else -> palette.accentContent
+        }
+    Row(
+        modifier
+            .fillMaxWidth()
+            .heightIn(min = 58.dp)
+            .clip(shape)
+            .background(background)
+            .clickable(enabled = enabled && !loading, role = Role.Button, onClickLabel = label, onClick = onClick)
+            .padding(horizontal = TandemSpacing.large),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (loading) TandemLoadingIndicator(Modifier.size(18.dp), foreground, 2.dp)
+        Text(
+            label,
+            modifier = Modifier.weight(1f).padding(start = if (loading) TandemSpacing.small else 0.dp),
+            color = foreground,
+            fontSize = TandemTypography.action,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(21.dp), tint = foreground)
     }
 }
 
@@ -223,13 +312,15 @@ internal fun ServerAddressScreen(
 ) {
     OnboardingLayout(
         content = {
+            SetupStepHeader(step = 1, navigation = navigation)
+            SetupHeadline("Connect to your server.", "Enter the address you use to access your Actual Budget server.")
             TextFieldCard(
                 "Server URL",
                 state.serverUrl,
                 { state.serverUrl = it },
                 TextFieldOptions(placeholder = "https://"),
             )
-            InfoBubble("Enter your Actual Budget address. Tandem checks for its API Gateway at /api/v1/.")
+            InfoBubble("Tandem checks for the Actual API Gateway at /api/v1/.")
             if (serverAddressMayBeInsecure(state.serverUrl)) {
                 val palette = tandemPalette
                 Row(
@@ -253,7 +344,7 @@ internal fun ServerAddressScreen(
             }
         },
         actions = {
-            PrimaryButton("Continue", modifier = Modifier.fillMaxWidth(), enabled = serverAddressIsValid(state.serverUrl)) {
+            SetupPrimaryButton("Continue", modifier = Modifier.fillMaxWidth(), enabled = serverAddressIsValid(state.serverUrl)) {
                 navigation.open(AppRoute.SIGN_IN)
             }
         },
@@ -343,15 +434,14 @@ internal fun SignInTransportWarning(serverUrl: String) {
 internal fun SignInScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
     onSignIn: () -> Unit,
     onStartOpenIdSignIn: () -> Unit,
 ) {
-    var serverUrlFocused by remember { mutableStateOf(false) }
-    val focusManager = LocalFocusManager.current
-    LaunchedEffect(state.serverUrl, serverUrlFocused) {
+    LaunchedEffect(state.serverUrl) {
         state.actualPassword = ""
         mobileSession.clearActualLoginMethodState()
-        if (shouldCheckActualLoginMethods(state.serverUrl, serverUrlFocused)) {
+        if (shouldCheckActualLoginMethods(state.serverUrl, serverUrlFocused = false)) {
             delay(300)
             mobileSession.loadActualLoginMethods(state.serverUrl)
         }
@@ -362,33 +452,74 @@ internal fun SignInScreen(
     val openIdActive =
         loginMethods?.availableLoginMethods?.any { it.method == "openid" && it.active } ?: (loginMethods?.loginMethod == "openid")
     OnboardingLayout(
+        verticalSpacing = TandemSpacing.medium,
         content = {
-            Heading("Sign in to Actual")
-            TextFieldCard(
-                "Server URL",
-                state.serverUrl,
-                { state.serverUrl = it },
-                TextFieldOptions(
-                    placeholder = "https://",
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                    onFocusedChange = { serverUrlFocused = it },
-                ),
-            )
+            val palette = tandemPalette
+            SetupStepHeader(step = 2, navigation = navigation)
+            SetupHeadline("Welcome back.", "Sign in with your existing Actual Budget account.")
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+                    LabelText("SERVER")
+                    Text(
+                        state.serverUrl.takeIf { serverAddressIsValid(it) } ?: "Not set",
+                        color = palette.text,
+                        fontSize = TandemTypography.compactBody,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (serverAddressIsValid(state.serverUrl)) {
+                    Text(
+                        "Change",
+                        modifier =
+                            Modifier
+                                .clip(RoundedCornerShape(TandemShapes.small))
+                                .clickable(role = Role.Button, onClickLabel = "Change server address") {
+                                    navigation.open(AppRoute.SERVER_ADDRESS)
+                                }.padding(horizontal = TandemSpacing.small, vertical = TandemSpacing.extraSmall),
+                        color = palette.accent,
+                        fontSize = TandemTypography.label,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
             if (serverAddressIsValid(state.serverUrl)) SignInTransportWarning(state.serverUrl)
+            if (loginMethods != null && mobileSession.signInError == null) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.positive)
+                    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+                        Text(
+                            "Server is reachable",
+                            color = palette.text,
+                            fontSize = TandemTypography.compactBody,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text("Connection verified", color = palette.muted, fontSize = TandemTypography.caption)
+                    }
+                }
+            }
             when {
                 !serverAddressIsValid(state.serverUrl) -> {
-                    InfoBubble("Enter your server address to see sign-in options.")
+                    InlineMessage("Add your Actual Budget server address to continue.", InlineMessageKind.INFO)
                 }
-                serverUrlFocused -> Unit
-                mobileSession.isLoadingLoginMethods -> {
-                    TandemLoadingIndicator(Modifier.size(24.dp), color = tandemPalette.accent, strokeWidth = 2.dp)
-                }
-                mobileSession.actualLoginMethods == null && mobileSession.signInError == null -> {
-                    TandemLoadingIndicator(Modifier.size(24.dp), color = tandemPalette.accent, strokeWidth = 2.dp)
+                mobileSession.isLoadingLoginMethods || (mobileSession.actualLoginMethods == null && mobileSession.signInError == null) -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                    ) {
+                        TandemLoadingIndicator(Modifier.size(18.dp), color = palette.accent, strokeWidth = 2.dp)
+                        Text("Checking sign-in options…", color = palette.muted, fontSize = TandemTypography.caption)
+                    }
                 }
                 mobileSession.actualLoginMethods?.bootstrapped == false -> {
-                    InlineMessage("This Actual server has no budget yet. Create one in Actual, then try again.", InlineMessageKind.INFO)
+                    InlineMessage("Create a budget in Actual, then return here to sign in.", InlineMessageKind.INFO)
                 }
                 mobileSession.actualLoginMethods != null -> {
                     if (passwordActive) {
@@ -398,7 +529,11 @@ internal fun SignInScreen(
                             { state.actualPassword = it },
                             TextFieldOptions(placeholder = "Password", isSecret = true),
                         )
-                        InfoBubble("Your password is used to sign in and isn’t saved on this device.")
+                        Text(
+                            "Your password is only used to sign in and isn’t saved on this device.",
+                            color = palette.muted,
+                            fontSize = TandemTypography.caption,
+                        )
                     }
                     mobileSession.signInError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
                     mobileSession.credentialStorageError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
@@ -419,21 +554,37 @@ internal fun SignInScreen(
             }
         },
         actions = {
+            if (!serverAddressIsValid(state.serverUrl)) {
+                SetupPrimaryButton("Set server address", modifier = Modifier.fillMaxWidth()) {
+                    navigation.open(AppRoute.SERVER_ADDRESS)
+                }
+            }
             if (serverAddressIsValid(state.serverUrl) && passwordActive) {
-                PrimaryButton(
+                SetupPrimaryButton(
                     if (mobileSession.isSigningIn) "Signing in" else "Sign in",
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !mobileSession.isSigningIn && state.actualPassword.isNotBlank(),
+                    loading = mobileSession.isSigningIn,
                     onClick = onSignIn,
                 )
             }
             if (serverAddressIsValid(state.serverUrl) && openIdActive) {
-                SecondaryButton(
-                    if (mobileSession.isSigningIn) "Opening sign-in" else "Continue with OpenID",
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !mobileSession.isSigningIn,
-                    onClick = onStartOpenIdSignIn,
-                )
+                if (passwordActive) {
+                    SecondaryButton(
+                        if (mobileSession.isSigningIn) "Opening sign-in" else "Continue with OpenID",
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !mobileSession.isSigningIn,
+                        onClick = onStartOpenIdSignIn,
+                    )
+                } else {
+                    SetupPrimaryButton(
+                        if (mobileSession.isSigningIn) "Opening sign-in" else "Continue with OpenID",
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !mobileSession.isSigningIn,
+                        loading = mobileSession.isSigningIn,
+                        onClick = onStartOpenIdSignIn,
+                    )
+                }
             }
         },
     )
@@ -445,6 +596,7 @@ internal fun BudgetChooserScreen(
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
     onRefreshBudgets: () -> Unit,
+    onPrepareBudgetUnlock: (BudgetCatalogItem) -> Unit,
     onOpenSelectedBudget: (BudgetCatalogItem) -> Unit,
 ) {
     val cachedCatalog =
@@ -476,86 +628,131 @@ internal fun BudgetChooserScreen(
         chooserSelectedBudgetId = budget.budgetId
     }
 
-    PageColumn {
-        Heading(
-            if (usingCachedCatalog || (mobileSession.budgets.isEmpty() && cachedCatalog.isNotEmpty())) {
-                "Saved budgets"
-            } else {
-                "Choose a budget"
-            },
-            if (usingCachedCatalog) {
-                "Choose a saved budget to open on this device."
-            } else if (hasCachedOnlyBudgets) {
-                "Choose a server or saved budget to open."
-            } else {
-                "Choose a budget to open."
-            },
-        )
-        when {
-            usingCachedCatalog || (mobileSession.budgets.isEmpty() && cachedCatalog.isNotEmpty()) -> {
-                selectableBudgets.forEach { budget ->
-                    ChoiceRow(
-                        budget.name,
-                        if (budget.isEncrypted) "Encrypted budget · saved on this device" else "Saved on this device",
-                        selected = chooserSelectedBudgetId == budget.budgetId,
-                    ) { chooseBudget(budget) }
-                }
-            }
-            selectableBudgets.isNotEmpty() -> {
-                selectableBudgets.forEach { budget ->
-                    val isOnServer = mobileSession.budgets.any { it.budgetId == budget.budgetId }
-                    val detail =
-                        when {
-                            !isOnServer && budget.isEncrypted -> "Encrypted budget · saved on this device"
-                            !isOnServer -> "Saved on this device"
-                            budget.isEncrypted -> "Encrypted Actual budget"
-                            else -> "Available on this server"
-                        }
-                    ChoiceRow(budget.name, detail, selected = chooserSelectedBudgetId == budget.budgetId) { chooseBudget(budget) }
-                }
-            }
-            mobileSession.isLoadingBudgets -> BodyText("Loading budgets")
-            mobileSession.budgets.isEmpty() && mobileSession.isAuthenticated -> {
-                mobileSession.budgetError?.let { error ->
-                    InlineMessage(error, InlineMessageKind.ERROR)
-                } ?: EmptyState("No budgets available", "Ask the budget owner to grant access.")
-                SecondaryButton("Try again", onClick = onRefreshBudgets)
-            }
-            mobileSession.budgets.isEmpty() -> {
-                SurfaceCard {
-                    Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                        LabelText("Sign in first")
-                        BodyText("Connect this device to your Tandem server to choose a budget.")
+    OnboardingLayout(
+        content = {
+            SetupStepHeader(step = 3, navigation = navigation)
+            SetupHeadline(
+                if (usingCachedCatalog || (mobileSession.budgets.isEmpty() && cachedCatalog.isNotEmpty())) {
+                    "Choose a saved budget."
+                } else {
+                    "Choose a budget."
+                },
+                if (usingCachedCatalog) {
+                    "Select the budget saved on this device."
+                } else if (hasCachedOnlyBudgets) {
+                    "Choose a server budget or a saved copy."
+                } else {
+                    "Select the Actual budget to use on this device."
+                },
+            )
+            LabelText("AVAILABLE BUDGETS")
+            when {
+                usingCachedCatalog || (mobileSession.budgets.isEmpty() && cachedCatalog.isNotEmpty()) -> {
+                    selectableBudgets.forEach { budget ->
+                        ChoiceRow(
+                            budget.name,
+                            if (budget.isEncrypted) "Encrypted budget · saved on this device" else "Saved on this device",
+                            selected = chooserSelectedBudgetId == budget.budgetId,
+                        ) { chooseBudget(budget) }
                     }
                 }
-                SecondaryButton("Sign in") { navigation.open(AppRoute.SIGN_IN) }
+                selectableBudgets.isNotEmpty() -> {
+                    selectableBudgets.forEach { budget ->
+                        val isOnServer = mobileSession.budgets.any { it.budgetId == budget.budgetId }
+                        val detail =
+                            when {
+                                !isOnServer && budget.isEncrypted -> "Encrypted budget · saved on this device"
+                                !isOnServer -> "Saved on this device"
+                                budget.isEncrypted -> "Encrypted Actual budget"
+                                else -> "Available on this server"
+                            }
+                        ChoiceRow(budget.name, detail, selected = chooserSelectedBudgetId == budget.budgetId) { chooseBudget(budget) }
+                    }
+                }
+                mobileSession.isLoadingBudgets -> BodyText("Loading budgets")
+                mobileSession.budgets.isEmpty() && mobileSession.isAuthenticated -> {
+                    mobileSession.budgetError?.let { error ->
+                        InlineMessage(error, InlineMessageKind.ERROR)
+                    } ?: EmptyState("No budgets available", "Ask the budget owner to grant access.")
+                    SecondaryButton("Try again", onClick = onRefreshBudgets)
+                }
+                mobileSession.budgets.isEmpty() -> {
+                    SurfaceCard {
+                        Column(
+                            Modifier.padding(TandemSpacing.large),
+                            verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                        ) {
+                            LabelText("Sign in first")
+                            BodyText("Connect this device to your Tandem server to choose a budget.")
+                        }
+                    }
+                    SecondaryButton("Sign in") { navigation.open(AppRoute.SIGN_IN) }
+                }
             }
-        }
-        mobileSession.budgetError?.takeIf { selectableBudgets.isNotEmpty() }?.let { error ->
-            InlineMessage(error, InlineMessageKind.ERROR)
-        }
-        if (needsEncryptionPassword) {
+            mobileSession.budgetError?.takeIf { selectableBudgets.isNotEmpty() }?.let { error ->
+                InlineMessage(error, InlineMessageKind.ERROR)
+            }
+        },
+        actions = {
+            SetupPrimaryButton(
+                "Continue",
+                modifier = Modifier.fillMaxWidth(),
+                enabled = selectedBudgetIsAvailable && (!mobileSession.isLoadingBudgets || cachedBudgetSelected),
+                onClick = {
+                    selectedBudget?.let { budget ->
+                        if (needsEncryptionPassword) onPrepareBudgetUnlock(budget) else onOpenSelectedBudget(budget)
+                    }
+                },
+            )
+        },
+    )
+}
+
+@Composable
+internal fun BudgetUnlockScreen(
+    state: AppState,
+    navigation: AppNavigation,
+    onOpenSelectedBudget: (BudgetCatalogItem) -> Unit,
+) {
+    OnboardingLayout(
+        content = {
+            SetupStepHeader(
+                step = 3,
+                navigation = navigation,
+                onBack = {
+                    state.restorePendingBudgetSelectionOrigin()
+                    navigation.back()
+                },
+            )
+            SetupHeadline(
+                "Unlock your budget.",
+                "${state.selectedBudget} is encrypted. Enter the separate password you use to open it in Actual.",
+            )
             TextFieldCard(
-                "Budget password",
+                "Budget encryption password",
                 state.encryptedPassword,
                 { state.encryptedPassword = it },
-                TextFieldOptions(placeholder = "Enter password", isSecret = true),
+                TextFieldOptions(placeholder = "Password", isSecret = true),
             )
-            InfoBubble("Used to unlock this budget. Cleared after the first sync.")
-        }
-        PrimaryButton(
-            "Open budget",
-            enabled =
-                budgetOpenButtonEnabled(
-                    selectedBudgetIsAvailable,
-                    mobileSession.isLoadingBudgets,
-                    cachedBudgetSelected,
-                    needsEncryptionPassword,
-                    state.encryptedPassword,
-                ),
-            onClick = { selectedBudget?.let(onOpenSelectedBudget) },
-        )
-    }
+            InfoBubble("This is not your Actual sign-in password. It is cleared after the first sync.")
+        },
+        actions = {
+            SetupPrimaryButton(
+                "Unlock budget",
+                modifier = Modifier.fillMaxWidth(),
+                enabled = state.encryptedPassword.isNotBlank(),
+                onClick = {
+                    onOpenSelectedBudget(
+                        BudgetCatalogItem(
+                            budgetId = state.selectedBudgetId,
+                            name = state.selectedBudget,
+                            isEncrypted = state.selectedBudgetEncrypted,
+                        ),
+                    )
+                },
+            )
+        },
+    )
 }
 
 @Composable
@@ -567,61 +764,66 @@ internal fun FirstSyncScreen(
     notificationPermissionEnabled: Boolean?,
 ) {
     val palette = tandemPalette
-    PageColumn {
-        SurfaceCard {
-            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.large)) {
-                listOf("Connecting", "Downloading budget", "Saving on this device").forEachIndexed { index, title ->
-                    val complete = mobileSession.syncComplete || (!mobileSession.isSyncing && mobileSession.syncError != null && index == 0)
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        val color =
-                            if (complete) {
-                                palette.positive
-                            } else if (mobileSession.syncError !=
-                                null
-                            ) {
-                                palette.warning
-                            } else {
-                                palette.accent
-                            }
-                        if (mobileSession.isSyncing && index == 0 && !complete) {
-                            TandemLoadingIndicator(Modifier.size(20.dp), color, 2.dp)
-                        } else {
-                            Badge(if (complete) "✓" else "${index + 1}", color)
-                        }
-                        Text(title, color = palette.text, fontSize = TandemTypography.compactBody)
-                    }
+    OnboardingLayout(
+        content = {
+            SetupStepHeader(step = 4, navigation = navigation)
+            SetupHeadline("Making it yours.", "Downloading a local copy so your budget is ready when you’re offline.")
+            Box(
+                Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .size(136.dp)
+                    .clip(CircleShape)
+                    .background(palette.surface)
+                    .border(1.dp, palette.border, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                when {
+                    mobileSession.syncComplete ->
+                        Icon(
+                            Lucide.Check,
+                            contentDescription = "First sync complete",
+                            modifier = Modifier.size(42.dp),
+                            tint = palette.positive,
+                        )
+                    mobileSession.syncError != null && !mobileSession.isSyncing ->
+                        Icon(
+                            Lucide.CircleAlert,
+                            contentDescription = "First sync needs attention",
+                            modifier = Modifier.size(42.dp),
+                            tint = palette.warning,
+                        )
+                    else -> TandemLoadingIndicator(Modifier.size(42.dp), palette.accent, 3.dp)
                 }
             }
-        }
-        val syncMessage =
-            when {
-                mobileSession.isSyncing -> "Syncing the budget."
-                mobileSession.syncComplete ->
-                    "${mobileSession.syncedTransactionCount} transactions saved on this device."
-                mobileSession.syncError != null -> mobileSession.syncError.orEmpty()
-                else -> "Preparing budget."
-            }
-        val syncMessageColor by
-            animateColorAsState(
-                targetValue = if (mobileSession.syncError != null && !mobileSession.isSyncing) palette.warning else palette.muted,
-                animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
-                label = "first-sync-status-color",
+            val syncMessage =
+                when {
+                    mobileSession.isSyncing -> "Saving your budget for offline use."
+                    mobileSession.syncComplete -> "Complete offline copy saved"
+                    mobileSession.syncError != null -> "Couldn’t save a complete offline copy."
+                    else -> "Preparing your offline copy."
+                }
+            val syncMessageColor by
+                animateColorAsState(
+                    targetValue = if (mobileSession.syncError != null && !mobileSession.isSyncing) palette.warning else palette.muted,
+                    animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+                    label = "first-sync-status-color",
+                )
+            AnimatedStatusText(
+                syncMessage,
+                syncMessageColor,
+                fontSize = TandemTypography.compactBody,
+                lineHeight = TandemTypography.bodyLineHeight,
+                animateSizeChanges = true,
             )
-        AnimatedStatusText(
-            syncMessage,
-            syncMessageColor,
-            fontSize = TandemTypography.compactBody,
-            lineHeight = TandemTypography.bodyLineHeight,
-            animateSizeChanges = true,
-        )
-        AnimatedReveal(visible = mobileSession.syncError != null && !mobileSession.isSyncing) {
-            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                SecondaryButton("Try again", onClick = onRetrySync)
+            if (mobileSession.syncComplete) {
+                BodyText(
+                    "${mobileSession.syncedTransactionCount} transactions saved. Your budget is now available on this device.",
+                )
+            }
+            if (mobileSession.syncError != null && !mobileSession.isSyncing) {
+                InlineMessage(mobileSession.syncError.orEmpty(), InlineMessageKind.ERROR)
                 if (mobileSession.cachedSnapshotBudgetId == state.selectedBudgetId && mobileSession.hasCachedSnapshot) {
-                    BodyText("The last saved copy is still available on this device.")
+                    BodyText("Your last saved copy is still available on this device.")
                     SecondaryButton("Open saved copy") {
                         state.pendingBudgetSelectionOrigin = null
                         selectLatestCachedMonth(state, mobileSession.budgetMonthIds, mobileSession.transactionRecords)
@@ -629,16 +831,45 @@ internal fun FirstSyncScreen(
                     }
                 }
             }
-        }
-        FirstSyncCompletionAction(
-            state = state,
-            navigation = navigation,
-            syncComplete = mobileSession.syncComplete,
-            notificationPermissionEnabled = notificationPermissionEnabled,
-        ) {
-            selectLatestCachedMonth(state, mobileSession.budgetMonthIds, mobileSession.transactionRecords)
-        }
-    }
+        },
+        actions = {
+            when {
+                mobileSession.syncComplete ->
+                    FirstSyncCompletionAction(
+                        state = state,
+                        navigation = navigation,
+                        syncComplete = true,
+                        notificationPermissionEnabled = notificationPermissionEnabled,
+                        actionLabel =
+                            if (shouldShowNotificationOnboarding(
+                                    state.hasCompletedNotificationOnboarding,
+                                    notificationPermissionEnabled,
+                                )
+                            ) {
+                                "Continue"
+                            } else {
+                                "Open budget"
+                            },
+                        onComplete = {
+                            selectLatestCachedMonth(state, mobileSession.budgetMonthIds, mobileSession.transactionRecords)
+                        },
+                    )
+                mobileSession.syncError != null && !mobileSession.isSyncing ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        SecondaryButton("Cancel", modifier = Modifier.weight(1f), onClick = navigation.back)
+                        SetupPrimaryButton("Try again", modifier = Modifier.weight(1f), onClick = onRetrySync)
+                    }
+                else ->
+                    Text(
+                        "Keep Tandem open for the first download.",
+                        modifier = Modifier.fillMaxWidth(),
+                        color = palette.muted,
+                        fontSize = TandemTypography.caption,
+                        textAlign = TextAlign.Center,
+                    )
+            }
+        },
+    )
 }
 
 @Composable
@@ -647,16 +878,17 @@ internal fun FirstSyncCompletionAction(
     navigation: AppNavigation,
     syncComplete: Boolean,
     notificationPermissionEnabled: Boolean?,
+    actionLabel: String = "Done",
     onComplete: () -> Unit,
 ) {
-    PrimaryButton("Done", enabled = syncComplete) {
+    SetupPrimaryButton(actionLabel, modifier = Modifier.fillMaxWidth(), enabled = syncComplete) {
         state.pendingBudgetSelectionOrigin = null
         onComplete()
         if (shouldShowNotificationOnboarding(state.hasCompletedNotificationOnboarding, notificationPermissionEnabled)) {
             navigation.open(AppRoute.NOTIFICATION_ONBOARDING)
         } else {
             state.hasCompletedNotificationOnboarding = true
-            navigation.selectTab(AppRoute.BUDGET)
+            navigation.open(AppRoute.SETUP_COMPLETE)
         }
     }
 }
@@ -689,22 +921,45 @@ internal fun NotificationOnboardingScreen(
     onRequestNotificationPermission: (() -> Unit)?,
 ) {
     OnboardingLayout(
+        verticalSpacing = TandemSpacing.medium,
         content = {
-            Heading("Stay in the loop", "Get an alert when a change needs your attention.")
-            SurfaceCard(Modifier.testTag("notification-onboarding-info")) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(TandemSpacing.large),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                ) {
-                    BodyText("Tandem can alert you when an edit needs review, is rejected, or has an unknown status.")
-                    BodyText("You can change this later in Settings.")
+            SetupStepHeader(step = 4, navigation = navigation, optional = true)
+            SetupHeadline("Stay in the loop.", "Get helpful alerts when your budget needs attention. You can change this later.")
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .testTag("notification-onboarding-info"),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.large),
+            ) {
+                listOf(
+                    "Sync issues" to "Know when your Actual server needs attention.",
+                    "Conflicts" to "Review changes that need your decision.",
+                ).forEach { (title, detail) ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(20.dp), tint = tandemPalette.accent)
+                        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+                            Text(
+                                title,
+                                color = tandemPalette.text,
+                                fontSize = TandemTypography.compactBody,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                detail,
+                                color = tandemPalette.muted,
+                                fontSize = TandemTypography.caption,
+                                lineHeight = TandemTypography.bodyLineHeight,
+                            )
+                        }
+                    }
                 }
             }
         },
         actions = {
-            PrimaryButton("Allow notifications", modifier = Modifier.fillMaxWidth()) {
+            SetupPrimaryButton("Allow notifications", modifier = Modifier.fillMaxWidth()) {
                 finishNotificationOnboarding(state, navigation, onRequestNotificationPermission)
             }
             SecondaryButton("Not now", modifier = Modifier.fillMaxWidth()) {
@@ -721,7 +976,52 @@ internal fun finishNotificationOnboarding(
 ) {
     state.hasCompletedNotificationOnboarding = true
     onRequestPermission?.invoke()
-    navigation.selectTab(AppRoute.BUDGET)
+    navigation.open(AppRoute.SETUP_COMPLETE)
+}
+
+@Composable
+internal fun SetupCompleteScreen(
+    state: AppState,
+    navigation: AppNavigation,
+) {
+    val palette = tandemPalette
+    OnboardingLayout(
+        content = {
+            Spacer(Modifier.height(TandemSpacing.extraLarge))
+            Box(
+                Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .size(112.dp)
+                    .clip(CircleShape)
+                    .border(1.dp, palette.border, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(38.dp), tint = palette.positive)
+            }
+            SetupHeadline(
+                "You’re all set.",
+                "${state.selectedBudget.ifBlank { "Your budget" }} is ready. Your first offline copy is saved on this device.",
+            )
+            Text(
+                "Sync again whenever you need.",
+                color = palette.muted,
+                fontSize = TandemTypography.body,
+            )
+        },
+        actions = {
+            SetupPrimaryButton("Open budget", modifier = Modifier.fillMaxWidth()) {
+                state.pendingBudgetSelectionOrigin = null
+                navigation.selectTab(AppRoute.BUDGET)
+            }
+            Text(
+                "You can manage syncing in Settings.",
+                modifier = Modifier.fillMaxWidth(),
+                color = palette.muted,
+                fontSize = TandemTypography.caption,
+                textAlign = TextAlign.Center,
+            )
+        },
+    )
 }
 
 internal fun selectLatestCachedMonth(

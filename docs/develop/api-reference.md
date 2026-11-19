@@ -104,7 +104,7 @@ hexadecimal characters, and keep it stable and private. This is random key
 material, not a human password, so generate it randomly rather than stretching
 a passphrase. The hex form is only its text representation. To rotate it, set the
 new value as the current key and set the old value as
-`AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS` (or `_FILE`). On startup, Tandem re-encrypts
+`AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS`. On startup, Tandem re-encrypts
 stored sessions in one transaction. If any row matches neither key, startup
 fails and the transaction rolls back. After the API is healthy, clear the
 previous-key setting and restart; retain the old key in protected backup
@@ -186,11 +186,11 @@ operator-managed startup session; it is not required for each person to sign in.
 Session tokens can expire or be revoked. When a configured startup token is
 rejected, `GET /api/v1/health/ready` returns `503` with a message to replace the
 token and restart Tandem. Tandem does not refresh it automatically.
-For production Compose, leave `ACTUAL_SESSION_TOKEN_FILE` empty for normal
+For production Compose, leave `ACTUAL_SESSION_TOKEN` empty for normal
 per-person sign-in. If an operator-managed startup session is needed, sign in
 to Actual in a browser and copy the `user-token` value from the `actual` /
-`asyncStorage` IndexedDB store into the mounted secret described in the
-deployment guide. Never put the token in `.env` or the mobile app.
+`asyncStorage` IndexedDB store into `ACTUAL_SESSION_TOKEN` in `.env`. Keep that
+file private. Never put the token in the mobile app.
 
 The Actual server must be the exact version supported by the API build; the API
 fails startup if it cannot verify that version. `ACTUAL_API_DATA_DIR` defaults

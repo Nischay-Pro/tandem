@@ -51,6 +51,25 @@ import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.WalletCards
 import kotlinx.coroutines.delay
 
+internal fun selectTransactionType(
+    state: AppState,
+    type: String,
+) {
+    val previousType = state.transactionType
+    if (previousType != type) {
+        if (type == "Transfer") {
+            state.transactionPayee = ""
+            state.newTransactionPayeeId = ""
+            state.transactionCategory = ""
+            state.newTransactionCategoryId = ""
+        } else if (previousType == "Transfer") {
+            state.transactionPayee = ""
+            state.newTransactionPayeeId = ""
+        }
+    }
+    state.transactionType = type
+}
+
 @Composable
 internal fun TransactionFormScreen(
     route: AppRoute,
@@ -265,6 +284,7 @@ internal fun TransactionFormScreen(
                         amountMinorUnits = amountMinorUnits,
                         transactionType = state.transactionType,
                         showCursor = keypadVisible,
+                        fractionDigits = state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
                         onShowKeypad = { keypadVisible = true },
                     )
                     budgetAmountPreview?.let { BodyText("Budget format: $it") }
@@ -278,18 +298,7 @@ internal fun TransactionFormScreen(
                             state.transactionType,
                             allowTransfer = true,
                             onBeforeOpen = ::dismissKeypad,
-                            onSelect = { type ->
-                                if (type == "Transfer") {
-                                    state.transactionPayee = ""
-                                    state.newTransactionPayeeId = ""
-                                    state.transactionCategory = ""
-                                    state.newTransactionCategoryId = ""
-                                } else if (state.transactionType == "Transfer") {
-                                    state.transactionPayee = ""
-                                    state.newTransactionPayeeId = ""
-                                }
-                                state.transactionType = type
-                            },
+                            onSelect = { type -> selectTransactionType(state, type) },
                         )
                     }
                     SectionCard(title = "") {
@@ -452,7 +461,13 @@ internal fun TransactionFormScreen(
         var originalAmountMinor by remember(state.selectedTransactionRecordId) { mutableStateOf(state.selectedTransactionAmountMinor) }
         var originalTransactionType by
             remember(state.selectedTransactionRecordId) {
-                mutableStateOf(if ((state.selectedTransactionAmountMinor ?: 0L) < 0) "Spending" else "Income")
+                mutableStateOf(
+                    when {
+                        state.selectedTransactionIsTransfer -> "Transfer"
+                        (state.selectedTransactionAmountMinor ?: 0L) < 0 -> "Spending"
+                        else -> "Income"
+                    },
+                )
             }
         var originalNotes by remember(state.selectedTransactionRecordId) { mutableStateOf(state.selectedTransactionNotes) }
         var savedFeedback by remember(state.selectedTransactionRecordId) { mutableStateOf(false) }
@@ -641,6 +656,7 @@ internal fun TransactionFormScreen(
                     amountMinorUnits = amountMinorUnits,
                     transactionType = state.transactionType,
                     showCursor = keypadVisible,
+                    fractionDigits = state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
                     onShowKeypad = { keypadVisible = true },
                 )
                 budgetAmountPreview?.let { BodyText("Budget format: $it") }
@@ -652,24 +668,37 @@ internal fun TransactionFormScreen(
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     TransactionTypePicker(
                         state.transactionType,
+                        allowTransfer = true,
                         onBeforeOpen = ::dismissEditKeypad,
-                        onSelect = { state.transactionType = it },
+                        onSelect = { selectTransactionType(state, it) },
                     )
                 }
                 SectionCard(title = "") {
-                    TransactionPickerRow(state.transactionPayee, "Choose payee", Lucide.Receipt) {
-                        dismissEditKeypad()
-                        navigation.open(AppRoute.CHOOSE_PAYEE)
-                    }
-                    DividerLine()
-                    TransactionPickerRow(state.transactionCategory, "Choose category", Lucide.Tags) {
-                        dismissEditKeypad()
-                        navigation.open(AppRoute.CHOOSE_CATEGORY)
-                    }
-                    DividerLine()
-                    TransactionPickerRow(state.transactionAccount, "Choose account", Lucide.WalletCards) {
-                        dismissEditKeypad()
-                        showAccountPicker = true
+                    if (state.transactionType == "Transfer") {
+                        TransactionPickerRow(state.transactionAccount, "Choose source account", Lucide.WalletCards) {
+                            dismissEditKeypad()
+                            showAccountPicker = true
+                        }
+                        DividerLine()
+                        TransactionPickerRow(state.transactionPayee, "Choose destination account", Lucide.WalletCards) {
+                            dismissEditKeypad()
+                            navigation.open(AppRoute.CHOOSE_PAYEE)
+                        }
+                    } else {
+                        TransactionPickerRow(state.transactionPayee, "Choose payee", Lucide.Receipt) {
+                            dismissEditKeypad()
+                            navigation.open(AppRoute.CHOOSE_PAYEE)
+                        }
+                        DividerLine()
+                        TransactionPickerRow(state.transactionCategory, "Choose category", Lucide.Tags) {
+                            dismissEditKeypad()
+                            navigation.open(AppRoute.CHOOSE_CATEGORY)
+                        }
+                        DividerLine()
+                        TransactionPickerRow(state.transactionAccount, "Choose account", Lucide.WalletCards) {
+                            dismissEditKeypad()
+                            showAccountPicker = true
+                        }
                     }
                     DividerLine()
                     TransactionPickerRow(displayTransactionDate(state.transactionDate), "Choose date", Lucide.CalendarDays) {

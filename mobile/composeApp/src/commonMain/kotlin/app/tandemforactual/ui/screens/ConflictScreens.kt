@@ -43,6 +43,8 @@ import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
+import app.tandemforactual.ui.components.TandemActionButton
+import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.model.recordName
 import app.tandemforactual.ui.model.stringValue
 import com.composables.icons.lucide.Lucide
@@ -57,22 +59,18 @@ internal fun conflictSnapshot(operation: OutboxOperationEntity?): JsonObject? =
         ?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
 
 internal fun conflictReviewRevisionChanged(
-    serverConfirmed: Boolean,
     reviewedRevision: String?,
     latestRevision: String?,
 ): Boolean =
-    serverConfirmed &&
-        !reviewedRevision.isNullOrBlank() &&
+    !reviewedRevision.isNullOrBlank() &&
         !latestRevision.isNullOrBlank() &&
         reviewedRevision != latestRevision
 
 internal fun canResolveReviewedConflict(
-    serverConfirmed: Boolean,
     reviewedRevision: String?,
     latestRevision: String?,
 ): Boolean =
-    serverConfirmed &&
-        !reviewedRevision.isNullOrBlank() &&
+    !reviewedRevision.isNullOrBlank() &&
         reviewedRevision == latestRevision
 
 internal fun conflictReplacementForRecord(
@@ -108,6 +106,8 @@ internal fun canOfferUncertainWriteRecoveryActions(
 ): Boolean = statusCheckFinished && operationStatus == "uncertain"
 
 internal fun isUncertainWriteOperationNotFound(errorCode: String?): Boolean = errorCode == "operation_not_found"
+
+internal fun isBudgetMutationReviewable(status: String): Boolean = status in setOf("queued", "sending", "uncertain", "conflict", "rejected")
 
 internal fun uncertainWriteRemovalWarning(
     payee: String,
@@ -195,8 +195,6 @@ internal fun ConflictInboxScreen(
         }
         return
     }
-    val entryPointerSequence = remember(state.selectedBudgetId) { state.pointerInputSequence }
-    val canOpenConflict = state.pointerInputSequence > entryPointerSequence
     val conflicts =
         mobileSession.pendingWrites
             .filter { it.status == "conflict" }
@@ -244,16 +242,11 @@ internal fun ConflictInboxScreen(
                                 fallback = conflict.categoryIcon ?: Lucide.Receipt,
                             ),
                         options = ListRowOptions(trailingColor = tandemPalette.warning),
-                        onClick =
-                            if (canOpenConflict) {
-                                {
-                                    mobileSession.clearTransactionWriteMessage()
-                                    state.selectedConflictOperationId = conflict.id
-                                    navigation.open(AppRoute.CONFLICT_REVIEW)
-                                }
-                            } else {
-                                null
-                            },
+                        onClick = {
+                            mobileSession.clearTransactionWriteMessage()
+                            state.selectedConflictOperationId = conflict.id
+                            navigation.open(AppRoute.CONFLICT_REVIEW)
+                        },
                     )
                 }
             }
@@ -285,7 +278,10 @@ internal fun ConflictValueCard(
 }
 
 @Composable
-internal fun ConflictComparisonCard(comparisons: List<ConflictFieldComparison>) {
+internal fun ConflictComparisonCard(
+    comparisons: List<ConflictFieldComparison>,
+    actualLabel: String = "Actual",
+) {
     SectionCard("Changed details") {
         comparisons.forEachIndexed { index, comparison ->
             if (index > 0) DividerLine()
@@ -300,7 +296,7 @@ internal fun ConflictComparisonCard(comparisons: List<ConflictFieldComparison>) 
                         Text(comparison.editedValue, color = tandemPalette.text, fontSize = TandemTypography.compactBody)
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-                        Text("Actual", color = tandemPalette.muted, fontSize = TandemTypography.micro)
+                        Text(actualLabel, color = tandemPalette.muted, fontSize = TandemTypography.micro)
                         Text(comparison.actualValue, color = tandemPalette.text, fontSize = TandemTypography.compactBody)
                     }
                 }
@@ -371,14 +367,14 @@ internal fun ConflictReviewScreen(
                 ?: mobileSession.transactionRecords.firstOrNull { it.recordId == item.recordId }
         }
     LaunchedEffect(operation?.operationId, serverConfirmed, record?.remoteRevision) {
-        if (serverConfirmed && reviewedRevision == null) reviewedRevision = record?.remoteRevision
+        if (reviewedRevision == null) reviewedRevision = record?.remoteRevision
     }
     val latestRevision = record?.remoteRevision
-    val reviewRevisionChanged = conflictReviewRevisionChanged(serverConfirmed, reviewedRevision, latestRevision)
-    val canResolveReviewedVersion = canResolveReviewedConflict(serverConfirmed, reviewedRevision, latestRevision)
+    val reviewRevisionChanged = conflictReviewRevisionChanged(reviewedRevision, latestRevision)
+    val canResolveReviewedVersion = canResolveReviewedConflict(reviewedRevision, latestRevision)
     val deviceVersion = operation?.optimisticJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
     val userEditedFields = operation?.patchJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject.keys }.getOrNull() }
-    val actualDeleted = serverConfirmed && record?.remoteDeleted == true
+    val actualDeleted = record?.remoteDeleted == true
     val conflictDetails = operation?.lastErrorCode?.let(::parseLocalWriteConflictDetails)
     val conflictReason =
         if (serverConfirmed) {
@@ -392,7 +388,7 @@ internal fun ConflictReviewScreen(
             null
         }
     val actualVersion =
-        if (serverConfirmed && !actualDeleted) {
+        if (!actualDeleted) {
             record?.remoteJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
         } else {
             null
@@ -451,10 +447,13 @@ internal fun ConflictReviewScreen(
             when {
                 mobileSession.isSyncing -> BodyText("Checking the latest transaction with Tandem…")
                 serverConfirmed -> BodyText("Tandem confirmed the latest Actual version.")
+                actualVersion != null ->
+                    BodyText(
+                        "Showing the last synced Actual version. Tandem checks it again before applying your choice.",
+                    )
                 else -> {
                     BodyText(
-                        "Connect to Tandem before choosing a version. Your edit stays on this device. " +
-                            "Check the connection and try again.",
+                        "No Actual version is saved on this device yet. Connect to Tandem to load it before choosing.",
                     )
                     SecondaryButton(
                         "Check again",
@@ -489,18 +488,21 @@ internal fun ConflictReviewScreen(
             comparisons.firstOrNull { it.label == "Amount" }?.let { amountComparison ->
                 Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     ConflictValueCard("Your edit", amountComparison.editedValue, Modifier.weight(1f))
-                    ConflictValueCard("Actual", amountComparison.actualValue, Modifier.weight(1f))
+                    ConflictValueCard(
+                        if (serverConfirmed) "Actual" else "Last synced Actual",
+                        amountComparison.actualValue,
+                        Modifier.weight(1f),
+                    )
                 }
             }
             conflictReason?.let { BodyText(it) }
             when {
-                !serverConfirmed -> BodyText("Actual’s latest transaction details appear after the Tandem check.")
                 actualDeleted -> if (conflictReason == null) BodyText("Actual no longer has this transaction.")
                 actualVersion == null -> BodyText("Actual’s latest transaction details aren’t available.")
                 comparisons.isEmpty() && operation.action == "DELETE" -> BodyText("The transaction is still in Actual.")
-                comparisons.isEmpty() -> BodyText("Your edit already matches the latest Actual version.")
+                comparisons.isEmpty() -> BodyText("Your edit already matches the saved Actual version.")
                 detailComparisons.isEmpty() -> BodyText("Amount is the only differing field.")
-                else -> ConflictComparisonCard(detailComparisons)
+                else -> ConflictComparisonCard(detailComparisons, actualLabel = if (serverConfirmed) "Actual" else "Last synced Actual")
             }
             mobileSession.conflictResolutionFeedback
                 ?.takeIf { it.operationId == operation.operationId }
@@ -535,10 +537,13 @@ internal fun KeepLastSyncedConflictAction(
     onResolveConflict: (String, Boolean, String) -> Unit,
 ) {
     var confirmDiscard by rememberSaveable(operationId) { mutableStateOf(false) }
-    SecondaryButton(
+    TandemActionButton(
         "Keep Actual’s version",
+        tone = TandemActionButtonTone.DESTRUCTIVE,
+        modifier = Modifier.fillMaxWidth(),
         enabled = enabled,
-    ) { confirmDiscard = true }
+        onClick = { confirmDiscard = true },
+    )
     Text(
         "Discards your edit and keeps Actual’s version. Tandem must confirm it first.",
         color = tandemPalette.muted,
@@ -790,76 +795,105 @@ internal fun BudgetMutationReviewScreen(
 ) {
     val operation =
         mobileSession.pendingWrites.firstOrNull {
-            it.operationId == state.selectedConflictOperationId && it.recordType == "budget-mutation"
+            it.operationId == state.selectedConflictOperationId &&
+                it.recordType == "budget-mutation" &&
+                isBudgetMutationReviewable(it.status)
         }
     val mutation = operation?.let { decodeBudgetReorderQueue(it.patchJson).moves.singleOrNull() }
-    val itemName = mutation?.name ?: "budget item"
-    val title = operation?.let { budgetMutationTitle(it.action, itemName) } ?: "Budget change"
+    val itemName = budgetMutationItemName(mutation, operation, mobileSession)
+    val changeTitle =
+        mutation?.let { budgetMutationChangeTitle(it, itemName, state, mobileSession) }
+            ?: operation?.let { budgetMutationTitle(it.action, itemName) }
+            ?: "Budget change"
     val statusLabel = operation?.let { budgetMutationStatusLabel(it.status) } ?: "Pending"
     val scope = rememberCoroutineScope()
     var showRenameCorrection by rememberSaveable(operation?.operationId) { mutableStateOf(false) }
     var correctedName by rememberSaveable(operation?.operationId) { mutableStateOf(mutation?.name.orEmpty()) }
     val isRejectedCategoryRename = operation?.status == "rejected" && operation.action == "RENAME_CATEGORY"
     var confirmDiscard by rememberSaveable(operation?.operationId) { mutableStateOf(false) }
+    var requestedDiscardOperationId by rememberSaveable(state.selectedConflictOperationId) { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(state.selectedConflictOperationId) {
+        mobileSession.clearTransactionWriteMessage()
+    }
+    LaunchedEffect(requestedDiscardOperationId, operation?.operationId) {
+        if (requestedDiscardOperationId != null && operation?.operationId != requestedDiscardOperationId) {
+            navigation.back()
+        }
+    }
 
     PageColumn {
-        Heading(statusLabel)
         if (operation == null) {
-            InfoBubble("This budget change no longer needs review.")
+            Heading("Change no longer needs review")
+            InfoBubble(mobileSession.transactionWriteMessage ?: "This budget change has already been cleared.")
         } else {
-            SectionCard(title) {
-                ListRow("Budget item", itemName)
-                DividerLine()
-                ListRow(
-                    "Change",
-                    operation.action
-                        .replace('_', ' ')
-                        .lowercase()
-                        .replaceFirstChar { it.uppercase() },
+            val outcome =
+                when (operation.status) {
+                    "rejected" -> "Rejected"
+                    "uncertain" -> "Not confirmed"
+                    "conflict" -> "Budget changed"
+                    "queued" -> "Waiting to sync"
+                    "sending" -> "Sending to Actual"
+                    else -> statusLabel
+                }
+            val outcomeExplanation =
+                when {
+                    operation.status == "rejected" &&
+                        operation.lastErrorCode == "invalid_request" &&
+                        mutation?.kind == BudgetReorderKind.SET_CATEGORY_AMOUNT ->
+                        "This assignment did not reach Actual. The budget value was left unchanged."
+                    operation.status == "rejected" -> "Actual kept the previous value."
+                    operation.status == "uncertain" -> "Tandem could not confirm whether Actual saved this change."
+                    operation.status == "conflict" -> "The budget changed while Tandem was processing this request."
+                    operation.status == "queued" -> "Saved on this device. It has not been sent to Actual yet."
+                    operation.status == "sending" -> "Tandem is sending this change to Actual."
+                    else -> "Review the change and its current status."
+                }
+            ReviewOutcomeCard(outcome, outcomeExplanation, isRejected = operation.status == "rejected")
+            BudgetMutationChangeDetails(
+                changeTitle,
+                budgetMutationLastSyncedAssignment(mutation, operation, state, mobileSession),
+            )
+            BudgetMutationReasonCard(
+                title = if (operation.status == "rejected") "WHY IT WAS REJECTED" else "WHAT HAPPENED",
+                explanation = budgetMutationReason(operation, mutation, itemName),
+            )
+            if (operation.status == "rejected" &&
+                operation.lastErrorCode == "invalid_request" &&
+                mutation?.kind == BudgetReorderKind.SET_CATEGORY_AMOUNT
+            ) {
+                BudgetMutationReasonCard(
+                    title = "WHAT TO DO NEXT",
+                    explanation =
+                        "Refresh the budget to load its latest data. After the Tandem server fix is available, " +
+                            "enter this assignment again from the Budget screen.",
                 )
             }
-            InfoBubble(
-                when (operation.status) {
-                    "conflict", "rejected", "uncertain" -> budgetMutationFailureMessage(operation.lastErrorCode)
-                    else -> "Tandem couldn’t confirm whether Actual saved this change. Check Actual, then try again."
-                },
-            )
+            if (mutation?.requiresEncryptionPassword == true) {
+                BudgetMutationReasonCard(
+                    title = "ENCRYPTED BUDGET",
+                    explanation = "Unlock this budget before Tandem can refresh or retry the change.",
+                )
+            }
+            mobileSession.transactionWriteMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+
             when (operation.status) {
                 "uncertain", "conflict" -> {
-                    if (mutation?.requiresEncryptionPassword == true) {
-                        InfoBubble("Unlock this encrypted budget before trying again.")
+                    PrimaryButton(
+                        if (budgetMutationNeedsRefresh(operation.lastErrorCode)) {
+                            "Refresh budget"
+                        } else if (budgetMutationCanRetry(operation.lastErrorCode)) {
+                            "Try again"
+                        } else {
+                            "Check Actual"
+                        },
+                        enabled = !state.readOnlyMode && mutation?.requiresEncryptionPassword != true,
+                    ) { mobileSession.retryBudgetMutation(operation.operationId) }
+                    if (!budgetMutationNeedsRefresh(operation.lastErrorCode) && !budgetMutationCanRetry(operation.lastErrorCode)) {
+                        SecondaryButton("Discard change", enabled = !state.readOnlyMode) { confirmDiscard = true }
                     }
-                    if (budgetMutationNeedsRefresh(operation.lastErrorCode)) {
-                        PrimaryButton(
-                            "Refresh budget",
-                            enabled = !state.readOnlyMode && mutation?.requiresEncryptionPassword != true,
-                        ) { mobileSession.retryBudgetMutation(operation.operationId) }
-                    } else if (!budgetMutationCanRetry(operation.lastErrorCode)) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                            PrimaryButton(
-                                "Refresh budget",
-                                enabled = !state.readOnlyMode && mutation?.requiresEncryptionPassword != true,
-                                modifier = Modifier.weight(1f),
-                            ) { mobileSession.retryBudgetMutation(operation.operationId) }
-                            SecondaryButton(
-                                "Discard change",
-                                modifier = Modifier.weight(1f),
-                                enabled = !state.readOnlyMode,
-                            ) { confirmDiscard = true }
-                        }
-                    } else {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                            PrimaryButton(
-                                "Try again",
-                                enabled = !state.readOnlyMode && mutation?.requiresEncryptionPassword != true,
-                                modifier = Modifier.weight(1f),
-                            ) { mobileSession.retryBudgetMutation(operation.operationId) }
-                            SecondaryButton(
-                                "Discard change",
-                                modifier = Modifier.weight(1f),
-                                enabled = !state.readOnlyMode,
-                            ) { confirmDiscard = true }
-                        }
+                    if (budgetMutationCanRetry(operation.lastErrorCode)) {
+                        SecondaryButton("Discard change", enabled = !state.readOnlyMode) { confirmDiscard = true }
                     }
                 }
                 "rejected" -> {
@@ -874,85 +908,60 @@ internal fun BudgetMutationReviewScreen(
                             mobileSession.budgetMutationCorrectionMessage?.let {
                                 InlineMessage(it, InlineMessageKind.ERROR)
                             }
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                                PrimaryButton(
-                                    if (mobileSession.isCorrectingBudgetMutation) "Saving" else "Save correction",
-                                    enabled =
-                                        !state.readOnlyMode &&
-                                            !mobileSession.isCorrectingBudgetMutation &&
-                                            correctedName.trim().isNotBlank() &&
-                                            correctedName.trim() != mutation.name &&
-                                            (mutation.requiresEncryptionPassword.not() || state.encryptedPassword.isNotBlank()),
-                                    modifier = Modifier.weight(1f),
-                                    loading = mobileSession.isCorrectingBudgetMutation,
-                                ) {
-                                    scope.launch {
-                                        val saved =
-                                            mobileSession.correctRejectedCategoryRename(
-                                                budgetId = operation.budgetId,
-                                                operationId = operation.operationId,
-                                                correctedName = correctedName,
-                                                encryptionPassword = state.encryptedPassword.takeIf(String::isNotBlank),
-                                            )
-                                        if (saved) navigation.back()
-                                    }
+                            PrimaryButton(
+                                if (mobileSession.isCorrectingBudgetMutation) "Saving correction" else "Save correction",
+                                enabled =
+                                    !state.readOnlyMode &&
+                                        !mobileSession.isCorrectingBudgetMutation &&
+                                        correctedName.trim().isNotBlank() &&
+                                        correctedName.trim() != mutation.name &&
+                                        (mutation.requiresEncryptionPassword.not() || state.encryptedPassword.isNotBlank()),
+                                loading = mobileSession.isCorrectingBudgetMutation,
+                            ) {
+                                scope.launch {
+                                    val saved =
+                                        mobileSession.correctRejectedCategoryRename(
+                                            budgetId = operation.budgetId,
+                                            operationId = operation.operationId,
+                                            correctedName = correctedName,
+                                            encryptionPassword = state.encryptedPassword.takeIf(String::isNotBlank),
+                                        )
+                                    if (saved) navigation.back()
                                 }
-                                SecondaryButton(
-                                    "Cancel",
-                                    modifier = Modifier.weight(1f),
-                                    enabled = !mobileSession.isCorrectingBudgetMutation,
-                                    onClick = {
-                                        showRenameCorrection = false
-                                        mobileSession.clearBudgetMutationCorrectionMessage()
-                                    },
-                                )
                             }
-                        } else {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                                PrimaryButton(
-                                    "Correct name",
-                                    modifier = Modifier.weight(1f),
-                                    enabled =
-                                        !state.readOnlyMode &&
-                                            (!mutation.requiresEncryptionPassword || state.encryptedPassword.isNotBlank()),
-                                ) {
-                                    correctedName = mutation.name.orEmpty()
+                            SecondaryButton(
+                                "Cancel correction",
+                                enabled = !mobileSession.isCorrectingBudgetMutation,
+                                onClick = {
+                                    showRenameCorrection = false
                                     mobileSession.clearBudgetMutationCorrectionMessage()
-                                    showRenameCorrection = true
-                                }
-                                SecondaryButton(
-                                    "Discard change",
-                                    modifier = Modifier.weight(1f),
-                                    enabled = !state.readOnlyMode,
-                                ) { confirmDiscard = true }
+                                },
+                            )
+                        } else {
+                            PrimaryButton(
+                                "Correct category name",
+                                enabled =
+                                    !state.readOnlyMode &&
+                                        (!mutation.requiresEncryptionPassword || state.encryptedPassword.isNotBlank()),
+                            ) {
+                                correctedName = mutation.name.orEmpty()
+                                mobileSession.clearBudgetMutationCorrectionMessage()
+                                showRenameCorrection = true
                             }
+                            SecondaryButton("Discard change", enabled = !state.readOnlyMode) { confirmDiscard = true }
                         }
                     } else if (budgetMutationCanRetry(operation.lastErrorCode)) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                            PrimaryButton(
-                                "Try again",
-                                modifier = Modifier.weight(1f),
-                                enabled = !state.readOnlyMode && mutation?.requiresEncryptionPassword != true,
-                            ) { mobileSession.retryBudgetMutation(operation.operationId) }
-                            SecondaryButton(
-                                "Discard change",
-                                modifier = Modifier.weight(1f),
-                                enabled = !state.readOnlyMode,
-                            ) { confirmDiscard = true }
-                        }
+                        PrimaryButton(
+                            "Try again",
+                            enabled = !state.readOnlyMode && mutation?.requiresEncryptionPassword != true,
+                        ) { mobileSession.retryBudgetMutation(operation.operationId) }
+                        SecondaryButton("Discard change", enabled = !state.readOnlyMode) { confirmDiscard = true }
                     } else {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                            PrimaryButton(
-                                "Refresh budget",
-                                enabled = !state.readOnlyMode && mutation?.requiresEncryptionPassword != true,
-                                modifier = Modifier.weight(1f),
-                            ) { mobileSession.retryBudgetMutation(operation.operationId) }
-                            SecondaryButton(
-                                "Discard change",
-                                modifier = Modifier.weight(1f),
-                                enabled = !state.readOnlyMode,
-                            ) { confirmDiscard = true }
-                        }
+                        PrimaryButton(
+                            "Refresh budget",
+                            enabled = !state.readOnlyMode && mutation?.requiresEncryptionPassword != true,
+                        ) { mobileSession.retryBudgetMutation(operation.operationId) }
+                        SecondaryButton("Discard change", enabled = !state.readOnlyMode) { confirmDiscard = true }
                     }
                 }
                 else -> Spacer(Modifier.height(72.dp))
@@ -963,13 +972,19 @@ internal fun BudgetMutationReviewScreen(
     if (confirmDiscard && operation != null) {
         DestructiveConfirmationDialog(
             title = "Discard this change?",
-            message = "Remove this budget change from this device?",
+            message =
+                if (operation.status == "uncertain") {
+                    "Remove the pending change for $itemName from this device? Actual may already have saved it; this won’t undo a change already stored there."
+                } else {
+                    "Remove this budget change from this device?"
+                },
             confirmLabel = "Discard change",
             dismissLabel = "Keep change",
             enabled = !state.readOnlyMode,
             onDismissRequest = { confirmDiscard = false },
             onConfirm = {
                 confirmDiscard = false
+                requestedDiscardOperationId = operation.operationId
                 onDiscard(operation.operationId)
             },
         )

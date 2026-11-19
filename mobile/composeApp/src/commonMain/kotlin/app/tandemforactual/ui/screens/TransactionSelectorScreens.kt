@@ -57,15 +57,21 @@ internal fun SelectorScreen(
     onSelect: (SelectorItem) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
-    val filtered = values.filter { it.label.contains(query, ignoreCase = true) }
-    val filteredIds = filtered.mapTo(mutableSetOf(), SelectorItem::id)
-    val groupedItems =
-        groups.mapNotNull { group ->
-            val items = group.items.filter { it.id in filteredIds }
-            if (items.isEmpty()) null else group to items
+    val filteredContent =
+        remember(values, groups, query) {
+            val filtered = values.filter { it.label.contains(query, ignoreCase = true) }
+            val filteredIds = filtered.mapTo(mutableSetOf(), SelectorItem::id)
+            val groupedItems =
+                groups.mapNotNull { group ->
+                    val items = group.items.filter { it.id in filteredIds }
+                    if (items.isEmpty()) null else group to items
+                }
+            val groupedIds = groupedItems.flatMapTo(mutableSetOf()) { (_, items) -> items.map(SelectorItem::id) }
+            Triple(filtered, groupedItems, filtered.filterNot { it.id in groupedIds })
         }
-    val groupedIds = groupedItems.flatMapTo(mutableSetOf()) { (_, items) -> items.map(SelectorItem::id) }
-    val ungroupedItems = filtered.filterNot { it.id in groupedIds }
+    val filtered = filteredContent.first
+    val groupedItems = filteredContent.second
+    val ungroupedItems = filteredContent.third
     PageLazyColumn {
         if (values.size > 8) {
             item {
@@ -136,12 +142,7 @@ internal fun TransactionTypePicker(
                 ) {
                     Text(
                         choice,
-                        color =
-                            when (choice) {
-                                "Income" -> tandemPalette.positive
-                                "Transfer" -> tandemPalette.accent
-                                else -> tandemPalette.negative
-                            },
+                        color = transactionTypeColor(choice, tandemPalette),
                         fontSize = TandemTypography.compactBody,
                         fontWeight = FontWeight.SemiBold,
                     )

@@ -7,7 +7,7 @@ Choose a page by what you need to do.
 | Page                                               | For                                                          |
 | -------------------------------------------------- | ------------------------------------------------------------ |
 | [Install the server](deploy/install.md)            | Operators setting up Tandem beside Actual.                   |
-| [Configuration reference](deploy/configuration.md) | Operators changing API and Compose settings.                 |
+| [Configuration reference](deploy/configuration.md) | Operators changing settings in `.env`.                       |
 | [Reverse proxy](deploy/reverse-proxy.md)           | Operators routing HTTPS traffic to Actual and Tandem.        |
 | [Upgrade](deploy/upgrade.md)                       | Operators rebuilding or rolling back the API.                |
 | [Back up and restore](deploy/backup-restore.md)    | Operators protecting and recovering budget data.             |

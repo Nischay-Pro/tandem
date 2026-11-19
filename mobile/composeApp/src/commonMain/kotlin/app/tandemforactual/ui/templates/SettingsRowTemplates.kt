@@ -53,6 +53,7 @@ import app.tandemforactual.ui.components.LabelText
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.SelectableTile
 import app.tandemforactual.ui.components.SurfaceCard
+import app.tandemforactual.ui.components.amountAnnotatedString
 import app.tandemforactual.ui.components.crossfadeTransitions
 import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.BriefcaseBusiness
@@ -170,6 +171,7 @@ internal fun SettingRowLayout(
     enabled: Boolean,
     compactTitle: Boolean = false,
     semiboldTitle: Boolean = false,
+    leadingIcon: ImageVector? = null,
     interactionModifier: Modifier = Modifier,
     control: @Composable RowScope.() -> Unit,
 ) {
@@ -184,9 +186,25 @@ internal fun SettingRowLayout(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(TandemLayout.listRowGap),
     ) {
+        if (leadingIcon != null) {
+            Box(
+                Modifier
+                    .size(TandemLayout.listRowLeadingSize)
+                    .clip(RoundedCornerShape(TandemShapes.medium))
+                    .background(palette.raised),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    leadingIcon,
+                    contentDescription = null,
+                    modifier = Modifier.size(TandemLayout.listRowIconSize),
+                    tint = if (enabled) palette.accent else palette.muted,
+                )
+            }
+        }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
             Text(
-                title,
+                amountAnnotatedString(title),
                 color = if (enabled) palette.text else palette.muted,
                 fontSize = if (compactTitle) TandemTypography.compactBody else TandemTypography.body,
                 fontWeight = if (semiboldTitle) FontWeight.SemiBold else FontWeight.Medium,
@@ -195,7 +213,7 @@ internal fun SettingRowLayout(
             )
             if (subtitle != null) {
                 Text(
-                    subtitle,
+                    amountAnnotatedString(subtitle),
                     color = palette.muted,
                     fontSize = TandemTypography.caption,
                     maxLines = 1,
@@ -213,6 +231,30 @@ internal fun ToggleRow(
     subtitle: String? = null,
     checked: Boolean,
     enabled: Boolean = true,
+    onChange: (Boolean) -> Unit,
+) {
+    ToggleRowContent(title, subtitle, checked, enabled, leadingIcon = null, onChange = onChange)
+}
+
+@Composable
+internal fun ToggleRow(
+    title: String,
+    subtitle: String? = null,
+    checked: Boolean,
+    enabled: Boolean = true,
+    leadingIcon: ImageVector,
+    onChange: (Boolean) -> Unit,
+) {
+    ToggleRowContent(title, subtitle, checked, enabled, leadingIcon, onChange)
+}
+
+@Composable
+private fun ToggleRowContent(
+    title: String,
+    subtitle: String?,
+    checked: Boolean,
+    enabled: Boolean,
+    leadingIcon: ImageVector?,
     onChange: (Boolean) -> Unit,
 ) {
     val palette = tandemPalette
@@ -239,6 +281,7 @@ internal fun ToggleRow(
         subtitle = subtitle,
         enabled = enabled,
         compactTitle = true,
+        leadingIcon = leadingIcon,
         interactionModifier = Modifier.toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange),
     ) {
         Box(
@@ -396,7 +439,12 @@ internal fun InfoBubble(text: String) {
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
     ) {
         Icon(Lucide.Info, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.syncing)
-        Text(text, color = palette.text, fontSize = TandemTypography.label, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(
+            text,
+            modifier = Modifier.weight(1f),
+            color = palette.text,
+            fontSize = TandemTypography.label,
+        )
     }
 }
 
@@ -416,13 +464,15 @@ internal fun AmountHero(
         ) {
             LabelText(label)
             Text(
-                amount,
+                amountAnnotatedString(amount),
                 color = palette.text,
                 fontSize = TandemTypography.amount,
                 lineHeight = TandemTypography.amountLineHeight,
                 fontWeight = FontWeight.Bold,
             )
-            supporting?.let { Text(it, color = palette.muted, fontSize = TandemTypography.label) }
+            supporting?.let {
+                Text(amountAnnotatedString(it), color = palette.muted, fontSize = TandemTypography.label)
+            }
         }
     }
 }

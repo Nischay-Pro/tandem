@@ -25,10 +25,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.ListRow
@@ -37,6 +34,7 @@ import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.TandemLoadingIndicator
+import app.tandemforactual.ui.components.amountAnnotatedString
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Receipt
@@ -139,37 +137,6 @@ internal fun activityTransactionLeading(transaction: TransactionItem): RowLeadin
     return RowLeading.Letter(transaction.icon.ifBlank { payeeInitial })
 }
 
-internal fun activityAmountFractionRange(
-    value: String,
-    fractionDigits: Int,
-): IntRange? {
-    if (fractionDigits <= 0) return null
-    val lastDigitIndex = value.indexOfLast(Char::isDigit)
-    if (lastDigitIndex < 0) return null
-
-    val firstFractionDigitIndex = lastDigitIndex - fractionDigits + 1
-    if (firstFractionDigitIndex < 0) return null
-    if (value.substring(firstFractionDigitIndex, lastDigitIndex + 1).any { !it.isDigit() }) return null
-
-    val decimalSeparatorIndex = firstFractionDigitIndex - 1
-    if (decimalSeparatorIndex < 0 || value[decimalSeparatorIndex] !in ACTIVITY_AMOUNT_DECIMAL_SEPARATORS) return null
-    return firstFractionDigitIndex..lastDigitIndex
-}
-
-internal fun activityAmountAnnotatedString(
-    value: String,
-    fractionDigits: Int,
-): AnnotatedString {
-    val fractionRange = activityAmountFractionRange(value, fractionDigits) ?: return AnnotatedString(value)
-    return buildAnnotatedString {
-        append(value.substring(0, fractionRange.first))
-        withStyle(SpanStyle(fontSize = TandemTypography.caption)) {
-            append(value.substring(fractionRange.first, fractionRange.last + 1))
-        }
-        append(value.substring(fractionRange.last + 1))
-    }
-}
-
 internal fun activityAmountAccessibilityDescription(
     value: String,
     amountMinorUnits: Long,
@@ -180,6 +147,16 @@ internal fun activityAmountAccessibilityDescription(
         else -> "No money moved, $value"
     }
 
+internal fun activityAmountFractionRange(
+    value: String,
+    fractionDigits: Int,
+): IntRange? = amountAnnotatedString(value, fractionDigits).spanStyles.lastOrNull()?.let { it.start until it.end }
+
+internal fun activityAmountAnnotatedString(
+    value: String,
+    fractionDigits: Int,
+): AnnotatedString = amountAnnotatedString(value, fractionDigits)
+
 @Composable
 private fun ActivityTransactionAmount(
     value: String,
@@ -187,7 +164,7 @@ private fun ActivityTransactionAmount(
     fractionDigits: Int,
 ) {
     Text(
-        activityAmountAnnotatedString(value, fractionDigits),
+        amountAnnotatedString(value, fractionDigits),
         modifier =
             Modifier.semantics {
                 contentDescription = activityAmountAccessibilityDescription(value, amountMinorUnits)
@@ -198,8 +175,6 @@ private fun ActivityTransactionAmount(
         maxLines = 2,
     )
 }
-
-private val ACTIVITY_AMOUNT_DECIMAL_SEPARATORS = setOf('.', ',', '\u066b', '\uff0e')
 
 @Composable
 internal fun TransactionSelectionFloatingBar(
@@ -298,11 +273,17 @@ internal fun openTransaction(
     state.selectedTransactionCategoryName = transaction.category
     state.transactionNotes = transaction.notes
     state.transactionAmount = formatAmount(kotlin.math.abs(transaction.amountMinorUnits), state.budgetDisplaySettings)
-    state.transactionType = if (transaction.amountMinorUnits < 0) "Spending" else "Income"
+    state.transactionType =
+        when {
+            transaction.isTransfer -> "Transfer"
+            transaction.amountMinorUnits < 0 -> "Spending"
+            else -> "Income"
+        }
     state.selectedTransactionAmountMinor = transaction.amountMinorUnits
     state.selectedTransactionNotes = transaction.notes
     state.selectedTransactionRecordId = transaction.recordId.orEmpty()
     state.selectedTransactionIsLive = isLive
+    state.selectedTransactionIsTransfer = transaction.isTransfer
     navigation.open(AppRoute.TRANSACTION_DETAIL)
 }
 

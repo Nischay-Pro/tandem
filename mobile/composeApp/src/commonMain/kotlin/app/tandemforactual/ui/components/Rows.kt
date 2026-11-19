@@ -106,6 +106,7 @@ internal fun ListRow(
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
+    subtitleContent: (@Composable () -> Unit)? = null,
     trailingContent: (@Composable () -> Unit)? = null,
 ) {
     val palette = tandemPalette
@@ -214,17 +215,20 @@ internal fun ListRow(
                     maxLines = 2,
                 )
             }
-            if (subtitle != null) {
+            if (subtitleContent != null) {
+                subtitleContent()
+            } else if (subtitle != null) {
                 if (options.animateChanges) {
                     AnimatedStatusText(
                         subtitle,
                         palette.muted,
                         fontSize = TandemTypography.caption,
                         maxLines = options.subtitleMaxLines,
+                        fractionDigits = 2,
                     )
                 } else {
                     Text(
-                        subtitle,
+                        amountAnnotatedString(subtitle),
                         color = palette.muted,
                         fontSize = TandemTypography.caption,
                         maxLines = options.subtitleMaxLines,
@@ -244,10 +248,11 @@ internal fun ListRow(
                         fontSize = TandemTypography.compactBody,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 2,
+                        fractionDigits = 2,
                     )
                 } else {
                     Text(
-                        trailing,
+                        amountAnnotatedString(trailing),
                         color = if (options.muted) palette.muted else options.trailingColor ?: palette.muted,
                         fontSize = TandemTypography.compactBody,
                         fontWeight = FontWeight.SemiBold,
@@ -267,10 +272,11 @@ internal fun ListRow(
                     fontSize = TandemTypography.compactBody,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
+                    fractionDigits = 2,
                 )
             } else {
                 Text(
-                    trailing,
+                    amountAnnotatedString(trailing),
                     color = effectiveColor,
                     fontSize = TandemTypography.compactBody,
                     fontWeight = FontWeight.SemiBold,
@@ -310,7 +316,7 @@ internal fun SectionCard(
     animateDetail: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    SectionCardLayout(title, detail, action, null, onClick, animateDetail, null, content)
+    SectionCardLayout(title, detail, action, null, onClick, animateDetail, null, null, content)
 }
 
 private data class SectionCollapse(
@@ -328,9 +334,20 @@ internal fun CollapsibleSectionCard(
     onToggleExpanded: () -> Unit,
     onClick: (() -> Unit)? = null,
     animateDetail: Boolean = false,
+    actionContent: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    SectionCardLayout(title, detail, action, actionColor, onClick, animateDetail, SectionCollapse(expanded, onToggleExpanded), content)
+    SectionCardLayout(
+        title,
+        detail,
+        action,
+        actionColor,
+        onClick,
+        animateDetail,
+        SectionCollapse(expanded, onToggleExpanded),
+        actionContent,
+        content,
+    )
 }
 
 @Composable
@@ -342,6 +359,7 @@ private fun SectionCardLayout(
     onClick: (() -> Unit)?,
     animateDetail: Boolean,
     collapse: SectionCollapse?,
+    actionContent: (@Composable () -> Unit)?,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val palette = tandemPalette
@@ -378,7 +396,9 @@ private fun SectionCardLayout(
                             }
                         }
                     }
-                    if (action != null) {
+                    if (actionContent != null) {
+                        actionContent()
+                    } else if (action != null) {
                         Text(
                             action,
                             color = actionColor ?: palette.accent,

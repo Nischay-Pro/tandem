@@ -88,8 +88,8 @@ chmod +x "$fake_bin/docker" "$fake_bin/sudo" "$fake_bin/nginx"
 
 make_install_tree() {
   local root="$1"
-  mkdir -p "$root/install/deploy/compose" "$root/actual-budget"
-  printf 'TANDEM_TRUST_PROXY=\n' > "$root/install/deploy/compose/.env"
+  mkdir -p "$root/install" "$root/actual-budget"
+  printf 'TANDEM_API_HOST_PORT=19753\nTRUST_PROXY=\n' > "$root/install/.env"
   cat > "$root/nginx.conf" <<'NGINX'
 server {
     listen [::]:443 ssl;
@@ -107,31 +107,29 @@ NGINX
 tls_root="$test_root/tls"
 make_install_tree "$tls_root"
 cp "$tls_root/nginx.conf" "$tls_root/original.conf"
-TANDEM_NGINX_TEST_CONFIG="$tls_root/nginx.conf" \
+printf 'y\n' | TANDEM_NGINX_TEST_CONFIG="$tls_root/nginx.conf" \
   TANDEM_NGINX_TEST_COMPOSE_DIRECTORY="$tls_root/actual-budget" \
   TANDEM_NGINX_TEST_NETWORK_STATE="$tls_root/network-attached" \
   PATH="$fake_bin:$PATH" \
-  bash "$project_root/deploy/configure-docker-nginx.sh" \
-    "$tls_root/install" "https://budget.nischay.pro" "https://budget.nischay.pro" "" \
+  bash "$project_root/deploy/configure-docker-nginx.sh" "$tls_root/install" \
     > "$tls_root/first-run.log"
 
 grep -Fq '# TANDEM-SETUP-MANAGED-ROUTES' "$tls_root/nginx.conf"
 grep -Fq 'location ^~ /api/v1/' "$tls_root/nginx.conf"
 grep -Fq 'limit_req_zone $binary_remote_addr zone=tandem_setup_api:10m rate=600r/m;' "$tls_root/nginx.conf"
-grep -Fq 'TANDEM_TRUST_PROXY=172.30.0.10' "$tls_root/install/deploy/compose/.env"
+grep -Fq 'TRUST_PROXY=172.30.0.10' "$tls_root/install/.env"
 grep -Fq 'tandem-edge:' "$tls_root/actual-budget/compose.override.yaml"
 grep -Fq 'ipv4_address: "172.30.0.10"' "$tls_root/actual-budget/compose.override.yaml"
-cmp -s "$tls_root/original.conf" "$tls_root/nginx.conf.tandem-setup-"*.bak
+test ! -e "$tls_root/nginx.conf.tandem-setup-"*.bak
 
 TANDEM_NGINX_TEST_CONFIG="$tls_root/nginx.conf" \
   TANDEM_NGINX_TEST_COMPOSE_DIRECTORY="$tls_root/actual-budget" \
   TANDEM_NGINX_TEST_NETWORK_STATE="$tls_root/network-attached" \
   PATH="$fake_bin:$PATH" \
-  bash "$project_root/deploy/configure-docker-nginx.sh" \
-    "$tls_root/install" "https://budget.nischay.pro" "https://budget.nischay.pro" "" \
+  bash "$project_root/deploy/configure-docker-nginx.sh" "$tls_root/install" \
     > "$tls_root/second-run.log"
 grep -Fq 'Tandem routes are already present' "$tls_root/second-run.log"
-test "$(find "$tls_root" -name 'nginx.conf.tandem-setup-*.bak' -type f | wc -l)" -eq 1
+test "$(find "$tls_root" -name 'nginx.conf.tandem-setup-*.bak' -type f | wc -l)" -eq 0
 
 http_root="$test_root/http-only"
 make_install_tree "$http_root"
@@ -141,9 +139,9 @@ TANDEM_NGINX_TEST_CONFIG="$http_root/nginx.conf" \
   TANDEM_NGINX_TEST_NETWORK_STATE="$http_root/network-attached" \
   PATH="$fake_bin:$PATH" \
   bash "$project_root/deploy/configure-docker-nginx.sh" \
-    "$http_root/install" "https://budget.nischay.pro" "https://budget.nischay.pro" "" \
+    "$http_root/install" \
     > "$http_root/run.log"
-grep -Fq 'No existing HTTPS Nginx vhost matched' "$http_root/run.log"
+grep -Fq 'No matching HTTPS Nginx site' "$http_root/run.log"
 test ! -e "$http_root/network-attached"
 test ! -e "$http_root/actual-budget/compose.override.yaml"
 if grep -Fq 'TANDEM-SETUP-MANAGED-ROUTES' "$http_root/nginx.conf"; then
@@ -154,24 +152,23 @@ fi
 rollback_root="$test_root/rollback"
 make_install_tree "$rollback_root"
 cp "$rollback_root/nginx.conf" "$rollback_root/original.conf"
-TANDEM_NGINX_TEST_CONFIG="$rollback_root/nginx.conf" \
+printf 'y\n' | env \
+  TANDEM_NGINX_TEST_CONFIG="$rollback_root/nginx.conf" \
   TANDEM_NGINX_TEST_COMPOSE_DIRECTORY="$rollback_root/actual-budget" \
   TANDEM_NGINX_TEST_NETWORK_STATE="$rollback_root/network-attached" \
   TANDEM_NGINX_TEST_FAIL_CONFIG=1 \
   PATH="$fake_bin:$PATH" \
-  bash "$project_root/deploy/configure-docker-nginx.sh" \
-    "$rollback_root/install" "https://budget.nischay.pro" "https://budget.nischay.pro" "" \
+  bash "$project_root/deploy/configure-docker-nginx.sh" "$rollback_root/install" \
     > "$rollback_root/run.log" 2>&1
 cmp -s "$rollback_root/original.conf" "$rollback_root/nginx.conf"
-grep -Fq 'Nginx validation failed; restored' "$rollback_root/run.log"
+grep -Fq 'Nginx validation failed' "$rollback_root/run.log"
 test ! -e "$rollback_root/network-attached"
 
 host_root="$test_root/host-nginx"
 make_install_tree "$host_root"
 ln -s nginx.conf "$host_root/sites-enabled-budget.conf"
-mkdir -p "$host_root/install/deploy/compose"
-cat > "$host_root/install/deploy/compose/production.yml" <<'YAML'
-name: tandem
+mkdir -p "$host_root/install"
+cat > "$host_root/install/docker-compose.yml" <<'YAML'
 services:
   tandem-api:
     image: tandem-api:test
@@ -179,66 +176,47 @@ services:
       - "19753"
     networks:
       - tandem-edge
+    ports:
+      - "127.0.0.1:${TANDEM_API_HOST_PORT:-19753}:19753"
 
 networks:
   tandem-edge:
     name: tandem-edge
     external: true
 YAML
-cat > "$host_root/install/compose.yml" <<'YAML'
-include:
-  - path: ./deploy/compose/production.yml
-    project_directory: .
-    env_file: ./deploy/compose/.env
-
-# TANDEM-HOST-NGINX-PORT
-services:
-  tandem-api:
-    ports:
-      - "127.0.0.1:19753:19753"
-YAML
-TANDEM_NGINX_TEST_HOST=1 \
+printf 'y\n' | TANDEM_NGINX_TEST_HOST=1 \
   TANDEM_NGINX_TEST_CONFIG="$host_root/nginx.conf" \
   TANDEM_NGINX_TEST_CONFIG_PATH="$host_root/sites-enabled-budget.conf" \
   TANDEM_NGINX_TEST_COMPOSE_DIRECTORY="$host_root/actual-budget" \
   TANDEM_NGINX_TEST_NETWORK_STATE="$host_root/network-attached" \
   PATH="$fake_bin:$PATH" \
-  bash "$project_root/deploy/configure-docker-nginx.sh" \
-    "$host_root/install" "https://budget.nischay.pro" "https://budget.nischay.pro" "" \
+  bash "$project_root/deploy/configure-docker-nginx.sh" "$host_root/install" \
     > "$host_root/run.log"
 grep -Fq 'location ^~ /api/v1/' "$host_root/nginx.conf"
 grep -Fq 'proxy_pass http://127.0.0.1:19753;' "$host_root/nginx.conf"
 ! grep -Fq 'resolver 127.0.0.11' "$host_root/nginx.conf"
-grep -Fq 'TANDEM_TRUST_PROXY=127.0.0.1/32,172.30.0.1/32' \
-  "$host_root/install/deploy/compose/.env"
-grep -Fq '127.0.0.1:${TANDEM_API_HOST_PORT:-19753}:19753' \
-  "$host_root/install/deploy/compose/production.yml"
-if grep -Fq '# TANDEM-HOST-NGINX-PORT' "$host_root/install/compose.yml"; then
-  echo "The legacy host port block should be removed from the root Compose wrapper." >&2
-  exit 1
-fi
-test -f "$host_root/install/deploy/compose/production.yml.tandem-setup-"*.bak
+grep -Fq 'TRUST_PROXY=127.0.0.1/32,172.30.0.1/32' "$host_root/install/.env"
+grep -Fq '127.0.0.1:${TANDEM_API_HOST_PORT:-19753}:19753' "$host_root/install/docker-compose.yml"
 test -L "$host_root/sites-enabled-budget.conf"
 test ! -e "$host_root/network-attached"
-test -f "$host_root/nginx.conf.tandem-setup-"*.bak
+test ! -e "$host_root/nginx.conf.tandem-setup-"*.bak
 "$real_docker" compose --project-directory "$host_root/install" \
-  -f "$host_root/install/compose.yml" config --format json > "$host_root/compose.json"
+  --env-file "$host_root/install/.env" -f "$host_root/install/docker-compose.yml" config --format json > "$host_root/compose.json"
 jq -e '.services["tandem-api"].ports | any(.host_ip == "127.0.0.1" and .published == "19753" and .target == 19753)' \
   "$host_root/compose.json" >/dev/null
 sed -i 's/^TANDEM_API_HOST_PORT=.*/TANDEM_API_HOST_PORT=19754/' \
-  "$host_root/install/deploy/compose/.env"
+  "$host_root/install/.env"
 TANDEM_NGINX_TEST_HOST=1 \
   TANDEM_NGINX_TEST_CONFIG="$host_root/nginx.conf" \
   TANDEM_NGINX_TEST_CONFIG_PATH="$host_root/sites-enabled-budget.conf" \
   TANDEM_NGINX_TEST_COMPOSE_DIRECTORY="$host_root/actual-budget" \
   TANDEM_NGINX_TEST_NETWORK_STATE="$host_root/network-attached" \
   PATH="$fake_bin:$PATH" \
-  bash "$project_root/deploy/configure-docker-nginx.sh" \
-    "$host_root/install" "https://budget.nischay.pro" "https://budget.nischay.pro" "" \
+  bash "$project_root/deploy/configure-docker-nginx.sh" "$host_root/install" \
     > "$host_root/rerun.log"
 grep -Fq 'proxy_pass http://127.0.0.1:19754;' "$host_root/nginx.conf"
 "$real_docker" compose --project-directory "$host_root/install" \
-  -f "$host_root/install/compose.yml" config --format json > "$host_root/compose-rerun.json"
+  --env-file "$host_root/install/.env" -f "$host_root/install/docker-compose.yml" config --format json > "$host_root/compose-rerun.json"
 jq -e '.services["tandem-api"].ports | any(.host_ip == "127.0.0.1" and .published == "19754" and .target == 19753)' \
   "$host_root/compose-rerun.json" >/dev/null
 
@@ -261,24 +239,23 @@ for _ in $(seq 1 100); do
 done
 occupied_port="$(cat "$host_root/occupied-port")"
 sed -i "s/^TANDEM_API_HOST_PORT=.*/TANDEM_API_HOST_PORT=$occupied_port/" \
-  "$host_root/install/deploy/compose/.env"
+  "$host_root/install/.env"
 TANDEM_NGINX_TEST_HOST=1 \
   TANDEM_NGINX_TEST_CONFIG="$host_root/nginx.conf" \
   TANDEM_NGINX_TEST_CONFIG_PATH="$host_root/sites-enabled-budget.conf" \
   TANDEM_NGINX_TEST_COMPOSE_DIRECTORY="$host_root/actual-budget" \
   TANDEM_NGINX_TEST_NETWORK_STATE="$host_root/network-attached" \
   PATH="$fake_bin:$PATH" \
-  bash "$project_root/deploy/configure-docker-nginx.sh" \
-    "$host_root/install" "https://budget.nischay.pro" "https://budget.nischay.pro" "" \
+  bash "$project_root/deploy/configure-docker-nginx.sh" "$host_root/install" \
     > "$host_root/port-conflict.log"
 selected_port="$(awk -F= '$1 == "TANDEM_API_HOST_PORT" { print $2; exit }' \
-  "$host_root/install/deploy/compose/.env")"
+  "$host_root/install/.env")"
 test "$selected_port" != "$occupied_port"
 grep -Fq "Loopback port $occupied_port is already in use; selected free port $selected_port" \
   "$host_root/port-conflict.log"
 grep -Fq "proxy_pass http://127.0.0.1:$selected_port;" "$host_root/nginx.conf"
 "$real_docker" compose --project-directory "$host_root/install" \
-  -f "$host_root/install/compose.yml" config --format json > "$host_root/compose-port-conflict.json"
+  --env-file "$host_root/install/.env" -f "$host_root/install/docker-compose.yml" config --format json > "$host_root/compose-port-conflict.json"
 jq -e --arg port "$selected_port" \
   '.services["tandem-api"].ports | any(.host_ip == "127.0.0.1" and .published == $port and .target == 19753)' \
   "$host_root/compose-port-conflict.json" >/dev/null
@@ -286,4 +263,4 @@ kill "$port_holder_pid" >/dev/null 2>&1 || true
 wait "$port_holder_pid" >/dev/null 2>&1 || true
 port_holder_pid=""
 
-echo "Docker and host Nginx setup tests pass: TLS routes are backed up and validated, host API access stays on loopback, and HTTP-only vhosts stay unchanged."
+echo "Docker and host Nginx setup tests pass: route edits require approval, host API access stays on loopback, and HTTP-only vhosts stay unchanged."

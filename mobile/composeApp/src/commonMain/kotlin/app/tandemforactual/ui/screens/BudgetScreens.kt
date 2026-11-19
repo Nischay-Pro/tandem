@@ -3,12 +3,14 @@
 package app.tandemforactual.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,6 +21,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
@@ -34,7 +38,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +57,7 @@ import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.PeriodStepper
+import app.tandemforactual.ui.components.PrivacyAmountText
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SelectableTile
 import app.tandemforactual.ui.components.SurfaceCard
@@ -61,6 +68,7 @@ import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.TandemModalHeader
 import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
+import app.tandemforactual.ui.model.LiveCategorySummary
 import app.tandemforactual.ui.model.LiveScheduleSummary
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.ChartNoAxesCombined
@@ -70,7 +78,7 @@ import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Plus
+import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.X
@@ -86,43 +94,45 @@ internal fun LazyListScope.budgetPendingChangeBannerItems(
     val rejectedWrites = reviewableWrites.filter { it.status == "rejected" }
     val uncertainWrites = reviewableWrites.filter { it.status == "uncertain" }
 
-    item(key = "budget-conflict-alert") {
-        AnimatedReveal(visible = conflictCount > 0) {
-            AttentionBanner(
-                "Needs review",
-                if (conflictCount == 1) "Choose which version to keep." else "Review $conflictCount changes.",
-                "Review",
-            ) {
-                state.selectedConflictOperationId = ""
-                navigation.open(AppRoute.CONFLICT_INBOX)
+    if (conflictCount > 0) {
+        item(key = "budget-conflict-alert") {
+            AnimatedReveal(visible = true) {
+                AttentionBanner(
+                    "Needs review",
+                    if (conflictCount == 1) "Choose which version to keep." else "Review $conflictCount changes.",
+                    "Review",
+                ) {
+                    state.selectedConflictOperationId = ""
+                    navigation.open(AppRoute.CONFLICT_INBOX)
+                }
             }
         }
     }
-    item(key = "budget-rejected-alert") {
-        AnimatedReveal(visible = rejectedWrites.isNotEmpty()) {
-            AttentionBanner(
-                "Rejected",
-                if (rejectedWrites.size == 1) {
-                    "Actual kept the previous value. Review it."
-                } else {
-                    "Actual kept the previous values. Review them."
-                },
-                "Review",
-            ) {
-                state.selectedConflictOperationId = rejectedWrites.firstOrNull()?.operationId.orEmpty()
-                navigation.open(AppRoute.UNCERTAIN_WRITE)
+    if (rejectedWrites.isNotEmpty()) {
+        item(key = "budget-rejected-alert") {
+            AnimatedReveal(visible = true) {
+                AttentionBanner(
+                    "Rejected",
+                    "${rejectedWrites.size} ${if (rejectedWrites.size == 1) "change" else "changes"} were rejected.",
+                    "Review",
+                ) {
+                    state.selectedConflictOperationId = rejectedWrites.firstOrNull()?.operationId.orEmpty()
+                    navigation.open(AppRoute.UNCERTAIN_WRITE)
+                }
             }
         }
     }
-    item(key = "budget-status-unknown-alert") {
-        AnimatedReveal(visible = uncertainWrites.isNotEmpty()) {
-            AttentionBanner(
-                "Status unknown",
-                "Tandem hasn’t confirmed these edits. Check their status.",
-                "Check status",
-            ) {
-                state.selectedConflictOperationId = uncertainWrites.firstOrNull()?.operationId.orEmpty()
-                navigation.open(AppRoute.UNCERTAIN_WRITE)
+    if (uncertainWrites.isNotEmpty()) {
+        item(key = "budget-status-unknown-alert") {
+            AnimatedReveal(visible = true) {
+                AttentionBanner(
+                    "Status unknown",
+                    "Tandem hasn’t confirmed these edits. Check their status.",
+                    "Check status",
+                ) {
+                    state.selectedConflictOperationId = uncertainWrites.firstOrNull()?.operationId.orEmpty()
+                    navigation.open(AppRoute.UNCERTAIN_WRITE)
+                }
             }
         }
     }
@@ -142,7 +152,6 @@ internal fun BudgetScreen(
     val palette = tandemPalette
     val scope = rememberCoroutineScope()
     var showCopyLastMonthDialog by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
-    var showMonthPicker by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
     var showBudgetTemplatesDialog by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
     var showNextMonthHoldDialog by rememberSaveable(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf(false) }
     var showCreateCategoryGroupDialog by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
@@ -165,15 +174,20 @@ internal fun BudgetScreen(
     }
     val routeScrollState = LocalRouteScrollState.current
     val routeListState = LocalRouteLazyListState.current
-    val transactionActionCompact by remember(routeScrollState, routeListState) {
-        derivedStateOf {
-            (routeScrollState?.value ?: 0) > 72 ||
-                (routeListState?.firstVisibleItemIndex ?: 0) > 0 ||
-                (routeListState?.firstVisibleItemScrollOffset ?: 0) > 72
+    val createActionsCompact by
+        remember(routeScrollState, routeListState) {
+            derivedStateOf {
+                (routeScrollState?.value ?: 0) > 72 ||
+                    routeListState?.firstVisibleItemIndex?.let { it > 0 } == true ||
+                    (routeListState?.firstVisibleItemScrollOffset ?: 0) > 72
+            }
         }
-    }
-    val categoryGroupActionEndPadding = if (transactionActionCompact) 92.dp else 216.dp
+    val windowSize = LocalWindowInfo.current.containerSize
+    val isLandscape = isLandscapeViewport(windowSize.width, windowSize.height)
     var selectedGroupOrderId by rememberSaveable(state.selectedBudgetId) { mutableStateOf<String?>(null) }
+    var selectedBudgetCategoryOrderId by rememberSaveable(state.selectedBudgetId) { mutableStateOf<String?>(null) }
+    var selectedBudgetCategoryGroupId by rememberSaveable(state.selectedBudgetId) { mutableStateOf<String?>(null) }
+    val budgetCategoryDrag = remember(state.selectedBudgetId) { DragReorderState() }
     LaunchedEffect(selectedGroupOrderId) {
         onGroupReorderModeChange(selectedGroupOrderId != null)
     }
@@ -188,12 +202,14 @@ internal fun BudgetScreen(
     val groups = liveBudgetMonth?.groups.orEmpty().filterNot { it.id in pendingDeletedGroupIds }
     val queuedGroupMoves = mobileSession.budgetReorderMovesFor(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
     val groupReorderStatus = mobileSession.budgetReorderStatus(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
-    val orderedGroupIds =
+    val groupDrag = remember(state.selectedBudgetId, state.selectedMonthId) { DragReorderState() }
+    val queuedGroupOrder =
         budgetOrderForScreen(
             groups.map { it.id },
             groupReorderStatus,
             queuedGroupMoves,
         )
+    val orderedGroupIds = groupDrag.currentOrder(queuedGroupOrder)
     val orderedGroups =
         remember(groups, orderedGroupIds) {
             val groupsById = groups.associateBy { it.id }
@@ -229,13 +245,10 @@ internal fun BudgetScreen(
     val summaryKey = "live:${state.selectedBudgetId}:summary:${state.selectedMonthId}"
     val displayGroups = orderedGroups
 
-    fun enqueueGroupMove(
+    fun saveGroupOrder(
         groupId: String,
-        nextIndex: Int,
+        nextOrder: List<String>,
     ) {
-        val oldOrder = displayGroups.map { it.id }
-        val nextOrder = reorderItemToIndex(oldOrder, groupId, nextIndex)
-        if (oldOrder == nextOrder) return
         scope.launch {
             mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
             mobileSession.clearBudgetActionMessage()
@@ -250,12 +263,30 @@ internal fun BudgetScreen(
             )
         }
     }
+
+    fun enqueueGroupMove(
+        groupId: String,
+        nextIndex: Int,
+    ) {
+        val oldOrder = displayGroups.map { it.id }
+        val nextOrder = reorderItemToIndex(oldOrder, groupId, nextIndex)
+        if (oldOrder == nextOrder) return
+        saveGroupOrder(groupId, nextOrder)
+    }
     val pinnedCategories =
         remember(groups, state.pinnedCategoryIds) {
             groups.flatMap { group ->
                 group.categories.filter { state.isCategoryPinned(it.id) }.map { group to it }
             }
         }
+
+    val showCreateActions =
+        shouldShowBudgetCreateAction(
+            isLiveBudget,
+            selectedGroupOrderId != null || selectedBudgetCategoryOrderId != null,
+        )
+    val showTransactionAction = showCreateActions && !isLandscape
+    val actionDockVisible = showCreateActions
 
     Box(Modifier.fillMaxSize()) {
         PageLazyColumn(
@@ -265,10 +296,23 @@ internal fun BudgetScreen(
             onRefresh = onSyncNow.takeIf { isLiveBudget },
         ) {
             if (isLiveBudget) {
+                if (!mobileSession.isAuthenticated) {
+                    item(key = "budget-reauthentication-alert") {
+                        AnimatedReveal(visible = true) {
+                            AttentionBanner(
+                                "Sign in to sync",
+                                "This budget is saved on this device. Sign in again to reconnect and sync it.",
+                                "Sign in",
+                            ) {
+                                navigation.open(AppRoute.SIGN_IN)
+                            }
+                        }
+                    }
+                }
                 budgetPendingChangeBannerItems(state, navigation, mobileSession.pendingWrites)
             }
             item(key = "budget-overview-title") {
-                Heading("Budget overview")
+                Heading("Overview")
             }
             if (mobileSession.syncComplete && !state.hasDismissedBudgetHint) {
                 item(key = "budget-getting-started-hint") {
@@ -307,9 +351,6 @@ internal fun BudgetScreen(
                         }
                     }
                 }
-            }
-            item(key = "budget-month-picker") {
-                MonthSelectorCard(state.selectedMonth) { showMonthPicker = true }
             }
             if (isLiveBudget) {
                 groupReorderStatus.message?.let { message ->
@@ -371,13 +412,29 @@ internal fun BudgetScreen(
                     }
                 }
             }
-            if (isLiveBudget && liveBudgetMonth == null && !isTrackingBudget) {
+            if (
+                isLiveBudget &&
+                liveBudgetMonth == null &&
+                !isTrackingBudget &&
+                !mobileSession.isLoadingSelectedBudgetMonth &&
+                mobileSession.selectedBudgetMonthRecord == null
+            ) {
                 item(key = "budget-month-empty") {
                     SurfaceCard {
                         EmptyState(
                             "No plan for this month",
                             "Sync a month available in Actual, or choose a different planning period.",
                             modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                        )
+                    }
+                }
+            } else if (isLiveBudget && liveBudgetMonth == null && !isTrackingBudget) {
+                item(key = "budget-month-loading") {
+                    SurfaceCard {
+                        ListRow(
+                            "Loading ${state.selectedMonth}",
+                            "Checking the saved plan on this device.",
+                            leading = RowLeading.Icon(Lucide.CalendarDays),
                         )
                     }
                 }
@@ -389,7 +446,17 @@ internal fun BudgetScreen(
                             CollapsibleSectionCard(
                                 "${state.selectedMonth} summary",
                                 "${categoryCountLabel(groups.sumOf { it.categories.size })} · ${assignmentPresentation.label}",
-                                state.formatCurrency(displayedAssignmentMinor),
+                                actionContent = {
+                                    PrivacyAmountText(
+                                        state.formatCurrency(displayedAssignmentMinor),
+                                        privacyModeEnabled = state.privacyModeEnabled,
+                                        fractionDigits = state.currencyFractionDigitsForDisplay,
+                                        color = readyToAssignColor,
+                                        fontSize = TandemTypography.label,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 2,
+                                    )
+                                },
                                 actionColor = readyToAssignColor,
                                 expanded = summaryExpanded,
                                 onToggleExpanded = { state.toggleBudgetSection(summaryKey) },
@@ -404,9 +471,18 @@ internal fun BudgetScreen(
                                         ListRow(
                                             assignmentPresentation.label,
                                             if (isLiveBudget) state.selectedMonth else "On track",
-                                            state.formatCurrency(displayedAssignmentMinor),
                                             leading = RowLeading.Icon(Lucide.WalletCards),
                                             options = ListRowOptions(trailingColor = readyToAssignColor),
+                                            trailingContent = {
+                                                PrivacyAmountText(
+                                                    state.formatCurrency(displayedAssignmentMinor),
+                                                    privacyModeEnabled = state.privacyModeEnabled,
+                                                    fractionDigits = state.currencyFractionDigitsForDisplay,
+                                                    color = readyToAssignColor,
+                                                    fontSize = TandemTypography.compactBody,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                )
+                                            },
                                         )
                                         if (isLiveBudget) {
                                             DividerLine()
@@ -419,8 +495,10 @@ internal fun BudgetScreen(
                                                         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
                                                     ) {
                                                         if (liveBudgetMonth?.heldForNextMonthPending == true) PendingBudgetSyncIcon()
-                                                        Text(
+                                                        PrivacyAmountText(
                                                             state.formatCurrency(heldForNextMonthMinor),
+                                                            privacyModeEnabled = state.privacyModeEnabled,
+                                                            fractionDigits = state.currencyFractionDigitsForDisplay,
                                                             color = palette.muted,
                                                             fontSize = TandemTypography.compactBody,
                                                             fontWeight = FontWeight.SemiBold,
@@ -478,8 +556,10 @@ internal fun BudgetScreen(
                                                         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
                                                     ) {
                                                         if (category.pendingChanges) PendingBudgetSyncIcon()
-                                                        Text(
+                                                        PrivacyAmountText(
                                                             state.formatCurrency(category.balanceMinor),
+                                                            privacyModeEnabled = state.privacyModeEnabled,
+                                                            fractionDigits = state.currencyFractionDigitsForDisplay,
                                                             color = palette.text,
                                                             fontSize = TandemTypography.compactBody,
                                                             fontWeight = FontWeight.SemiBold,
@@ -501,48 +581,75 @@ internal fun BudgetScreen(
                 }
                 displayGroups.forEach { group ->
                     val groupSectionKey = "live:${state.selectedBudgetId}:group:${group.id}"
-                    val groupExpanded = !state.isBudgetSectionCollapsed(groupSectionKey)
+                    val groupExpanded = selectedGroupOrderId == null && !state.isBudgetSectionCollapsed(groupSectionKey)
                     val isReordering = selectedGroupOrderId == group.id
                     val groupIndex = displayGroups.indexOfFirst { it.id == group.id }
-                    val displayCategories = group.categories
+                    val categoryOrderStatus = mobileSession.budgetReorderStatus(state.selectedBudgetId, group.id)
+                    val queuedCategoryMoves = mobileSession.budgetReorderMovesFor(state.selectedBudgetId, group.id)
+                    val serverCategoryOrder = group.categories.map { it.id }
+                    val queuedCategoryOrder = budgetOrderForScreen(serverCategoryOrder, categoryOrderStatus, queuedCategoryMoves)
+                    val categoryOrderIds =
+                        if (selectedBudgetCategoryGroupId == group.id) {
+                            budgetCategoryDrag.currentOrder(queuedCategoryOrder)
+                        } else {
+                            queuedCategoryOrder
+                        }
+                    val categoriesById = group.categories.associateBy { it.id }
+                    val orderedCategories =
+                        categoryOrderIds.mapNotNull(categoriesById::get) + group.categories.filterNot { it.id in categoryOrderIds }
                     item(key = "$groupSectionKey:section") {
-                        SurfaceCard {
+                        fun startDrag() {
+                            selectedBudgetCategoryOrderId = null
+                            selectedBudgetCategoryGroupId = null
+                            selectedGroupOrderId = group.id
+                            groupDrag.start(orderedGroupIds, group.id)
+                        }
+
+                        fun dropDrag() {
+                            val result = groupDrag.finish() ?: return
+                            if (result.startingOrder != result.finalOrder) {
+                                saveGroupOrder(group.id, result.finalOrder)
+                            }
+                        }
+                        SurfaceCard(
+                            dragReorderItemModifier(
+                                itemId = group.id,
+                                dragState = groupDrag,
+                                reduceMotion = tandemReduceMotion,
+                                dragEnabled = isLiveBudget && !state.readOnlyMode && displayGroups.size > 1,
+                                onDragStarted = ::startDrag,
+                                onDragBy = { groupDrag.dragBy(it) },
+                                onDragStopped = ::dropDrag,
+                            ).combinedClickable(
+                                role = Role.Button,
+                                onClickLabel = "Open ${group.name}",
+                                onClick = {
+                                    if (selectedGroupOrderId != null) {
+                                        selectedGroupOrderId = null
+                                    } else {
+                                        state.selectedCategoryGroupId = group.id
+                                        navigation.open(AppRoute.CATEGORY_GROUP)
+                                    }
+                                },
+                            ).then(
+                                if (isLiveBudget && !state.readOnlyMode && displayGroups.size > 1) {
+                                    Modifier.reorderAccessibilityAction(group.name) {
+                                        selectedBudgetCategoryOrderId = null
+                                        selectedBudgetCategoryGroupId = null
+                                        selectedGroupOrderId = group.id
+                                    }
+                                } else {
+                                    Modifier
+                                },
+                            ),
+                            animateSizeChanges = false,
+                        ) {
                             Column {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Column(
                                         Modifier
                                             .weight(1f)
-                                            .combinedClickable(
-                                                role = Role.Button,
-                                                onClickLabel = "Open ${group.name}",
-                                                onLongClickLabel = "Reorder ${group.name}",
-                                                onClick = {
-                                                    if (selectedGroupOrderId == group.id) {
-                                                        selectedGroupOrderId = null
-                                                    } else if (selectedGroupOrderId != null) {
-                                                        selectedGroupOrderId = null
-                                                    } else {
-                                                        state.selectedCategoryGroupId = group.id
-                                                        navigation.open(AppRoute.CATEGORY_GROUP)
-                                                    }
-                                                },
-                                                onLongClick = {
-                                                    if (isLiveBudget &&
-                                                        !state.readOnlyMode
-                                                    ) {
-                                                        if (!isReordering) {
-                                                            state.collapseBudgetSections(
-                                                                orderedGroups
-                                                                    .asSequence()
-                                                                    .filterNot { it.id == group.id }
-                                                                    .map { "live:${state.selectedBudgetId}:group:${it.id}" }
-                                                                    .toList(),
-                                                            )
-                                                        }
-                                                        selectedGroupOrderId = if (isReordering) null else group.id
-                                                    }
-                                                },
-                                            ).padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+                                            .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
                                         verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
                                     ) {
                                         Text(
@@ -552,18 +659,61 @@ internal fun BudgetScreen(
                                             fontWeight = FontWeight.SemiBold,
                                             maxLines = 1,
                                         )
-                                        Text(
-                                            when {
-                                                isReordering -> categoryCountLabel(group.categories.size)
-                                                isTrackingBudget -> categoryCountLabel(group.categories.size)
-                                                else -> "${state.formatCurrency(
-                                                    group.assignedMinor,
-                                                )} assigned · ${categoryCountLabel(group.categories.size)}"
-                                            },
-                                            color = palette.muted,
-                                            fontSize = TandemTypography.caption,
-                                            maxLines = 1,
-                                        )
+                                        when {
+                                            isReordering || isTrackingBudget -> {
+                                                Text(
+                                                    categoryCountLabel(group.categories.size),
+                                                    color = palette.muted,
+                                                    fontSize = TandemTypography.caption,
+                                                    maxLines = 1,
+                                                )
+                                            }
+                                            else -> {
+                                                Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+                                                    PrivacyAmountText(
+                                                        state.formatCurrency(group.assignedMinor),
+                                                        privacyModeEnabled = state.privacyModeEnabled,
+                                                        fractionDigits = state.currencyFractionDigitsForDisplay,
+                                                        color = palette.muted,
+                                                        fontSize = TandemTypography.caption,
+                                                    )
+                                                    Text(
+                                                        "assigned · ${categoryCountLabel(group.categories.size)}",
+                                                        color = palette.muted,
+                                                        fontSize = TandemTypography.caption,
+                                                        maxLines = 1,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        if (state.budgetShowProgressBars && !isTrackingBudget) {
+                                            val groupSpent = kotlin.math.abs(group.activityMinor)
+                                            val groupRemaining = group.balanceMinor.coerceAtLeast(0L)
+                                            val groupTotal = maxOf(group.assignedMinor, groupSpent + groupRemaining, groupSpent)
+                                            val groupProgress =
+                                                if (groupTotal > 0L) {
+                                                    (groupSpent.toDouble() / groupTotal.toDouble()).toFloat().coerceIn(0f, 1f)
+                                                } else {
+                                                    0f
+                                                }
+                                            Box(
+                                                Modifier
+                                                    .fillMaxWidth()
+                                                    .height(4.dp)
+                                                    .clip(CircleShape)
+                                                    .background(palette.accent.copy(alpha = 0.18f)),
+                                            ) {
+                                                Box(
+                                                    Modifier
+                                                        .fillMaxWidth(groupProgress)
+                                                        .height(4.dp)
+                                                        .clip(CircleShape)
+                                                        .background(
+                                                            if (group.balanceMinor < 0L) palette.warning else palette.accent,
+                                                        ),
+                                                )
+                                            }
+                                        }
                                     }
                                     if (isReordering && isLiveBudget) {
                                         BudgetItemReorderActions(
@@ -571,6 +721,9 @@ internal fun BudgetScreen(
                                             canMoveDown = groupIndex >= 0 && groupIndex < displayGroups.lastIndex,
                                             enabled = !state.readOnlyMode,
                                             itemName = group.name,
+                                            onDragStarted = ::startDrag,
+                                            onDragBy = { groupDrag.dragBy(it) },
+                                            onDragStopped = ::dropDrag,
                                             onMoveUp = {
                                                 enqueueGroupMove(group.id, groupIndex - 1)
                                             },
@@ -583,8 +736,10 @@ internal fun BudgetScreen(
                                             horizontalAlignment = Alignment.End,
                                             verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
                                         ) {
-                                            Text(
+                                            PrivacyAmountText(
                                                 state.formatCurrency(group.balanceMinor),
+                                                privacyModeEnabled = state.privacyModeEnabled,
+                                                fractionDigits = state.currencyFractionDigitsForDisplay,
                                                 color = palette.accent,
                                                 fontSize = TandemTypography.compactBody,
                                                 fontWeight = FontWeight.SemiBold,
@@ -610,41 +765,93 @@ internal fun BudgetScreen(
                         }
                     }
                     if (groupExpanded) {
-                        items(displayCategories, key = { "budget-category:${group.id}:${it.id}" }) { category ->
-                            SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
-                                ListRow(
-                                    category.name,
-                                    buildString {
-                                        append("Assigned ")
-                                        append(state.formatCurrency(category.assignedMinor))
-                                        append(" · spent ")
-                                        append(state.formatCurrency(kotlin.math.abs(category.activityMinor)))
-                                        if (category.pendingChanges) append(" · Waiting to sync")
-                                    },
-                                    leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
-                                    options =
-                                        ListRowOptions(
-                                            dense = compact,
-                                        ),
-                                    onClick = {
+                        items(orderedCategories, key = { "budget-category:${group.id}:${it.id}" }) { category ->
+                            val categoryIndex = orderedCategories.indexOfFirst { it.id == category.id }
+                            val categoryIsReordering = selectedBudgetCategoryOrderId == category.id
+
+                            fun startCategoryDrag() {
+                                selectedGroupOrderId = null
+                                selectedBudgetCategoryGroupId = group.id
+                                selectedBudgetCategoryOrderId = category.id
+                                mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, group.id)
+                                mobileSession.clearBudgetActionMessage()
+                                budgetCategoryDrag.start(categoryOrderIds, category.id)
+                            }
+
+                            fun dragCategoryBy(delta: Float) {
+                                if (budgetCategoryDrag.draggedItemId == category.id) {
+                                    budgetCategoryDrag.dragBy(delta)
+                                }
+                            }
+
+                            fun dropCategoryDrag() {
+                                budgetCategoryDrag.finish()?.let { result ->
+                                    if (result.itemId == category.id && result.finalOrder != result.startingOrder) {
+                                        scope.launch {
+                                            mobileSession.enqueueBudgetReorder(
+                                                state.selectedBudgetId,
+                                                group.id,
+                                                BudgetReorderKind.CATEGORY,
+                                                result.itemId,
+                                                itemTargetIdAfterMove(result.finalOrder, result.itemId),
+                                                result.finalOrder,
+                                                state.encryptedPassword.takeIf { it.isNotBlank() },
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            fun moveCategory(direction: Int) {
+                                val currentOrder = budgetCategoryDrag.currentOrder(queuedCategoryOrder)
+                                val nextOrder = reorderItemToIndex(currentOrder, category.id, categoryIndex + direction)
+                                if (nextOrder == currentOrder) return
+                                scope.launch {
+                                    mobileSession.enqueueBudgetReorder(
+                                        state.selectedBudgetId,
+                                        group.id,
+                                        BudgetReorderKind.CATEGORY,
+                                        category.id,
+                                        itemTargetIdAfterMove(nextOrder, category.id),
+                                        nextOrder,
+                                        state.encryptedPassword.takeIf { it.isNotBlank() },
+                                    )
+                                }
+                            }
+
+                            val categoryCardModifier =
+                                dragReorderItemModifier(
+                                    itemId = category.id,
+                                    dragState = budgetCategoryDrag,
+                                    reduceMotion = tandemReduceMotion,
+                                    dragEnabled = !state.readOnlyMode && orderedCategories.size > 1,
+                                    onDragStarted = ::startCategoryDrag,
+                                    onDragBy = ::dragCategoryBy,
+                                    onDragStopped = ::dropCategoryDrag,
+                                )
+                            BudgetCategoryCard(
+                                state = state,
+                                category = category,
+                                compact = compact,
+                                modifier = categoryCardModifier,
+                                isReordering = categoryIsReordering,
+                                canMoveUp = categoryIndex > 0,
+                                canMoveDown = categoryIndex >= 0 && categoryIndex < orderedCategories.lastIndex,
+                                onMoveUp = { moveCategory(-1) },
+                                onMoveDown = { moveCategory(1) },
+                                onDragStarted = ::startCategoryDrag,
+                                onDragBy = ::dragCategoryBy,
+                                onDragStopped = ::dropCategoryDrag,
+                                onClick = {
+                                    if (reorderModeConsumesItemTap(selectedBudgetCategoryOrderId)) {
+                                        selectedBudgetCategoryOrderId = null
+                                    } else {
                                         state.selectedCategoryGroupId = group.id
                                         state.selectedCategoryId = category.id
                                         navigation.open(AppRoute.CATEGORY_DETAIL)
-                                    },
-                                    trailingContent = {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
-                                        ) {
-                                            if (category.pendingChanges) PendingBudgetSyncIcon()
-                                            AvailableAmountPill(
-                                                state.formatCurrency(category.balanceMinor),
-                                                isOverspent = category.balanceMinor < 0,
-                                            )
-                                        }
-                                    },
-                                )
-                            }
+                                    }
+                                },
+                            )
                         }
                     }
                 }
@@ -663,7 +870,7 @@ internal fun BudgetScreen(
                             "Recent activity",
                             "${liveTransactions.size} synced transactions",
                             "See all",
-                            onClick = { navigation.selectTab(AppRoute.ACTIVITY) },
+                            onClick = { openRecentActivity(state, navigation) },
                             expanded = recentExpanded,
                             onToggleExpanded = { state.toggleBudgetSection(recentSectionKey) },
                         ) {}
@@ -693,27 +900,37 @@ internal fun BudgetScreen(
                     }
                 }
             }
-            item(key = "budget-bottom-spacer") { Spacer(Modifier.height(72.dp)) }
         }
-        if (shouldShowBudgetCreateAction(isLiveBudget, selectedGroupOrderId != null)) {
-            FloatingAction(
-                compact = true,
-                enabled = !state.readOnlyMode,
-                label = "Add category group",
-                contentDescription = "Add category group",
-                icon = Lucide.Plus,
-                outlined = true,
-                onClick = {
-                    categoryGroupNameDraft = ""
-                    newCategoryGroupIsIncome = false
-                    mobileSession.clearBudgetActionMessage()
-                    showCreateCategoryGroupDialog = true
-                },
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = categoryGroupActionEndPadding, bottom = TandemSpacing.large),
-            )
+        if (actionDockVisible) {
+            Row(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = TandemSpacing.large, bottom = TandemSpacing.large),
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FloatingAction(
+                    compact = true,
+                    enabled = !state.readOnlyMode,
+                    label = "Add group",
+                    contentDescription = "Add category group",
+                    icon = Lucide.Tags,
+                    outlined = true,
+                    onClick = {
+                        categoryGroupNameDraft = ""
+                        newCategoryGroupIsIncome = false
+                        mobileSession.clearBudgetActionMessage()
+                        showCreateCategoryGroupDialog = true
+                    },
+                )
+                if (showTransactionAction) {
+                    FloatingTransactionAction(
+                        compact = createActionsCompact,
+                        enabled = !state.readOnlyMode,
+                        onClick = { navigation.newTransaction(null) },
+                    )
+                }
+            }
         }
     }
     TandemTaskSheet(
@@ -788,6 +1005,7 @@ internal fun BudgetScreen(
                         modifier = Modifier.weight(1f),
                         color = tandemPalette.text,
                         fontSize = TandemTypography.sectionTitle,
+                        fontFamily = tandemAlloFamily(),
                         fontWeight = FontWeight.Bold,
                     )
                     TandemIconButton(
@@ -984,6 +1202,7 @@ internal fun BudgetScreen(
                             modifier = Modifier.weight(1f),
                             color = tandemPalette.text,
                             fontSize = TandemTypography.sectionTitle,
+                            fontFamily = tandemAlloFamily(),
                             fontWeight = FontWeight.Bold,
                         )
                         TandemIconButton(
@@ -1104,7 +1323,7 @@ internal fun BudgetScreen(
     if (isLiveBudget) {
         CategoryGroupNameDialog(
             visible = showCreateCategoryGroupDialog,
-            title = "Add category group",
+            title = "New category group",
             name = categoryGroupNameDraft,
             onNameChange = { categoryGroupNameDraft = it },
             busy = isCreatingCategoryGroup || mobileSession.isPersistingBudgetMutation,
@@ -1113,9 +1332,12 @@ internal fun BudgetScreen(
             messageActionLabel = mobileSession.budgetActionMessageActionLabel,
             onMessageAction = if (mobileSession.budgetActionMessageActionLabel == null) null else mobileSession::retryBudgetAction,
             placeholder = "Travel & Leisure",
+            nameLabel = "Group name",
+            description = "Keep related categories together under one heading.",
+            leadingIcon = Lucide.Tags,
             isIncome = newCategoryGroupIsIncome,
             onIncomeChange = { newCategoryGroupIsIncome = it },
-            saveLabel = "Add group",
+            saveLabel = "Create group",
             onDismiss = { showCreateCategoryGroupDialog = false },
             onSave = {
                 if (!isCreatingCategoryGroup) {
@@ -1141,9 +1363,9 @@ internal fun BudgetScreen(
         )
     }
     MonthPickerDialog(
-        visible = showMonthPicker,
+        visible = state.isBudgetMonthPickerOpen,
         state = state,
-        onDismiss = { showMonthPicker = false },
+        onDismiss = { state.isBudgetMonthPickerOpen = false },
     )
 }
 
@@ -1203,6 +1425,205 @@ private fun MonthPickerDialog(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BudgetCategoryCard(
+    state: AppState,
+    category: LiveCategorySummary,
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+    isReordering: Boolean = false,
+    canMoveUp: Boolean = false,
+    canMoveDown: Boolean = false,
+    onMoveUp: () -> Unit = {},
+    onMoveDown: () -> Unit = {},
+    onDragStarted: (() -> Unit)? = null,
+    onDragBy: ((Float) -> Unit)? = null,
+    onDragStopped: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
+    if (!state.budgetShowProgressBars) {
+        SurfaceCard(modifier = modifier, animateSizeChanges = false) {
+            ListRow(
+                category.name,
+                leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
+                options = ListRowOptions(dense = compact),
+                subtitleContent = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
+                    ) {
+                        Text("Assigned", color = tandemPalette.muted, fontSize = TandemTypography.caption)
+                        PrivacyAmountText(
+                            state.formatCurrency(category.assignedMinor),
+                            privacyModeEnabled = state.privacyModeEnabled,
+                            fractionDigits = state.currencyFractionDigitsForDisplay,
+                            color = tandemPalette.muted,
+                            fontSize = TandemTypography.caption,
+                        )
+                        Text("· Spent", color = tandemPalette.muted, fontSize = TandemTypography.caption)
+                        PrivacyAmountText(
+                            state.formatCurrency(kotlin.math.abs(category.activityMinor)),
+                            privacyModeEnabled = state.privacyModeEnabled,
+                            fractionDigits = state.currencyFractionDigitsForDisplay,
+                            color = tandemPalette.muted,
+                            fontSize = TandemTypography.caption,
+                        )
+                    }
+                },
+                onClick = onClick,
+                trailingContent = {
+                    if (isReordering) {
+                        BudgetItemReorderActions(
+                            itemName = category.name,
+                            canMoveUp = canMoveUp,
+                            canMoveDown = canMoveDown,
+                            enabled = !state.readOnlyMode,
+                            onMoveUp = onMoveUp,
+                            onMoveDown = onMoveDown,
+                            onDragStarted = onDragStarted,
+                            onDragBy = onDragBy,
+                            onDragStopped = onDragStopped,
+                        )
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+                        ) {
+                            if (category.pendingChanges) PendingBudgetSyncIcon()
+                            AvailableAmountPill(
+                                state.formatCurrency(category.balanceMinor),
+                                isOverspent = category.balanceMinor < 0,
+                                privacyModeEnabled = state.privacyModeEnabled,
+                                fractionDigits = state.currencyFractionDigitsForDisplay,
+                            )
+                        }
+                    }
+                },
+            )
+        }
+        return
+    }
+
+    val palette = tandemPalette
+    val spentMinor = kotlin.math.abs(category.activityMinor)
+    val progress =
+        when {
+            category.assignedMinor > 0L -> (spentMinor.toDouble() / category.assignedMinor.toDouble()).toFloat().coerceIn(0f, 1f)
+            spentMinor > 0L -> 1f
+            else -> 0f
+        }
+    val overspent = category.balanceMinor < 0L
+    val statusColor = if (overspent) palette.negative else palette.positive
+    SurfaceCard(
+        modifier = modifier,
+        onClick = onClick,
+        animateSizeChanges = false,
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = TandemLayout.listRowHorizontalInset, vertical = TandemSpacing.medium),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(TandemLayout.listRowGap),
+        ) {
+            Box(
+                Modifier
+                    .size(TandemLayout.listRowLeadingSize)
+                    .clip(RoundedCornerShape(TandemShapes.medium))
+                    .background(palette.raised),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    state.categoryIconFor(category.id, category.name),
+                    contentDescription = null,
+                    modifier = Modifier.size(TandemLayout.listRowIconSize),
+                    tint = palette.accent,
+                )
+            }
+            Column(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        category.name,
+                        modifier = Modifier.weight(1f),
+                        color = palette.text,
+                        fontSize = TandemTypography.body,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (category.pendingChanges) PendingBudgetSyncIcon()
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
+                ) {
+                    PrivacyAmountText(
+                        state.formatCurrency(spentMinor),
+                        privacyModeEnabled = state.privacyModeEnabled,
+                        fractionDigits = state.currencyFractionDigitsForDisplay,
+                        color = palette.muted,
+                        fontSize = TandemTypography.caption,
+                    )
+                    Text("spent of", color = palette.muted, fontSize = TandemTypography.caption)
+                    PrivacyAmountText(
+                        state.formatCurrency(category.assignedMinor),
+                        privacyModeEnabled = state.privacyModeEnabled,
+                        fractionDigits = state.currencyFractionDigitsForDisplay,
+                        color = palette.muted,
+                        fontSize = TandemTypography.caption,
+                    )
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(CircleShape)
+                        .background(palette.accent.copy(alpha = 0.16f)),
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(progress)
+                            .fillMaxHeight()
+                            .clip(CircleShape)
+                            .background(if (overspent) palette.negative else palette.accent),
+                    )
+                }
+            }
+            if (isReordering) {
+                BudgetItemReorderActions(
+                    itemName = category.name,
+                    canMoveUp = canMoveUp,
+                    canMoveDown = canMoveDown,
+                    enabled = !state.readOnlyMode,
+                    onMoveUp = onMoveUp,
+                    onMoveDown = onMoveDown,
+                    onDragStarted = onDragStarted,
+                    onDragBy = onDragBy,
+                    onDragStopped = onDragStopped,
+                )
+            } else {
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+                    PrivacyAmountText(
+                        state.formatCurrency(category.balanceMinor),
+                        privacyModeEnabled = state.privacyModeEnabled,
+                        fractionDigits = state.currencyFractionDigitsForDisplay,
+                        color = statusColor,
+                        fontSize = TandemTypography.compactBody,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                    )
+                    Text(
+                        if (overspent) "over" else "remaining",
+                        color = statusColor,
+                        fontSize = TandemTypography.micro,
+                    )
                 }
             }
         }

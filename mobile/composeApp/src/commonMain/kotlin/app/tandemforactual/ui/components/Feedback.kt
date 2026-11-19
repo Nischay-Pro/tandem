@@ -56,7 +56,12 @@ import com.composables.icons.lucide.X
 
 @Composable
 internal fun BodyText(text: String) {
-    Text(text, color = tandemPalette.muted, fontSize = TandemTypography.body, lineHeight = TandemTypography.bodyLineHeight)
+    Text(
+        amountAnnotatedString(text),
+        color = tandemPalette.muted,
+        fontSize = TandemTypography.body,
+        lineHeight = TandemTypography.bodyLineHeight,
+    )
 }
 
 internal enum class InlineMessageKind {
@@ -181,7 +186,7 @@ internal fun FeedbackMessageView(
             ) {
                 Icon(icon, contentDescription = kindDescription, modifier = Modifier.size(16.dp), tint = color)
                 Text(
-                    message.text,
+                    amountAnnotatedString(message.text),
                     modifier = textModifier.weight(1f),
                     color = color,
                     fontSize = TandemTypography.compactBody,
@@ -212,13 +217,15 @@ internal fun FeedbackMessageView(
                         Text(it, color = palette.text, fontSize = TandemTypography.compactBody, fontWeight = FontWeight.SemiBold)
                     }
                     Text(
-                        message.text,
+                        amountAnnotatedString(message.text),
                         modifier = textModifier,
                         color = palette.text,
                         fontSize = TandemTypography.compactBody,
                         lineHeight = TandemTypography.bodyLineHeight,
                     )
-                    message.detail?.let { Text(it, color = palette.muted, fontSize = TandemTypography.caption) }
+                    message.detail?.let {
+                        Text(amountAnnotatedString(it), color = palette.muted, fontSize = TandemTypography.caption)
+                    }
                 }
                 if (message.actionLabel != null && message.onAction != null) {
                     Text(
@@ -258,7 +265,7 @@ internal fun FeedbackMessageView(
                 ) {
                     Icon(icon, contentDescription = kindDescription, modifier = Modifier.size(20.dp), tint = color)
                     Text(
-                        message.title ?: message.text,
+                        amountAnnotatedString(message.title ?: message.text),
                         modifier = textModifier.weight(1f),
                         color = palette.text,
                         fontSize = TandemTypography.action,
@@ -311,7 +318,7 @@ internal fun EmptyState(
 @Composable
 internal fun LabelText(text: String) {
     Text(
-        text,
+        amountAnnotatedString(text),
         color = tandemPalette.muted,
         fontSize = TandemTypography.caption,
         letterSpacing = TandemTypography.captionLetterSpacing,
