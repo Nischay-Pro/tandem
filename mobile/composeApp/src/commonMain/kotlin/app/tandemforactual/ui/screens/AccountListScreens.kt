@@ -199,7 +199,7 @@ internal fun sortAccountsForList(accounts: List<LiveAccountSummary>): List<LiveA
         compareBy(
             { accountGroupOrder(liveAccountGroupLabel(it)) },
             { liveAccountGroupLabel(it).lowercase() },
-            { it.sortOrder ?: Long.MAX_VALUE },
+            { it.sortOrder ?: Double.MAX_VALUE },
             { it.name.lowercase() },
         ),
     )
@@ -551,14 +551,28 @@ internal fun AccountsScreen(
             orderAccountsForList(liveAccounts, accountOrderIds)
         }
 
+    // Drag callbacks can outlive the composition that created them, so read the
+    // queue's latest state when they run instead of a captured order.
+    fun latestAccountOrder(): List<String> =
+        dragReorder.displayOrder
+            ?: dragReorder.currentOrder(
+                budgetOrderForScreen(
+                    serverAccountOrder,
+                    mobileSession.budgetReorderStatus(state.selectedBudgetId, "accounts"),
+                    mobileSession
+                        .budgetReorderMovesFor(state.selectedBudgetId, "accounts")
+                        .filter { it.kind == BudgetReorderKind.MOVE_ACCOUNT },
+                ),
+            )
+
     fun enqueueAccountMove(
         accountId: String,
-        destinationIndex: Int,
+        direction: Int,
         movableAccountIds: List<String>,
     ) {
-        val currentOrder = dragReorder.displayOrder ?: dragReorder.currentOrder(queuedAccountOrder)
+        val currentOrder = latestAccountOrder()
         val currentGroupOrder = currentOrder.filter { it in movableAccountIds }
-        val nextGroupOrder = reorderItemToIndex(currentGroupOrder, accountId, destinationIndex)
+        val nextGroupOrder = reorderItemToIndex(currentGroupOrder, accountId, currentGroupOrder.indexOf(accountId) + direction)
         if (nextGroupOrder == currentGroupOrder) return
         val nextFullOrder = reorderAccountsWithinSlots(currentOrder, movableAccountIds, nextGroupOrder)
         scope.launch {
@@ -737,7 +751,7 @@ internal fun AccountsScreen(
                             selectedAccountOrderId = account.id
                             mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, "accounts")
                             mobileSession.clearBudgetActionMessage()
-                            val fullOrder = dragReorder.displayOrder ?: dragReorder.currentOrder(queuedAccountOrder)
+                            val fullOrder = latestAccountOrder()
                             dragReorder.start(
                                 itemOrder = fullOrder.filter { it in movableAccountIds },
                                 itemId = account.id,
@@ -776,10 +790,9 @@ internal fun AccountsScreen(
                                 itemId = account.id,
                                 dragState = dragReorder,
                                 reduceMotion = tandemReduceMotion,
-                                dragEnabled =
-                                    !state.readOnlyMode &&
-                                        !isRefreshing &&
-                                        movableAccountIds.size > 1,
+                                // Reorders are held as drafts and merged on the server, so a
+                                // sync in progress must not cancel or block a drag.
+                                dragEnabled = !state.readOnlyMode && movableAccountIds.size > 1,
                                 onDragStarted = ::startDrag,
                                 onDragBy = ::dragBy,
                                 onDragStopped = ::dropDrag,
@@ -793,7 +806,7 @@ internal fun AccountsScreen(
                             isReordering = isReordering,
                             canMoveUp = canMoveUp,
                             canMoveDown = canMoveDown,
-                            reorderEnabled = !state.readOnlyMode && !isRefreshing,
+                            reorderEnabled = !state.readOnlyMode,
                             onClick = {
                                 if (reorderModeConsumesItemTap(selectedAccountOrderId)) {
                                     selectedAccountOrderId = null
@@ -804,7 +817,6 @@ internal fun AccountsScreen(
                             },
                             onLongClick = {
                                 if (!state.readOnlyMode &&
-                                    !isRefreshing &&
                                     (selectedAccountOrderId != null || movableAccountIds.size > 1)
                                 ) {
                                     selectedAccountOrderId = account.id
@@ -815,8 +827,8 @@ internal fun AccountsScreen(
                                 state.selectedAccountId = account.id
                                 navigation.open(AppRoute.ACCOUNT_OPTIONS)
                             },
-                            onMoveUp = { enqueueAccountMove(account.id, currentIndex - 1, movableAccountIds) },
-                            onMoveDown = { enqueueAccountMove(account.id, currentIndex + 1, movableAccountIds) },
+                            onMoveUp = { enqueueAccountMove(account.id, -1, movableAccountIds) },
+                            onMoveDown = { enqueueAccountMove(account.id, 1, movableAccountIds) },
                             onDragStarted = ::startDrag,
                             onDragBy = ::dragBy,
                             onDragStopped = ::dropDrag,

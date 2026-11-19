@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
 
@@ -22,7 +23,8 @@ internal data class LiveAccountSummary(
     val closed: Boolean = false,
     val accountGroupId: String? = null,
     val accountGroupName: String? = null,
-    val sortOrder: Long? = null,
+    /** Actual's sort order; fractional after some moves, so kept as a Double. */
+    val sortOrder: Double? = null,
 )
 
 internal data class LiveCategorySummary(
@@ -90,6 +92,9 @@ internal fun BudgetRecordEntity.recordName(): String? = displayName?.takeIf { it
 
 internal fun JsonObject.stringValue(name: String): String? = (this[name] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
 
+internal fun JsonObject.doubleValue(name: String): Double? =
+    (this[name] as? JsonPrimitive)?.let { it.doubleOrNull ?: it.contentOrNull?.toDoubleOrNull() }?.takeIf { it.isFinite() }
+
 internal fun JsonObject.longValue(name: String): Long? =
     (this[name] as? JsonPrimitive)?.let { it.longOrNull ?: it.contentOrNull?.toLongOrNull() }
 
@@ -133,7 +138,7 @@ internal fun liveAccountSummaries(
             closed = closedOverrides[record.recordId] ?: body.booleanValue("closed") ?: false,
             accountGroupId = accountGroupId,
             accountGroupName = accountGroupId?.let(groupNames::get),
-            sortOrder = body.longValue("sort_order"),
+            sortOrder = body.doubleValue("sort_order"),
         )
     }
 }

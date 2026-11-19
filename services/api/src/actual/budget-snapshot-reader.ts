@@ -120,6 +120,7 @@ export class ActualBudgetSnapshotReader implements BudgetSnapshotReader {
     );
 
     const accounts = requireArray(await this.actual.getAccounts(), "accounts");
+    const accountBodies: JsonObject[] = [];
     for (const value of accounts) {
       const account = requireRecord(value, "account");
       const id = requireId(account.id, "account");
@@ -127,9 +128,10 @@ export class ActualBudgetSnapshotReader implements BudgetSnapshotReader {
       if (!Number.isSafeInteger(balance)) {
         throw new Error("Actual returned an invalid account balance");
       }
-      records.push(
-        this.record("account", { ...account, balance_current: balance }),
-      );
+      accountBodies.push({
+        ...account,
+        balance_current: balance,
+      } as JsonObject);
     }
 
     const categoryGroups = requireArray(
@@ -193,6 +195,19 @@ export class ActualBudgetSnapshotReader implements BudgetSnapshotReader {
     records.push(...budgetMonthRecords);
 
     records.push(...(await this.readTransactions()));
+
+    // Actual's account API omits the sort order, so read it separately; the
+    // app lists accounts in this order.
+    const accountSortOrders = await this.readAccountSortOrders();
+    for (const body of accountBodies) {
+      const sortOrder = accountSortOrders.get(body.id as string);
+      records.push(
+        this.record(
+          "account",
+          sortOrder === undefined ? body : { ...body, sort_order: sortOrder },
+        ),
+      );
+    }
     records.sort((left, right) =>
       left.type === right.type
         ? left.id.localeCompare(right.id)
@@ -204,6 +219,26 @@ export class ActualBudgetSnapshotReader implements BudgetSnapshotReader {
 
   private async readCurrentDisplaySettings(): Promise<BudgetDisplaySettings> {
     return readDisplaySettings(await this.actual.getPreferences());
+  }
+
+  private async readAccountSortOrders(): Promise<Map<string, number>> {
+    const result = await this.actual.aqlQuery(
+      this.actual.q("accounts").select(["id", "sort_order"]),
+    );
+    const rows =
+      isRecord(result) && Array.isArray(result.data) ? result.data : [];
+    const sortOrders = new Map<string, number>();
+    for (const row of rows) {
+      if (
+        isRecord(row) &&
+        typeof row.id === "string" &&
+        typeof row.sort_order === "number" &&
+        Number.isFinite(row.sort_order)
+      ) {
+        sortOrders.set(row.id, row.sort_order);
+      }
+    }
+    return sortOrders;
   }
 
   private async readTransactions(): Promise<BudgetProjectionRecord[]> {

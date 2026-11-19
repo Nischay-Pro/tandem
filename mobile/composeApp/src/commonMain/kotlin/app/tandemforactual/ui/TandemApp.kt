@@ -660,6 +660,20 @@ fun TandemApp(
             }
         }
     }
+    LaunchedEffect(routeEntry) {
+        // A back preview belongs to the screen the gesture started on. If another
+        // screen is now on top (navigation happened mid-gesture or before the
+        // preview was cleared), drop it so the old header and screen stop showing.
+        if (isBackPreviewStale(backPreviewRoute, backGestureOutgoingEntry, routeEntry)) {
+            backGestureCancelJob?.cancel()
+            backGestureCancelJob = null
+            backGestureCommitPending = false
+            backButtonTransitionRunning = false
+            backGestureProgress = 0f
+            backGestureOutgoingEntry = null
+            backPreviewRoute = null
+        }
+    }
     var previousRoute by remember { mutableStateOf(route) }
     val automaticSyncRequest =
         rememberUpdatedState(
@@ -1680,3 +1694,13 @@ internal fun AppRoute.isReportDetail(): Boolean = this == AppRoute.REPORT_DETAIL
 
 /** How often an open budget pulls changes from the server while the app is on screen. */
 internal const val BUDGET_PERIODIC_SYNC_INTERVAL_MS = 60_000L
+
+/**
+ * A back-gesture preview is stale once the screen on top is neither the screen
+ * the gesture started on nor the screen it was revealing.
+ */
+internal fun <T> isBackPreviewStale(
+    preview: T?,
+    gestureOrigin: T?,
+    current: T,
+): Boolean = preview != null && gestureOrigin != current && preview != current
