@@ -438,4 +438,14 @@ class LocaleFormattingTest {
             Locale.setDefault(original)
         }
     }
+
+    @Test
+    fun syncMomentsSayTodayOrYesterdayBeforeFallingBackToTheDate() {
+        val now = 1_795_100_000_000L
+        assertTrue(formatMomentAtEpochMilliseconds(now - 60_000L, now).startsWith("today at "))
+        assertTrue(formatMomentAtEpochMilliseconds(now - 86_400_000L, now).startsWith("yesterday at "))
+        val older = formatMomentAtEpochMilliseconds(now - 5 * 86_400_000L, now)
+        assertTrue(older.startsWith(platformFormatDateAtEpochMilliseconds(now - 5 * 86_400_000L)))
+        assertTrue(older.contains(" at "))
+    }
 }

@@ -2,6 +2,16 @@
 
 package app.tandemforactual.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
@@ -25,12 +36,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.ui.TandemMotion
+import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.LabelText
 import app.tandemforactual.ui.components.PrimaryButton
@@ -41,8 +55,11 @@ import app.tandemforactual.ui.model.booleanValue
 import app.tandemforactual.ui.model.longValue
 import app.tandemforactual.ui.model.recordName
 import app.tandemforactual.ui.model.stringValue
+import app.tandemforactual.ui.tandemMotionSpec
+import app.tandemforactual.ui.tandemReduceMotion
 import com.composables.icons.lucide.ArrowLeftRight
 import com.composables.icons.lucide.CalendarClock
+import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Cloud
@@ -53,6 +70,7 @@ import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Receipt
 import com.composables.icons.lucide.RefreshCw
+import com.composables.icons.lucide.TriangleAlert
 import com.composables.icons.lucide.WalletCards
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -138,6 +156,7 @@ internal fun SyncCenterScreen(
                 isServerReachable = mobileSession.isServerReachable,
                 syncError = mobileSession.syncError,
                 lastSyncedAtEpochMs = mobileSession.localSyncState?.lastSyncedAtEpochMs,
+                nowEpochMilliseconds = mobileSession.nowEpochMillis(),
                 onSyncNow = onSyncNow.takeIf { !mobileSession.isSyncing },
                 onPendingClick = { navigation.open(AppRoute.PENDING_CHANGES) },
                 onReviewClick = {
@@ -258,56 +277,19 @@ internal fun PendingChangesScreen(
     val pendingCount = transactions.size + schedules.size + budgetMutations.size
 
     PageLazyColumn {
-        if (pendingCount > 0) {
-            item(key = "pending-changes-summary") {
-                SurfaceCard {
-                    Column(
-                        Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                        ) {
-                            Icon(Lucide.CloudSync, contentDescription = null, tint = tandemPalette.syncing)
-                            Text(
-                                "$pendingCount pending",
-                                color = tandemPalette.text,
-                                fontSize = TandemTypography.cardTitle,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Spacer(Modifier.weight(1f))
-                        }
-                        if (onSyncNow != null) {
-                            PrimaryButton(
-                                if (mobileSession.isSyncing) "Syncing…" else "Sync now",
-                                enabled = !mobileSession.isSyncing,
-                                loading = mobileSession.isSyncing,
-                                onClick = onSyncNow,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        if (pendingCount == 0) {
-            item(key = "pending-changes-empty") {
-                SurfaceCard {
-                    Row(
-                        Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                    ) {
-                        Icon(Lucide.CloudCheck, contentDescription = null, tint = tandemPalette.positive)
-                        Text(
-                            "All caught up",
-                            color = tandemPalette.text,
-                            fontSize = TandemTypography.cardTitle,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                }
+        item(key = "pending-changes-heading") {
+            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                SyncPageHeading(
+                    eyebrow = "Sync",
+                    title = if (pendingCount > 0) "Pending changes." else "All caught up.",
+                    detail =
+                        when (pendingCount) {
+                            0 -> "Every change on this device is in Actual."
+                            1 -> "One change is saved on this device. It syncs within a minute, or now."
+                            else -> "$pendingCount changes are saved on this device. They sync within a minute, or now."
+                        },
+                )
+                if (pendingCount > 0) SyncCountChip("$pendingCount waiting to sync", tandemPalette.syncing)
             }
         }
 
@@ -373,8 +355,48 @@ internal fun PendingChangesScreen(
                 }
             }
         }
+        if (pendingCount > 0) {
+            item(key = "pending-changes-footer") {
+                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.large)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(16.dp), tint = tandemPalette.positive)
+                        Text("All edits are saved on this device.", color = tandemPalette.muted, fontSize = TandemTypography.compactBody)
+                    }
+                    if (onSyncNow != null) {
+                        PrimaryButton(
+                            if (mobileSession.isSyncing) {
+                                "Syncing…"
+                            } else {
+                                "Sync $pendingCount ${if (pendingCount == 1) "change" else "changes"}"
+                            },
+                            enabled = !mobileSession.isSyncing,
+                            loading = mobileSession.isSyncing,
+                            onClick = onSyncNow,
+                        )
+                    }
+                }
+            }
+        }
         item(key = "pending-changes-bottom-spacer") { Spacer(Modifier.height(72.dp)) }
     }
+}
+
+@Composable
+internal fun SyncCountChip(
+    label: String,
+    color: androidx.compose.ui.graphics.Color,
+) {
+    Text(
+        label.uppercase(),
+        Modifier
+            .clip(RoundedCornerShape(TandemShapes.pill))
+            .background(color.copy(alpha = 0.14f))
+            .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.extraSmall),
+        color = color,
+        fontSize = TandemTypography.caption,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = TandemTypography.captionLetterSpacing,
+    )
 }
 
 @Composable
@@ -478,6 +500,7 @@ private fun SyncOverviewCard(
     isServerReachable: Boolean,
     syncError: String?,
     lastSyncedAtEpochMs: Long?,
+    nowEpochMilliseconds: Long,
     onSyncNow: (() -> Unit)?,
     onPendingClick: () -> Unit,
     onReviewClick: () -> Unit,
@@ -486,17 +509,10 @@ private fun SyncOverviewCard(
     var showErrorDetails by rememberSaveable(syncError) { mutableStateOf(false) }
     val status =
         when {
-            syncError != null ->
-                SyncStatusPresentation(
-                    title = "Sync failed",
-                    detail = "Actual did not confirm every change.",
-                    icon = Lucide.CloudAlert,
-                    color = palette.negative,
-                )
             isSyncing ->
                 SyncStatusPresentation(
                     title = "Syncing now",
-                    detail = "Sending changes to Actual.",
+                    detail = "Getting the latest from Actual and sending your changes.",
                     icon = Lucide.CloudSync,
                     color = palette.syncing,
                 )
@@ -504,13 +520,25 @@ private fun SyncOverviewCard(
                 SyncStatusPresentation(
                     title = "You’re offline",
                     detail =
-                        if (waitingCount > 0) {
-                            "$waitingCount ${if (waitingCount == 1) "change" else "changes"} saved on this device."
-                        } else {
-                            "Your budget is saved on this device."
+                        when (waitingCount) {
+                            0 -> "Showing the budget saved on this device. The latest from Actual loads when you reconnect."
+                            1 -> "1 change is saved on this device. It syncs when you reconnect."
+                            else -> "$waitingCount changes are saved on this device. They sync when you reconnect."
                         },
                     icon = Lucide.CloudOff,
                     color = palette.warning,
+                )
+            syncError != null ->
+                SyncStatusPresentation(
+                    title = "Couldn’t finish syncing",
+                    detail =
+                        when (waitingCount) {
+                            0 -> "Couldn’t load the latest from Actual. Your saved copy is still here."
+                            1 -> "Your change is saved on this device."
+                            else -> "Your $waitingCount changes are saved on this device."
+                        },
+                    icon = Lucide.CloudAlert,
+                    color = palette.negative,
                 )
             attentionCount > 0 ->
                 SyncStatusPresentation(
@@ -541,106 +569,221 @@ private fun SyncOverviewCard(
                     color = palette.accent,
                 )
         }
-    SurfaceCard {
-        Column(
-            Modifier.fillMaxWidth().padding(TandemSpacing.large),
-            verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-        ) {
-            Text(
-                budgetName,
-                color = palette.muted,
-                fontSize = TandemTypography.label,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(TandemSpacing.large)) {
+        SyncPageHeading(
+            eyebrow = budgetName,
+            title = "${status.title}.",
+            detail = status.detail,
+        )
+        SyncStatusRing(
+            icon = status.icon,
+            color = status.color,
+            active = isSyncing,
+            caption =
+                lastSyncedAtEpochMs?.let { "Last synced ${formatMomentAtEpochMilliseconds(it, nowEpochMilliseconds)}" }
+                    ?: "Not synced yet",
+        )
+        if (syncError != null) {
+            val chevronRotation by animateFloatAsState(
+                if (showErrorDetails) 90f else 0f,
+                tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
+                label = "sync-error-chevron",
             )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                Box(
+            SurfaceCard {
+                Row(
                     Modifier
-                        .size(54.dp)
-                        .clip(RoundedCornerShape(TandemShapes.large))
-                        .background(status.color.copy(alpha = 0.13f))
-                        .border(1.dp, status.color.copy(alpha = 0.35f), RoundedCornerShape(TandemShapes.large)),
-                    contentAlignment = Alignment.Center,
+                        .fillMaxWidth()
+                        .clickable(
+                            role = Role.Button,
+                            onClickLabel = if (showErrorDetails) "Hide error details" else "Show error details",
+                        ) { showErrorDetails = !showErrorDetails }
+                        .animateContentSize(tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS))
+                        .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
                 ) {
-                    Icon(status.icon, contentDescription = null, modifier = Modifier.size(28.dp), tint = status.color)
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-                    Text(
-                        status.title,
-                        color = palette.text,
-                        fontSize = TandemTypography.sectionTitle,
-                        fontFamily = tandemAlloFamily(),
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (waitingCount == 0 && attentionCount == 0) {
+                    Icon(Lucide.CircleAlert, contentDescription = null, modifier = Modifier.size(22.dp), tint = status.color)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+                        Text("What went wrong", color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
                         Text(
-                            status.detail,
+                            syncError,
                             color = palette.muted,
-                            fontSize = TandemTypography.compactBody,
+                            fontSize = TandemTypography.caption,
                             lineHeight = TandemTypography.compactLineHeight,
+                            maxLines = if (showErrorDetails) Int.MAX_VALUE else 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
-                }
-            }
-
-            if (syncError != null) {
-                Text(
-                    syncError,
-                    color = palette.text,
-                    fontSize = TandemTypography.caption,
-                    lineHeight = TandemTypography.compactLineHeight,
-                    maxLines = if (showErrorDetails) 8 else 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    if (showErrorDetails) "Hide error details" else "View error details",
-                    Modifier.clickable(role = Role.Button) { showErrorDetails = !showErrorDetails },
-                    color = palette.accent,
-                    fontSize = TandemTypography.label,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                SyncCountTile(
-                    label = "Pending changes",
-                    count = waitingCount,
-                    icon = Lucide.RefreshCw,
-                    color = palette.syncing,
-                    modifier = Modifier.weight(1f),
-                    onClick = onPendingClick,
-                )
-                if (attentionCount > 0) {
-                    SyncCountTile(
-                        label = "Needs review",
-                        count = attentionCount,
-                        icon = Lucide.CircleAlert,
-                        color = palette.warning,
-                        modifier = Modifier.weight(1f),
-                        onClick = onReviewClick,
+                    Icon(
+                        Lucide.ChevronRight,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp).graphicsLayer { rotationZ = chevronRotation },
+                        tint = palette.muted,
                     )
                 }
             }
+        }
+        SurfaceCard {
+            SyncSummaryRow(
+                icon = Lucide.RefreshCw,
+                color = palette.syncing,
+                title = "Pending changes",
+                detail =
+                    when (waitingCount) {
+                        0 -> "No changes waiting to upload"
+                        1 -> "1 change saved on this device"
+                        else -> "$waitingCount changes saved on this device"
+                    },
+                count = waitingCount,
+                onClick = onPendingClick,
+            )
+            DividerLine()
+            SyncSummaryRow(
+                icon = Lucide.TriangleAlert,
+                color = palette.warning,
+                title = "Needs review",
+                detail =
+                    when (attentionCount) {
+                        0 -> "Nothing needs a decision"
+                        1 -> "1 change needs a decision"
+                        else -> "$attentionCount changes need a decision"
+                    },
+                count = attentionCount,
+                onClick = onReviewClick.takeIf { attentionCount > 0 },
+            )
+        }
+        PrimaryButton(
+            when {
+                isSyncing -> "Syncing…"
+                !isServerReachable -> "Try connecting again"
+                syncError != null -> "Try again"
+                waitingCount > 0 -> "Sync $waitingCount ${if (waitingCount == 1) "change" else "changes"}"
+                else -> "Sync now"
+            },
+            enabled = onSyncNow != null,
+            loading = isSyncing,
+            onClick = { onSyncNow?.invoke() },
+        )
+    }
+}
 
+@Composable
+internal fun SyncPageHeading(
+    eyebrow: String,
+    title: String,
+    detail: String?,
+) {
+    val palette = tandemPalette
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+        Text(
+            eyebrow.uppercase(),
+            color = palette.muted,
+            fontSize = TandemTypography.caption,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = TandemTypography.captionLetterSpacing,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            title,
+            color = palette.text,
+            fontSize = TandemTypography.setupHeadline,
+            lineHeight = TandemTypography.setupHeadlineLineHeight,
+            fontFamily = tandemAlloFamily(),
+            fontWeight = FontWeight.Bold,
+        )
+        detail?.let {
             Text(
-                lastSyncedAtEpochMs?.let { "Last synced ${formatDateAtEpochMilliseconds(it)}" } ?: "Not synced yet",
+                it,
                 color = palette.muted,
-                fontSize = TandemTypography.caption,
+                fontSize = TandemTypography.body,
+                lineHeight = TandemTypography.bodyLineHeight,
             )
-            PrimaryButton(
-                when {
-                    isSyncing -> "Syncing…"
-                    syncError != null -> "Try again"
-                    !isServerReachable -> "Try connecting again"
-                    else -> "Sync now"
+        }
+    }
+}
+
+@Composable
+internal fun SyncStatusRing(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    color: androidx.compose.ui.graphics.Color,
+    active: Boolean,
+    caption: String,
+) {
+    val palette = tandemPalette
+    val ringColor by animateColorAsState(color, tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS), label = "sync-ring")
+    val breath by
+        rememberInfiniteTransition(label = "sync-ring-breath").animateFloat(
+            initialValue = 1f,
+            targetValue = 0f,
+            animationSpec = infiniteRepeatable(tween(900, easing = TandemMotion.movementEasing), RepeatMode.Reverse),
+            label = "sync-ring-phase",
+        )
+    val emphasis by animateFloatAsState(
+        if (active && !tandemReduceMotion) breath else 1f,
+        spring(stiffness = Spring.StiffnessMediumLow),
+        label = "sync-ring-emphasis",
+    )
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = TandemSpacing.medium),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+    ) {
+        Box(
+            Modifier
+                .size(104.dp)
+                .graphicsLayer {
+                    scaleX = 0.94f + 0.06f * emphasis
+                    scaleY = 0.94f + 0.06f * emphasis
+                }.clip(CircleShape)
+                .background(ringColor.copy(alpha = 0.08f + 0.06f * (1f - emphasis)))
+                .border(2.dp, ringColor.copy(alpha = 0.35f + 0.4f * (1f - emphasis)), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(40.dp), tint = ringColor)
+        }
+        Text(caption, color = palette.muted, fontSize = TandemTypography.compactBody)
+    }
+}
+
+@Composable
+private fun SyncSummaryRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    color: androidx.compose.ui.graphics.Color,
+    title: String,
+    detail: String,
+    count: Int,
+    onClick: (() -> Unit)?,
+) {
+    val palette = tandemPalette
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
+            .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp), tint = if (count > 0) color else palette.muted)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+            Text(title, color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
+            Text(detail, color = palette.muted, fontSize = TandemTypography.caption)
+        }
+        Text(
+            count.toString(),
+            color =
+                if (count >
+                    0
+                ) {
+                    color
+                } else {
+                    palette.muted
                 },
-                enabled = onSyncNow != null,
-                loading = isSyncing,
-                onClick = { onSyncNow?.invoke() },
-            )
+            fontSize = TandemTypography.body,
+            fontWeight = FontWeight.SemiBold,
+        )
+        if (onClick != null) {
+            Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = palette.muted)
         }
     }
 }

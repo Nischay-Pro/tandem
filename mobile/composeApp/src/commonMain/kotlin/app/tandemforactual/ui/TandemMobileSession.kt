@@ -233,7 +233,7 @@ private class LocalBudgetRepositoryMutationQueuePersistence(
 internal class TandemMobileSession(
     private val apiClient: TandemApiClient,
     database: TandemDatabase?,
-    private val nowEpochMillis: () -> Long,
+    internal val nowEpochMillis: () -> Long,
     private val credentialStore: DeviceCredentialStore? = null,
     budgetMutationQueuePersistenceOverride: BudgetMutationQueuePersistence? = null,
     private val currentDateIso: () -> String = ::platformTodayIsoDate,
