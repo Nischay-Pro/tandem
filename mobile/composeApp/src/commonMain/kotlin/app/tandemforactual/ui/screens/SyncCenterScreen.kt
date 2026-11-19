@@ -14,19 +14,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -36,14 +35,14 @@ import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.LabelText
 import app.tandemforactual.ui.components.PrimaryButton
 import app.tandemforactual.ui.components.SurfaceCard
-import app.tandemforactual.ui.components.TandemActionButton
-import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
 import app.tandemforactual.ui.model.LiveScheduleSummary
 import app.tandemforactual.ui.model.booleanValue
 import app.tandemforactual.ui.model.longValue
 import app.tandemforactual.ui.model.recordName
 import app.tandemforactual.ui.model.stringValue
+import com.composables.icons.lucide.ArrowLeftRight
+import com.composables.icons.lucide.CalendarClock
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Cloud
@@ -52,9 +51,11 @@ import com.composables.icons.lucide.CloudCheck
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Receipt
 import com.composables.icons.lucide.RefreshCw
-import kotlinx.coroutines.launch
+import com.composables.icons.lucide.WalletCards
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 
 internal fun openNeedsReview(
@@ -126,15 +127,6 @@ internal fun SyncCenterScreen(
     val schedulesWaiting = scheduleActions.filter { it.status in setOf("queued", "sending") }
     val attentionCount = transactionsNeedingReview.size + budgetMutationReviews.size + schedulesNeedingReview.size
     val waitingCount = transactionsWaiting.size + budgetMutations.size + schedulesWaiting.size
-    val attentionItemCount =
-        transactionsNeedingReview.size + schedulesNeedingReview.size + budgetMutationReviews.size
-    val listState = LocalRouteLazyListState.current
-    val scope = rememberCoroutineScope()
-    val waitingSectionIndex = if (attentionItemCount > 0) 2 + attentionItemCount else 1
-
-    fun scrollToSection(index: Int) {
-        scope.launch { listState?.animateScrollToItem(index) }
-    }
 
     PageLazyColumn {
         item(key = "sync-center-overview") {
@@ -147,7 +139,7 @@ internal fun SyncCenterScreen(
                 syncError = mobileSession.syncError,
                 lastSyncedAtEpochMs = mobileSession.localSyncState?.lastSyncedAtEpochMs,
                 onSyncNow = onSyncNow.takeIf { !mobileSession.isSyncing },
-                onPendingClick = { scrollToSection(waitingSectionIndex) },
+                onPendingClick = { navigation.open(AppRoute.PENDING_CHANGES) },
                 onReviewClick = {
                     if (!openNeedsReview(
                             state,
@@ -157,110 +149,323 @@ internal fun SyncCenterScreen(
                             budgetMutationReviews.firstOrNull(),
                         )
                     ) {
-                        scrollToSection(1)
+                        navigation.open(AppRoute.CONFLICT_INBOX)
                     }
                 },
             )
         }
 
         if (attentionCount > 0) {
-            item(key = "sync-center-review-heading") {
-                ChangeSectionHeading(
-                    title = "Needs your attention",
+            item(key = "sync-center-review-section") {
+                SyncChangeSection(
+                    title = "Needs review",
                     detail = "$attentionCount ${if (attentionCount == 1) "change" else "changes"}",
-                )
-            }
-            items(transactionsNeedingReview, key = { "transaction-review:${it.operationId}" }) { operation ->
-                val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
-                val status = writeStatusLabel(operation.status)
-                ChangeSummaryCard(
-                    title = transaction?.payee ?: "Transaction",
-                    summary = transactionChangeSummary(operation, transaction, state, mobileSession),
-                    status = status,
-                    explanation = transactionStatusExplanation(operation.status),
-                    needsAttention = true,
-                    actionLabel = "View details",
-                    onClick = {
-                        mobileSession.clearTransactionWriteMessage()
-                        state.selectedConflictOperationId = operation.operationId
-                        navigation.open(
-                            if (operation.status == "conflict") AppRoute.CONFLICT_REVIEW else AppRoute.UNCERTAIN_WRITE,
+                ) {
+                    transactionsNeedingReview.forEachIndexed { index, operation ->
+                        val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
+                        SyncChangeRow(
+                            title = transaction?.payee ?: "Transaction",
+                            summary = transactionChangeSummary(operation, transaction, state, mobileSession),
+                            status = writeStatusLabel(operation.status),
+                            attention = true,
+                            showDivider = index > 0,
+                            onClick = {
+                                mobileSession.clearTransactionWriteMessage()
+                                state.selectedConflictOperationId = operation.operationId
+                                navigation.open(
+                                    if (operation.status == "conflict") AppRoute.CONFLICT_REVIEW else AppRoute.UNCERTAIN_WRITE,
+                                )
+                            },
                         )
-                    },
-                )
-            }
-            items(schedulesNeedingReview, key = { "schedule-review:${it.operationId}" }) { operation ->
-                val schedule = liveSchedules.firstOrNull { it.id == operation.recordId }
-                val actionLabel = mobileSession.scheduleActionStatusActionLabel(operation)
-                ChangeSummaryCard(
-                    title = scheduleActionTitle(operation.action, schedule?.name),
-                    summary = scheduleActionSummary(operation.action, schedule, state),
-                    status = writeStatusLabel(operation.status),
-                    explanation = scheduleStatusExplanation(operation.status),
-                    needsAttention = true,
-                    actionLabel = actionLabel,
-                    onClick = if (actionLabel != null) ({ mobileSession.performScheduleActionStatusAction(operation) }) else null,
-                )
-            }
-            items(budgetMutationReviews, key = { "budget-review:${it.operationId}" }) { operation ->
-                val mutation = decodeBudgetReorderQueue(operation.patchJson).moves.singleOrNull()
-                val itemName = budgetMutationItemName(mutation, operation, mobileSession, liveBudgetMonth)
-                ChangeSummaryCard(
-                    title = itemName,
-                    summary =
-                        mutation?.let { budgetMutationChangeTitle(it, itemName, state, mobileSession) }
-                            ?: budgetMutationTitle(operation.action, itemName),
-                    status = budgetMutationStatusLabel(operation.status),
-                    explanation = budgetMutationStatusSummary(operation, mutation),
-                    needsAttention = true,
-                    actionLabel = "View details",
-                    onClick = {
-                        state.selectedConflictOperationId = operation.operationId
-                        navigation.open(AppRoute.UNCERTAIN_WRITE)
-                    },
-                )
+                    }
+                    schedulesNeedingReview.forEachIndexed { index, operation ->
+                        val schedule = liveSchedules.firstOrNull { it.id == operation.recordId }
+                        SyncChangeRow(
+                            title = scheduleActionTitle(operation.action, schedule?.name),
+                            summary = scheduleActionSummary(operation.action, schedule, state),
+                            status = writeStatusLabel(operation.status),
+                            attention = true,
+                            showDivider = transactionsNeedingReview.isNotEmpty() || index > 0,
+                            onClick = {
+                                state.pendingScheduleToOpenId = operation.recordId
+                                navigation.open(AppRoute.SCHEDULES)
+                            },
+                        )
+                    }
+                    budgetMutationReviews.forEachIndexed { index, operation ->
+                        val mutation = decodeBudgetReorderQueue(operation.patchJson).moves.singleOrNull()
+                        val itemName = budgetMutationItemName(mutation, operation, mobileSession, liveBudgetMonth)
+                        SyncChangeRow(
+                            title = itemName,
+                            summary =
+                                mutation?.let { budgetMutationPendingSummary(it, state, mobileSession) }
+                                    ?: budgetMutationTitle(operation.action, itemName),
+                            status = budgetMutationStatusLabel(operation.status),
+                            attention = true,
+                            showDivider =
+                                transactionsNeedingReview.isNotEmpty() ||
+                                    schedulesNeedingReview.isNotEmpty() ||
+                                    index > 0,
+                            onClick = {
+                                state.selectedConflictOperationId = operation.operationId
+                                navigation.open(AppRoute.UNCERTAIN_WRITE)
+                            },
+                        )
+                    }
+                }
             }
         }
 
-        if (waitingCount > 0) {
-            item(key = "sync-center-waiting-heading") {
-                ChangeSectionHeading(
-                    title = "Waiting to sync",
-                    detail = "$waitingCount ${if (waitingCount == 1) "change" else "changes"}",
-                )
-            }
-            items(transactionsWaiting, key = { "transaction-waiting:${it.operationId}" }) { operation ->
-                val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
-                ChangeSummaryCard(
-                    title = transaction?.payee ?: "Transaction",
-                    summary = transactionChangeSummary(operation, transaction, state, mobileSession),
-                    status = if (operation.status == "sending") "Syncing" else "On this device",
-                    explanation = "This edit is saved on this device. Actual has not confirmed it yet.",
-                    needsAttention = false,
-                )
-            }
-            items(schedulesWaiting, key = { "schedule-waiting:${it.operationId}" }) { operation ->
-                val schedule = liveSchedules.firstOrNull { it.id == operation.recordId }
-                ChangeSummaryCard(
-                    title = scheduleActionTitle(operation.action, schedule?.name),
-                    summary = scheduleActionSummary(operation.action, schedule, state),
-                    status = if (operation.status == "sending") "Syncing" else "On this device",
-                    explanation = "Saved on this device. It will reach Actual when sync completes.",
-                    needsAttention = false,
-                )
-            }
-            items(budgetMutations, key = { "budget-waiting:${it.operationId}" }) { mutation ->
-                val itemName = budgetMutationItemName(mutation, null, mobileSession, liveBudgetMonth)
-                ChangeSummaryCard(
-                    title = itemName,
-                    summary = budgetMutationChangeTitle(mutation, itemName, state, mobileSession),
-                    status = "On this device",
-                    explanation = "Saved here. It has not been applied in Actual yet.",
-                    needsAttention = false,
-                )
+        item(key = "sync-center-bottom-spacer") { Spacer(Modifier.height(72.dp)) }
+    }
+}
+
+@Composable
+internal fun PendingChangesScreen(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
+    liveTransactions: List<TransactionItem>,
+    liveBudgetMonth: LiveBudgetMonthSummary?,
+    liveSchedules: List<LiveScheduleSummary>,
+    onSyncNow: (() -> Unit)?,
+) {
+    if (state.selectedBudgetId.isBlank()) {
+        PageColumn {
+            EmptyState(
+                "Choose a budget",
+                "Open an Actual budget to see changes saved on this device.",
+                actionLabel = "Choose budget",
+                onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+            )
+        }
+        return
+    }
+
+    val transactions =
+        mobileSession.pendingWrites.filter {
+            it.budgetId == state.selectedBudgetId &&
+                it.recordType == "transaction" &&
+                it.status in setOf("queued", "sending")
+        }
+    val schedules =
+        mobileSession.pendingWrites.filter {
+            it.budgetId == state.selectedBudgetId &&
+                it.recordType == "schedule-action" &&
+                it.status in setOf("queued", "sending")
+        }
+    val budgetMutations = mobileSession.pendingBudgetMutationsFor(state.selectedBudgetId)
+    val pendingCount = transactions.size + schedules.size + budgetMutations.size
+
+    PageLazyColumn {
+        if (pendingCount > 0) {
+            item(key = "pending-changes-summary") {
+                SurfaceCard {
+                    Column(
+                        Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                        ) {
+                            Icon(Lucide.CloudSync, contentDescription = null, tint = tandemPalette.syncing)
+                            Text(
+                                "$pendingCount pending",
+                                color = tandemPalette.text,
+                                fontSize = TandemTypography.cardTitle,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Spacer(Modifier.weight(1f))
+                        }
+                        if (onSyncNow != null) {
+                            PrimaryButton(
+                                if (mobileSession.isSyncing) "Syncing…" else "Sync now",
+                                enabled = !mobileSession.isSyncing,
+                                loading = mobileSession.isSyncing,
+                                onClick = onSyncNow,
+                            )
+                        }
+                    }
+                }
             }
         }
-        item(key = "sync-center-bottom-spacer") { Spacer(Modifier.height(72.dp)) }
+
+        if (pendingCount == 0) {
+            item(key = "pending-changes-empty") {
+                SurfaceCard {
+                    Row(
+                        Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                    ) {
+                        Icon(Lucide.CloudCheck, contentDescription = null, tint = tandemPalette.positive)
+                        Text(
+                            "All caught up",
+                            color = tandemPalette.text,
+                            fontSize = TandemTypography.cardTitle,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+            }
+        }
+
+        if (transactions.isNotEmpty()) {
+            item(key = "pending-transactions-section") {
+                SyncChangeSection("Activity", transactions.size.toString()) {
+                    transactions.forEachIndexed { index, operation ->
+                        val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
+                        PendingChangeRow(
+                            title = transaction?.payee ?: "Transaction",
+                            summary = pendingTransactionSummary(operation, transaction, state, mobileSession),
+                            icon = Lucide.Receipt,
+                            showDivider = index > 0,
+                            onClick = {
+                                mobileSession.clearTransactionWriteMessage()
+                                state.selectedConflictOperationId = operation.operationId
+                                navigation.open(AppRoute.UNCERTAIN_WRITE)
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        if (schedules.isNotEmpty()) {
+            item(key = "pending-schedules-section") {
+                SyncChangeSection("Scheduled", schedules.size.toString()) {
+                    schedules.forEachIndexed { index, operation ->
+                        val schedule = liveSchedules.firstOrNull { it.id == operation.recordId }
+                        PendingChangeRow(
+                            title = schedule?.name ?: "Scheduled payment",
+                            summary = pendingScheduleSummary(operation.action, schedule, state),
+                            icon = Lucide.CalendarClock,
+                            showDivider = index > 0,
+                            onClick = {
+                                state.pendingScheduleToOpenId = operation.recordId
+                                navigation.open(AppRoute.SCHEDULES)
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        if (budgetMutations.isNotEmpty()) {
+            item(key = "pending-budget-section") {
+                SyncChangeSection("Budget", budgetMutations.size.toString()) {
+                    budgetMutations.forEachIndexed { index, mutation ->
+                        val operation = mobileSession.pendingWrites.firstOrNull { it.operationId == mutation.operationId }
+                        val itemName = budgetMutationItemName(mutation, operation, mobileSession, liveBudgetMonth)
+                        PendingChangeRow(
+                            title = pendingBudgetMutationTitle(itemName),
+                            summary = budgetMutationPendingSummary(mutation, state, mobileSession),
+                            icon = if (mutation.kind == BudgetReorderKind.MOVE_BUDGET_MONEY) Lucide.ArrowLeftRight else Lucide.WalletCards,
+                            amountChanges = budgetMutationAmountChanges(mutation, state, mobileSession),
+                            showDivider = index > 0,
+                            onClick = {
+                                state.selectedConflictOperationId = mutation.operationId
+                                navigation.open(AppRoute.UNCERTAIN_WRITE)
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        item(key = "pending-changes-bottom-spacer") { Spacer(Modifier.height(72.dp)) }
+    }
+}
+
+@Composable
+private fun PendingChangeRow(
+    title: String,
+    summary: String,
+    icon: ImageVector,
+    amountChanges: List<BudgetAmountChange> = emptyList(),
+    showDivider: Boolean,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    Column {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(role = Role.Button, onClickLabel = "Review $title", onClick = onClick)
+                .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+        ) {
+            Box(
+                Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(TandemShapes.medium))
+                    .background(palette.accent.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = palette.accent)
+            }
+            Column(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
+            ) {
+                if (amountChanges.isNotEmpty()) {
+                    amountChanges.forEach { change ->
+                        AmountTransitionLine(change)
+                    }
+                } else {
+                    Text(
+                        title,
+                        color = palette.text,
+                        fontSize = TandemTypography.compactBody,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (summary.isNotBlank()) {
+                        Text(
+                            summary,
+                            color = palette.muted,
+                            fontSize = TandemTypography.caption,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+            Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = palette.muted)
+        }
+        if (showDivider) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 64.dp, end = TandemSpacing.medium)
+                    .height(1.dp)
+                    .background(palette.border),
+            )
+        }
+    }
+}
+
+@Composable
+internal fun AmountTransitionLine(change: BudgetAmountChange) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+    ) {
+        Text(
+            change.label,
+            modifier = Modifier.weight(1f),
+            color = tandemPalette.text,
+            fontSize = TandemTypography.caption,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(change.before, color = tandemPalette.muted, fontSize = TandemTypography.caption, maxLines = 1)
+        Text("→", color = tandemPalette.accent, fontSize = TandemTypography.caption, fontWeight = FontWeight.Bold)
+        Text(change.after, color = tandemPalette.text, fontSize = TandemTypography.caption, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
@@ -278,247 +483,201 @@ private fun SyncOverviewCard(
     onReviewClick: () -> Unit,
 ) {
     val palette = tandemPalette
-    val statusTitle =
+    var showErrorDetails by rememberSaveable(syncError) { mutableStateOf(false) }
+    val status =
         when {
-            syncError != null -> "Sync failed"
-            isSyncing -> "Syncing with Actual"
-            isServerReachable -> "Connected to Actual"
-            else -> "You’re offline"
-        }
-    Column(
-        Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-    ) {
-        if (syncError != null) {
-            SyncFailureCard(
-                error = syncError,
-                isServerReachable = isServerReachable,
-                isSyncing = isSyncing,
-                onRetry = onSyncNow,
-            )
-        } else if (!isServerReachable) {
-            val warningColor = palette.warning
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(TandemShapes.medium))
-                    .background(warningColor.copy(alpha = 0.14f))
-                    .border(1.dp, warningColor.copy(alpha = 0.55f), RoundedCornerShape(TandemShapes.medium))
-                    .padding(TandemSpacing.medium),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-            ) {
-                Icon(
-                    Lucide.CloudOff,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp),
-                    tint = warningColor,
+            syncError != null ->
+                SyncStatusPresentation(
+                    title = "Sync failed",
+                    detail = "Actual did not confirm every change.",
+                    icon = Lucide.CloudAlert,
+                    color = palette.negative,
                 )
-                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
-                    Text(
-                        "You’re offline",
-                        color = warningColor,
-                        fontSize = TandemTypography.compactBody,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        "Changes will be saved locally and synced when you’re back online.",
-                        color = palette.text,
-                        fontSize = TandemTypography.caption,
-                        lineHeight = TandemTypography.compactLineHeight,
-                    )
-                }
-            }
+            isSyncing ->
+                SyncStatusPresentation(
+                    title = "Syncing now",
+                    detail = "Sending changes to Actual.",
+                    icon = Lucide.CloudSync,
+                    color = palette.syncing,
+                )
+            !isServerReachable ->
+                SyncStatusPresentation(
+                    title = "You’re offline",
+                    detail =
+                        if (waitingCount > 0) {
+                            "$waitingCount ${if (waitingCount == 1) "change" else "changes"} saved on this device."
+                        } else {
+                            "Your budget is saved on this device."
+                        },
+                    icon = Lucide.CloudOff,
+                    color = palette.warning,
+                )
+            attentionCount > 0 ->
+                SyncStatusPresentation(
+                    title = "Needs your review",
+                    detail = "$attentionCount ${if (attentionCount == 1) "change needs" else "changes need"} a decision.",
+                    icon = Lucide.CircleAlert,
+                    color = palette.warning,
+                )
+            waitingCount > 0 ->
+                SyncStatusPresentation(
+                    title = "Ready to sync",
+                    detail = "$waitingCount ${if (waitingCount == 1) "change is" else "changes are"} waiting.",
+                    icon = Lucide.CloudSync,
+                    color = palette.syncing,
+                )
+            lastSyncedAtEpochMs != null ->
+                SyncStatusPresentation(
+                    title = "Up to date",
+                    detail = "Your budget is in sync.",
+                    icon = Lucide.CloudCheck,
+                    color = palette.positive,
+                )
+            else ->
+                SyncStatusPresentation(
+                    title = "Ready to sync",
+                    detail = "Your budget is saved on this device.",
+                    icon = Lucide.Cloud,
+                    color = palette.accent,
+                )
         }
-
-        SurfaceCard {
-            Row(
-                Modifier.fillMaxWidth().padding(TandemSpacing.medium),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-            ) {
+    SurfaceCard {
+        Column(
+            Modifier.fillMaxWidth().padding(TandemSpacing.large),
+            verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+        ) {
+            Text(
+                budgetName,
+                color = palette.muted,
+                fontSize = TandemTypography.label,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 Box(
                     Modifier
-                        .size(42.dp)
-                        .clip(RoundedCornerShape(TandemShapes.medium))
-                        .background(palette.raised),
+                        .size(54.dp)
+                        .clip(RoundedCornerShape(TandemShapes.large))
+                        .background(status.color.copy(alpha = 0.13f))
+                        .border(1.dp, status.color.copy(alpha = 0.35f), RoundedCornerShape(TandemShapes.large)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Lucide.CloudCheck, contentDescription = null, modifier = Modifier.size(24.dp), tint = palette.accent)
+                    Icon(status.icon, contentDescription = null, modifier = Modifier.size(28.dp), tint = status.color)
                 }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
                     Text(
-                        "Saved on this device",
+                        status.title,
                         color = palette.text,
-                        fontSize = TandemTypography.compactBody,
+                        fontSize = TandemTypography.sectionTitle,
+                        fontFamily = tandemAlloFamily(),
                         fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
-                    Text("All changes are stored locally.", color = palette.muted, fontSize = TandemTypography.caption)
+                    if (waitingCount == 0 && attentionCount == 0) {
+                        Text(
+                            status.detail,
+                            color = palette.muted,
+                            fontSize = TandemTypography.compactBody,
+                            lineHeight = TandemTypography.compactLineHeight,
+                        )
+                    }
                 }
             }
-        }
 
-        if (waitingCount > 0) {
-            SyncSummaryRow(
-                title = "$waitingCount Pending ${if (waitingCount == 1) "Change" else "Changes"}",
-                subtitle = if (isServerReachable) "Will sync when you sync" else "Will sync when you’re back online",
-                icon = Lucide.RefreshCw,
-                color = palette.syncing,
-                onClick = onPendingClick,
-            )
-        }
-        if (attentionCount > 0) {
-            SyncSummaryRow(
-                title = "Needs review",
-                subtitle = "$attentionCount ${if (attentionCount == 1) "change" else "changes"} need your attention",
-                icon = Lucide.CircleAlert,
-                color = palette.warning,
-                onClick = onReviewClick,
-            )
-        }
-
-        if (syncError == null) {
-            PrimaryButton("Sync now", enabled = onSyncNow != null, onClick = { onSyncNow?.invoke() })
-        }
-
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.small, vertical = TandemSpacing.extraSmall),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            Icon(
-                if (isServerReachable && syncError == null) Lucide.CloudCheck else Lucide.CloudOff,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = if (isServerReachable && syncError == null) palette.positive else palette.muted,
-            )
-            Spacer(Modifier.size(TandemSpacing.small))
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(statusTitle, color = palette.muted, fontSize = TandemTypography.caption, fontWeight = FontWeight.SemiBold)
+            if (syncError != null) {
                 Text(
-                    lastSyncedAtEpochMs?.let { "Last successful sync ${formatDateAtEpochMilliseconds(it)}" }
-                        ?: "No successful sync yet · $budgetName",
-                    color = palette.muted,
-                    fontSize = TandemTypography.micro,
-                    maxLines = 1,
+                    syncError,
+                    color = palette.text,
+                    fontSize = TandemTypography.caption,
+                    lineHeight = TandemTypography.compactLineHeight,
+                    maxLines = if (showErrorDetails) 8 else 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                Text(
+                    if (showErrorDetails) "Hide error details" else "View error details",
+                    Modifier.clickable(role = Role.Button) { showErrorDetails = !showErrorDetails },
+                    color = palette.accent,
+                    fontSize = TandemTypography.label,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
-        }
-    }
-}
 
-@Composable
-private fun SyncFailureCard(
-    error: String,
-    isServerReachable: Boolean,
-    isSyncing: Boolean,
-    onRetry: (() -> Unit)?,
-) {
-    val palette = tandemPalette
-    var showDetails by rememberSaveable(error) { mutableStateOf(false) }
-    val errorReason =
-        error.ifBlank {
-            if (isServerReachable) "The sync request did not complete." else "Tandem could not reach the server."
-        }
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(TandemShapes.medium))
-            .background(palette.negative.copy(alpha = 0.09f))
-            .border(1.dp, palette.negative.copy(alpha = 0.4f), RoundedCornerShape(TandemShapes.medium))
-            .padding(TandemSpacing.medium),
-        verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-            Icon(Lucide.CloudAlert, contentDescription = null, modifier = Modifier.size(22.dp), tint = palette.negative)
-            Text("Sync failed", color = palette.negative, fontSize = TandemTypography.compactBody, fontWeight = FontWeight.SemiBold)
-        }
-        Text(
-            errorReason,
-            color = palette.text,
-            fontSize = TandemTypography.caption,
-            lineHeight = TandemTypography.compactLineHeight,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            if (isServerReachable) {
-                "Check the Actual budget and try again. Your changes are still saved on this device."
-            } else {
-                "Check your network and the Tandem server, then try again. Your changes are still saved on this device."
-            },
-            color = palette.muted,
-            fontSize = TandemTypography.caption,
-            lineHeight = TandemTypography.compactLineHeight,
-        )
-        if (showDetails) {
+            Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                SyncCountTile(
+                    label = "Pending changes",
+                    count = waitingCount,
+                    icon = Lucide.RefreshCw,
+                    color = palette.syncing,
+                    modifier = Modifier.weight(1f),
+                    onClick = onPendingClick,
+                )
+                if (attentionCount > 0) {
+                    SyncCountTile(
+                        label = "Needs review",
+                        count = attentionCount,
+                        icon = Lucide.CircleAlert,
+                        color = palette.warning,
+                        modifier = Modifier.weight(1f),
+                        onClick = onReviewClick,
+                    )
+                }
+            }
+
             Text(
-                "Full server response:\n$errorReason",
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(TandemShapes.small))
-                    .background(palette.surface.copy(alpha = 0.78f))
-                    .padding(TandemSpacing.small),
-                color = palette.text,
-                fontSize = TandemTypography.micro,
-                lineHeight = TandemTypography.compactLineHeight,
+                lastSyncedAtEpochMs?.let { "Last synced ${formatDateAtEpochMilliseconds(it)}" } ?: "Not synced yet",
+                color = palette.muted,
+                fontSize = TandemTypography.caption,
             )
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-            TandemActionButton(
-                if (isSyncing) "Syncing…" else "Try again",
-                TandemActionButtonTone.PRIMARY,
-                Modifier.weight(1f),
-                icon = Lucide.RefreshCw,
-                enabled = onRetry != null && !isSyncing,
+            PrimaryButton(
+                when {
+                    isSyncing -> "Syncing…"
+                    syncError != null -> "Try again"
+                    !isServerReachable -> "Try connecting again"
+                    else -> "Sync now"
+                },
+                enabled = onSyncNow != null,
                 loading = isSyncing,
-                onClick = { onRetry?.invoke() },
-            )
-            TandemActionButton(
-                if (showDetails) "Hide details" else "View details",
-                TandemActionButtonTone.NEUTRAL,
-                Modifier.weight(1f),
-                enabled = !isSyncing,
-                onClick = { showDetails = !showDetails },
+                onClick = { onSyncNow?.invoke() },
             )
         }
     }
 }
 
+private data class SyncStatusPresentation(
+    val title: String,
+    val detail: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val color: androidx.compose.ui.graphics.Color,
+)
+
 @Composable
-internal fun SyncSummaryRow(
-    title: String,
-    subtitle: String,
+internal fun SyncCountTile(
+    label: String,
+    count: Int,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     color: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    val palette = tandemPalette
-    SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clickable(role = Role.Button, onClickLabel = "Open $title", onClick = onClick)
-                .padding(TandemSpacing.medium),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-        ) {
-            Box(
-                Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(TandemShapes.medium))
-                    .background(color.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = color)
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
-                Text(title, color = palette.text, fontSize = TandemTypography.compactBody, fontWeight = FontWeight.SemiBold)
-                Text(subtitle, color = palette.muted, fontSize = TandemTypography.caption)
-            }
-            Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.muted)
+    val shape = RoundedCornerShape(TandemShapes.medium)
+    Row(
+        modifier
+            .clip(shape)
+            .background(color.copy(alpha = 0.09f))
+            .border(1.dp, color.copy(alpha = 0.28f), shape)
+            .clickable(role = Role.Button, onClickLabel = "Open $label", onClick = onClick)
+            .padding(horizontal = TandemSpacing.small, vertical = TandemSpacing.medium),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = color)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+            Text(count.toString(), color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.Bold)
+            Text(label, color = tandemPalette.muted, fontSize = TandemTypography.micro, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+        Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = color)
     }
 }
 
@@ -544,78 +703,91 @@ private fun ChangeSectionHeading(
 }
 
 @Composable
-private fun ChangeSummaryCard(
+private fun SyncChangeSection(
+    title: String,
+    detail: String,
+    content: @Composable () -> Unit,
+) {
+    Column(
+        Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+    ) {
+        ChangeSectionHeading(title, detail)
+        SurfaceCard {
+            Column(Modifier.fillMaxWidth()) { content() }
+        }
+    }
+}
+
+@Composable
+private fun SyncChangeRow(
     title: String,
     summary: String,
     status: String,
-    explanation: String,
-    needsAttention: Boolean,
-    actionLabel: String? = null,
-    onClick: (() -> Unit)? = null,
+    attention: Boolean,
+    showDivider: Boolean,
+    onClick: () -> Unit,
 ) {
-    val statusColor = if (needsAttention) tandemPalette.warning else tandemPalette.syncing
-    SurfaceCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
-        Column(
-            Modifier.fillMaxWidth().padding(TandemSpacing.large),
-            verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+    val palette = tandemPalette
+    val statusColor =
+        when {
+            status == "Rejected" -> palette.negative
+            attention -> palette.warning
+            else -> palette.syncing
+        }
+    Column {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(role = Role.Button, onClickLabel = "Review $title", onClick = onClick)
+                .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.medium),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
         ) {
-            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                Box(
-                    Modifier
-                        .size(38.dp)
-                        .clip(RoundedCornerShape(TandemShapes.medium))
-                        .background(statusColor.copy(alpha = 0.14f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        if (needsAttention) Lucide.CloudAlert else Lucide.Cloud,
-                        contentDescription = null,
-                        modifier = Modifier.size(21.dp),
-                        tint = statusColor,
-                    )
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-                    Text(
-                        title,
-                        color = tandemPalette.text,
-                        fontSize = TandemTypography.cardTitle,
-                        lineHeight = TandemTypography.actionLineHeight,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        summary,
-                        color = tandemPalette.accent,
-                        fontSize = TandemTypography.action,
-                        lineHeight = TandemTypography.bodyLineHeight,
-                    )
-                }
+            Box(
+                Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(TandemShapes.medium))
+                    .background(statusColor.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (attention) Lucide.CloudAlert else Lucide.Cloud,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = statusColor,
+                )
             }
-            Text(
-                explanation,
-                color = tandemPalette.muted,
-                fontSize = TandemTypography.label,
-                lineHeight = TandemTypography.compactLineHeight,
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+                Text(
+                    title,
+                    color = palette.text,
+                    fontSize = TandemTypography.compactBody,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    summary,
+                    color = palette.muted,
+                    fontSize = TandemTypography.caption,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+                Text(status, color = statusColor, fontSize = TandemTypography.micro, fontWeight = FontWeight.SemiBold)
+                Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = palette.muted)
+            }
+        }
+        if (showDivider) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 64.dp, end = TandemSpacing.medium)
+                    .height(1.dp)
+                    .background(palette.border),
             )
-            if (actionLabel != null) {
-                Row(
-                    Modifier.fillMaxWidth().padding(top = TandemSpacing.extraSmall),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        status,
-                        modifier = Modifier.weight(1f),
-                        color = statusColor,
-                        fontSize = TandemTypography.label,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(actionLabel, color = tandemPalette.accent, fontSize = TandemTypography.label, fontWeight = FontWeight.SemiBold)
-                    Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = tandemPalette.accent)
-                }
-            } else {
-                Text(status, color = statusColor, fontSize = TandemTypography.label, fontWeight = FontWeight.SemiBold)
-            }
         }
     }
 }
@@ -701,6 +873,196 @@ internal fun budgetMutationChangeTitle(
     }
 }
 
+internal fun pendingBudgetMutationTitle(itemName: String): String = itemName
+
+internal fun budgetMutationPendingSummary(
+    mutation: QueuedBudgetReorder,
+    state: AppState,
+    mobileSession: TandemMobileSession,
+): String {
+    val payload = mutationPayload(mutation)
+    val categoryName: (String?) -> String = { id ->
+        id?.let { key -> mobileSession.categoryRecords.firstOrNull { it.recordId == key }?.recordName() } ?: "category"
+    }
+    return when (mutation.kind) {
+        BudgetReorderKind.MOVE_BUDGET_MONEY -> {
+            val amount = payload?.longValue("amountMinor")?.let(state::formatCurrency) ?: "Money"
+            val from = categoryName(payload?.stringValue("fromCategoryId"))
+            val to = categoryName(payload?.stringValue("toCategoryId"))
+            "$amount · $from → $to"
+        }
+        BudgetReorderKind.SET_CATEGORY_AMOUNT -> {
+            val target = payload?.longValue("amountMinor")
+            val before =
+                payload?.stringValue("month")?.let { monthId ->
+                    budgetCategoryAssignedMinorFromLastSync(mobileSession, mutation.itemId, monthId)
+                }
+            val change =
+                if (before != null && target != null) {
+                    "${state.formatCurrency(before)} → ${state.formatCurrency(target)}"
+                } else {
+                    "→ ${target?.let(state::formatCurrency) ?: "money"}"
+                }
+            change
+        }
+        BudgetReorderKind.SET_CATEGORY_CARRYOVER -> {
+            val before =
+                payload?.stringValue("month")?.let { monthId ->
+                    budgetCategoryCarryoverFromLastSync(mobileSession, mutation.itemId, monthId)
+                }
+            val after = payload?.booleanValue("enabled")
+            if (before != null && after != null) {
+                "${if (before) "On" else "Off"} → ${if (after) "On" else "Off"}"
+            } else {
+                if (after == true) "Carryover on" else "Carryover off"
+            }
+        }
+        BudgetReorderKind.CATEGORY,
+        BudgetReorderKind.CATEGORY_GROUP,
+        BudgetReorderKind.MOVE_ACCOUNT,
+        BudgetReorderKind.MOVE_CATEGORY_TO_GROUP,
+        -> "Reorder"
+        BudgetReorderKind.RENAME_CATEGORY,
+        BudgetReorderKind.RENAME_CATEGORY_GROUP,
+        BudgetReorderKind.RENAME_ACCOUNT,
+        BudgetReorderKind.RENAME_PAYEE,
+        BudgetReorderKind.REFRESH_CATEGORY_RENAME,
+        BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
+        -> "Rename → ${payload?.stringValue("name") ?: mutation.name ?: "new name"}"
+        BudgetReorderKind.CREATE_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_CREATE -> "Add category"
+        BudgetReorderKind.CREATE_CATEGORY_GROUP, BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE -> "Add group"
+        BudgetReorderKind.CREATE_ACCOUNT -> "Add account"
+        BudgetReorderKind.CREATE_PAYEE -> "Add payee"
+        BudgetReorderKind.HIDE_CATEGORY, BudgetReorderKind.HIDE_CATEGORY_GROUP -> "Hide"
+        BudgetReorderKind.SHOW_CATEGORY, BudgetReorderKind.SHOW_CATEGORY_GROUP -> "Show"
+        BudgetReorderKind.DELETE_CATEGORY, BudgetReorderKind.DELETE_CATEGORY_GROUP,
+        BudgetReorderKind.DELETE_PAYEE,
+        -> "Delete"
+        BudgetReorderKind.COPY_BUDGET_MONTH -> "Copy last month"
+        BudgetReorderKind.APPLY_BUDGET_TEMPLATE -> "Apply template"
+        BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH -> "Hold ${payload?.longValue("amountMinor")?.let(state::formatCurrency) ?: "money"}"
+        BudgetReorderKind.RESET_BUDGET_HOLD -> "Release hold"
+        BudgetReorderKind.CLOSE_ACCOUNT -> "Close account"
+        BudgetReorderKind.REOPEN_ACCOUNT -> "Reopen account"
+        BudgetReorderKind.MERGE_PAYEE -> "Merge payee"
+        BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY -> "Set default category"
+        BudgetReorderKind.IMPORT_STATEMENT -> "Import transactions"
+    }
+}
+
+internal data class BudgetAmountChange(
+    val label: String,
+    val before: String,
+    val after: String,
+)
+
+internal fun budgetMoneyMoveTransitions(
+    fromName: String,
+    fromBefore: Long,
+    toName: String,
+    toBefore: Long,
+    amount: Long,
+    formatAmount: (Long) -> String,
+): List<BudgetAmountChange> {
+    if (amount <= 0L) return emptyList()
+    return listOf(
+        BudgetAmountChange(fromName, formatAmount(fromBefore), formatAmount(fromBefore - amount)),
+        BudgetAmountChange(toName, formatAmount(toBefore), formatAmount(toBefore + amount)),
+    )
+}
+
+internal fun budgetMutationAmountChanges(
+    mutation: QueuedBudgetReorder?,
+    state: AppState,
+    mobileSession: TandemMobileSession,
+): List<BudgetAmountChange> {
+    mutation ?: return emptyList()
+    val payload = mutationPayload(mutation) ?: return emptyList()
+    val monthId = payload.stringValue("month") ?: return emptyList()
+    val formatAmount: (Long) -> String = state::formatCurrency
+    return when (mutation.kind) {
+        BudgetReorderKind.SET_CATEGORY_AMOUNT -> {
+            val before = budgetCategoryAssignedMinorFromLastSync(mobileSession, mutation.itemId, monthId) ?: return emptyList()
+            val after = payload.longValue("amountMinor") ?: return emptyList()
+            listOf(
+                BudgetAmountChange(
+                    mobileSession.categoryRecords.firstOrNull { it.recordId == mutation.itemId }?.recordName() ?: "Assigned",
+                    formatAmount(before),
+                    formatAmount(after),
+                ),
+            )
+        }
+        BudgetReorderKind.MOVE_BUDGET_MONEY -> {
+            val fromId = payload.stringValue("fromCategoryId") ?: return emptyList()
+            val toId = payload.stringValue("toCategoryId") ?: return emptyList()
+            val amount = payload.longValue("amountMinor") ?: return emptyList()
+            val fromBefore = budgetCategoryAssignedMinorFromLastSync(mobileSession, fromId, monthId) ?: return emptyList()
+            val toBefore = budgetCategoryAssignedMinorFromLastSync(mobileSession, toId, monthId) ?: return emptyList()
+            budgetMoneyMoveTransitions(
+                mobileSession.categoryRecords.firstOrNull { it.recordId == fromId }?.recordName() ?: "From category",
+                fromBefore,
+                mobileSession.categoryRecords.firstOrNull { it.recordId == toId }?.recordName() ?: "To category",
+                toBefore,
+                amount,
+                formatAmount,
+            )
+        }
+        else -> emptyList()
+    }
+}
+
+internal fun budgetCategoryAssignedMinorFromLastSync(
+    mobileSession: TandemMobileSession,
+    categoryId: String,
+    monthId: String,
+): Long? {
+    val record =
+        mobileSession.selectedBudgetMonthRecord?.takeIf {
+            it.recordId == monthId
+        } ?: return null
+    val month =
+        record.remoteJson?.let { raw ->
+            runCatching { Json.parseToJsonElement(raw) as? JsonObject }.getOrNull()
+        } ?: return null
+    val groups = month["categoryGroups"] as? JsonArray ?: return null
+    val category =
+        groups.firstNotNullOfOrNull { groupElement ->
+            (groupElement as? JsonObject)
+                ?.get("categories")
+                ?.let { it as? JsonArray }
+                ?.firstNotNullOfOrNull { categoryElement ->
+                    (categoryElement as? JsonObject)?.takeIf { it.stringValue("id") == categoryId }
+                }
+        } ?: return null
+    return category.longValue("budgeted") ?: category.longValue("assigned")
+}
+
+internal fun budgetCategoryCarryoverFromLastSync(
+    mobileSession: TandemMobileSession,
+    categoryId: String,
+    monthId: String,
+): Boolean? {
+    val record =
+        mobileSession.selectedBudgetMonthRecord?.takeIf {
+            it.recordId == monthId
+        } ?: return null
+    val month =
+        record.remoteJson?.let { raw ->
+            runCatching { Json.parseToJsonElement(raw) as? JsonObject }.getOrNull()
+        } ?: return null
+    val groups = month["categoryGroups"] as? JsonArray ?: return null
+    val category =
+        groups.firstNotNullOfOrNull { groupElement ->
+            (groupElement as? JsonObject)
+                ?.get("categories")
+                ?.let { it as? JsonArray }
+                ?.firstNotNullOfOrNull { categoryElement ->
+                    (categoryElement as? JsonObject)?.takeIf { it.stringValue("id") == categoryId }
+                }
+        } ?: return null
+    return category.booleanValue("carryover") ?: category.booleanValue("rollover")
+}
+
 internal fun budgetMutationTitle(
     action: String,
     itemName: String,
@@ -779,22 +1141,6 @@ internal fun budgetMutationLastSyncedAssignment(
     return "Last synced in Actual${period?.let { " · $it" }.orEmpty()}: ${state.formatCurrency(amount)} assigned."
 }
 
-internal fun budgetMutationStatusSummary(
-    operation: OutboxOperationEntity,
-    mutation: QueuedBudgetReorder?,
-): String =
-    when (operation.status) {
-        "rejected" ->
-            if (operation.lastErrorCode == "invalid_request" && mutation?.kind == BudgetReorderKind.SET_CATEGORY_AMOUNT) {
-                "Tandem stopped this before it reached Actual. Open this change to see the exact reason."
-            } else {
-                "This change was rejected. Open it to see what happened and what to do next."
-            }
-        "uncertain" -> "Tandem could not confirm whether Actual saved this change. Check before trying again."
-        "conflict" -> "The budget changed while Tandem was saving this. Review it before trying again."
-        else -> "This change still needs attention."
-    }
-
 private fun transactionChangeSummary(
     operation: OutboxOperationEntity,
     transaction: TransactionItem?,
@@ -827,12 +1173,46 @@ private fun transactionChangeSummary(
         ?: "Review the transaction edit"
 }
 
-private fun transactionStatusExplanation(status: String): String =
-    when (status) {
-        "rejected" -> "This edit was rejected. Open it to see the reason and next step."
-        "conflict" -> "Actual changed this transaction too. Compare both versions before choosing."
-        else -> "Tandem could not confirm whether Actual saved this edit. Check its status before retrying."
+private fun pendingTransactionSummary(
+    operation: OutboxOperationEntity,
+    transaction: TransactionItem?,
+    state: AppState,
+    mobileSession: TandemMobileSession,
+): String {
+    val patch = runCatching { Json.parseToJsonElement(operation.patchJson) as? JsonObject }.getOrNull()
+    val details =
+        buildList {
+            patch?.longValue("amount")?.let { add(state.formatSignedCurrency(it)) }
+            val categoryId = patch?.stringValue("category") ?: patch?.stringValue("categoryId")
+            categoryId?.let { id ->
+                add(mobileSession.categoryRecords.firstOrNull { it.recordId == id }?.recordName() ?: "Uncategorized")
+            }
+            val payeeId = patch?.stringValue("payee") ?: patch?.stringValue("payeeId")
+            payeeId?.let { id -> add(mobileSession.payeeRecords.firstOrNull { it.recordId == id }?.recordName() ?: id) }
+            patch?.stringValue("date")?.let { add(formatLiveDate(it)) }
+            if (patch?.containsKey("notes") == true) add("Note changed")
+        }
+    return details.take(2).joinToString(" · ").ifBlank {
+        if (operation.action == "DELETE") "Delete" else transaction?.let { state.formatSignedCurrency(it.amountMinorUnits) }.orEmpty()
     }
+}
+
+private fun pendingScheduleSummary(
+    action: String,
+    schedule: LiveScheduleSummary?,
+    state: AppState,
+): String =
+    listOfNotNull(
+        when (action) {
+            "skip" -> "Skip"
+            "post" -> "Post"
+            "edit" -> "Edit"
+            "delete" -> "Delete"
+            else -> null
+        },
+        schedule?.amountMinor?.let(state::formatCurrency),
+        schedule?.nextDate?.let(::formatLiveDate),
+    ).joinToString(" · ")
 
 private fun scheduleActionTitle(
     action: String,
@@ -868,14 +1248,6 @@ private fun scheduleActionSummary(
     ).joinToString(" · ").ifBlank { "Review this scheduled change" }
 }
 
-private fun scheduleStatusExplanation(status: String): String =
-    when (status) {
-        "rejected" -> "Actual did not accept this scheduled change. Open it to see the next step."
-        "conflict" -> "The schedule changed before Tandem could finish this action. Review it first."
-        "uncertain" -> "Tandem could not confirm whether this action reached Actual. Check before retrying."
-        else -> "Saved on this device. It has not been confirmed in Actual yet."
-    }
-
 private fun mutationPayload(mutation: QueuedBudgetReorder): JsonObject? =
     mutation.payloadJson?.let { raw -> runCatching { Json.parseToJsonElement(raw) as? JsonObject }.getOrNull() }
 
@@ -885,7 +1257,7 @@ internal fun ReviewOutcomeCard(
     explanation: String,
     isRejected: Boolean,
 ) {
-    val color = if (isRejected) tandemPalette.warning else tandemPalette.syncing
+    val color = if (isRejected) tandemPalette.negative else tandemPalette.syncing
     SurfaceCard {
         Row(
             Modifier.fillMaxWidth().padding(TandemSpacing.large),
@@ -898,7 +1270,7 @@ internal fun ReviewOutcomeCard(
             ) {
                 Icon(if (isRejected) Lucide.CloudAlert else Lucide.CloudSync, contentDescription = null, tint = color)
             }
-            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
                 Text(
                     title,
                     color = tandemPalette.text,
@@ -921,15 +1293,21 @@ internal fun ReviewOutcomeCard(
 internal fun BudgetMutationChangeDetails(
     title: String,
     detail: String?,
+    amountChanges: List<BudgetAmountChange> = emptyList(),
 ) {
     SurfaceCard {
         Column(
             Modifier.fillMaxWidth().padding(TandemSpacing.large),
             verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
         ) {
-            LabelText("THE CHANGE")
-            Text(title, color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
-            detail?.let { Text(it, color = tandemPalette.muted, fontSize = TandemTypography.body) }
+            if (amountChanges.isNotEmpty()) {
+                amountChanges.forEach { change ->
+                    AmountTransitionLine(change)
+                }
+            } else {
+                Text(title, color = tandemPalette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
+                detail?.let { Text(it, color = tandemPalette.muted, fontSize = TandemTypography.body) }
+            }
         }
     }
 }
@@ -956,10 +1334,12 @@ internal fun budgetMutationReason(
     itemName: String,
 ): String =
     when {
+        operation.status == "rejected" && isRejectedBudgetOrderRequest(operation.lastErrorCode, mutation?.kind) ->
+            budgetMutationFailureMessage(operation.lastErrorCode, mutation?.kind, itemName)
         operation.status == "rejected" &&
             operation.lastErrorCode == "invalid_request" &&
             mutation?.kind == BudgetReorderKind.SET_CATEGORY_AMOUNT ->
-            "Tandem checked only hidden categories, so it failed to find $itemName. The category is in your budget, but Tandem treated it as missing and stopped the request before sending it to Actual. Actual did not receive or save this assignment."
+            "Tandem searched hidden categories only, so it could not find $itemName. It stopped the request before sending it to Actual; your assignment did not change."
         operation.status == "rejected" -> budgetMutationFailureMessage(operation.lastErrorCode, mutation?.kind, itemName)
         operation.status == "uncertain" ->
             "Tandem sent this change but did not receive confirmation. It may already be saved in Actual, so check your budget before trying again."

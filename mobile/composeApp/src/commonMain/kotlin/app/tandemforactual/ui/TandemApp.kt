@@ -1362,16 +1362,14 @@ fun TandemApp(
                                         (it.status == "queued" || (it.status == "sending" && mobileSession.isSyncing))
                                 }
                             val showSyncAction =
-                                (visibleRoute == AppRoute.SYNC_CENTER && state.selectedBudgetId.isNotBlank()) ||
-                                    (visibleRoute == AppRoute.UNCERTAIN_WRITE && pendingSyncOperation != null)
+                                visibleRoute == AppRoute.UNCERTAIN_WRITE && pendingSyncOperation != null
                             if (showSyncAction) {
                                 val syncActionCompact by
                                     remember(routeScrollState) {
                                         derivedStateOf { routeScrollState.value > 72 }
                                     }
                                 val syncActionEnabled =
-                                    !mobileSession.isSyncing &&
-                                        (visibleRoute != AppRoute.SYNC_CENTER || mobileSession.isAuthenticated)
+                                    !mobileSession.isSyncing && mobileSession.isAuthenticated
                                 FloatingSyncAction(
                                     compact = syncActionCompact,
                                     syncing = mobileSession.isSyncing,

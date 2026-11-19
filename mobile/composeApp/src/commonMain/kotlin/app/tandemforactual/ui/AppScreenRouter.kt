@@ -529,6 +529,16 @@ internal fun ScreenContent(
                 liveSchedules,
                 onSyncNow,
             )
+        AppRoute.PENDING_CHANGES ->
+            PendingChangesScreen(
+                state,
+                mobileSession,
+                navigation,
+                liveTransactions,
+                liveBudgetMonth,
+                liveSchedules,
+                onSyncNow,
+            )
         AppRoute.CONFLICT_INBOX -> ConflictInboxScreen(state, mobileSession, navigation, liveTransactions, merchantIconMatcher)
         AppRoute.CONFLICT_REVIEW ->
             ConflictReviewScreen(state, mobileSession, navigation, onResolveConflict, liveTransactions, merchantIconMatcher)
