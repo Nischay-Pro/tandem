@@ -708,7 +708,7 @@ internal fun SyncStatusRing(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     color: androidx.compose.ui.graphics.Color,
     active: Boolean,
-    caption: String,
+    caption: String?,
 ) {
     val palette = tandemPalette
     val ringColor by animateColorAsState(color, tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS), label = "sync-ring")
@@ -742,7 +742,7 @@ internal fun SyncStatusRing(
         ) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(40.dp), tint = ringColor)
         }
-        Text(caption, color = palette.muted, fontSize = TandemTypography.compactBody)
+        caption?.let { Text(it, color = palette.muted, fontSize = TandemTypography.compactBody) }
     }
 }
 
@@ -1406,34 +1406,20 @@ internal fun ReviewOutcomeCard(
     explanation: String,
     isRejected: Boolean,
 ) {
-    val color = if (isRejected) tandemPalette.negative else tandemPalette.syncing
-    SurfaceCard {
-        Row(
-            Modifier.fillMaxWidth().padding(TandemSpacing.large),
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-        ) {
-            Box(
-                Modifier.size(44.dp).clip(RoundedCornerShape(TandemShapes.medium)).background(color.copy(alpha = 0.14f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(if (isRejected) Lucide.CloudAlert else Lucide.CloudSync, contentDescription = null, tint = color)
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-                Text(
-                    title,
-                    color = tandemPalette.text,
-                    fontSize = TandemTypography.sectionTitle,
-                    fontFamily = tandemAlloFamily(),
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    explanation,
-                    color = tandemPalette.muted,
-                    fontSize = TandemTypography.body,
-                    lineHeight = TandemTypography.bodyLineHeight,
-                )
-            }
+    val unknown = !isRejected && (title.startsWith("Status") || title.startsWith("Couldn"))
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+        SyncPageHeading(
+            eyebrow =
+                when {
+                    isRejected -> "Action required"
+                    unknown -> "Verify sync status"
+                    else -> "Sync"
+                },
+            title = "${if (title == "Rejected") "Change rejected" else title}.",
+            detail = explanation,
+        )
+        if (unknown) {
+            SyncStatusRing(icon = Lucide.CloudAlert, color = tandemPalette.syncing, active = false, caption = null)
         }
     }
 }
