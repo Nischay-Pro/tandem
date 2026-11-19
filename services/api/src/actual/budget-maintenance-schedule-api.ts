@@ -167,7 +167,9 @@ export function createScheduleOperations({
             }
             const internal = session.internal;
             if (!internal) {
-              throw new Error("The Tandem Actual connection cannot issue schedule commands");
+              throw new Error(
+                "The Tandem Actual connection cannot issue schedule commands",
+              );
             }
             await internal.send("schedule/skip-next-date", { id: scheduleId });
           },
@@ -196,7 +198,9 @@ export function createScheduleOperations({
             }
             const internal = session.internal;
             if (!internal) {
-              throw new Error("The Tandem Actual connection cannot issue schedule commands");
+              throw new Error(
+                "The Tandem Actual connection cannot issue schedule commands",
+              );
             }
             await internal.send("schedule/post-transaction", {
               id: scheduleId,
