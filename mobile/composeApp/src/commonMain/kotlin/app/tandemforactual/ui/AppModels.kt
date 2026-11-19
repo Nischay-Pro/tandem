@@ -170,7 +170,7 @@ internal enum class AppRoute(
     SYNC_CENTER("Sync Center"),
     PENDING_CHANGES("Pending changes"),
     CONFLICT_INBOX("Needs review"),
-    CONFLICT_REVIEW("Review versions"),
+    CONFLICT_REVIEW("Choose a version"),
     UNCERTAIN_WRITE("Review change"),
     SETTINGS("Settings"),
     APPEARANCE("Appearance"),

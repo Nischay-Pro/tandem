@@ -96,7 +96,7 @@ internal class TransactionConflictResolution(
                         "Sync the budget to check its status."
 
             val current = store.findRecord(budgetId, confirmedOperation.recordType, confirmedOperation.recordId)
-            val revision = current?.remoteRevision
+            val revision = current?.let(::conflictReviewRevision)
             if (current == null || revision.isNullOrBlank() || revision != reviewedRevision) {
                 return "Actual changed again. Review the latest version before choosing."
             }
@@ -199,3 +199,8 @@ internal class TransactionConflictResolution(
                 }
         }
 }
+
+internal const val DELETED_RECORD_REVISION = "deleted"
+
+internal fun conflictReviewRevision(record: BudgetRecordEntity): String? =
+    record.remoteRevision ?: DELETED_RECORD_REVISION.takeIf { record.remoteDeleted }

@@ -292,6 +292,28 @@ class TransactionConflictResolutionTest {
         }
 
     @Test
+    fun keepingActualDiscardsTheEditWhenActualDeletedTheTransaction() =
+        runBlocking {
+            val store = FakeStore(remoteDeleted = true)
+            store.record = store.record.copy(remoteRevision = null)
+            val sync = FakeSync(store)
+
+            assertEquals(DELETED_RECORD_REVISION, conflictReviewRevision(store.record))
+            val message =
+                workflow(store, sync).resolve(
+                    BUDGET,
+                    CONFLICT_ID,
+                    keepDeviceVersion = false,
+                    encryptionPassword = null,
+                    reviewedRevision = DELETED_RECORD_REVISION,
+                )
+
+            assertEquals("discarded", store.writes[CONFLICT_ID]?.status)
+            assertTrue(store.requests.isEmpty())
+            assertTrue(message.contains("removed your edit"))
+        }
+
+    @Test
     fun aSecondConflictKeepsTheRebasedEditAvailableForReview() =
         runBlocking {
             val store = FakeStore()

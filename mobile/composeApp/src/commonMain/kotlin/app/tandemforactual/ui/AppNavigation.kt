@@ -298,7 +298,7 @@ internal fun AppHeader(
             AppRoute.ACTIVITY,
             AppRoute.ACTIVITY_SEARCH,
             -> activitySelectionTotalMinor?.let(state::formatCurrency) ?: route.title
-            AppRoute.CONFLICT_REVIEW -> conflictTitle?.takeIf(String::isNotBlank) ?: route.title
+            AppRoute.CONFLICT_REVIEW -> route.title
             AppRoute.REPORT_DETAIL ->
                 app.tandemforactual.ui.reports.ReportKind.entries
                     .firstOrNull { it.name == state.selectedReportKindName }

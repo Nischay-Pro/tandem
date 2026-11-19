@@ -4,6 +4,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import app.tandemforactual.data.database.OutboxOperationEntity
 import org.junit.Rule
 import org.junit.Test
@@ -43,15 +44,15 @@ class UncertainWriteScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Status unknown").assertExists()
+        composeTestRule.onNodeWithText("Status unknown.").assertExists()
         composeTestRule
             .onNodeWithText(
                 "Actual couldn’t confirm whether this was saved. Check Actual before retrying.",
             ).assertExists()
-        composeTestRule.onNodeWithText("Try again").performClick()
+        composeTestRule.onNodeWithText("Try again").performScrollTo().performClick()
         assertTrue(retryRequested)
 
-        composeTestRule.onNodeWithText("Remove edit").performClick()
+        composeTestRule.onNodeWithText("Remove edit").performScrollTo().performClick()
         composeTestRule.onNodeWithText("Actual may already have saved it", substring = true).assertExists()
         composeTestRule.onAllNodesWithText("Remove edit")[1].performClick()
         assertTrue(removalConfirmed)
@@ -112,11 +113,11 @@ class UncertainWriteScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Couldn’t check this change").assertExists()
+        composeTestRule.onNodeWithText("Couldn’t check this change.").assertExists()
         composeTestRule.onNodeWithText("Check again").assertExists()
-        composeTestRule.onNodeWithText("Try again").performClick()
+        composeTestRule.onNodeWithText("Try again").performScrollTo().performClick()
         assertTrue(retryRequested)
-        composeTestRule.onNodeWithText("Remove edit").performClick()
+        composeTestRule.onNodeWithText("Remove edit").performScrollTo().performClick()
         composeTestRule.onNodeWithText("Actual may already have saved it", substring = true).assertExists()
         assertFalse(removalRequested)
     }
@@ -145,11 +146,11 @@ class UncertainWriteScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Couldn’t check this change").assertExists()
+        composeTestRule.onNodeWithText("Couldn’t check this change.").assertExists()
         composeTestRule.onNodeWithText("Check again").assertExists()
-        composeTestRule.onNodeWithText("Try again").performClick()
+        composeTestRule.onNodeWithText("Try again").performScrollTo().performClick()
         assertTrue(retryRequested)
-        composeTestRule.onNodeWithText("Remove edit").performClick()
+        composeTestRule.onNodeWithText("Remove edit").performScrollTo().performClick()
         composeTestRule.onNodeWithText("Actual may already have saved it", substring = true).assertExists()
         assertTrue(retryRequested)
         assertFalse(removalRequested)
@@ -179,16 +180,16 @@ class UncertainWriteScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Status not found").assertExists()
+        composeTestRule.onNodeWithText("Status not found.").assertExists()
         composeTestRule
             .onNodeWithText(
                 "Actual has no record of this edit. Keep it here or remove it.",
                 substring = true,
             ).assertExists()
         composeTestRule.onNodeWithText("Check again").assertExists()
-        composeTestRule.onNodeWithText("Try again").performClick()
+        composeTestRule.onNodeWithText("Try again").performScrollTo().performClick()
         assertTrue(retryRequested)
-        composeTestRule.onNodeWithText("Remove edit").performClick()
+        composeTestRule.onNodeWithText("Remove edit").performScrollTo().performClick()
         composeTestRule.onNodeWithText("Actual may already have saved it", substring = true).assertExists()
         assertFalse(removalRequested)
     }

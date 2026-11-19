@@ -1315,11 +1315,29 @@ private fun transactionChangeSummary(
             patch?.booleanValue("cleared")?.let { add(if (it) "Marked cleared" else "Marked uncleared") }
             patch?.booleanValue("reconciled")?.let { add(if (it) "Marked reconciled" else "Marked unreconciled") }
         }
-    val summary = changes.take(2).joinToString(" · ")
-    if (summary.isNotBlank()) return summary
-    if (operation.action == "DELETE") return "Delete this transaction"
-    return transaction?.let { "${it.category} · ${it.dateLabel} · ${state.formatSignedCurrency(it.amountMinorUnits)}" }
-        ?: "Review the transaction edit"
+    val change =
+        changes.take(2).joinToString(" · ").ifBlank {
+            if (operation.action == "DELETE") "Delete this transaction" else "Transaction edit"
+        }
+    return listOfNotNull(change, transactionIdentity(operation, transaction, state, mobileSession)).joinToString(" · ")
+}
+
+internal fun transactionIdentity(
+    operation: OutboxOperationEntity,
+    transaction: TransactionItem?,
+    state: AppState,
+    mobileSession: TandemMobileSession,
+): String? {
+    val version =
+        (operation.optimisticJson ?: operation.baseSnapshotJson)
+            ?.let { runCatching { Json.parseToJsonElement(it) as? JsonObject }.getOrNull() }
+    val date = transaction?.dateLabel ?: version?.stringValue("date")?.let(::formatLiveDate)
+    val amount = (transaction?.amountMinorUnits ?: version?.longValue("amount"))?.let(state::formatSignedCurrency)
+    val account =
+        version?.stringValue("account")?.let { id ->
+            mobileSession.accountRecords.firstOrNull { it.recordId == id }?.recordName()
+        }
+    return listOfNotNull(date, amount, account).joinToString(" · ").ifBlank { null }
 }
 
 private fun pendingTransactionSummary(
