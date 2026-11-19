@@ -222,7 +222,22 @@ class TandemMobileSessionTest {
                     ),
                 )
 
-                val queuedTransaction = repository.readPendingWrites("budget-1").single { it.recordType == "transaction" }
+                assertTrue(
+                    session.createTransaction(
+                        budgetId = "budget-1",
+                        accountId = "account-1",
+                        payeeId = localPayeeId,
+                        categoryId = "category-1",
+                        amountText = "-0.02",
+                        dateText = "2026-11-12",
+                        notes = "Spending",
+                        encryptionPassword = null,
+                    ),
+                    session.transactionWriteMessage,
+                )
+                val transactions = repository.readPendingWrites("budget-1").filter { it.recordType == "transaction" }
+                assertEquals(-2L, transactions.single { it.optimisticAmountMinor != 1250L }.optimisticAmountMinor)
+                val queuedTransaction = transactions.single { it.optimisticAmountMinor == 1250L }
                 assertEquals("queued", queuedTransaction.status)
                 assertEquals(localPayeeId, queuedTransaction.optimisticPayeeId)
                 assertEquals(localPayeeId, repository.findRecord("budget-1", "transaction", queuedTransaction.recordId)?.payeeId)

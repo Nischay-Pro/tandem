@@ -4491,10 +4491,6 @@ internal class TandemMobileSession(
             transactionWriteMessage = transactionAmountInputError(amountText, displaySettings)
             return false
         }
-        if (amount < 0) {
-            transactionWriteMessage = "Enter a positive amount."
-            return false
-        }
         if (amount == 0L) {
             transactionWriteMessage = "Enter an amount greater than zero."
             return false
