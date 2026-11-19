@@ -60,6 +60,8 @@ internal object TandemTypography {
     val keypadNumber = 22.sp
     val pageTitle = 24.sp
     val heroTitle = 28.sp
+    val setupBrandWordmark = 21.sp
+    val setupHeadline = 32.sp
     val amount = 32.sp
     val amountField = 40.sp
     val microLineHeight = 13.sp
@@ -69,6 +71,7 @@ internal object TandemTypography {
     val actionLineHeight = 22.sp
     val largeInputLineHeight = 38.sp
     val headingLineHeight = 29.sp
+    val setupHeadlineLineHeight = 38.sp
     val amountLineHeight = 36.sp
     val amountFieldLineHeight = 48.sp
     val captionLetterSpacing = 0.2.sp

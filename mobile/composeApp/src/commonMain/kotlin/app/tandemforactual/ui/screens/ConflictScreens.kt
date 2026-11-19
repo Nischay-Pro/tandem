@@ -872,7 +872,7 @@ internal fun BudgetMutationReviewScreen(
             if (mutation?.requiresEncryptionPassword == true) {
                 BudgetMutationReasonCard(
                     title = "ENCRYPTED BUDGET",
-                    explanation = "Unlock this budget before Tandem can refresh or retry the change.",
+                    explanation = "Unlock this budget before Tandem can refresh or try again.",
                 )
             }
             mobileSession.transactionWriteMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }

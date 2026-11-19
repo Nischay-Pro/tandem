@@ -149,7 +149,13 @@ private fun SetupBrandWordmark() {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.size(7.dp).clip(CircleShape).background(palette.accent))
-            Text("tandem", color = palette.text, fontSize = 21.sp, fontWeight = FontWeight.Bold, fontFamily = tandemAlloFamily())
+            Text(
+                "tandem",
+                color = palette.text,
+                fontSize = TandemTypography.setupBrandWordmark,
+                fontWeight = FontWeight.Bold,
+                fontFamily = tandemAlloFamily(),
+            )
         }
         Text("FOR ACTUAL BUDGET", color = palette.muted, fontSize = TandemTypography.micro, fontWeight = FontWeight.SemiBold)
     }
@@ -191,8 +197,8 @@ private fun SetupHeadline(
         Text(
             title,
             color = palette.text,
-            fontSize = 32.sp,
-            lineHeight = 38.sp,
+            fontSize = TandemTypography.setupHeadline,
+            lineHeight = TandemTypography.setupHeadlineLineHeight,
             fontWeight = FontWeight.SemiBold,
             fontFamily = tandemAlloFamily(),
         )
@@ -933,7 +939,7 @@ internal fun NotificationOnboardingScreen(
             ) {
                 listOf(
                     "Sync issues" to "Know when your Actual server needs attention.",
-                    "Conflicts" to "Review changes that need your decision.",
+                    "Needs review" to "These changes need your decision.",
                 ).forEach { (title, detail) ->
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),

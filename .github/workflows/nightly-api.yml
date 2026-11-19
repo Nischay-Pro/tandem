@@ -381,7 +381,6 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-
   report_nightly_failure:
     name: Report failed nightly build
     needs:

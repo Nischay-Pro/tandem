@@ -141,7 +141,7 @@ TANDEM_NGINX_TEST_CONFIG="$http_root/nginx.conf" \
   bash "$project_root/deploy/configure-docker-nginx.sh" \
     "$http_root/install" \
     > "$http_root/run.log"
-grep -Fq 'No matching HTTPS Nginx site' "$http_root/run.log"
+grep -Fq 'No existing HTTPS Nginx vhost matched budget.nischay.pro' "$http_root/run.log"
 test ! -e "$http_root/network-attached"
 test ! -e "$http_root/actual-budget/compose.override.yaml"
 if grep -Fq 'TANDEM-SETUP-MANAGED-ROUTES' "$http_root/nginx.conf"; then

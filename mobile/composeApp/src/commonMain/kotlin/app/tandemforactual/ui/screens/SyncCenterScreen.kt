@@ -283,7 +283,7 @@ private fun SyncOverviewCard(
             syncError != null -> "Sync failed"
             isSyncing -> "Syncing with Actual"
             isServerReachable -> "Connected to Actual"
-            else -> "You're offline"
+            else -> "You’re offline"
         }
     Column(
         Modifier.fillMaxWidth(),
@@ -316,13 +316,13 @@ private fun SyncOverviewCard(
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
                     Text(
-                        "You're offline",
+                        "You’re offline",
                         color = warningColor,
                         fontSize = TandemTypography.compactBody,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        "Changes will be saved locally and synced when you're back online.",
+                        "Changes will be saved locally and synced when you’re back online.",
                         color = palette.text,
                         fontSize = TandemTypography.caption,
                         lineHeight = TandemTypography.compactLineHeight,
@@ -361,7 +361,7 @@ private fun SyncOverviewCard(
         if (waitingCount > 0) {
             SyncSummaryRow(
                 title = "$waitingCount Pending ${if (waitingCount == 1) "Change" else "Changes"}",
-                subtitle = if (isServerReachable) "Will sync when you sync" else "Will sync when you're back online",
+                subtitle = if (isServerReachable) "Will sync when you sync" else "Will sync when you’re back online",
                 icon = Lucide.RefreshCw,
                 color = palette.syncing,
                 onClick = onPendingClick,
@@ -446,7 +446,7 @@ private fun SyncFailureCard(
             if (isServerReachable) {
                 "Check the Actual budget and try again. Your changes are still saved on this device."
             } else {
-                "Check your network and the Tandem server, then retry. Your changes are still saved on this device."
+                "Check your network and the Tandem server, then try again. Your changes are still saved on this device."
             },
             color = palette.muted,
             fontSize = TandemTypography.caption,
@@ -467,7 +467,7 @@ private fun SyncFailureCard(
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
             TandemActionButton(
-                if (isSyncing) "Retrying…" else "Retry sync",
+                if (isSyncing) "Syncing…" else "Try again",
                 TandemActionButtonTone.PRIMARY,
                 Modifier.weight(1f),
                 icon = Lucide.RefreshCw,

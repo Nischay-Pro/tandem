@@ -4576,7 +4576,7 @@ internal class TandemMobileSession(
         if (isSavingTransaction) {
             reportConflictResolution(
                 operationId,
-                "A conflict choice is already being saved. Wait for it to finish, then review this change again.",
+                "A decision is already being saved. Wait for it to finish, then review this change again.",
             )
             return
         }
