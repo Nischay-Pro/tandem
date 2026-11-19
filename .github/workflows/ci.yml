@@ -260,7 +260,10 @@ jobs:
 
       - name: Assemble Android release
         working-directory: mobile
-        run: ./gradlew :androidApp:assembleRelease
+        run: |
+          ./gradlew \
+            -Dorg.gradle.jvmargs="-Xmx1024m -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8" \
+            :androidApp:assembleRelease
 
   ios_host:
     name: iOS app · Xcode simulator tests and launch smoke
