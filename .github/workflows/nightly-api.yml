@@ -311,7 +311,12 @@ jobs:
           TANDEM_ANDROID_NIGHTLY_KEY_PASSWORD: ${{ secrets.ANDROID_NIGHTLY_KEY_PASSWORD }}
           NIGHTLY_VERSION_CODE: ${{ format('{0}{1}', steps.version.outputs.date_code, steps.version.outputs.sequence) }}
           NIGHTLY_VERSION_NAME: 0.1.0-nightly.${{ github.run_number }}
-        run: ./gradlew :androidApp:assembleRelease -PtandemVersionCode="$NIGHTLY_VERSION_CODE" -PtandemVersionName="$NIGHTLY_VERSION_NAME"
+        run: |
+          ./gradlew \
+            -Dorg.gradle.jvmargs="-Xmx1024m -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8" \
+            :androidApp:assembleRelease \
+            -PtandemVersionCode="$NIGHTLY_VERSION_CODE" \
+            -PtandemVersionName="$NIGHTLY_VERSION_NAME"
 
       - name: Verify APK signature and write checksum
         env:
