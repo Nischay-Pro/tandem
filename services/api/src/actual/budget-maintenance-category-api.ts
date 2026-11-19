@@ -203,10 +203,10 @@ export function createCategoryOperations({
                 "Choose a category group in this budget",
               );
             }
-            const internal = client.internal;
+            const internal = session.internal;
             if (!internal) {
               throw new BudgetMaintenanceInputError(
-                "This Actual version does not support category group ordering",
+                "The Tandem Actual connection cannot issue category group ordering commands",
               );
             }
             await internal.send("category-group-move", {
@@ -270,10 +270,10 @@ export function createCategoryOperations({
                   "A category moved to another group starts at the end of that group",
                 );
               }
-              const internal = client.internal;
+              const internal = session.internal;
               if (!internal) {
                 throw new BudgetMaintenanceInputError(
-                  "This Actual version does not support moving categories between groups",
+                  "The Tandem Actual connection cannot issue category move commands",
                 );
               }
               await internal.send("category-move", {
@@ -302,10 +302,10 @@ export function createCategoryOperations({
                 "Choose a category in the same group",
               );
             }
-            const internal = client.internal;
+            const internal = session.internal;
             if (!internal) {
               throw new BudgetMaintenanceInputError(
-                "This Actual version does not support category ordering",
+                "The Tandem Actual connection cannot issue category ordering commands",
               );
             }
             await internal.send("category-move", {

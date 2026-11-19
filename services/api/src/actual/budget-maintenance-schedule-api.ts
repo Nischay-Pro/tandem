@@ -165,9 +165,11 @@ export function createScheduleOperations({
             if (schedule.next_date !== expectedNextDate) {
               throw new BudgetScheduleChangedError();
             }
-            const internal = client.internal;
+            const internal = session.internal;
             if (!internal) {
-              throw new Error("Actual schedule actions are unavailable");
+              throw new Error(
+                "The Tandem Actual connection cannot issue schedule commands",
+              );
             }
             await internal.send("schedule/skip-next-date", { id: scheduleId });
           },
@@ -194,9 +196,11 @@ export function createScheduleOperations({
                 "Choose an account before posting this schedule",
               );
             }
-            const internal = client.internal;
+            const internal = session.internal;
             if (!internal) {
-              throw new Error("Actual schedule actions are unavailable");
+              throw new Error(
+                "The Tandem Actual connection cannot issue schedule commands",
+              );
             }
             await internal.send("schedule/post-transaction", {
               id: scheduleId,

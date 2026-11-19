@@ -190,10 +190,10 @@ export function createAccountOperations({
                 "Accounts can only be reordered within the same section",
               );
             }
-            const internal = client.internal;
+            const internal = session.internal;
             if (!internal) {
               throw new BudgetMaintenanceInputError(
-                "This Actual version does not support account ordering",
+                "The Tandem Actual connection cannot issue account ordering commands",
               );
             }
             await internal.send("account-move", {

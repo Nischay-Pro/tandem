@@ -43,6 +43,7 @@ describe("budget maintenance date validation fallback", () => {
       },
     };
     const session: ActualBudgetMaintenanceSession = {
+      internal: undefined,
       async runBudget<T>(_budgetId: string, operation: () => Promise<T>) {
         return operation();
       },

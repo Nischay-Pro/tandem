@@ -1,5 +1,8 @@
 import type * as actualApi from "@actual-app/api";
-import type { BudgetOperationOptions } from "./actual-session.js";
+import type {
+  ActualInternalApiPort,
+  BudgetOperationOptions,
+} from "./actual-session.js";
 import type { BudgetLockPort } from "./transaction-reconciler.js";
 import {
   MAX_TRANSACTION_AMOUNT,
@@ -410,6 +413,7 @@ export interface BudgetMaintenanceApiPort {
 }
 
 export interface ActualBudgetMaintenanceSession {
+  readonly internal: ActualInternalApiPort | undefined;
   runBudget<T>(
     syncId: string,
     operation: () => Promise<T>,
@@ -482,7 +486,6 @@ export type ActualBudgetMaintenanceClient = Pick<
   | "getSchedules"
   | "updateSchedule"
   | "deleteSchedule"
-  | "internal"
 >;
 
 export async function getAllCategoryGroups(

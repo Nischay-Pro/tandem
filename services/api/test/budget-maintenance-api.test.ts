@@ -212,9 +212,15 @@ function createFake() {
       send: vi.fn(async () => undefined),
     },
   };
+  const session: ActualBudgetMaintenanceSession = {
+    runBudget,
+    get internal() {
+      return client.internal as unknown as ActualBudgetMaintenanceSession["internal"];
+    },
+  };
   const api = createBudgetMaintenanceApi(
     { withBudgetLock } as unknown as BudgetLockPort,
-    { runBudget },
+    session,
     client as unknown as Parameters<typeof createBudgetMaintenanceApi>[2],
   );
   return { api, client, events, runBudgetCalls, withBudgetLock, payees, rules };
@@ -488,7 +494,7 @@ describe("Actual budget maintenance API", () => {
     fake.client.internal = undefined as never;
     await expect(
       fake.api.moveAccount("budget-1", "source", null),
-    ).rejects.toThrow("does not support account ordering");
+    ).rejects.toThrow("cannot issue account ordering commands");
   });
 
   it("creates a category in an active group and rejects duplicate names", async () => {
@@ -737,7 +743,7 @@ describe("Actual budget maintenance API", () => {
     fake.client.internal = undefined as never;
     await expect(
       fake.api.manageCategoryGroup("budget-1", "group-1", "move"),
-    ).rejects.toThrow("does not support category group ordering");
+    ).rejects.toThrow("cannot issue category group ordering commands");
   });
 
   it("validates category membership and cross-group move rules", async () => {
@@ -818,10 +824,10 @@ describe("Actual budget maintenance API", () => {
         undefined,
         "group-2",
       ),
-    ).rejects.toThrow("does not support moving categories between groups");
+    ).rejects.toThrow("cannot issue category move commands");
     await expect(
       fake.api.manageCategory("budget-1", "expense", "move", "expense-2"),
-    ).rejects.toThrow("does not support category ordering");
+    ).rejects.toThrow("cannot issue category ordering commands");
   });
 
   it("creates payees in Actual and rejects duplicate names case-insensitively", async () => {
@@ -1526,16 +1532,16 @@ describe("Actual budget maintenance API", () => {
     expect(fake.client.internal.send).not.toHaveBeenCalled();
   });
 
-  it("reports when this Actual client does not expose schedule handlers", async () => {
+  it("reports when the Actual session does not expose schedule handlers", async () => {
     const fake = createFake();
     Object.assign(fake.client, { internal: undefined });
 
     await expect(
       fake.api.skipSchedule("budget-1", "monthly-rent", "2026-11-15"),
-    ).rejects.toThrow("Actual schedule actions are unavailable");
+    ).rejects.toThrow("cannot issue schedule commands");
     await expect(
       fake.api.postSchedule("budget-1", "monthly-rent", "2026-11-15"),
-    ).rejects.toThrow("Actual schedule actions are unavailable");
+    ).rejects.toThrow("cannot issue schedule commands");
   });
 
   it("rejects posting a schedule without an account and deletes only existing schedules", async () => {

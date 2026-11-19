@@ -54,6 +54,7 @@ function createFakeClient(): FakeClient {
       }
       return (
         initialized ?? {
+          send: vi.fn(async () => undefined),
           on: (eventName: string, listener: (event: unknown) => void) => {
             if (eventName === "sync-event") syncEventListener = listener;
           },
@@ -144,6 +145,24 @@ describe("ActualSession", () => {
 
     expect(fake.calls).toEqual(["init", "version"]);
     await session.close();
+  });
+
+  it("uses the command bus returned by init and clears it on close", async () => {
+    const fake = createFakeClient();
+    const send = vi.fn(async () => ({ accepted: true }));
+    fake.setInitialized({ send, on: vi.fn() });
+    const session = new ActualSession(fake.api, config);
+
+    const response = await session.execute(async () => {
+      const internal = session.internal;
+      if (!internal) throw new Error("Actual command bus was not retained");
+      return internal.send("category-move", { id: "category-1" });
+    });
+
+    expect(send).toHaveBeenCalledWith("category-move", { id: "category-1" });
+    expect(response).toEqual({ accepted: true });
+    await session.close();
+    expect(session.internal).toBeUndefined();
   });
 
   it("skips startup when no Actual credential is configured", async () => {
