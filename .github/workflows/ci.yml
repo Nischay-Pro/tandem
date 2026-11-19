@@ -160,16 +160,17 @@ jobs:
 
       - name: Compile and test data Android and JVM targets
         working-directory: mobile
-        run: >-
-          ./gradlew
-          :data:compileAndroidMain
-          :data:compileAndroidDeviceTest
-          :data:compileCommonMainKotlinMetadata
-          :data:compileKotlinJvm
-          :data:jvmTest
-          :data:testAndroidHostTest
-          :data:koverVerify
-          :data:ktlintCheck
+        run: |
+          ./gradlew \
+            -Dorg.gradle.jvmargs="-Xmx1024m -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8" \
+            :data:compileAndroidMain \
+            :data:compileAndroidDeviceTest \
+            :data:compileCommonMainKotlinMetadata \
+            :data:compileKotlinJvm \
+            :data:jvmTest \
+            :data:testAndroidHostTest \
+            :data:koverVerify \
+            :data:ktlintCheck
 
   compose_android:
     name: Compose · Android host

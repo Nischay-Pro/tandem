@@ -63,12 +63,31 @@ internal fun budgetMutationFailureMessage(
     kind: BudgetReorderKind?,
     itemName: String?,
 ): String =
-    if (errorCode == "invalid_request" && kind == BudgetReorderKind.SET_CATEGORY_AMOUNT) {
-        val categoryName = itemName?.takeIf(String::isNotBlank) ?: "this category"
-        "Tandem searched only hidden categories, treated $categoryName as missing, and stopped before assigning the amount in Actual."
-    } else {
-        budgetMutationFailureMessage(errorCode)
+    when {
+        errorCode == "invalid_request" && isBudgetOrderMutation(kind) -> {
+            val name = itemName?.takeIf(String::isNotBlank) ?: "this item"
+            "Tandem rejected the reorder for $name before changing Actual. The saved order is unchanged, and this entry does not include the server’s detailed reason."
+        }
+        errorCode == "invalid_request" && kind == BudgetReorderKind.SET_CATEGORY_AMOUNT -> {
+            val categoryName = itemName?.takeIf(String::isNotBlank) ?: "this category"
+            "Tandem searched only hidden categories, treated $categoryName as missing, and stopped before assigning the amount in Actual."
+        }
+        else -> budgetMutationFailureMessage(errorCode)
     }
+
+internal fun isBudgetOrderMutation(kind: BudgetReorderKind?): Boolean =
+    kind in
+        setOf(
+            BudgetReorderKind.CATEGORY,
+            BudgetReorderKind.CATEGORY_GROUP,
+            BudgetReorderKind.MOVE_CATEGORY_TO_GROUP,
+            BudgetReorderKind.MOVE_ACCOUNT,
+        )
+
+internal fun isRejectedBudgetOrderRequest(
+    errorCode: String?,
+    kind: BudgetReorderKind?,
+): Boolean = errorCode == "invalid_request" && isBudgetOrderMutation(kind)
 
 internal fun budgetMutationStatusLabel(status: String): String =
     when (status) {

@@ -1,5 +1,6 @@
 package app.tandemforactual.ui
 
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -19,16 +20,17 @@ class SyncCenterSummaryRowTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun needsReviewSummaryRowOpensItsReviewActionWhenTapped() {
+    fun needsReviewCountTileOpensItsReviewSectionWhenTapped() {
         var opened = false
 
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                SyncSummaryRow(
-                    title = "Needs review",
-                    subtitle = "1 change needs your attention",
+                SyncCountTile(
+                    label = "Needs review",
+                    count = 1,
                     icon = Lucide.CircleAlert,
                     color = tandemPalette.warning,
+                    modifier = Modifier,
                     onClick = { opened = true },
                 )
             }

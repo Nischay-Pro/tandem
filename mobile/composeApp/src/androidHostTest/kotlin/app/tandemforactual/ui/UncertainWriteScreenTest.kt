@@ -46,7 +46,7 @@ class UncertainWriteScreenTest {
         composeTestRule.onNodeWithText("Status unknown").assertExists()
         composeTestRule
             .onNodeWithText(
-                "Actual still can’t confirm whether this edit was saved. You can try again or remove it.",
+                "Actual couldn’t confirm whether this was saved. Check Actual before retrying.",
             ).assertExists()
         composeTestRule.onNodeWithText("Try again").performClick()
         assertTrue(retryRequested)
@@ -182,7 +182,7 @@ class UncertainWriteScreenTest {
         composeTestRule.onNodeWithText("Status not found").assertExists()
         composeTestRule
             .onNodeWithText(
-                "Keep it on this device and check Actual before trying again.",
+                "Actual has no record of this edit. Keep it here or remove it.",
                 substring = true,
             ).assertExists()
         composeTestRule.onNodeWithText("Check again").assertExists()

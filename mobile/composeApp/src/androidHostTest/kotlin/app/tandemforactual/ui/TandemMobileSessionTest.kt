@@ -673,6 +673,23 @@ class TandemMobileSessionTest {
             "Tandem searched only hidden categories, treated Beauty as missing, and stopped before assigning the amount in Actual.",
             budgetMutationFailureMessage("invalid_request", BudgetReorderKind.SET_CATEGORY_AMOUNT, "Beauty"),
         )
+        val orderKinds =
+            listOf(
+                BudgetReorderKind.CATEGORY,
+                BudgetReorderKind.CATEGORY_GROUP,
+                BudgetReorderKind.MOVE_CATEGORY_TO_GROUP,
+                BudgetReorderKind.MOVE_ACCOUNT,
+            )
+        orderKinds.forEach { kind ->
+            assertTrue(isRejectedBudgetOrderRequest("invalid_request", kind), "$kind needs server update guidance")
+            assertEquals(
+                "Tandem rejected the reorder for Jewelry before changing Actual. The saved order is unchanged, and this entry does not include the server’s detailed reason.",
+                budgetMutationFailureMessage("invalid_request", kind, "Jewelry"),
+                kind.name,
+            )
+        }
+        assertFalse(isRejectedBudgetOrderRequest("invalid_request", BudgetReorderKind.RENAME_CATEGORY))
+        assertFalse(isRejectedBudgetOrderRequest("operation_rejected", BudgetReorderKind.CATEGORY))
     }
 
     @Test

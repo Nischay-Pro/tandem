@@ -168,6 +168,7 @@ internal enum class AppRoute(
     MANAGE_PAYEES("Manage payees"),
     CHOOSE_CATEGORY("Choose category"),
     SYNC_CENTER("Sync Center"),
+    PENDING_CHANGES("Pending changes"),
     CONFLICT_INBOX("Needs review"),
     CONFLICT_REVIEW("Review versions"),
     UNCERTAIN_WRITE("Review change"),

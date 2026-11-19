@@ -442,7 +442,7 @@ internal fun ConflictReviewScreen(
                 ?.takeIf { it.operationId == state.selectedConflictOperationId }
                 ?.let { feedback -> BodyText(feedback.message) }
         } else {
-            Heading("Two versions differ")
+            Heading("Choose a version")
             if (redirectedToLatestConflict) BodyText("Actual changed again. Review this latest version before choosing.")
             when {
                 mobileSession.isSyncing -> BodyText("Checking the latest transaction with Tandem…")
@@ -690,20 +690,24 @@ internal fun UncertainWriteDetailsScreen(
             val message =
                 when {
                     checkErrorForOperation != null -> checkErrorForOperation
-                    operation.status == "committed" -> "This change is saved in your budget."
-                    operation.status == "conflict" -> "Actual changed this transaction. Review both versions."
-                    operation.status == "rejected" -> "Actual kept the previous value."
-                    operation.status == "discarded" -> "Your edit was removed."
-                    operation.status == "queued" && isChecked -> "Actual confirmed this edit wasn’t saved. Try again."
-                    operation.status == "queued" -> "Your edit is saved on this device and is waiting to sync."
-                    operation.status == "sending" && isSyncing -> "Syncing this edit with Actual."
-                    operation.status == "sending" -> "Tandem couldn’t confirm the save. Check its status before trying again."
-                    isNotFound -> "Tandem can’t find this edit’s status. Keep it on this device and check Actual before trying again."
-                    isChecked -> "Actual still can’t confirm whether this edit was saved. You can try again or remove it."
+                    operation.status == "committed" -> "Actual saved this edit."
+                    operation.status == "conflict" -> "Actual has a different version. Compare before choosing."
+                    operation.status == "rejected" -> "Actual rejected this edit. The previous value is unchanged."
+                    operation.status == "discarded" -> "This edit was removed from this device."
+                    operation.status == "queued" && isChecked -> "Actual did not save this edit. It is still on this device."
+                    operation.status == "queued" -> "Saved on this device. Waiting to sync."
+                    operation.status == "sending" && isSyncing -> "Sending this edit to Actual."
+                    operation.status == "sending" -> "Tandem couldn’t confirm the save. Check Actual before retrying."
+                    isNotFound -> "Actual has no record of this edit. Keep it here or remove it."
+                    isChecked -> "Actual couldn’t confirm whether this was saved. Check Actual before retrying."
                     isSyncing -> "Checking Actual for this edit."
-                    else -> "Tandem couldn’t confirm whether Actual saved this edit. Check its status before trying again."
+                    else -> "Tandem couldn’t confirm whether Actual saved this edit. Check before retrying."
                 }
-            Heading(heading)
+            ReviewOutcomeCard(
+                title = heading,
+                explanation = message,
+                isRejected = operation.status == "rejected" || checkErrorForOperation != null,
+            )
             SectionCard(
                 transaction?.payee ?: "Transaction",
                 transaction?.dateLabel ?: "Saved on this device",
@@ -724,7 +728,6 @@ internal fun UncertainWriteDetailsScreen(
                     )
                 }
             }
-            InfoBubble(message)
             when {
                 checkErrorForOperation != null -> {
                     UncertainWriteRecoveryActions(
@@ -830,10 +833,10 @@ internal fun BudgetMutationReviewScreen(
             val outcome =
                 when (operation.status) {
                     "rejected" -> "Rejected"
-                    "uncertain" -> "Not confirmed"
-                    "conflict" -> "Budget changed"
+                    "uncertain" -> "Status unknown"
+                    "conflict" -> "Needs review"
                     "queued" -> "Waiting to sync"
-                    "sending" -> "Sending to Actual"
+                    "sending" -> "Syncing"
                     else -> statusLabel
                 }
             val outcomeExplanation =
@@ -841,18 +844,21 @@ internal fun BudgetMutationReviewScreen(
                     operation.status == "rejected" &&
                         operation.lastErrorCode == "invalid_request" &&
                         mutation?.kind == BudgetReorderKind.SET_CATEGORY_AMOUNT ->
-                        "This assignment did not reach Actual. The budget value was left unchanged."
-                    operation.status == "rejected" -> "Actual kept the previous value."
-                    operation.status == "uncertain" -> "Tandem could not confirm whether Actual saved this change."
-                    operation.status == "conflict" -> "The budget changed while Tandem was processing this request."
-                    operation.status == "queued" -> "Saved on this device. It has not been sent to Actual yet."
-                    operation.status == "sending" -> "Tandem is sending this change to Actual."
+                        "Actual did not receive this assignment. The saved value is unchanged."
+                    operation.status == "rejected" && isRejectedBudgetOrderRequest(operation.lastErrorCode, mutation?.kind) ->
+                        "Tandem rejected this reorder. Actual’s saved order did not change."
+                    operation.status == "rejected" -> "Actual rejected this change. The previous value is unchanged."
+                    operation.status == "uncertain" -> "Actual has not confirmed whether this change was saved."
+                    operation.status == "conflict" -> "The budget changed since this edit. Review the latest value first."
+                    operation.status == "queued" -> "Saved on this device. Waiting to sync."
+                    operation.status == "sending" -> "Sending this change to Actual."
                     else -> "Review the change and its current status."
                 }
             ReviewOutcomeCard(outcome, outcomeExplanation, isRejected = operation.status == "rejected")
             BudgetMutationChangeDetails(
                 changeTitle,
                 budgetMutationLastSyncedAssignment(mutation, operation, state, mobileSession),
+                budgetMutationAmountChanges(mutation, state, mobileSession),
             )
             BudgetMutationReasonCard(
                 title = if (operation.status == "rejected") "WHY IT WAS REJECTED" else "WHAT HAPPENED",
@@ -865,8 +871,14 @@ internal fun BudgetMutationReviewScreen(
                 BudgetMutationReasonCard(
                     title = "WHAT TO DO NEXT",
                     explanation =
-                        "Refresh the budget to load its latest data. After the Tandem server fix is available, " +
-                            "enter this assignment again from the Budget screen.",
+                        "Refresh the budget. After the server is updated, assign this category again from Budget.",
+                )
+            }
+            if (operation.status == "rejected" && isRejectedBudgetOrderRequest(operation.lastErrorCode, mutation?.kind)) {
+                BudgetMutationReasonCard(
+                    title = "WHAT TO DO NEXT",
+                    explanation =
+                        "Check Actual’s order. Confirm the Tandem server is updated, then make this reorder again.",
                 )
             }
             if (mutation?.requiresEncryptionPassword == true) {
@@ -958,7 +970,7 @@ internal fun BudgetMutationReviewScreen(
                         SecondaryButton("Discard change", enabled = !state.readOnlyMode) { confirmDiscard = true }
                     } else {
                         PrimaryButton(
-                            "Refresh budget",
+                            if (budgetMutationNeedsRefresh(operation.lastErrorCode)) "Refresh budget" else "Check Actual",
                             enabled = !state.readOnlyMode && mutation?.requiresEncryptionPassword != true,
                         ) { mobileSession.retryBudgetMutation(operation.operationId) }
                         SecondaryButton("Discard change", enabled = !state.readOnlyMode) { confirmDiscard = true }
@@ -1010,17 +1022,25 @@ internal fun RejectedWriteScreen(
         val operationAmountText = operationAmount?.let(state::formatSignedCurrency) ?: "Unavailable"
         var confirmDismiss by rememberSaveable(operation?.operationId) { mutableStateOf(false) }
         PageColumn {
-            Heading("Rejected")
             if (operation == null) {
+                Heading("Rejected")
                 BodyText("No rejected edits need review.")
             } else {
+                ReviewOutcomeCard(
+                    title = "Rejected",
+                    explanation = "Actual kept the previous value.",
+                    isRejected = true,
+                )
                 SectionCard(transaction?.payee ?: "Deleted transaction", transaction?.dateLabel ?: operationAmountText) {
                     ListRow(
                         "Your edit",
                         trailing = operationAmountText,
                     )
                 }
-                InfoBubble(rejectedTransactionReferenceMessage(operation.lastErrorCode))
+                BudgetMutationReasonCard(
+                    title = "WHY IT WAS REJECTED",
+                    explanation = rejectedTransactionReferenceMessage(operation.lastErrorCode),
+                )
                 PrimaryButton("Remove edit", enabled = !state.readOnlyMode) { confirmDismiss = true }
             }
         }
