@@ -76,6 +76,9 @@ internal class AppState {
     var budgetDisplaySettings by mutableStateOf<BudgetDisplaySettings?>(null)
     var selectedMonth by mutableStateOf(currentMonthLabel())
     var selectedMonthId by mutableStateOf(currentMonthId())
+    var isBudgetMonthPickerOpen by mutableStateOf(false)
+    var accountsSearchExpanded by mutableStateOf(false)
+    var accountsRequestedAction by mutableStateOf<String?>(null)
     var reportsMonthId by mutableStateOf(currentMonthId())
     var selectedReportKindName by mutableStateOf(ReportKind.SPENDING_BY_CATEGORY.name)
     var reportsBudgetId by mutableStateOf("")
@@ -126,9 +129,12 @@ internal class AppState {
     var selectedTransactionAmountMinor by mutableStateOf<Long?>(null)
     var selectedTransactionNotes by mutableStateOf("")
     var selectedTransactionIsLive by mutableStateOf(false)
+    var selectedTransactionIsTransfer by mutableStateOf(false)
     var conflictChoice by mutableStateOf("")
     var backgroundStyle by mutableStateOf("Solid surface")
     var homeLayout by mutableStateOf("Comfortable")
+    var budgetShowProgressBars by mutableStateOf(false)
+    var privacyModeEnabled by mutableStateOf(false)
     var collapsedBudgetSections by mutableStateOf("")
     var pinnedCategoryIds by mutableStateOf("")
     var categoryIconOverrides by mutableStateOf("")
@@ -195,6 +201,7 @@ internal class AppState {
         selectedTransactionAmountMinor = null
         selectedTransactionNotes = ""
         selectedTransactionIsLive = false
+        selectedTransactionIsTransfer = false
         conflictChoice = ""
         collapsedBudgetSections = ""
         pinnedCategoryIds = ""
@@ -213,6 +220,8 @@ internal class AppState {
             "accent" to accent.name,
             "backgroundStyle" to backgroundStyle,
             "homeLayout" to homeLayout,
+            "budgetShowProgressBars" to budgetShowProgressBars.toString(),
+            "privacyModeEnabled" to privacyModeEnabled.toString(),
             "collapsedBudgetSections" to collapsedBudgetSections,
             "pinnedCategoryIds" to pinnedCategoryIds,
             "categoryIconOverrides" to categoryIconOverrides,
@@ -222,6 +231,7 @@ internal class AppState {
             "selectedBudget" to selectedBudget,
             "selectedBudgetId" to selectedBudgetId,
             "selectedBudgetEncrypted" to selectedBudgetEncrypted.toString(),
+            "serverUrl" to serverUrl,
             "cachedBudgetCatalogJson" to cachedBudgetCatalogJson,
             "reportsMonthId" to reportsMonthId,
             "selectedReportKindName" to selectedReportKindName,
@@ -247,6 +257,8 @@ internal class AppState {
         accent = AccentChoice.entries.firstOrNull { it.name == saved["accent"] } ?: accent
         backgroundStyle = saved["backgroundStyle"] ?: backgroundStyle
         homeLayout = normalizeHomeLayoutName(saved["homeLayout"] ?: homeLayout)
+        budgetShowProgressBars = saved["budgetShowProgressBars"]?.toBooleanStrictOrNull() ?: budgetShowProgressBars
+        privacyModeEnabled = saved["privacyModeEnabled"]?.toBooleanStrictOrNull() ?: privacyModeEnabled
         collapsedBudgetSections = saved["collapsedBudgetSections"] ?: collapsedBudgetSections
         pinnedCategoryIds = saved["pinnedCategoryIds"] ?: pinnedCategoryIds
         categoryIconOverrides = saved["categoryIconOverrides"] ?: categoryIconOverrides
@@ -257,6 +269,10 @@ internal class AppState {
         selectedBudget = saved["selectedBudget"] ?: selectedBudget
         selectedBudgetId = saved["selectedBudgetId"] ?: selectedBudgetId
         selectedBudgetEncrypted = saved["selectedBudgetEncrypted"]?.toBooleanStrictOrNull() ?: selectedBudgetEncrypted
+        serverUrl =
+            saved["serverUrl"]
+                ?.takeUnless { it.trim().equals("https://budget.example.com", ignoreCase = true) }
+                ?: serverUrl
         cachedBudgetCatalogJson = saved["cachedBudgetCatalogJson"] ?: cachedBudgetCatalogJson
         reportsMonthId = saved["reportsMonthId"] ?: reportsMonthId
         selectedReportKindName = saved["selectedReportKindName"] ?: selectedReportKindName
@@ -322,6 +338,7 @@ internal class AppState {
                         "selectedTransactionPayeeName" to state.selectedTransactionPayeeName,
                         "selectedTransactionCategoryName" to state.selectedTransactionCategoryName,
                         "selectedTransactionNotes" to state.selectedTransactionNotes,
+                        "selectedTransactionIsTransfer" to state.selectedTransactionIsTransfer,
                         "selectedConflictOperationId" to state.selectedConflictOperationId,
                         "serverUrl" to state.serverUrl,
                         "transactionAmount" to state.transactionAmount,
@@ -342,6 +359,8 @@ internal class AppState {
                         "conflictChoice" to state.conflictChoice,
                         "backgroundStyle" to state.backgroundStyle,
                         "homeLayout" to state.homeLayout,
+                        "budgetShowProgressBars" to state.budgetShowProgressBars,
+                        "privacyModeEnabled" to state.privacyModeEnabled,
                         "collapsedBudgetSections" to state.collapsedBudgetSections,
                         "pinnedCategoryIds" to state.pinnedCategoryIds,
                         "categoryIconOverrides" to state.categoryIconOverrides,
@@ -394,6 +413,7 @@ internal class AppState {
                         selectedTransactionCategoryName =
                             saved["selectedTransactionCategoryName"] as? String ?: selectedTransactionCategoryName
                         selectedTransactionNotes = saved["selectedTransactionNotes"] as? String ?: selectedTransactionNotes
+                        selectedTransactionIsTransfer = saved["selectedTransactionIsTransfer"] as? Boolean ?: selectedTransactionIsTransfer
                         selectedConflictOperationId = saved["selectedConflictOperationId"] as? String ?: selectedConflictOperationId
                         serverUrl =
                             (saved["serverUrl"] as? String)
@@ -419,6 +439,8 @@ internal class AppState {
                         conflictChoice = saved["conflictChoice"] as? String ?: conflictChoice
                         backgroundStyle = saved["backgroundStyle"] as? String ?: backgroundStyle
                         homeLayout = normalizeHomeLayoutName(saved["homeLayout"] as? String ?: homeLayout)
+                        budgetShowProgressBars = saved["budgetShowProgressBars"] as? Boolean ?: budgetShowProgressBars
+                        privacyModeEnabled = saved["privacyModeEnabled"] as? Boolean ?: privacyModeEnabled
                         collapsedBudgetSections = saved["collapsedBudgetSections"] as? String ?: collapsedBudgetSections
                         pinnedCategoryIds = saved["pinnedCategoryIds"] as? String ?: pinnedCategoryIds
                         categoryIconOverrides = saved["categoryIconOverrides"] as? String ?: categoryIconOverrides
@@ -467,7 +489,11 @@ internal fun transactionFormHasUnsavedChanges(
         AppRoute.EDIT_TRANSACTION ->
             amount == null ||
                 state.selectedTransactionAmountMinor?.let { amount != kotlin.math.abs(it) } != false ||
-                state.transactionType != (if ((state.selectedTransactionAmountMinor ?: 0L) < 0) "Spending" else "Income") ||
+                state.transactionType !=
+                transactionTypeForSelection(
+                    state.selectedTransactionIsTransfer,
+                    state.selectedTransactionAmountMinor,
+                ) ||
                 state.transactionNotes != state.selectedTransactionNotes ||
                 state.newTransactionAccountId != state.selectedTransactionAccountId ||
                 state.newTransactionPayeeId != state.selectedTransactionPayeeId ||
@@ -499,7 +525,7 @@ internal fun restoreTransactionFormBaseline(
         }
         AppRoute.EDIT_TRANSACTION -> {
             state.selectedTransactionAmountMinor?.let { state.transactionAmount = state.formatAmount(kotlin.math.abs(it)) }
-            state.transactionType = if ((state.selectedTransactionAmountMinor ?: 0L) < 0) "Spending" else "Income"
+            state.transactionType = transactionTypeForSelection(state.selectedTransactionIsTransfer, state.selectedTransactionAmountMinor)
             state.transactionAccount = state.selectedTransactionAccountName
             state.newTransactionAccountId = state.selectedTransactionAccountId
             state.transactionPayee = state.selectedTransactionPayeeName
@@ -512,3 +538,13 @@ internal fun restoreTransactionFormBaseline(
         else -> Unit
     }
 }
+
+private fun transactionTypeForSelection(
+    isTransfer: Boolean,
+    amountMinor: Long?,
+): String =
+    when {
+        isTransfer -> "Transfer"
+        (amountMinor ?: 0L) < 0 -> "Spending"
+        else -> "Income"
+    }

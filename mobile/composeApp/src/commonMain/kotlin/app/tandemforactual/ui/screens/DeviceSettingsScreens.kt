@@ -204,6 +204,14 @@ internal fun SecurityScreen(
                 onChange = { state.readOnlyMode = it },
             )
         }
+        SectionCard("Privacy") {
+            ToggleRow(
+                title = "Hide budget amounts",
+                subtitle = "Tap to reveal for 3 seconds; hover to reveal temporarily",
+                checked = state.privacyModeEnabled,
+                onChange = { state.privacyModeEnabled = it },
+            )
+        }
         SurfaceCard {
             ListRow(
                 "Budget password",

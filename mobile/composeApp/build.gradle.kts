@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.Sync
+
 plugins {
   alias(libs.plugins.kotlinMultiplatform)
   alias(libs.plugins.androidKmpLibrary)
@@ -8,6 +10,13 @@ plugins {
 
 val repositoryRoot = rootProject.projectDir.parentFile
 val generatedTheSvgResources = layout.buildDirectory.dir("generated/thesvg-icon-pack/composeResources")
+val combinedComposeResources =
+  tasks.register<Sync>("combineCommonComposeResources") {
+    dependsOn("generateTheSvgIconPack")
+    from(generatedTheSvgResources)
+    from(layout.projectDirectory.dir("src/commonMain/composeResources"))
+    into(layout.buildDirectory.dir("generated/combinedComposeResources"))
+  }
 val usePreGeneratedIconPack =
   providers.environmentVariable("TANDEM_PREGENERATED_ICON_PACK").map { it == "true" }.orElse(false)
 val generateTheSvgIconPack =
@@ -130,6 +139,6 @@ compose.resources {
   packageOfResClass = "app.tandemforactual.ui.generated.resources"
   customDirectory(
     sourceSetName = "commonMain",
-    directoryProvider = generatedTheSvgResources,
+    directoryProvider = combinedComposeResources.map { it.destinationDirectory.get() },
   )
 }

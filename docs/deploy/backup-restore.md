@@ -1,6 +1,8 @@
 # Back up and restore Tandem
 
-For operators protecting or recovering a Tandem deployment.
+For operators protecting or recovering a Tandem deployment. The installer does not add backup tools to the install folder. Use the single `deploy/tandem-data.py` command from a source checkout; it provides `backup`, `restore`, `status`, and `scheduled-backup` subcommands.
+
+For example, keep a checkout at `/opt/tandem-source` and point `TANDEM_ENV_FILE` to the install folder's `.env`.
 
 ## What you need
 
@@ -10,7 +12,7 @@ For operators protecting or recovering a Tandem deployment.
 - The passphrase file if the backups are encrypted.
 - GnuPG installed on the host to encrypt or restore encrypted backup files.
 
-The backup scripts capture PostgreSQL and the Actual API workspace. They do
+The data command captures PostgreSQL and the Actual API workspace. It does
 not include the deployment's `.env` or secret files. Keep live credentials in
 a protected secrets manager. Store a protected copy of the session encryption
 key separately from the backup files, but make it available in the same
@@ -28,8 +30,8 @@ encrypt them.
 
    ```sh
    TANDEM_COMPOSE_PROJECT=tandem \
-     TANDEM_ENV_FILE=/opt/tandem/deploy/compose/.env \
-     /opt/tandem/deploy/backup.sh /secure/tandem-backups/tandem-2026-11-12
+     TANDEM_ENV_FILE=/opt/tandem/.env \
+     /opt/tandem-source/deploy/tandem-data.py backup /secure/tandem-backups/tandem-2026-11-12
    ```
 
    The API is briefly stopped while its Actual workspace is archived, then
@@ -55,9 +57,9 @@ writing it to disk and adds `.gpg` to each output file:
 
 ```sh
 TANDEM_COMPOSE_PROJECT=tandem \
-  TANDEM_ENV_FILE=/opt/tandem/deploy/compose/.env \
+  TANDEM_ENV_FILE=/opt/tandem/.env \
   TANDEM_BACKUP_GPG_PASSPHRASE_FILE=/secure/tandem-backup-keys/passphrase \
-  /opt/tandem/deploy/backup.sh /secure/tandem-backups/tandem-2026-11-12
+  /opt/tandem-source/deploy/tandem-data.py backup /secure/tandem-backups/tandem-2026-11-12
 ```
 
 **Check:** both encrypted files exist and are non-empty. Verify each can be
@@ -89,7 +91,7 @@ backup directory on protected storage separate from the host.
    sudo install -d -m 700 /etc/tandem /secure/tandem-backups
    sudo tee /etc/tandem/backup.env >/dev/null <<'EOF'
    TANDEM_COMPOSE_PROJECT=tandem
-   TANDEM_ENV_FILE=/opt/tandem/deploy/compose/.env
+   TANDEM_ENV_FILE=/opt/tandem/.env
    TANDEM_BACKUP_DIRECTORY=/secure/tandem-backups
    TANDEM_BACKUP_GPG_PASSPHRASE_FILE=/secure/tandem-backup-keys/passphrase
    EOF
@@ -105,8 +107,8 @@ backup directory on protected storage separate from the host.
 2. **Install and enable the supplied timer:**
 
    ```sh
-   sudo install -m 644 /opt/tandem/deploy/systemd/tandem-backup.service /etc/systemd/system/
-   sudo install -m 644 /opt/tandem/deploy/systemd/tandem-backup.timer /etc/systemd/system/
+   sudo install -m 644 /opt/tandem-source/deploy/systemd/tandem-backup.service /etc/systemd/system/
+   sudo install -m 644 /opt/tandem-source/deploy/systemd/tandem-backup.timer /etc/systemd/system/
    sudo systemctl daemon-reload
    sudo systemctl enable --now tandem-backup.timer
    ```
@@ -119,7 +121,7 @@ backup directory on protected storage separate from the host.
 
    ```sh
    sudo systemctl start tandem-backup.service
-   sudo /opt/tandem/deploy/backup-status.sh /secure/tandem-backups
+   sudo /opt/tandem-source/deploy/tandem-data.py status /secure/tandem-backups
    sudo systemctl status tandem-backup.service --no-pager
    ```
 
@@ -148,12 +150,12 @@ API. It leaves the API stopped for you to verify the result.
    suffix. Do not mix encrypted and plaintext files. If validation fails, keep
    the running deployment and choose a complete verified pair.
 
-2. **Run the restore script:**
+2. **Run the restore command:**
 
    ```sh
    TANDEM_COMPOSE_PROJECT=tandem \
-     TANDEM_ENV_FILE=/opt/tandem/deploy/compose/.env \
-     /opt/tandem/deploy/restore.sh /secure/tandem-backups/tandem-2026-11-12
+     TANDEM_ENV_FILE=/opt/tandem/.env \
+     /opt/tandem-source/deploy/tandem-data.py restore /secure/tandem-backups/tandem-2026-11-12
    ```
 
    For an encrypted pair, add
@@ -168,8 +170,8 @@ API. It leaves the API stopped for you to verify the result.
 
    ```sh
    TANDEM_COMPOSE_PROJECT=tandem \
-     TANDEM_ENV_FILE=/opt/tandem/deploy/compose/.env \
-     /opt/tandem/deploy/restore.sh \
+     TANDEM_ENV_FILE=/opt/tandem/.env \
+     /opt/tandem-source/deploy/tandem-data.py restore \
        /secure/tandem-backups/tandem-2026-11-12.before-restore-20261112T061249Z-12345
    ```
 
@@ -181,8 +183,8 @@ API. It leaves the API stopped for you to verify the result.
 
    ```sh
    docker compose --project-directory /opt/tandem \
-     --env-file /opt/tandem/deploy/compose/.env \
-     -f /opt/tandem/deploy/compose/production.yml up -d tandem-api
+     --env-file /opt/tandem/.env \
+     -f /opt/tandem/docker-compose.yml up -d tandem-api
    ```
 
    For a Compose include, run `up -d tandem-api` from the existing Actual

@@ -382,6 +382,7 @@ fun TandemApp(
             state.selectedTransactionDate = ""
             state.selectedTransactionAmountMinor = null
             state.selectedTransactionIsLive = false
+            state.selectedTransactionIsTransfer = false
             backStack.add(newRouteEntry(AppRoute.NEW_TRANSACTION))
         }
     }
@@ -444,6 +445,16 @@ fun TandemApp(
         }
         savedTabBackStacks = tabSelection.savedTabBackStacks
     }
+    val selectTabRoot: (AppRoute) -> Unit = { selectedTab ->
+        state.pendingScheduleToOpenId = null
+        val tabSelection = selectAppTabRootNavigation(backStack.toList(), savedTabBackStacks, selectedTab, newRouteEntry)
+        if (tabSelection.backStack != backStack.toList()) {
+            routeTransitionDirection = 0f
+            backStack.clear()
+            backStack.addAll(tabSelection.backStack)
+        }
+        savedTabBackStacks = tabSelection.savedTabBackStacks
+    }
     val performBack: () -> Unit = {
         when (backRequestDisposition(routeTransitionInputBlocked, backButtonTransitionRunning)) {
             BackRequestDisposition.QUEUE_AFTER_BACK_TRANSITION -> {
@@ -493,7 +504,9 @@ fun TandemApp(
                 transactionSheetClosing = true
             }
         } else {
-            if (currentRoute == AppRoute.FIRST_SYNC) state.restorePendingBudgetSelectionOrigin()
+            if (currentRoute == AppRoute.FIRST_SYNC || currentRoute == AppRoute.BUDGET_UNLOCK) {
+                state.restorePendingBudgetSelectionOrigin()
+            }
             performBack()
         }
     }
@@ -569,12 +582,29 @@ fun TandemApp(
                     handleBack()
                 }
             },
+            selectTabRoot = selectTabRoot,
         )
     val routeEntry = backStack.last()
     val route = routeEntry.route
     SideEffect { mobileSession.setBudgetActionRoute(routeEntry) }
     val transactionSheetIndex = backStack.indexOfLast { it.route.isTransactionForm() }
     val transactionSheetActive = transactionSheetIndex >= 0
+    val handleCurrentRouteBack: () -> Unit = {
+        if (backStack.lastOrNull()?.route == AppRoute.MANAGE_PAYEES) {
+            routeTransitionInputJob?.cancel()
+            routeTransitionInputJob = null
+            routeTransitionInputBlocked = false
+            pendingBackAfterRouteTransition = false
+            routeTransitionDirection = -1f
+            if (backStack.size > 1) {
+                backStack.removeAt(backStack.lastIndex)
+            } else {
+                backStack[backStack.lastIndex] = newRouteEntry(AppRoute.CHOOSE_PAYEE)
+            }
+        } else {
+            handleBack()
+        }
+    }
     val transactionSheetBaseEntry = backStack.getOrNull(transactionSheetIndex - 1)
     val backgroundRouteEntry =
         if (transactionSheetActive && transactionSheetBaseEntry != null) transactionSheetBaseEntry else routeEntry
@@ -846,7 +876,10 @@ fun TandemApp(
         categoryCarryoverOverrides,
         state.selectedMonthId,
     ) {
-        val monthRecord = mobileSession.selectedBudgetMonthRecord?.takeIf { it.recordId == state.selectedMonthId }
+        val monthRecord =
+            mobileSession.selectedBudgetMonthRecord?.takeIf {
+                it.budgetId == state.selectedBudgetId && it.recordId == state.selectedMonthId
+            }
         val monthCategories = mobileSession.categoryRecords
         val monthCategoryGroups = mobileSession.categoryGroupRecords
         liveBudgetMonth =
@@ -927,7 +960,7 @@ fun TandemApp(
     }
     val openSelectedBudget: (BudgetCatalogItem) -> Unit = { selected ->
         val previousSelection =
-            BudgetSelectionSnapshot(
+            state.pendingBudgetSelectionOrigin ?: BudgetSelectionSnapshot(
                 budgetId = state.selectedBudgetId,
                 name = state.selectedBudget,
                 isEncrypted = state.selectedBudgetEncrypted,
@@ -937,7 +970,9 @@ fun TandemApp(
         state.selectedBudgetId = selected.budgetId
         state.selectedBudgetEncrypted = selected.isEncrypted
         coroutineScope.launch {
-            val isCached = mobileSession.hasCachedBudgetSnapshot(selected.budgetId)
+            val isCached =
+                mobileSession.cachedBudgets.any { it.budgetId == selected.budgetId } ||
+                    mobileSession.hasCachedBudgetSnapshot(selected.budgetId)
             when {
                 isCached -> {
                     state.pendingBudgetSelectionOrigin = null
@@ -954,6 +989,19 @@ fun TandemApp(
                 }
             }
         }
+    }
+    val prepareBudgetUnlock: (BudgetCatalogItem) -> Unit = { selected ->
+        state.pendingBudgetSelectionOrigin =
+            BudgetSelectionSnapshot(
+                budgetId = state.selectedBudgetId,
+                name = state.selectedBudget,
+                isEncrypted = state.selectedBudgetEncrypted,
+            )
+        state.selectedBudget = selected.name
+        state.selectedBudgetId = selected.budgetId
+        state.selectedBudgetEncrypted = selected.isEncrypted
+        state.encryptedPassword = ""
+        navigation.open(AppRoute.BUDGET_UNLOCK)
     }
     val syncNow: () -> Unit = {
         if (!mobileSession.isSyncing && state.selectedBudgetId.isNotBlank()) {
@@ -988,7 +1036,13 @@ fun TandemApp(
                     )
                 if (saved) {
                     val amount = state.parseAmountMinorUnits(state.transactionAmount) ?: kotlin.math.abs(originalAmount)
-                    state.selectedTransactionAmountMinor = if (state.transactionType == "Income") amount else -amount
+                    state.selectedTransactionAmountMinor =
+                        when {
+                            state.transactionType == "Income" -> amount
+                            state.transactionType == "Transfer" && originalAmount >= 0L -> amount
+                            else -> -amount
+                        }
+                    state.selectedTransactionIsTransfer = state.transactionType == "Transfer"
                     state.selectedTransactionNotes = state.transactionNotes
                     state.selectedTransactionAccountId = state.newTransactionAccountId
                     state.selectedTransactionPayeeId = state.newTransactionPayeeId
@@ -1144,7 +1198,7 @@ fun TandemApp(
         }
         TandemBackHandler(
             enabled = backStack.size > 1 && !transactionSheetActive,
-            onBack = handleBack,
+            onBack = handleCurrentRouteBack,
             onBackProgress = updateBackGesture,
         )
         val mainCloudStatus =
@@ -1174,11 +1228,12 @@ fun TandemApp(
                     route = headerRoute,
                     state = state,
                     showBack = !headerRoute.isTab(),
-                    onBack = handleBack,
+                    onBack = handleCurrentRouteBack,
                     onSync = { navigation.open(AppRoute.SYNC_CENTER) },
                     syncStatus = mainCloudStatus,
                     pendingWriteStatuses = mobileSession.pendingWrites.map { it.status },
                     onBudget = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+                    onOpenRoute = navigation.open,
                     actualConnected = mobileSession.isServerReachable,
                     liveAccounts = liveAccounts,
                     liveBudgetMonth = liveBudgetMonth,
@@ -1261,6 +1316,7 @@ fun TandemApp(
                         Box(Modifier.weight(1f).fillMaxWidth()) {
                             ScreenContent(
                                 route = visibleRoute,
+                                isForegroundRoute = visibleEntry == routeEntry,
                                 state = state,
                                 deviceName = deviceName,
                                 navigation = navigation,
@@ -1269,6 +1325,7 @@ fun TandemApp(
                                 onSignIn = signIn,
                                 onStartOpenIdSignIn = startOpenIdSignIn,
                                 onRefreshBudgets = refreshBudgets,
+                                onPrepareBudgetUnlock = prepareBudgetUnlock,
                                 onOpenSelectedBudget = openSelectedBudget,
                                 onRetrySync = { syncRetryCounter += 1 },
                                 backgroundSyncSupported = onBackgroundSyncSettingsChanged != null,
@@ -1299,31 +1356,6 @@ fun TandemApp(
                                 notificationPermissionEnabled = notificationPermissionEnabled,
                                 onToggleNotificationPermission = onToggleNotificationPermission,
                             )
-                            if (!isLandscape &&
-                                visibleRoute == AppRoute.BUDGET &&
-                                shouldShowBudgetCreateAction(state.selectedBudgetId.isNotBlank(), budgetGroupReorderActive)
-                            ) {
-                                val transactionActionCompact by
-                                    remember(routeScrollState, routeLazyListState) {
-                                        derivedStateOf {
-                                            routeScrollState.value > 72 ||
-                                                routeLazyListState.firstVisibleItemIndex > 0 ||
-                                                routeLazyListState.firstVisibleItemScrollOffset > 72
-                                        }
-                                    }
-                                FloatingTransactionAction(
-                                    compact = transactionActionCompact,
-                                    enabled = !state.readOnlyMode,
-                                    onClick = {
-                                        navigation.newTransaction(null)
-                                    },
-                                    modifier =
-                                        Modifier
-                                            .align(
-                                                Alignment.BottomEnd,
-                                            ).padding(end = TandemSpacing.large, bottom = TandemSpacing.large),
-                                )
-                            }
                             val pendingSyncOperation =
                                 mobileSession.pendingWrites.firstOrNull {
                                     it.operationId == state.selectedConflictOperationId &&
@@ -1456,8 +1488,12 @@ fun TandemApp(
                                     targetState.route == AppRoute.STARTUP ->
                                     EnterTransition.None togetherWith ExitTransition.None
                                 initialState.route.isTab() && targetState.route.isTab() ->
-                                    fadeIn(tween(TandemMotion.CROSSFADE_MILLIS)) togetherWith
-                                        fadeOut(tween(TandemMotion.CROSSFADE_MILLIS)) using null
+                                    fadeIn(
+                                        tween(TandemMotion.TAB_TRANSITION_MILLIS, easing = TandemMotion.movementEasing),
+                                    ) togetherWith
+                                        fadeOut(
+                                            tween(TandemMotion.CROSSFADE_MILLIS, easing = TandemMotion.exitEasing),
+                                        ) using null
                                 routeTransitionDirection > 0f ->
                                     (
                                         slideInHorizontally(
@@ -1512,8 +1548,9 @@ fun TandemApp(
                 if (transactionSheetActive) {
                     TandemTaskSheet(
                         visible = !transactionSheetClosing,
-                        onDismissRequest = handleBack,
+                        onDismissRequest = handleCurrentRouteBack,
                         fullScreen = true,
+                        dismissOnBackPress = true,
                         onDismissed = {
                             routeTransitionDirection = 0f
                             repeat(transactionSheetPopCount.coerceAtMost(backStack.size - 1)) {
@@ -1523,13 +1560,25 @@ fun TandemApp(
                             transactionSheetPopCount = 1
                         },
                     ) {
-                        AnimatedContent(
-                            targetState = routeEntry,
-                            modifier = Modifier.fillMaxSize().clipToBounds(),
-                            transitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
-                            label = "tandem-task-sheet-content",
-                        ) { sheetEntry ->
-                            renderRoute(sheetEntry, Modifier.fillMaxSize(), true, true)
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .clipToBounds()
+                                .then(transitionInputModifier)
+                                .tandemEdgeBackGesture(
+                                    enabled = transactionSheetActive && backStack.size > 1,
+                                    onBack = handleCurrentRouteBack,
+                                    onBackProgress = updateBackGesture,
+                                ),
+                        ) {
+                            AnimatedContent(
+                                targetState = routeEntry,
+                                modifier = Modifier.fillMaxSize(),
+                                transitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
+                                label = "tandem-task-sheet-content",
+                            ) { sheetEntry ->
+                                renderRoute(sheetEntry, Modifier.fillMaxSize(), true, true)
+                            }
                         }
                     }
                 }
@@ -1581,8 +1630,10 @@ internal fun AppRoute.showsBottomNavigation(): Boolean =
         AppRoute.SERVER_ADDRESS,
         AppRoute.SIGN_IN,
         AppRoute.BUDGET_CHOOSER,
+        AppRoute.BUDGET_UNLOCK,
         AppRoute.FIRST_SYNC,
         AppRoute.NOTIFICATION_ONBOARDING,
+        AppRoute.SETUP_COMPLETE,
         AppRoute.NEW_TRANSACTION,
         AppRoute.EDIT_TRANSACTION,
         AppRoute.CHOOSE_PAYEE,

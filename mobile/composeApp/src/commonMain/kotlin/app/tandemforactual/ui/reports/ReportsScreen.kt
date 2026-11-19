@@ -72,6 +72,7 @@ import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SelectableTile
 import app.tandemforactual.ui.components.SurfaceCard
+import app.tandemforactual.ui.components.amountAnnotatedString
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.recordName
 import app.tandemforactual.ui.reports.BudgetedSpentPoint
@@ -663,7 +664,10 @@ private fun ReportSummary(
         val netWorth = assets - debts
         Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
             Text(
-                formatReportCurrency(netWorth, data.displaySettings),
+                amountAnnotatedString(
+                    formatReportCurrency(netWorth, data.displaySettings),
+                    data.displaySettings?.currencyFractionDigits ?: 2,
+                ),
                 color = netAmountColor(netWorth),
                 fontSize = if (compact) TandemTypography.amount else TandemTypography.amountField,
                 fontWeight = FontWeight.Bold,
@@ -671,7 +675,10 @@ private fun ReportSummary(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                 Icon(Lucide.TrendingUp, contentDescription = null, modifier = Modifier.size(20.dp), tint = tandemPalette.positive)
                 Text(
-                    "Assets: ${formatReportCurrency(assets, data.displaySettings)}",
+                    amountAnnotatedString(
+                        "Assets: ${formatReportCurrency(assets, data.displaySettings)}",
+                        data.displaySettings?.currencyFractionDigits ?: 2,
+                    ),
                     color = tandemPalette.positive,
                     fontSize = TandemTypography.caption,
                 )
@@ -679,7 +686,10 @@ private fun ReportSummary(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                 Icon(Lucide.CreditCard, contentDescription = null, modifier = Modifier.size(20.dp), tint = tandemPalette.negative)
                 Text(
-                    "Debts: ${formatReportCurrency(debts, data.displaySettings)}",
+                    amountAnnotatedString(
+                        "Debts: ${formatReportCurrency(debts, data.displaySettings)}",
+                        data.displaySettings?.currencyFractionDigits ?: 2,
+                    ),
                     color = tandemPalette.negative,
                     fontSize = TandemTypography.caption,
                 )
@@ -687,7 +697,7 @@ private fun ReportSummary(
         }
     } else {
         Text(
-            reportSummary(kind, data, "All accounts"),
+            amountAnnotatedString(reportSummary(kind, data, "All accounts"), data.displaySettings?.currencyFractionDigits ?: 2),
             color = reportSummaryColor(kind, data),
             fontSize = if (compact) TandemTypography.body else TandemTypography.action,
             lineHeight = if (compact) TandemTypography.bodyLineHeight else TandemTypography.actionLineHeight,
@@ -923,7 +933,7 @@ private fun BudgetedSpentValueBar(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(label, color = tandemPalette.muted, fontSize = TandemTypography.caption, modifier = Modifier.width(76.dp))
             Text(
-                formatReportCurrency(valueMinor, displaySettings),
+                amountAnnotatedString(formatReportCurrency(valueMinor, displaySettings), displaySettings?.currencyFractionDigits ?: 2),
                 color = color,
                 fontSize = TandemTypography.caption,
                 modifier = Modifier.weight(1f),
@@ -989,7 +999,11 @@ private fun ReportLegend(
                     horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
                 ) {
                     Box(Modifier.size(10.dp).background(color, androidx.compose.foundation.shape.CircleShape))
-                    Text(label, color = tandemPalette.muted, fontSize = TandemTypography.caption)
+                    Text(
+                        amountAnnotatedString(label, data.displaySettings?.currencyFractionDigits ?: 2),
+                        color = tandemPalette.muted,
+                        fontSize = TandemTypography.caption,
+                    )
                 }
             }
         }
@@ -1275,7 +1289,7 @@ private fun ReportCanvas(
         }
         if (callout != null) {
             Text(
-                callout,
+                amountAnnotatedString(callout, data.displaySettings?.currencyFractionDigits ?: 2),
                 modifier =
                     Modifier
                         .align(if (selectedCategory != null) Alignment.Center else Alignment.TopStart)
@@ -1631,17 +1645,21 @@ private fun NetWorthTableRow(
     Column(Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium)) {
         Text(month, color = tandemPalette.text, fontSize = TandemTypography.action, fontWeight = FontWeight.Medium)
         Text(
-            formatReportCurrency(assets - debts, displaySettings),
+            amountAnnotatedString(formatReportCurrency(assets - debts, displaySettings), displaySettings?.currencyFractionDigits ?: 2),
             color = netAmountColor(assets - debts),
             fontSize = TandemTypography.compactBody,
             fontWeight = FontWeight.SemiBold,
         )
         Text(
-            "Assets: ${formatReportCurrency(assets, displaySettings)}",
+            amountAnnotatedString("Assets: ${formatReportCurrency(assets, displaySettings)}", displaySettings?.currencyFractionDigits ?: 2),
             color = tandemPalette.positive,
             fontSize = TandemTypography.caption,
         )
-        Text("Debts: ${formatReportCurrency(debts, displaySettings)}", color = tandemPalette.negative, fontSize = TandemTypography.caption)
+        Text(
+            amountAnnotatedString("Debts: ${formatReportCurrency(debts, displaySettings)}", displaySettings?.currencyFractionDigits ?: 2),
+            color = tandemPalette.negative,
+            fontSize = TandemTypography.caption,
+        )
     }
 }
 
@@ -1654,7 +1672,10 @@ private fun IncomeAndSpendingTableRow(
         Text(point.month, color = tandemPalette.text, fontSize = TandemTypography.action, fontWeight = FontWeight.Medium)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
             Text(
-                "Income ${formatReportCurrency(point.incomeMinor, displaySettings)}",
+                amountAnnotatedString(
+                    "Income ${formatReportCurrency(point.incomeMinor, displaySettings)}",
+                    displaySettings?.currencyFractionDigits ?: 2,
+                ),
                 modifier = Modifier.weight(1f),
                 color = tandemPalette.positive,
                 fontSize = TandemTypography.caption,
@@ -1662,7 +1683,10 @@ private fun IncomeAndSpendingTableRow(
                 overflow = TextOverflow.Clip,
             )
             Text(
-                "Spending ${formatReportCurrency(point.spendingMinor, displaySettings)}",
+                amountAnnotatedString(
+                    "Spending ${formatReportCurrency(point.spendingMinor, displaySettings)}",
+                    displaySettings?.currencyFractionDigits ?: 2,
+                ),
                 modifier = Modifier.weight(1f),
                 color = tandemPalette.negative,
                 fontSize = TandemTypography.caption,
@@ -1672,7 +1696,10 @@ private fun IncomeAndSpendingTableRow(
             )
         }
         Text(
-            "Net ${formatReportCurrency(point.netMinor, displaySettings)}",
+            amountAnnotatedString(
+                "Net ${formatReportCurrency(point.netMinor, displaySettings)}",
+                displaySettings?.currencyFractionDigits ?: 2,
+            ),
             color = netAmountColor(point.netMinor),
             fontSize = TandemTypography.caption,
             fontWeight = FontWeight.SemiBold,
@@ -1716,7 +1743,10 @@ private fun BudgetedSpentTableRow(
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
             Text(
-                "Budgeted ${formatReportCurrency(point.budgetedMinor, displaySettings)}",
+                amountAnnotatedString(
+                    "Budgeted ${formatReportCurrency(point.budgetedMinor, displaySettings)}",
+                    displaySettings?.currencyFractionDigits ?: 2,
+                ),
                 modifier = Modifier.weight(1f),
                 color = tandemPalette.positive,
                 fontSize = TandemTypography.caption,
@@ -1724,7 +1754,10 @@ private fun BudgetedSpentTableRow(
                 overflow = TextOverflow.Clip,
             )
             Text(
-                "Spent ${formatReportCurrency(point.spentMinor, displaySettings)}",
+                amountAnnotatedString(
+                    "Spent ${formatReportCurrency(point.spentMinor, displaySettings)}",
+                    displaySettings?.currencyFractionDigits ?: 2,
+                ),
                 modifier = Modifier.weight(1f),
                 color = tandemPalette.negative,
                 fontSize = TandemTypography.caption,

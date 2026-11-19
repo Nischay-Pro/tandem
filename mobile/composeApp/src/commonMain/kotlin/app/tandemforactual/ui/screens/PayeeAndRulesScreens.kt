@@ -341,6 +341,7 @@ internal fun ManagePayeesScreen(
                             modifier = Modifier.weight(1f),
                             color = tandemPalette.text,
                             fontSize = TandemTypography.sectionTitle,
+                            fontFamily = tandemAlloFamily(),
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,

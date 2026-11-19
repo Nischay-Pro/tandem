@@ -8,22 +8,25 @@ import kotlin.test.assertTrue
 
 class AppStateTest {
     @Test
-    fun preparingBudgetKeepsBackHeaderWhenOpenedWithoutATabShell() {
-        assertTrue(shouldRenderRouteHeader(AppRoute.FIRST_SYNC, hasStationaryTabShell = false))
-        assertTrue(shouldRenderRouteHeader(AppRoute.FIRST_SYNC, hasStationaryTabShell = true))
+    fun setupRoutesUseTheirOwnBackAndProgressHeader() {
+        assertFalse(shouldRenderRouteHeader(AppRoute.FIRST_SYNC, hasStationaryTabShell = false))
+        assertFalse(shouldRenderRouteHeader(AppRoute.FIRST_SYNC, hasStationaryTabShell = true))
         assertFalse(shouldRenderRouteHeader(AppRoute.BUDGET_CHOOSER, hasStationaryTabShell = false))
+        assertFalse(shouldRenderRouteHeader(AppRoute.BUDGET_CHOOSER, hasStationaryTabShell = true))
+        assertFalse(shouldRenderRouteHeader(AppRoute.BUDGET_UNLOCK, hasStationaryTabShell = true))
     }
 
     @Test
     fun notificationOnboardingDoesNotRepeatItsTitleInTheRouteHeader() {
         assertFalse(shouldRenderRouteHeader(AppRoute.NOTIFICATION_ONBOARDING, hasStationaryTabShell = true))
         assertFalse(shouldRenderStandaloneRouteHeader(AppRoute.NOTIFICATION_ONBOARDING))
-        assertTrue(shouldRenderStandaloneRouteHeader(AppRoute.BUDGET_CHOOSER))
+        assertFalse(shouldRenderStandaloneRouteHeader(AppRoute.BUDGET_CHOOSER))
+        assertFalse(shouldRenderStandaloneRouteHeader(AppRoute.SETUP_COMPLETE))
     }
 
     @Test
-    fun firstSyncUsesOnlyTheSharedRouteHeader() {
-        assertTrue(shouldRenderRouteHeader(AppRoute.FIRST_SYNC, hasStationaryTabShell = false))
+    fun firstSyncUsesItsOwnProgressHeader() {
+        assertFalse(shouldRenderRouteHeader(AppRoute.FIRST_SYNC, hasStationaryTabShell = false))
         assertFalse(shouldRenderStandaloneRouteHeader(AppRoute.FIRST_SYNC))
     }
 
@@ -240,6 +243,7 @@ class AppStateTest {
                 selectedBudget = "Household"
                 selectedBudgetId = "household-budget-id"
                 selectedBudgetEncrypted = true
+                serverUrl = "https://budget.example.test"
                 cachedBudgetCatalogJson = encodeCachedBudgetCatalog(listOf(BudgetCatalogItem("household-budget-id", "Household", true)))
                 reduceMotionOverride = true
                 syncOnOpen = false
@@ -259,6 +263,7 @@ class AppStateTest {
         assertEquals("Household", restored.selectedBudget)
         assertEquals("household-budget-id", restored.selectedBudgetId)
         assertEquals(true, restored.selectedBudgetEncrypted)
+        assertEquals("https://budget.example.test", restored.serverUrl)
         assertEquals(
             listOf(BudgetCatalogItem("household-budget-id", "Household", true)),
             decodeCachedBudgetCatalog(restored.cachedBudgetCatalogJson),

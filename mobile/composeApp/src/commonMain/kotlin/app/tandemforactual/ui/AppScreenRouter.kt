@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -45,6 +46,7 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun ScreenContent(
     route: AppRoute,
+    isForegroundRoute: Boolean,
     state: AppState,
     deviceName: String,
     navigation: AppNavigation,
@@ -53,6 +55,7 @@ internal fun ScreenContent(
     onSignIn: () -> Unit,
     onStartOpenIdSignIn: () -> Unit,
     onRefreshBudgets: () -> Unit,
+    onPrepareBudgetUnlock: (BudgetCatalogItem) -> Unit,
     onOpenSelectedBudget: (BudgetCatalogItem) -> Unit,
     onRetrySync: () -> Unit,
     backgroundSyncSupported: Boolean,
@@ -92,9 +95,10 @@ internal fun ScreenContent(
                 uriHandler.openUri("https://github.com/Nischay-Pro/tandem#getting-started")
             }
         AppRoute.SERVER_ADDRESS -> ServerAddressScreen(state, navigation)
-        AppRoute.SIGN_IN -> SignInScreen(state, mobileSession, onSignIn, onStartOpenIdSignIn)
+        AppRoute.SIGN_IN -> SignInScreen(state, mobileSession, navigation, onSignIn, onStartOpenIdSignIn)
         AppRoute.BUDGET_CHOOSER ->
-            BudgetChooserScreen(state, mobileSession, navigation, onRefreshBudgets, onOpenSelectedBudget)
+            BudgetChooserScreen(state, mobileSession, navigation, onRefreshBudgets, onPrepareBudgetUnlock, onOpenSelectedBudget)
+        AppRoute.BUDGET_UNLOCK -> BudgetUnlockScreen(state, navigation, onOpenSelectedBudget)
         AppRoute.FIRST_SYNC ->
             FirstSyncScreen(
                 state = state,
@@ -105,6 +109,7 @@ internal fun ScreenContent(
             )
         AppRoute.NOTIFICATION_ONBOARDING ->
             NotificationOnboardingScreen(state, navigation, onRequestNotificationPermission)
+        AppRoute.SETUP_COMPLETE -> SetupCompleteScreen(state, navigation)
         AppRoute.BUDGET ->
             BudgetScreen(
                 state,
@@ -153,7 +158,7 @@ internal fun ScreenContent(
                 mobileSession,
             )
         AppRoute.ACCOUNT_DETAIL ->
-            AccountDetailScreen(state, navigation, liveAccounts, mobileSession, merchantIconMatcher)
+            AccountDetailScreen(state, navigation, liveAccounts, mobileSession, merchantIconMatcher, isForegroundRoute)
         AppRoute.ACCOUNT_OPTIONS -> AccountOptionsScreen(state, liveAccounts, mobileSession, navigation)
         AppRoute.ACTIVITY ->
             ActivityScreen(
@@ -224,41 +229,47 @@ internal fun ScreenContent(
             val isLiveBudget = state.selectedBudgetId.isNotBlank()
             val selectingTransferDestination = isLiveBudget && state.transactionType == "Transfer"
             val activePayees =
-                mobileSession.payeeRecords.filterNot { record ->
-                    val body = record.recordBody()
-                    record.localDeleted || record.remoteDeleted || body?.booleanValue("tombstone") == true
+                remember(mobileSession.payeeRecords) {
+                    mobileSession.payeeRecords.filterNot { record ->
+                        val body = record.recordBody()
+                        record.localDeleted || record.remoteDeleted || body?.booleanValue("tombstone") == true
+                    }
                 }
             val values =
-                if (!isLiveBudget) {
-                    listOf("Corner Market", "Electric Company", "Acme Corp", "Riverside Cafe", "City Transit")
-                        .map { SelectorItem(it, it) }
-                } else if (selectingTransferDestination) {
-                    activePayees
-                        .mapNotNull { record ->
-                            val destinationId = record.recordBody()?.stringValue("transfer_acct")
-                            val name = record.recordName()
-                            if (destinationId.isNullOrBlank() ||
-                                destinationId == state.newTransactionAccountId ||
-                                name.isNullOrBlank()
-                            ) {
-                                null
-                            } else {
-                                val accountName = name.removePrefix("Transfer:").trim().ifBlank { name }
-                                SelectorItem(record.recordId, accountName)
-                            }
-                        }.distinctBy { it.id }
-                } else {
-                    listOf(SelectorItem("", "No payee")) +
+                remember(isLiveBudget, selectingTransferDestination, state.newTransactionAccountId, activePayees) {
+                    if (!isLiveBudget) {
+                        listOf("Corner Market", "Electric Company", "Acme Corp", "Riverside Cafe", "City Transit")
+                            .map { SelectorItem(it, it) }
+                    } else if (selectingTransferDestination) {
                         activePayees
-                            .filter { it.recordBody()?.stringValue("transfer_acct").isNullOrBlank() }
-                            .mapNotNull { record -> record.recordName()?.let { SelectorItem(record.recordId, it) } }
-                            .distinctBy { it.id }
+                            .mapNotNull { record ->
+                                val destinationId = record.recordBody()?.stringValue("transfer_acct")
+                                val name = record.recordName()
+                                if (destinationId.isNullOrBlank() ||
+                                    destinationId == state.newTransactionAccountId ||
+                                    name.isNullOrBlank()
+                                ) {
+                                    null
+                                } else {
+                                    val accountName = name.removePrefix("Transfer:").trim().ifBlank { name }
+                                    SelectorItem(record.recordId, accountName)
+                                }
+                            }.distinctBy { it.id }
+                    } else {
+                        listOf(SelectorItem("", "No payee")) +
+                            activePayees
+                                .filter { it.recordBody()?.stringValue("transfer_acct").isNullOrBlank() }
+                                .mapNotNull { record -> record.recordName()?.let { SelectorItem(record.recordId, it) } }
+                                .distinctBy { it.id }
+                    }
                 }
             val payeeGroups =
-                if (!selectingTransferDestination || values.isEmpty()) {
-                    emptyList()
-                } else {
-                    listOf(SelectorGroup("To account", values))
+                remember(selectingTransferDestination, values) {
+                    if (!selectingTransferDestination || values.isEmpty()) {
+                        emptyList()
+                    } else {
+                        listOf(SelectorGroup("To account", values))
+                    }
                 }
             SelectorScreen(
                 values,
@@ -267,19 +278,6 @@ internal fun ScreenContent(
                 groups = payeeGroups,
                 searchLabel = if (selectingTransferDestination) "Search accounts" else "Search payees",
                 searchPlaceholder = if (selectingTransferDestination) "Find an account" else "Find a payee",
-                topContent =
-                    if (isLiveBudget && !selectingTransferDestination) {
-                        {
-                            SurfaceCard {
-                                ListRow(
-                                    "Manage payees",
-                                    leading = RowLeading.Icon(Lucide.Tags),
-                                ) { navigation.open(AppRoute.MANAGE_PAYEES) }
-                            }
-                        }
-                    } else {
-                        null
-                    },
                 noMatches =
                     if (isLiveBudget) {
                         { query ->
@@ -521,7 +519,16 @@ internal fun ScreenContent(
                 navigation.back()
             }
         }
-        AppRoute.SYNC_CENTER -> SyncCenterScreen(state, mobileSession, navigation, liveTransactions)
+        AppRoute.SYNC_CENTER ->
+            SyncCenterScreen(
+                state,
+                mobileSession,
+                navigation,
+                liveTransactions,
+                liveBudgetMonth,
+                liveSchedules,
+                onSyncNow,
+            )
         AppRoute.CONFLICT_INBOX -> ConflictInboxScreen(state, mobileSession, navigation, liveTransactions, merchantIconMatcher)
         AppRoute.CONFLICT_REVIEW ->
             ConflictReviewScreen(state, mobileSession, navigation, onResolveConflict, liveTransactions, merchantIconMatcher)

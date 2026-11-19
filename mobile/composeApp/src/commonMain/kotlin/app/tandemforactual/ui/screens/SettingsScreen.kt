@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -28,6 +29,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.TandemLayout
+import app.tandemforactual.ui.TandemShapes
+import app.tandemforactual.ui.TandemSpacing
 import app.tandemforactual.ui.components.AnimatedReveal
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.ListRow
@@ -45,6 +48,19 @@ import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.WalletCards
+
+private data class AppearancePalettePreset(
+    val title: String,
+    val description: String,
+    val accent: AccentChoice,
+)
+
+private val appearancePalettePresets =
+    listOf(
+        AppearancePalettePreset("Modern", "Tandem violet with soft lavender surfaces.", AccentChoice.ACTUAL_PURPLE),
+        AppearancePalettePreset("Clarity", "Calm green for everyday budgeting.", AccentChoice.CLARITY),
+        AppearancePalettePreset("Warm", "Terracotta tones with a softer feel.", AccentChoice.WARM),
+    )
 
 @Composable
 internal fun SettingsScreen(
@@ -152,10 +168,30 @@ internal fun AppearanceScreen(state: AppState) {
                 )
             }
         }
-        SectionCard("Accent color") {
-            AccentChoice.entries.forEachIndexed { index, accent ->
+        SectionCard("Color theme", "Choose the palette used across Tandem.") {
+            appearancePalettePresets.forEachIndexed { index, preset ->
                 if (index > 0) DividerLine()
-                AccentChoiceRow(accent, accent.colorFor(isDark), selected = state.accent == accent) { state.accent = accent }
+                AccentChoiceRow(
+                    title = preset.title,
+                    description = preset.description,
+                    accent = preset.accent,
+                    isDark = isDark,
+                    selected = state.accent == preset.accent,
+                ) { state.accent = preset.accent }
+            }
+        }
+        val presetAccents = appearancePalettePresets.mapTo(mutableSetOf()) { it.accent }
+        val additionalAccents = AccentChoice.entries.filterNot { it in presetAccents }
+        SectionCard("More accent colors", "Use a different accent with the Modern surfaces.") {
+            additionalAccents.forEachIndexed { index, accent ->
+                if (index > 0) DividerLine()
+                AccentChoiceRow(
+                    title = accent.label,
+                    description = null,
+                    accent = accent,
+                    isDark = isDark,
+                    selected = state.accent == accent,
+                ) { state.accent = accent }
             }
         }
         SectionCard("Background and motion") {
@@ -244,32 +280,61 @@ private fun AppearanceSelectionIndicator(selected: Boolean) {
 
 @Composable
 private fun AccentChoiceRow(
+    title: String,
+    description: String?,
     accent: AccentChoice,
-    color: Color,
+    isDark: Boolean,
     selected: Boolean,
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
+    val previewPalette = tandemPaletteFor(if (isDark) ThemeMode.DARK else ThemeMode.LIGHT, isDark, accent)
+    val rowShape = RoundedCornerShape(TandemShapes.medium)
     Row(
         Modifier
             .fillMaxWidth()
-            .heightIn(min = TandemLayout.listRowMinHeight)
+            .heightIn(min = if (description == null) TandemLayout.listRowMinHeight else 76.dp)
+            .clip(rowShape)
+            .background(if (selected) previewPalette.accentSurface else Color.Transparent)
             .clickable(onClick = onClick)
             .semantics(mergeDescendants = true) {
-                contentDescription = "${accent.label} accent"
+                contentDescription = "$title color theme"
                 this.selected = selected
             }.padding(horizontal = TandemLayout.listRowHorizontalInset, vertical = TandemLayout.listRowVerticalInset),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(TandemLayout.listRowGap),
     ) {
-        Box(Modifier.size(22.dp).clip(CircleShape).background(color))
-        Text(
-            accent.label,
-            modifier = Modifier.weight(1f),
-            color = palette.text,
-            fontSize = TandemTypography.body,
-            fontWeight = FontWeight.Medium,
-        )
+        if (description == null) {
+            Box(Modifier.size(22.dp).clip(CircleShape).background(accent.colorFor(isDark)))
+        } else {
+            Row(
+                Modifier
+                    .clip(RoundedCornerShape(TandemShapes.small))
+                    .background(previewPalette.surface)
+                    .border(1.dp, previewPalette.border, RoundedCornerShape(TandemShapes.small))
+                    .padding(TandemSpacing.extraSmall),
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+            ) {
+                Box(Modifier.size(14.dp).clip(RoundedCornerShape(TandemShapes.small)).background(previewPalette.accent))
+                Box(Modifier.size(14.dp).clip(RoundedCornerShape(TandemShapes.small)).background(previewPalette.raised))
+                Box(Modifier.size(14.dp).clip(RoundedCornerShape(TandemShapes.small)).background(previewPalette.border))
+            }
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+            Text(
+                title,
+                color = palette.text,
+                fontSize = TandemTypography.body,
+                fontWeight = FontWeight.Medium,
+            )
+            if (description != null) {
+                Text(
+                    description,
+                    color = palette.muted,
+                    fontSize = TandemTypography.caption,
+                )
+            }
+        }
         AppearanceSelectionIndicator(selected)
     }
 }

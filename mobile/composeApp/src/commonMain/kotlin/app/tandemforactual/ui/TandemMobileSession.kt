@@ -37,6 +37,7 @@ import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.model.LiveCategoryGroupSummary
 import app.tandemforactual.ui.model.booleanValue
+import app.tandemforactual.ui.model.budgetMonthCategoryCarryover
 import app.tandemforactual.ui.model.recordBody
 import app.tandemforactual.ui.model.recordName
 import app.tandemforactual.ui.model.stringValue
@@ -324,6 +325,7 @@ internal class TandemMobileSession(
         private set
 
     private var syncPresentation by mutableStateOf(SyncPresentationState())
+    private val synchronizationMutex = Mutex()
 
     val isSyncing: Boolean get() = syncPresentation.isSyncing
 
@@ -694,6 +696,16 @@ internal class TandemMobileSession(
         val device = authenticatedDevice ?: return null
         val serverUrl = apiClient.currentServerUrl ?: return null
         return budgetCacheOwner(serverUrl, device.principalId)
+    }
+
+    private suspend fun budgetCacheOwnerForLocalEdit(): String? {
+        val activeOwner = activeBudgetCacheOwner()
+        if (activeOwner != null) return activeOwner
+        return try {
+            preferencesStore?.read()?.get(BUDGET_CACHE_OWNER_KEY)
+        } catch (_: Exception) {
+            null
+        }
     }
 
     internal suspend fun restoreBudgetReorderQueue(): Boolean =
@@ -1077,7 +1089,34 @@ internal class TandemMobileSession(
                         request.encryptionPassword,
                         retryQueuedBudgetMutations = false,
                     )
-                if (refreshed != null) pendingWrites = localRepository.readPendingWrites(operation.budgetId)
+                if (refreshed != null) {
+                    if (request.kind == BudgetReorderKind.SET_CATEGORY_CARRYOVER) {
+                        val payload = request.payloadJson?.let(::parseQueuePayload)
+                        val monthId = payload?.stringValue("month")
+                        val desiredCarryover = payload?.booleanValue("enabled")
+                        val refreshedMonth =
+                            monthId?.let { localRepository.findRecord(operation.budgetId, "budget-month", it) }
+                        val actualCarryover = budgetMonthCategoryCarryover(refreshedMonth?.remoteJson, request.itemId)
+                        if (desiredCarryover != null && actualCarryover == desiredCarryover) {
+                            val confirmedRequest = request.copy(operationId = operation.operationId)
+                            val confirmed =
+                                runCatching {
+                                    localRepository.completeBudgetMutationAfterConfirmation(operation.operationId)
+                                }.isSuccess
+                            if (confirmed) {
+                                if (budgetReorderQueue.moves.none { it.operationId == operation.operationId }) {
+                                    budgetReorderQueue = budgetReorderQueue.enqueue(confirmedRequest)
+                                }
+                                budgetReorderQueue = completeAppliedBudgetMutationAfterRefresh(confirmedRequest)
+                                persistCurrentBudgetReorderQueue()
+                                pendingWrites = localRepository.readPendingWrites(operation.budgetId)
+                                retryQueuedBudgetReorders()
+                                return@launch
+                            }
+                        }
+                    }
+                    pendingWrites = localRepository.readPendingWrites(operation.budgetId)
+                }
                 return@launch
             }
 
@@ -1286,10 +1325,6 @@ internal class TandemMobileSession(
         }
         if (refuseWriteInReadOnlyMode()) {
             budgetActionMessage = transactionWriteMessage
-            return false
-        }
-        if (!apiClient.isAuthenticated) {
-            budgetActionMessage = "Sign in before making this change."
             return false
         }
         if (!isCurrentIdentityCacheOwner()) {
@@ -2408,11 +2443,35 @@ internal class TandemMobileSession(
     var selectedBudgetMonthRecord by mutableStateOf<BudgetRecordEntity?>(null)
         private set
 
+    var isLoadingSelectedBudgetMonth by mutableStateOf(true)
+        private set
+
+    private var selectedBudgetMonthObservationKey by mutableStateOf("")
+
     var accountRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
         private set
 
     var accountGroupRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
         private set
+
+    private val accountActivitySnapshots = linkedMapOf<String, AccountActivitySnapshot>()
+
+    fun cachedAccountActivity(
+        budgetId: String,
+        accountId: String,
+    ): AccountActivitySnapshot? = accountActivitySnapshots["$budgetId\u001f$accountId"]
+
+    fun cacheAccountActivity(
+        budgetId: String,
+        accountId: String,
+        snapshot: AccountActivitySnapshot,
+    ) {
+        if (budgetId.isBlank() || accountId.isBlank()) return
+        accountActivitySnapshots["$budgetId\u001f$accountId"] = snapshot
+        while (accountActivitySnapshots.size > 8) {
+            accountActivitySnapshots.remove(accountActivitySnapshots.keys.first())
+        }
+    }
 
     var scheduleRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
         private set
@@ -2649,6 +2708,8 @@ internal class TandemMobileSession(
             categoryGroupRecords = emptyList()
             budgetMonthIds = emptyList()
             selectedBudgetMonthRecord = null
+            isLoadingSelectedBudgetMonth = false
+            selectedBudgetMonthObservationKey = ""
             accountRecords = emptyList()
             accountGroupRecords = emptyList()
             scheduleRecords = emptyList()
@@ -2918,6 +2979,23 @@ internal class TandemMobileSession(
         sendQueuedWrites: Boolean = true,
         reconcileUncertainOperationId: String? = null,
         retryQueuedBudgetMutations: Boolean = true,
+    ): BudgetSyncSummary? =
+        synchronizationMutex.withLock {
+            synchronizeSerialized(
+                budgetId = budgetId,
+                encryptionPassword = encryptionPassword,
+                sendQueuedWrites = sendQueuedWrites,
+                reconcileUncertainOperationId = reconcileUncertainOperationId,
+                retryQueuedBudgetMutations = retryQueuedBudgetMutations,
+            )
+        }
+
+    private suspend fun synchronizeSerialized(
+        budgetId: String,
+        encryptionPassword: String?,
+        sendQueuedWrites: Boolean,
+        reconcileUncertainOperationId: String?,
+        retryQueuedBudgetMutations: Boolean,
     ): BudgetSyncSummary? {
         if (isSigningOut) return null
         if (!encryptionPassword.isNullOrBlank()) scheduleActionEncryptionPasswords[budgetId] = encryptionPassword
@@ -3145,7 +3223,7 @@ internal class TandemMobileSession(
             )
         }
         if (budgetId.isBlank() || accountId.isBlank() || refuseWriteInReadOnlyMode()) return false
-        if (!apiClient.isAuthenticated || !isCurrentIdentityCacheOwner()) {
+        if (!isCurrentIdentityCacheOwner()) {
             budgetActionMessage = "Sign in to the server and account that own this budget before changing it."
             return false
         }
@@ -3374,8 +3452,8 @@ internal class TandemMobileSession(
             budgetActionMessage = transactionWriteMessage
             return null
         }
-        if (budgetId.isBlank() || !apiClient.isAuthenticated) {
-            budgetActionMessage = "Sign in and open a budget before changing it."
+        if (budgetId.isBlank()) {
+            budgetActionMessage = "Open a budget before changing it."
             return null
         }
         if (!isCurrentIdentityCacheOwner()) {
@@ -3691,11 +3769,11 @@ internal class TandemMobileSession(
             budgetActionMessage = "Tandem can’t save this action on this device."
             return false
         }
-        if (budgetId.isBlank() || !apiClient.isAuthenticated) {
-            budgetActionMessage = "Sign in and open a budget before changing it."
+        if (budgetId.isBlank()) {
+            budgetActionMessage = "Open a budget before changing it."
             return false
         }
-        val cacheOwner = activeBudgetCacheOwner()
+        val cacheOwner = budgetCacheOwnerForLocalEdit()
         if (cacheOwner.isNullOrBlank() || !isCurrentIdentityCacheOwner()) {
             budgetActionMessage = "Sign in to the server and account that own this budget before changing it."
             return false
@@ -4096,11 +4174,34 @@ internal class TandemMobileSession(
             transactionWriteMessage = "Choose an existing payee or clear the payee field."
             return false
         }
-        if (updateDetails && categoryId != null && categoryRecords.none { it.recordId == categoryId }) {
+        val transferDestinationId =
+            payeeId
+                ?.let { id -> payeeRecords.firstOrNull { it.recordId == id } }
+                ?.recordBody()
+                ?.stringValue("transfer_acct")
+        if (updateDetails && transactionType == "Transfer" && transferDestinationId.isNullOrBlank()) {
+            transactionWriteMessage = "Choose a destination account for this transfer."
+            return false
+        }
+        if (updateDetails && transactionType == "Transfer" && transferDestinationId == requestedAccountId) {
+            transactionWriteMessage = "Choose a different destination account."
+            return false
+        }
+        if (updateDetails && transactionType != "Transfer" && !transferDestinationId.isNullOrBlank()) {
+            transactionWriteMessage = "Choose Transfer as the transaction type for this payee."
+            return false
+        }
+        val requestedCategoryId = categoryId.takeUnless { transactionType == "Transfer" }
+        if (updateDetails && requestedCategoryId != null && categoryRecords.none { it.recordId == requestedCategoryId }) {
             transactionWriteMessage = "Choose a category from this budget before saving."
             return false
         }
-        val signedAmount = if (transactionType == "Income") enteredAmount else -enteredAmount
+        val signedAmount =
+            when (transactionType) {
+                "Income" -> enteredAmount
+                "Transfer" -> if (originalAmountMinor >= 0L) enteredAmount else -enteredAmount
+                else -> -enteredAmount
+            }
         val patch =
             buildTransactionEditPatch(
                 base = base,
@@ -4112,7 +4213,7 @@ internal class TandemMobileSession(
                         TransactionEditDetails(
                             accountId = checkNotNull(requestedAccountId),
                             payeeId = payeeId,
-                            categoryId = categoryId,
+                            categoryId = requestedCategoryId,
                             date = checkNotNull(requestedDate),
                         )
                     } else {
@@ -4472,8 +4573,11 @@ internal class TandemMobileSession(
             reportConflictResolution(operationId, transactionWriteMessage ?: "Read-only mode is on.")
             return
         }
-        if (isSavingTransaction || isSyncing) {
-            reportConflictResolution(operationId, "Wait for the current save or sync to finish, then review this change again.")
+        if (isSavingTransaction) {
+            reportConflictResolution(
+                operationId,
+                "A decision is already being saved. Wait for it to finish, then review this change again.",
+            )
             return
         }
         val localRepository = repository
@@ -4547,7 +4651,7 @@ internal class TandemMobileSession(
         if (refuseWriteInReadOnlyMode()) return
         val localRepository = repository ?: return
         val operation = localRepository.findWrite(operationId)
-        if (operation?.status == "uncertain") {
+        if (operation?.status == "uncertain" && operation.recordType != "budget-mutation") {
             if (operation.recordType != "transaction") {
                 uncertainWriteCheckError = "Tandem couldn’t confirm that this change was removed. It remains on this device."
                 uncertainWriteCheckErrorOperationId = operationId
@@ -4622,7 +4726,7 @@ internal class TandemMobileSession(
         localRepository.discardWrite(operationId)
         if (operation?.recordType == "budget-mutation") {
             budgetReorderQueue = budgetReorderQueue.discardOperation(operationId)
-            retryQueuedBudgetReorders()
+            if (operation.status != "uncertain") retryQueuedBudgetReorders()
         }
         loadLocalRecords(budgetId)
         transactionWriteMessage = discardedPendingWriteMessage(operation?.status)
@@ -4725,7 +4829,6 @@ internal class TandemMobileSession(
         categoryRecords = localRepository.findRecords(budgetId, "category")
         categoryGroupRecords = localRepository.findRecords(budgetId, "category-group")
         budgetMonthIds = localRepository.findRecordIds(budgetId, "budget-month")
-        selectedBudgetMonthRecord = null
         pendingWrites = localRepository.readPendingWrites(budgetId)
         conflictRecordsByRecordId = findConflictRecords(budgetId, pendingWrites)
     }
@@ -4912,11 +5015,21 @@ internal class TandemMobileSession(
         budgetId: String,
         monthId: String,
     ) {
-        val localRepository = repository ?: return
+        val observationKey = "$budgetId/$monthId"
+        selectedBudgetMonthObservationKey = observationKey
         selectedBudgetMonthRecord = null
-        if (budgetId.isBlank() || monthId.isBlank()) return
-        if (!isCurrentIdentityCacheOwner()) return
-        localRepository.observeRecord(budgetId, "budget-month", monthId).collect { selectedBudgetMonthRecord = it }
+        isLoadingSelectedBudgetMonth = true
+        val localRepository = repository
+        if (localRepository == null || budgetId.isBlank() || monthId.isBlank() || !isCurrentIdentityCacheOwner()) {
+            isLoadingSelectedBudgetMonth = false
+            return
+        }
+        localRepository.observeRecord(budgetId, "budget-month", monthId).collect { record ->
+            if (selectedBudgetMonthObservationKey == observationKey) {
+                selectedBudgetMonthRecord = record
+                isLoadingSelectedBudgetMonth = false
+            }
+        }
     }
 
     suspend fun observeActivitySearchRecords(budgetId: String) {
@@ -5063,6 +5176,8 @@ internal class TandemMobileSession(
         categoryGroupRecords = emptyList()
         budgetMonthIds = emptyList()
         selectedBudgetMonthRecord = null
+        isLoadingSelectedBudgetMonth = false
+        selectedBudgetMonthObservationKey = ""
         accountRecords = emptyList()
         accountGroupRecords = emptyList()
         scheduleRecords = emptyList()

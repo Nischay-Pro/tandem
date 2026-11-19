@@ -122,7 +122,7 @@ jobs:
 
       - name: Exercise the candidate through the production Compose stack
         env:
-          TANDEM_API_IMAGE: ghcr.io/nischay-pro/tandem-api:candidate-${{ needs.require_green_main_ci.outputs.source_sha }}
+          TANDEM_API_TAG: candidate-${{ needs.require_green_main_ci.outputs.source_sha }}
           TANDEM_API_IMAGE_PREBUILT: "true"
           TANDEM_RELEASE_CHECK_DIRECTORY: ${{ runner.temp }}/tandem-release-check
         run: ./scripts/test-production-deployment.sh
@@ -182,6 +182,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
+            ghcr.io/nischay-pro/tandem-api:latest-nightly
             ghcr.io/nischay-pro/tandem-api:nightly
             ghcr.io/nischay-pro/tandem-api:nightly-${{ steps.date.outputs.value }}
             ghcr.io/nischay-pro/tandem-api:sha-${{ steps.tags.outputs.short_sha }}
@@ -334,27 +335,6 @@ jobs:
           printf '%s\n' "$NIGHTLY_VERSION_CODE" > "$RUNNER_TEMP/nightly-release/version-code.txt"
           printf '%s\n' "$SOURCE_SHA" > "$RUNNER_TEMP/nightly-release/source-commit.txt"
 
-      - name: Create digest-pinned Compose bundle
-        env:
-          IMAGE_DIGEST: ${{ needs.publish_api_image.outputs.digest }}
-          SOURCE_SHA: ${{ needs.publish_api_image.outputs.source_sha }}
-          NIGHTLY_VERSION_NAME: 0.1.0-nightly.${{ github.run_number }}
-        run: |
-          set -euo pipefail
-          bundle="$RUNNER_TEMP/tandem-nightly-$SOURCE_SHA"
-          node scripts/render-pinned-compose.mjs \
-            "ghcr.io/nischay-pro/tandem-api@$IMAGE_DIGEST" \
-            "$bundle"
-          TANDEM_API_IMAGE="ghcr.io/nischay-pro/tandem-api@$IMAGE_DIGEST" \
-            docker compose --project-directory "$bundle" \
-              --env-file "$bundle/.env.example" \
-              -f "$bundle/production.yml" config --quiet
-          archive="$RUNNER_TEMP/nightly-release/Tandem-compose-$NIGHTLY_VERSION_NAME-$SOURCE_SHA.tar.gz"
-          tar -czf "$archive" -C "$RUNNER_TEMP" "tandem-nightly-$SOURCE_SHA"
-          (
-            cd "$RUNNER_TEMP/nightly-release"
-            sha256sum "$(basename "$archive")" > "$(basename "$archive").sha256"
-          )
       - name: Move the rolling nightly tag to this tested commit
         env:
           GH_TOKEN: ${{ github.token }}
@@ -391,8 +371,6 @@ jobs:
           gh release upload nightly \
             "$RUNNER_TEMP/nightly-release/Tandem-$NIGHTLY_VERSION_NAME-$SOURCE_SHA.apk" \
             "$RUNNER_TEMP/nightly-release/Tandem-$NIGHTLY_VERSION_NAME-$SOURCE_SHA.apk.sha256" \
-            "$RUNNER_TEMP/nightly-release/Tandem-compose-$NIGHTLY_VERSION_NAME-$SOURCE_SHA.tar.gz" \
-            "$RUNNER_TEMP/nightly-release/Tandem-compose-$NIGHTLY_VERSION_NAME-$SOURCE_SHA.tar.gz.sha256" \
             --clobber
 
       - name: Upload installable Android APK
@@ -401,15 +379,6 @@ jobs:
           name: tandem-android-nightly-${{ needs.publish_api_image.outputs.source_sha }}
           path: ${{ runner.temp }}/nightly-release/*
           if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload digest-pinned Compose bundle
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: tandem-compose-nightly-${{ needs.publish_api_image.outputs.source_sha }}
-          path: ${{ runner.temp }}/tandem-nightly-${{ needs.publish_api_image.outputs.source_sha }}
-          if-no-files-found: error
-          include-hidden-files: true
           retention-days: 14
 
   report_nightly_failure:

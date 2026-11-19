@@ -6,8 +6,7 @@ core.*
 **/.env
 .env.*
 **/.env.*
-!.env.example
-!deploy/compose/.env.example
+!deploy/example.env
 *.pem
 **/*.pem
 *.key
@@ -24,5 +23,6 @@ node_modules
 **/dist
 **/build
 **/coverage
+**/.gradle
 DerivedData
 **/Pods

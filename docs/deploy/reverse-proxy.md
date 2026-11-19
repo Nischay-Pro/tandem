@@ -1,65 +1,36 @@
 # Reverse proxy setup
 
-For operators routing a public HTTPS address to Tandem and Actual.
+Tandem needs the same public HTTPS hostname pattern as the existing Actual
+site. Certbot and the current certificate renewal process continue to manage
+HTTPS.
 
-You need either Ubuntu's host-installed Nginx or an Nginx container, an
-existing HTTPS server block for the public Tandem domain, an Actual server
-reachable from Tandem, and a domain that resolves to the proxy. Your existing
-certificate and renewal process continue to manage HTTPS.
+During setup, Tandem checks for an existing HTTPS vhost in Ubuntu's packaged
+Nginx or a regular Docker Nginx container. If it finds one, it asks before
+adding the `/api/v1/` route. If port `19753` is occupied on the host, setup
+chooses another free loopback port and updates `.env` and the Nginx route.
+Managed Nginx dashboards and ambiguous configurations are left unchanged.
 
-The setup command can add the Tandem route automatically when it finds one
-matching HTTPS server block in host Nginx or in a regular Docker Nginx
-container. It backs up the config before editing and leaves certificates
-unchanged. For host Nginx, it publishes the API on `127.0.0.1:19753` and uses
-that loopback address. If port 19753 is busy, setup chooses a free loopback
-port and updates both Compose and Nginx. For Docker Nginx, it attaches the container to
-`tandem-edge`. It leaves Nginx Proxy Manager, `nginx-proxy`, SWAG, and
-ambiguous or unmounted configurations unchanged. Use the steps below when setup
-reports that it skipped proxy configuration.
+If you declined the change or Nginx was not detected, route `/api/v1/` to the
+Tandem API on port `19753`:
 
-## Steps
+- For host-installed Nginx, use `http://127.0.0.1:<TANDEM_API_HOST_PORT>`.
+- For Docker Nginx, connect it to the `tandem-edge` network and use
+  `http://tandem-api:19753`.
 
-1. **Join the services to one private network when Nginx is in Docker.** Tandem
-   API joins `tandem-edge` automatically. Attach Nginx to that network, and
-   attach Actual too if `TANDEM_ACTUAL_SERVER_URL` uses its internal Compose
-   service name. If you use a different network name, set
-   `TANDEM_EDGE_NETWORK` and use that name in both services. Host-installed
-   Nginx uses the loopback-published API port instead.
+Add the route to the existing HTTPS server block before Actual's catch-all.
+The locations in [`tandem-locations.conf.example`](../../deploy/nginx/tandem-locations.conf.example)
+include the authentication rate limits and request headers. Keep the Actual
+`/` route and its existing COOP/COEP headers.
 
-   **Check:** `docker network inspect tandem-edge` lists the API and proxy.
-   If it does not, attach both services to the same external network.
+Set `TRUST_PROXY` in `.env` to the exact proxy address or a narrow CIDR seen by
+the API. Do not trust all forwarded headers or expose the API directly.
 
-2. **Add the upstreams for Docker Nginx.** Copy the declarations from
-   [`deploy/nginx/tandem-upstreams.conf.example`](../../deploy/nginx/tandem-upstreams.conf.example)
-   into Nginx's `http {}` section. The supplied Compose service is
-   `tandem-api:19753`; use that name on the shared network.
+Check the Nginx configuration, reload it, then verify:
 
-   **Check:** Nginx can resolve the API and Actual service names on the shared
-   network. If not, check their Compose network memberships.
+```sh
+curl --fail https://budget.example.com/api/v1/health/ready
+```
 
-3. **Route `/api/v1/` to Tandem.** Add the locations from
-   [`deploy/nginx/tandem-locations.conf.example`](../../deploy/nginx/tandem-locations.conf.example)
-   to the existing TLS server block, before Actual's catch-all route. Keep the
-   Actual `/` route and its existing COOP/COEP headers. For host-installed
-   Nginx, use `proxy_pass http://127.0.0.1:<TANDEM_API_HOST_PORT>;` in the
-   Tandem locations. Setup writes the selected port to
-   `tandem/deploy/compose/.env` (default `19753`).
-
-   **Check:** `nginx -t` succeeds. If the API path displays Actual's web page,
-   move the Tandem locations above the Actual catch-all.
-
-4. **Set proxy trust and reload Nginx.** Set `TANDEM_TRUST_PROXY` to the exact proxy
-   address or narrow CIDR the API sees. If a CDN sits in front, configure Nginx
-   real-IP handling for only that upstream. Keep the API private; do not trust
-   all forwarded headers.
-
-   **Check:** Nginx reloads and `curl --fail https://budget.example.com/api/v1/health/ready`
-   returns `{"status":"ok"}`. If it fails, use the
-   [troubleshooting guide](troubleshooting.md).
-
-The sample disables callback access and non-emergency error logging because
-Actual's short-lived sign-in token returns in that callback URL. Custom proxies
-must omit its query string from access and error logs too.
-
-For the full install sequence, see [Install the server](install.md). For
-settings, see [Configuration](configuration.md).
+The response should be `{"status":"ok"}`. The Actual callback path contains a
+short-lived sign-in code, so disable access logging for
+`/api/v1/auth/actual-return/`; see the example locations above.

@@ -36,6 +36,7 @@ internal fun AnimatedStatusText(
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip,
     animateSizeChanges: Boolean = false,
+    fractionDigits: Int = 0,
 ) {
     val reduceMotion = tandemReduceMotion
     AnimatedContent(
@@ -65,7 +66,7 @@ internal fun AnimatedStatusText(
                 label = "sync-status-text-color",
             )
         Text(
-            visibleText.text,
+            amountAnnotatedString(visibleText.text, fractionDigits),
             color = visibleColor,
             fontSize = fontSize,
             lineHeight = lineHeight,

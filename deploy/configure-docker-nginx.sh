@@ -2,28 +2,18 @@
 set -euo pipefail
 
 readonly install_directory="${1:?Tandem install directory is required}"
-readonly actual_server_url="${2:-}"
-readonly public_tandem_url="${3:-}"
-readonly requested_trust_proxy="${4:-}"
-readonly environment_file="$install_directory/deploy/compose/.env"
+readonly environment_file="$install_directory/.env"
 network_name="$(awk -F= '$1 == "TANDEM_EDGE_NETWORK" { print $2; exit }' "$environment_file" 2>/dev/null || true)"
 network_name="${network_name:-tandem-edge}"
 readonly network_name
+requested_trust_proxy="$(awk -F= '$1 == "TRUST_PROXY" { print $2; exit }' "$environment_file" 2>/dev/null || true)"
 
 if ! command -v python3 >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
   printf 'Skipping Nginx auto-configuration: python3 or jq is unavailable.\n'
   exit 0
 fi
 
-url_for_domain="${public_tandem_url:-$actual_server_url}"
-url_for_domain="${url_for_domain#*://}"
-url_for_domain="${url_for_domain%%/*}"
-url_for_domain="${url_for_domain%%:*}"
-if [[ ! "$url_for_domain" =~ ^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
-  printf 'Skipping Docker Nginx auto-configuration: no public domain could be derived.\n'
-  exit 0
-fi
-readonly domain="${url_for_domain,,}"
+domain=""
 host_api_port="$(awk -F= '$1 == "TANDEM_API_HOST_PORT" { print $2; exit }' "$environment_file" 2>/dev/null || true)"
 host_api_port="${host_api_port:-19753}"
 
@@ -92,7 +82,8 @@ for path, lines in sections.items():
             continue
         body = text[opening + 1 : closing]
         names = re.findall(r"(?m)^\s*server_name\s+([^;]+);", body)
-        if not any(domain in name.split() for name in names):
+        server_names = [candidate.lower() for name in names for candidate in name.split() if candidate != "_"]
+        if domain and domain not in server_names:
             continue
         listens = re.findall(r"(?m)^\s*listen\s+([^;]+);", body)
         listens_on_443 = any(
@@ -104,13 +95,24 @@ for path, lines in sections.items():
             or bool(re.search(r"(?m)^\s*ssl\s+on\s*;", body))
             or bool(re.search(r"(?m)^\s*ssl_certificate\s+", body))
         )
-        matches.append((path, has_tls, "TANDEM-SETUP-MANAGED-ROUTES" in body))
+        score = 0
+        if any(re.search(r"actual|budget", name, re.I) for name in server_names):
+            score += 2
+        if re.search(r"proxy_pass\s+https?://[^;]*(?:actual|budget|:5006)", body, re.I):
+            score += 2
+        chosen_name = next((name for name in server_names if not name.startswith("www.")), "")
+        matches.append((path, has_tls, "TANDEM-SETUP-MANAGED-ROUTES" in body, chosen_name, score))
 
 tls_matches = [item for item in matches if item[1]]
 selected = tls_matches if tls_matches else matches
+if not domain and len(tls_matches) > 1:
+    likely = [item for item in tls_matches if item[4] > 0]
+    if likely:
+        best_score = max(item[4] for item in likely)
+        selected = [item for item in likely if item[4] == best_score]
 if len(selected) == 1:
-    path, has_tls, managed = selected[0]
-    print(f"{path}\t{int(has_tls)}\t{int(managed)}")
+    path, has_tls, managed, chosen_name, _ = selected[0]
+    print(f"{path}\t{int(has_tls)}\t{int(managed)}\t{chosen_name}")
 elif len(selected) > 1:
     print("AMBIGUOUS")
 PY
@@ -129,11 +131,9 @@ map_container_config() {
 
 update_managed_host_route_port() {
   sudo python3 - "$1" "$2" <<'PY'
-from datetime import datetime, timezone
 import os
 from pathlib import Path
 import re
-import shutil
 import sys
 import tempfile
 
@@ -157,10 +157,6 @@ if updated_routes == routes:
     raise SystemExit(0)
 updated = text[:start] + updated_routes + text[end:]
 metadata = path.stat()
-backup = path.with_name(
-    f"{path.name}.tandem-setup-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.bak"
-)
-shutil.copy2(path, backup)
 fd, temporary = tempfile.mkstemp(prefix=".tandem-nginx-", dir=path.parent)
 try:
     with os.fdopen(fd, "w", encoding="utf-8") as stream:
@@ -174,7 +170,7 @@ except BaseException:
     except FileNotFoundError:
         pass
     raise
-print(backup)
+print("changed")
 PY
 }
 
@@ -286,12 +282,12 @@ if ((${#nginx_matches[@]} == 0)); then
       "${nginx_manager_images[0]}"
     printf 'Configure /api/v1/ in that proxy and route it to tandem-api:19753 on the tandem-edge network.\n'
   else
-    printf 'No Docker or host Nginx server block matched %s; leaving proxy configuration unchanged.\n' "$domain"
+    printf 'No matching HTTPS Nginx site was detected; leaving Nginx unchanged.\n'
   fi
   exit 0
 fi
 if ((${#nginx_matches[@]} != 1)); then
-  printf 'More than one Docker Nginx server block matched %s; refusing to edit an ambiguous proxy.\n' "$domain" >&2
+  printf 'More than one HTTPS Nginx site could match; leaving Nginx unchanged.\n' >&2
   exit 0
 fi
 
@@ -305,7 +301,8 @@ if [[ "$proxy_mode" == host ]]; then
     exit 0
   fi
 fi
-IFS=$'\t' read -r container_config_path has_tls has_managed_routes <<< "$config_match"
+IFS=$'\t' read -r container_config_path has_tls has_managed_routes domain <<< "$config_match"
+domain="${domain,,}"
 if [[ "$container_config_path" == AMBIGUOUS || -z "$container_config_path" ]]; then
   printf 'Nginx has multiple matching server blocks for %s; refusing to edit an ambiguous proxy.\n' "$domain" >&2
   exit 0
@@ -339,28 +336,39 @@ if ! sudo test -f "$host_config_file"; then
   printf 'Could not access the mounted Nginx configuration at %s; refusing to edit it.\n' "$host_config_file" >&2
   exit 0
 fi
+
+if [[ "$has_managed_routes" != 1 ]]; then
+  answer=""
+  read -r -p "Add Tandem routes to the detected Nginx site ${domain:-$host_config_file}? [y/N]: " answer || answer=""
+  case "${answer,,}" in
+    y|yes) ;;
+    *) printf 'Leaving Nginx unchanged.\n'; exit 0 ;;
+  esac
+fi
+
 if [[ "$proxy_mode" == host ]]; then
   select_host_api_port
 fi
 
 if [[ "$has_managed_routes" == 1 ]]; then
   if [[ "$proxy_mode" == host ]]; then
-    route_backup="$(update_managed_host_route_port "$host_config_file" "$host_api_port")" || {
+    sudo cp --preserve=mode,ownership -- "$host_config_file" "$temporary_directory/nginx-before.conf"
+    route_changed="$(update_managed_host_route_port "$host_config_file" "$host_api_port")" || {
       printf 'Could not safely update the Tandem route to host port %s.\n' "$host_api_port" >&2
       exit 0
     }
-    if [[ -n "$route_backup" ]]; then
+    if [[ -n "$route_changed" ]]; then
       if ! sudo nginx -t; then
-        sudo cp -- "$route_backup" "$host_config_file"
-        printf 'Nginx validation failed; restored %s.\n' "$route_backup" >&2
+        sudo cp --preserve=mode,ownership -- "$temporary_directory/nginx-before.conf" "$host_config_file"
+        printf 'Nginx validation failed. Check %s before reloading Nginx.\n' "$host_config_file" >&2
         exit 0
       fi
       if ! sudo nginx -s reload; then
-        sudo cp -- "$route_backup" "$host_config_file"
-        printf 'Nginx reload failed; restored %s.\n' "$route_backup" >&2
+        sudo cp --preserve=mode,ownership -- "$temporary_directory/nginx-before.conf" "$host_config_file"
+        printf 'Nginx reload failed. Check %s before reloading Nginx.\n' "$host_config_file" >&2
         exit 0
       fi
-      printf 'Updated Tandem routes to host port %s (backup: %s).\n' "$host_api_port" "$route_backup"
+      printf 'Updated Tandem routes to host port %s.\n' "$host_api_port"
     else
       printf 'Tandem routes are already present in the Nginx vhost for %s.\n' "$domain"
     fi
@@ -460,13 +468,12 @@ routes = routes.replace(
 path.write_text(routes, encoding="utf-8")
 PY
   fi
-  backup_path="$(sudo python3 - "$host_config_file" "$domain" "$route_file" <<'PY'
+  sudo cp --preserve=mode,ownership -- "$host_config_file" "$temporary_directory/nginx-before.conf"
+  route_changed="$(sudo python3 - "$host_config_file" "$domain" "$route_file" <<'PY'
 import os
 import re
-import shutil
 import sys
 import tempfile
-from datetime import datetime, timezone
 
 config_path, domain, route_path = sys.argv[1:]
 with open(config_path, encoding="utf-8") as stream:
@@ -539,8 +546,6 @@ if re.search(r"(?m)^\s*location\b[^{};]*?/api/v1", body):
 
 mode = os.stat(config_path).st_mode & 0o777
 metadata = os.stat(config_path)
-backup = f"{config_path}.tandem-setup-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.bak"
-shutil.copy2(config_path, backup)
 updated = text[:closing] + "\n" + route + "\n" + text[closing:]
 if "TANDEM-SETUP-MANAGED-LIMITS" not in text:
     limits = (
@@ -563,13 +568,13 @@ except BaseException:
     except FileNotFoundError:
         pass
     raise
-print(backup)
+print("changed")
 PY
 )" || {
     printf 'Could not safely update the Nginx vhost for %s; it was not changed.\n' "$domain" >&2
     exit 0
   }
-  if [[ -n "$backup_path" ]]; then
+  if [[ -n "$route_changed" ]]; then
     if [[ "$proxy_mode" == docker ]]; then
       nginx_test_command=(docker exec "$nginx_container" nginx -t)
       nginx_reload_command=(docker exec "$nginx_container" nginx -s reload)
@@ -578,16 +583,16 @@ PY
       nginx_reload_command=(sudo nginx -s reload)
     fi
     if ! "${nginx_test_command[@]}"; then
-      sudo cp -- "$backup_path" "$host_config_file"
-      printf 'Nginx validation failed; restored %s.\n' "$backup_path" >&2
+      sudo cp --preserve=mode,ownership -- "$temporary_directory/nginx-before.conf" "$host_config_file"
+      printf 'Nginx validation failed. Check %s before reloading Nginx.\n' "$host_config_file" >&2
       exit 0
     fi
     if ! "${nginx_reload_command[@]}"; then
-      sudo cp -- "$backup_path" "$host_config_file"
-      printf 'Nginx reload failed; restored %s.\n' "$backup_path" >&2
+      sudo cp --preserve=mode,ownership -- "$temporary_directory/nginx-before.conf" "$host_config_file"
+      printf 'Nginx reload failed. Check %s before reloading Nginx.\n' "$host_config_file" >&2
       exit 0
     fi
-    printf 'Added Tandem API routes to %s (backup: %s).\n' "$domain" "$backup_path"
+    printf 'Added Tandem API routes to %s.\n' "$domain"
   fi
 fi
 
@@ -598,10 +603,10 @@ if [[ "$proxy_mode" == host ]]; then
   if [[ -n "$network_gateway" && -z "$requested_trust_proxy" && -f "$environment_file" ]]; then
     trust_proxy_value="127.0.0.1/32,$network_gateway/32"
     temporary_environment="$temporary_directory/.env"
-    TANDEM_TRUST_PROXY_AUTO="$trust_proxy_value" awk '
+    TRUST_PROXY_DETECTED="$trust_proxy_value" awk '
       BEGIN { updated = 0 }
-      /^TANDEM_TRUST_PROXY=/ {
-        print "TANDEM_TRUST_PROXY=" ENVIRON["TANDEM_TRUST_PROXY_AUTO"]
+      /^TRUST_PROXY=/ {
+        print "TRUST_PROXY=" ENVIRON["TRUST_PROXY_DETECTED"]
         updated = 1
         next
       }
@@ -612,106 +617,7 @@ if [[ "$proxy_mode" == host ]]; then
     mv -- "$temporary_environment" "$environment_file"
     printf 'Set Tandem proxy trust to the host Nginx loopback and Docker gateway addresses.\n'
   elif [[ -z "$requested_trust_proxy" ]]; then
-    printf 'Could not detect the Docker gateway for host Nginx. Set TANDEM_TRUST_PROXY to the immediate proxy address before relying on client IP rate limits.\n' >&2
-  fi
-
-  production_compose_file="$install_directory/deploy/compose/production.yml"
-  if [[ -f "$production_compose_file" ]]; then
-    if ! python3 - "$production_compose_file" <<'PY'
-from datetime import datetime, timezone
-import os
-from pathlib import Path
-import re
-import shutil
-import sys
-import tempfile
-
-path = Path(sys.argv[1])
-text = path.read_text(encoding="utf-8")
-lines = text.splitlines(keepends=True)
-start = next((i for i, line in enumerate(lines) if re.fullmatch(r"  tandem-api:\s*\n?", line)), None)
-if start is None:
-    raise SystemExit("Could not find the tandem-api service in production.yml.")
-end = next(
-    (
-        i
-        for i in range(start + 1, len(lines))
-        if re.match(r"^(?:\S[^\n]*:|  [A-Za-z0-9_-]+:\s*)\s*$", lines[i])
-    ),
-    len(lines),
-)
-service_lines = lines[start:end]
-service_text = "".join(service_lines)
-if re.search(r'127\.0\.0\.1:[^\s"\']*:19753', service_text):
-    raise SystemExit(0)
-port_entry = '      - "127.0.0.1:${TANDEM_API_HOST_PORT:-19753}:19753"\n'
-ports_index = next((i for i, line in enumerate(service_lines) if re.fullmatch(r"    ports:\s*\n?", line)), None)
-if ports_index is not None:
-    service_lines.insert(ports_index + 1, port_entry)
-else:
-    image_index = next((i for i, line in enumerate(service_lines) if line.startswith("    image:")), None)
-    if image_index is None:
-        raise SystemExit("Could not locate the tandem-api image setting in production.yml.")
-    service_lines[image_index + 1 : image_index + 1] = ["    ports:\n", port_entry]
-lines[start:end] = service_lines
-updated = "".join(lines)
-metadata = path.stat()
-backup = path.with_name(
-    f"{path.name}.tandem-setup-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.bak"
-)
-shutil.copy2(path, backup)
-fd, temporary = tempfile.mkstemp(prefix=".tandem-compose-", dir=path.parent)
-try:
-    with os.fdopen(fd, "w", encoding="utf-8") as stream:
-        stream.write(updated)
-    os.chown(temporary, metadata.st_uid, metadata.st_gid)
-    os.chmod(temporary, metadata.st_mode & 0o777)
-    os.replace(temporary, path)
-except BaseException:
-    try:
-        os.unlink(temporary)
-    except FileNotFoundError:
-        pass
-    raise
-PY
-    then
-      printf 'Could not add the loopback-only API port to %s.\n' "$production_compose_file" >&2
-      exit 0
-    fi
-  else
-    printf 'Could not find %s to publish the loopback API port for host Nginx.\n' \
-      "$production_compose_file" >&2
-    exit 0
-  fi
-
-  root_compose_file="$install_directory/compose.yml"
-  if [[ -f "$root_compose_file" ]] && ! python3 - "$root_compose_file" <<'PY'
-from pathlib import Path
-import re
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text(encoding="utf-8")
-marker = "# TANDEM-HOST-NGINX-PORT"
-if marker not in text:
-    raise SystemExit(0)
-legacy_block = re.compile(
-    r'\n# TANDEM-HOST-NGINX-PORT\nservices:\n  tandem-api:\n    ports:\n      - "127\.0\.0\.1:19753:19753"\n?\s*\Z'
-)
-match = legacy_block.search(text)
-if match is None:
-    raise SystemExit("The generated Tandem host-port block was edited; refusing to remove user changes.")
-path.write_text(text[: match.start()].rstrip() + "\n", encoding="utf-8")
-PY
-  then
-    printf 'Could not remove the old Tandem host-port block from %s.\n' "$root_compose_file" >&2
-    exit 0
-  fi
-
-  if ! docker compose --project-directory "$install_directory" -f "$root_compose_file" config --quiet; then
-    printf 'The Tandem Compose files did not validate. Check %s and %s before starting Tandem.\n' \
-      "$root_compose_file" "$production_compose_file" >&2
-    exit 0
+    printf 'Could not detect the Docker gateway for host Nginx. TRUST_PROXY remains unchanged.\n' >&2
   fi
   printf 'Published the Tandem API on loopback port %s for host Nginx.\n' "$host_api_port"
   exit 0
@@ -726,10 +632,10 @@ fi
 proxy_ip="$(docker inspect "$nginx_container" | jq -r --arg network "$network_name" '.[0].NetworkSettings.Networks[$network].IPAddress // empty')"
 if [[ -n "$proxy_ip" && -z "$requested_trust_proxy" && -f "$environment_file" ]]; then
   temporary_environment="$temporary_directory/.env"
-  TANDEM_TRUST_PROXY_AUTO="$proxy_ip" awk '
+  TRUST_PROXY_DETECTED="$proxy_ip" awk '
     BEGIN { updated = 0 }
-    /^TANDEM_TRUST_PROXY=/ {
-      print "TANDEM_TRUST_PROXY=" ENVIRON["TANDEM_TRUST_PROXY_AUTO"]
+    /^TRUST_PROXY=/ {
+      print "TRUST_PROXY=" ENVIRON["TRUST_PROXY_DETECTED"]
       updated = 1
       next
     }

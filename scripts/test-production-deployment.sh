@@ -22,7 +22,7 @@ full_disk_edge_network="${full_disk_project}-edge"
 full_disk_host_port="${TEST_FULL_DISK_API_HOST_PORT:-$(find_available_local_port)}"
 full_disk_env_file="$scratch_root/full-disk.env"
 full_disk_compose=()
-compose=(docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml")
+compose=(docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/docker-compose.yml" -f "$project_root/scripts/compose/production-check.yml")
 
 start_compose_stack() {
   local compose_variable="$1"
@@ -71,33 +71,22 @@ test_secret="release-check-$(date +%s)-synthetic"
 test_epoch="release-check-$(date +%s)"
 auth_key="$(openssl rand -hex 32)"
 backup_passphrase_file="$secret_dir/backup_passphrase"
-printf '%s' "$test_secret" > "$secret_dir/postgres_password"
-printf 'postgresql://tandem_release_check:%s@tandem-postgres:5432/tandem_release_check' \
-  "$test_secret" > "$secret_dir/database_url"
-printf '%s' "$auth_key" > "$secret_dir/auth_token_encryption_key"
-touch "$secret_dir/auth_token_encryption_key_previous"
-touch "$secret_dir/actual_session_token"
 printf '%s' "release-check-gpg-passphrase-$test_epoch" > "$backup_passphrase_file"
-chmod 444 "$secret_dir"/*
 chmod 600 "$backup_passphrase_file"
 cat > "$env_file" <<EOF
-TANDEM_POSTGRES_DB=tandem_release_check
-TANDEM_POSTGRES_USER=tandem_release_check
-TANDEM_POSTGRES_PASSWORD_FILE=$secret_dir/postgres_password
-TANDEM_DATABASE_URL_FILE=$secret_dir/database_url
-TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_FILE=$secret_dir/auth_token_encryption_key
-TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE=$secret_dir/auth_token_encryption_key_previous
-TANDEM_ACTUAL_SESSION_TOKEN_FILE=$secret_dir/actual_session_token
-TANDEM_API_IMAGE=tandem-for-actual-api:release-check
+TANDEM_API_TAG=${TANDEM_API_TAG:-release-check}
 TANDEM_API_HOST_PORT=$test_api_host_port
-TANDEM_TRUST_PROXY=127.0.0.1
 TANDEM_EDGE_NETWORK=$edge_network
-TANDEM_ACTUAL_SERVER_URL=
-TANDEM_ACTUAL_PUBLIC_URL=
+POSTGRES_PASSWORD=$test_secret
+AUTH_TOKEN_ENCRYPTION_KEY=$auth_key
+TRUST_PROXY=127.0.0.1
+ACTUAL_SERVER_URL=
+ACTUAL_SESSION_TOKEN=
+ACTUAL_PUBLIC_URL=
 EOF
 
 docker network create "$edge_network" >/dev/null
-if ! TANDEM_TRUST_PROXY= "${compose[@]}" config --quiet; then
+if ! TRUST_PROXY= "${compose[@]}" config --quiet; then
   echo "Production Compose rejected the safe empty TRUST_PROXY default." >&2
   exit 1
 fi
@@ -109,15 +98,9 @@ jq -e --arg port "$test_api_host_port" \
 start_compose_stack compose
 api_id="$("${compose[@]}" ps -q tandem-api)"
 api_environment="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$api_id")"
-if [[ "$api_environment" == *"$test_secret"* || "$api_environment" == *"$auth_key"* ]]; then
-  echo "Production secrets were exposed in the API container environment." >&2
-  exit 1
-fi
-if [[ "$api_environment" != *"DATABASE_URL_FILE=/run/secrets/tandem_database_url"* || \
-  "$api_environment" != *"ACTUAL_SESSION_TOKEN_FILE=/run/secrets/tandem_actual_session_token"* || \
-  "$api_environment" != *"AUTH_TOKEN_ENCRYPTION_KEY_FILE=/run/secrets/tandem_auth_token_encryption_key"* || \
-  "$api_environment" != *"AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE=/run/secrets/tandem_auth_token_encryption_key_previous"* ]]; then
-  echo "The production API did not receive its secret-file paths." >&2
+if [[ "$api_environment" != *"DATABASE_URL=postgresql://tandem:$test_secret@tandem-postgres:5432/tandem"* || \
+  "$api_environment" != *"AUTH_TOKEN_ENCRYPTION_KEY=$auth_key"* ]]; then
+  echo "The API did not receive its database URL and encryption key." >&2
   exit 1
 fi
 
@@ -138,16 +121,16 @@ wait_for_api
 scheduled_backup_dir="$scratch_root/scheduled-backups"
 TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" \
   TANDEM_BACKUP_DIRECTORY="$scheduled_backup_dir" \
-  "$project_root/deploy/backup-scheduled.sh"
+  "$project_root/deploy/tandem-data.py" scheduled-backup
 wait_for_api
 TANDEM_BACKUP_MAX_AGE_HOURS=26 \
-  "$project_root/deploy/backup-status.sh" "$scheduled_backup_dir"
+  "$project_root/deploy/tandem-data.py" status "$scheduled_backup_dir"
 scheduled_marker="$scheduled_backup_dir/tandem-backup.last-success"
 scheduled_marker_before_failure="$(cat "$scheduled_marker")"
 if TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" \
   TANDEM_BACKUP_DIRECTORY="$scheduled_backup_dir" \
   TANDEM_BACKUP_GPG_PASSPHRASE_FILE="$secret_dir/missing-passphrase" \
-  "$project_root/deploy/backup-scheduled.sh" >/dev/null 2>&1; then
+  "$project_root/deploy/tandem-data.py" scheduled-backup >/dev/null 2>&1; then
   echo "The scheduled backup accepted a missing encryption passphrase file." >&2
   exit 1
 fi
@@ -155,7 +138,7 @@ if [[ "$(cat "$scheduled_marker")" != "$scheduled_marker_before_failure" ]]; the
   echo "A failed scheduled backup replaced the last-success marker." >&2
   exit 1
 fi
-"$project_root/deploy/backup-status.sh" "$scheduled_backup_dir"
+"$project_root/deploy/tandem-data.py" status "$scheduled_backup_dir"
 
 # A host-side file-size limit simulates a backup destination that stops
 # accepting writes without filling the developer or CI filesystem. The backup
@@ -165,7 +148,7 @@ full_backup_log="$scratch_root/full-destination-backup.log"
 if (
   ulimit -f 8
   TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" \
-    "$project_root/deploy/backup.sh" "$full_backup_prefix"
+    "$project_root/deploy/tandem-data.py" backup "$full_backup_prefix"
 ) >"$full_backup_log" 2>&1; then
   echo "The backup unexpectedly succeeded after its destination stopped accepting writes." >&2
   exit 1
@@ -186,7 +169,7 @@ done
   echo "2000-01-01T00:00:00Z"
   echo "$scheduled_prefix"
 } > "$stale_backup_dir/tandem-backup.last-success"
-if "$project_root/deploy/backup-status.sh" "$stale_backup_dir" >/dev/null 2>&1; then
+if "$project_root/deploy/tandem-data.py" status "$stale_backup_dir" >/dev/null 2>&1; then
   echo "The backup status check accepted an old success marker." >&2
   exit 1
 fi
@@ -197,7 +180,7 @@ create_test_device() {
   token="$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n' | cut -c1-43)"
   credential_hash="$(printf '%s' "$token" | sha256sum | cut -d ' ' -f1)"
   device_id="$(cat /proc/sys/kernel/random/uuid)"
-  "${compose[@]}" exec -T tandem-postgres psql -U tandem_release_check -d tandem_release_check \
+  "${compose[@]}" exec -T tandem-postgres psql -U tandem -d tandem \
     --set=device_id="$device_id" \
     --set=device_name="$name" \
     --set=credential_hash="$credential_hash" >/dev/null <<'SQL'
@@ -235,7 +218,7 @@ fi
 "${compose[@]}" exec -T tandem-api node --input-type=module -e \
   "import { chmodSync, writeFileSync } from 'node:fs'; const path = '/data/actual-api/release-check.txt'; writeFileSync(path, 'before backup'); chmodSync(path, 0o600);"
 TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" \
-  "$project_root/deploy/backup.sh" "$scratch_root/tandem-backup"
+  "$project_root/deploy/tandem-data.py" backup "$scratch_root/tandem-backup"
 wait_for_api
 third_token="$(create_test_device 'Post-backup tablet')"
 "${compose[@]}" exec -T tandem-api node --input-type=module -e \
@@ -260,7 +243,7 @@ chmod 700 "$docker_shim_dir/docker"
 interrupted_restore_log="$scratch_root/interrupted-restore.log"
 if REAL_DOCKER="$real_docker" PATH="$docker_shim_dir:$PATH" \
   TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" \
-  "$project_root/deploy/restore.sh" "$scratch_root/tandem-backup" \
+  "$project_root/deploy/tandem-data.py" restore "$scratch_root/tandem-backup" \
   >"$interrupted_restore_log" 2>&1; then
   echo "The injected interruption unexpectedly completed the restore." >&2
   exit 1
@@ -277,7 +260,7 @@ if [[ -z "$safety_prefix" || ! -f "${safety_prefix}.postgres.dump" || \
   exit 1
 fi
 TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" \
-  "$project_root/deploy/restore.sh" "$safety_prefix"
+  "$project_root/deploy/tandem-data.py" restore "$safety_prefix"
 "${compose[@]}" up --detach tandem-api
 wait_for_api
 recovered_devices="$(curl --silent --show-error --fail "http://127.0.0.1:$test_api_host_port/api/v1/devices" \
@@ -296,7 +279,7 @@ if [[ "$recovered_workspace" != "after backup" ]]; then
 fi
 
 TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" \
-  "$project_root/deploy/restore.sh" "$scratch_root/tandem-backup"
+  "$project_root/deploy/tandem-data.py" restore "$scratch_root/tandem-backup"
 "${compose[@]}" up --detach tandem-api
 wait_for_api
 device_list="$(curl --silent --show-error --fail "http://127.0.0.1:$test_api_host_port/api/v1/devices" \
@@ -379,7 +362,7 @@ assert_corrupt_restore_is_rejected() {
   fi
 
   if TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" \
-    "$project_root/deploy/restore.sh" "$corrupt_prefix" \
+    "$project_root/deploy/tandem-data.py" restore "$corrupt_prefix" \
     >"$restore_log" 2>&1; then
     echo "Production restore accepted a truncated $kind backup ($truncation)." >&2
     exit 1
@@ -432,8 +415,8 @@ assert_corrupt_restore_is_rejected postgres header
 assert_corrupt_restore_is_rejected postgres mid-file
 assert_corrupt_restore_is_rejected workspace header
 
-docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml" exec -T tandem-api node --input-type=module -e "import { writeFileSync } from 'node:fs'; writeFileSync('/data/actual-api/release-check.txt', 'before encrypted backup');"
-TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" TANDEM_BACKUP_GPG_PASSPHRASE_FILE="$backup_passphrase_file" "$project_root/deploy/backup.sh" "$scratch_root/tandem-encrypted-backup"
+docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/docker-compose.yml" -f "$project_root/scripts/compose/production-check.yml" exec -T tandem-api node --input-type=module -e "import { writeFileSync } from 'node:fs'; writeFileSync('/data/actual-api/release-check.txt', 'before encrypted backup');"
+TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" TANDEM_BACKUP_GPG_PASSPHRASE_FILE="$backup_passphrase_file" "$project_root/deploy/tandem-data.py" backup "$scratch_root/tandem-encrypted-backup"
 wait_for_api
 if [[ ! -f "$scratch_root/tandem-encrypted-backup.postgres.dump.gpg" || ! -f "$scratch_root/tandem-encrypted-backup.actual-workspace.tar.gz.gpg" || -e "$scratch_root/tandem-encrypted-backup.postgres.dump" || -e "$scratch_root/tandem-encrypted-backup.actual-workspace.tar.gz" ]]; then
   echo "Encrypted backup did not produce exactly the expected ciphertext files." >&2
@@ -443,7 +426,7 @@ wrong_passphrase_file="$scratch_root/release-check-wrong-backup-passphrase"
 mkdir -m 700 -p "$restore_tmp_dir"
 printf '%s' 'incorrect synthetic passphrase' > "$wrong_passphrase_file"
 chmod 600 "$wrong_passphrase_file"
-if TMPDIR="$restore_tmp_dir" TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" TANDEM_BACKUP_GPG_PASSPHRASE_FILE="$wrong_passphrase_file" "$project_root/deploy/restore.sh" "$scratch_root/tandem-encrypted-backup" >/dev/null 2>&1; then
+if TMPDIR="$restore_tmp_dir" TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" TANDEM_BACKUP_GPG_PASSPHRASE_FILE="$wrong_passphrase_file" "$project_root/deploy/tandem-data.py" restore "$scratch_root/tandem-encrypted-backup" >/dev/null 2>&1; then
   echo "Encrypted restore accepted an incorrect passphrase." >&2
   exit 1
 fi
@@ -453,9 +436,9 @@ if [[ -n "$(find "$restore_tmp_dir" -mindepth 1 -maxdepth 1 -type f -print -quit
 fi
 wait_for_api 15
 encrypted_post_backup_token="$(create_test_device 'Post-encrypted-backup tablet')"
-docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml" exec -T tandem-api node --input-type=module -e "import { writeFileSync } from 'node:fs'; writeFileSync('/data/actual-api/release-check.txt', 'after encrypted backup');"
+docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/docker-compose.yml" -f "$project_root/scripts/compose/production-check.yml" exec -T tandem-api node --input-type=module -e "import { writeFileSync } from 'node:fs'; writeFileSync('/data/actual-api/release-check.txt', 'after encrypted backup');"
 if ! TMPDIR="$restore_tmp_dir" TANDEM_COMPOSE_PROJECT="$project" TANDEM_ENV_FILE="$env_file" TANDEM_BACKUP_GPG_PASSPHRASE_FILE="$backup_passphrase_file" \
-  "$project_root/deploy/restore.sh" "$scratch_root/tandem-encrypted-backup" \
+  "$project_root/deploy/tandem-data.py" restore "$scratch_root/tandem-encrypted-backup" \
   >"$scratch_root/encrypted-restore.log" 2>&1; then
   cat "$scratch_root/encrypted-restore.log" >&2
   exit 1
@@ -474,14 +457,14 @@ if [[ -n "$(find "$restore_tmp_dir" -mindepth 1 -maxdepth 1 -type f -print -quit
   echo "A successful encrypted restore left decrypted temporary files." >&2
   exit 1
 fi
-docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml" up --detach tandem-api
+docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/docker-compose.yml" -f "$project_root/scripts/compose/production-check.yml" up --detach tandem-api
 wait_for_api
 encrypted_device_list="$(curl --silent --show-error --fail "http://127.0.0.1:$test_api_host_port/api/v1/devices" --header "Authorization: Bearer $phone_token")"
 if [[ "$encrypted_device_list" != *'Release check phone'* || "$encrypted_device_list" != *'Release check tablet'* || "$encrypted_device_list" == *'Post-encrypted-backup tablet'* ]]; then
   echo "Encrypted production restore did not reinstate its PostgreSQL backup." >&2
   exit 1
 fi
-encrypted_workspace_value="$(docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml" exec -T tandem-api node --input-type=module -e "import { readFileSync } from 'node:fs'; process.stdout.write(readFileSync('/data/actual-api/release-check.txt', 'utf8'));")"
+encrypted_workspace_value="$(docker compose -p "$project" --project-directory "$project_root" --env-file "$env_file" -f "$project_root/deploy/docker-compose.yml" -f "$project_root/scripts/compose/production-check.yml" exec -T tandem-api node --input-type=module -e "import { readFileSync } from 'node:fs'; process.stdout.write(readFileSync('/data/actual-api/release-check.txt', 'utf8'));")"
 if [[ "$encrypted_workspace_value" != "before encrypted backup" ]]; then
   echo "Encrypted production restore did not reinstate its Actual workspace." >&2
   exit 1
@@ -506,22 +489,18 @@ if [[ "$device_list" != *'Release check phone'* || "$device_list" != *'Release c
 fi
 
 cat > "$full_disk_env_file" <<EOF
-TANDEM_POSTGRES_DB=tandem_release_check
-TANDEM_POSTGRES_USER=tandem_release_check
-TANDEM_POSTGRES_PASSWORD_FILE=$secret_dir/postgres_password
-TANDEM_DATABASE_URL_FILE=$secret_dir/database_url
-TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_FILE=$secret_dir/auth_token_encryption_key
-TANDEM_AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS_FILE=$secret_dir/auth_token_encryption_key_previous
-TANDEM_ACTUAL_SESSION_TOKEN_FILE=$secret_dir/actual_session_token
-TANDEM_API_IMAGE=tandem-for-actual-api:release-check
+TANDEM_API_TAG=${TANDEM_API_TAG:-release-check}
 TANDEM_API_HOST_PORT=$full_disk_host_port
-TANDEM_TRUST_PROXY=127.0.0.1
 TANDEM_EDGE_NETWORK=$full_disk_edge_network
-TANDEM_ACTUAL_SERVER_URL=
-TANDEM_ACTUAL_PUBLIC_URL=
+POSTGRES_PASSWORD=$test_secret
+AUTH_TOKEN_ENCRYPTION_KEY=$auth_key
+TRUST_PROXY=127.0.0.1
+ACTUAL_SERVER_URL=http://actual-server:5006
+ACTUAL_SESSION_TOKEN=
+ACTUAL_PUBLIC_URL=
 EOF
 chmod 600 "$full_disk_env_file"
-full_disk_compose=(docker compose -p "$full_disk_project" --project-directory "$project_root" --env-file "$full_disk_env_file" -f "$project_root/deploy/compose/production.yml" -f "$project_root/deploy/compose/production-check.yml" -f "$project_root/deploy/compose/production-full-disk-check.yml")
+full_disk_compose=(docker compose -p "$full_disk_project" --project-directory "$project_root" --env-file "$full_disk_env_file" -f "$project_root/deploy/docker-compose.yml" -f "$project_root/scripts/compose/production-check.yml" -f "$project_root/scripts/compose/production-full-disk-check.yml")
 docker network create "$full_disk_edge_network" >/dev/null
 "${full_disk_compose[@]}" config --quiet
 start_compose_stack full_disk_compose
@@ -573,7 +552,7 @@ full_disk_postgres_id="$("${full_disk_compose[@]}" ps -q tandem-postgres)"
 full_disk_token="$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n' | cut -c1-43)"
 full_disk_credential_hash="$(printf '%s' "$full_disk_token" | sha256sum | cut -d ' ' -f1)"
 full_disk_device_id="$(cat /proc/sys/kernel/random/uuid)"
-"${full_disk_compose[@]}" exec -T tandem-postgres psql -U tandem_release_check -d tandem_release_check \
+"${full_disk_compose[@]}" exec -T tandem-postgres psql -U tandem -d tandem \
   --set=device_id="$full_disk_device_id" \
   --set=device_name='Full disk check phone' \
   --set=credential_hash="$full_disk_credential_hash" >/dev/null <<'SQL'
@@ -606,7 +585,7 @@ if [[ "$full_disk_transaction_status" != 503 ]] || ! grep -Fq '"code":"server_st
 fi
 docker exec --user 0 "$full_disk_postgres_id" rm -f /var/lib/postgresql/full-disk-probe
 wait_for_full_disk_api
-full_disk_operation_count="$("${full_disk_compose[@]}" exec -T tandem-postgres psql -U tandem_release_check -d tandem_release_check --tuples-only --no-align -c "SELECT count(*) FROM tandem_operations WHERE operation_id = '$full_disk_operation_id'::uuid" | tr -d '[:space:]')"
+full_disk_operation_count="$("${full_disk_compose[@]}" exec -T tandem-postgres psql -U tandem -d tandem --tuples-only --no-align -c "SELECT count(*) FROM tandem_operations WHERE operation_id = '$full_disk_operation_id'::uuid" | tr -d '[:space:]')"
 if [[ "$full_disk_operation_count" != 0 ]]; then
   echo "A request rejected for full storage left a partial PostgreSQL operation row." >&2
   exit 1

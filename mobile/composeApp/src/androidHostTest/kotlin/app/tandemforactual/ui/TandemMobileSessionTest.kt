@@ -45,18 +45,17 @@ import kotlin.test.assertTrue
 @Config(sdk = [36])
 class TandemMobileSessionTest {
     @Test
-    fun schedulePostAndSkipAreSavedLocallyWithoutAReachableServer() =
+    fun scheduleChangesAreSavedLocallyWhileSignedOut() =
         runBlocking {
             val database = newDatabase()
             try {
                 val preferences = AppPreferencesStore(database)
                 val repository = LocalBudgetRepository(database) { 1_000L }
                 seedCachedBudget(repository, preferences, withPendingWrite = false)
-                val credentialStore = memoryCredentialStore(storedSession("https://offline.example.test", "principal-old"))
                 val apiClient = TandemApiClient()
-                val session = TandemMobileSession(apiClient, database, { 1_000L }, credentialStore)
+                val session = TandemMobileSession(apiClient, database, { 1_000L })
 
-                assertEquals("https://offline.example.test", session.restoreStoredSession())
+                assertFalse(session.isAuthenticated)
                 assertTrue(
                     session.manageBudgetSchedule(
                         budgetId = "budget-1",
@@ -121,17 +120,16 @@ class TandemMobileSessionTest {
         }
 
     @Test
-    fun newPayeeIsSavedAndAvailableFromTheLocalQueueWithoutAConnection() =
+    fun newPayeeIsSavedAndAvailableFromTheLocalQueueWhileSignedOut() =
         runBlocking {
             val database = newDatabase()
             try {
                 val preferences = AppPreferencesStore(database)
                 val repository = LocalBudgetRepository(database) { 1_000L }
                 seedCachedBudget(repository, preferences, withPendingWrite = false)
-                val credentialStore = memoryCredentialStore(storedSession("https://offline.example.test", "principal-old"))
                 val apiClient = TandemApiClient()
-                val session = TandemMobileSession(apiClient, database, { 1_000L }, credentialStore)
-                assertEquals("https://offline.example.test", session.restoreStoredSession())
+                val session = TandemMobileSession(apiClient, database, { 1_000L })
+                assertFalse(session.isAuthenticated)
 
                 val localPayeeId = session.createBudgetPayee("budget-1", "Corner Market", null)
 
@@ -143,8 +141,8 @@ class TandemMobileSessionTest {
                 assertEquals(BudgetReorderKind.CREATE_PAYEE, queuedPayee.kind)
                 assertEquals(localPayeeId, queuedPayee.itemId)
 
-                val restoredSession = TandemMobileSession(apiClient, database, { 1_000L }, credentialStore)
-                assertTrue(restoredSession.restoreStoredSession() != null)
+                val restoredSession = TandemMobileSession(apiClient, database, { 1_000L })
+                assertFalse(restoredSession.isAuthenticated)
                 assertTrue(restoredSession.restoreBudgetReorderQueue())
                 restoredSession.loadLocalRecords("budget-1")
 
@@ -156,7 +154,7 @@ class TandemMobileSessionTest {
         }
 
     @Test
-    fun transactionCanUseOfflinePayeeAndStaysQueuedUntilThatPayeeSyncs() =
+    fun transactionCanUseOfflinePayeeWhileSignedOut() =
         runBlocking {
             val database = newDatabase()
             val serverUrl = "http://127.0.0.1:1"
@@ -197,18 +195,16 @@ class TandemMobileSessionTest {
                         ),
                 )
                 preferences.putValue("internal:budget-cache-owner-v1", cacheOwner(serverUrl, "principal-old"))
-                val credentialStore = memoryCredentialStore(storedSession(serverUrl, "principal-old"))
                 val apiClient = TandemApiClient(allowInsecurePrivateNetwork = true)
                 val session =
                     TandemMobileSession(
                         apiClient,
                         database,
                         { 1_000L },
-                        credentialStore,
                         currentDateIso = { "2026-11-12" },
                     )
 
-                assertEquals(serverUrl, session.restoreStoredSession())
+                assertFalse(session.isAuthenticated)
                 session.loadLocalRecords("budget-1")
                 val localPayeeId = session.createBudgetPayee("budget-1", "Corner Market", null)
                 assertNotNull(localPayeeId)
@@ -243,16 +239,15 @@ class TandemMobileSessionTest {
         }
 
     @Test
-    fun budgetAccountPayeeAmountAndStatementChangesQueueWithoutAConnection() =
+    fun budgetAccountPayeeAmountAndStatementChangesQueueWhileSignedOut() =
         runBlocking {
             val database = newDatabase()
             try {
                 val preferences = AppPreferencesStore(database)
                 val repository = LocalBudgetRepository(database) { 1_000L }
                 seedCachedBudget(repository, preferences, withPendingWrite = false)
-                val credentialStore = memoryCredentialStore(storedSession("https://offline.example.test", "principal-old"))
-                val session = TandemMobileSession(TandemApiClient(), database, { 1_000L }, credentialStore)
-                assertEquals("https://offline.example.test", session.restoreStoredSession())
+                val session = TandemMobileSession(TandemApiClient(), database, { 1_000L })
+                assertFalse(session.isAuthenticated)
 
                 assertTrue(session.setBudgetCategoryAmount("budget-1", "category-1", "2026-11", 12_500, null))
                 assertTrue(session.setBudgetCategoryCarryover("budget-1", "category-1", "2026-11", true, null))
@@ -265,7 +260,15 @@ class TandemMobileSessionTest {
                 assertTrue(session.closeBudgetAccount("budget-1", "account-1", null, null, null))
                 assertTrue(session.renameBudgetAccount("budget-1", "account-1", "Daily checking", null))
                 assertTrue(session.reopenBudgetAccount("budget-1", "account-1", null))
-                assertTrue(session.moveBudgetAccount("budget-1", "account-1", "account-2", null))
+                assertTrue(
+                    session.moveBudgetAccount(
+                        "budget-1",
+                        "account-1",
+                        "account-2",
+                        null,
+                        desiredOrder = listOf("account-2", "account-1"),
+                    ),
+                )
                 assertTrue(session.manageBudgetPayee("budget-1", "payee-1", "rename", "Corner Market", null, null))
                 assertTrue(session.manageBudgetPayee("budget-1", "payee-1", "merge", null, "payee-2", null))
                 assertTrue(session.manageBudgetPayee("budget-1", "payee-1", "delete", null, null, null))
@@ -663,6 +666,13 @@ class TandemMobileSessionTest {
         assertFalse(budgetMutationRetryNeedsNewKey("operation_result_unavailable"))
         assertTrue(budgetMutationNeedsRefresh("operation_result_unavailable"))
         assertFalse(budgetMutationNeedsRefresh("operation_uncertain"))
+        assertEquals(BudgetMutationFailureDisposition.REVIEW, budgetMutationFailureDisposition("invalid_request"))
+        assertFalse(budgetMutationCanRetry("invalid_request"))
+        assertTrue(budgetMutationRequiresActualCheck("invalid_request"))
+        assertEquals(
+            "Tandem searched only hidden categories, treated Beauty as missing, and stopped before assigning the amount in Actual.",
+            budgetMutationFailureMessage("invalid_request", BudgetReorderKind.SET_CATEGORY_AMOUNT, "Beauty"),
+        )
     }
 
     @Test
@@ -792,6 +802,50 @@ class TandemMobileSessionTest {
         assertFalse(message.contains("Actual wasn’t changed"))
         assertTrue(discardedPendingWriteMessage("queued").contains("Actual wasn’t changed"))
     }
+
+    @Test
+    fun discardingAnUncertainBudgetMutationRemovesItLocallyWithoutRetrying() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val mutation =
+                    QueuedBudgetReorder(
+                        budgetId = "budget-1",
+                        scopeId = "category-1",
+                        kind = BudgetReorderKind.SET_CATEGORY_CARRYOVER,
+                        itemId = "category-1",
+                        targetId = null,
+                        desiredOrder = emptyList(),
+                        encryptionPassword = null,
+                        operationId = "uncertain-carryover",
+                    )
+                val queueState = BudgetReorderQueueState().enqueue(mutation)
+                repository.replaceBudgetMutationQueue(
+                    listOf(budgetMutationItem(mutation)),
+                    encodeBudgetReorderQueueMetadata(queueState),
+                )
+                assertTrue(repository.beginBudgetMutation(mutation.operationId))
+                repository.markBudgetMutationUncertain(mutation.operationId, "operation_uncertain")
+                val session = TandemMobileSession(TandemApiClient(), database, { 200L })
+
+                assertTrue(session.restoreBudgetReorderQueue())
+                assertEquals(
+                    listOf(mutation.operationId),
+                    session.budgetReorderMovesFor("budget-1", "category-1").map { it.operationId },
+                )
+
+                session.discardWrite("budget-1", mutation.operationId)
+
+                assertEquals("discarded", repository.findWrite(mutation.operationId)?.status)
+                assertFalse(isBudgetMutationReviewable(repository.findWrite(mutation.operationId)?.status.orEmpty()))
+                assertTrue(session.budgetReorderMovesFor("budget-1", "category-1").isEmpty())
+                assertTrue(repository.readBudgetMutationQueue().items.isEmpty())
+                assertTrue(session.transactionWriteMessage?.contains("Actual may already have saved it") == true)
+            } finally {
+                database.close()
+            }
+        }
 
     @Test
     fun budgetQueueReadFailureAgainstRoomDoesNotOverwriteSavedChangesAndCanRetry() =

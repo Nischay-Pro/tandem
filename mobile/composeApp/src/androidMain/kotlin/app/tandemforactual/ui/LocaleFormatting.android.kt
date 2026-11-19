@@ -15,6 +15,16 @@ import java.util.Currency
 import java.util.Date
 import java.util.Locale
 
+private data class BudgetNumberFormatKey(
+    val locale: Locale,
+    val fractionDigits: Int,
+)
+
+private val budgetNumberFormats =
+    object : ThreadLocal<MutableMap<BudgetNumberFormatKey, NumberFormat>>() {
+        override fun initialValue(): MutableMap<BudgetNumberFormatKey, NumberFormat> = mutableMapOf()
+    }
+
 @Composable
 @Suppress("DEPRECATION")
 internal actual fun platformAppVersionName(): String {
@@ -125,9 +135,13 @@ private fun budgetNumberFormat(
     fractionDigits: Int,
 ): NumberFormat {
     val locale = numberLocale(displaySettings)
-    return NumberFormat.getNumberInstance(locale).apply {
-        minimumFractionDigits = fractionDigits
-        maximumFractionDigits = fractionDigits
+    val key = BudgetNumberFormatKey(locale, fractionDigits)
+    val cache = requireNotNull(budgetNumberFormats.get())
+    return cache.getOrPut(key) {
+        NumberFormat.getNumberInstance(locale).apply {
+            minimumFractionDigits = fractionDigits
+            maximumFractionDigits = fractionDigits
+        }
     }
 }
 

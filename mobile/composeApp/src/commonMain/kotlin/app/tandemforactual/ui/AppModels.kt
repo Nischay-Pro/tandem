@@ -145,8 +145,10 @@ internal enum class AppRoute(
     SERVER_ADDRESS("Server address"),
     SIGN_IN("Sign in"),
     BUDGET_CHOOSER("Budgets"),
+    BUDGET_UNLOCK("Unlock budget"),
     FIRST_SYNC("Preparing budget"),
     NOTIFICATION_ONBOARDING("Stay in the loop"),
+    SETUP_COMPLETE("Setup complete"),
     BUDGET("Budget"),
     CATEGORY_GROUP("Essentials"),
     CATEGORY_DETAIL("Rent"),
@@ -165,10 +167,10 @@ internal enum class AppRoute(
     CHOOSE_PAYEE("Choose payee"),
     MANAGE_PAYEES("Manage payees"),
     CHOOSE_CATEGORY("Choose category"),
-    SYNC_CENTER("Sync center"),
+    SYNC_CENTER("Sync Center"),
     CONFLICT_INBOX("Needs review"),
     CONFLICT_REVIEW("Review versions"),
-    UNCERTAIN_WRITE("Status unknown"),
+    UNCERTAIN_WRITE("Review change"),
     SETTINGS("Settings"),
     APPEARANCE("Appearance"),
     BUDGET_PREFERENCES("Budget preferences"),
@@ -247,6 +249,12 @@ internal data class TransactionItem(
     val matched: Boolean? = null,
     val isTransfer: Boolean = false,
     val isSplitParent: Boolean = false,
+)
+
+internal data class AccountActivitySnapshot(
+    val transactions: List<TransactionItem>,
+    val offset: Int,
+    val hasMore: Boolean,
 )
 
 internal data class MerchantIconNotice(
@@ -369,6 +377,12 @@ internal suspend fun loadMerchantIconCatalog(): MerchantIconCatalog {
 }
 
 internal fun AppState.formatCurrency(minorUnits: Long): String = formatCurrency(minorUnits, budgetDisplaySettings)
+
+internal val AppState.currencyFractionDigitsForDisplay: Int
+    get() =
+        budgetDisplaySettings?.let { settings ->
+            if (settings.hideFraction) 0 else settings.currencyFractionDigits
+        } ?: 2
 
 internal fun AppState.formatAmount(minorUnits: Long): String = formatAmount(minorUnits, budgetDisplaySettings)
 
@@ -770,6 +784,7 @@ internal data class AppNavigation(
     val selectTab: (AppRoute) -> Unit,
     val back: () -> Unit,
     val backToList: () -> Unit,
+    val selectTabRoot: (AppRoute) -> Unit = selectTab,
 )
 
 internal enum class BackRequestDisposition {
@@ -782,11 +797,31 @@ internal fun shouldRenderRouteHeader(
     route: AppRoute,
     hasStationaryTabShell: Boolean,
 ): Boolean =
-    route != AppRoute.NOTIFICATION_ONBOARDING &&
-        (hasStationaryTabShell || route == AppRoute.FIRST_SYNC)
+    route !in
+        setOf(
+            AppRoute.WELCOME,
+            AppRoute.SERVER_ADDRESS,
+            AppRoute.SIGN_IN,
+            AppRoute.BUDGET_CHOOSER,
+            AppRoute.BUDGET_UNLOCK,
+            AppRoute.FIRST_SYNC,
+            AppRoute.NOTIFICATION_ONBOARDING,
+            AppRoute.SETUP_COMPLETE,
+        ) &&
+        hasStationaryTabShell
 
 internal fun shouldRenderStandaloneRouteHeader(route: AppRoute): Boolean =
-    route != AppRoute.NOTIFICATION_ONBOARDING && route != AppRoute.FIRST_SYNC
+    route !in
+        setOf(
+            AppRoute.WELCOME,
+            AppRoute.SERVER_ADDRESS,
+            AppRoute.SIGN_IN,
+            AppRoute.BUDGET_CHOOSER,
+            AppRoute.BUDGET_UNLOCK,
+            AppRoute.FIRST_SYNC,
+            AppRoute.NOTIFICATION_ONBOARDING,
+            AppRoute.SETUP_COMPLETE,
+        )
 
 internal fun backRequestDisposition(
     routeTransitionInputBlocked: Boolean,
@@ -882,6 +917,25 @@ internal fun selectAppTabNavigation(
             }
         }
     return AppTabSelection(nextBackStack, encodeAppTabBackStacks(tabStacks))
+}
+
+internal fun selectAppTabRootNavigation(
+    currentBackStack: List<AppRouteEntry>,
+    savedTabBackStacks: String,
+    selectedTab: AppRoute,
+    newRouteEntry: (AppRoute) -> AppRouteEntry,
+): AppTabSelection {
+    require(selectedTab.isTab())
+    val tabStacks = decodeAppTabBackStacks(savedTabBackStacks).toMutableMap()
+    val activeTab = currentBackStack.lastOrNull { it.route.isTab() }?.route
+    if (activeTab != null && activeTab != selectedTab) tabStacks[activeTab] = currentBackStack
+    tabStacks.remove(selectedTab)
+    val rootBackStack =
+        buildList {
+            if (selectedTab != AppRoute.BUDGET) add(newRouteEntry(AppRoute.BUDGET))
+            add(newRouteEntry(selectedTab))
+        }
+    return AppTabSelection(rootBackStack, encodeAppTabBackStacks(tabStacks))
 }
 
 internal val appRouteStackSaver =

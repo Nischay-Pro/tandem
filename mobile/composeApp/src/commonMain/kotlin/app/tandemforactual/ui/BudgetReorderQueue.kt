@@ -53,7 +53,21 @@ internal fun budgetMutationFailureMessage(errorCode: String?): String =
         "operation_rejected" -> "Actual rejected this change earlier. Refresh the budget, then try again."
         "operation_result_unavailable" ->
             "Actual saved this change, but Tandem hasn’t refreshed the budget. Sync the budget to update this device."
+        "invalid_request" ->
+            "Tandem rejected this budget change because one or more details did not pass validation. Refresh the budget and check Actual before trying again."
         else -> "Tandem received an unexpected response. Refresh the budget and check Actual before deciding what to do with this change."
+    }
+
+internal fun budgetMutationFailureMessage(
+    errorCode: String?,
+    kind: BudgetReorderKind?,
+    itemName: String?,
+): String =
+    if (errorCode == "invalid_request" && kind == BudgetReorderKind.SET_CATEGORY_AMOUNT) {
+        val categoryName = itemName?.takeIf(String::isNotBlank) ?: "this category"
+        "Tandem searched only hidden categories, treated $categoryName as missing, and stopped before assigning the amount in Actual."
+    } else {
+        budgetMutationFailureMessage(errorCode)
     }
 
 internal fun budgetMutationStatusLabel(status: String): String =

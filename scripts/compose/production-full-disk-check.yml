@@ -1,7 +1,7 @@
 services:
   tandem-api:
-    environment:
-      ACTUAL_SERVER_URL: http://127.0.0.1:1
+    volumes:
+      - tandem-actual-workspace:/data/actual-api
 
 volumes:
   tandem-postgres-data:

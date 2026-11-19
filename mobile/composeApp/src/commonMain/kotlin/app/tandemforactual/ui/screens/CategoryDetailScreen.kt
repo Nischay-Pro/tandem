@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.DropdownMenu
 import androidx.compose.material.DropdownMenuItem
@@ -39,8 +38,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.BodyText
@@ -70,6 +67,7 @@ import com.composables.icons.lucide.Minus
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Receipt
+import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.WalletCards
@@ -243,9 +241,18 @@ internal fun CategoryDetailScreen(
                                 tint = tandemPalette.accent,
                             )
                         }
-                        Text("Assigned", modifier = Modifier.weight(1f), color = tandemPalette.text, fontSize = TandemTypography.body)
                         Text(
-                            state.formatCurrency(category.assignedMinor),
+                            "Assigned",
+                            modifier = Modifier.weight(1f),
+                            color = tandemPalette.text,
+                            fontSize = TandemTypography.body,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            app.tandemforactual.ui.components.amountAnnotatedString(
+                                state.formatCurrency(category.assignedMinor),
+                                state.currencyFractionDigitsForDisplay,
+                            ),
                             color = tandemPalette.text,
                             fontSize = TandemTypography.compactBody,
                         )
@@ -273,6 +280,7 @@ internal fun CategoryDetailScreen(
                         "Unused money rolls forward",
                         checked = category.carryover,
                         enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                        leadingIcon = Lucide.RefreshCw,
                     ) { enabled ->
                         scope.launch {
                             mobileSession.setBudgetCategoryCarryover(
@@ -329,6 +337,8 @@ internal fun CategoryDetailScreen(
     ) {
         if (category != null) {
             val parsedAmount = state.parseAmountMinorUnits(assignedAmountDraft)
+            val canSaveAssignedAmount =
+                parsedAmount != null && parsedAmount >= 0 && parsedAmount != category.assignedMinor
             SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 460.dp).padding(horizontal = 16.dp)) {
                 Column(
                     Modifier.fillMaxWidth().padding(TandemSpacing.large),
@@ -341,6 +351,7 @@ internal fun CategoryDetailScreen(
                             modifier = Modifier.weight(1f),
                             color = tandemPalette.text,
                             fontSize = TandemTypography.sectionTitle,
+                            fontFamily = tandemAlloFamily(),
                             fontWeight = FontWeight.Bold,
                         )
                         TandemIconButton(
@@ -352,16 +363,12 @@ internal fun CategoryDetailScreen(
                         ) { showAssignedAmountDialog = false }
                     }
                     Text("${category.name} · ${state.selectedMonth}", color = tandemPalette.muted, fontSize = TandemTypography.caption)
-                    TextFieldCard(
-                        "Amount",
-                        assignedAmountDraft,
-                        { assignedAmountDraft = it },
-                        TextFieldOptions(
-                            placeholder = state.formatAmount(0),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            textAlign = TextAlign.Center,
-                            large = true,
-                        ),
+                    MoneyAmountInput(
+                        label = "Amount",
+                        value = assignedAmountDraft,
+                        placeholder = state.formatAmount(0),
+                        onValueChange = { assignedAmountDraft = it },
+                        fractionDigits = state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
                     )
                     budgetActionFeedbackMessage(mobileSession)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
@@ -376,8 +383,7 @@ internal fun CategoryDetailScreen(
                             TandemActionButtonTone.PRIMARY,
                             Modifier.weight(1f),
                             icon = Lucide.Check,
-                            enabled =
-                                !state.readOnlyMode && !mobileSession.isPerformingBudgetAction && parsedAmount != null && parsedAmount >= 0,
+                            enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction && canSaveAssignedAmount,
                             loading = mobileSession.isPerformingBudgetAction,
                         ) {
                             scope.launch {
@@ -418,6 +424,7 @@ internal fun CategoryDetailScreen(
                             modifier = Modifier.weight(1f),
                             color = tandemPalette.text,
                             fontSize = TandemTypography.sectionTitle,
+                            fontFamily = tandemAlloFamily(),
                             fontWeight = FontWeight.Bold,
                         )
                         TandemIconButton(
@@ -457,16 +464,12 @@ internal fun CategoryDetailScreen(
                             }
                         }
                     }
-                    TextFieldCard(
-                        "Amount",
-                        moveMoneyAmountDraft,
-                        { moveMoneyAmountDraft = it },
-                        TextFieldOptions(
-                            placeholder = state.formatAmount(0),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            textAlign = TextAlign.Center,
-                            large = true,
-                        ),
+                    MoneyAmountInput(
+                        label = "Amount",
+                        value = moveMoneyAmountDraft,
+                        placeholder = state.formatAmount(0),
+                        onValueChange = { moveMoneyAmountDraft = it },
+                        fractionDigits = state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
                     )
                     budgetActionFeedbackMessage(mobileSession)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
@@ -538,6 +541,7 @@ internal fun CategoryDetailScreen(
                             modifier = Modifier.weight(1f),
                             color = tandemPalette.text,
                             fontSize = TandemTypography.sectionTitle,
+                            fontFamily = tandemAlloFamily(),
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -717,6 +721,7 @@ internal fun CategoryDetailScreen(
                                 "Delete category",
                                 color = tandemPalette.text,
                                 fontSize = TandemTypography.sectionTitle,
+                                fontFamily = tandemAlloFamily(),
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -876,6 +881,16 @@ internal fun openGeneralActivitySearch(
     state.activitySearchFocusRequest += 1
     state.activitySearchFilters = emptyList()
     navigation.open(AppRoute.ACTIVITY_SEARCH)
+}
+
+internal fun openRecentActivity(
+    state: AppState,
+    navigation: AppNavigation,
+) {
+    state.activitySearchQuery = ""
+    state.activitySearchFilters = emptyList()
+    state.activitySearchResultCache = null
+    navigation.selectTabRoot(AppRoute.ACTIVITY)
 }
 
 internal fun openReportCategoryActivity(

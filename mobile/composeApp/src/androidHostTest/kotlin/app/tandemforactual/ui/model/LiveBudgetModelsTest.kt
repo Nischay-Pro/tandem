@@ -13,6 +13,17 @@ import kotlin.test.assertTrue
 
 class LiveBudgetModelsTest {
     @Test
+    fun readsCarryoverFromTheRefreshedMonthSnapshot() {
+        val monthJson =
+            """{"categoryGroups":[{"id":"fashion","categories":[{"id":"accessories","carryover":true},{"id":"clothing","carryover":false}]}]}"""
+
+        assertEquals(true, budgetMonthCategoryCarryover(monthJson, "accessories"))
+        assertEquals(false, budgetMonthCategoryCarryover(monthJson, "clothing"))
+        assertNull(budgetMonthCategoryCarryover(monthJson, "missing"))
+        assertNull(budgetMonthCategoryCarryover("not json", "accessories"))
+    }
+
+    @Test
     fun mapsLiveAccountBalanceAndOffBudgetState() {
         val accounts =
             liveAccountSummaries(

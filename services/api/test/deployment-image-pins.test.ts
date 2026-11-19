@@ -16,15 +16,14 @@ describe("deployment image digests", () => {
       { file: "../Dockerfile", images: [nodeImage] },
       { file: "../Dockerfile.dev", images: [nodeImage] },
       {
-        file: "../../../deploy/compose/production.yml",
+        file: "../../../deploy/docker-compose.yml",
         images: [postgresImage],
       },
       {
         file: "../../../docker-compose.dev.yml",
         images: [postgresImage, actualImage],
       },
-      { file: "../../../deploy/backup.sh", images: [nodeImage] },
-      { file: "../../../deploy/restore.sh", images: [nodeImage] },
+      { file: "../../../deploy/tandem-data.py", images: [nodeImage] },
       {
         file: "../../../scripts/test-dockerignore-secrets.sh",
         images: [nodeImage],
@@ -42,15 +41,17 @@ describe("deployment image digests", () => {
 
   it("keeps production pull-only and source builds in the disposable check overlay", async () => {
     const production = await readFile(
-      new URL("../../../deploy/compose/production.yml", import.meta.url),
+      new URL("../../../deploy/docker-compose.yml", import.meta.url),
       "utf8",
     );
     const checkOverlay = await readFile(
-      new URL("../../../deploy/compose/production-check.yml", import.meta.url),
+      new URL("../../../scripts/compose/production-check.yml", import.meta.url),
       "utf8",
     );
 
-    expect(production).toContain("image: ${TANDEM_API_IMAGE:");
+    expect(production).toContain(
+      "image: ghcr.io/nischay-pro/tandem-api:${TANDEM_API_TAG:-latest-nightly}",
+    );
     expect(production).not.toMatch(/^\s+build:/m);
     expect(checkOverlay).toContain("dockerfile: services/api/Dockerfile");
   });

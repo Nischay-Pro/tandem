@@ -272,7 +272,7 @@ export function checkVersions(repoRoot = root) {
   const packageJson = JSON.parse(get("package.json"));
   const apiPackage = JSON.parse(get("services/api/package.json"));
   const catalog = get("mobile/gradle/libs.versions.toml");
-  const production = get("deploy/compose/production.yml");
+  const production = get("deploy/docker-compose.yml");
   const compatibility = get("docker-compose.dev.yml");
   const action = get(".github/actions/setup-mobile-build/action.yml");
   const appBuild = get("mobile/androidApp/build.gradle.kts");
@@ -289,7 +289,7 @@ export function checkVersions(repoRoot = root) {
     node: getSource("mise.toml", get("mise.toml"), /^node\s*=\s*"([^"]+)"/m),
     pnpm: packageJson.packageManager?.match(/^pnpm@(.+)$/)?.[1],
     postgres: getSource(
-      "deploy/compose/production.yml",
+      "deploy/docker-compose.yml",
       production,
       /^\s+image:\s+postgres:([\d.]+)-/m,
     ),
