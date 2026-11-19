@@ -377,6 +377,15 @@ jobs:
             "$RUNNER_TEMP/nightly-release/Tandem-$NIGHTLY_VERSION_NAME-$SOURCE_SHA.apk" \
             "$RUNNER_TEMP/nightly-release/Tandem-$NIGHTLY_VERSION_NAME-$SOURCE_SHA.apk.sha256" \
             --clobber
+          # The release always offers only the current build: remove assets left
+          # by earlier nightlies, whose file names include their own version.
+          current_apk="Tandem-$NIGHTLY_VERSION_NAME-$SOURCE_SHA.apk"
+          gh release view nightly --json assets --jq '.assets[].name' |
+            while IFS= read -r asset; do
+              if [[ "$asset" != "$current_apk" && "$asset" != "$current_apk.sha256" ]]; then
+                gh release delete-asset nightly "$asset" --yes
+              fi
+            done
 
       - name: Upload installable Android APK
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
