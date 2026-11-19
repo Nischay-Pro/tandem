@@ -87,7 +87,7 @@ class OnboardingWordingTest {
         composeTestRule.onNodeWithText("Stay in the loop.").assertExists()
         composeTestRule.onNodeWithText("Sync issues").assertExists()
         composeTestRule.onNodeWithText("Know when your Actual server needs attention.").assertExists()
-        composeTestRule.onNodeWithText("Conflicts").assertExists()
+        composeTestRule.onNodeWithText("Needs review").assertExists()
         val cardBounds = composeTestRule.onNodeWithTag("notification-onboarding-info").fetchSemanticsNode().boundsInRoot
         val messageBounds =
             composeTestRule

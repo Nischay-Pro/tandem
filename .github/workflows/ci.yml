@@ -221,7 +221,10 @@ jobs:
 
       - name: Run Android release lint
         working-directory: mobile
-        run: ./gradlew :androidApp:lintRelease
+        run: |
+          ./gradlew \
+            -Dorg.gradle.jvmargs="-Xmx1024m -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8" \
+            :androidApp:lintRelease
 
   android_app_release:
     name: Android app · release assembly
