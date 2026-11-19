@@ -820,6 +820,34 @@ class TandemApiClient(
         }
     }
 
+    /**
+     * Saves reordered category groups, categories, and accounts in one request.
+     * [order] holds the optional `categoryGroups`, `categories`, and `accounts` lists,
+     * each with the `baseOrder` the device started from and the `order` the user chose.
+     */
+    suspend fun setBudgetOrder(
+        budgetId: String,
+        order: JsonObject,
+        encryptionPassword: String?,
+        idempotencyKey: String,
+    ) {
+        withMaintenanceOperation(
+            maintenanceSignature("order", budgetId, order.toString()),
+            idempotencyKey,
+        ) { operationKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.setBudgetOrder(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = operationKey,
+                        budgetId = budgetId,
+                        body = order.toMap(),
+                    ),
+                )
+            }
+        }
+    }
+
     suspend fun createBudgetPayee(
         budgetId: String,
         name: String,

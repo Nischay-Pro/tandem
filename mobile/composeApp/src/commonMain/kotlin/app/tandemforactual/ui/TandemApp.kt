@@ -35,6 +35,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -77,6 +78,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
@@ -98,6 +101,8 @@ fun TandemApp(
     onToggleNotificationPermission: ((Boolean) -> Unit)? = null,
     onStartupComplete: (() -> Unit)? = null,
     appResumeEvents: Flow<Unit> = emptyFlow(),
+    /** Whether the app is on screen; periodic sync runs only then. */
+    appInForeground: StateFlow<Boolean> = MutableStateFlow(true),
     networkRestoredEvents: Flow<Unit> = emptyFlow(),
 ) {
     var accessibilitySettingsRevision by remember { mutableStateOf(0) }
@@ -765,6 +770,35 @@ fun TandemApp(
         }
         previousRoute = route
     }
+    val isAppInForeground by appInForeground.collectAsState()
+    LaunchedEffect(
+        isAppInForeground,
+        state.syncOnOpen,
+        mobileSession.isAuthenticated,
+        state.selectedBudgetId,
+        state.selectedBudgetEncrypted,
+        state.encryptedPassword,
+    ) {
+        if (
+            !isAppInForeground ||
+            !state.syncOnOpen ||
+            !mobileSession.isAuthenticated ||
+            state.selectedBudgetId.isBlank() ||
+            (state.selectedBudgetEncrypted && state.encryptedPassword.isBlank())
+        ) {
+            return@LaunchedEffect
+        }
+        // Pick up changes from Actual and other devices while the budget is open.
+        while (true) {
+            delay(BUDGET_PERIODIC_SYNC_INTERVAL_MS)
+            if (!mobileSession.isSyncing && !mobileSession.isPerformingBudgetAction) {
+                mobileSession.synchronize(
+                    state.selectedBudgetId,
+                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                )
+            }
+        }
+    }
     LaunchedEffect(
         state.selectedBudgetId,
         mobileSession.budgetDisplaySettingsBudgetId,
@@ -1004,6 +1038,8 @@ fun TandemApp(
         navigation.open(AppRoute.BUDGET_UNLOCK)
     }
     val syncNow: () -> Unit = {
+        // Send reorders held on the device instead of waiting for the next periodic flush.
+        mobileSession.requestBudgetOrderFlush()
         if (!mobileSession.isSyncing && state.selectedBudgetId.isNotBlank()) {
             coroutineScope.launch {
                 mobileSession.synchronize(
@@ -1641,3 +1677,6 @@ internal fun AppRoute.showsBottomNavigation(): Boolean =
     }
 
 internal fun AppRoute.isReportDetail(): Boolean = this == AppRoute.REPORT_DETAIL
+
+/** How often an open budget pulls changes from the server while the app is on screen. */
+internal const val BUDGET_PERIODIC_SYNC_INTERVAL_MS = 60_000L

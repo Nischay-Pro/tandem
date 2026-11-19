@@ -3,6 +3,7 @@ import type { BudgetLockPort } from "./transaction-reconciler.js";
 import { createAccountOperations } from "./budget-maintenance-account-api.js";
 import { createBankSyncOperations } from "./budget-maintenance-bank-sync-api.js";
 import { createCategoryOperations } from "./budget-maintenance-category-api.js";
+import { createOrderOperations } from "./budget-maintenance-order-api.js";
 import { createPayeeOperations } from "./budget-maintenance-payee-api.js";
 import { createPlanningOperations } from "./budget-maintenance-planning-api.js";
 import { createScheduleOperations } from "./budget-maintenance-schedule-api.js";
@@ -23,6 +24,7 @@ export function createBudgetMaintenanceApi(
     ...createBankSyncOperations(dependencies),
     ...createAccountOperations(dependencies),
     ...createCategoryOperations(dependencies),
+    ...createOrderOperations(dependencies),
     ...createPayeeOperations(dependencies),
     ...createPlanningOperations(dependencies),
     ...createScheduleOperations(dependencies),

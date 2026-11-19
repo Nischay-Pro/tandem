@@ -63,6 +63,7 @@ async function createApi(
     renameAccount: vi.fn(async () => undefined),
     reopenAccount: vi.fn(async () => undefined),
     moveAccount: vi.fn(async () => undefined),
+    setOrders: vi.fn(async () => ({ categoryGroups: ["group-2", "group-1"] })),
     renameCategory: vi.fn(async () => undefined),
     deleteCategory: vi.fn(async () => undefined),
     renameSchedule: vi.fn(async () => undefined),
@@ -209,6 +210,16 @@ const maintenanceRouteCases = (routeBudgetId = budgetId) => [
   {
     method: "POST" as const,
     url: `/api/v1/budgets/${routeBudgetId}/accounts/account-1/reopen`,
+  },
+  {
+    method: "PUT" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/order`,
+    payload: {
+      categoryGroups: {
+        baseOrder: ["group-1", "group-2"],
+        order: ["group-2", "group-1"],
+      },
+    },
   },
   {
     method: "POST" as const,
@@ -2299,5 +2310,135 @@ describe("budget maintenance routes", () => {
     expect(JSON.stringify(events)).not.toContain("secret");
     auditLog.mockRestore();
     await fake.app.close();
+  });
+
+  describe("batched reorders", () => {
+    const orderPayload = {
+      categoryGroups: {
+        baseOrder: ["group-1", "group-2"],
+        order: ["group-2", "group-1"],
+      },
+      categories: [
+        {
+          groupId: "group-1",
+          baseOrder: ["category-1", "category-2"],
+          order: ["category-2", "category-1"],
+        },
+      ],
+      accounts: {
+        baseOrder: ["account-1", "account-2"],
+        order: ["account-2", "account-1"],
+      },
+    };
+
+    it("saves every reordered list in one request and returns the saved orders", async () => {
+      const fake = await createApi();
+      const response = await fake.app.inject({
+        method: "PUT",
+        url: `/api/v1/budgets/${budgetId}/order`,
+        headers: testHeaders(),
+        payload: orderPayload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        status: "ok",
+        categoryGroups: ["group-2", "group-1"],
+      });
+      expect(fake.budgetMaintenanceApi.setOrders).toHaveBeenCalledOnce();
+      expect(fake.budgetMaintenanceApi.setOrders).toHaveBeenCalledWith(
+        budgetId,
+        orderPayload,
+        undefined,
+      );
+      await fake.app.close();
+    });
+
+    it("replays a retried batch without applying it again", async () => {
+      const fake = await createApi();
+      const headers = testHeaders();
+      const first = await fake.app.inject({
+        method: "PUT",
+        url: `/api/v1/budgets/${budgetId}/order`,
+        headers,
+        payload: orderPayload,
+      });
+      const retry = await fake.app.inject({
+        method: "PUT",
+        url: `/api/v1/budgets/${budgetId}/order`,
+        headers,
+        payload: orderPayload,
+      });
+
+      expect(retry.statusCode).toBe(200);
+      expect(retry.json()).toEqual(first.json());
+      expect(fake.budgetMaintenanceApi.setOrders).toHaveBeenCalledOnce();
+      await fake.app.close();
+    });
+
+    it("rejects empty batches, duplicate items, and incomplete lists before touching Actual", async () => {
+      const fake = await createApi();
+      for (const payload of [
+        {},
+        {
+          categoryGroups: {
+            baseOrder: ["group-1", "group-1"],
+            order: ["group-1", "group-1"],
+          },
+        },
+        { accounts: { baseOrder: ["account-1"] } },
+      ]) {
+        const response = await fake.app.inject({
+          method: "PUT",
+          url: `/api/v1/budgets/${budgetId}/order`,
+          headers: testHeaders(),
+          payload,
+        });
+        expect(response.statusCode, JSON.stringify(payload)).toBe(400);
+      }
+      expect(fake.budgetMaintenanceApi.setOrders).not.toHaveBeenCalled();
+      await fake.app.close();
+    });
+
+    it("reports a safe failure when Actual cannot save the orders", async () => {
+      const fake = await createApi();
+      vi.mocked(fake.budgetMaintenanceApi.setOrders).mockRejectedValueOnce(
+        new Error("Actual did not save the requested order"),
+      );
+      const response = await fake.app.inject({
+        method: "PUT",
+        url: `/api/v1/budgets/${budgetId}/order`,
+        headers: testHeaders(),
+        payload: orderPayload,
+      });
+      expect(response.statusCode).toBe(502);
+      expect(JSON.stringify(response.json())).not.toContain(
+        "did not save the requested order",
+      );
+      await fake.app.close();
+    });
+
+    it("returns Actual's validation message when the orders cannot be merged", async () => {
+      const fake = await createApi();
+      vi.mocked(fake.budgetMaintenanceApi.setOrders).mockRejectedValueOnce(
+        new BudgetMaintenanceInputError(
+          "The order must contain the same items as the base order",
+        ),
+      );
+      const response = await fake.app.inject({
+        method: "PUT",
+        url: `/api/v1/budgets/${budgetId}/order`,
+        headers: testHeaders(),
+        payload: orderPayload,
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({
+        error: {
+          code: "invalid_request",
+          message: "The order must contain the same items as the base order",
+        },
+      });
+      await fake.app.close();
+    });
   });
 });

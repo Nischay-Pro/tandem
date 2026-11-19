@@ -436,6 +436,10 @@ internal class TandemMobileSession(
             persistBudgetReorderQueue()
         }
     private var budgetReorderRetrySignal by mutableStateOf(0)
+    private var budgetOrderFlushSignal by mutableStateOf(0)
+
+    /** When the oldest unsent reorder draft was queued; drafts are flushed [BUDGET_ORDER_FLUSH_INTERVAL_MS] later. */
+    private var orderDraftsHeldSinceEpochMs: Long? = null
     private var scheduleActionRetrySignal by mutableStateOf(0)
     private val scheduleActionQueueMutex = Mutex()
     private val scheduleActionEncryptionPasswords = mutableMapOf<String, String>()
@@ -535,7 +539,7 @@ internal class TandemMobileSession(
                 return@withLock true
             }
             return@withLock try {
-                localRepository.recoverInterruptedWrites()
+                localRepository.recoverInterruptedScheduleActions()
                 pendingScheduleActions = localRepository.readScheduleActionQueue()
                 scheduleActionQueueLoaded = true
                 true
@@ -718,6 +722,9 @@ internal class TandemMobileSession(
             }
 
             try {
+                // Runs once per session, before this queue sends anything, so any `sending` row
+                // left behind belongs to a request from an earlier process.
+                repository?.recoverInterruptedBudgetMutations()
                 val pendingBeforeRestore = budgetReorderQueueState.moves
                 val restoredFromRoom = persistence.read()
                 val hasStoredRoomQueue = restoredFromRoom.items.isNotEmpty() || restoredFromRoom.metadataJson != null
@@ -1295,6 +1302,11 @@ internal class TandemMobileSession(
     fun budgetMutationsWaitingForConnection(budgetId: String): Boolean =
         budgetReorderQueue.waitingForConnection && budgetReorderQueue.moves.firstOrNull()?.budgetId == budgetId
 
+    /**
+     * Queues a reorder. With [baseOrder] (the server order the screen showed before
+     * this drop), the change is held on the device and sent with other reorders at
+     * the next flush; see [requestBudgetOrderFlush].
+     */
     suspend fun enqueueBudgetReorder(
         budgetId: String,
         scopeId: String,
@@ -1303,12 +1315,42 @@ internal class TandemMobileSession(
         targetId: String?,
         desiredOrder: List<String>,
         encryptionPassword: String?,
+        baseOrder: List<String> = emptyList(),
     ): Boolean =
         persistBudgetReorderQueueMutation { queue ->
-            queue.enqueueIfMissing(
-                QueuedBudgetReorder(budgetId, scopeId, kind, itemId, targetId, desiredOrder, encryptionPassword),
-            )
+            val move = QueuedBudgetReorder(budgetId, scopeId, kind, itemId, targetId, desiredOrder, encryptionPassword, baseOrder)
+            if (move.isOrderDraft()) queue.enqueueOrderDraft(move) else queue.enqueueIfMissing(move)
+        }.also { queued -> if (queued) noteOrderDraftQueued() }
+
+    /** Sends held reorders now instead of waiting for the next periodic flush. */
+    fun requestBudgetOrderFlush() {
+        budgetOrderFlushSignal += 1
+    }
+
+    private fun noteOrderDraftQueued() {
+        if (orderDraftsHeldSinceEpochMs == null && budgetReorderQueue.hasOrderDraftsAtHead()) {
+            orderDraftsHeldSinceEpochMs = nowEpochMillis()
         }
+    }
+
+    /**
+     * Waits until held reorder drafts at the head of the queue should be sent: after
+     * [BUDGET_ORDER_FLUSH_INTERVAL_MS], on [requestBudgetOrderFlush], or as soon as
+     * another kind of change is queued behind them.
+     */
+    private suspend fun awaitBudgetOrderFlush() {
+        val heldSince = orderDraftsHeldSinceEpochMs ?: nowEpochMillis().also { orderDraftsHeldSinceEpochMs = it }
+        val observedFlushSignal = budgetOrderFlushSignal
+        val remaining = (heldSince + BUDGET_ORDER_FLUSH_INTERVAL_MS - nowEpochMillis()).coerceAtLeast(0)
+        withTimeoutOrNull(remaining) {
+            snapshotFlow {
+                isSigningOut ||
+                    budgetOrderFlushSignal != observedFlushSignal ||
+                    !budgetReorderQueue.hasOrderDraftsAtHead() ||
+                    budgetReorderQueue.hasWorkBehindOrderDrafts()
+            }.first { it }
+        }
+    }
 
     private suspend fun enqueueOfflineBudgetMutation(
         budgetId: String,
@@ -1688,6 +1730,26 @@ internal class TandemMobileSession(
             var request = snapshotFlow { budgetReorderQueue.moves.firstOrNull() }.first { it != null } ?: continue
             snapshotFlow { isCorrectingBudgetMutation }.first { !it }
             if (budgetReorderQueue.moves.firstOrNull() != request) continue
+            if (request.isOrderDraft()) {
+                // Reorders wait on the device and go out together in one request.
+                awaitBudgetOrderFlush()
+                if (isSigningOut) return
+                if (!budgetReorderQueue.hasOrderDraftsAtHead()) continue
+                snapshotFlow { isPersistingBudgetMutation }.first { !it }
+                try {
+                    budgetQueuePersistenceMutex.withLock {
+                        val folded = budgetReorderQueueState.foldOrderDrafts()
+                        persistBudgetReorderQueueNow(folded)
+                        budgetReorderQueueState = folded
+                    }
+                    orderDraftsHeldSinceEpochMs = null
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    delay(1_000)
+                }
+                continue
+            }
             persistCurrentBudgetReorderQueue()
             if (request.requiresEncryptionPassword && request.encryptionPassword.isNullOrBlank()) {
                 observedRetrySignal = snapshotFlow { budgetReorderRetrySignal }.first { it != observedRetrySignal }
@@ -2035,6 +2097,19 @@ internal class TandemMobileSession(
                                         request.operationId,
                                     )
                                 }
+                            BudgetReorderKind.SET_ORDER -> {
+                                val order =
+                                    request.requirePayload()["order"] as? JsonObject
+                                        ?: throw IllegalStateException("A saved reorder could not be read.")
+                                performBudgetAction(request.budgetId, request.encryptionPassword, "Couldn’t save the new order.", null) {
+                                    apiClient.setBudgetOrder(
+                                        request.budgetId,
+                                        order,
+                                        request.encryptionPassword,
+                                        request.operationId,
+                                    )
+                                }
+                            }
                             BudgetReorderKind.MOVE_ACCOUNT -> {
                                 val payload = request.requirePayload()
                                 performBudgetAction(request.budgetId, request.encryptionPassword, "Couldn’t reorder this account.", null) {
@@ -3210,6 +3285,7 @@ internal class TandemMobileSession(
         targetAccountId: String?,
         encryptionPassword: String?,
         desiredOrder: List<String> = emptyList(),
+        baseOrder: List<String> = emptyList(),
     ): Boolean {
         val payload = buildJsonObject { put("targetAccountId", targetAccountId?.let(::JsonPrimitive) ?: JsonNull) }
         if (desiredOrder.isEmpty()) {
@@ -3228,7 +3304,7 @@ internal class TandemMobileSession(
             return false
         }
         return persistBudgetReorderQueueMutation { queue ->
-            queue.enqueueIfMissing(
+            val move =
                 QueuedBudgetReorder(
                     budgetId = budgetId,
                     scopeId = "accounts",
@@ -3237,10 +3313,11 @@ internal class TandemMobileSession(
                     targetId = targetAccountId,
                     desiredOrder = desiredOrder,
                     encryptionPassword = encryptionPassword,
+                    baseOrder = baseOrder,
                     payloadJson = payload.toString(),
-                ),
-            )
-        }
+                )
+            if (move.isOrderDraft()) queue.enqueueOrderDraft(move) else queue.enqueueIfMissing(move)
+        }.also { queued -> if (queued) noteOrderDraftQueued() }
     }
 
     suspend fun markTransactionsReconciled(
@@ -5255,6 +5332,9 @@ internal fun budgetApiErrorMessage(
 private const val ACTIVITY_TRANSACTION_PAGE_SIZE = 50
 private const val ACTIVITY_TRANSACTION_REFRESH_LIMIT = 200
 private const val SCHEDULE_ACTION_RETRY_INTERVAL_MILLIS = 30_000L
+
+/** How long reorders wait on the device before they are sent together, unless Sync now is tapped. */
+internal const val BUDGET_ORDER_FLUSH_INTERVAL_MS = 60_000L
 private const val BUDGET_QUEUE_RESTORE_ERROR = "Couldn’t load saved category changes. Try again before editing categories."
 private const val BUDGET_CACHE_OWNER_KEY = "internal:budget-cache-owner-v1"
 

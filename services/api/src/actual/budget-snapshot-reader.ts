@@ -56,6 +56,10 @@ export class ActualBudgetSnapshotReader implements BudgetSnapshotReader {
     }
   }
 
+  hasUnreadWrites(budgetId: string): boolean {
+    return this.session.hasUnreadWrites?.(budgetId) ?? false;
+  }
+
   read(
     budgetId: string,
     encryptionPassword?: string,

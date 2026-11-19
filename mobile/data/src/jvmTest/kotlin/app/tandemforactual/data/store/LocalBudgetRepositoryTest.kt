@@ -518,6 +518,65 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
+    fun syncRecoveryLeavesInFlightQueueRequestsToTheirQueues() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                repository.applySnapshot(BUDGET, GENERATION, "c1", listOf(transaction()))
+                val mutation =
+                    LocalBudgetMutationOutboxItem(
+                        operationId = "budget-mutation-in-flight",
+                        budgetId = BUDGET,
+                        action = "CATEGORY",
+                        recordId = "category-moved",
+                        patchJson = """{"moves":[]}""",
+                        createdAtEpochMs = 100L,
+                    )
+                repository.replaceBudgetMutationQueue(listOf(mutation), """{"operationOrder":["${mutation.operationId}"]}""")
+                assertTrue(repository.beginBudgetMutation(mutation.operationId))
+                val scheduleAction =
+                    repository.enqueueScheduleAction(
+                        LocalScheduleActionOutboxItem(
+                            operationId = "schedule-in-flight",
+                            budgetId = BUDGET,
+                            scheduleId = "schedule-1",
+                            action = "skip",
+                            payloadJson = "{\"expectedNextDate\":\"2026-11-15\"}",
+                            createdAtEpochMs = 100L,
+                        ),
+                    )
+                assertTrue(repository.beginScheduleAction(scheduleAction.operationId))
+                repository.enqueueWrite(updateRequest())
+                assertNotNull(repository.claimNextWrite(BUDGET))
+
+                // A sync started while queue-owned requests are in flight must not reclassify them.
+                assertEquals(1, repository.recoverInterruptedSyncWrites())
+                assertEquals("sending", database.outboxDao().find(mutation.operationId)?.status)
+                assertEquals("sending", database.outboxDao().find(scheduleAction.operationId)?.status)
+                // The schedule queue recovers only its own rows after a restart.
+                assertEquals(1, repository.recoverInterruptedScheduleActions())
+                assertEquals("uncertain", database.outboxDao().find(scheduleAction.operationId)?.status)
+                assertEquals("sending", database.outboxDao().find(mutation.operationId)?.status)
+                assertEquals("uncertain", repository.readPendingWrites(BUDGET).single { it.recordType == "transaction" }.status)
+
+                // The reorder queue can still finish the request it owns.
+                assertEquals("committed", repository.completeBudgetMutation(mutation.operationId).status)
+
+                // After a real restart, the queue's own recovery marks a leftover send as uncertain.
+                val leftover = mutation.copy(operationId = "budget-mutation-leftover", createdAtEpochMs = 101L)
+                repository.replaceBudgetMutationQueue(listOf(leftover), """{"operationOrder":["${leftover.operationId}"]}""")
+                assertTrue(repository.beginBudgetMutation(leftover.operationId))
+                assertEquals(1, repository.recoverInterruptedBudgetMutations())
+                val recovered = assertNotNull(database.outboxDao().find(leftover.operationId))
+                assertEquals("uncertain", recovered.status)
+                assertEquals("process-restarted-during-send", recovered.lastErrorCode)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun budgetMutationOutboxRecoversAcrossRestartAndDiscardsSafelyWhenClockMovesBackwards() =
         runBlocking {
             val databaseFile = File.createTempFile("tandem-budget-mutations-", ".db")

@@ -171,6 +171,7 @@ internal fun CategoryGroupScreen(
                 itemTargetIdAfterMove(nextOrder, itemId),
                 nextOrder,
                 state.encryptedPassword.takeIf { it.isNotBlank() },
+                baseOrder = serverCategoryOrder,
             )
         }
     }
@@ -192,7 +193,7 @@ internal fun CategoryGroupScreen(
                     (body?.stringValue("group") ?: body?.stringValue("group_id")) == group?.id
             }
         }
-    val hiddenCategoryScopeId = "${group?.id.orEmpty()}::hidden"
+    val hiddenCategoryScopeId = "${group?.id.orEmpty()}$HIDDEN_CATEGORY_SCOPE_SUFFIX"
     val queuedHiddenCategoryMoves = mobileSession.budgetReorderMovesFor(state.selectedBudgetId, hiddenCategoryScopeId)
     val hiddenCategoryMoveStatus = mobileSession.budgetReorderStatus(state.selectedBudgetId, hiddenCategoryScopeId)
     val queuedHiddenCategoryOrder =
@@ -201,7 +202,8 @@ internal fun CategoryGroupScreen(
             hiddenCategoryMoveStatus,
             queuedHiddenCategoryMoves,
         )
-    val hiddenCategoryOrder = queuedHiddenCategoryOrder
+    val hiddenDrag = remember(state.selectedBudgetId, group?.id) { DragReorderState() }
+    val hiddenCategoryOrder = hiddenDrag.currentOrder(queuedHiddenCategoryOrder)
     val orderedHiddenCategoryRecords =
         remember(hiddenCategoryRecords, hiddenCategoryOrder) {
             val recordsById = hiddenCategoryRecords.associateBy { it.recordId }
@@ -294,15 +296,18 @@ internal fun CategoryGroupScreen(
                         dragReorder.finish()?.let { result ->
                             if (result.itemId == category.id && result.finalOrder != result.startingOrder) {
                                 scope.launch {
-                                    mobileSession.enqueueBudgetReorder(
-                                        state.selectedBudgetId,
-                                        categoryScopeId,
-                                        BudgetReorderKind.CATEGORY,
-                                        result.itemId,
-                                        itemTargetIdAfterMove(result.finalOrder, result.itemId),
-                                        result.finalOrder,
-                                        state.encryptedPassword.takeIf { it.isNotBlank() },
-                                    )
+                                    val saved =
+                                        mobileSession.enqueueBudgetReorder(
+                                            state.selectedBudgetId,
+                                            categoryScopeId,
+                                            BudgetReorderKind.CATEGORY,
+                                            result.itemId,
+                                            itemTargetIdAfterMove(result.finalOrder, result.itemId),
+                                            result.finalOrder,
+                                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                                            baseOrder = serverCategoryOrder,
+                                        )
+                                    if (!saved) dragReorder.releaseHeldDrop()
                                 }
                             }
                         }
@@ -440,6 +445,7 @@ internal fun CategoryGroupScreen(
                                         itemTargetIdAfterMove(nextOrder, hidden.recordId),
                                         nextOrder,
                                         state.encryptedPassword.takeIf { it.isNotBlank() },
+                                        baseOrder = hiddenCategoryRecords.map { it.recordId },
                                     )
                                 }
                             }
@@ -448,16 +454,61 @@ internal fun CategoryGroupScreen(
                                 saveHiddenOrder(reorderItemToIndex(hiddenCategoryOrder, hidden.recordId, hiddenIndex + direction))
                             }
 
-                            SurfaceCard {
+                            val hiddenDragEnabled = isLiveBudget && !state.readOnlyMode && orderedHiddenCategoryRecords.size > 1
+
+                            fun startHiddenDrag() {
+                                selectedCategoryOrderId = hidden.recordId
+                                mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, hiddenCategoryScopeId)
+                                mobileSession.clearBudgetActionMessage()
+                                hiddenDrag.start(hiddenCategoryOrder, hidden.recordId)
+                            }
+
+                            fun dragHiddenBy(delta: Float) {
+                                if (hiddenDrag.draggedItemId == hidden.recordId) hiddenDrag.dragBy(delta)
+                            }
+
+                            fun dropHiddenDrag() {
+                                val result = hiddenDrag.finish(queuedHiddenCategoryOrder) ?: return
+                                if (result.itemId != hidden.recordId || result.finalOrder == result.startingOrder) return
+                                scope.launch {
+                                    val saved =
+                                        mobileSession.enqueueBudgetReorder(
+                                            state.selectedBudgetId,
+                                            hiddenCategoryScopeId,
+                                            BudgetReorderKind.CATEGORY,
+                                            result.itemId,
+                                            itemTargetIdAfterMove(result.finalOrder, result.itemId),
+                                            result.finalOrder,
+                                            state.encryptedPassword.takeIf { it.isNotBlank() },
+                                            baseOrder = hiddenCategoryRecords.map { it.recordId },
+                                        )
+                                    if (!saved) hiddenDrag.releaseHeldDrop()
+                                }
+                            }
+
+                            SurfaceCard(
+                                modifier =
+                                    dragReorderItemModifier(
+                                        itemId = hidden.recordId,
+                                        dragState = hiddenDrag,
+                                        reduceMotion = tandemReduceMotion,
+                                        dragEnabled = hiddenDragEnabled,
+                                        onDragStarted = ::startHiddenDrag,
+                                        onDragBy = ::dragHiddenBy,
+                                        onDragStopped = ::dropHiddenDrag,
+                                    ),
+                            ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     ListRow(
                                         hidden.recordName() ?: "Hidden category",
                                         if (isReordering) null else "Hidden",
                                         leading = RowLeading.Icon(Lucide.EyeOff),
                                         options = ListRowOptions(showChevron = !isReordering),
+                                        // With drag enabled, a long press starts dragging (which also shows the controls).
                                         onLongClick =
                                             if (!state.readOnlyMode &&
-                                                !isReordering
+                                                !isReordering &&
+                                                !hiddenDragEnabled
                                             ) {
                                                 { selectedCategoryOrderId = hidden.recordId }
                                             } else {

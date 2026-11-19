@@ -360,6 +360,10 @@ export class ActualSession {
     );
   }
 
+  hasUnreadWrites(syncId: string): boolean {
+    return this.#dirtyBudgetSyncIds.has(syncId.trim());
+  }
+
   #markBudgetDirty(syncId: string): void {
     this.#dirtyBudgetSyncIds.add(syncId);
     this.#budgetWriteRevisions.set(

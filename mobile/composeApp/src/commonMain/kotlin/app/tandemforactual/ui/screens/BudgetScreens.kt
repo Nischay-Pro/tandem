@@ -247,20 +247,31 @@ internal fun BudgetScreen(
 
     fun saveGroupOrder(
         groupId: String,
-        nextOrder: List<String>,
+        requestedOrder: List<String>,
     ) {
+        // Actual always lists income groups after expense groups, so keep that on screen too.
+        val incomeGroupIds = groups.filter { it.isIncome }.mapTo(mutableSetOf()) { it.id }
+        val nextOrder = requestedOrder.filterNot { it in incomeGroupIds } + requestedOrder.filter { it in incomeGroupIds }
+        if (nextOrder == queuedGroupOrder) {
+            // Nothing changes (for example, Income dropped among expense groups).
+            groupDrag.releaseHeldDrop()
+            return
+        }
         scope.launch {
             mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
             mobileSession.clearBudgetActionMessage()
-            mobileSession.enqueueBudgetReorder(
-                state.selectedBudgetId,
-                BUDGET_GROUP_ORDER_SCOPE,
-                BudgetReorderKind.CATEGORY_GROUP,
-                groupId,
-                itemTargetIdAfterMove(nextOrder, groupId),
-                nextOrder,
-                state.encryptedPassword.takeIf { it.isNotBlank() },
-            )
+            val saved =
+                mobileSession.enqueueBudgetReorder(
+                    state.selectedBudgetId,
+                    BUDGET_GROUP_ORDER_SCOPE,
+                    BudgetReorderKind.CATEGORY_GROUP,
+                    groupId,
+                    itemTargetIdAfterMove(nextOrder, groupId),
+                    nextOrder,
+                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                    baseOrder = groups.map { it.id },
+                )
+            if (!saved) groupDrag.releaseHeldDrop()
         }
     }
 
@@ -788,15 +799,18 @@ internal fun BudgetScreen(
                                 budgetCategoryDrag.finish()?.let { result ->
                                     if (result.itemId == category.id && result.finalOrder != result.startingOrder) {
                                         scope.launch {
-                                            mobileSession.enqueueBudgetReorder(
-                                                state.selectedBudgetId,
-                                                group.id,
-                                                BudgetReorderKind.CATEGORY,
-                                                result.itemId,
-                                                itemTargetIdAfterMove(result.finalOrder, result.itemId),
-                                                result.finalOrder,
-                                                state.encryptedPassword.takeIf { it.isNotBlank() },
-                                            )
+                                            val saved =
+                                                mobileSession.enqueueBudgetReorder(
+                                                    state.selectedBudgetId,
+                                                    group.id,
+                                                    BudgetReorderKind.CATEGORY,
+                                                    result.itemId,
+                                                    itemTargetIdAfterMove(result.finalOrder, result.itemId),
+                                                    result.finalOrder,
+                                                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                                                    baseOrder = serverCategoryOrder,
+                                                )
+                                            if (!saved) budgetCategoryDrag.releaseHeldDrop()
                                         }
                                     }
                                 }
@@ -815,6 +829,7 @@ internal fun BudgetScreen(
                                         itemTargetIdAfterMove(nextOrder, category.id),
                                         nextOrder,
                                         state.encryptedPassword.takeIf { it.isNotBlank() },
+                                        baseOrder = serverCategoryOrder,
                                     )
                                 }
                             }

@@ -71,6 +71,8 @@ export interface ActualBudgetSessionPort {
     operation: (changed: boolean) => Promise<T>,
     options?: BudgetOperationOptions,
   ): Promise<{ changed: boolean; value: T }>;
+  /** True after Tandem writes to this budget until a projection read consumes the change. */
+  hasUnreadWrites?(syncId: string): boolean;
 }
 
 export interface TransactionReconciliationResult {

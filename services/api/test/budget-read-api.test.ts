@@ -587,6 +587,31 @@ describe("budget read API", () => {
     expect(fake.readChanges).toHaveBeenCalledOnce();
   });
 
+  it("rereads Actual inside the freshness window after Tandem writes to the budget", async () => {
+    const fake = createApi({ snapshotFresh: true });
+    const hasUnreadWrites = vi.fn(() => true);
+    fake.reader.hasUnreadWrites = hasUnreadWrites;
+    await fake.api.getChanges({
+      budgetId: "budget-1",
+      generation: snapshot.generation,
+      cursor: "2",
+      limit: 25,
+    });
+    expect(hasUnreadWrites).toHaveBeenCalledWith("budget-1");
+    expect(fake.reader.read).toHaveBeenCalledOnce();
+    expect(fake.applySnapshotForRefresh).toHaveBeenCalledOnce();
+
+    hasUnreadWrites.mockReturnValue(false);
+    vi.mocked(fake.reader.read).mockClear();
+    await fake.api.getChanges({
+      budgetId: "budget-1",
+      generation: snapshot.generation,
+      cursor: "2",
+      limit: 25,
+    });
+    expect(fake.reader.read).not.toHaveBeenCalled();
+  });
+
   it("refreshes when a paged request refers to a budget without stored state", async () => {
     const fake = createApi({ refreshPage: undefined });
     const request = {

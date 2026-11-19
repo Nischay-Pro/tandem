@@ -30,11 +30,22 @@ internal enum class BudgetMutationFailureDisposition {
     OPERATION_REJECTED,
     IDEMPOTENCY_KEY_REUSED,
     RESULT_UNAVAILABLE,
+
+    /**
+     * The app stopped while a request was in flight, so this device never saw the server's answer.
+     * The server journals maintenance requests by idempotency key, so resending with the same key
+     * either applies the change once or returns the earlier outcome.
+     */
+    SEND_INTERRUPTED,
     REVIEW,
 }
 
+/** Local outbox code written when a `sending` entry is found after the app process restarts. */
+internal const val SEND_INTERRUPTED_ERROR_CODE = "process-restarted-during-send"
+
 internal fun budgetMutationFailureDisposition(errorCode: String?): BudgetMutationFailureDisposition =
     when (errorCode) {
+        SEND_INTERRUPTED_ERROR_CODE -> BudgetMutationFailureDisposition.SEND_INTERRUPTED
         "operation_in_progress" -> BudgetMutationFailureDisposition.OPERATION_IN_PROGRESS
         "operation_uncertain" -> BudgetMutationFailureDisposition.OPERATION_UNCERTAIN
         "operation_rejected" -> BudgetMutationFailureDisposition.OPERATION_REJECTED
@@ -47,6 +58,8 @@ internal fun budgetMutationFailureMessage(errorCode: String?): String =
     when (errorCode) {
         "idempotency_key_reused" -> "Tandem matched this change to a different request. Refresh the budget, then try again."
         "operation_in_progress" -> "Tandem is still processing this change. Wait a moment, then try again."
+        SEND_INTERRUPTED_ERROR_CODE ->
+            "Tandem closed before Actual confirmed this change. Try again to resend it. Actual won’t apply it twice."
         "operation_uncertain" ->
             "Tandem couldn’t confirm whether Actual saved this change. " +
                 "Refresh the budget and check Actual before deciding what to do with it."
@@ -110,6 +123,7 @@ internal fun budgetMutationCanRetry(errorCode: String?): Boolean =
     budgetMutationFailureDisposition(errorCode) in
         setOf(
             BudgetMutationFailureDisposition.OPERATION_IN_PROGRESS,
+            BudgetMutationFailureDisposition.SEND_INTERRUPTED,
             BudgetMutationFailureDisposition.OPERATION_REJECTED,
             BudgetMutationFailureDisposition.IDEMPOTENCY_KEY_REUSED,
         )
@@ -129,6 +143,7 @@ internal fun budgetMutationRequestForRetry(
 ): QueuedBudgetReorder? =
     when (budgetMutationFailureDisposition(errorCode)) {
         BudgetMutationFailureDisposition.OPERATION_IN_PROGRESS,
+        BudgetMutationFailureDisposition.SEND_INTERRUPTED,
         -> request
         BudgetMutationFailureDisposition.OPERATION_REJECTED,
         BudgetMutationFailureDisposition.IDEMPOTENCY_KEY_REUSED,
@@ -188,6 +203,9 @@ internal enum class BudgetReorderKind {
     DELETE_PAYEE,
     SET_PAYEE_DEFAULT_CATEGORY,
     IMPORT_STATEMENT,
+
+    /** One request that saves every folded reorder draft (see [BudgetReorderQueueState.foldOrderDrafts]). */
+    SET_ORDER,
 }
 
 internal data class QueuedBudgetReorder(
@@ -198,6 +216,12 @@ internal data class QueuedBudgetReorder(
     val targetId: String?,
     val desiredOrder: List<String>,
     val encryptionPassword: String?,
+    /**
+     * For a reorder draft: the server order shown before the user started this
+     * burst of reordering. The server merges `baseOrder -> desiredOrder` into the
+     * live order, so reorders from other devices are kept.
+     */
+    val baseOrder: List<String> = emptyList(),
     val name: String? = null,
     val isIncome: Boolean = false,
     val parentGroupId: String? = null,
@@ -413,6 +437,157 @@ internal data class BudgetReorderQueueState(
         )
     }
 
+    /**
+     * Queues a reorder draft. A new drop on a list replaces that list's unsent
+     * draft (keeping its starting order), so a burst of drags becomes one change.
+     */
+    fun enqueueOrderDraft(move: QueuedBudgetReorder): BudgetReorderQueueState {
+        val lastIndex = moves.indexOfLast { it.budgetId == move.budgetId && it.scopeId == move.scopeId }
+        val existing = moves.getOrNull(lastIndex)
+        if (existing == null || !existing.isOrderDraft() || existing.kind != move.kind || !move.isOrderDraft()) {
+            return enqueue(move)
+        }
+        val merged =
+            existing.copy(
+                itemId = move.itemId,
+                targetId = move.targetId,
+                desiredOrder = move.desiredOrder,
+                payloadJson = move.payloadJson,
+                encryptionPassword = move.encryptionPassword ?: existing.encryptionPassword,
+                requiresEncryptionPassword =
+                    existing.requiresEncryptionPassword || move.requiresEncryptionPassword || move.encryptionPassword != null,
+            )
+        val key = budgetReorderStatusKey(move.budgetId, move.scopeId)
+        return copy(
+            moves = moves.toMutableList().also { it[lastIndex] = merged },
+            statuses =
+                statuses +
+                    (
+                        key to
+                            statusFor(move.budgetId, move.scopeId).copy(
+                                message = null,
+                                warning = false,
+                                optimisticOrder = move.desiredOrder,
+                            )
+                    ),
+        )
+    }
+
+    /** True when the queue starts with reorder drafts that [foldOrderDrafts] can send together. */
+    fun hasOrderDraftsAtHead(): Boolean = moves.firstOrNull()?.isOrderDraft() == true
+
+    /** True when something other than a reorder draft is waiting behind the leading drafts. */
+    fun hasWorkBehindOrderDrafts(): Boolean {
+        val head = moves.firstOrNull() ?: return false
+        if (!head.isOrderDraft()) return false
+        return moves.dropWhile { it.isOrderDraft() && it.budgetId == head.budgetId }.isNotEmpty()
+    }
+
+    /**
+     * Replaces the leading reorder drafts with one [BudgetReorderKind.SET_ORDER]
+     * entry: one request, one idempotency key. Each list keeps the order it started
+     * from and the latest order the user chose. The lists' optimistic orders stay on
+     * screen until that entry completes.
+     */
+    fun foldOrderDrafts(batchOperationId: String = Uuid.random().toString()): BudgetReorderQueueState {
+        val head = moves.firstOrNull() ?: return this
+        if (!head.isOrderDraft()) return this
+        val drafts =
+            moves.takeWhile {
+                it.isOrderDraft() && it.budgetId == head.budgetId && it.encryptionPassword == head.encryptionPassword
+            }
+        val changes = LinkedHashMap<Pair<BudgetReorderKind, String>, Pair<List<String>, List<String>>>()
+        drafts.forEach { draft ->
+            val key = draft.kind to draft.scopeId
+            changes[key] = (changes[key]?.first ?: draft.baseOrder) to draft.desiredOrder
+        }
+
+        fun change(
+            base: List<String>,
+            order: List<String>,
+        ) = buildJsonObject {
+            val (normalizedBase, normalizedOrder) = normalizeOrderChange(base, order)
+            put("baseOrder", buildJsonArray { normalizedBase.forEach { add(JsonPrimitive(it)) } })
+            put("order", buildJsonArray { normalizedOrder.forEach { add(JsonPrimitive(it)) } })
+        }
+        val order =
+            buildJsonObject {
+                changes.entries.firstOrNull { it.key.first == BudgetReorderKind.CATEGORY_GROUP }?.let { (_, lists) ->
+                    put("categoryGroups", change(lists.first, lists.second))
+                }
+                val categoryChanges = changes.entries.filter { it.key.first == BudgetReorderKind.CATEGORY }
+                if (categoryChanges.isNotEmpty()) {
+                    put(
+                        "categories",
+                        buildJsonArray {
+                            categoryChanges.forEach { (key, lists) ->
+                                add(
+                                    buildJsonObject {
+                                        // Hidden categories are reordered as a subset of the group's categories.
+                                        put("groupId", key.second.removeSuffix(HIDDEN_CATEGORY_SCOPE_SUFFIX))
+                                        change(lists.first, lists.second).forEach { (name, value) -> put(name, value) }
+                                    },
+                                )
+                            }
+                        },
+                    )
+                }
+                changes.entries.firstOrNull { it.key.first == BudgetReorderKind.MOVE_ACCOUNT }?.let { (_, lists) ->
+                    put("accounts", change(lists.first, lists.second))
+                }
+            }
+        val batch =
+            QueuedBudgetReorder(
+                budgetId = head.budgetId,
+                scopeId = ORDER_BATCH_SCOPE,
+                kind = BudgetReorderKind.SET_ORDER,
+                itemId = head.budgetId,
+                targetId = null,
+                desiredOrder = emptyList(),
+                encryptionPassword = head.encryptionPassword,
+                requiresEncryptionPassword = drafts.any { it.requiresEncryptionPassword },
+                payloadJson =
+                    buildJsonObject {
+                        put("order", order)
+                        put("scopes", buildJsonArray { drafts.map { it.scopeId }.distinct().forEach { add(JsonPrimitive(it)) } })
+                    }.toString(),
+                operationId = batchOperationId,
+            )
+        return copy(
+            moves = listOf(batch) + moves.drop(drafts.size),
+            statuses =
+                statuses +
+                    (budgetReorderStatusKey(head.budgetId, ORDER_BATCH_SCOPE) to BudgetReorderStatus(pendingCount = 1)),
+        )
+    }
+
+    /** Status keys a move affects: its own list, plus every list a batched reorder covers. */
+    private fun statusKeysFor(move: QueuedBudgetReorder): List<String> =
+        listOf(budgetReorderStatusKey(move.budgetId, move.scopeId)) +
+            move.orderBatchScopes().map { budgetReorderStatusKey(move.budgetId, it) }
+
+    /** Updates the lists a finished or failed batch covered, based on what is still queued for each. */
+    private fun settleOrderBatch(
+        move: QueuedBudgetReorder,
+        remainingMoves: List<QueuedBudgetReorder>,
+        message: String?,
+        keepOptimisticOrder: Boolean,
+    ): Map<String, BudgetReorderStatus> =
+        statusKeysFor(move).associateWith { key ->
+            val remainingCount = remainingMoves.count { budgetReorderStatusKey(it.budgetId, it.scopeId) == key }
+            val current = statuses[key] ?: BudgetReorderStatus()
+            when {
+                remainingCount == 0 && !keepOptimisticOrder && message == null -> BudgetReorderStatus()
+                remainingCount == 0 && !keepOptimisticOrder -> BudgetReorderStatus(message = message, warning = true)
+                else ->
+                    current.copy(
+                        pendingCount = remainingCount,
+                        message = message ?: current.message,
+                        warning = message != null || current.warning,
+                    )
+            }
+        }
+
     fun replaceOperationId(
         currentOperationId: String,
         newOperationId: String,
@@ -470,6 +645,20 @@ internal data class BudgetReorderQueueState(
     ): BudgetReorderQueueState {
         if (moves.firstOrNull() != move) return this
         val remainingMoves = moves.drop(1)
+        if (move.kind == BudgetReorderKind.SET_ORDER) {
+            return copy(
+                moves = remainingMoves,
+                statuses =
+                    statuses +
+                        settleOrderBatch(
+                            move,
+                            remainingMoves,
+                            message = if (refreshFailed) message ?: REFRESH_FAILED_MESSAGE else null,
+                            // Until the budget refreshes, keep showing the order the user chose.
+                            keepOptimisticOrder = refreshFailed,
+                        ),
+            )
+        }
         val key = budgetReorderStatusKey(move.budgetId, move.scopeId)
         val current = statusFor(move.budgetId, move.scopeId)
         val nextCount = (current.pendingCount - 1).coerceAtLeast(0)
@@ -508,7 +697,7 @@ internal data class BudgetReorderQueueState(
                 refreshFailed ->
                     current.copy(
                         pendingCount = nextCount,
-                        message = message ?: "Actual was updated, but Tandem couldn’t refresh the budget. Sync to load the latest data.",
+                        message = message ?: REFRESH_FAILED_MESSAGE,
                         warning = true,
                     )
                 nextCount == 0 -> BudgetReorderStatus()
@@ -734,11 +923,13 @@ internal data class BudgetReorderQueueState(
         message: String,
     ): BudgetReorderQueueState {
         if (moves.firstOrNull() != move) return this
-        val key = budgetReorderStatusKey(move.budgetId, move.scopeId)
-        val current = statusFor(move.budgetId, move.scopeId)
         return copy(
             waitingForConnection = true,
-            statuses = statuses + (key to current.copy(message = message, warning = true)),
+            statuses =
+                statuses +
+                    statusKeysFor(move).associateWith { key ->
+                        (statuses[key] ?: BudgetReorderStatus()).copy(message = message, warning = true)
+                    },
         )
     }
 
@@ -747,11 +938,13 @@ internal data class BudgetReorderQueueState(
         message: String,
     ): BudgetReorderQueueState {
         if (moves.firstOrNull() != move) return this
-        val key = budgetReorderStatusKey(move.budgetId, move.scopeId)
-        val current = statusFor(move.budgetId, move.scopeId)
         return copy(
             waitingForConnection = true,
-            statuses = statuses + (key to current.copy(message = message, warning = true)),
+            statuses =
+                statuses +
+                    statusKeysFor(move).associateWith { key ->
+                        (statuses[key] ?: BudgetReorderStatus()).copy(message = message, warning = true)
+                    },
         )
     }
 
@@ -834,6 +1027,14 @@ internal data class BudgetReorderQueueState(
         message: String,
     ): BudgetReorderQueueState {
         if (moves.firstOrNull() != move) return this
+        if (move.kind == BudgetReorderKind.SET_ORDER) {
+            val remainingMoves = moves.drop(1)
+            return copy(
+                moves = remainingMoves,
+                statuses = statuses + settleOrderBatch(move, remainingMoves, message.ifEmpty { null }, keepOptimisticOrder = false),
+                waitingForConnection = false,
+            )
+        }
         val failedMoves =
             if (move.kind == BudgetReorderKind.CREATE_CATEGORY_GROUP) {
                 moves.filter { queued ->
@@ -1002,6 +1203,7 @@ internal fun budgetMutationFailureMessage(
             BudgetReorderKind.DELETE_PAYEE -> "Couldn’t delete this payee."
             BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY -> "Couldn’t update this payee’s category."
             BudgetReorderKind.IMPORT_STATEMENT -> "Couldn’t import this statement."
+            BudgetReorderKind.SET_ORDER -> "Couldn’t save the new order."
         }
     return if (detail == null) fallback else "$detail."
 }
@@ -1055,6 +1257,7 @@ private fun QueuedBudgetReorder.replaceGroupId(
             targetId = if (targetId == previousId) nextId else targetId,
             parentGroupId = if (parentGroupId == previousId) nextId else parentGroupId,
             desiredOrder = desiredOrder.map { if (it == previousId) nextId else it },
+            baseOrder = baseOrder.map { if (it == previousId) nextId else it },
         )
     }
 
@@ -1070,6 +1273,7 @@ private fun QueuedBudgetReorder.replaceCategoryId(
             itemId = if (itemId == previousId) nextId else itemId,
             targetId = if (targetId == previousId) nextId else targetId,
             desiredOrder = desiredOrder.map { if (it == previousId) nextId else it },
+            baseOrder = baseOrder.map { if (it == previousId) nextId else it },
         )
     }
 
@@ -1087,6 +1291,62 @@ private fun Set<String>.remapId(
     oldId: String,
     newId: String,
 ): Set<String> = if (oldId in this) (this - oldId) + newId else this
+
+/** Scope suffix for the separately listed hidden categories of a group. */
+internal const val HIDDEN_CATEGORY_SCOPE_SUFFIX = "::hidden"
+
+/** Status scope for a batched reorder; the lists it covers are named in its payload. */
+internal const val ORDER_BATCH_SCOPE = "order-batch"
+
+private const val REFRESH_FAILED_MESSAGE =
+    "Actual was updated, but Tandem couldn’t refresh the budget. Sync to load the latest data."
+
+/** Reorder kinds that are held on the device and sent together in one request. */
+private val batchableOrderKinds =
+    setOf(BudgetReorderKind.CATEGORY, BudgetReorderKind.CATEGORY_GROUP, BudgetReorderKind.MOVE_ACCOUNT)
+
+/** A reorder that waits on the device until the next flush. Older moves without a starting order are sent one by one. */
+internal fun QueuedBudgetReorder.isOrderDraft(): Boolean = kind in batchableOrderKinds && baseOrder.isNotEmpty()
+
+/** The lists a [BudgetReorderKind.SET_ORDER] entry covers. */
+internal fun QueuedBudgetReorder.orderBatchScopes(): List<String> =
+    if (kind != BudgetReorderKind.SET_ORDER) {
+        emptyList()
+    } else {
+        payloadJson
+            ?.let {
+                runCatching {
+                    kotlinx.serialization.json.Json
+                        .parseToJsonElement(it)
+                        .jsonObject
+                }.getOrNull()
+            }?.get("scopes")
+            ?.let { it as? JsonArray }
+            ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+            .orEmpty()
+    }
+
+/**
+ * Makes `base` and `order` contain the same items. Items that appeared since the
+ * user started (for example, a new category) are placed in `base` where they sit
+ * in `order`, so the server treats them as not moved. Items that disappeared are dropped.
+ */
+internal fun normalizeOrderChange(
+    base: List<String>,
+    order: List<String>,
+): Pair<List<String>, List<String>> {
+    val orderSet = order.toSet()
+    val normalizedBase = base.filter { it in orderSet }.distinct().toMutableList()
+    val baseSet = normalizedBase.toMutableSet()
+    order.forEachIndexed { index, id ->
+        if (id in baseSet) return@forEachIndexed
+        val previous = order.subList(0, index).lastOrNull { it in baseSet }
+        val insertAt = previous?.let { normalizedBase.indexOf(it) + 1 } ?: 0
+        normalizedBase.add(insertAt, id)
+        baseSet.add(id)
+    }
+    return normalizedBase to order.distinct()
+}
 
 private val budgetOrderKinds =
     setOf(
@@ -1114,6 +1374,7 @@ internal fun encodeBudgetReorderQueue(state: BudgetReorderQueueState): String =
                             put("itemId", move.itemId)
                             put("targetId", move.targetId?.let(::JsonPrimitive) ?: JsonNull)
                             put("desiredOrder", buildJsonArray { move.desiredOrder.forEach { add(JsonPrimitive(it)) } })
+                            put("baseOrder", buildJsonArray { move.baseOrder.forEach { add(JsonPrimitive(it)) } })
                             put("name", move.name?.let(::JsonPrimitive) ?: JsonNull)
                             put("isIncome", move.isIncome)
                             put("parentGroupId", move.parentGroupId?.let(::JsonPrimitive) ?: JsonNull)
@@ -1192,6 +1453,7 @@ internal fun decodeBudgetReorderQueue(encoded: String?): BudgetReorderQueueState
                     targetId = move.queueString("targetId"),
                     desiredOrder = (move["desiredOrder"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty(),
                     encryptionPassword = null,
+                    baseOrder = (move["baseOrder"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty(),
                     name = move.queueString("name"),
                     isIncome = move["isIncome"]?.let { (it as? JsonPrimitive)?.booleanOrNull } ?: false,
                     parentGroupId = move.queueString("parentGroupId"),

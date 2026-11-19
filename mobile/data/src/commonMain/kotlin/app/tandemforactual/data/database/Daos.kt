@@ -545,6 +545,22 @@ interface OutboxDao {
     suspend fun markInterruptedSendsUncertain(updatedAtEpochMs: Long): Int
 
     @Query(
+        "UPDATE sync_outbox SET status = 'uncertain', lastErrorCode = 'process-restarted-during-send', updatedAtEpochMs = :updatedAtEpochMs WHERE status = 'sending' AND recordType IN (:recordTypes)",
+    )
+    suspend fun markInterruptedSendsUncertainForRecordTypes(
+        recordTypes: List<String>,
+        updatedAtEpochMs: Long,
+    ): Int
+
+    @Query(
+        "UPDATE sync_outbox SET status = 'uncertain', lastErrorCode = 'process-restarted-during-send', updatedAtEpochMs = :updatedAtEpochMs WHERE status = 'sending' AND recordType NOT IN (:recordTypes)",
+    )
+    suspend fun markInterruptedSendsUncertainExceptRecordTypes(
+        recordTypes: List<String>,
+        updatedAtEpochMs: Long,
+    ): Int
+
+    @Query(
         "UPDATE sync_outbox SET status = 'conflict', lastErrorCode = 'remote-deleted', updatedAtEpochMs = :updatedAtEpochMs WHERE budgetId = :budgetId AND recordType = 'transaction' AND recordId = :recordId AND action = 'UPDATE' AND status = 'queued' AND attemptCount = 0",
     )
     suspend fun markEditsForDeletedRecord(

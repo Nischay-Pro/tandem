@@ -3671,6 +3671,215 @@
         }
       }
     },
+    "/api/v1/budgets/{budgetId}/order": {
+      "put": {
+        "operationId": "setBudgetOrder",
+        "summary": "Save reordered category groups, categories, and accounts in one request",
+        "tags": ["Budgets"],
+        "description": "Moves only the items this device reordered between each baseOrder and order, on top of Actual's current order, so reorders made meanwhile on other devices are kept. Items deleted since baseOrder are skipped, and new items keep their place. All lists are saved together under one idempotency key.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "categoryGroups": {
+                    "type": "object",
+                    "properties": {
+                      "baseOrder": {
+                        "type": "array",
+                        "maxItems": 1000,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500,
+                          "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$"
+                        },
+                        "description": "The order this device showed before the user started reordering."
+                      },
+                      "order": {
+                        "type": "array",
+                        "maxItems": 1000,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500,
+                          "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$"
+                        },
+                        "description": "The order the user chose. It must contain the same items as baseOrder."
+                      }
+                    },
+                    "required": ["baseOrder", "order"],
+                    "additionalProperties": false,
+                    "description": "Category group order. Income groups always stay after expense groups."
+                  },
+                  "categories": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "description": "Category order within each listed group.",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "groupId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500,
+                          "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$"
+                        },
+                        "baseOrder": {
+                          "type": "array",
+                          "maxItems": 1000,
+                          "uniqueItems": true,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500,
+                            "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$"
+                          },
+                          "description": "The order this device showed before the user started reordering."
+                        },
+                        "order": {
+                          "type": "array",
+                          "maxItems": 1000,
+                          "uniqueItems": true,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500,
+                            "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$"
+                          },
+                          "description": "The order the user chose. It must contain the same items as baseOrder."
+                        }
+                      },
+                      "required": ["groupId", "baseOrder", "order"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "accounts": {
+                    "type": "object",
+                    "properties": {
+                      "baseOrder": {
+                        "type": "array",
+                        "maxItems": 1000,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500,
+                          "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$"
+                        },
+                        "description": "The order this device showed before the user started reordering."
+                      },
+                      "order": {
+                        "type": "array",
+                        "maxItems": 1000,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500,
+                          "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$"
+                        },
+                        "description": "The order the user chose. It must contain the same items as baseOrder."
+                      }
+                    },
+                    "required": ["baseOrder", "order"],
+                    "additionalProperties": false,
+                    "description": "Account order. Accounts are reordered within their section: open on-budget, open off-budget, or closed."
+                  }
+                },
+                "minProperties": 1,
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500,
+              "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$"
+            },
+            "in": "path",
+            "name": "budgetId",
+            "required": true
+          },
+          {
+            "schema": { "type": "string", "minLength": 1, "maxLength": 1024 },
+            "in": "header",
+            "name": "x-budget-encryption-password",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]+$"
+            },
+            "in": "header",
+            "name": "idempotency-key",
+            "required": true
+          }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "enum": ["ok"] },
+                    "categoryGroups": {
+                      "type": "array",
+                      "items": { "type": "string", "minLength": 1 }
+                    },
+                    "categories": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "groupId": { "type": "string" },
+                          "order": {
+                            "type": "array",
+                            "items": { "type": "string", "minLength": 1 }
+                          }
+                        },
+                        "required": ["groupId", "order"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "accounts": {
+                      "type": "array",
+                      "items": { "type": "string", "minLength": 1 }
+                    }
+                  },
+                  "required": ["status"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "413": { "$ref": "#/components/responses/PayloadTooLarge" },
+          "415": { "$ref": "#/components/responses/UnsupportedMediaType" },
+          "429": { "$ref": "#/components/responses/TooManyRequests" },
+          "500": { "$ref": "#/components/responses/InternalServerError" },
+          "502": { "$ref": "#/components/responses/BadGateway" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" }
+        }
+      }
+    },
     "/api/v1/budgets": {
       "get": {
         "operationId": "listBudgets",

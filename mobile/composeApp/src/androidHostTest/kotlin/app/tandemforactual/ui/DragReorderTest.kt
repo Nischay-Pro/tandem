@@ -65,6 +65,56 @@ class DragReorderTest {
     }
 
     @Test
+    fun theDraggedRowStaysUnderTheFingerWhenTheListLayoutShifts() {
+        val state = DragReorderState()
+        state.measure("a", 100f)
+        state.measure("b", 500f)
+        state.measure("c", 900f)
+        state.start(listOf("a", "b", "c"), "b")
+
+        // Starting the drag collapses the list, so every row moves up.
+        state.measure("a", 50f)
+        state.measure("b", 150f)
+        state.measure("c", 250f)
+
+        // The finger has not moved, so the row is shifted back under it.
+        assertEquals(350f, state.dragOffsetPx)
+        // Swaps use where rows are now: the finger (500) is already past "c" (250).
+        state.dragBy(0f)
+        assertEquals(listOf("a", "c", "b"), state.reorderedItemIds)
+    }
+
+    @Test
+    fun aDroppedOrderStaysOnScreenUntilTheListCatchesUp() {
+        val state = DragReorderState()
+        state.measure("a", 100f)
+        state.measure("b", 200f)
+        state.start(listOf("a", "b"), "a")
+        state.dragBy(150f)
+        state.finish(listOrder = listOf("a", "b"))
+
+        // Saving is still in progress: keep showing the drop, not the old order.
+        assertEquals(listOf("b", "a"), state.currentOrder(listOf("a", "b")))
+        // The list now shows the saved order, so the held order is released.
+        assertEquals(listOf("b", "a"), state.currentOrder(listOf("b", "a")))
+        assertEquals(listOf("a", "b"), state.currentOrder(listOf("a", "b")))
+    }
+
+    @Test
+    fun aDropThatCouldNotBeSavedCanBeReleased() {
+        val state = DragReorderState()
+        state.measure("a", 100f)
+        state.measure("b", 200f)
+        state.start(listOf("a", "b"), "a")
+        state.dragBy(150f)
+        state.finish(listOrder = listOf("a", "b"))
+
+        state.releaseHeldDrop()
+
+        assertEquals(listOf("a", "b"), state.currentOrder(listOf("a", "b")))
+    }
+
+    @Test
     fun sharedDragStateCommitsTheSameOrderAndDisplayProjection() {
         val state = DragReorderState()
         state.start(

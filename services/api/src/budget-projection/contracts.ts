@@ -136,6 +136,8 @@ export interface BudgetSnapshotReader {
     budgetId: string,
     encryptionPassword?: string,
   ): Promise<BudgetSnapshotReadResult>;
+  /** True when Tandem wrote to the budget after the cached projection was built. */
+  hasUnreadWrites?(budgetId: string): boolean;
 }
 
 export interface BudgetLockPort {
