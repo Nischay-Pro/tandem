@@ -514,7 +514,7 @@ private fun SyncOverviewCard(
                 )
             attentionCount > 0 ->
                 SyncStatusPresentation(
-                    title = "Needs your review",
+                    title = "Needs review",
                     detail = "$attentionCount ${if (attentionCount == 1) "change needs" else "changes need"} a decision.",
                     icon = Lucide.CircleAlert,
                     color = palette.warning,
