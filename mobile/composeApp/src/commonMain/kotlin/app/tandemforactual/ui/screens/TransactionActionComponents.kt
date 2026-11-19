@@ -50,6 +50,7 @@ internal fun TransactionRow(
     showDateHeader: Boolean = true,
     showAccount: Boolean = false,
     showDivider: Boolean = false,
+    syncStatus: String? = null,
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
@@ -69,7 +70,7 @@ internal fun TransactionRow(
         ListRow(
             transaction.payee,
             secondaryLabel,
-            amountText.takeUnless { activityStyle },
+            amountText.takeUnless { activityStyle || syncStatus != null },
             leading =
                 when {
                     selectionMode -> RowLeading.Icon(if (selected) Lucide.Check else Lucide.Square)
@@ -84,16 +85,22 @@ internal fun TransactionRow(
             onClick = onClick,
             onLongClick = onLongClick,
             trailingContent =
-                if (activityStyle) {
+                if (activityStyle || syncStatus != null) {
                     {
-                        ActivityTransactionAmount(
-                            amountText,
-                            amountMinorUnits = transaction.amountMinorUnits,
-                            fractionDigits =
-                                transaction.displaySettings
-                                    ?.takeUnless { it.hideFraction }
-                                    ?.currencyFractionDigits ?: 0,
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+                        ) {
+                            ActivityTransactionAmount(
+                                amountText,
+                                amountMinorUnits = transaction.amountMinorUnits,
+                                fractionDigits =
+                                    transaction.displaySettings
+                                        ?.takeUnless { it.hideFraction }
+                                        ?.currencyFractionDigits ?: 0,
+                            )
+                            syncStatus?.let { TransactionSyncChip(it) }
+                        }
                     }
                 } else {
                     null

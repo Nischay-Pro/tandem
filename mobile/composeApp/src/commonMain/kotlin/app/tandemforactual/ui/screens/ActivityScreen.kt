@@ -43,9 +43,11 @@ import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.Clock
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
+import com.composables.icons.lucide.TriangleAlert
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -142,6 +144,7 @@ internal fun ActivityScreen(
         onDispose { onActivitySelectionTotalChanged(null) }
     }
     Box(Modifier.fillMaxSize()) {
+        val syncOperations = remember(mobileSession.pendingWrites) { transactionSyncOperations(mobileSession.pendingWrites) }
         PageLazyColumn(
             verticalSpacing = TandemSpacing.xxSmall,
             isRefreshing = isRefreshing,
@@ -165,6 +168,31 @@ internal fun ActivityScreen(
                             modifier = Modifier.weight(1f),
                         )
                         Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp), tint = tandemPalette.muted)
+                    }
+                }
+            }
+            if (isLiveBudget) {
+                item(key = "activity-sync") {
+                    val needsReview = syncOperations.values.count { transactionSyncNeedsReview(it.status) }
+                    val waiting = syncOperations.size - needsReview
+                    AnimatedVisibility(syncOperations.isNotEmpty()) {
+                        if (needsReview > 0) {
+                            SyncNoticeCard(
+                                Lucide.TriangleAlert,
+                                tandemPalette.warning,
+                                if (needsReview == 1) "1 change needs review" else "$needsReview changes need review",
+                                "Open Sync Center to choose what to keep.",
+                                onClick = { navigation.open(AppRoute.SYNC_CENTER) },
+                            )
+                        } else {
+                            SyncNoticeCard(
+                                Lucide.Clock,
+                                tandemPalette.accent,
+                                if (waiting == 1) "1 change waiting to sync" else "$waiting changes waiting to sync",
+                                "Saved on this device. Sent on the next sync.",
+                                onClick = { navigation.open(AppRoute.PENDING_CHANGES) },
+                            )
+                        }
                     }
                 }
             }
@@ -207,6 +235,7 @@ internal fun ActivityScreen(
                             ),
                         showAccount = showAccountName,
                         showDivider = true,
+                        syncStatus = transactionId?.let { syncOperations[it]?.status },
                         modifier = if (isLiveBudget) tandemListItemModifier(tandemReduceMotion) else Modifier,
                         onLongClick =
                             if (isLiveBudget && !state.readOnlyMode && transactionId != null) {
