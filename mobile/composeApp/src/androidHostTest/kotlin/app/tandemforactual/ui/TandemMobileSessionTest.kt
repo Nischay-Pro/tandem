@@ -1832,7 +1832,7 @@ class TandemMobileSessionTest {
                 assertFalse(apiClient.isAuthenticated)
                 assertTrue(repository.findCachedBudgetIds().isEmpty())
                 assertTrue(session.cachedBudgets.isEmpty())
-                assertTrue(session.signOutNotice.orEmpty().contains("server still trusts this device"))
+                assertTrue(session.signOutNotice.orEmpty().contains("server still has this device linked"))
                 assertTrue(session.signOutNotice.orEmpty().contains("Sign in again to this server"))
             } finally {
                 database.close()

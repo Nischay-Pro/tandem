@@ -5326,7 +5326,7 @@ internal fun discardedPendingWriteMessage(operationStatus: String?): String =
 
 internal fun signOutRevocationNotice(httpStatus: Int?): String =
     if (httpStatus == null) {
-        "The server still trusts this device. Sign in again to this server and remove it in Settings."
+        "The server still has this device linked. Sign in again to this server and unlink it in Settings."
     } else {
         "Couldn’t confirm that the server removed this device. Sign in again to this server and check Settings."
     }
