@@ -59,6 +59,10 @@ export interface ActualApiPort {
   shutdown(): Promise<void>;
 }
 
+export interface ActualInternalApiPort {
+  send(command: string, args?: unknown): Promise<unknown>;
+}
+
 export interface BudgetOperationOptions {
   encryptionPassword?: string;
   synchronizeAfterWrite?: boolean | ((result: unknown) => boolean);
@@ -161,6 +165,7 @@ export class ActualSession {
   #loadedBudgetSyncId: string | undefined;
   #loadedBudgetWasOpenedWithPassword = false;
   #lastSyncEvent: ActualSyncEvent | undefined;
+  #internalApi: ActualInternalApiPort | undefined;
   #syncEventListenerAttached = false;
   #dirtyBudgetSyncIds = new Set<string>();
   #budgetWriteRevisions = new Map<string, number>();
@@ -204,6 +209,7 @@ export class ActualSession {
       }
       if (this.#closing) this.#closing = false;
       if (activeActualSession === this.#sessionId) {
+        this.#internalApi = undefined;
         await this.#withTimeout(() => this.client.shutdown());
         activeActualSession = undefined;
       }
@@ -234,6 +240,12 @@ export class ActualSession {
 
   get readinessMessage(): string | undefined {
     return this.#readinessErrorMessage;
+  }
+
+  get internal(): ActualInternalApiPort | undefined {
+    return activeActualSession === this.#sessionId
+      ? this.#internalApi
+      : undefined;
   }
 
   async execute<T>(
@@ -371,6 +383,7 @@ export class ActualSession {
       }
 
       await this.#withTimeout(() => this.client.shutdown());
+      this.#internalApi = undefined;
       this.#loadedBudgetSyncId = undefined;
       this.#loadedBudgetWasOpenedWithPassword = false;
       activeActualSession = undefined;
@@ -471,6 +484,7 @@ export class ActualSession {
           server.version,
         );
       }
+      this.#internalApi = actualInternalApi(initialized);
       this.#attachSyncEventListener(initialized);
       this.#readinessErrorMessage = undefined;
     } catch (error) {
@@ -483,6 +497,7 @@ export class ActualSession {
         cleanupFailed = true;
         cleanupError = shutdownError;
       }
+      this.#internalApi = undefined;
       this.#cleanupFailed = cleanupFailed;
 
       if (cleanupFailed) {
@@ -519,6 +534,7 @@ export class ActualSession {
   }
 
   async #shutdownActivePrincipal(): Promise<void> {
+    this.#internalApi = undefined;
     await this.#withTimeout(() => this.client.shutdown());
     activeActualSession = undefined;
     this.#activePrincipalId = undefined;
@@ -686,6 +702,11 @@ function isActualAuthenticationFailure(error: unknown): boolean {
     nested?.reason === "unauthorized" ||
     /\b(unauthorized|token (expired|rejected|invalid))\b/i.test(message)
   );
+}
+
+function actualInternalApi(value: unknown): ActualInternalApiPort | undefined {
+  if (!isRecord(value) || typeof value.send !== "function") return undefined;
+  return value as unknown as ActualInternalApiPort;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -2357,12 +2357,12 @@ describe.skipIf(!compatibilityTestEnabled)(
         await encryptedOwner.runBudget(
           fixture.budgetId,
           async () => {
-            if (!Actual.internal) {
+            if (!encryptedOwner.internal) {
               throw new Error("Actual encryption handler is unavailable");
             }
-            const result = await Actual.internal.send("key-make", {
+            const result = (await encryptedOwner.internal.send("key-make", {
               password: encryptedBudgetPassword,
-            });
+            })) as { error?: string };
             if (result.error) {
               throw new Error("Actual could not encrypt the synthetic budget");
             }
