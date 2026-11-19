@@ -23,7 +23,6 @@ internal data class LiveAccountSummary(
     val closed: Boolean = false,
     val accountGroupId: String? = null,
     val accountGroupName: String? = null,
-    /** Actual's sort order; fractional after some moves, so kept as a Double. */
     val sortOrder: Double? = null,
 )
 

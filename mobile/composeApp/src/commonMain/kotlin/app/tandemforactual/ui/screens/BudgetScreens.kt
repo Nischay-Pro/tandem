@@ -246,8 +246,6 @@ internal fun BudgetScreen(
     val summaryKey = "live:${state.selectedBudgetId}:summary:${state.selectedMonthId}"
     val displayGroups = orderedGroups
 
-    // Drag callbacks can outlive the composition that created them, so read the
-    // queue's latest state when they run instead of a captured order.
     fun latestQueuedGroupOrder(): List<String> =
         budgetOrderForScreen(
             groups.map { it.id },

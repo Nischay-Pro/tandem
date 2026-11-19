@@ -9,6 +9,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -60,6 +61,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.TandemApiClient
@@ -415,7 +417,12 @@ fun TandemApp(
                         val returnAnimation = Animatable(0f)
                         returnAnimation.animateTo(
                             targetValue = 1f,
-                            animationSpec = tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS),
+                            animationSpec =
+                                if (reduceMotion) {
+                                    tandemMotionSpec(true, TandemMotion.ROUTE_MILLIS)
+                                } else {
+                                    tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.emphasizedEasing)
+                                },
                         ) {
                             backGestureProgress = value
                         }
@@ -661,9 +668,6 @@ fun TandemApp(
         }
     }
     LaunchedEffect(routeEntry) {
-        // A back preview belongs to the screen the gesture started on. If another
-        // screen is now on top (navigation happened mid-gesture or before the
-        // preview was cleared), drop it so the old header and screen stop showing.
         if (isBackPreviewStale(backPreviewRoute, backGestureOutgoingEntry, routeEntry)) {
             backGestureCancelJob?.cancel()
             backGestureCancelJob = null
@@ -809,6 +813,7 @@ fun TandemApp(
                 mobileSession.synchronize(
                     state.selectedBudgetId,
                     state.encryptedPassword.takeIf { it.isNotBlank() },
+                    background = true,
                 )
             }
         }
@@ -1482,7 +1487,21 @@ fun TandemApp(
                     .fillMaxSize()
                     .padding(start = if (showLandscapeRail) 80.dp else 0.dp),
             ) {
-                if (shouldRenderRouteHeader(route, tabShellRoute != null)) renderHeader(shellHeaderRoute)
+                if (shouldRenderRouteHeader(route, tabShellRoute != null)) {
+                    AnimatedContent(
+                        targetState = shellHeaderRoute,
+                        transitionSpec = {
+                            fadeIn(
+                                tween(
+                                    TandemMotion.TAB_TRANSITION_MILLIS,
+                                    delayMillis = TandemMotion.TAB_EXIT_MILLIS,
+                                    easing = TandemMotion.emphasizedEasing,
+                                ),
+                            ) togetherWith fadeOut(tween(TandemMotion.TAB_EXIT_MILLIS, easing = TandemMotion.exitEasing))
+                        },
+                        label = "tandem-header-transition",
+                    ) { headerRoute -> renderHeader(headerRoute) }
+                }
                 val transitionInputModifier =
                     Modifier.pointerInput(Unit) {
                         awaitEachGesture {
@@ -1510,6 +1529,7 @@ fun TandemApp(
                             .then(transitionInputModifier)
                             .tandemEdgeBackGesture(backStack.size > 1 && !transactionSheetActive, handleBack, updateBackGesture),
                 ) {
+                    val routeBackground = appBackgroundBrush(state.backgroundStyle, palette)
                     if (!transactionSheetActive && backGestureProgress > 0f && backPreviewRoute != null && backPreviewRoute != routeEntry) {
                         val direction = backGestureDirection
                         renderRoute(
@@ -1519,12 +1539,15 @@ fun TandemApp(
                                 .clearAndSetSemantics {}
                                 .graphicsLayer {
                                     val progress = backGestureProgress
-                                    translationX = -direction * size.width * (1f - progress)
-                                },
+                                    translationX = -direction * size.width * TandemMotion.ROUTE_PARALLAX * (1f - progress)
+                                    alpha = TandemMotion.ROUTE_COVERED_ALPHA + (1f - TandemMotion.ROUTE_COVERED_ALPHA) * progress
+                                }.background(routeBackground),
                             false,
                             !stationaryTabShell,
                         )
                     }
+                    val routeSlideSpec = tween<IntOffset>(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.emphasizedEasing)
+                    val routeFadeSpec = tween<Float>(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.emphasizedEasing)
                     AnimatedContent(
                         targetState = backgroundRouteEntry,
                         modifier = Modifier.fillMaxSize().clipToBounds(),
@@ -1536,28 +1559,39 @@ fun TandemApp(
                                     targetState.route == AppRoute.STARTUP ->
                                     EnterTransition.None togetherWith ExitTransition.None
                                 initialState.route.isTab() && targetState.route.isTab() ->
-                                    fadeIn(
-                                        tween(TandemMotion.TAB_TRANSITION_MILLIS, easing = TandemMotion.movementEasing),
+                                    (
+                                        fadeIn(
+                                            tween(
+                                                TandemMotion.TAB_TRANSITION_MILLIS,
+                                                delayMillis = TandemMotion.TAB_EXIT_MILLIS,
+                                                easing = TandemMotion.emphasizedEasing,
+                                            ),
+                                        ) +
+                                            scaleIn(
+                                                tween(
+                                                    TandemMotion.TAB_TRANSITION_MILLIS,
+                                                    delayMillis = TandemMotion.TAB_EXIT_MILLIS,
+                                                    easing = TandemMotion.emphasizedEasing,
+                                                ),
+                                                initialScale = 0.97f,
+                                            )
                                     ) togetherWith
                                         fadeOut(
-                                            tween(TandemMotion.CROSSFADE_MILLIS, easing = TandemMotion.exitEasing),
+                                            tween(TandemMotion.TAB_EXIT_MILLIS, easing = TandemMotion.exitEasing),
                                         ) using null
                                 routeTransitionDirection > 0f ->
-                                    (
-                                        slideInHorizontally(
-                                            tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                        ) { it }
-                                    ) togetherWith
-                                        slideOutHorizontally(
-                                            tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                        ) { -it } using null
+                                    slideInHorizontally(routeSlideSpec) { it } togetherWith
+                                        (
+                                            slideOutHorizontally(routeSlideSpec) { -(it * TandemMotion.ROUTE_PARALLAX).toInt() } +
+                                                fadeOut(routeFadeSpec, targetAlpha = TandemMotion.ROUTE_COVERED_ALPHA)
+                                        ) using null
                                 routeTransitionDirection < 0f ->
-                                    slideInHorizontally(
-                                        tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                    ) { -it } togetherWith
-                                        slideOutHorizontally(
-                                            tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                        ) { it } using null
+                                    (
+                                        (
+                                            slideInHorizontally(routeSlideSpec) { -(it * TandemMotion.ROUTE_PARALLAX).toInt() } +
+                                                fadeIn(routeFadeSpec, initialAlpha = TandemMotion.ROUTE_COVERED_ALPHA)
+                                        ) togetherWith slideOutHorizontally(routeSlideSpec) { it } using null
+                                    ).apply { targetContentZIndex = -1f }
                                 else -> EnterTransition.None togetherWith ExitTransition.None
                             }
                         },
@@ -1565,11 +1599,13 @@ fun TandemApp(
                     ) { visibleEntry ->
                         renderRoute(
                             if (transactionSheetActive) backgroundRouteEntry else visibleEntry,
-                            Modifier.fillMaxSize().graphicsLayer {
-                                if (visibleEntry == backGestureOutgoingEntry && backGestureProgress > 0f) {
-                                    translationX = backGestureProgress * size.width * backGestureDirection
-                                }
-                            },
+                            Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    if (visibleEntry == backGestureOutgoingEntry && backGestureProgress > 0f) {
+                                        translationX = backGestureProgress * size.width * backGestureDirection
+                                    }
+                                }.background(routeBackground),
                             true,
                             !stationaryTabShell,
                         )
@@ -1577,7 +1613,7 @@ fun TandemApp(
                 }
                 if (tabShellRoute != null && !imeVisible && !isLandscape) {
                     Box(
-                        modifier = Modifier.fillMaxWidth().height(72.dp),
+                        modifier = Modifier.fillMaxWidth().height(88.dp),
                         contentAlignment = Alignment.BottomCenter,
                     ) {
                         androidx.compose.animation.AnimatedVisibility(
@@ -1695,10 +1731,6 @@ internal fun AppRoute.isReportDetail(): Boolean = this == AppRoute.REPORT_DETAIL
 /** How often an open budget pulls changes from the server while the app is on screen. */
 internal const val BUDGET_PERIODIC_SYNC_INTERVAL_MS = 60_000L
 
-/**
- * A back-gesture preview is stale once the screen on top is neither the screen
- * the gesture started on nor the screen it was revealing.
- */
 internal fun <T> isBackPreviewStale(
     preview: T?,
     gestureOrigin: T?,

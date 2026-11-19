@@ -37,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.api.client.StatementImportPreview
 import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.data.store.BudgetDisplaySettings
+import app.tandemforactual.ui.TandemSpacing
+import app.tandemforactual.ui.TandemTypography
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
@@ -51,8 +53,10 @@ import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveAccountSummary
+import app.tandemforactual.ui.tandemPalette
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Receipt
 import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.X
@@ -343,6 +347,22 @@ internal fun AccountDetailScreen(
         if (accountName == null) {
             Heading("Account details", "This account isn’t saved on this device.")
         } else {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+            ) {
+                Box(Modifier.weight(1f)) {
+                    Text(description, color = tandemPalette.muted, fontSize = TandemTypography.label)
+                }
+                if (liveAccount != null) {
+                    TandemIconButton(
+                        Lucide.Pencil,
+                        "Edit $accountName",
+                        enabled = !state.readOnlyMode,
+                    ) { navigation.open(AppRoute.ACCOUNT_OPTIONS) }
+                }
+            }
             AmountHero("Available balance", balance, "$accountName · $description")
             if (liveAccount != null) {
                 TandemActionButton(

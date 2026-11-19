@@ -1781,6 +1781,7 @@ internal class TandemMobileSession(
                         encryptionPassword = request.encryptionPassword,
                         sendQueuedWrites = false,
                         retryQueuedBudgetMutations = false,
+                        background = true,
                     )
                 if (refreshed == null) {
                     budgetReorderQueue =
@@ -1866,7 +1867,7 @@ internal class TandemMobileSession(
             val moved =
                 withoutBudgetActionFeedback {
                     if (isRefreshOnlyRequest) {
-                        synchronize(request.budgetId, request.encryptionPassword) != null
+                        synchronize(request.budgetId, request.encryptionPassword, background = true) != null
                     } else {
                         when (request.kind) {
                             BudgetReorderKind.CATEGORY ->
@@ -2241,6 +2242,7 @@ internal class TandemMobileSession(
                             request.budgetId,
                             request.encryptionPassword,
                             retryQueuedBudgetMutations = false,
+                            background = true,
                         ) != null
                     }
             if (
@@ -2357,6 +2359,7 @@ internal class TandemMobileSession(
                         request.budgetId,
                         request.encryptionPassword,
                         retryQueuedBudgetMutations = false,
+                        background = true,
                     )
                 }
                 val message = budgetMutationFailureMessage(lastBudgetActionErrorCode)
@@ -2401,7 +2404,7 @@ internal class TandemMobileSession(
                 ) &&
                 !hasPendingTransactionDependency(request.budgetId)
             ) {
-                synchronize(request.budgetId, request.encryptionPassword)
+                synchronize(request.budgetId, request.encryptionPassword, background = true)
             }
             persistCurrentBudgetReorderQueue()
         }
@@ -3054,6 +3057,7 @@ internal class TandemMobileSession(
         sendQueuedWrites: Boolean = true,
         reconcileUncertainOperationId: String? = null,
         retryQueuedBudgetMutations: Boolean = true,
+        background: Boolean = false,
     ): BudgetSyncSummary? =
         synchronizationMutex.withLock {
             synchronizeSerialized(
@@ -3062,6 +3066,7 @@ internal class TandemMobileSession(
                 sendQueuedWrites = sendQueuedWrites,
                 reconcileUncertainOperationId = reconcileUncertainOperationId,
                 retryQueuedBudgetMutations = retryQueuedBudgetMutations,
+                background = background,
             )
         }
 
@@ -3071,32 +3076,42 @@ internal class TandemMobileSession(
         sendQueuedWrites: Boolean,
         reconcileUncertainOperationId: String?,
         retryQueuedBudgetMutations: Boolean,
+        background: Boolean,
     ): BudgetSyncSummary? {
         if (isSigningOut) return null
+
+        fun present(next: SyncPresentationState) {
+            if (!background || (next.error == null && !next.isSyncing && syncPresentation.error != null)) {
+                syncPresentation = next
+            }
+        }
         if (!encryptionPassword.isNullOrBlank()) scheduleActionEncryptionPasswords[budgetId] = encryptionPassword
         if (!isCurrentIdentityCacheOwner()) {
-            syncPresentation =
+            present(
                 syncPresentation.failed(
                     "These changes belong to another server or account. Sign in there before syncing them.",
-                )
+                ),
+            )
             return null
         }
         val budgetQueueRestored = restoreBudgetReorderQueue()
         if (budgetQueueRestored && retryQueuedBudgetMutations && !encryptionPassword.isNullOrBlank()) {
             retryQueuedBudgetReorders(budgetId, encryptionPassword)
         }
-        syncComplete = false
-        syncedTransactionCount = 0
-        lastSyncSummary = null
+        if (!background) {
+            syncComplete = false
+            syncedTransactionCount = 0
+            lastSyncSummary = null
+        }
         val coordinator = syncCoordinator
         val localRepository = repository
         if (coordinator == null || localRepository == null) {
-            syncPresentation = syncPresentation.failed("Tandem can’t save this budget on your device. Restart the app and try again.")
+            present(syncPresentation.failed("Tandem can’t save this budget on your device. Restart the app and try again."))
             return null
         }
 
         // Keep an earlier error visible while retrying; clear it only when the retry succeeds.
-        syncPresentation = syncPresentation.begin()
+        present(syncPresentation.begin())
         try {
             val summary =
                 apiClient.withExclusiveSession {
@@ -3114,7 +3129,7 @@ internal class TandemMobileSession(
             syncedTransactionCount =
                 localRepository.countVisibleRecords(budgetId, "transaction").coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
             syncComplete = true
-            syncPresentation = syncPresentation.succeeded()
+            present(syncPresentation.succeeded())
             if (budgetQueueRestored) {
                 budgetReorderQueue = budgetReorderQueue.clearCompletedVisibilityOverrides(budgetId)
                 if (retryQueuedBudgetMutations) retryQueuedBudgetReorders(budgetId, encryptionPassword)
@@ -3125,7 +3140,7 @@ internal class TandemMobileSession(
             throw error
         } catch (error: BudgetSyncRemoteException) {
             isServerReachable = error.indicatesTandemReachable()
-            syncPresentation =
+            present(
                 syncPresentation.failed(
                     apiFailureMessage(
                         errorCode = error.errorCode,
@@ -3133,15 +3148,16 @@ internal class TandemMobileSession(
                         context = ApiFailureContext.SYNC,
                         fallback = "Tandem couldn’t sync this budget. Try again shortly.",
                     ),
-                )
+                ),
+            )
             return null
         } catch (error: BudgetSyncProtocolException) {
             isServerReachable = true
-            syncPresentation = syncPresentation.failed("Tandem couldn’t read this budget. Check the Tandem API address and try again.")
+            present(syncPresentation.failed("Tandem couldn’t read this budget. Check the Tandem API address and try again."))
             return null
         } catch (error: Exception) {
             isServerReachable = false
-            syncPresentation =
+            present(
                 syncPresentation.failed(
                     apiFailureMessage(
                         errorCode = "network-error",
@@ -3149,7 +3165,8 @@ internal class TandemMobileSession(
                         context = ApiFailureContext.SYNC,
                         fallback = "Tandem couldn’t sync this budget. Your saved copy is still available.",
                     ),
-                )
+                ),
+            )
             return null
         } finally {
             if (syncPresentation.isSyncing) syncPresentation = syncPresentation.stopped()
@@ -4061,7 +4078,7 @@ internal class TandemMobileSession(
                 action()
                 actionApplied = true
             }
-            if (synchronize(budgetId, encryptionPassword) == null) {
+            if (synchronize(budgetId, encryptionPassword, background = suppressBudgetActionFeedback) == null) {
                 budgetActionWasAppliedButRefreshFailed = true
                 val refreshMessage =
                     syncError ?: "Actual was updated, but Tandem couldn’t refresh the budget. Sync to load the latest data."

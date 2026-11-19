@@ -379,7 +379,6 @@ describe("Actual budget snapshot reader", () => {
     expect(splitChild?.revision).toBe(
       createTransactionRevision(snapshotActualTransaction(splitChildInput)),
     );
-    // Two transaction pages, then the account sort-order query.
     expect(fake.queries).toHaveLength(3);
     expect(fake.queries[2]!.select).toHaveBeenCalledWith(["id", "sort_order"]);
     for (const [index, query] of fake.queries.slice(0, 2).entries()) {

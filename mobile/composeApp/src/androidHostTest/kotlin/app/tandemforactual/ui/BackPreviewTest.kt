@@ -17,8 +17,6 @@ class BackPreviewTest {
 
     @Test
     fun aPreviewIsDroppedWhenAnotherScreenOpensMidGesture() {
-        // Settings -> Manage payees, swipe back, then Budget rules opens before the
-        // preview was cleared: the Settings preview must not stay underneath.
         assertTrue(isBackPreviewStale(preview = "settings", gestureOrigin = "payees", current = "rules"))
         assertTrue(isBackPreviewStale(preview = "settings", gestureOrigin = null, current = "rules"))
     }

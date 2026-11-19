@@ -151,8 +151,6 @@ internal fun CategoryGroupScreen(
             categoryOrderIds.mapNotNull(categoriesById::get) + categories.filterNot { it.id in categoryOrderIds }
         }
 
-    // Drag callbacks can outlive the composition that created them, so read the
-    // queue's latest state when they run instead of a captured order.
     fun currentCategoryOrder(): List<String> =
         dragReorder.currentOrder(
             budgetOrderForScreen(

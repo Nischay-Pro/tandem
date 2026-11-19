@@ -551,8 +551,6 @@ internal fun AccountsScreen(
             orderAccountsForList(liveAccounts, accountOrderIds)
         }
 
-    // Drag callbacks can outlive the composition that created them, so read the
-    // queue's latest state when they run instead of a captured order.
     fun latestAccountOrder(): List<String> =
         dragReorder.displayOrder
             ?: dragReorder.currentOrder(
@@ -790,8 +788,6 @@ internal fun AccountsScreen(
                                 itemId = account.id,
                                 dragState = dragReorder,
                                 reduceMotion = tandemReduceMotion,
-                                // Reorders are held as drafts and merged on the server, so a
-                                // sync in progress must not cancel or block a drag.
                                 dragEnabled = !state.readOnlyMode && movableAccountIds.size > 1,
                                 onDragStarted = ::startDrag,
                                 onDragBy = ::dragBy,

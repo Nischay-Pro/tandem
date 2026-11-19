@@ -196,8 +196,6 @@ export class ActualBudgetSnapshotReader implements BudgetSnapshotReader {
 
     records.push(...(await this.readTransactions()));
 
-    // Actual's account API omits the sort order, so read it separately; the
-    // app lists accounts in this order.
     const accountSortOrders = await this.readAccountSortOrders();
     for (const body of accountBodies) {
       const sortOrder = accountSortOrders.get(body.id as string);
