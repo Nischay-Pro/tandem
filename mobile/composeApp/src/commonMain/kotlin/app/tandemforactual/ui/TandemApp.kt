@@ -377,7 +377,9 @@ fun TandemApp(
             val eligibleAccounts = liveAccounts.filterNot { it.offBudget }
             val defaultAccount =
                 if (state.selectedBudgetId.isNotBlank()) {
-                    eligibleAccounts.firstOrNull { it.id == requestedAccountId } ?: eligibleAccounts.firstOrNull()
+                    eligibleAccounts.firstOrNull { it.id == requestedAccountId }
+                        ?: eligibleAccounts.firstOrNull { it.id == state.lastTransactionAccountId }
+                        ?: eligibleAccounts.firstOrNull()
                 } else {
                     null
                 }
