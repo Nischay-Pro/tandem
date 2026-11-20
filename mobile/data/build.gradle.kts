@@ -103,6 +103,26 @@ kover {
   }
 }
 
+val robolectricSdk28 by configurations.creating { isTransitive = false }
+val robolectricSdk36 by configurations.creating { isTransitive = false }
+
+dependencies {
+  robolectricSdk28(libs.robolectricSdk28)
+  robolectricSdk36(libs.robolectricSdk36)
+}
+
+val prepareRobolectricSdk by tasks.registering(Sync::class) {
+  from(robolectricSdk28, robolectricSdk36)
+  into(layout.buildDirectory.dir("robolectric-sdk"))
+}
+
 tasks.withType<Test>().configureEach {
   jvmArgs("--add-opens=java.base/jdk.internal.access=ALL-UNNAMED")
+  dependsOn(prepareRobolectricSdk)
+  val sdkDirectory = prepareRobolectricSdk.map { it.destinationDir.absolutePath }
+  jvmArgumentProviders.add(
+    CommandLineArgumentProvider {
+      listOf("-Drobolectric.offline=true", "-Drobolectric.dependency.dir=${sdkDirectory.get()}")
+    },
+  )
 }
