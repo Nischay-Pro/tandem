@@ -7,12 +7,14 @@ import { createOrderOperations } from "./budget-maintenance-order-api.js";
 import { createPayeeOperations } from "./budget-maintenance-payee-api.js";
 import { createPlanningOperations } from "./budget-maintenance-planning-api.js";
 import { createScheduleOperations } from "./budget-maintenance-schedule-api.js";
+import { createRuleOperations } from "./budget-maintenance-rule-api.js";
 import type {
   ActualBudgetMaintenanceSession,
   BudgetMaintenanceApiPort,
 } from "./budget-maintenance-contracts.js";
 import type { ActualBudgetMaintenanceClient } from "./budget-maintenance-contracts.js";
 export * from "./budget-maintenance-contracts.js";
+export * from "./budget-maintenance-rule-api.js";
 
 export function createBudgetMaintenanceApi(
   locks: BudgetLockPort,
@@ -28,5 +30,6 @@ export function createBudgetMaintenanceApi(
     ...createPayeeOperations(dependencies),
     ...createPlanningOperations(dependencies),
     ...createScheduleOperations(dependencies),
+    ...createRuleOperations(dependencies),
   };
 }

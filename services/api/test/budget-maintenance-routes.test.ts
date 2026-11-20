@@ -17,6 +17,40 @@ import type {
 } from "../src/write-journal/contracts.js";
 
 const budgetId = "budget-1";
+const sampleRule = {
+  stage: "default",
+  conditionsOp: "and",
+  conditions: [
+    { field: "imported_payee", op: "contains", text: "COFFEE" },
+    {
+      field: "amount",
+      op: "isbetween",
+      range: { num1: 100, num2: 2_000 },
+      outflow: true,
+    },
+  ],
+  actions: [
+    { field: "category", op: "set", text: "category-1" },
+    { op: "append-notes", text: " #coffee" },
+  ],
+};
+const sampleDraft = {
+  stage: "default",
+  conditionsOp: "and",
+  conditions: [
+    { field: "imported_payee", op: "contains", value: "COFFEE" },
+    {
+      field: "amount",
+      op: "isbetween",
+      value: { num1: 100, num2: 2_000 },
+      options: { outflow: true },
+    },
+  ],
+  actions: [
+    { field: "category", op: "set", value: "category-1" },
+    { op: "append-notes", value: " #coffee" },
+  ],
+};
 const accessToken = "A".repeat(43);
 const device: DeviceRecord = {
   deviceId: "device-1",
@@ -71,6 +105,9 @@ async function createApi(
     skipSchedule: vi.fn(async () => undefined),
     postSchedule: vi.fn(async () => undefined),
     deleteSchedule: vi.fn(async () => undefined),
+    createRule: vi.fn(async () => "rule-created"),
+    editRule: vi.fn(async () => undefined),
+    deleteRule: vi.fn(async () => undefined),
   };
   const authenticate = vi.fn(async (token?: string) =>
     token === accessToken ? device : undefined,
@@ -305,6 +342,16 @@ const maintenanceRouteCases = (routeBudgetId = budgetId) => [
     method: "POST" as const,
     url: `/api/v1/budgets/${routeBudgetId}/schedules/schedule-1/actions`,
     payload: { action: "post", expectedNextDate: "2026-11-15" },
+  },
+  {
+    method: "POST" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/rules`,
+    payload: sampleRule,
+  },
+  {
+    method: "POST" as const,
+    url: `/api/v1/budgets/${routeBudgetId}/rules/rule-1/actions`,
+    payload: { action: "delete" },
   },
 ];
 
@@ -1768,6 +1815,184 @@ describe("budget maintenance routes", () => {
     expect(invalid.statusCode).toBe(400);
     expect(failed.statusCode).toBe(502);
     expect(failed.body).not.toContain("private Actual detail");
+    await fake.app.close();
+  });
+
+  it("creates, edits, and deletes rules through the journal", async () => {
+    const fake = await createApi();
+    const createHeaders = {
+      ...testHeaders(),
+      "idempotency-key": "rule-create-1",
+    };
+    const create = () =>
+      fake.app.inject({
+        method: "POST",
+        url: `/api/v1/budgets/${budgetId}/rules`,
+        headers: createHeaders,
+        payload: sampleRule,
+      });
+    const created = await create();
+    const replayed = await create();
+    const edited = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/rules/rule-1/actions`,
+      headers: testHeaders(),
+      payload: { action: "edit", rule: { ...sampleRule, stage: "pre" } },
+    });
+    const deleted = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/rules/rule-1/actions`,
+      headers: testHeaders(),
+      payload: { action: "delete" },
+    });
+    const editWithoutRule = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/rules/rule-1/actions`,
+      headers: testHeaders(),
+      payload: { action: "edit" },
+    });
+    const deleteWithRule = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/rules/rule-1/actions`,
+      headers: testHeaders(),
+      payload: { action: "delete", rule: sampleRule },
+    });
+    const unsupportedField = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/rules`,
+      headers: testHeaders(),
+      payload: {
+        ...sampleRule,
+        conditions: [{ field: "date", op: "is", text: "2026-11-01" }],
+      },
+    });
+    const twoValues = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/rules`,
+      headers: testHeaders(),
+      payload: {
+        ...sampleRule,
+        conditions: [{ field: "notes", op: "is", text: "a", amountMinor: 1 }],
+      },
+    });
+    const outOfScope = await fake.app.inject({
+      method: "POST",
+      url: "/api/v1/budgets/other-budget/rules",
+      headers: testHeaders(),
+      payload: sampleRule,
+    });
+
+    expect([created.statusCode, replayed.statusCode]).toEqual([200, 200]);
+    expect(fake.budgetMaintenanceApi.createRule).toHaveBeenNthCalledWith(
+      1,
+      budgetId,
+      sampleDraft,
+      undefined,
+    );
+    expect(edited.statusCode).toBe(200);
+    expect(fake.budgetMaintenanceApi.editRule).toHaveBeenCalledWith(
+      budgetId,
+      "rule-1",
+      { ...sampleDraft, stage: "pre" },
+      undefined,
+    );
+    expect(deleted.statusCode).toBe(200);
+    expect(fake.budgetMaintenanceApi.deleteRule).toHaveBeenCalledWith(
+      budgetId,
+      "rule-1",
+      undefined,
+    );
+    const inflowOnly = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/rules`,
+      headers: testHeaders(),
+      payload: {
+        ...sampleRule,
+        conditions: [
+          { field: "amount", op: "gt", amountMinor: 500, inflow: true },
+        ],
+      },
+    });
+    const textAndCleared = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/rules`,
+      headers: testHeaders(),
+      payload: {
+        ...sampleRule,
+        actions: [{ field: "cleared", op: "set", text: "x", cleared: true }],
+      },
+    });
+    const missingBody = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/rules/rule-1/actions`,
+      headers: testHeaders(),
+    });
+
+    expect(inflowOnly.statusCode).toBe(200);
+    expect(fake.budgetMaintenanceApi.createRule).toHaveBeenLastCalledWith(
+      budgetId,
+      expect.objectContaining({
+        conditions: [
+          {
+            field: "amount",
+            op: "gt",
+            value: 500,
+            options: { inflow: true },
+          },
+        ],
+      }),
+      undefined,
+    );
+    expect([
+      editWithoutRule.statusCode,
+      deleteWithRule.statusCode,
+      unsupportedField.statusCode,
+      twoValues.statusCode,
+      textAndCleared.statusCode,
+      missingBody.statusCode,
+    ]).toEqual([400, 400, 400, 400, 400, 400]);
+    expect(outOfScope.statusCode).toBe(404);
+    await fake.app.close();
+  });
+
+  it("explains rejected rule changes and hides Actual failures", async () => {
+    const fake = await createApi();
+    vi.mocked(fake.budgetMaintenanceApi.createRule).mockRejectedValueOnce(
+      new BudgetMaintenanceInputError("Choose a category in this budget"),
+    );
+    vi.mocked(fake.budgetMaintenanceApi.deleteRule).mockRejectedValueOnce(
+      new Error("private Actual detail"),
+    );
+    vi.mocked(fake.budgetMaintenanceApi.createRule).mockRejectedValueOnce(
+      new Error("private create detail"),
+    );
+    const rejected = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/rules`,
+      headers: testHeaders(),
+      payload: sampleRule,
+    });
+    const failed = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/rules/rule-1/actions`,
+      headers: testHeaders(),
+      payload: { action: "delete" },
+    });
+
+    expect(rejected.statusCode).toBe(400);
+    expect(rejected.json().error.message).toBe(
+      "Choose a category in this budget",
+    );
+    const createFailed = await fake.app.inject({
+      method: "POST",
+      url: `/api/v1/budgets/${budgetId}/rules`,
+      headers: testHeaders(),
+      payload: sampleRule,
+    });
+    expect(failed.statusCode).toBeGreaterThanOrEqual(500);
+    expect(failed.body).not.toContain("private Actual detail");
+    expect(createFailed.statusCode).toBeGreaterThanOrEqual(500);
+    expect(createFailed.body).not.toContain("private create detail");
     await fake.app.close();
   });
 

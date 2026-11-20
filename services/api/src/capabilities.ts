@@ -10,6 +10,7 @@ export const SERVER_FEATURES = [
   "budget-password-attempt-limit",
   "hold-total",
   "local-identity",
+  "rule-edit",
 ] as const;
 
 const schema: FastifySchema = {
