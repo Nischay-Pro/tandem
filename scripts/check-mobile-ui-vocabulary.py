@@ -43,7 +43,7 @@ RULES = (
     ('use "Delete transaction?" for a single transaction', re.compile(r"\bDelete this transaction\?")),
     ('use "Needs review" as the review state label', re.compile(r"\bNeeds your review\b|\bReview changes\b")),
     ('never show a transaction record ID as its name', re.compile(r"Transaction \$\{[^}]*recordId[^}]*\}")),
-    ("use the mobile-data setting name", re.compile(r"Use unrestricted networks")),
+    ('use "Sync over" for the network setting', re.compile(r"Use unrestricted networks")),
     ('use "Rejected edit alerts" for phone notifications', re.compile(r"Not applied alerts")),
     ("use sentence case for account creation", re.compile(r"\bAdd Account\b")),
     (
@@ -76,7 +76,7 @@ PREFERRED_TERMS = (
     "Needs review",
     "Status unknown",
     "Rejected",
-    "Sync on mobile data",
+    "Sync over",
     "Rejected edit alerts",
     "Allow notifications",
     "Turn on in notification settings",

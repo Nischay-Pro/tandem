@@ -10,17 +10,22 @@ adding the `/api/v1/` route. If port `19753` is occupied on the host, setup
 chooses another free loopback port and updates `.env` and the Nginx route.
 Managed Nginx dashboards and ambiguous configurations are left unchanged.
 
-If you declined the change or Nginx was not detected, route `/api/v1/` to the
-Tandem API on port `19753`:
+If you declined the change or Nginx was not detected, configure the route
+manually.
 
-- For host-installed Nginx, use `http://127.0.0.1:<TANDEM_API_HOST_PORT>`.
-- For Docker Nginx, connect it to the `tandem-edge` network and use
-  `http://tandem-api:19753`.
+1. Define the `tandem_auth` and `tandem_api` rate-limit zones and the
+   `tandem_api` upstream inside Nginx's `http` context. Copy those declarations
+   from [`tandem-upstreams.conf.example`](../../deploy/nginx/tandem-upstreams.conf.example).
+   - For host-installed Nginx, set the `tandem_api` upstream to
+     `127.0.0.1:<TANDEM_API_HOST_PORT>`. The default port is `19753`.
+   - For Docker Nginx, connect it to the network named by `TANDEM_EDGE_NETWORK`
+     (default `tandem-edge`) and set the upstream to `tandem-api:19753`.
 
-Add the route to the existing HTTPS server block before Actual's catch-all.
-The locations in [`tandem-locations.conf.example`](../../deploy/nginx/tandem-locations.conf.example)
-include the authentication rate limits and request headers. Keep the Actual
-`/` route and its existing COOP/COEP headers.
+2. Add the `/api/v1` and `/api/v1/` locations, including the more specific
+   `/api/v1/auth/` locations, to the existing HTTPS server block. Use
+   [`tandem-locations.conf.example`](../../deploy/nginx/tandem-locations.conf.example)
+   for the routing, request headers, and limits. Keep the existing Actual `/`
+   location and its COOP/COEP headers.
 
 Set `TRUST_PROXY` in `.env` to the exact proxy address or a narrow CIDR seen by
 the API. Do not trust all forwarded headers or expose the API directly.
@@ -31,6 +36,7 @@ Check the Nginx configuration, reload it, then verify:
 curl --fail https://budget.example.com/api/v1/health/ready
 ```
 
-The response should be `{"status":"ok"}`. The Actual callback path contains a
-short-lived sign-in code, so disable access logging for
-`/api/v1/auth/actual-return/`; see the example locations above.
+The response should be `{"status":"ok"}`. Actual OpenID returns its session
+token in the query string under `/api/v1/auth/actual-return/`. Keep that query
+string out of both access and error logs. The example location turns off access
+logging and directs error logging for that route to `/dev/null`.

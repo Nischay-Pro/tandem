@@ -2,8 +2,8 @@
 
 Tandem settings live in the single `.env` file beside `docker-compose.yml`.
 Keep that file private: it contains the PostgreSQL password and the key used to
-encrypt saved Actual sessions. The setup command preserves `.env` when run
-again.
+encrypt saved Actual sessions. The setup command reuses `.env` on later runs.
+Automatic Nginx setup can update `TANDEM_API_HOST_PORT` and `TRUST_PROXY`.
 
 | Variable                             | Default                  | Purpose                                                                                                      |
 | ------------------------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------ |

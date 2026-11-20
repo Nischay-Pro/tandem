@@ -54,27 +54,55 @@ single structured request log entry.
 
 ## Implemented endpoints
 
-| Method   | Path                                                                          | Purpose                                                            |
-| -------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `GET`    | `/api/v1/health/live`                                                         | Liveness check for the API process.                                |
-| `GET`    | `/api/v1/health/ready`                                                        | Readiness check for PostgreSQL and any configured startup session. |
-| `GET`    | `/api/v1/openapi.json`                                                        | Generated API contract.                                            |
-| `GET`    | `/api/v1/auth/methods`                                                        | Read the Actual server's available sign-in methods.                |
-| `POST`   | `/api/v1/auth/login`                                                          | Sign in with an Actual password and create a device session.       |
-| `POST`   | `/api/v1/auth/openid/start`                                                   | Start Actual OpenID sign-in in the system browser.                 |
-| `GET`    | `/api/v1/auth/openid/browser-start/{state}`                                   | Bind the pending sign-in to this browser and redirect to Actual.   |
-| `GET`    | `/api/v1/auth/actual-return/{state}/openid-cb`                                | Receive Actual's browser callback and return to the mobile app.    |
-| `POST`   | `/api/v1/auth/openid/complete`                                                | Exchange a one-use return code for the device session.             |
-| `GET`    | `/api/v1/auth/me`                                                             | Return the authenticated device and its budget scope.              |
-| `GET`    | `/api/v1/devices`                                                             | List devices visible to the authenticated device.                  |
-| `DELETE` | `/api/v1/devices/{deviceId}`                                                  | Revoke an authorized device token.                                 |
-| `GET`    | `/api/v1/budgets`                                                             | List Actual budgets visible to the signed-in account.              |
-| `GET`    | `/api/v1/budgets/{budgetId}/snapshot`                                         | Refresh and read a complete budget snapshot.                       |
-| `GET`    | `/api/v1/budgets/{budgetId}/changes`                                          | Read generation-aware pages of budget changes.                     |
-| `GET`    | `/api/v1/budgets/{budgetId}/transactions/{transactionId}`                     | Read a transaction snapshot and revision.                          |
-| `POST`   | `/api/v1/budgets/{budgetId}/accounts/{accountId}/transactions/import/preview` | Count existing statement references without importing them.        |
-| `POST`   | `/api/v1/budgets/{budgetId}/transactions/{transactionId}/operations`          | Create, update, or delete a transaction idempotently.              |
-| `GET`    | `/api/v1/operations/{operationId}`                                            | Read operation status and conflict details.                        |
+See the [OpenAPI contract](../api/openapi-v1.json) for request and response
+schemas, and [App and server versioning](versioning.md) for capability negotiation.
+
+| Method   | Path                                                                          | Purpose                                                                               |
+| -------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `GET`    | `/api/v1/health/live`                                                         | Liveness check for the API process.                                                   |
+| `GET`    | `/api/v1/health/ready`                                                        | Readiness check for PostgreSQL and any configured startup session.                    |
+| `GET`    | `/api/v1/openapi.json`                                                        | Generated API contract.                                                               |
+| `GET`    | `/api/v1/capabilities`                                                        | List the API version, minimum client version, and server features without signing in. |
+| `POST`   | `/api/v1/local-identity`                                                      | Prove the server's identity to a device on a private network.                         |
+| `GET`    | `/api/v1/auth/methods`                                                        | Read the Actual server's available sign-in methods.                                   |
+| `POST`   | `/api/v1/auth/login`                                                          | Sign in with an Actual password and create a device session.                          |
+| `POST`   | `/api/v1/auth/openid/start`                                                   | Start Actual OpenID sign-in in the system browser.                                    |
+| `GET`    | `/api/v1/auth/openid/browser-start/{state}`                                   | Bind the pending sign-in to this browser and redirect to Actual.                      |
+| `GET`    | `/api/v1/auth/actual-return/{state}/openid-cb`                                | Receive Actual's browser callback and return to the mobile app.                       |
+| `POST`   | `/api/v1/auth/openid/complete`                                                | Exchange a one-use return code for the device session.                                |
+| `GET`    | `/api/v1/auth/me`                                                             | Return the authenticated device and its budget scope.                                 |
+| `GET`    | `/api/v1/devices`                                                             | List devices visible to the authenticated device.                                     |
+| `DELETE` | `/api/v1/devices/{deviceId}`                                                  | Revoke an authorized device token.                                                    |
+| `GET`    | `/api/v1/budgets`                                                             | List Actual budgets visible to the signed-in account.                                 |
+| `GET`    | `/api/v1/budgets/{budgetId}/snapshot`                                         | Refresh and read a complete budget snapshot.                                          |
+| `GET`    | `/api/v1/budgets/{budgetId}/snapshot-pages`                                   | Read a page from a budget snapshot.                                                   |
+| `GET`    | `/api/v1/budgets/{budgetId}/changes`                                          | Check whether the client needs a fresh snapshot.                                      |
+| `PUT`    | `/api/v1/budgets/{budgetId}/order`                                            | Save reordered category groups, categories, and accounts.                             |
+| `POST`   | `/api/v1/budgets/{budgetId}/bank-sync`                                        | Run Actual bank sync and refresh the budget.                                          |
+| `POST`   | `/api/v1/budgets/{budgetId}/accounts`                                         | Create an account.                                                                    |
+| `PATCH`  | `/api/v1/budgets/{budgetId}/accounts/{accountId}`                             | Rename an account.                                                                    |
+| `POST`   | `/api/v1/budgets/{budgetId}/accounts/{accountId}/close`                       | Close an account.                                                                     |
+| `POST`   | `/api/v1/budgets/{budgetId}/accounts/{accountId}/reopen`                      | Reopen an account.                                                                    |
+| `POST`   | `/api/v1/budgets/{budgetId}/accounts/{accountId}/move`                        | Reorder an account.                                                                   |
+| `POST`   | `/api/v1/budgets/{budgetId}/payees`                                           | Create a payee.                                                                       |
+| `POST`   | `/api/v1/budgets/{budgetId}/payees/{payeeId}/actions`                         | Rename, merge, or delete a payee.                                                     |
+| `POST`   | `/api/v1/budgets/{budgetId}/categories`                                       | Create a category.                                                                    |
+| `PATCH`  | `/api/v1/budgets/{budgetId}/categories/{categoryId}`                          | Rename a category.                                                                    |
+| `DELETE` | `/api/v1/budgets/{budgetId}/categories/{categoryId}`                          | Delete a category and reassign its transactions.                                      |
+| `POST`   | `/api/v1/budgets/{budgetId}/categories/{categoryId}/actions`                  | Hide, show, reorder, or move a category.                                              |
+| `POST`   | `/api/v1/budgets/{budgetId}/category-groups`                                  | Create a category group.                                                              |
+| `PATCH`  | `/api/v1/budgets/{budgetId}/category-groups/{groupId}`                        | Rename, hide, show, reorder, or delete a category group.                              |
+| `PUT`    | `/api/v1/budgets/{budgetId}/categories/{categoryId}/budget-amount`            | Set a category's assigned amount for a month.                                         |
+| `PUT`    | `/api/v1/budgets/{budgetId}/categories/{categoryId}/carryover`                | Set whether unused category money carries into the next month.                        |
+| `POST`   | `/api/v1/budgets/{budgetId}/categories/move-money`                            | Move an assigned amount between categories.                                           |
+| `POST`   | `/api/v1/budgets/{budgetId}/months/{month}/actions`                           | Manage a month's carryover and category assignments.                                  |
+| `POST`   | `/api/v1/budgets/{budgetId}/schedules/{scheduleId}/actions`                   | Edit, post, skip, or delete an existing schedule.                                     |
+| `GET`    | `/api/v1/budgets/{budgetId}/transactions/{transactionId}`                     | Read a transaction snapshot and revision.                                             |
+| `POST`   | `/api/v1/budgets/{budgetId}/accounts/{accountId}/transactions/import/preview` | Count existing statement references without importing them.                           |
+| `POST`   | `/api/v1/budgets/{budgetId}/accounts/{accountId}/transactions/import`         | Import a parsed statement into an account.                                            |
+| `POST`   | `/api/v1/budgets/{budgetId}/transactions/{transactionId}/operations`          | Create, update, or delete a transaction idempotently.                                 |
+| `GET`    | `/api/v1/operations/{operationId}`                                            | Read operation status and conflict details.                                           |
+| `POST`   | `/api/v1/operations/{operationId}/discard`                                    | Discard an uncertain transaction operation on the server.                             |
 
 ## Sign-in and device authorization
 
@@ -111,8 +139,8 @@ previous-key setting and restart; retain the old key in protected backup
 storage while any database backup may still contain tokens encrypted with it.
 A ciphertext envelope carries a key ID, so rows encrypted with the previous
 key remain readable during rotation without a schema migration.
-A budget password for an Actual-encrypted budget is different: mobile sends it
-only on the requests that need it, and Tandem does not persist it.
+A budget password unlocks a specific Actual-encrypted budget. The mobile app
+sends it with the requests that need it, and the Tandem API does not persist it.
 
 ### OpenID sign-in
 
@@ -236,6 +264,11 @@ normalized fields as the transaction read endpoint, and their revisions match
 that endpoint so an offline client can safely use a downloaded record as its
 write base. Internal raw bank-import payloads are omitted from transaction
 records. The response is `Cache-Control: no-store`.
+
+For a bounded download, call `GET /api/v1/budgets/{budgetId}/snapshot-pages`.
+When `hasMore` is true, send the returned `generation` and `cursor` plus
+`nextAfterType` and `nextAfterId` as `afterType` and `afterId`. If a page sets
+`resetRequired`, start again from the first page without those parameters.
 
 Start a change poll with
 `GET /api/v1/budgets/{budgetId}/changes?generation=<generation>&cursor=<cursor>`.

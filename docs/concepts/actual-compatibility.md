@@ -64,8 +64,9 @@ notes, and base snapshots until that journal is removed. Actual's encryption
 therefore protects the budget on Actual's sync server, but does not make the
 Tandem API service an encrypted relay; deployers must trust and protect the
 service, its PostgreSQL journal and credentials, local Actual working copy,
-and the phones' offline caches. Production backups also contain these files:
-the backup script writes mode-600 plaintext by default,
+and the phones' offline caches. The [architecture notes](architecture-and-trust.md#unencrypted-and-encrypted-budgets)
+describe how Android and iOS store encrypted budgets. The backup script writes
+mode-600 plaintext by default,
 or can encrypt the exported files with GnuPG when configured. File permissions
 limit access to the operator account but do not encrypt backup contents.
 
