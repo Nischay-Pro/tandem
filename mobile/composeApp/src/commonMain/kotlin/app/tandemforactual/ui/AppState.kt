@@ -109,8 +109,10 @@ internal class AppState {
     var selectedTransactionPayeeName by mutableStateOf("")
     var selectedTransactionCategoryName by mutableStateOf("")
     var selectedConflictOperationId by mutableStateOf("")
+    var ruleEditorRuleId by mutableStateOf<String?>(null)
     var pointerInputSequence by mutableStateOf(0)
     var serverUrl by mutableStateOf("")
+    var recentServerUrls by mutableStateOf("")
     var actualPassword by mutableStateOf("")
     var encryptedPassword by mutableStateOf("")
     var transactionAmount by mutableStateOf(formatAmount(0))
@@ -258,6 +260,7 @@ internal class AppState {
             "hasCompletedSyncOnboarding" to hasCompletedSyncOnboarding.toString(),
             "unlockFailureCount" to unlockFailureCount.toString(),
             "localServerUrl" to localServerUrl,
+            "recentServerUrls" to recentServerUrls,
             "unlockRetryAtEpochMillis" to unlockRetryAtEpochMillis.toString(),
             "syncReminders" to syncReminders.toString(),
             "conflictReviewAlerts" to conflictReviewAlerts.toString(),
@@ -310,6 +313,7 @@ internal class AppState {
         hasCompletedSyncOnboarding = saved["hasCompletedSyncOnboarding"]?.toBooleanStrictOrNull() ?: hasCompletedSyncOnboarding
         unlockFailureCount = saved["unlockFailureCount"]?.toIntOrNull()?.coerceAtLeast(0) ?: unlockFailureCount
         localServerUrl = saved["localServerUrl"] ?: localServerUrl
+        recentServerUrls = saved["recentServerUrls"] ?: recentServerUrls
         unlockRetryAtEpochMillis = saved["unlockRetryAtEpochMillis"]?.toLongOrNull()?.coerceAtLeast(0L) ?: unlockRetryAtEpochMillis
         val legacyNotifications = saved["notifications"]?.toBooleanStrictOrNull()
         syncReminders = saved["syncReminders"]?.toBooleanStrictOrNull() ?: legacyNotifications ?: syncReminders

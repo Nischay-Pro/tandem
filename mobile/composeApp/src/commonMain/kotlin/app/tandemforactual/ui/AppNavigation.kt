@@ -272,6 +272,7 @@ internal fun AppHeader(
     addTransactionEnabled: Boolean = true,
     onRefreshBudgets: (() -> Unit)? = null,
     refreshingBudgets: Boolean = false,
+    canAddRules: Boolean = false,
 ) {
     val palette = tandemPalette
     var headerMenuExpanded by rememberSaveable(route) { mutableStateOf(false) }
@@ -489,6 +490,11 @@ internal fun AppHeader(
                         } else {
                             TandemIconButton(Lucide.RefreshCw, "Refresh budgets", onClick = onRefreshBudgets)
                         }
+                    }
+                }
+                AppRoute.BUDGET_RULES -> {
+                    if (canAddRules) {
+                        TandemIconButton(Lucide.Plus, "Add rule") { state.ruleEditorRuleId = "" }
                     }
                 }
                 AppRoute.SYNC_CENTER -> {
@@ -801,6 +807,14 @@ internal fun isLandscapeViewport(
     widthPx: Int,
     heightPx: Int,
 ): Boolean = widthPx > heightPx
+
+internal const val RAIL_NAVIGATION_MIN_WIDTH_DP = 600f
+
+/** Wide windows (tablets, unfolded foldables) and landscape phones use the side rail instead of the tab bar. */
+internal fun usesRailNavigation(
+    widthDp: Float,
+    isLandscape: Boolean,
+): Boolean = isLandscape || widthDp >= RAIL_NAVIGATION_MIN_WIDTH_DP
 
 @Composable
 internal fun SideNavigationRail(

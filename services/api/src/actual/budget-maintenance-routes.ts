@@ -8,6 +8,7 @@ import { registerBudgetPlanningRoutes } from "./budget-planning-routes.js";
 import { registerBudgetCategoryRenameRoutes } from "./budget-category-rename-routes.js";
 import { registerBudgetScheduleRoutes } from "./budget-schedule-routes.js";
 import { registerBudgetOrderRoutes } from "./budget-order-routes.js";
+import { registerBudgetRuleRoutes } from "./budget-rule-routes.js";
 
 export { type BudgetMaintenanceJournal } from "./budget-maintenance-support.js";
 
@@ -23,4 +24,5 @@ export function registerBudgetMaintenanceRoutes(
   registerBudgetCategoryRenameRoutes(app, dependencies);
   registerBudgetScheduleRoutes(app, dependencies);
   registerBudgetOrderRoutes(app, dependencies);
+  registerBudgetRuleRoutes(app, dependencies);
 }
