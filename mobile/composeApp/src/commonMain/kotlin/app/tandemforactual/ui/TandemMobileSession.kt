@@ -348,6 +348,13 @@ internal class TandemMobileSession(
         bindEncryptedBudgetDatabase(budgetId, null)
     }
 
+    internal fun synchronizeInBackground(
+        budgetId: String,
+        encryptionPassword: String,
+    ) {
+        sessionScope.launch { synchronize(budgetId = budgetId, encryptionPassword = encryptionPassword) }
+    }
+
     internal fun forgetEncryptionPasswords() {
         scheduleActionEncryptionPasswords.clear()
     }
