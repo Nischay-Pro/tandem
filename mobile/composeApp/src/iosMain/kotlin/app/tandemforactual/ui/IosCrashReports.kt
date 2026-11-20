@@ -2,6 +2,7 @@ package app.tandemforactual.ui
 
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSApplicationSupportDirectory
+import platform.Foundation.NSBundle
 import platform.Foundation.NSDate
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSString
@@ -36,7 +37,7 @@ class IosCrashReports : CrashReports {
         val millis = (NSDate().timeIntervalSince1970 * 1000).toLong()
         val text =
             crashReportText(
-                appVersion = platformAppVersionName(),
+                appVersion = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String ?: "unknown",
                 platform = "${UIDevice.currentDevice.systemName} ${UIDevice.currentDevice.systemVersion}",
                 device = UIDevice.currentDevice.model,
                 thread = "main",
