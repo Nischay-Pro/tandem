@@ -243,20 +243,29 @@ export function createPlanningOperations({
               );
             }
             const monthData = await client.getBudgetMonth(month);
-            const available = readSafeAmount(
+            const ready = readSafeAmount(
               monthData.toBudget ?? 0,
               "ready-to-assign amount",
             );
-            if (amountMinor > available) {
+            const alreadyHeld = readSafeAmount(
+              monthData.forNextMonth ?? 0,
+              "held amount",
+            );
+            if (amountMinor > ready + alreadyHeld) {
               throw new BudgetMaintenanceInputError(
                 "The hold cannot exceed the amount ready to assign",
               );
             }
+            if (amountMinor === alreadyHeld) return;
+            if (alreadyHeld > 0) await client.resetBudgetHold(month);
             const held = await client.holdBudgetForNextMonth(
               month,
               amountMinor,
             );
             if (!held) {
+              if (alreadyHeld > 0) {
+                await client.holdBudgetForNextMonth(month, alreadyHeld);
+              }
               throw new BudgetMaintenanceInputError(
                 "There is no money ready to assign in this month",
               );

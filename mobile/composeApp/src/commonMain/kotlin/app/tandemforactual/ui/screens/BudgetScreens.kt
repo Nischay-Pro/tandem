@@ -532,7 +532,8 @@ internal fun BudgetScreen(
                                                     }
                                                 },
                                                 onClick = {
-                                                    nextMonthHoldAmountMinor = readyToAssignMinor.coerceAtLeast(0)
+                                                    nextMonthHoldAmountMinor =
+                                                        suggestedHoldAmount(readyToAssignMinor, heldForNextMonthMinor)
                                                     holdCalculatorAccumulator = null
                                                     holdCalculatorOperator = null
                                                     holdEnterNewOperand = false
@@ -1267,7 +1268,13 @@ internal fun BudgetScreen(
                         },
                     )
                     if (readyToAssignMinor < 0) {
-                        InfoBubble("This month is overbudgeted. Move money back before holding it for next month.")
+                        InfoBubble(
+                            if (heldForNextMonthMinor > 0) {
+                                "This month is overbudgeted by ${state.formatCurrency(-readyToAssignMinor)}. Lower the hold to cover it."
+                            } else {
+                                "This month is overbudgeted. Move money back before holding it for next month."
+                            },
+                        )
                     }
                     TransactionAmountField(
                         amount = state.formatAmount(nextMonthHoldAmountMinor),
@@ -1300,7 +1307,7 @@ internal fun BudgetScreen(
                     budgetActionFeedbackMessage(mobileSession)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                         TandemActionButton(
-                            if (heldForNextMonthMinor > 0) "Reset hold" else "Close",
+                            if (heldForNextMonthMinor > 0) "Release all" else "Close",
                             TandemActionButtonTone.NEUTRAL,
                             Modifier.weight(1f),
                             enabled =
@@ -1323,15 +1330,18 @@ internal fun BudgetScreen(
                             }
                         }
                         TandemActionButton(
-                            if (mobileSession.isPerformingBudgetAction) "Holding…" else "Hold amount",
+                            when {
+                                mobileSession.isPerformingBudgetAction -> "Holding…"
+                                heldForNextMonthMinor > 0 -> "Update hold"
+                                else -> "Hold amount"
+                            },
                             TandemActionButtonTone.PRIMARY,
                             Modifier.weight(1f),
                             icon = Lucide.Check,
                             enabled =
                                 !state.readOnlyMode &&
                                     !mobileSession.isPerformingBudgetAction &&
-                                    parsedHoldAmount > 0 &&
-                                    parsedHoldAmount <= readyToAssignMinor,
+                                    holdAmountAllowed(parsedHoldAmount, readyToAssignMinor, heldForNextMonthMinor),
                             loading = mobileSession.isPerformingBudgetAction,
                         ) {
                             scope.launch {
@@ -1669,3 +1679,19 @@ private fun PendingBudgetSyncIcon() {
         tint = tandemPalette.accent,
     )
 }
+
+internal fun suggestedHoldAmount(
+    readyToAssignMinor: Long,
+    heldMinor: Long,
+): Long =
+    if (heldMinor > 0) {
+        minOf(heldMinor, (readyToAssignMinor + heldMinor).coerceAtLeast(0))
+    } else {
+        readyToAssignMinor.coerceAtLeast(0)
+    }
+
+internal fun holdAmountAllowed(
+    amountMinor: Long,
+    readyToAssignMinor: Long,
+    heldMinor: Long,
+): Boolean = amountMinor > 0 && amountMinor != heldMinor && amountMinor <= readyToAssignMinor + heldMinor

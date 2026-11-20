@@ -388,7 +388,10 @@ internal fun liveBudgetMonthSummary(
         }
     }
     return LiveBudgetMonthSummary(
-        toBudgetMinor = month.longValue("toBudget")?.minus(assignedDelta),
+        toBudgetMinor =
+            month.longValue("toBudget")?.minus(assignedDelta)?.plus(
+                heldForNextMonthOverride?.let { (month.longValue("forNextMonth") ?: 0L) - it } ?: 0L,
+            ),
         incomeAvailableMinor = month.longValue("incomeAvailable"),
         totalBudgetedMinor = month.longValue("totalBudgeted")?.plus(assignedDelta),
         totalSpentMinor = month.longValue("totalSpent"),
