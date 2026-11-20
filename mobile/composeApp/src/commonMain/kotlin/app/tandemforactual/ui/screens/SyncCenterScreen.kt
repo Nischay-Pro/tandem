@@ -147,6 +147,28 @@ internal fun SyncCenterScreen(
     val waitingCount = transactionsWaiting.size + budgetMutations.size + schedulesWaiting.size
 
     PageLazyColumn {
+        val capabilities = mobileSession.serverCapabilities
+        if (capabilities?.clientUpdateRequired == true) {
+            item(key = "sync-center-app-update") {
+                SyncNoticeCard(
+                    Lucide.TriangleAlert,
+                    tandemPalette.warning,
+                    "Update the Tandem app",
+                    "Your Tandem server needs a newer version of this app to sync every change.",
+                    onClick = null,
+                )
+            }
+        } else if (capabilities?.isLegacy == true) {
+            item(key = "sync-center-server-update") {
+                SyncNoticeCard(
+                    Lucide.TriangleAlert,
+                    tandemPalette.warning,
+                    "Update your Tandem server",
+                    "Some changes wait on this device until your server is updated. They sync automatically after that.",
+                    onClick = null,
+                )
+            }
+        }
         item(key = "sync-center-overview") {
             SyncOverviewCard(
                 budgetName = budgetDisplayNameForHeader(state.selectedBudget),

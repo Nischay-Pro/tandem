@@ -175,6 +175,42 @@
     }
   },
   "paths": {
+    "/api/v1/capabilities": {
+      "get": {
+        "operationId": "getServerCapabilities",
+        "summary": "List the API version and features this Tandem server supports",
+        "tags": ["Health"],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "apiVersion": { "type": "integer" },
+                    "minimumClientApiVersion": { "type": "integer" },
+                    "features": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "actualVersion": { "type": "string" }
+                  },
+                  "required": [
+                    "apiVersion",
+                    "minimumClientApiVersion",
+                    "features",
+                    "actualVersion"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
     "/api/v1/health/live": {
       "get": {
         "operationId": "getLiveness",
