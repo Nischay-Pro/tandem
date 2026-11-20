@@ -77,7 +77,9 @@ import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Globe
 import com.composables.icons.lucide.History
+import com.composables.icons.lucide.Lock
 import com.composables.icons.lucide.LockKeyhole
+import com.composables.icons.lucide.LockOpen
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.WalletCards
 import kotlinx.coroutines.delay
@@ -323,6 +325,7 @@ internal fun ServerAddressScreen(
 ) {
     val completedAddress = completeServerAddress(state.serverUrl)
     val canContinue = serverAddressIsValid(completedAddress)
+    val secureAddress = completedAddress.startsWith("https://", ignoreCase = true)
     val continueToSignIn = {
         if (canContinue) {
             state.serverUrl = completedAddress
@@ -348,6 +351,9 @@ internal fun ServerAddressScreen(
                             imeAction = ImeAction.Go,
                         ),
                     keyboardActions = KeyboardActions(onGo = { continueToSignIn() }),
+                    leadingIcon = if (canContinue) (if (secureAddress) Lucide.Lock else Lucide.LockOpen) else null,
+                    leadingIconTint = if (secureAddress) tandemPalette.positive else tandemPalette.negative,
+                    leadingIconDescription = if (secureAddress) "Secure connection" else "Not secure",
                 ),
             )
             AnimatedReveal(visible = suggestions.isNotEmpty()) {

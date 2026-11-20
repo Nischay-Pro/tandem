@@ -66,10 +66,13 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.amountAnnotatedString
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.Eye
+import com.composables.icons.lucide.EyeOff
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Receipt
 import com.composables.icons.lucide.Trash2
@@ -133,6 +136,9 @@ internal data class TextFieldOptions(
     val textAlign: TextAlign = TextAlign.Start,
     val large: Boolean = false,
     val onFocusedChange: ((Boolean) -> Unit)? = null,
+    val leadingIcon: ImageVector? = null,
+    val leadingIconTint: Color? = null,
+    val leadingIconDescription: String? = null,
 )
 
 internal fun currencySymbolTransformation(
@@ -193,6 +199,7 @@ internal fun TextFieldCard(
     options: TextFieldOptions = TextFieldOptions(),
 ) {
     val palette = tandemPalette
+    var secretRevealed by remember { mutableStateOf(false) }
     FieldFrame(label, large = options.large) {
         BasicTextField(
             value = value,
@@ -211,6 +218,7 @@ internal fun TextFieldCard(
             keyboardActions = options.keyboardActions ?: KeyboardActions.Default,
             visualTransformation =
                 when {
+                    options.isSecret && secretRevealed -> VisualTransformation.None
                     options.isSecret -> PasswordVisualTransformation()
                     !options.currencySymbol.isNullOrBlank() ->
                         currencySymbolTransformation(
@@ -237,17 +245,36 @@ internal fun TextFieldCard(
                     .onFocusChanged { focusState -> options.onFocusedChange?.invoke(focusState.isFocused) }
                     .semantics { contentDescription = label },
             decorationBox = { innerTextField ->
-                Box {
-                    if (value.isEmpty() && options.placeholder.isNotEmpty()) {
-                        Text(
-                            options.placeholder,
-                            modifier = Modifier.fillMaxWidth(),
-                            color = palette.muted,
-                            fontSize = if (options.large) TandemTypography.keypadNumber else TandemTypography.body,
-                            textAlign = options.textAlign,
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    options.leadingIcon?.let { icon ->
+                        Icon(
+                            icon,
+                            contentDescription = options.leadingIconDescription,
+                            modifier = Modifier.padding(end = TandemSpacing.small).size(18.dp),
+                            tint = options.leadingIconTint ?: palette.muted,
                         )
                     }
-                    innerTextField()
+                    Box(Modifier.weight(1f)) {
+                        if (value.isEmpty() && options.placeholder.isNotEmpty()) {
+                            Text(
+                                options.placeholder,
+                                modifier = Modifier.fillMaxWidth(),
+                                color = palette.muted,
+                                fontSize = if (options.large) TandemTypography.keypadNumber else TandemTypography.body,
+                                textAlign = options.textAlign,
+                            )
+                        }
+                        innerTextField()
+                    }
+                    if (options.isSecret) {
+                        TandemIconButton(
+                            if (secretRevealed) Lucide.EyeOff else Lucide.Eye,
+                            if (secretRevealed) "Hide password" else "Show password",
+                            sizeDp = 32,
+                            iconSizeDp = 18,
+                            tint = palette.muted,
+                        ) { secretRevealed = !secretRevealed }
+                    }
                 }
             },
         )
