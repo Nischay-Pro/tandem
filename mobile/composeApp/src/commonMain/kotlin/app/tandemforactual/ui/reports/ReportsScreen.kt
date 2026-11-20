@@ -326,32 +326,36 @@ private fun rememberReportData(
         }
     val categoryFlow =
         remember(mobileSession.reportViewModels, budgetId, window, categoryNames) {
-            if (budgetId.isNotBlank() && mobileSession.reportViewModels != null) {
-                mobileSession.reportViewModels.spendingByCategory.observe(budgetId, window, categoryNames)
+            val viewModels = mobileSession.reportViewModels
+            if (budgetId.isNotBlank() && viewModels != null) {
+                viewModels.spendingByCategory.observe(budgetId, window, categoryNames)
             } else {
                 flowOf(emptyList())
             }
         }
     val monthlyFlow =
         remember(mobileSession.reportViewModels, budgetId, window) {
-            if (budgetId.isNotBlank() && mobileSession.reportViewModels != null) {
-                mobileSession.reportViewModels.spendingOverTime.observe(budgetId, window)
+            val viewModels = mobileSession.reportViewModels
+            if (budgetId.isNotBlank() && viewModels != null) {
+                viewModels.spendingOverTime.observe(budgetId, window)
             } else {
                 flowOf(emptyList())
             }
         }
     val incomeAndSpendingFlow =
         remember(mobileSession.reportViewModels, budgetId, window) {
-            if (budgetId.isNotBlank() && mobileSession.reportViewModels != null) {
-                mobileSession.reportViewModels.incomeAndSpending.observe(budgetId, window)
+            val viewModels = mobileSession.reportViewModels
+            if (budgetId.isNotBlank() && viewModels != null) {
+                viewModels.incomeAndSpending.observe(budgetId, window)
             } else {
                 flowOf(emptyList())
             }
         }
     val budgetedFlow =
         remember(mobileSession.reportViewModels, budgetId, window, categoryNames) {
-            if (budgetId.isNotBlank() && mobileSession.reportViewModels != null) {
-                mobileSession.reportViewModels.budgetedAndSpent.observe(budgetId, window, categoryNames)
+            val viewModels = mobileSession.reportViewModels
+            if (budgetId.isNotBlank() && viewModels != null) {
+                viewModels.budgetedAndSpent.observe(budgetId, window, categoryNames)
             } else {
                 flowOf(emptyList())
             }
@@ -359,8 +363,9 @@ private fun rememberReportData(
     val today = platformTodayIsoDate()
     val netWorthFlow =
         remember(mobileSession.reportViewModels, budgetId, netWorthWindow, today, accounts) {
-            if (budgetId.isNotBlank() && mobileSession.reportViewModels != null) {
-                mobileSession.reportViewModels.netWorth.observe(budgetId, netWorthWindow.monthIds, today, accounts)
+            val viewModels = mobileSession.reportViewModels
+            if (budgetId.isNotBlank() && viewModels != null) {
+                viewModels.netWorth.observe(budgetId, netWorthWindow.monthIds, today, accounts)
             } else {
                 flowOf(emptyList())
             }

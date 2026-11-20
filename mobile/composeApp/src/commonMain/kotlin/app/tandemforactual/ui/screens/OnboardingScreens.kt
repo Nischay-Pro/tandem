@@ -627,6 +627,7 @@ internal fun BudgetChooserScreen(
     val selectedBudget = selectableBudgets.firstOrNull { it.budgetId == chooserSelectedBudgetId }
     val cachedBudgetSelected = selectedBudget?.let { budget -> cachedCatalog.any { it.budgetId == budget.budgetId } } == true
     val selectedBudgetIsAvailable = selectedBudget != null
+    val vaultAvailable = LocalEncryptedBudgetVault.current != null
     val needsEncryptionPassword =
         budgetPasswordRequired(
             isEncrypted = selectedBudget?.isEncrypted == true,
@@ -710,7 +711,7 @@ internal fun BudgetChooserScreen(
                 enabled = selectedBudgetIsAvailable && (!mobileSession.isLoadingBudgets || cachedBudgetSelected),
                 onClick = {
                     selectedBudget?.let { budget ->
-                        if (needsEncryptionPassword) onPrepareBudgetUnlock(budget) else onOpenSelectedBudget(budget)
+                        if (needsEncryptionPassword && !vaultAvailable) onPrepareBudgetUnlock(budget) else onOpenSelectedBudget(budget)
                     }
                 },
             )

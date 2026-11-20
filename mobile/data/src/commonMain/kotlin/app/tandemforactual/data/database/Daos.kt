@@ -9,6 +9,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface BudgetRecordDao {
+    @Query("DELETE FROM budget_records WHERE budgetId = :budgetId")
+    suspend fun deleteBudget(budgetId: String): Int
+
     @Query(
         """
     SELECT recordId FROM budget_records
@@ -451,6 +454,12 @@ interface BudgetSnapshotDao {
 
 @Dao
 interface OutboxDao {
+    @Query("SELECT * FROM sync_outbox WHERE budgetId = :budgetId ORDER BY createdAtEpochMs ASC, operationId ASC")
+    suspend fun findAllForBudget(budgetId: String): List<OutboxOperationEntity>
+
+    @Query("DELETE FROM sync_outbox WHERE budgetId = :budgetId")
+    suspend fun deleteBudget(budgetId: String): Int
+
     @Query("SELECT * FROM sync_outbox WHERE operationId = :operationId")
     suspend fun find(operationId: String): OutboxOperationEntity?
 
@@ -580,6 +589,9 @@ interface OutboxDao {
 
 @Dao
 interface BudgetSyncStateDao {
+    @Query("DELETE FROM budget_sync_state WHERE budgetId = :budgetId")
+    suspend fun deleteBudget(budgetId: String): Int
+
     @Query(
         """
         SELECT EXISTS(SELECT 1 FROM budget_records)

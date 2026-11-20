@@ -269,6 +269,7 @@ internal fun AccountDetailScreen(
         }
     }
     LaunchedEffect(
+        mobileSession.databaseGeneration,
         state.selectedBudgetId,
         liveAccount?.id,
         accountActivityOffset,
@@ -341,7 +342,7 @@ internal fun AccountDetailScreen(
         pendingScrollRestore = -1
         accountRouteWasCovered = false
     }
-    LaunchedEffect(state.selectedBudgetId, liveAccount?.id) {
+    LaunchedEffect(state.selectedBudgetId, liveAccount?.id, mobileSession.databaseGeneration) {
         val accountId = liveAccount?.id ?: return@LaunchedEffect
         val clearedBalanceFlow = mobileSession.observeClearedAccountBalance(state.selectedBudgetId, accountId) ?: return@LaunchedEffect
         clearedBalanceFlow.collect { clearedAccountBalanceMinor = it }

@@ -23,6 +23,7 @@ composeIcons = "2.2.1"
 coreSplashScreen = "1.2.0"
 biometric = "1.1.0"
 fragment = "1.8.5"
+sqlcipher = "4.20.0"
 baselineProfile = "1.5.0"
 macrobenchmark = "1.5.0"
 profileInstaller = "1.4.1"
@@ -58,6 +59,7 @@ androidxTestRunner = { module = "androidx.test:runner", version.ref = "androidxT
 androidxTestExtJunit = { module = "androidx.test.ext:junit", version.ref = "androidxTestExtJunit" }
 biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
 fragment = { module = "androidx.fragment:fragment", version.ref = "fragment" }
+sqlcipher = { module = "net.zetetic:sqlcipher-android", version.ref = "sqlcipher" }
 activityCompose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 desugarJdkLibs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 workRuntimeKtx = { module = "androidx.work:work-runtime-ktx", version.ref = "workManager" }

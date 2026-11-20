@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 class MainActivity : FragmentActivity() {
   private var appStartupComplete = false
   private val deviceAuthenticator by lazy { AndroidDeviceAuthenticator(this) }
+  private val encryptedBudgetVault by lazy { AndroidEncryptedBudgetVault(applicationContext) }
   private var tandemDatabase: TandemDatabase? = null
   private var notificationPermissionEnabled by mutableStateOf(false)
   private val notificationPermissionLauncher =
@@ -94,6 +95,7 @@ class MainActivity : FragmentActivity() {
         appInForeground = appInForeground,
         networkRestoredEvents = networkRestoredEvents,
         deviceAuthenticator = deviceAuthenticator,
+        encryptedBudgetVault = encryptedBudgetVault,
       )
     }
   }

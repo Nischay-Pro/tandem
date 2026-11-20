@@ -289,9 +289,11 @@ internal fun AboutScreen(
             DividerLine()
             ListRow("AndroidX Room and SQLite", "Apache-2.0")
             DividerLine()
+            ListRow("SQLCipher for Android", "Encrypted budget storage · BSD-style")
+            DividerLine()
             ListRow(
                 "AndroidX platform libraries",
-                "Activity Compose, WorkManager and SplashScreen · Apache-2.0",
+                "Activity Compose, Biometric, Fragment, WorkManager and SplashScreen · Apache-2.0",
             )
             DividerLine()
             ListRow("Compose Icons", "MIT")

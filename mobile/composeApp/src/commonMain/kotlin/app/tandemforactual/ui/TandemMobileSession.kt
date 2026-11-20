@@ -19,6 +19,7 @@ import app.tandemforactual.data.database.BudgetSyncStateEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.database.TandemDatabase
+import app.tandemforactual.data.database.closeDatabase
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.BudgetSyncCoordinator
@@ -240,23 +241,74 @@ internal class TandemMobileSession(
     private val openIdLoginProofState: OpenIdLoginProofState = OpenIdLoginProofState(nowEpochMillis),
     private val revokeCurrentDeviceForSignOut: suspend () -> Unit = { apiClient.revokeCurrentDevice() },
 ) {
-    private val repository = database?.let { LocalBudgetRepository(it, nowEpochMillis) }
-    private val budgetMutationQueuePersistence =
-        budgetMutationQueuePersistenceOverride ?: repository?.let(::LocalBudgetRepositoryMutationQueuePersistence)
+    private val mainStorage = database?.let { BudgetStorage(it) }
+    private var budgetStorage by mutableStateOf<BudgetStorage?>(null)
+    private val storage: BudgetStorage? get() = budgetStorage ?: mainStorage
+    private val repository: LocalBudgetRepository? get() = storage?.repository
+    private val budgetMutationQueuePersistence: BudgetMutationQueuePersistence?
+        get() = queuePersistenceOverride ?: storage?.queuePersistence
+    private val queuePersistenceOverride = budgetMutationQueuePersistenceOverride
     private val preferencesStore = database?.let(::AppPreferencesStore)
     private val sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val budgetQueuePersistenceMutex = Mutex()
     private val budgetQueueRestoreMutex = Mutex()
     private var budgetQueueLoaded = false
-    internal val reportViewModels = repository?.let(::ReportsViewModels)
-    private val syncCoordinator =
-        repository?.let {
+    internal val reportViewModels: ReportsViewModels? get() = storage?.reports
+    private val syncCoordinator: BudgetSyncCoordinator? get() = storage?.coordinator
+
+    var databaseGeneration by mutableStateOf(0)
+        private set
+
+    internal val boundEncryptedBudgetId: String? get() = budgetStorage?.budgetId
+
+    private inner class BudgetStorage(
+        val database: TandemDatabase,
+        val budgetId: String? = null,
+    ) {
+        val repository = LocalBudgetRepository(database, nowEpochMillis)
+        val queuePersistence = LocalBudgetRepositoryMutationQueuePersistence(repository)
+        val reports = ReportsViewModels(repository)
+        val coordinator =
             BudgetSyncCoordinator(
-                it,
+                repository,
                 app.tandemforactual.api.client
                     .GeneratedBudgetSyncRemote(apiClient),
             )
+    }
+
+    internal suspend fun bindEncryptedBudgetDatabase(
+        budgetId: String,
+        database: TandemDatabase?,
+    ) {
+        val previous =
+            synchronizationMutex.withLock {
+                val replaced = budgetStorage
+                budgetStorage = database?.let { BudgetStorage(it, budgetId) }
+                budgetQueueLoaded = false
+                budgetReorderQueueState = BudgetReorderQueueState()
+                databaseGeneration += 1
+                replaced
+            }
+        if (previous != null && previous.budgetId != null) {
+            sessionScope.launch {
+                delay(ENCRYPTED_DATABASE_CLOSE_DELAY_MILLIS)
+                runCatching { previous.database.closeDatabase() }
+            }
         }
+        loadLocalRecords(budgetId)
+    }
+
+    internal suspend fun unbindEncryptedBudgetDatabase() {
+        val budgetId = budgetStorage?.budgetId ?: return
+        bindEncryptedBudgetDatabase(budgetId, null)
+    }
+
+    internal suspend fun mainBudgetWrites(budgetId: String): List<OutboxOperationEntity> =
+        mainStorage?.repository?.budgetWrites(budgetId).orEmpty()
+
+    internal suspend fun removeBudgetFromMainStorage(budgetId: String) {
+        mainStorage?.repository?.removeBudget(budgetId)
+    }
 
     var authenticatedDevice by mutableStateOf<AuthenticatedDevice?>(null)
         private set
@@ -524,9 +576,10 @@ internal class TandemMobileSession(
 
     fun retryScheduleActionStatus(operationId: String) {
         sessionScope.launch {
-            val operation = repository?.findWrite(operationId) ?: return@launch
+            val localRepository = repository ?: return@launch
+            val operation = localRepository.findWrite(operationId) ?: return@launch
             if (operation.recordType != "schedule-action" || operation.status != "uncertain") return@launch
-            runCatching { repository.retryScheduleActionCheck(operationId) }
+            runCatching { localRepository.retryScheduleActionCheck(operationId) }
             refreshScheduleActionQueue(operation.budgetId)
             scheduleActionRetrySignal += 1
         }
@@ -5458,4 +5511,9 @@ internal fun JsonObject.toProjection(): LocalRecordProjection =
         budgetMonth = stringValue("month"),
     )
 
-internal val BUDGET_PASSWORD_ERROR_CODES = setOf("budget_password_required", "budget_password_incorrect")
+internal const val BUDGET_PASSWORD_ATTEMPTS_EXCEEDED = "budget_password_attempts_exceeded"
+
+internal val BUDGET_PASSWORD_ERROR_CODES =
+    setOf("budget_password_required", "budget_password_incorrect", BUDGET_PASSWORD_ATTEMPTS_EXCEEDED)
+
+internal const val ENCRYPTED_DATABASE_CLOSE_DELAY_MILLIS = 3_000L

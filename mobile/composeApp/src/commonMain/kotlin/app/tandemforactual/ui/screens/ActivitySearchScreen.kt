@@ -96,7 +96,7 @@ internal fun ActivitySearchScreen(
                 cached.filters == filters &&
                 cached.sourceRecords === cachedSearch?.searchableRecords
         }
-    LaunchedEffect(state.selectedBudgetId, mobileSession) {
+    LaunchedEffect(state.selectedBudgetId, mobileSession, mobileSession.databaseGeneration) {
         if (isLiveBudget) mobileSession.observeActivitySearchRecords(state.selectedBudgetId)
     }
     var searchableRecords by remember(state.selectedBudgetId) {
