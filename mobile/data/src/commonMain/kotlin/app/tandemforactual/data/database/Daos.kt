@@ -287,6 +287,22 @@ interface BudgetRecordDao {
 
     @Query(
         """
+    SELECT categoryId FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = 'transaction' AND payeeId = :payeeId
+      AND categoryId IS NOT NULL AND isParent = 0
+      AND localDeleted = 0
+      AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))
+    ORDER BY recordDate DESC, recordId ASC
+    LIMIT 1
+    """,
+    )
+    suspend fun findLatestCategoryForPayee(
+        budgetId: String,
+        payeeId: String,
+    ): String?
+
+    @Query(
+        """
     SELECT * FROM budget_records
     WHERE budgetId = :budgetId AND recordType = :recordType
       AND localDeleted = 0
