@@ -7,9 +7,11 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -581,6 +583,7 @@ fun TandemApp(
             reset = { next ->
                 state.pendingScheduleToOpenId = null
                 routeTransitionDirection = 0f
+                savedTabBackStacks = ""
                 backStack.clear()
                 backStack.add(newRouteEntry(next))
             },
@@ -699,6 +702,9 @@ fun TandemApp(
     val currentNetworkKind by currentNetwork.collectAsState()
     LaunchedEffect(state.localServerUrl, mobileSession.authenticatedDevice?.deviceId, currentNetworkKind) {
         mobileSession.configureLocalServer(state.localServerUrl.ifBlank { null })
+        if (currentNetworkKind != null && mobileSession.budgetError != null && mobileSession.isAuthenticated) {
+            mobileSession.loadBudgets()
+        }
     }
     val automaticSyncRequest =
         rememberUpdatedState(
@@ -1098,11 +1104,14 @@ fun TandemApp(
             val alreadyUnlocked =
                 mobileSession.boundEncryptedBudgetId == selected.budgetId && state.encryptedPassword.isNotBlank()
             if (!alreadyUnlocked) state.encryptedPassword = ""
-            state.pendingSetupAfterUnlock =
-                !alreadyUnlocked &&
-                (!state.hasCompletedNotificationOnboarding || !state.hasCompletedSyncOnboarding)
+            val setupIncomplete = !state.hasCompletedNotificationOnboarding || !state.hasCompletedSyncOnboarding
+            state.pendingSetupAfterUnlock = !alreadyUnlocked && setupIncomplete
             state.pendingBudgetSelectionOrigin = null
-            navigation.reset(AppRoute.BUDGET)
+            if (alreadyUnlocked && setupIncomplete) {
+                navigation.open(nextSetupRoute(state, notificationPermissionEnabled))
+            } else {
+                navigation.reset(AppRoute.BUDGET)
+            }
             return@openSelectedBudget
         }
         coroutineScope.launch {
@@ -1392,6 +1401,8 @@ fun TandemApp(
                             null
                         },
                     addTransactionEnabled = !state.readOnlyMode,
+                    onRefreshBudgets = refreshBudgets.takeIf { mobileSession.isAuthenticated && mobileSession.isServerReachable },
+                    refreshingBudgets = mobileSession.isLoadingBudgets,
                 )
             }
         }
@@ -1592,7 +1603,7 @@ fun TandemApp(
                             ) togetherWith fadeOut(tween(TandemMotion.TAB_EXIT_MILLIS, easing = TandemMotion.exitEasing))
                         },
                         label = "tandem-header-transition",
-                    ) { headerRoute -> renderHeader(headerRoute) }
+                    ) { headerRoute -> if (!needsEncryptedBudgetUnlock(state, headerRoute)) renderHeader(headerRoute) }
                 }
                 val transitionInputModifier =
                     Modifier.pointerInput(Unit) {
@@ -1707,16 +1718,20 @@ fun TandemApp(
                         )
                     }
                 }
-                if (tabShellRoute != null && !imeVisible && !isLandscape) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().height(88.dp),
-                        contentAlignment = Alignment.BottomCenter,
+                if (tabShellRoute != null && !isLandscape) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = backgroundRouteEntry.route.showsBottomNavigation() && !imeVisible,
+                        modifier = Modifier.fillMaxWidth(),
+                        enter =
+                            expandVertically(
+                                tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS),
+                            ) + tandemBottomBarEnter(reduceMotion),
+                        exit =
+                            shrinkVertically(tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS)) + tandemBottomBarExit(reduceMotion),
                     ) {
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = backgroundRouteEntry.route.showsBottomNavigation(),
-                            modifier = Modifier.fillMaxWidth(),
-                            enter = tandemBottomBarEnter(reduceMotion),
-                            exit = tandemBottomBarExit(reduceMotion),
+                        Box(
+                            modifier = Modifier.fillMaxWidth().height(88.dp),
+                            contentAlignment = Alignment.BottomCenter,
                         ) {
                             BottomNavigation(
                                 tabShellRoute,
@@ -1800,10 +1815,16 @@ fun TandemApp(
             appInForeground = isAppInForeground,
             onChooseBudget = { navigation.open(AppRoute.SWITCH_BUDGET) },
             vault = encryptedBudgetVault,
+            backTargetRoute = backPreviewRoute?.route,
+            backProgress = backGestureProgress,
             onUnlocked = {
                 if (state.pendingSetupAfterUnlock) {
                     state.pendingSetupAfterUnlock = false
-                    navigation.open(nextSetupRoute(state, notificationPermissionEnabled))
+                    routeTransitionDirection = 0f
+                    savedTabBackStacks = ""
+                    backStack.clear()
+                    backStack.add(newRouteEntry(AppRoute.BUDGET_CHOOSER))
+                    backStack.add(newRouteEntry(nextSetupRoute(state, notificationPermissionEnabled)))
                 }
             },
         )
@@ -1823,6 +1844,7 @@ internal fun AppRoute.showsBottomNavigation(): Boolean =
     when (this) {
         AppRoute.STARTUP,
         AppRoute.WELCOME,
+        AppRoute.SWITCH_BUDGET,
         AppRoute.SERVER_ADDRESS,
         AppRoute.SIGN_IN,
         AppRoute.BUDGET_CHOOSER,

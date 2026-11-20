@@ -1103,7 +1103,14 @@ internal fun SwitchBudgetScreen(
                 )
             }
         }
-        mobileSession.budgetError?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+        mobileSession.budgetError?.let {
+            InlineMessage(
+                it,
+                InlineMessageKind.ERROR,
+                actionLabel = "Try again".takeIf { mobileSession.isAuthenticated && !mobileSession.isLoadingBudgets },
+                onAction = onRefreshBudgets,
+            )
+        }
     }
 }
 
