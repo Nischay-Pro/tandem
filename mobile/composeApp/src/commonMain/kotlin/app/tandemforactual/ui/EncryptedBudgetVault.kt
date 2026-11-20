@@ -48,6 +48,7 @@ internal suspend fun TandemMobileSession.unlockEncryptedBudget(
             unbindEncryptedBudgetDatabase()
             return EncryptedBudgetUnlockResult.WRONG_PASSWORD
         }
+        removeBudgetFromMainStorage(budgetId)
         return EncryptedBudgetUnlockResult.UNLOCKED
     }
 

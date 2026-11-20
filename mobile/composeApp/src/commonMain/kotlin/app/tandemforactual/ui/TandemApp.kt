@@ -137,6 +137,7 @@ fun TandemApp(
             )
         }
     LaunchedEffect(mobileSession) {
+        if (mobileSession.boundEncryptedBudgetId == null && state.selectedBudgetEncrypted) state.encryptedPassword = ""
         mobileSession.processQueuedBudgetReorders()
     }
     LaunchedEffect(mobileSession) {
@@ -783,18 +784,37 @@ fun TandemApp(
             }
         }
     }
+    LaunchedEffect(state.selectedBudgetEncrypted, state.selectedBudgetId, encryptedBudgetVault) {
+        mobileSession.encryptedStorageRequired =
+            if (encryptedBudgetVault != null && state.selectedBudgetEncrypted && state.selectedBudgetId.isNotBlank()) {
+                setOf(state.selectedBudgetId)
+            } else {
+                emptySet()
+            }
+    }
     LaunchedEffect(state.encryptedPassword.isBlank(), state.selectedBudgetId) {
         val bound = mobileSession.boundEncryptedBudgetId
         if (bound != null && (state.encryptedPassword.isBlank() || bound != state.selectedBudgetId)) {
             mobileSession.unbindEncryptedBudgetDatabase()
         }
     }
-    LaunchedEffect(state.selectedBudgetId, mobileSession, mobileSession.databaseGeneration) {
+    LaunchedEffect(
+        state.selectedBudgetId,
+        mobileSession,
+        mobileSession.databaseGeneration,
+        mobileSession.authenticatedDevice?.principalId,
+    ) {
         if (state.selectedBudgetId.isNotBlank()) {
             mobileSession.observeLocalRecords(state.selectedBudgetId)
         }
     }
-    LaunchedEffect(state.selectedBudgetId, state.selectedMonthId, mobileSession, mobileSession.databaseGeneration) {
+    LaunchedEffect(
+        state.selectedBudgetId,
+        state.selectedMonthId,
+        mobileSession,
+        mobileSession.databaseGeneration,
+        mobileSession.authenticatedDevice?.principalId,
+    ) {
         mobileSession.observeSelectedBudgetMonth(state.selectedBudgetId, state.selectedMonthId)
     }
     LaunchedEffect(

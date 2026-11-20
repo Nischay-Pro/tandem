@@ -3,6 +3,7 @@
 package app.tandemforactual.ui
 
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.window.ComposeUIViewController
 import app.tandemforactual.data.database.openTandemDatabase
 import app.tandemforactual.data.database.tandemDatabaseBuilder
@@ -43,7 +44,7 @@ private fun createTandemViewController(
         TandemApp(
             deviceName = UIDevice.currentDevice.name.ifBlank { "iPhone" },
             database = database,
-            deviceCredentialStore = IosDeviceCredentialStore(),
+            deviceCredentialStore = remember { IosDeviceCredentialStore() },
             nowEpochMillis = { Clock.System.now().toEpochMilliseconds() },
             allowInsecurePrivateNetwork = true,
             onBackgroundSyncSettingsChanged =

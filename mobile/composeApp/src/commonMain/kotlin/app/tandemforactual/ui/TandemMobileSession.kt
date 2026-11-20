@@ -261,6 +261,11 @@ internal class TandemMobileSession(
 
     internal val boundEncryptedBudgetId: String? get() = budgetStorage?.budgetId
 
+    internal var encryptedStorageRequired by mutableStateOf<Set<String>>(emptySet())
+
+    internal fun encryptedStorageMissing(budgetId: String): Boolean =
+        budgetId in encryptedStorageRequired && budgetStorage?.budgetId != budgetId
+
     private inner class BudgetStorage(
         val database: TandemDatabase,
         val budgetId: String? = null,
@@ -3134,6 +3139,7 @@ internal class TandemMobileSession(
         background: Boolean,
     ): BudgetSyncSummary? {
         if (isSigningOut) return null
+        if (encryptedStorageMissing(budgetId)) return null
 
         fun present(next: SyncPresentationState) {
             if (!background || (next.error == null && !next.isSyncing && syncPresentation.error != null)) {

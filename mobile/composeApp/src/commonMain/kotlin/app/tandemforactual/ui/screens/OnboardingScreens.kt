@@ -3,6 +3,11 @@
 package app.tandemforactual.ui
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -112,9 +118,9 @@ internal fun WelcomeScreen(
                 Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(TandemSpacing.large),
             ) {
-                SetupBrandWordmark()
                 Spacer(Modifier.height(TandemSpacing.extraLarge))
-                WelcomeOrbitIllustration(Modifier.align(Alignment.CenterHorizontally))
+                WelcomeBrand(Modifier.align(Alignment.CenterHorizontally))
+                Spacer(Modifier.height(TandemSpacing.large))
                 Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                     SetupHeadline(
                         "Your budget.\nEverywhere.",
@@ -145,51 +151,49 @@ internal fun WelcomeScreen(
 }
 
 @Composable
-private fun SetupBrandWordmark() {
+private fun WelcomeBrand(modifier: Modifier = Modifier) {
     val palette = tandemPalette
+    val breathing = !tandemReduceMotion
+    val breath by
+        rememberInfiniteTransition(label = "welcome-breath").animateFloat(
+            initialValue = 1f,
+            targetValue = 0f,
+            animationSpec = infiniteRepeatable(tween(1_600, easing = TandemMotion.movementEasing), RepeatMode.Reverse),
+            label = "welcome-breath-phase",
+        )
+    val emphasis = if (breathing) breath else 1f
     Column(
-        verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+        modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
     ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.size(7.dp).clip(CircleShape).background(palette.accent))
-            Text(
-                "tandem",
-                color = palette.text,
-                fontSize = TandemTypography.setupBrandWordmark,
-                fontWeight = FontWeight.Bold,
-                fontFamily = tandemAlloFamily(),
-            )
-        }
-        Text("FOR ACTUAL BUDGET", color = palette.muted, fontSize = TandemTypography.micro, fontWeight = FontWeight.SemiBold)
-    }
-}
-
-@Composable
-private fun WelcomeOrbitIllustration(modifier: Modifier = Modifier) {
-    val palette = tandemPalette
-    Box(modifier.size(176.dp), contentAlignment = Alignment.Center) {
-        Box(
+        TandemBrandMark(
             Modifier
-                .size(168.dp)
-                .border(2.dp, palette.accent.copy(alpha = 0.2f), CircleShape),
+                .size(96.dp)
+                .graphicsLayer {
+                    alpha = 0.8f + 0.2f * emphasis
+                    scaleX = 0.94f + 0.06f * emphasis
+                    scaleY = 0.94f + 0.06f * emphasis
+                },
         )
-        Box(
-            Modifier
-                .size(136.dp)
-                .border(5.dp, palette.accent.copy(alpha = 0.85f), CircleShape),
+        Spacer(Modifier.height(TandemSpacing.small))
+        Text(
+            "Tandem",
+            color = palette.text,
+            fontSize = TandemTypography.welcomeWordmark,
+            lineHeight = TandemTypography.welcomeWordmarkLineHeight,
+            fontWeight = FontWeight.Bold,
+            fontFamily = tandemAlloFamily(),
+            textAlign = TextAlign.Center,
         )
-        Box(
-            Modifier
-                .size(72.dp)
-                .clip(CircleShape)
-                .background(palette.accentSurface),
-            contentAlignment = Alignment.Center,
-        ) {
-            TandemBrandMark(Modifier.size(42.dp))
-        }
+        Text(
+            "FOR ACTUAL BUDGET",
+            color = palette.muted,
+            fontSize = TandemTypography.caption,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = TandemTypography.captionLetterSpacing,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -1024,7 +1028,7 @@ internal fun SyncOnboardingScreen(
                     if (state.selectedBudgetEncrypted) {
                         "Encrypted budgets sync only while unlocked, because Tandem keeps their password only then."
                     } else {
-                        "Refresh this budget about every six hours, even when Tandem is closed"
+                        "About every six hours, even when Tandem is closed"
                     },
                     state.backgroundSyncEnabled && !state.selectedBudgetEncrypted,
                     enabled = !state.selectedBudgetEncrypted,

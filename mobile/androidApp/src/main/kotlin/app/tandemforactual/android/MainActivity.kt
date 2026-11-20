@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 class MainActivity : FragmentActivity() {
   private var appStartupComplete = false
   private val deviceAuthenticator by lazy { AndroidDeviceAuthenticator(this) }
+  private val deviceCredentialStore by lazy { AndroidDeviceCredentialStore(applicationContext) }
   private val encryptedBudgetVault by lazy { AndroidEncryptedBudgetVault(applicationContext) }
   private var tandemDatabase: TandemDatabase? = null
   private var notificationPermissionEnabled by mutableStateOf(false)
@@ -97,7 +98,7 @@ class MainActivity : FragmentActivity() {
           Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME)
             ?.takeIf { it.isNotBlank() } ?: Build.MODEL ?: "Android device",
         database = database,
-        deviceCredentialStore = AndroidDeviceCredentialStore(applicationContext),
+        deviceCredentialStore = deviceCredentialStore,
         nowEpochMillis = { System.currentTimeMillis() },
         allowInsecurePrivateNetwork = true,
         onBackgroundSyncSettingsChanged = onBackgroundSyncSettingsChanged,
