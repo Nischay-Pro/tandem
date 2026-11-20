@@ -152,6 +152,7 @@ internal fun ScreenContent(
                 mobileSession.categoryRecords,
                 mobileSession.categoryGroupRecords,
                 mobileSession.payeeRecords,
+                canAddRules = !state.readOnlyMode,
                 onOpenRule = { ruleId -> state.ruleEditorRuleId = ruleId },
             )
             RuleEditorSheet(state, mobileSession)
