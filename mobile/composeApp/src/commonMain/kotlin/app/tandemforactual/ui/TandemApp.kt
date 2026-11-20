@@ -613,6 +613,25 @@ fun TandemApp(
     val routeEntry = backStack.last()
     val route = routeEntry.route
     SideEffect { mobileSession.setBudgetActionRoute(routeEntry) }
+    val quickAddRequested by QuickActionEvents.addTransactionRequested.collectAsState()
+    LaunchedEffect(
+        quickAddRequested,
+        route,
+        state.selectedBudgetId,
+        state.encryptedPassword.isBlank(),
+        state.readOnlyMode,
+        liveAccounts.isEmpty(),
+    ) {
+        val budgetReady =
+            state.selectedBudgetId.isNotBlank() &&
+                !state.readOnlyMode &&
+                route.isTab() &&
+                !needsEncryptedBudgetUnlock(state, route) &&
+                liveAccounts.any { !it.offBudget }
+        if (!quickAddRequested || !budgetReady) return@LaunchedEffect
+        delay(TandemMotion.ROUTE_MILLIS * 2L)
+        if (!routeTransitionInputBlocked && QuickActionEvents.consumeAddTransaction()) newTransaction(null)
+    }
     val transactionSheetIndex = backStack.indexOfLast { it.route.isTransactionForm() }
     val transactionSheetActive = transactionSheetIndex >= 0
     val handleCurrentRouteBack: () -> Unit = {
