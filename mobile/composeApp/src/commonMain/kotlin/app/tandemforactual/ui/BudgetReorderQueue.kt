@@ -30,6 +30,7 @@ internal enum class BudgetMutationFailureDisposition {
     OPERATION_REJECTED,
     IDEMPOTENCY_KEY_REUSED,
     RESULT_UNAVAILABLE,
+    INPUT_REJECTED,
 
     /**
      * The app stopped while a request was in flight, so this device never saw the server's answer.
@@ -51,6 +52,7 @@ internal fun budgetMutationFailureDisposition(errorCode: String?): BudgetMutatio
         "operation_rejected" -> BudgetMutationFailureDisposition.OPERATION_REJECTED
         "idempotency_key_reused" -> BudgetMutationFailureDisposition.IDEMPOTENCY_KEY_REUSED
         "operation_result_unavailable" -> BudgetMutationFailureDisposition.RESULT_UNAVAILABLE
+        "invalid_request" -> BudgetMutationFailureDisposition.INPUT_REJECTED
         else -> BudgetMutationFailureDisposition.REVIEW
     }
 
@@ -117,6 +119,7 @@ internal fun budgetMutationRetryNeedsNewKey(errorCode: String?): Boolean =
         setOf(
             BudgetMutationFailureDisposition.OPERATION_REJECTED,
             BudgetMutationFailureDisposition.IDEMPOTENCY_KEY_REUSED,
+            BudgetMutationFailureDisposition.INPUT_REJECTED,
         )
 
 internal fun budgetMutationCanRetry(errorCode: String?): Boolean =
@@ -126,6 +129,7 @@ internal fun budgetMutationCanRetry(errorCode: String?): Boolean =
             BudgetMutationFailureDisposition.SEND_INTERRUPTED,
             BudgetMutationFailureDisposition.OPERATION_REJECTED,
             BudgetMutationFailureDisposition.IDEMPOTENCY_KEY_REUSED,
+            BudgetMutationFailureDisposition.INPUT_REJECTED,
         )
 
 internal fun budgetMutationRequiresActualCheck(errorCode: String?): Boolean =
@@ -147,6 +151,7 @@ internal fun budgetMutationRequestForRetry(
         -> request
         BudgetMutationFailureDisposition.OPERATION_REJECTED,
         BudgetMutationFailureDisposition.IDEMPOTENCY_KEY_REUSED,
+        BudgetMutationFailureDisposition.INPUT_REJECTED,
         -> request.copy(operationId = replacementOperationId)
         BudgetMutationFailureDisposition.OPERATION_UNCERTAIN,
         BudgetMutationFailureDisposition.RESULT_UNAVAILABLE,
