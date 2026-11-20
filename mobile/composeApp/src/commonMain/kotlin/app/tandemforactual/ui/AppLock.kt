@@ -50,7 +50,9 @@ import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.FingerprintPattern
 import com.composables.icons.lucide.LockKeyhole
 import com.composables.icons.lucide.Lucide
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 interface DeviceAuthenticator {
     fun isAvailable(): Boolean
@@ -78,6 +80,18 @@ interface DeviceAuthenticator {
     ) = onResult(null)
 
     fun deleteSecret(id: String) = Unit
+
+    fun rememberPasswordCheck(
+        id: String,
+        password: String,
+    ) = Unit
+
+    fun matchesPasswordCheck(
+        id: String,
+        password: String,
+    ): Boolean? = null
+
+    fun forgetPasswordCheck(id: String) = Unit
 
     fun deleteAllSecrets() = Unit
 }
@@ -109,6 +123,12 @@ internal class AppLockState(
         backgroundedAt = -1L
     }
 }
+
+internal fun encryptedBudgetUnlockAccepted(
+    syncSucceeded: Boolean,
+    serverReachable: Boolean,
+    offlineCheck: Boolean?,
+): Boolean = syncSucceeded || (!serverReachable && offlineCheck == true)
 
 internal fun needsEncryptedBudgetUnlock(
     state: AppState,
@@ -214,8 +234,21 @@ private fun EncryptedBudgetUnlock(
         error = null
         scope.launch {
             mobileSession.synchronize(budgetId = budgetId, encryptionPassword = candidate)
+            val synced = mobileSession.syncComplete
+            val offlineCheck =
+                if (!synced && !mobileSession.isServerReachable) {
+                    withContext(Dispatchers.Default) { authenticator?.matchesPasswordCheck(secretId, candidate) }
+                } else {
+                    null
+                }
+            if (synced) withContext(Dispatchers.Default) { authenticator?.rememberPasswordCheck(secretId, candidate) }
+            if (mobileSession.budgetPasswordRejection == "budget_password_incorrect") authenticator?.forgetPasswordCheck(secretId)
             checking = false
-            if (mobileSession.budgetPasswordRejection != null) {
+            if (!encryptedBudgetUnlockAccepted(synced, mobileSession.isServerReachable, offlineCheck)) {
+                if (!mobileSession.isServerReachable && offlineCheck == null) {
+                    error = "Connect to the internet to unlock this budget for the first time."
+                    return@launch
+                }
                 if (fromBiometrics) {
                     authenticator?.deleteSecret(secretId)
                     hasStoredPassword = false

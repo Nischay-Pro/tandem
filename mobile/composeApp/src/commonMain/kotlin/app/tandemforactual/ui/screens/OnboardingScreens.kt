@@ -627,7 +627,11 @@ internal fun BudgetChooserScreen(
     val selectedBudget = selectableBudgets.firstOrNull { it.budgetId == chooserSelectedBudgetId }
     val cachedBudgetSelected = selectedBudget?.let { budget -> cachedCatalog.any { it.budgetId == budget.budgetId } } == true
     val selectedBudgetIsAvailable = selectedBudget != null
-    val needsEncryptionPassword = budgetPasswordRequired(selectedBudget?.isEncrypted == true, cachedBudgetSelected)
+    val needsEncryptionPassword =
+        budgetPasswordRequired(
+            isEncrypted = selectedBudget?.isEncrypted == true,
+            hasUnlockedPassword = selectedBudget?.budgetId == state.selectedBudgetId && state.encryptedPassword.isNotBlank(),
+        )
 
     fun chooseBudget(budget: BudgetCatalogItem) {
         if (chooserSelectedBudgetId != budget.budgetId) state.encryptedPassword = ""
@@ -833,7 +837,10 @@ internal fun FirstSyncScreen(
             }
             if (mobileSession.syncError != null && !mobileSession.isSyncing) {
                 InlineMessage(mobileSession.syncError.orEmpty(), InlineMessageKind.ERROR)
-                if (mobileSession.cachedSnapshotBudgetId == state.selectedBudgetId && mobileSession.hasCachedSnapshot) {
+                if (mobileSession.cachedSnapshotBudgetId == state.selectedBudgetId &&
+                    mobileSession.hasCachedSnapshot &&
+                    !state.selectedBudgetEncrypted
+                ) {
                     BodyText("Your last saved copy is still available on this device.")
                     SecondaryButton("Open saved copy") {
                         state.pendingBudgetSelectionOrigin = null
@@ -911,8 +918,8 @@ internal fun shouldShowNotificationOnboarding(
 
 internal fun budgetPasswordRequired(
     isEncrypted: Boolean,
-    hasCachedSnapshot: Boolean,
-): Boolean = isEncrypted && !hasCachedSnapshot
+    hasUnlockedPassword: Boolean,
+): Boolean = isEncrypted && !hasUnlockedPassword
 
 internal fun budgetOpenButtonEnabled(
     selectedBudgetAvailable: Boolean,

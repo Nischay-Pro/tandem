@@ -31,4 +31,13 @@ class AppLockStateTest {
 
         assertFalse(lock.unlocked)
     }
+
+    @Test
+    fun aRejectedSyncNeverUnlocksAnEncryptedBudget() {
+        assertTrue(encryptedBudgetUnlockAccepted(syncSucceeded = true, serverReachable = true, offlineCheck = null))
+        assertFalse(encryptedBudgetUnlockAccepted(syncSucceeded = false, serverReachable = true, offlineCheck = true))
+        assertTrue(encryptedBudgetUnlockAccepted(syncSucceeded = false, serverReachable = false, offlineCheck = true))
+        assertFalse(encryptedBudgetUnlockAccepted(syncSucceeded = false, serverReachable = false, offlineCheck = false))
+        assertFalse(encryptedBudgetUnlockAccepted(syncSucceeded = false, serverReachable = false, offlineCheck = null))
+    }
 }

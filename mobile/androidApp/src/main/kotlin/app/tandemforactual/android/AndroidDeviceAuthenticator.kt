@@ -16,10 +16,14 @@ import androidx.core.content.edit
 import androidx.fragment.app.FragmentActivity
 import app.tandemforactual.ui.DeviceAuthenticator
 import java.security.KeyStore
+import java.security.MessageDigest
+import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
+import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.PBEKeySpec
 
 class AndroidDeviceAuthenticator(
   private val activity: FragmentActivity,
@@ -98,9 +102,48 @@ class AndroidDeviceAuthenticator(
   }
 
   override fun deleteAllSecrets() {
-    secrets.edit { clear() }
+    val checks = secrets.all.filterKeys { it.endsWith(CHECK_SUFFIX) }
+    secrets.edit {
+      clear()
+      checks.forEach { (key, value) -> putString(key, value as String) }
+    }
     runCatching { keyStore().deleteEntry(KEY_ALIAS) }
   }
+
+  override fun rememberPasswordCheck(
+    id: String,
+    password: String,
+  ) {
+    val salt = ByteArray(SALT_BYTES).also { SecureRandom().nextBytes(it) }
+    secrets.edit { putString(checkKey(id), "${encode(salt)}:${encode(derive(password, salt))}") }
+  }
+
+  override fun matchesPasswordCheck(
+    id: String,
+    password: String,
+  ): Boolean? {
+    val stored = secrets.getString(checkKey(id), null) ?: return null
+    val (salt, hash) = stored.split(":").takeIf { it.size == 2 }?.map(::decode) ?: return null
+    return MessageDigest.isEqual(derive(password, salt), hash)
+  }
+
+  override fun forgetPasswordCheck(id: String) {
+    secrets.edit { remove(checkKey(id)) }
+  }
+
+  private fun derive(
+    password: String,
+    salt: ByteArray,
+  ): ByteArray {
+    val spec = PBEKeySpec(password.toCharArray(), salt, PBKDF2_ITERATIONS, HASH_BITS)
+    return try {
+      SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
+    } finally {
+      spec.clearPassword()
+    }
+  }
+
+  private fun checkKey(id: String) = "$id$CHECK_SUFFIX"
 
   private fun cipherOrNull(create: () -> Cipher): Cipher? =
     try {
@@ -187,5 +230,9 @@ class AndroidDeviceAuthenticator(
     const val SECRETS_FILE = "tandem_biometric_secrets"
     const val TRANSFORMATION = "AES/GCM/NoPadding"
     const val GCM_TAG_BITS = 128
+    const val CHECK_SUFFIX = ".check"
+    const val SALT_BYTES = 16
+    const val PBKDF2_ITERATIONS = 310_000
+    const val HASH_BITS = 256
   }
 }

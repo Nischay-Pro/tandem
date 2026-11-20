@@ -763,6 +763,7 @@ fun TandemApp(
             val unlockedPassword = state.encryptedPassword
             if (mobileSession.syncComplete && state.selectedBudgetEncrypted && unlockedPassword.isNotBlank()) {
                 val secretId = budgetPasswordSecretId(state.selectedBudgetId)
+                withContext(Dispatchers.Default) { deviceAuthenticator?.rememberPasswordCheck(secretId, unlockedPassword) }
                 if (state.rememberBudgetPasswordWithBiometrics && deviceAuthenticator?.canStoreSecrets() == true) {
                     deviceAuthenticator.storeSecret(secretId, unlockedPassword, "Use biometrics for ${state.selectedBudget}") {}
                 } else {
@@ -1045,8 +1046,11 @@ fun TandemApp(
         state.selectedBudgetEncrypted = selected.isEncrypted
         coroutineScope.launch {
             val isCached =
-                mobileSession.cachedBudgets.any { it.budgetId == selected.budgetId } ||
-                    mobileSession.hasCachedBudgetSnapshot(selected.budgetId)
+                !selected.isEncrypted &&
+                    (
+                        mobileSession.cachedBudgets.any { it.budgetId == selected.budgetId } ||
+                            mobileSession.hasCachedBudgetSnapshot(selected.budgetId)
+                    )
             when {
                 isCached -> {
                     state.pendingBudgetSelectionOrigin = null

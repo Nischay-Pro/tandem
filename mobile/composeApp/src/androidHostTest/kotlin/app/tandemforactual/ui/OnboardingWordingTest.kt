@@ -222,9 +222,9 @@ class OnboardingWordingTest {
 
     @Test
     fun encryptedBudgetPasswordIsRequiredBeforeOpeningAnUncachedBudget() {
-        assertTrue(budgetPasswordRequired(isEncrypted = true, hasCachedSnapshot = false))
-        assertFalse(budgetPasswordRequired(isEncrypted = true, hasCachedSnapshot = true))
-        assertFalse(budgetPasswordRequired(isEncrypted = false, hasCachedSnapshot = false))
+        assertTrue(budgetPasswordRequired(isEncrypted = true, hasUnlockedPassword = false))
+        assertFalse(budgetPasswordRequired(isEncrypted = true, hasUnlockedPassword = true))
+        assertFalse(budgetPasswordRequired(isEncrypted = false, hasUnlockedPassword = false))
         assertFalse(
             budgetOpenButtonEnabled(
                 selectedBudgetAvailable = true,
