@@ -1172,7 +1172,8 @@ internal fun BudgetMutationReviewScreen(
                         } else {
                             "Check Actual"
                         },
-                        enabled = !state.readOnlyMode && mutation?.requiresEncryptionPassword != true,
+                        enabled =
+                            !state.readOnlyMode && !(mutation?.requiresEncryptionPassword == true && state.encryptedPassword.isBlank()),
                     ) { mobileSession.retryBudgetMutation(operation.operationId) }
                     if (!budgetMutationNeedsRefresh(operation.lastErrorCode) && !budgetMutationCanRetry(operation.lastErrorCode)) {
                         SecondaryButton("Discard change", enabled = !state.readOnlyMode) { confirmDiscard = true }
@@ -1238,13 +1239,15 @@ internal fun BudgetMutationReviewScreen(
                     } else if (budgetMutationCanRetry(operation.lastErrorCode)) {
                         PrimaryButton(
                             "Try again",
-                            enabled = !state.readOnlyMode && mutation?.requiresEncryptionPassword != true,
+                            enabled =
+                                !state.readOnlyMode && !(mutation?.requiresEncryptionPassword == true && state.encryptedPassword.isBlank()),
                         ) { mobileSession.retryBudgetMutation(operation.operationId) }
                         SecondaryButton("Discard change", enabled = !state.readOnlyMode) { confirmDiscard = true }
                     } else {
                         PrimaryButton(
                             if (budgetMutationNeedsRefresh(operation.lastErrorCode)) "Refresh budget" else "Check Actual",
-                            enabled = !state.readOnlyMode && mutation?.requiresEncryptionPassword != true,
+                            enabled =
+                                !state.readOnlyMode && !(mutation?.requiresEncryptionPassword == true && state.encryptedPassword.isBlank()),
                         ) { mobileSession.retryBudgetMutation(operation.operationId) }
                         SecondaryButton("Discard change", enabled = !state.readOnlyMode) { confirmDiscard = true }
                     }
