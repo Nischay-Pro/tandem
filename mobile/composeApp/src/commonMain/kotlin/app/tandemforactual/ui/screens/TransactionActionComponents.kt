@@ -27,7 +27,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.RowLeading
@@ -240,24 +239,6 @@ internal fun TransactionSelectionFloatingBar(
     }
 }
 
-@Composable
-internal fun TransactionBulkDeleteDialog(
-    selectedCount: Int,
-    isDeleting: Boolean,
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit,
-) {
-    DestructiveConfirmationDialog(
-        title = if (selectedCount == 1) "Delete transaction?" else "Delete $selectedCount transactions?",
-        message = "Deleted transactions leave this device first and sync when Tandem is available.",
-        confirmLabel = if (isDeleting) "Deleting…" else "Delete",
-        dismissLabel = "Cancel",
-        enabled = !isDeleting,
-        onDismissRequest = onDismiss,
-        onConfirm = onConfirm,
-    )
-}
-
 internal fun openTransaction(
     state: AppState,
     navigation: AppNavigation,
@@ -298,9 +279,4 @@ internal suspend fun deleteTransactionSelection(
     mobileSession: TandemMobileSession,
     budgetId: String,
     transactionIds: Set<String>,
-): Boolean {
-    for (transactionId in transactionIds) {
-        if (!mobileSession.deleteTransaction(budgetId, transactionId)) return false
-    }
-    return true
-}
+): Boolean = mobileSession.deleteTransactionsWithUndo(budgetId, transactionIds)

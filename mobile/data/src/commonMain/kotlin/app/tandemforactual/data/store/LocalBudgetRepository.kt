@@ -743,6 +743,15 @@ class LocalBudgetRepository(
         return database.budgetRecordDao().findRecentVisible(budgetId, recordType, limit)
     }
 
+    suspend fun latestCategoryForPayee(
+        budgetId: String,
+        payeeId: String,
+    ): String? {
+        requireIdentifier(budgetId, "budgetId")
+        requireIdentifier(payeeId, "payeeId")
+        return database.budgetRecordDao().findLatestCategoryForPayee(budgetId, payeeId)
+    }
+
     suspend fun findTransactionPage(
         budgetId: String,
         cursorDate: String? = null,

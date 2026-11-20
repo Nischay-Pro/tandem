@@ -332,24 +332,17 @@ internal fun ActivityScreen(
         }
     }
     mobileSession.transactionWriteMessage?.takeIf { selectionMode }?.let { InlineMessage(it, InlineMessageKind.ERROR) }
-    if (confirmBulkDelete) {
-        TransactionBulkDeleteDialog(
-            selectedCount = selectedTransactionIds.size,
-            isDeleting = isDeletingSelection,
-            onDismiss = { confirmBulkDelete = false },
-            onConfirm = {
-                scope.launch {
-                    isDeletingSelection = true
-                    val deleted = deleteTransactionSelection(mobileSession, state.selectedBudgetId, selectedTransactionIds)
-                    isDeletingSelection = false
-                    confirmBulkDelete = false
-                    if (deleted) {
-                        selectedTransactionIds = emptySet()
-                        selectionMode = false
-                    }
-                }
-            },
-        )
+    LaunchedEffect(confirmBulkDelete) {
+        if (confirmBulkDelete) {
+            isDeletingSelection = true
+            val deleted = deleteTransactionSelection(mobileSession, state.selectedBudgetId, selectedTransactionIds)
+            isDeletingSelection = false
+            confirmBulkDelete = false
+            if (deleted) {
+                selectedTransactionIds = emptySet()
+                selectionMode = false
+            }
+        }
     }
 }
 

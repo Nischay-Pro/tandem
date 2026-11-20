@@ -152,6 +152,7 @@ internal fun ScreenContent(
                 mobileSession.categoryRecords,
                 mobileSession.categoryGroupRecords,
                 mobileSession.payeeRecords,
+                canAddRules = !state.readOnlyMode,
                 onOpenRule = { ruleId -> state.ruleEditorRuleId = ruleId },
             )
             RuleEditorSheet(state, mobileSession)
@@ -330,6 +331,16 @@ internal fun ScreenContent(
                 onSelect = { item ->
                     state.transactionPayee = if (item.label == "No payee") "" else item.label
                     state.newTransactionPayeeId = if (isLiveBudget) item.id else ""
+                    if (isLiveBudget && !selectingTransferDestination && state.newTransactionCategoryId.isBlank()) {
+                        scope.launch {
+                            val categoryId = mobileSession.suggestedCategoryForPayee(state.selectedBudgetId, item.id)
+                            val categoryName = mobileSession.categoryRecords.firstOrNull { it.recordId == categoryId }?.recordName()
+                            if (categoryId != null && categoryName != null && state.newTransactionCategoryId.isBlank()) {
+                                state.newTransactionCategoryId = categoryId
+                                state.transactionCategory = categoryName
+                            }
+                        }
+                    }
                     navigation.back()
                 },
             )

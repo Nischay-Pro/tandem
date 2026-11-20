@@ -31,7 +31,6 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.AmountConfirmationDialog
 import app.tandemforactual.ui.components.AnimatedReveal
 import app.tandemforactual.ui.components.BodyText
-import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.FeedbackMessageOwner
@@ -414,6 +413,7 @@ internal fun TransactionFormScreen(
                 onSelect = { account ->
                     state.transactionAccount = account.label
                     state.newTransactionAccountId = account.id
+                    state.lastTransactionAccountId = account.id
                     showAccountPicker = false
                 },
                 onDismiss = { showAccountPicker = false },
@@ -470,7 +470,6 @@ internal fun TransactionFormScreen(
             }
         var originalNotes by remember(state.selectedTransactionRecordId) { mutableStateOf(state.selectedTransactionNotes) }
         var savedFeedback by remember(state.selectedTransactionRecordId) { mutableStateOf(false) }
-        var confirmDelete by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf(false) }
         var confirmAmount by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf(false) }
         var confirmFutureDate by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf(false) }
         var futureDateConfirmationTarget by rememberSaveable(state.selectedTransactionRecordId) { mutableStateOf("") }
@@ -758,7 +757,7 @@ internal fun TransactionFormScreen(
                         enabled = !mobileSession.isSavingTransaction,
                         onClick = {
                             dismissEditKeypad()
-                            confirmDelete = true
+                            onDeleteTransaction { deleted -> if (deleted) navigation.backToList() }
                         },
                     )
                     Spacer(Modifier.weight(1f))
@@ -827,22 +826,6 @@ internal fun TransactionFormScreen(
                 continueEditTransactionSave(confirmedDate)
             },
         )
-        if (confirmDelete) {
-            DestructiveConfirmationDialog(
-                title = "Delete transaction?",
-                message = "It’ll be removed from this device. The removal will sync later.",
-                confirmLabel = "Delete",
-                dismissLabel = "Keep",
-                enabled = !mobileSession.isSavingTransaction,
-                onDismissRequest = { confirmDelete = false },
-                onConfirm = {
-                    onDeleteTransaction { deleted ->
-                        confirmDelete = false
-                        if (deleted) navigation.backToList()
-                    }
-                },
-            )
-        }
         return
     }
     PageColumn {
