@@ -79,6 +79,7 @@ import app.tandemforactual.ui.model.LiveScheduleSummary
 import app.tandemforactual.ui.model.liveAccountSummaries
 import app.tandemforactual.ui.model.liveBudgetMonthSummary
 import app.tandemforactual.ui.model.liveScheduleSummaries
+import app.tandemforactual.ui.model.recordName
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -634,7 +635,27 @@ fun TandemApp(
                 liveAccounts.any { !it.offBudget }
         if (!quickAddRequested || !budgetReady) return@LaunchedEffect
         delay(TandemMotion.ROUTE_MILLIS * 2L)
-        if (!routeTransitionInputBlocked && QuickActionEvents.consumeAddTransaction()) newTransaction(null)
+        if (!routeTransitionInputBlocked && QuickActionEvents.consumeAddTransaction()) {
+            newTransaction(null)
+            QuickActionEvents.consumeSharedText()?.let(::parseSharedTransactionText)?.let { shared ->
+                shared.amountMinor?.let { state.transactionAmount = state.formatAmount(it) }
+                if (shared.isIncome) state.transactionType = "Income"
+                val payees = mobileSession.payeeRecords.mapNotNull { record -> record.recordName()?.let { record.recordId to it } }
+                val payee = matchSharedPayee(shared.payeeHint, payees)
+                if (payee != null) {
+                    state.newTransactionPayeeId = payee.first
+                    state.transactionPayee = payee.second
+                    mobileSession.suggestedCategoryForPayee(state.selectedBudgetId, payee.first)?.let { categoryId ->
+                        mobileSession.categoryRecords.firstOrNull { it.recordId == categoryId }?.recordName()?.let { name ->
+                            state.newTransactionCategoryId = categoryId
+                            state.transactionCategory = name
+                        }
+                    }
+                } else {
+                    state.transactionNotes = shared.original.take(200)
+                }
+            }
+        }
     }
     val transactionSheetIndex = backStack.indexOfLast { it.route.isTransactionForm() }
     val transactionSheetActive = transactionSheetIndex >= 0

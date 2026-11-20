@@ -9,9 +9,19 @@ object QuickActionEvents {
 
     val addTransactionRequested: StateFlow<Boolean> = mutableAddTransaction
 
+    private var sharedText: String? = null
+
     fun requestAddTransaction() {
         mutableAddTransaction.value = true
     }
+
+    /** Opens a new transaction prefilled from text shared into Tandem, such as a bank alert. */
+    fun shareText(text: String) {
+        sharedText = text
+        mutableAddTransaction.value = true
+    }
+
+    internal fun consumeSharedText(): String? = sharedText.also { sharedText = null }
 
     internal fun consumeAddTransaction(): Boolean {
         val requested = mutableAddTransaction.value
