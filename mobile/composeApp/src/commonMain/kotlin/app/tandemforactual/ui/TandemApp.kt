@@ -847,6 +847,9 @@ fun TandemApp(
         previousRoute = route
     }
     val isAppInForeground by appInForeground.collectAsState()
+    LaunchedEffect(mobileSession.authenticatedDevice?.deviceId, isAppInForeground) {
+        if (mobileSession.authenticatedDevice != null && isAppInForeground) mobileSession.refreshServerCapabilities(force = true)
+    }
     LaunchedEffect(mobileSession.budgets, state.selectedBudgetId) {
         mobileSession.budgets.firstOrNull { it.budgetId == state.selectedBudgetId }?.let {
             if (state.selectedBudgetEncrypted != it.isEncrypted) state.selectedBudgetEncrypted = it.isEncrypted

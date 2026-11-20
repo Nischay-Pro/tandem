@@ -39,11 +39,13 @@ follows the selected light, dark, or system mode alongside the Compose screens.
 
 The first-run welcome screen gives three short benefits and shows four setup
 steps: Server, Sign in, Budget, and First sync. After a successful first sync,
-Tandem offers one optional “Stay in the loop” screen. The notification
+Tandem may offer the optional “Stay in the loop” screen. The notification
 permission request happens only after “Allow notifications” is tapped; “Not
-now” continues directly to the budget. Tandem does not repeat the onboarding
+now” continues to sync preferences. Tandem does not repeat the onboarding
 prompt after either choice. If the system permission was denied and can no
-longer be requested, the platform action opens notification settings.
+longer be requested, the platform action opens notification settings. The
+“Keep it up to date” screen lets people choose whether to **Sync in the
+background** and which network to use under **Sync over**.
 
 Assume people already have an Actual Budget and want to connect Tandem to it.
 The normal setup path connects to that existing server, signs in, chooses an
@@ -53,19 +55,19 @@ step. If Actual is reachable but the gateway is missing, say: “We found your
 Actual Budget service. Make sure the Tandem API Gateway is running at
 `/api/v1/`.” Avoid terms such as “proxy” and “route” in that message.
 
-| Idea                                      | Use                                                                                      | Avoid                                         |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------- |
-| A local copy                              | Saved on this device                                                                     | Saved on this phone                           |
-| Repeating an action                       | Try again                                                                                | Retry sync, Retry edit, Retry loading budgets |
-| Removing a pending local edit             | Remove edit                                                                              | Discard or Dismiss                            |
-| Deleting one transaction                  | Delete transaction?                                                                      | Delete this transaction?                      |
-| A conflict that needs a choice            | Needs review                                                                             | Needs your review, Review changes             |
-| Allowing background sync on cellular data | Sync on mobile data                                                                      | Use unrestricted networks                     |
-| Alerts for rejected edits                 | Rejected edit alerts                                                                     | Not applied alerts                            |
-| OS notification permission control        | Allow notifications; Turn on in notification settings; Turn off in notification settings | System permissions, Enable, Disable           |
-| Budget layout that puts essentials first  | Essentials                                                                               | Essentials first                              |
-| Product description                       | A local-first app for Actual Budget                                                      |                                               |
-| Pending local edit collection             | Pending Changes (screen title); pending edits in prose                                   | Pending changes in the screen title           |
+| Idea                                     | Use                                                                                      | Avoid                                         |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------- |
+| A local copy                             | Saved on this device                                                                     | Saved on this phone                           |
+| Repeating an action                      | Try again                                                                                | Retry sync, Retry edit, Retry loading budgets |
+| Removing a pending local edit            | Remove edit                                                                              | Discard or Dismiss                            |
+| Deleting one transaction                 | Delete transaction?                                                                      | Delete this transaction?                      |
+| A conflict that needs a choice           | Needs review                                                                             | Needs your review, Review changes             |
+| Network for automatic sync               | Sync over, with Wi-Fi, Mobile, and Both as choices                                       | Use unrestricted networks                     |
+| Alerts for rejected edits                | Rejected edit alerts                                                                     | Not applied alerts                            |
+| OS notification permission control       | Allow notifications; Turn on in notification settings; Turn off in notification settings | System permissions, Enable, Disable           |
+| Budget layout that puts essentials first | Essentials                                                                               | Essentials first                              |
+| Product description                      | A local-first app for Actual Budget                                                      |                                               |
+| Pending local edit collection            | Pending Changes (screen title); pending edits in prose                                   | Pending changes in the screen title           |
 
 Keep action labels consistent when the surrounding screen already makes the
 object clear. Use a short next step in error messages, such as “Try again.”

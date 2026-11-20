@@ -1,8 +1,9 @@
 # Install Tandem
 
-Run the installer from the directory where you want Tandem installed. It creates
-only `tandem/docker-compose.yml` and `tandem/.env` by default. The Compose file
-is refreshed on every run; an existing `.env` is left unchanged.
+Run the installer from the directory where you want Tandem installed. By
+default it writes `tandem/docker-compose.yml` and `tandem/.env`. Each run
+refreshes the Compose file from `main` and uses your existing `.env` as the
+starting configuration.
 
 ## Install and start
 
@@ -18,11 +19,15 @@ image tag (Enter uses `latest-nightly`), and whether it should add Tandem routes
 to a detected Nginx HTTPS site. It supports Ubuntu's packaged Nginx and regular
 Docker Nginx. Certbot and your existing certificate renewal remain unchanged.
 
-The installer creates the `.env` on first run with a generated PostgreSQL
-password and session encryption key. Keep `.env` private. On later runs it
-preserves every setting and secret while replacing `docker-compose.yml` with the
-current version. Edit `.env` if you want to change the API image tag or server
-settings.
+The installer creates `.env` on the first run with a generated PostgreSQL
+password and session encryption key. Keep `.env` private. Automatic Nginx setup
+can update `TANDEM_API_HOST_PORT` and `TRUST_PROXY` when configuring the proxy.
+
+Before starting Tandem, set `ACTUAL_SERVER_URL` in `.env` to the Actual server
+URL reachable from the Tandem API container. For example, use
+`http://actual:5006` if the Actual service is reachable by that name on the
+shared Docker network. For OpenID sign-in, also set `ACTUAL_PUBLIC_URL` to the
+public HTTPS URL that reaches Tandem. See the [configuration reference](configuration.md).
 
 Start Tandem with:
 
@@ -44,6 +49,4 @@ The HTTPS Nginx site must route `/api/v1/` to Tandem. If you declined automatic
 Nginx changes or no site was detected, follow [Reverse proxy setup](reverse-proxy.md).
 Replace `budget.example.com` with your public Tandem hostname.
 
-Set `ACTUAL_SERVER_URL` in `.env` when the Actual server is not discoverable
-through your deployment. For settings, see the [configuration reference](configuration.md).
 For updates, see [Upgrade](upgrade.md).

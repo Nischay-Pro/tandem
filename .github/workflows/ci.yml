@@ -14,8 +14,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Classify changes
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.scope.outputs.docs_only }}
+    steps:
+      - name: Check out source and history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check whether only Markdown changed
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BUILD_SHA: ${{ github.sha }}
+        run: |
+          docs_only="$(bash scripts/ci-docs-only.sh "$BASE_SHA" "$BUILD_SHA")"
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+
   docs:
     name: Documentation links and toolchain versions
+    needs: changes
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
@@ -38,6 +61,17 @@ jobs:
       - name: Check local documentation links and toolchain versions
         run: node scripts/check-docs.mjs
 
+      - name: Check documentation wording
+        if: needs.changes.outputs.docs_only == 'true'
+        run: python3 scripts/check-mobile-ui-vocabulary.py
+
+      - name: Check Markdown formatting
+        if: needs.changes.outputs.docs_only == 'true'
+        shell: bash
+        run: |
+          prettier_version="$(node -p 'require("./package.json").devDependencies.prettier')"
+          git ls-files -z -- '*.md' | xargs -0 -r npm exec --yes --package="prettier@$prettier_version" -- prettier --check --
+
   pr_title:
     name: Conventional PR title
     if: github.event_name == 'pull_request'
@@ -55,6 +89,8 @@ jobs:
 
   merchant_icon_pack:
     name: Generate merchant icon resources on Linux
+    needs: changes
+    if: needs.changes.outputs.docs_only == 'false'
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
@@ -92,6 +128,8 @@ jobs:
 
   mobile_static:
     name: Mobile text and design-token checks
+    needs: changes
+    if: needs.changes.outputs.docs_only == 'false'
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
@@ -117,6 +155,8 @@ jobs:
 
   api_android_jvm:
     name: API client · Android and JVM
+    needs: changes
+    if: needs.changes.outputs.docs_only == 'false'
     runs-on: ubuntu-26.04
     timeout-minutes: 60
     steps:
@@ -144,6 +184,8 @@ jobs:
 
   data_android_jvm:
     name: Data · Android and JVM
+    needs: changes
+    if: needs.changes.outputs.docs_only == 'false'
     runs-on: ubuntu-26.04
     timeout-minutes: 60
     steps:
@@ -173,6 +215,8 @@ jobs:
 
   compose_android:
     name: Compose · Android host
+    needs: changes
+    if: needs.changes.outputs.docs_only == 'false'
     runs-on: ubuntu-26.04
     timeout-minutes: 60
     steps:
@@ -198,6 +242,8 @@ jobs:
 
   android_app_unit_tests:
     name: Android app · unit tests
+    needs: changes
+    if: needs.changes.outputs.docs_only == 'false'
     runs-on: ubuntu-26.04
     timeout-minutes: 60
     steps:
@@ -219,6 +265,8 @@ jobs:
 
   android_app_release_lint:
     name: Android app · release lint
+    needs: changes
+    if: needs.changes.outputs.docs_only == 'false'
     runs-on: ubuntu-26.04
     timeout-minutes: 60
     steps:
@@ -242,6 +290,8 @@ jobs:
 
   android_app_release:
     name: Android app · release assembly
+    needs: changes
+    if: needs.changes.outputs.docs_only == 'false'
     runs-on: ubuntu-26.04
     timeout-minutes: 60
     steps:
@@ -265,7 +315,8 @@ jobs:
 
   ios_host:
     name: iOS app · Xcode simulator tests and launch smoke
-    needs: merchant_icon_pack
+    needs: [changes, merchant_icon_pack]
+    if: needs.changes.outputs.docs_only == 'false'
     runs-on: macos-26
     timeout-minutes: 60
     env:
@@ -321,6 +372,8 @@ jobs:
 
   api_ios:
     name: API client · iOS architectures
+    needs: changes
+    if: needs.changes.outputs.docs_only == 'false'
     runs-on: macos-26
     timeout-minutes: 60
     steps:
@@ -345,6 +398,8 @@ jobs:
 
   data_ios:
     name: Data · iOS architectures and simulator tests
+    needs: changes
+    if: needs.changes.outputs.docs_only == 'false'
     runs-on: macos-26
     timeout-minutes: 60
     steps:
@@ -370,7 +425,8 @@ jobs:
 
   compose_ios:
     name: Compose · iOS architectures and simulator tests
-    needs: merchant_icon_pack
+    needs: [changes, merchant_icon_pack]
+    if: needs.changes.outputs.docs_only == 'false'
     runs-on: macos-26
     timeout-minutes: 60
     env:
@@ -419,6 +475,7 @@ jobs:
   mobile:
     name: Android, iOS, and generated client gate
     needs:
+      - changes
       - docs
       - mobile_static
       - merchant_icon_pack
@@ -433,7 +490,7 @@ jobs:
       - data_ios
       - compose_ios
       - quality
-    if: always()
+    if: always() && needs.changes.outputs.docs_only == 'false'
     runs-on: ubuntu-26.04
     steps:
       - name: Require all mobile checks to pass
@@ -442,6 +499,8 @@ jobs:
 
   quality:
     name: API quality gate
+    needs: changes
+    if: needs.changes.outputs.docs_only == 'false'
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
@@ -468,6 +527,8 @@ jobs:
 
   deployment:
     name: Production image and disposable deployment gate
+    needs: changes
+    if: needs.changes.outputs.docs_only == 'false'
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
@@ -516,21 +577,34 @@ jobs:
   required_ci:
     name: Required CI
     needs:
+      - changes
+      - docs
       - mobile
       - deployment
       - pr_title
     if: always()
     runs-on: ubuntu-26.04
     steps:
-      - name: Require all suites and the pull request title to pass
+      - name: Require documentation, applicable suites, and the pull request title
         env:
           EVENT_NAME: ${{ github.event_name }}
+          CHANGE_RESULT: ${{ needs.changes.result }}
+          DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
+          DOCS_RESULT: ${{ needs.docs.result }}
           MOBILE_RESULT: ${{ needs.mobile.result }}
           DEPLOYMENT_RESULT: ${{ needs.deployment.result }}
           PR_TITLE_RESULT: ${{ needs.pr_title.result }}
         run: |
-          test "$MOBILE_RESULT" = success
-          test "$DEPLOYMENT_RESULT" = success
+          test "$CHANGE_RESULT" = success
+          test "$DOCS_RESULT" = success
+          if [[ "$DOCS_ONLY" == true ]]; then
+            test "$MOBILE_RESULT" = skipped
+            test "$DEPLOYMENT_RESULT" = skipped
+          else
+            test "$DOCS_ONLY" = false
+            test "$MOBILE_RESULT" = success
+            test "$DEPLOYMENT_RESULT" = success
+          fi
           if [[ "$EVENT_NAME" == pull_request ]]; then
             test "$PR_TITLE_RESULT" = success
           fi

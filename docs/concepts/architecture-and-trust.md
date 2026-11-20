@@ -25,7 +25,7 @@ the phone downloads a replacement snapshot while retaining local pending edits.
 | --------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | Use Actual's official API in the Tandem service           | Uses the supported Actual integration and gives Android and iOS one shared path | Remote sync and writes require the Tandem service and the Actual server |
 | Keep sign-in, budget scopes, and write recovery in Tandem | Access checks and conflict behavior have one implementation                     | Tandem's service and storage become trusted with readable budget data   |
-| Cache snapshots in Room on each phone                     | Previously synced budgets stay readable offline                                 | The phone stores a readable local copy                                  |
+| Cache snapshots in Room on each phone                     | Previously synced budgets stay available offline                                | The phone stores a local copy that needs protection                     |
 
 Actual's synchronization system uses CRDT techniques for multi-device changes.
 Projects such as [Actuali](https://github.com/MattFaz/actuali) use a direct
@@ -36,7 +36,7 @@ encrypted sync, use Actuali.
 
 ## Unencrypted and encrypted budgets
 
-The diagrams compare both paths side by side. Each person signs in to Actual
+The diagram compares both paths. Each person signs in to Actual
 from Tandem, and the API keeps that account's session token encrypted on the
 server. An encrypted budget has a second password: the person enters it in
 Tandem, which passes it to Actual's API to unlock that budget.
@@ -46,39 +46,38 @@ flowchart LR
   subgraph plain["UNENCRYPTED BUDGET"]
     direction TB
     plainServer["Actual sync server<br/>Readable budget payload"]
-    plainApi["Tandem API + @actual-app/api<br/>Open local copy; no budget key"]
-    plainDb[("Tandem PostgreSQL<br/>Session credentials and write journal")]
+    plainApi["Tandem API + @actual-app/api<br/>Readable local working copy"]
+    plainDb[("Tandem PostgreSQL<br/>Encrypted session tokens<br/>Write journal may hold readable data")]
     plainMemory["Tandem API memory<br/>Temporary snapshot pages"]
     plainPhone["Phone · Room<br/>Readable offline cache"]
-    plainServer -->|"Actual sync protocol"| plainApi
-    plainApi -->|"Temporary snapshot pages"| plainMemory
-    plainApi -->|"Budget data"| plainPhone
+    plainServer <-->|"Budget sync"| plainApi
+    plainApi <--> plainDb
+    plainApi <--> plainMemory
+    plainApi <-->|"Snapshots and edits"| plainPhone
   end
 
   subgraph encrypted["END-TO-END ENCRYPTED BUDGET"]
     direction TB
     encryptedServer["Actual sync server<br/>Encrypted budget payload"]
-    encryptedApi["Tandem API + @actual-app/api<br/>Decrypt local copy using budget key"]
-    encryptedDb[("Tandem PostgreSQL<br/>Session credentials and write journal")]
+    encryptedApi["Tandem API + @actual-app/api<br/>Decrypts into a readable working copy"]
+    encryptedDb[("Tandem PostgreSQL<br/>Encrypted session tokens<br/>Write journal may hold readable data")]
     encryptedMemory["Tandem API memory<br/>Temporary decrypted snapshot pages"]
-    encryptedPhone["Phone · Room<br/>Readable offline cache"]
-    budgetKey["Separate budget password<br/>sent in request header"]
-    encryptedServer -->|"Encrypted sync data"| encryptedApi
-    budgetKey -->|"HTTPS request"| encryptedApi
-    encryptedApi -->|"Temporary snapshot pages"| encryptedMemory
-    encryptedApi -->|"Budget data"| encryptedPhone
+    encryptedPhone["Phone · Room<br/>Android: encrypted SQLCipher cache<br/>iOS: standard local cache"]
+    encryptedServer <-->|"Encrypted budget sync"| encryptedApi
+    encryptedApi <--> encryptedDb
+    encryptedApi <--> encryptedMemory
+    encryptedApi <-->|"Snapshots and edits"| encryptedPhone
+    encryptedPhone -.->|"Budget password header"| encryptedApi
   end
 
   classDef server fill:#EDF1F7,stroke:#627D98,color:#102A43,stroke-width:1.5px;
   classDef plainService fill:#E4F5F2,stroke:#079AA2,color:#102A43,stroke-width:2px;
   classDef encryptedService fill:#F2E8FC,stroke:#8719E0,color:#102A43,stroke-width:2px;
   classDef store fill:#FFFFFF,stroke:#CBD5E1,color:#102A43,stroke-width:1.5px;
-  classDef secret fill:#FFF6E3,stroke:#D39B26,color:#664A12,stroke-width:1.5px;
   class plainServer,encryptedServer server;
   class plainApi plainService;
   class encryptedApi encryptedService;
   class plainDb,plainMemory,plainPhone,encryptedDb,encryptedMemory,encryptedPhone store;
-  class budgetKey secret;
   style plain fill:#F7FBFA,stroke:#A9DAD5,stroke-width:2px;
   style encrypted fill:#FBF8FE,stroke:#D9C0F2,stroke-width:2px;
 ```
@@ -88,9 +87,14 @@ For an encrypted budget, Tandem sends the budget password in the
 password is not saved in Tandem's durable transaction journal. Actual's API
 uses it to decrypt the budget into the service's local working copy so Tandem
 can read records and apply edits. Snapshot pages are held temporarily in API
-memory, and the mobile app stores a readable cache in Room. PostgreSQL retains
-the write journal, which can contain transaction values, notes, and base
-snapshots until journal removal is completed.
+memory. PostgreSQL retains the write journal, which can contain transaction
+values, notes, and base snapshots. Tandem clears payloads for committed and
+rejected operations after 90 days.
+
+On Android, Room uses a separate SQLCipher database for each encrypted budget.
+The budget password unlocks the database key, and you can optionally save the
+password with biometric protection. On iOS, encrypted budgets use the standard
+Room cache, which has no separate database encryption tied to the budget password.
 
 **Actual's end-to-end encryption protects an encrypted budget on the Actual
 sync server. It does not hide budget contents from the Tandem API service.**

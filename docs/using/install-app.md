@@ -14,14 +14,20 @@ prereleases. An iOS build is available from source only.
    release.
 
 2. **Verify the downloaded APK** in the directory where you saved both files.
-   The command below works in a Linux, macOS, or WSL terminal:
+   On Linux or WSL, run `sha256sum`.
 
    ```sh
    sha256sum -c Tandem-0.1.0-nightly.VERSION-COMMIT.apk.sha256
    ```
 
+   On macOS, run `shasum`.
+
+   ```sh
+   shasum -a 256 -c Tandem-0.1.0-nightly.VERSION-COMMIT.apk.sha256
+   ```
+
    Replace `VERSION-COMMIT` with the version and commit shown in the release.
-   **Check:** `sha256sum` prints `OK`. If it reports a mismatch, delete both
+   **Check:** the command prints `OK`. If it reports a mismatch, delete both
    downloads and get them again from the same release.
 
 3. **Install the APK.** Open the verified APK file. Android may ask you to
@@ -31,14 +37,27 @@ prereleases. An iOS build is available from source only.
    installation, use its settings prompt for that file source, then reopen the
    APK.
 
-4. **Connect to your budget.** Enter the Actual server address provided by the
+4. **Connect to your budget.** Enter the HTTPS server address provided by the
    operator, then sign in with your Actual account and choose a budget. Tandem
    checks for its API Gateway at `/api/v1/`; use the server address without
    adding that path.
 
-   **Check:** the budget opens after its first sync. If sign-in fails, confirm
+   **Check:** Tandem reports that the first sync is complete. If sign-in fails, confirm
    the operator has installed Tandem's API Gateway and that the server address
    reaches it. See [server troubleshooting](../deploy/troubleshooting.md).
+
+5. **Choose how Tandem syncs.** After the first sync and any notification
+   prompt, choose whether Tandem should sync in the background. Under **Sync
+   over**, choose **Wi-Fi**, **Mobile**, or **Both** for automatic sync. Tandem
+   treats hotspots and metered Wi-Fi as mobile data. **Sync now** is available
+   on any connection. You can change these choices in Settings.
+
+## Use a local server address
+
+If your operator provides a separate address for your home network or VPN,
+open **Settings → Server and device → Local address**. Enter the address and
+tap **Save and check**. Tandem uses it after verifying the server's identity.
+It falls back to your main address when the local address is unavailable.
 
 ## Install on iPhone
 

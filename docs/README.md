@@ -40,4 +40,5 @@ Choose a page by what you need to do.
 | [Toolchain](develop/toolchain.md)                                   | Developers setting up Gradle, Kotlin, and the generated client.      |
 | [UI wording](develop/ui-writing.md)                                 | Developers changing mobile interface text.                           |
 | [API reference](develop/api-reference.md)                           | Developers integrating with the Tandem API.                          |
+| [App and server versioning](develop/versioning.md)                  | Contributors changing the API or features the app depends on.        |
 | [OpenAPI document](api/openapi-v1.json)                             | Tools generating or checking API clients. Keep this path stable.     |
