@@ -674,6 +674,22 @@ describe("ActualSession", () => {
     await session.close();
   });
 
+  it("reports a missing budget encryption password with a stable code", async () => {
+    const fake = createFakeClient();
+    const session = new ActualSession(fake.api, config);
+    fake.failDownload(
+      Object.assign(new Error("File is encrypted"), { code: "missing-key" }),
+    );
+
+    await expect(
+      session.runBudget(
+        "budget-sync-id",
+        vi.fn(async () => undefined),
+      ),
+    ).rejects.toMatchObject({ code: "budget_password_required" });
+    await session.close();
+  });
+
   it("fails closed when the server version cannot be checked", async () => {
     const fake = createFakeClient();
     fake.setVersion({ error: "network-failure" });

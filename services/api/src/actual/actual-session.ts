@@ -1,5 +1,6 @@
 import { OperatorMessageError } from "../operator-message-error.js";
 import { getActualPrincipalId } from "../auth/actual-principal-context.js";
+import { toBudgetEncryptionError } from "./budget-encryption-errors.js";
 
 export const SUPPORTED_ACTUAL_SERVER_VERSION = "26.11.0";
 export const ACTUAL_SESSION_OPERATION_TIMEOUT_MS = 5 * 60 * 1_000;
@@ -632,7 +633,7 @@ export class ActualSession {
     try {
       return await operation();
     } catch (error) {
-      throw this.#mapCredentialFailure(error);
+      throw toBudgetEncryptionError(error) ?? this.#mapCredentialFailure(error);
     }
   }
 

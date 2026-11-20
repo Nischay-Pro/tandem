@@ -18,6 +18,7 @@ import {
   type OperationConflict,
   type WriteOperation,
 } from "../src/write-journal/contracts.js";
+import { BudgetEncryptionPasswordError } from "../src/actual/budget-encryption-errors.js";
 
 const budgetId = "synthetic-budget";
 const transactionId = "transaction-1";
@@ -358,6 +359,27 @@ describe("transaction REST routes", () => {
     expect(response.body).not.toContain("private Actual server detail");
     expect(consoleError).toHaveBeenCalledOnce();
     consoleError.mockRestore();
+    await app.close();
+  });
+
+  it("reports an incorrect budget encryption password", async () => {
+    const fake = createApi({
+      readTransaction: async () => {
+        throw new BudgetEncryptionPasswordError("budget_password_incorrect");
+      },
+    });
+    const app = await fake.buildApp();
+    const response = await app.inject({
+      method: "GET",
+      url: transactionUrl,
+      headers: authHeaders,
+    });
+
+    expect(response.statusCode).toBe(502);
+    expect(response.json().error).toEqual({
+      code: "budget_password_incorrect",
+      message: "The budget encryption password is incorrect.",
+    });
     await app.close();
   });
 

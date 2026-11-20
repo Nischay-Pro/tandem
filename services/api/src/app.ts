@@ -40,6 +40,7 @@ import {
   isStorageFullError,
   SERVER_STORAGE_FULL_ERROR,
 } from "./storage-failure.js";
+import { BudgetEncryptionPasswordError } from "./actual/budget-encryption-errors.js";
 
 declare module "fastify" {
   interface FastifySchema {
@@ -423,6 +424,11 @@ function budgetReadFailed(
   reply: import("fastify").FastifyReply,
   error?: unknown,
 ) {
+  if (error instanceof BudgetEncryptionPasswordError) {
+    return reply.code(502).send({
+      error: { code: error.code, message: error.message },
+    });
+  }
   if (error instanceof ActualPrincipalSessionExpiredError) {
     return reply.code(401).send({
       error: {
@@ -470,6 +476,11 @@ function actualRequestFailed(
 ) {
   if (isStorageFullError(error)) {
     return reply.code(503).send({ error: SERVER_STORAGE_FULL_ERROR });
+  }
+  if (error instanceof BudgetEncryptionPasswordError) {
+    return reply.code(502).send({
+      error: { code: error.code, message: error.message },
+    });
   }
   if (error instanceof ActualPrincipalSessionExpiredError) {
     return reply.code(401).send({
