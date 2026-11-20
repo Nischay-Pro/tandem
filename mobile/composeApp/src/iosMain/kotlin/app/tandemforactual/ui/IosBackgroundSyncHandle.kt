@@ -9,6 +9,7 @@ import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetSyncCoordinator
 import app.tandemforactual.data.store.BudgetSyncSummary
 import app.tandemforactual.data.store.LocalBudgetRepository
+import app.tandemforactual.data.store.overspendingAlert
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,10 +34,11 @@ private data class IosBackgroundSyncAlerts(
     val notifySyncFailure: Boolean = false,
     val conflictCount: Int = 0,
     val rejectedCount: Int = 0,
+    val overspendingMessage: String? = null,
 )
 
 /** Swift's BGTaskScheduler host calls this and completes its task from the callback. */
-fun startIosBackgroundBudgetSync(completion: (Boolean, Boolean, Int, Int) -> Unit): IosBackgroundSyncHandle {
+fun startIosBackgroundBudgetSync(completion: (Boolean, Boolean, Int, Int, String?) -> Unit): IosBackgroundSyncHandle {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val job =
         scope.launch {
@@ -47,6 +49,7 @@ fun startIosBackgroundBudgetSync(completion: (Boolean, Boolean, Int, Int) -> Uni
                     alerts.notifySyncFailure,
                     alerts.conflictCount,
                     alerts.rejectedCount,
+                    alerts.overspendingMessage,
                 )
             }
             scope.cancel()
@@ -66,6 +69,7 @@ private suspend fun runSelectedBudgetBackgroundSync(): IosBackgroundSyncAlerts {
     var syncRemindersEnabled = false
     var conflictAlertsEnabled = false
     var rejectedAlertsEnabled = false
+    var overspendingAlertsEnabled = false
     return try {
         val preferences = AppPreferencesStore(database).read()
         if (preferences["backgroundSyncEnabled"] != "true") {
@@ -74,6 +78,7 @@ private suspend fun runSelectedBudgetBackgroundSync(): IosBackgroundSyncAlerts {
         syncRemindersEnabled = preferences["syncReminders"] != "false"
         conflictAlertsEnabled = preferences["conflictReviewAlerts"] != "false"
         rejectedAlertsEnabled = preferences["rejectedEditAlerts"] != "false"
+        overspendingAlertsEnabled = preferences["overspendingAlerts"] != "false"
         val budgetId =
             preferences["selectedBudgetId"]?.takeIf(String::isNotBlank)
                 ?: return IosBackgroundSyncAlerts(taskSucceeded = true)
@@ -92,7 +97,13 @@ private suspend fun runSelectedBudgetBackgroundSync(): IosBackgroundSyncAlerts {
             sessionClient.withExclusiveSession {
                 BudgetSyncCoordinator(repository, GeneratedBudgetSyncRemote(sessionClient)).synchronize(budgetId)
             }
-        summary.toAlerts(conflictAlertsEnabled, rejectedAlertsEnabled)
+        val overspending =
+            if (overspendingAlertsEnabled) {
+                overspendingAlert(repository, AppPreferencesStore(database), budgetId, platformTodayIsoDate().take(7))
+            } else {
+                null
+            }
+        summary.toAlerts(conflictAlertsEnabled, rejectedAlertsEnabled).copy(overspendingMessage = overspending)
     } catch (error: CancellationException) {
         IosBackgroundSyncAlerts(taskSucceeded = false)
     } catch (_: IosCredentialUnavailableBeforeFirstUnlockException) {
