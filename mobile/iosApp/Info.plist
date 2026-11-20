@@ -51,6 +51,8 @@
     <key>UIApplicationSupportsMultipleScenes</key>
     <false/>
   </dict>
+  <key>NSFaceIDUsageDescription</key>
+  <string>Tandem uses Face ID to unlock your encrypted budgets and the app.</string>
   <key>UILaunchStoryboardName</key>
   <string>LaunchScreen</string>
   <key>UIBackgroundModes</key>
