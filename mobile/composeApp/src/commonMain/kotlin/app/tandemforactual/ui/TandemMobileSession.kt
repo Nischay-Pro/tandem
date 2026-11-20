@@ -348,6 +348,13 @@ internal class TandemMobileSession(
         bindEncryptedBudgetDatabase(budgetId, null)
     }
 
+    internal fun synchronizeInBackground(
+        budgetId: String,
+        encryptionPassword: String,
+    ) {
+        sessionScope.launch { synchronize(budgetId = budgetId, encryptionPassword = encryptionPassword) }
+    }
+
     internal fun forgetEncryptionPasswords() {
         scheduleActionEncryptionPasswords.clear()
     }
@@ -3253,12 +3260,10 @@ internal class TandemMobileSession(
         try {
             val summary =
                 apiClient.withExclusiveSession {
-                    coordinator.synchronize(
-                        budgetId,
-                        encryptionPassword,
-                        sendQueuedWrites && !hasPendingTransactionDependency(budgetId),
-                        reconcileUncertainOperationId,
-                    )
+                    val sendWrites = sendQueuedWrites && !hasPendingTransactionDependency(budgetId)
+                    withContext(Dispatchers.Default) {
+                        coordinator.synchronize(budgetId, encryptionPassword, sendWrites, reconcileUncertainOperationId)
+                    }
                 }
             isServerReachable = true
             refreshServerCapabilities()

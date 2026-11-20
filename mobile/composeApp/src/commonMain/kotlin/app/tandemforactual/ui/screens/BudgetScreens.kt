@@ -4,6 +4,7 @@ package app.tandemforactual.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -77,8 +78,9 @@ import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CloudSync
-import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Plus
+import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.WalletCards
@@ -342,40 +344,7 @@ internal fun BudgetScreen(
             }
             if (mobileSession.syncComplete && !state.hasDismissedBudgetHint) {
                 item(key = "budget-getting-started-hint") {
-                    SurfaceCard {
-                        Row(
-                            Modifier.fillMaxWidth().padding(TandemSpacing.medium),
-                            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                            verticalAlignment = Alignment.Top,
-                        ) {
-                            Icon(
-                                Lucide.Info,
-                                contentDescription = null,
-                                modifier = Modifier.padding(top = 2.dp).size(20.dp),
-                                tint = palette.accent,
-                            )
-                            Column(
-                                Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
-                            ) {
-                                Text(
-                                    "Getting started",
-                                    color = palette.text,
-                                    fontSize = TandemTypography.compactBody,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                    "Choose a category to review activity. Changes save here and sync when connected.",
-                                    color = palette.muted,
-                                    fontSize = TandemTypography.label,
-                                    lineHeight = TandemTypography.compactLineHeight,
-                                )
-                            }
-                            TandemIconButton(Lucide.X, "Dismiss getting-started hint", sizeDp = 36, iconSizeDp = 16) {
-                                state.hasDismissedBudgetHint = true
-                            }
-                        }
-                    }
+                    GettingStartedCard { state.hasDismissedBudgetHint = true }
                 }
             }
             if (isLiveBudget) {
@@ -1695,3 +1664,61 @@ internal fun holdAmountAllowed(
     readyToAssignMinor: Long,
     heldMinor: Long,
 ): Boolean = amountMinor > 0 && amountMinor != heldMinor && amountMinor <= readyToAssignMinor + heldMinor
+
+@Composable
+private fun GettingStartedCard(onDismiss: () -> Unit) {
+    val palette = tandemPalette
+    SurfaceCard {
+        Column(
+            Modifier.fillMaxWidth().padding(TandemSpacing.large),
+            verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Getting started",
+                    Modifier.weight(1f),
+                    color = palette.text,
+                    fontSize = TandemTypography.action,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                TandemIconButton(Lucide.X, "Dismiss getting started", sizeDp = 36, iconSizeDp = 16, onClick = onDismiss)
+            }
+            GettingStartedTip(Lucide.Tags, "Tap a category", "See its activity and change what’s assigned.")
+            GettingStartedTip(Lucide.Plus, "Add a transaction", "It’s saved on this device first, then synced.")
+            GettingStartedTip(Lucide.RefreshCw, "Sync with Actual", "Pull down here or tap the cloud to sync now.")
+            Text(
+                "Got it",
+                Modifier
+                    .align(Alignment.End)
+                    .clip(RoundedCornerShape(TandemShapes.capsule))
+                    .background(palette.accent.copy(alpha = 0.16f))
+                    .clickable(role = Role.Button, onClick = onDismiss)
+                    .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
+                color = palette.accent,
+                fontSize = TandemTypography.compactBody,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun GettingStartedTip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    detail: String,
+) {
+    val palette = tandemPalette
+    Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier.size(40.dp).clip(CircleShape).background(palette.accent.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.accent)
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+            Text(title, color = palette.text, fontSize = TandemTypography.compactBody, fontWeight = FontWeight.SemiBold)
+            Text(detail, color = palette.muted, fontSize = TandemTypography.caption)
+        }
+    }
+}

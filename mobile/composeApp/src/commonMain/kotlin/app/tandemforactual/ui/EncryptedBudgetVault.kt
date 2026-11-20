@@ -45,12 +45,8 @@ internal suspend fun TandemMobileSession.unlockEncryptedBudget(
     val existing = vault.open(budgetId, password)
     if (existing != null) {
         bindEncryptedBudgetDatabase(budgetId, existing)
-        synchronize(budgetId = budgetId, encryptionPassword = password)
-        if (budgetPasswordRejection != null && budgetPasswordRejection != BUDGET_PASSWORD_ATTEMPTS_EXCEEDED) {
-            unbindEncryptedBudgetDatabase()
-            return EncryptedBudgetUnlockResult.WRONG_PASSWORD
-        }
         removeBudgetFromMainStorage(budgetId)
+        synchronizeInBackground(budgetId, password)
         return EncryptedBudgetUnlockResult.UNLOCKED
     }
 
