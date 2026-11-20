@@ -7,9 +7,11 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -1711,16 +1713,20 @@ fun TandemApp(
                         )
                     }
                 }
-                if (tabShellRoute != null && !imeVisible && !isLandscape && !backgroundRouteEntry.route.isSetupRoute()) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().height(88.dp),
-                        contentAlignment = Alignment.BottomCenter,
+                if (tabShellRoute != null && !isLandscape) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = backgroundRouteEntry.route.showsBottomNavigation() && !imeVisible,
+                        modifier = Modifier.fillMaxWidth(),
+                        enter =
+                            expandVertically(
+                                tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS),
+                            ) + tandemBottomBarEnter(reduceMotion),
+                        exit =
+                            shrinkVertically(tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS)) + tandemBottomBarExit(reduceMotion),
                     ) {
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = backgroundRouteEntry.route.showsBottomNavigation(),
-                            modifier = Modifier.fillMaxWidth(),
-                            enter = tandemBottomBarEnter(reduceMotion),
-                            exit = tandemBottomBarExit(reduceMotion),
+                        Box(
+                            modifier = Modifier.fillMaxWidth().height(88.dp),
+                            contentAlignment = Alignment.BottomCenter,
                         ) {
                             BottomNavigation(
                                 tabShellRoute,
@@ -1831,6 +1837,7 @@ internal fun AppRoute.showsBottomNavigation(): Boolean =
     when (this) {
         AppRoute.STARTUP,
         AppRoute.WELCOME,
+        AppRoute.SWITCH_BUDGET,
         AppRoute.SERVER_ADDRESS,
         AppRoute.SIGN_IN,
         AppRoute.BUDGET_CHOOSER,
