@@ -1590,7 +1590,7 @@ fun TandemApp(
                     .fillMaxSize()
                     .padding(start = if (showLandscapeRail) 80.dp else 0.dp),
             ) {
-                if (shouldRenderRouteHeader(route, tabShellRoute != null) && !needsEncryptedBudgetUnlock(state, shellHeaderRoute)) {
+                if (shouldRenderRouteHeader(route, tabShellRoute != null)) {
                     AnimatedContent(
                         targetState = shellHeaderRoute,
                         transitionSpec = {
@@ -1603,7 +1603,7 @@ fun TandemApp(
                             ) togetherWith fadeOut(tween(TandemMotion.TAB_EXIT_MILLIS, easing = TandemMotion.exitEasing))
                         },
                         label = "tandem-header-transition",
-                    ) { headerRoute -> renderHeader(headerRoute) }
+                    ) { headerRoute -> if (!needsEncryptedBudgetUnlock(state, headerRoute)) renderHeader(headerRoute) }
                 }
                 val transitionInputModifier =
                     Modifier.pointerInput(Unit) {
@@ -1815,6 +1815,8 @@ fun TandemApp(
             appInForeground = isAppInForeground,
             onChooseBudget = { navigation.open(AppRoute.SWITCH_BUDGET) },
             vault = encryptedBudgetVault,
+            backTargetRoute = backPreviewRoute?.route,
+            backProgress = backGestureProgress,
             onUnlocked = {
                 if (state.pendingSetupAfterUnlock) {
                     state.pendingSetupAfterUnlock = false
