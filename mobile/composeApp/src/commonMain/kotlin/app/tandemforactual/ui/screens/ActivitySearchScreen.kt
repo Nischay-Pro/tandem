@@ -59,7 +59,6 @@ import com.composables.icons.lucide.X
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -659,23 +658,16 @@ internal fun ActivitySearchScreen(
             }
         }
     }
-    if (confirmBulkDelete) {
-        TransactionBulkDeleteDialog(
-            selectedCount = selectedTransactionIds.size,
-            isDeleting = isDeletingSelection,
-            onDismiss = { confirmBulkDelete = false },
-            onConfirm = {
-                scope.launch {
-                    isDeletingSelection = true
-                    val deleted = deleteTransactionSelection(mobileSession, state.selectedBudgetId, selectedTransactionIds)
-                    isDeletingSelection = false
-                    confirmBulkDelete = false
-                    if (deleted) {
-                        selectedTransactionIds = emptySet()
-                        selectionMode = false
-                    }
-                }
-            },
-        )
+    LaunchedEffect(confirmBulkDelete) {
+        if (confirmBulkDelete) {
+            isDeletingSelection = true
+            val deleted = deleteTransactionSelection(mobileSession, state.selectedBudgetId, selectedTransactionIds)
+            isDeletingSelection = false
+            confirmBulkDelete = false
+            if (deleted) {
+                selectedTransactionIds = emptySet()
+                selectionMode = false
+            }
+        }
     }
 }

@@ -118,6 +118,7 @@ internal class AppState {
     var transactionAmount by mutableStateOf(formatAmount(0))
     var transactionAccount by mutableStateOf("")
     var newTransactionAccountId by mutableStateOf("")
+    var lastTransactionAccountId by mutableStateOf("")
     var newTransactionInitialAccountId by mutableStateOf("")
     var newTransactionInitialAccountName by mutableStateOf("")
     var transactionPayee by mutableStateOf("")
@@ -159,6 +160,7 @@ internal class AppState {
     var syncReminders by mutableStateOf(true)
     var conflictReviewAlerts by mutableStateOf(true)
     var rejectedEditAlerts by mutableStateOf(true)
+    var overspendingAlerts by mutableStateOf(true)
     var settingsStorageError by mutableStateOf<String?>(null)
     var settingsStorageRetry by mutableStateOf(0)
     var settingsStorageReady by mutableStateOf(false)
@@ -260,11 +262,13 @@ internal class AppState {
             "hasCompletedSyncOnboarding" to hasCompletedSyncOnboarding.toString(),
             "unlockFailureCount" to unlockFailureCount.toString(),
             "localServerUrl" to localServerUrl,
+            "lastTransactionAccountId" to lastTransactionAccountId,
             "recentServerUrls" to recentServerUrls,
             "unlockRetryAtEpochMillis" to unlockRetryAtEpochMillis.toString(),
             "syncReminders" to syncReminders.toString(),
             "conflictReviewAlerts" to conflictReviewAlerts.toString(),
             "rejectedEditAlerts" to rejectedEditAlerts.toString(),
+            "overspendingAlerts" to overspendingAlerts.toString(),
         )
 
     fun restorePersistentSettings(saved: Map<String, String>) {
@@ -313,6 +317,7 @@ internal class AppState {
         hasCompletedSyncOnboarding = saved["hasCompletedSyncOnboarding"]?.toBooleanStrictOrNull() ?: hasCompletedSyncOnboarding
         unlockFailureCount = saved["unlockFailureCount"]?.toIntOrNull()?.coerceAtLeast(0) ?: unlockFailureCount
         localServerUrl = saved["localServerUrl"] ?: localServerUrl
+        lastTransactionAccountId = saved["lastTransactionAccountId"] ?: lastTransactionAccountId
         recentServerUrls = saved["recentServerUrls"] ?: recentServerUrls
         unlockRetryAtEpochMillis = saved["unlockRetryAtEpochMillis"]?.toLongOrNull()?.coerceAtLeast(0L) ?: unlockRetryAtEpochMillis
         val legacyNotifications = saved["notifications"]?.toBooleanStrictOrNull()
@@ -321,6 +326,7 @@ internal class AppState {
             saved["conflictReviewAlerts"]?.toBooleanStrictOrNull() ?: legacyNotifications ?: conflictReviewAlerts
         rejectedEditAlerts =
             saved["rejectedEditAlerts"]?.toBooleanStrictOrNull() ?: legacyNotifications ?: rejectedEditAlerts
+        overspendingAlerts = saved["overspendingAlerts"]?.toBooleanStrictOrNull() ?: overspendingAlerts
     }
 
     companion object {
