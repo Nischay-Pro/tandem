@@ -573,7 +573,7 @@ internal fun ScreenContent(
             SyncPreferencesScreen(
                 state,
                 mobileSession,
-                onSyncNow,
+                navigation,
                 backgroundSyncSupported,
             )
         AppRoute.SERVER_DEVICE ->
@@ -587,7 +587,7 @@ internal fun ScreenContent(
                 notificationPermissionEnabled,
                 onToggleNotificationPermission,
             )
-        AppRoute.LOCAL_DATA -> LocalDataScreen(state, mobileSession, onSyncNow)
+        AppRoute.LOCAL_DATA -> LocalDataScreen(state, mobileSession, navigation)
         AppRoute.ABOUT -> AboutScreen(merchantIconMatcherLoadError, navigation)
         AppRoute.MERCHANT_ICON_LICENSES -> MerchantIconLicensesScreen(merchantIconCatalog, merchantIconCatalogLoadError)
     }

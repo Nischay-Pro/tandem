@@ -1026,7 +1026,7 @@ internal fun SyncOnboardingScreen(
                 ToggleRow(
                     "Sync in the background",
                     if (state.selectedBudgetEncrypted) {
-                        "Encrypted budgets sync only while unlocked, because Tandem keeps their password only then."
+                        "Encrypted budgets sync only while unlocked."
                     } else {
                         "About every six hours, even when Tandem is closed"
                     },

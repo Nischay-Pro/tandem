@@ -613,7 +613,13 @@ fun TandemApp(
     val transactionSheetIndex = backStack.indexOfLast { it.route.isTransactionForm() }
     val transactionSheetActive = transactionSheetIndex >= 0
     val handleCurrentRouteBack: () -> Unit = {
-        if (backStack.lastOrNull()?.route == AppRoute.MANAGE_PAYEES) {
+        val payeesOverTransactionSheet =
+            backStack.lastOrNull()?.route == AppRoute.MANAGE_PAYEES &&
+                (
+                    backStack.size == 1 ||
+                        backStack[backStack.lastIndex - 1].route.let { it == AppRoute.CHOOSE_PAYEE || it.isTransactionForm() }
+                )
+        if (payeesOverTransactionSheet) {
             routeTransitionInputJob?.cancel()
             routeTransitionInputJob = null
             routeTransitionInputBlocked = false

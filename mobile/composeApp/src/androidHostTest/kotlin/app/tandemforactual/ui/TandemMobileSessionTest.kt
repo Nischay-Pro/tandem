@@ -254,6 +254,28 @@ class TandemMobileSessionTest {
         }
 
     @Test
+    fun removingABudgetWaitsForUnsyncedChangesThenDeletesItsCopy() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val preferences = AppPreferencesStore(database)
+                val repository = LocalBudgetRepository(database) { 1_000L }
+                seedCachedBudget(repository, preferences, withPendingWrite = true)
+                val session = TandemMobileSession(TandemApiClient(), database, { 1_000L })
+                session.loadLocalRecords("budget-1")
+
+                assertNotNull(session.removeBudgetFromDevice("budget-1", null))
+                assertTrue(repository.hasCachedSnapshot("budget-1"))
+
+                repository.budgetWrites("budget-1").forEach { repository.discardWrite(it.operationId) }
+                assertNull(session.removeBudgetFromDevice("budget-1", null))
+                assertFalse(repository.hasCachedSnapshot("budget-1"))
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun blankBudgetIdsAreNeverCachedInsteadOfCrashing() =
         runBlocking {
             val database = newDatabase()

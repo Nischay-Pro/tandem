@@ -10,9 +10,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.ListRow
-import app.tandemforactual.ui.components.ListRowOptions
+import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SegmentedSelector
+import app.tandemforactual.ui.components.SurfaceCard
+import com.composables.icons.lucide.CloudSync
+import com.composables.icons.lucide.Lucide
 
 @Composable
 internal fun BudgetPreferencesScreen(
@@ -49,27 +52,9 @@ internal fun BudgetPreferencesScreen(
 internal fun SyncPreferencesScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
-    onSyncNow: () -> Unit,
+    navigation: AppNavigation,
     backgroundSyncSupported: Boolean,
 ) {
-    val hasSelectedBudget = state.selectedBudgetId.isNotBlank()
-    val syncState = mobileSession.localSyncState
-    val syncStatus =
-        when {
-            !hasSelectedBudget -> "No budget selected"
-            mobileSession.isSyncing -> "Syncing"
-            mobileSession.syncError != null -> "Needs attention"
-            syncState?.lastSyncedAtEpochMs != null -> "Ready"
-            else -> "Never synced"
-        }
-    val syncDescription =
-        when {
-            !hasSelectedBudget -> "Sign in and choose an Actual budget to sync"
-            mobileSession.isSyncing -> "Reading changes from Actual"
-            mobileSession.syncError != null -> mobileSession.syncError.orEmpty()
-            syncState?.lastSyncedAtEpochMs != null -> "Last successful sync"
-            else -> "Open a budget and sync to save it on this device"
-        }
     PageColumn {
         SectionCard("When to sync") {
             ToggleRow("Sync when opening a budget", "Check for server changes when returning to a budget", state.syncOnOpen) {
@@ -81,9 +66,9 @@ internal fun SyncPreferencesScreen(
                 ToggleRow(
                     "Schedule background sync",
                     if (state.selectedBudgetEncrypted) {
-                        "Encrypted budgets can’t sync in the background."
+                        "Encrypted budgets sync only while unlocked."
                     } else {
-                        "Refresh the selected budget about every six hours"
+                        "About every six hours, even when Tandem is closed"
                     },
                     state.backgroundSyncEnabled && !state.selectedBudgetEncrypted,
                     enabled = !state.selectedBudgetEncrypted,
@@ -97,35 +82,12 @@ internal fun SyncPreferencesScreen(
                 SyncNetworkChoices(state.syncNetwork) { state.syncNetwork = it }
             }
         }
-        SectionCard("Current budget", if (hasSelectedBudget) null else "Choose an Actual budget", animateDetail = true) {
+        SurfaceCard {
             ListRow(
-                "Sync now",
-                "Read changes and check pending edits",
-                when {
-                    mobileSession.isSyncing -> "Syncing"
-                    hasSelectedBudget -> "Sync"
-                    else -> "Unavailable"
-                },
-                options = ListRowOptions(animateChanges = true),
-                onClick = onSyncNow.takeIf { hasSelectedBudget && !mobileSession.isSyncing },
-            )
-            DividerLine()
-            ListRow(
-                "Sync status",
-                syncDescription,
-                syncStatus,
-                options =
-                    ListRowOptions(
-                        trailingColor =
-                            if (mobileSession.syncError !=
-                                null
-                            ) {
-                                tandemPalette.warning
-                            } else {
-                                null
-                            },
-                        animateChanges = true,
-                    ),
+                "Sync Center",
+                "Sync now, see status, and review changes",
+                leading = RowLeading.Icon(Lucide.CloudSync),
+                onClick = { navigation.open(AppRoute.SYNC_CENTER) },
             )
         }
         AnimatedPreviewNote(mobileSession.syncError)
