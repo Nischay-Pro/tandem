@@ -31,6 +31,7 @@ import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SurfaceCard
+import app.tandemforactual.ui.components.SwipeToDeleteBox
 import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.TandemLoadingIndicator
 import app.tandemforactual.ui.components.amountAnnotatedString
@@ -52,6 +53,7 @@ internal fun TransactionRow(
     syncStatus: String? = null,
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
+    onSwipeDelete: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
@@ -65,46 +67,49 @@ internal fun TransactionRow(
                 fontSize = TandemTypography.micro,
             )
         }
-        val secondaryLabel = activityTransactionSubtitle(transaction, showAccount)
-        ListRow(
-            transaction.payee,
-            secondaryLabel,
-            amountText.takeUnless { activityStyle || syncStatus != null },
-            leading =
-                when {
-                    selectionMode -> RowLeading.Icon(if (selected) Lucide.Check else Lucide.Square)
-                    activityStyle -> activityTransactionLeading(transaction)
-                    else -> RowLeading.Merchant(transaction.merchantIcon, fallback = transaction.categoryIcon ?: Lucide.Receipt)
-                },
-            options =
-                ListRowOptions(
-                    trailingColor = if (transaction.amountMinorUnits > 0) palette.positive else palette.text,
-                    subtitleMaxLines = 1,
-                ),
-            onClick = onClick,
-            onLongClick = onLongClick,
-            trailingContent =
-                if (activityStyle || syncStatus != null) {
-                    {
-                        Column(
-                            horizontalAlignment = Alignment.End,
-                            verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
-                        ) {
-                            ActivityTransactionAmount(
-                                amountText,
-                                amountMinorUnits = transaction.amountMinorUnits,
-                                fractionDigits =
-                                    transaction.displaySettings
-                                        ?.takeUnless { it.hideFraction }
-                                        ?.currencyFractionDigits ?: 0,
-                            )
-                            syncStatus?.let { TransactionSyncChip(it) }
+        val row: @Composable () -> Unit = {
+            val secondaryLabel = activityTransactionSubtitle(transaction, showAccount)
+            ListRow(
+                transaction.payee,
+                secondaryLabel,
+                amountText.takeUnless { activityStyle || syncStatus != null },
+                leading =
+                    when {
+                        selectionMode -> RowLeading.Icon(if (selected) Lucide.Check else Lucide.Square)
+                        activityStyle -> activityTransactionLeading(transaction)
+                        else -> RowLeading.Merchant(transaction.merchantIcon, fallback = transaction.categoryIcon ?: Lucide.Receipt)
+                    },
+                options =
+                    ListRowOptions(
+                        trailingColor = if (transaction.amountMinorUnits > 0) palette.positive else palette.text,
+                        subtitleMaxLines = 1,
+                    ),
+                onClick = onClick,
+                onLongClick = onLongClick,
+                trailingContent =
+                    if (activityStyle || syncStatus != null) {
+                        {
+                            Column(
+                                horizontalAlignment = Alignment.End,
+                                verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+                            ) {
+                                ActivityTransactionAmount(
+                                    amountText,
+                                    amountMinorUnits = transaction.amountMinorUnits,
+                                    fractionDigits =
+                                        transaction.displaySettings
+                                            ?.takeUnless { it.hideFraction }
+                                            ?.currencyFractionDigits ?: 0,
+                                )
+                                syncStatus?.let { TransactionSyncChip(it) }
+                            }
                         }
-                    }
-                } else {
-                    null
-                },
-        )
+                    } else {
+                        null
+                    },
+            )
+        }
+        if (onSwipeDelete != null) SwipeToDeleteBox(onSwipeDelete) { row() } else row()
         if (showDivider) {
             Box(
                 Modifier
