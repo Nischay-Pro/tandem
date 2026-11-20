@@ -210,6 +210,7 @@ class MainActivity : FragmentActivity() {
 
   override fun onStop() {
     appInForeground.value = false
+    BudgetWidget.refresh(this)
     if (networkCallbackRegistered) {
       connectivityManager.unregisterNetworkCallback(networkCallback)
       networkCallbackRegistered = false

@@ -155,3 +155,9 @@ internal fun formatFirstWeekday(): String {
     val representativeDay = 1 + ((firstWeekday - mayFirstWeekday + 7) % 7)
     return platformFullWeekdayName(2026, 5, representativeDay)
 }
+
+/** Formats an amount the way the app does, for surfaces outside Compose such as widgets. */
+fun formatBudgetCurrency(
+    minorUnits: Long,
+    displaySettings: BudgetDisplaySettings?,
+): String = platformFormatCurrency(minorUnits, displaySettings)

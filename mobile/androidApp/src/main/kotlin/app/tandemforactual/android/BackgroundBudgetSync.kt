@@ -106,6 +106,7 @@ class BackgroundBudgetSyncWorker(
                     overspendingAlert(repository, AppPreferencesStore(database), budgetId, YearMonth.now().toString()),
                 )
             }
+            BudgetWidget.refresh(applicationContext)
             Result.success()
         } catch (error: CancellationException) {
             throw error
