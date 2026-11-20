@@ -40,4 +40,26 @@ class AppLockStateTest {
         assertFalse(encryptedBudgetUnlockAccepted(syncSucceeded = false, serverReachable = false, offlineCheck = false))
         assertFalse(encryptedBudgetUnlockAccepted(syncSucceeded = false, serverReachable = false, offlineCheck = null))
     }
+
+    @Test
+    fun wrongPasswordsWaitLongerAfterEachBlockOfFive() {
+        kotlin.test.assertEquals(0L, unlockWaitMillis(4))
+        kotlin.test.assertEquals(30_000L, unlockWaitMillis(5))
+        kotlin.test.assertEquals(0L, unlockWaitMillis(6))
+        kotlin.test.assertEquals(120_000L, unlockWaitMillis(10))
+        kotlin.test.assertEquals(600_000L, unlockWaitMillis(15))
+        kotlin.test.assertEquals(1_800_000L, unlockWaitMillis(40))
+    }
+
+    @Test
+    fun theUnlockWaitSurvivesARestart() {
+        val original =
+            AppState().apply {
+                unlockFailureCount = 5
+                unlockRetryAtEpochMillis = 90_000L
+            }
+        val restored = AppState().apply { restorePersistentSettings(original.persistentSettings()) }
+        kotlin.test.assertEquals(5, restored.unlockFailureCount)
+        kotlin.test.assertEquals(90_000L, restored.unlockRetryAtEpochMillis)
+    }
 }

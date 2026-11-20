@@ -305,7 +305,12 @@ internal class TandemMobileSession(
 
     internal suspend fun unbindEncryptedBudgetDatabase() {
         val budgetId = budgetStorage?.budgetId ?: return
+        scheduleActionEncryptionPasswords.remove(budgetId)
         bindEncryptedBudgetDatabase(budgetId, null)
+    }
+
+    internal fun forgetEncryptionPasswords() {
+        scheduleActionEncryptionPasswords.clear()
     }
 
     internal suspend fun mainBudgetWrites(budgetId: String): List<OutboxOperationEntity> =

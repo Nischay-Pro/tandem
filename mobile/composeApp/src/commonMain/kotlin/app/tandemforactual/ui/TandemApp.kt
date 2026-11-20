@@ -793,6 +793,7 @@ fun TandemApp(
             }
     }
     LaunchedEffect(state.encryptedPassword.isBlank(), state.selectedBudgetId) {
+        if (state.encryptedPassword.isBlank()) mobileSession.forgetEncryptionPasswords()
         val bound = mobileSession.boundEncryptedBudgetId
         if (bound != null && (state.encryptedPassword.isBlank() || bound != state.selectedBudgetId)) {
             mobileSession.unbindEncryptedBudgetDatabase()

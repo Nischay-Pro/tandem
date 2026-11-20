@@ -151,6 +151,8 @@ internal class AppState {
     var syncNetwork by mutableStateOf(SyncNetwork.ANY)
     var hasCompletedSyncOnboarding by mutableStateOf(false)
     var pendingSetupAfterUnlock by mutableStateOf(false)
+    var unlockFailureCount by mutableStateOf(0)
+    var unlockRetryAtEpochMillis by mutableStateOf(0L)
     var syncReminders by mutableStateOf(true)
     var conflictReviewAlerts by mutableStateOf(true)
     var rejectedEditAlerts by mutableStateOf(true)
@@ -253,6 +255,8 @@ internal class AppState {
             "backgroundSyncEnabled" to backgroundSyncEnabled.toString(),
             "syncNetwork" to syncNetwork.name,
             "hasCompletedSyncOnboarding" to hasCompletedSyncOnboarding.toString(),
+            "unlockFailureCount" to unlockFailureCount.toString(),
+            "unlockRetryAtEpochMillis" to unlockRetryAtEpochMillis.toString(),
             "syncReminders" to syncReminders.toString(),
             "conflictReviewAlerts" to conflictReviewAlerts.toString(),
             "rejectedEditAlerts" to rejectedEditAlerts.toString(),
@@ -302,6 +306,8 @@ internal class AppState {
         backgroundSyncEnabled = saved["backgroundSyncEnabled"]?.toBooleanStrictOrNull() ?: backgroundSyncEnabled
         syncNetwork = SyncNetwork.restore(saved["syncNetwork"], saved["syncOnWifi"]?.toBooleanStrictOrNull()) ?: syncNetwork
         hasCompletedSyncOnboarding = saved["hasCompletedSyncOnboarding"]?.toBooleanStrictOrNull() ?: hasCompletedSyncOnboarding
+        unlockFailureCount = saved["unlockFailureCount"]?.toIntOrNull()?.coerceAtLeast(0) ?: unlockFailureCount
+        unlockRetryAtEpochMillis = saved["unlockRetryAtEpochMillis"]?.toLongOrNull()?.coerceAtLeast(0L) ?: unlockRetryAtEpochMillis
         val legacyNotifications = saved["notifications"]?.toBooleanStrictOrNull()
         syncReminders = saved["syncReminders"]?.toBooleanStrictOrNull() ?: legacyNotifications ?: syncReminders
         conflictReviewAlerts =
