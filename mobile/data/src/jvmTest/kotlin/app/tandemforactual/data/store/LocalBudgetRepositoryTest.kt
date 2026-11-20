@@ -8,6 +8,7 @@ import app.tandemforactual.data.database.BudgetRecordParentMetadataMigration
 import app.tandemforactual.data.database.BudgetRecordSearchMetadataMigration
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.TandemDatabase
+import app.tandemforactual.data.database.closeDatabase
 import app.tandemforactual.data.database.openTandemDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -210,6 +211,33 @@ class LocalBudgetRepositoryTest {
                 assertEquals(listOf(AppPreferenceEntity("theme", "dark")), preferences.readAll())
             } finally {
                 database.close()
+            }
+        }
+
+    @Test
+    fun aBudgetMovesItsWritesAndLeavesNoCopyBehind() =
+        runBlocking {
+            val source = newDatabase()
+            val target = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(source) { 200L }
+                val destination = LocalBudgetRepository(target) { 200L }
+                repository.applySnapshot(BUDGET, GENERATION, "c1", listOf(transaction()))
+                repository.enqueueWrite(updateRequest(operationId = "move-1", idempotencyKey = "move-key-1"))
+
+                val writes = repository.budgetWrites(BUDGET)
+                destination.importBudgetWrites(writes)
+                destination.importBudgetWrites(writes)
+                repository.removeBudget(BUDGET)
+
+                assertFailsWith<InvalidLocalWriteException> { repository.removeBudget(" ") }
+                assertFailsWith<InvalidLocalWriteException> { repository.budgetWrites("") }
+                assertEquals(listOf("move-1"), destination.readPendingWrites(BUDGET).map { it.operationId })
+                assertTrue(repository.budgetWrites(BUDGET).isEmpty())
+                assertFalse(repository.hasCachedSnapshot(BUDGET))
+            } finally {
+                source.closeDatabase()
+                target.close()
             }
         }
 

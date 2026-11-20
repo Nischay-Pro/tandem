@@ -92,6 +92,7 @@ dependencies {
   implementation(libs.coreSplashScreen)
   implementation(libs.biometric)
   implementation(libs.fragment)
+  implementation(libs.sqlcipher)
   implementation(libs.profileInstaller)
   implementation(libs.composeRuntimeAndroid)
   implementation(libs.composeUiAndroid)

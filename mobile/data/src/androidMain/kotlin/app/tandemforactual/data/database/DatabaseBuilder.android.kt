@@ -8,6 +8,11 @@ import java.io.File
 fun tandemDatabaseBuilder(context: Context): RoomDatabase.Builder<TandemDatabase> =
     tandemDatabaseBuilder(context, context.applicationContext.getDatabasePath("tandem.db"))
 
+fun tandemDatabaseBuilder(
+    context: Context,
+    fileName: String,
+): RoomDatabase.Builder<TandemDatabase> = tandemDatabaseBuilder(context, context.applicationContext.getDatabasePath(fileName))
+
 internal fun tandemDatabaseBuilder(
     context: Context,
     databaseFile: File,

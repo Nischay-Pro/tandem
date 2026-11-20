@@ -46,6 +46,7 @@ internal fun ServerDeviceScreen(
     onForgetDevice: () -> Unit,
     onForgetDeviceLocally: () -> Unit,
 ) {
+    val encryptedBudgetVault = LocalEncryptedBudgetVault.current
     val device = mobileSession.authenticatedDevice
     val scope = rememberCoroutineScope()
     var confirmation by rememberSaveable { mutableStateOf("") }
@@ -162,6 +163,7 @@ internal fun ServerDeviceScreen(
                     confirmation = ""
                     scope.launch {
                         if (mobileSession.signOutAndClearLocalData()) {
+                            encryptedBudgetVault?.deleteAll()
                             state.clearBudgetSession()
                             navigation.reset(AppRoute.WELCOME)
                         }

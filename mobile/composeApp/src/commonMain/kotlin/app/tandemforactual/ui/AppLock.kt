@@ -3,7 +3,7 @@
 package app.tandemforactual.ui
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
@@ -51,6 +50,7 @@ import com.composables.icons.lucide.FingerprintPattern
 import com.composables.icons.lucide.LockKeyhole
 import com.composables.icons.lucide.Lucide
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -98,7 +98,11 @@ interface DeviceAuthenticator {
 
 internal val LocalDeviceAuthenticator = staticCompositionLocalOf<DeviceAuthenticator?> { null }
 
+internal val LocalEncryptedBudgetVault = staticCompositionLocalOf<EncryptedBudgetVault?> { null }
+
 internal const val APP_LOCK_GRACE_MILLIS = 60_000L
+internal const val UNLOCK_ATTEMPTS_BEFORE_WAIT = 5
+internal const val UNLOCK_WAIT_MILLIS = 30_000L
 
 internal fun budgetPasswordSecretId(budgetId: String): String = "budget-password:$budgetId"
 
@@ -158,6 +162,7 @@ internal fun AppLockGate(
     lockState: AppLockState,
     appInForeground: Boolean,
     onChooseBudget: () -> Unit,
+    vault: EncryptedBudgetVault? = null,
 ) {
     LaunchedEffect(lockState.unlocked, state.selectedBudgetEncrypted) {
         if (!lockState.unlocked && state.selectedBudgetEncrypted) state.encryptedPassword = ""
@@ -185,13 +190,13 @@ internal fun AppLockGate(
     LaunchedEffect(appLocked, appInForeground) {
         if (appLocked && appInForeground) unlockApp()
     }
-    AnimatedVisibility(appLocked, enter = fadeIn(), exit = fadeOut()) {
+    AnimatedVisibility(appLocked, enter = EnterTransition.None, exit = fadeOut()) {
         LockScaffold(Lucide.LockKeyhole, "Tandem is locked.", "Unlock with your fingerprint, face, or screen lock.") {
             PrimaryButton("Unlock", onClick = unlockApp)
         }
     }
-    AnimatedVisibility(budgetLocked, enter = fadeIn(), exit = fadeOut()) {
-        EncryptedBudgetUnlock(state, mobileSession, authenticator, lockState, appInForeground, onChooseBudget)
+    AnimatedVisibility(budgetLocked, enter = EnterTransition.None, exit = fadeOut()) {
+        EncryptedBudgetUnlock(state, mobileSession, authenticator, vault, lockState, appInForeground, onChooseBudget)
     }
 }
 
@@ -200,6 +205,7 @@ private fun EncryptedBudgetUnlock(
     state: AppState,
     mobileSession: TandemMobileSession,
     authenticator: DeviceAuthenticator?,
+    vault: EncryptedBudgetVault?,
     lockState: AppLockState,
     appInForeground: Boolean,
     onChooseBudget: () -> Unit,
@@ -224,15 +230,77 @@ private fun EncryptedBudgetUnlock(
         )
     }
     var prompting by remember { mutableStateOf(false) }
+    var failedAttempts by remember(budgetId) { mutableStateOf(0) }
+    var retryAtMillis by remember(budgetId) { mutableStateOf(0L) }
+    var nowMillis by remember { mutableStateOf(mobileSession.nowEpochMillis()) }
+    LaunchedEffect(retryAtMillis) {
+        while (mobileSession.nowEpochMillis() < retryAtMillis) {
+            nowMillis = mobileSession.nowEpochMillis()
+            delay(1_000)
+        }
+        nowMillis = mobileSession.nowEpochMillis()
+    }
+    val waitSeconds = ((retryAtMillis - nowMillis + 999) / 1_000).coerceAtLeast(0)
 
     fun submit(
         candidate: String,
         fromBiometrics: Boolean,
     ) {
-        if (candidate.isBlank() || checking) return
+        if (candidate.isBlank() || checking || mobileSession.nowEpochMillis() < retryAtMillis) return
         checking = true
         error = null
         scope.launch {
+            val unlockWith = {
+                state.encryptedPassword = candidate
+                lockState.unlock()
+            }
+            val rememberChoice = {
+                when {
+                    fromBiometrics || authenticator == null -> unlockWith()
+                    rememberWithBiometrics && canUseBiometrics ->
+                        authenticator.storeSecret(secretId, candidate, "Use biometrics for ${state.selectedBudget}") { unlockWith() }
+                    else -> {
+                        authenticator.deleteSecret(secretId)
+                        unlockWith()
+                    }
+                }
+            }
+            val rejectStoredPassword = {
+                failedAttempts += 1
+                if (failedAttempts % UNLOCK_ATTEMPTS_BEFORE_WAIT == 0) {
+                    retryAtMillis = mobileSession.nowEpochMillis() + UNLOCK_WAIT_MILLIS
+                }
+                if (fromBiometrics) {
+                    authenticator?.deleteSecret(secretId)
+                    hasStoredPassword = false
+                    usePassword = true
+                }
+            }
+            if (vault != null) {
+                val result = mobileSession.unlockEncryptedBudget(vault, budgetId, candidate)
+                checking = false
+                when (result) {
+                    EncryptedBudgetUnlockResult.UNLOCKED -> rememberChoice()
+                    EncryptedBudgetUnlockResult.WRONG_PASSWORD -> {
+                        rejectStoredPassword()
+                        error =
+                            if (fromBiometrics) {
+                                "Your saved password no longer works. It may have changed in Actual. Enter the current password."
+                            } else {
+                                "That password didn’t unlock this budget. It may have changed in Actual."
+                            }
+                    }
+                    EncryptedBudgetUnlockResult.TOO_MANY_ATTEMPTS ->
+                        error = "Too many incorrect passwords. Try again in a few minutes."
+                    EncryptedBudgetUnlockResult.NEEDS_CONNECTION ->
+                        error = "Connect to the internet to unlock this budget for the first time."
+                    EncryptedBudgetUnlockResult.FAILED -> {
+                        rejectStoredPassword()
+                        error = "Actual didn’t accept that password. Check it and try again."
+                    }
+                }
+                return@launch
+            }
             mobileSession.synchronize(budgetId = budgetId, encryptionPassword = candidate)
             val synced = mobileSession.syncComplete
             val offlineCheck =
@@ -249,27 +317,11 @@ private fun EncryptedBudgetUnlock(
                     error = "Connect to the internet to unlock this budget for the first time."
                     return@launch
                 }
-                if (fromBiometrics) {
-                    authenticator?.deleteSecret(secretId)
-                    hasStoredPassword = false
-                    usePassword = true
-                }
+                rejectStoredPassword()
                 error = "That password didn’t unlock this budget. It may have changed in Actual."
                 return@launch
             }
-            val unlockWith = {
-                state.encryptedPassword = candidate
-                lockState.unlock()
-            }
-            when {
-                fromBiometrics || authenticator == null -> unlockWith()
-                rememberWithBiometrics && canUseBiometrics ->
-                    authenticator.storeSecret(secretId, candidate, "Use biometrics for ${state.selectedBudget}") { unlockWith() }
-                else -> {
-                    authenticator.deleteSecret(secretId)
-                    unlockWith()
-                }
-            }
+            rememberChoice()
         }
     }
 
@@ -314,8 +366,12 @@ private fun EncryptedBudgetUnlock(
                 BiometricPasswordCheckbox(rememberWithBiometrics) { rememberWithBiometrics = it }
             }
             PrimaryButton(
-                if (checking) "Unlocking…" else "Unlock",
-                enabled = password.isNotBlank() && !checking,
+                when {
+                    checking -> "Unlocking…"
+                    waitSeconds > 0 -> "Try again in ${waitSeconds}s"
+                    else -> "Unlock"
+                },
+                enabled = password.isNotBlank() && !checking && waitSeconds == 0L,
                 loading = checking,
             ) { submit(password, fromBiometrics = false) }
             if (hasStoredPassword) LockTextAction("Use biometrics instead") { usePassword = false }
@@ -375,23 +431,9 @@ private fun LockScaffold(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(TandemSpacing.large),
         ) {
-            Box(
-                Modifier
-                    .size(104.dp)
-                    .border(2.dp, palette.accent.copy(alpha = 0.45f), CircleShape)
-                    .background(palette.accent.copy(alpha = 0.1f), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(icon, contentDescription = null, modifier = Modifier.size(40.dp), tint = palette.accent)
-            }
-            Text(
-                title,
-                color = palette.text,
-                fontSize = TandemTypography.setupHeadline,
-                fontFamily = tandemAlloFamily(),
-                textAlign = TextAlign.Center,
-            )
-            Text(detail, color = palette.muted, fontSize = TandemTypography.body, textAlign = TextAlign.Center)
+            SyncStatusRing(icon, palette.accent, active = false, caption = null)
+            DisplayHeadline(title, textAlign = TextAlign.Center)
+            HeadlineDetail(detail, textAlign = TextAlign.Center)
             content()
         }
     }

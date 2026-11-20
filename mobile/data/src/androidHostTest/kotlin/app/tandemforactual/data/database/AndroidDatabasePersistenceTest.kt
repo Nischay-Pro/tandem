@@ -52,6 +52,20 @@ class AndroidDatabasePersistenceTest {
         }
 
     @Test
+    fun aNamedDatabaseLivesInItsOwnFile() =
+        runBlocking {
+            val context: Context = RuntimeEnvironment.getApplication()
+            val database = tandemDatabaseBuilder(context, "budget-test.db").setDriver(AndroidSQLiteDriver()).build()
+            try {
+                LocalBudgetRepository(database) { 100L }.enqueueWrite(createRequest())
+                assertEquals(1, LocalBudgetRepository(database) { 100L }.readPendingWrites(BUDGET_ID).size)
+            } finally {
+                database.close()
+            }
+            assertEquals(true, context.getDatabasePath("budget-test.db").exists())
+        }
+
+    @Test
     fun databaseFlowObservesWrites() =
         runBlocking {
             val context: Context = RuntimeEnvironment.getApplication()

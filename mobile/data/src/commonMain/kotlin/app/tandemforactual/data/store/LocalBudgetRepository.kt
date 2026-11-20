@@ -945,6 +945,29 @@ class LocalBudgetRepository(
 
     suspend fun hasUnresolvedWrites(): Boolean = database.outboxDao().hasUnresolvedWrites()
 
+    suspend fun budgetWrites(budgetId: String): List<OutboxOperationEntity> {
+        requireIdentifier(budgetId, "budgetId")
+        return database.outboxDao().findAllForBudget(budgetId)
+    }
+
+    suspend fun importBudgetWrites(writes: List<OutboxOperationEntity>) {
+        database.withWriteTransaction {
+            val outbox = database.outboxDao()
+            writes.forEach { write -> if (outbox.find(write.operationId) == null) outbox.insert(write) }
+        }
+    }
+
+    suspend fun removeBudget(budgetId: String) {
+        requireIdentifier(budgetId, "budgetId")
+        database.withWriteTransaction {
+            database.budgetRecordDao().deleteBudget(budgetId)
+            database.budgetSnapshotDao().deleteRecords(budgetId)
+            database.budgetSnapshotDao().deleteProgress(budgetId)
+            database.budgetSyncStateDao().deleteBudget(budgetId)
+            database.outboxDao().deleteBudget(budgetId)
+        }
+    }
+
     suspend fun clearAllLocalData() {
         val preservedPreferences =
             database.appPreferenceDao().readAll().filterNot {

@@ -506,6 +506,12 @@ private fun BudgetHeaderMenu(
     onSwitchBudget: () -> Unit,
 ) {
     TandemHeaderMenu(expanded = expanded, onDismiss = onDismiss) {
+        if (state.selectedBudgetEncrypted && state.encryptedPassword.isNotBlank()) {
+            HeaderMenuAction("Lock budget", onClick = {
+                onDismiss()
+                state.encryptedPassword = ""
+            })
+        }
         HeaderMenuAction("Switch budget", onClick = onSwitchBudget)
         HeaderMenuDivider()
         HeaderMenuLabel("Category amounts")

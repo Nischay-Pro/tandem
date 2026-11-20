@@ -107,6 +107,7 @@ fun TandemApp(
     appInForeground: StateFlow<Boolean> = MutableStateFlow(true),
     networkRestoredEvents: Flow<Unit> = emptyFlow(),
     deviceAuthenticator: DeviceAuthenticator? = null,
+    encryptedBudgetVault: EncryptedBudgetVault? = null,
 ) {
     var accessibilitySettingsRevision by remember { mutableStateOf(0) }
     val systemReduceMotion = key(accessibilitySettingsRevision) { SystemReduceMotionEnabled() }
@@ -237,10 +238,12 @@ fun TandemApp(
         mobileSession.isAuthenticated,
     ) {
         if (backStack.lastOrNull()?.route != AppRoute.STARTUP) return@LaunchedEffect
+        val hasEncryptedStore =
+            state.selectedBudgetId.isNotBlank() && encryptedBudgetVault?.hasStore(state.selectedBudgetId) == true
         val destination =
             resolveAppStartupDestination(
                 cacheDiscoveryComplete = cacheDiscoveryComplete,
-                hasCachedBudget = mobileSession.cachedBudgets.isNotEmpty(),
+                hasCachedBudget = mobileSession.cachedBudgets.isNotEmpty() || hasEncryptedStore,
                 preferencesReady = state.settingsStorageReady,
                 preferencesFailed = state.settingsStorageError != null,
                 sessionRestoreComplete = sessionRestoreComplete,
@@ -257,7 +260,11 @@ fun TandemApp(
                     )
                 val selectedCachedBudget = availableCachedBudgets.firstOrNull { it.budgetId == state.selectedBudgetId }
                 val firstCachedBudget = selectedCachedBudget ?: availableCachedBudgets.firstOrNull()
-                if (firstCachedBudget != null) {
+                if (hasEncryptedStore) {
+                    state.selectedBudgetEncrypted = true
+                    backStack.clear()
+                    backStack.add(newRouteEntry(AppRoute.BUDGET))
+                } else if (firstCachedBudget != null) {
                     state.selectedBudget = firstCachedBudget.name
                     state.selectedBudgetId = firstCachedBudget.budgetId
                     state.selectedBudgetEncrypted = firstCachedBudget.isEncrypted
@@ -772,12 +779,18 @@ fun TandemApp(
             }
         }
     }
-    LaunchedEffect(state.selectedBudgetId, mobileSession) {
+    LaunchedEffect(state.encryptedPassword.isBlank(), state.selectedBudgetId) {
+        val bound = mobileSession.boundEncryptedBudgetId
+        if (bound != null && (state.encryptedPassword.isBlank() || bound != state.selectedBudgetId)) {
+            mobileSession.unbindEncryptedBudgetDatabase()
+        }
+    }
+    LaunchedEffect(state.selectedBudgetId, mobileSession, mobileSession.databaseGeneration) {
         if (state.selectedBudgetId.isNotBlank()) {
             mobileSession.observeLocalRecords(state.selectedBudgetId)
         }
     }
-    LaunchedEffect(state.selectedBudgetId, state.selectedMonthId, mobileSession) {
+    LaunchedEffect(state.selectedBudgetId, state.selectedMonthId, mobileSession, mobileSession.databaseGeneration) {
         mobileSession.observeSelectedBudgetMonth(state.selectedBudgetId, state.selectedMonthId)
     }
     LaunchedEffect(
@@ -1044,6 +1057,14 @@ fun TandemApp(
         state.selectedBudget = selected.name
         state.selectedBudgetId = selected.budgetId
         state.selectedBudgetEncrypted = selected.isEncrypted
+        if (selected.isEncrypted && encryptedBudgetVault != null) {
+            val alreadyUnlocked =
+                mobileSession.boundEncryptedBudgetId == selected.budgetId && state.encryptedPassword.isNotBlank()
+            if (!alreadyUnlocked) state.encryptedPassword = ""
+            state.pendingBudgetSelectionOrigin = null
+            navigation.reset(AppRoute.BUDGET)
+            return@openSelectedBudget
+        }
         coroutineScope.launch {
             val isCached =
                 !selected.isEncrypted &&
@@ -1339,8 +1360,12 @@ fun TandemApp(
             Modifier,
             Boolean,
             Boolean,
-        ) -> Unit = { visibleEntry, pageModifier, saveRouteState, includeChrome ->
+        ) -> Unit = renderRoute@{ visibleEntry, pageModifier, saveRouteState, includeChrome ->
             val visibleRoute = visibleEntry.route
+            if (needsEncryptedBudgetUnlock(state, visibleRoute)) {
+                Box(pageModifier.fillMaxSize().background(palette.background))
+                return@renderRoute
+            }
             val contentStateKey = routeContentStateKey(visibleEntry, state.selectedBudgetId)
             val routeScrollState =
                 remember(contentStateKey) {
@@ -1391,6 +1416,7 @@ fun TandemApp(
                     LocalRouteScrollState provides routeScrollState,
                     LocalRouteLazyListState provides routeLazyListState,
                     LocalDeviceAuthenticator provides deviceAuthenticator,
+                    LocalEncryptedBudgetVault provides encryptedBudgetVault,
                 ) {
                     Column(modifier = pageModifier.fillMaxSize()) {
                         if (includeChrome && shouldRenderStandaloneRouteHeader(visibleRoute)) renderHeader(visibleRoute)
@@ -1733,6 +1759,7 @@ fun TandemApp(
             lockState = appLockState,
             appInForeground = isAppInForeground,
             onChooseBudget = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+            vault = encryptedBudgetVault,
         )
     }
 }
