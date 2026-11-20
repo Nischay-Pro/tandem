@@ -47,6 +47,10 @@ generated 32-byte key encoded as 64 hexadecimal characters.
    on macOS; they are not verified by a Linux build. If a job fails, use its
    log and rerun the matching command from the workflow before changing code.
 
+For Markdown-only changes, CI runs the documentation and formatting checks
+and validates the pull request title. Changes that include a file other than
+Markdown run the full suite.
+
 ## Install local Git checks
 
 1. **Install the repository hooks once:**
