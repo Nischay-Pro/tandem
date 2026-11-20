@@ -90,6 +90,17 @@ export class PostgresDeviceAuthStore implements DeviceAuthStore {
     return currentRow === undefined ? undefined : mapDeviceRow(currentRow);
   }
 
+  async activeCredentialHash(deviceId: string): Promise<string | undefined> {
+    const result = await this.pool.query<{ credential_hash: string }>(
+      `SELECT credential_hash FROM tandem_devices
+      WHERE device_id = $1 AND revoked_at IS NULL
+        AND COALESCE(last_seen_at, created_at) >
+          clock_timestamp() - ($2::int * interval '1 day')`,
+      [deviceId, DEVICE_CREDENTIAL_IDLE_TTL_DAYS],
+    );
+    return result.rows[0]?.credential_hash;
+  }
+
   async listDevices(principalId: string): Promise<DeviceRecord[]> {
     const result = await this.pool.query<DeviceRow>(
       `SELECT device_id, principal_id, device_name, budget_ids,

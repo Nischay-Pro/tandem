@@ -34,6 +34,9 @@ function createStore(overrides: Partial<DeviceAuthStore> = {}) {
     async revokeDevice() {
       return true;
     },
+    async activeCredentialHash() {
+      return undefined;
+    },
     ...overrides,
   };
   return { store, devices };
