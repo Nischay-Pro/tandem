@@ -276,6 +276,44 @@ class TandemMobileSessionTest {
         }
 
     @Test
+    fun deletedTransactionsCanBeUndoneUntilTheyAreSent() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val preferences = AppPreferencesStore(database)
+                val repository = LocalBudgetRepository(database) { 1_000L }
+                seedCachedBudget(repository, preferences, withPendingWrite = false)
+                val session = TandemMobileSession(TandemApiClient(), database, { 1_000L })
+                session.loadLocalRecords("budget-1")
+
+                assertTrue(session.deleteTransactionsWithUndo("budget-1", setOf("txn-1")), session.transactionWriteMessage)
+                val notice = assertNotNull(session.undoNotice)
+                assertEquals("Transaction deleted", notice.message)
+                assertEquals(setOf("txn-1"), notice.transactionIds)
+                assertTrue(repository.readPendingWrites("budget-1").any { it.action == "DELETE" && it.status == "queued" })
+
+                session.undoTransactionDeletes(notice)
+                assertNull(session.undoNotice)
+                assertTrue(repository.readPendingWrites("budget-1").none { it.action == "DELETE" && it.status == "queued" })
+                assertEquals(listOf("txn-1"), session.transactionRecords.map { it.recordId })
+
+                assertTrue(session.deleteTransactionsWithUndo("budget-1", setOf("txn-1")))
+                val second = assertNotNull(session.undoNotice)
+                repository
+                    .readPendingWrites(
+                        "budget-1",
+                    ).filter { it.status == "queued" }
+                    .forEach { repository.discardWrite(it.operationId) }
+                session.undoTransactionDeletes(second)
+                assertEquals("Already synced, so it can’t be undone here", session.undoNotice?.message)
+                session.dismissUndoNotice(assertNotNull(session.undoNotice).id)
+                assertNull(session.undoNotice)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun blankBudgetIdsAreNeverCachedInsteadOfCrashing() =
         runBlocking {
             val database = newDatabase()
@@ -823,6 +861,22 @@ class TandemMobileSessionTest {
         assertEquals(-1L, merged[1].amountMinor)
         assertEquals("transaction-5000", merged.last().recordId)
         assertEquals(5_001, merged.map(BudgetRecordEntity::recordId).toSet().size)
+    }
+
+    @Test
+    fun activityRefreshDropsDeletedRowsButKeepsOlderPages() {
+        val loaded = (1..6).map { index -> activityTransaction("transaction-$index", "2026-11-0$index", index.toLong()) }.reversed()
+        val withoutFive = loaded.filterNot { it.recordId == "transaction-5" }
+
+        val partial = mergeRefreshedActivityTransactions(loaded, withoutFive.take(3))
+        assertEquals(
+            listOf("transaction-6", "transaction-4", "transaction-3", "transaction-2", "transaction-1"),
+            partial.map { it.recordId },
+        )
+
+        val complete = mergeRefreshedActivityTransactions(loaded, withoutFive.take(2), pageIsComplete = true)
+        assertEquals(listOf("transaction-6", "transaction-4"), complete.map { it.recordId })
+        assertEquals(loaded.map { it.recordId }, mergeRefreshedActivityTransactions(loaded, emptyList()).map { it.recordId })
     }
 
     @Test

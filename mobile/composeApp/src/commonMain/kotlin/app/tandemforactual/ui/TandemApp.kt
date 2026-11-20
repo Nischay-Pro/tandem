@@ -13,7 +13,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -32,6 +34,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -72,6 +75,9 @@ import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
+import app.tandemforactual.ui.components.InlineMessage
+import app.tandemforactual.ui.components.InlineMessageKind
+import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
@@ -1220,7 +1226,7 @@ fun TandemApp(
         val transactionId = state.selectedTransactionRecordId
         if (!state.readOnlyMode && transactionId.isNotBlank() && !mobileSession.isSavingTransaction) {
             coroutineScope.launch {
-                onComplete(mobileSession.deleteTransaction(state.selectedBudgetId, transactionId))
+                onComplete(mobileSession.deleteTransactionsWithUndo(state.selectedBudgetId, setOf(transactionId)))
             }
         } else {
             onComplete(false)
@@ -1362,6 +1368,14 @@ fun TandemApp(
             onBack = handleCurrentRouteBack,
             onBackProgress = updateBackGesture,
         )
+        var headerClockMs by remember { mutableStateOf(nowEpochMillis()) }
+        LaunchedEffect(Unit) {
+            while (true) {
+                delay(30_000)
+                headerClockMs = nowEpochMillis()
+            }
+        }
+        LaunchedEffect(mobileSession.localSyncState?.lastSyncedAtEpochMs) { headerClockMs = nowEpochMillis() }
         val mainCloudStatus =
             resolveMainCloudStatus(
                 syncEnabled =
@@ -1412,6 +1426,13 @@ fun TandemApp(
                             null
                         },
                     addTransactionEnabled = !state.readOnlyMode,
+                    syncCaption =
+                        headerSyncCaption(
+                            mainCloudStatus,
+                            mobileSession.pendingWrites.map { it.status },
+                            mobileSession.localSyncState?.lastSyncedAtEpochMs,
+                            headerClockMs,
+                        ),
                     onRefreshBudgets = refreshBudgets.takeIf { mobileSession.isAuthenticated && mobileSession.isServerReachable },
                     refreshingBudgets = mobileSession.isLoadingBudgets,
                 )
@@ -1790,6 +1811,45 @@ fun TandemApp(
                 }
             }
         }
+        val undoNotice = mobileSession.undoNotice
+        val undoAboveTabBar =
+            !usesRailNavigation(
+                with(LocalDensity.current) {
+                    LocalWindowInfo.current.containerSize.width
+                        .toDp()
+                        .value
+                },
+                isLandscapeViewport(LocalWindowInfo.current.containerSize.width, LocalWindowInfo.current.containerSize.height),
+            )
+        LaunchedEffect(undoNotice?.id) {
+            val shown = undoNotice ?: return@LaunchedEffect
+            delay(UNDO_NOTICE_MILLIS)
+            mobileSession.dismissUndoNotice(shown.id)
+        }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .safeDrawingPadding()
+                .padding(start = TandemSpacing.large, end = TandemSpacing.large, bottom = if (undoAboveTabBar) 104.dp else 24.dp),
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            AnimatedVisibility(
+                visible = undoNotice != null,
+                enter = fadeIn() + slideInVertically { it / 2 },
+                exit = fadeOut() + slideOutVertically { it / 2 },
+            ) {
+                val notice = undoNotice ?: return@AnimatedVisibility
+                SurfaceCard(Modifier.widthIn(max = 560.dp)) {
+                    InlineMessage(
+                        notice.message,
+                        InlineMessageKind.INFO,
+                        actionLabel = "Undo".takeIf { notice.transactionIds.isNotEmpty() },
+                        onAction = { coroutineScope.launch { mobileSession.undoTransactionDeletes(notice) } },
+                        onDismiss = { mobileSession.dismissUndoNotice(notice.id) },
+                    )
+                }
+            }
+        }
         if (showDiscardTransactionDialog) {
             val formRoute = backStack.lastOrNull()?.route
             val isNewTransaction = formRoute == AppRoute.NEW_TRANSACTION
@@ -1875,6 +1935,8 @@ internal fun AppRoute.showsBottomNavigation(): Boolean =
 internal fun AppRoute.isReportDetail(): Boolean = this == AppRoute.REPORT_DETAIL
 
 /** How often an open budget pulls changes from the server while the app is on screen. */
+internal const val UNDO_NOTICE_MILLIS = 6_000L
+
 internal const val BUDGET_PERIODIC_SYNC_INTERVAL_MS = 60_000L
 
 internal fun <T> isBackPreviewStale(

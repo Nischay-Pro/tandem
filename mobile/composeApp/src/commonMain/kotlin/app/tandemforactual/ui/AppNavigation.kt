@@ -270,6 +270,7 @@ internal fun AppHeader(
     compactLandscape: Boolean = false,
     onAddTransaction: (() -> Unit)? = null,
     addTransactionEnabled: Boolean = true,
+    syncCaption: String? = null,
     onRefreshBudgets: (() -> Unit)? = null,
     refreshingBudgets: Boolean = false,
 ) {
@@ -328,15 +329,25 @@ internal fun AppHeader(
                     modifier = Modifier.padding(bottom = 4.dp).heightIn(min = 48.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        headerTitle,
-                        modifier = Modifier.weight(1f),
-                        color = palette.text,
-                        fontSize = TandemTypography.periodTitle,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            headerTitle,
+                            color = palette.text,
+                            fontSize = TandemTypography.periodTitle,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        syncCaption?.let { caption ->
+                            Text(
+                                caption,
+                                color = if (syncStatus == MainCloudStatus.ERROR) palette.negative else palette.muted,
+                                fontSize = TandemTypography.caption,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                     if (onAddTransaction != null) {
                         TandemIconButton(
                             Lucide.Plus,
