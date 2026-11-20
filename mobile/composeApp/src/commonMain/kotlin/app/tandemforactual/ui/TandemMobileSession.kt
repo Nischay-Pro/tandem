@@ -5144,7 +5144,10 @@ internal class TandemMobileSession(
     }
 
     suspend fun hasCachedBudgetSnapshot(budgetId: String): Boolean =
-        isCurrentIdentityCacheOwner() && repository?.hasCachedSnapshot(budgetId) == true
+        budgetId.isNotBlank() &&
+            budgetId == budgetId.trim() &&
+            isCurrentIdentityCacheOwner() &&
+            repository?.hasCachedSnapshot(budgetId) == true
 
     suspend fun loadCachedBudgets(): List<BudgetCatalogItem> {
         val localRepository = repository ?: return emptyList()

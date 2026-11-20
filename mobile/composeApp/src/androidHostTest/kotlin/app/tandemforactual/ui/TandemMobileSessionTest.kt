@@ -254,6 +254,19 @@ class TandemMobileSessionTest {
         }
 
     @Test
+    fun blankBudgetIdsAreNeverCachedInsteadOfCrashing() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val session = TandemMobileSession(TandemApiClient(), database, { 1_000L })
+                assertFalse(session.hasCachedBudgetSnapshot(""))
+                assertFalse(session.hasCachedBudgetSnapshot(" budget-1"))
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun budgetAccountPayeeAmountAndStatementChangesQueueWhileSignedOut() =
         runBlocking {
             val database = newDatabase()

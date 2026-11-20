@@ -517,7 +517,8 @@ fun TandemApp(
                 transactionSheetClosing = true
             }
         } else {
-            if (currentRoute == AppRoute.FIRST_SYNC || currentRoute == AppRoute.BUDGET_UNLOCK) {
+            val returningToUnlock = backStack.getOrNull(backStack.lastIndex - 1)?.route == AppRoute.BUDGET_UNLOCK
+            if ((currentRoute == AppRoute.FIRST_SYNC && !returningToUnlock) || currentRoute == AppRoute.BUDGET_UNLOCK) {
                 state.restorePendingBudgetSelectionOrigin()
             }
             performBack()
@@ -1014,7 +1015,11 @@ fun TandemApp(
             }
         }
     }
-    val openSelectedBudget: (BudgetCatalogItem) -> Unit = { selected ->
+    val openSelectedBudget: (BudgetCatalogItem) -> Unit = openSelectedBudget@{ selected ->
+        if (selected.budgetId.isBlank()) {
+            navigation.reset(AppRoute.BUDGET_CHOOSER)
+            return@openSelectedBudget
+        }
         val previousSelection =
             state.pendingBudgetSelectionOrigin ?: BudgetSelectionSnapshot(
                 budgetId = state.selectedBudgetId,
