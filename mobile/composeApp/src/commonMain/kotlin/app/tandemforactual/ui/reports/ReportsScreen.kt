@@ -70,7 +70,7 @@ import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.PeriodStepper
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SectionCard
-import app.tandemforactual.ui.components.SelectableTile
+import app.tandemforactual.ui.components.SegmentedSelector
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.amountAnnotatedString
 import app.tandemforactual.ui.model.LiveAccountSummary
@@ -407,7 +407,7 @@ private fun ReportPeriodSelector(
             verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
         ) {
             Text("Period", color = tandemPalette.muted, fontSize = TandemTypography.caption, fontWeight = FontWeight.SemiBold)
-            ReportSegmentedSelector(
+            SegmentedSelector(
                 listOf("Month" to (mode == ReportPeriodMode.MONTH), "Range" to (mode == ReportPeriodMode.RANGE)),
             ) { index -> onModeChange(if (index == 0) ReportPeriodMode.MONTH else ReportPeriodMode.RANGE) }
             if (mode == ReportPeriodMode.RANGE) {
@@ -497,41 +497,6 @@ private fun ReportRangePresetDropdown(
                 }) {
                     Text(preset.label, color = tandemPalette.text, fontSize = TandemTypography.compactBody)
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReportSegmentedSelector(
-    options: List<Pair<String, Boolean>>,
-    onSelect: (Int) -> Unit,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(TandemShapes.pill))
-            .background(tandemPalette.raised)
-            .padding(TandemSpacing.xxSmall),
-        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
-    ) {
-        options.forEachIndexed { index, (label, selected) ->
-            SelectableTile(
-                selected = selected,
-                contentDescription = label,
-                onSelect = { onSelect(index) },
-                modifier = Modifier.weight(1f).heightIn(min = 44.dp),
-                shape = RoundedCornerShape(TandemShapes.pill),
-                selectedBackground = tandemPalette.accentSurface,
-                unselectedBackground = tandemPalette.raised,
-            ) {
-                Text(
-                    label,
-                    color = if (selected) tandemPalette.accent else tandemPalette.muted,
-                    fontSize = TandemTypography.caption,
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                    maxLines = 2,
-                )
             }
         }
     }

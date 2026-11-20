@@ -46,7 +46,10 @@ private fun createTandemViewController(
             deviceCredentialStore = IosDeviceCredentialStore(),
             nowEpochMillis = { Clock.System.now().toEpochMilliseconds() },
             allowInsecurePrivateNetwork = true,
-            onBackgroundSyncSettingsChanged = onBackgroundSyncSettingsChanged,
+            onBackgroundSyncSettingsChanged =
+                onBackgroundSyncSettingsChanged?.let { changed ->
+                    { enabled, network, budgetId -> changed(enabled, network == SyncNetwork.WIFI, budgetId) }
+                },
             onSystemAppearanceChanged = onSystemAppearanceChanged,
             onRequestNotificationPermission = onRequestNotificationPermission,
             onOpenNotificationSettings = onOpenNotificationSettings,

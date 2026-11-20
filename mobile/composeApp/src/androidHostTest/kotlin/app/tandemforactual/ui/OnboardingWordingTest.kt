@@ -101,6 +101,28 @@ class OnboardingWordingTest {
 
         assertEquals(1, permissionRequests)
         assertTrue(state.hasCompletedNotificationOnboarding)
+        assertEquals(AppRoute.SYNC_ONBOARDING, openedRoute)
+    }
+
+    @Test
+    fun syncStepSavesChoicesAndFinishesSetup() {
+        val state = AppState().apply { hasCompletedNotificationOnboarding = true }
+        var openedRoute: AppRoute? = null
+        val navigation = noOpNavigation().copy(open = { openedRoute = it })
+
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                SyncOnboardingScreen(state, navigation, notificationPermissionEnabled = true)
+            }
+        }
+        composeTestRule.onNodeWithText("Keep it up to date.").assertExists()
+        composeTestRule.onNodeWithText("Sync in the background").performClick()
+        composeTestRule.onNodeWithText("Wi-Fi").performClick()
+        composeTestRule.onNodeWithText("Continue").performClick()
+
+        assertTrue(state.backgroundSyncEnabled)
+        assertEquals(SyncNetwork.WIFI, state.syncNetwork)
+        assertTrue(state.hasCompletedSyncOnboarding)
         assertEquals(AppRoute.SETUP_COMPLETE, openedRoute)
     }
 
@@ -120,7 +142,7 @@ class OnboardingWordingTest {
 
         assertEquals(0, permissionRequests)
         assertTrue(state.hasCompletedNotificationOnboarding)
-        assertEquals(AppRoute.SETUP_COMPLETE, openedRoute)
+        assertEquals(AppRoute.SYNC_ONBOARDING, openedRoute)
         val restoredState = AppState().apply { restorePersistentSettings(state.persistentSettings()) }
         assertTrue(restoredState.hasCompletedNotificationOnboarding)
     }
@@ -174,7 +196,7 @@ class OnboardingWordingTest {
 
         composeTestRule.onNodeWithText("Done").performClick()
 
-        assertEquals(AppRoute.SETUP_COMPLETE, route.value)
+        assertEquals(AppRoute.SYNC_ONBOARDING, route.value)
     }
 
     @Test
@@ -217,7 +239,7 @@ class OnboardingWordingTest {
 
         assertEquals(0, permissionRequests)
         assertTrue(state.hasCompletedNotificationOnboarding)
-        assertEquals(AppRoute.SETUP_COMPLETE, route.value)
+        assertEquals(AppRoute.SYNC_ONBOARDING, route.value)
     }
 
     @Test

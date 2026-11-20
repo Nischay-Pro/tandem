@@ -534,3 +534,38 @@ private fun TandemButton(
         }
     }
 }
+
+@Composable
+internal fun SegmentedSelector(
+    options: List<Pair<String, Boolean>>,
+    onSelect: (Int) -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(TandemShapes.pill))
+            .background(tandemPalette.raised)
+            .padding(TandemSpacing.xxSmall),
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
+    ) {
+        options.forEachIndexed { index, (label, selected) ->
+            SelectableTile(
+                selected = selected,
+                contentDescription = label,
+                onSelect = { onSelect(index) },
+                modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                shape = RoundedCornerShape(TandemShapes.pill),
+                selectedBackground = tandemPalette.accentSurface,
+                unselectedBackground = tandemPalette.raised,
+            ) {
+                Text(
+                    label,
+                    color = if (selected) tandemPalette.accent else tandemPalette.muted,
+                    fontSize = TandemTypography.caption,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    maxLines = 2,
+                )
+            }
+        }
+    }
+}

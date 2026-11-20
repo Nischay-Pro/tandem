@@ -149,6 +149,7 @@ private val ENCRYPTED_UNLOCK_EXEMPT_ROUTES =
         AppRoute.SERVER_ADDRESS,
         AppRoute.SIGN_IN,
         AppRoute.BUDGET_CHOOSER,
+        AppRoute.SWITCH_BUDGET,
         AppRoute.BUDGET_UNLOCK,
         AppRoute.FIRST_SYNC,
     )
@@ -163,6 +164,7 @@ internal fun AppLockGate(
     appInForeground: Boolean,
     onChooseBudget: () -> Unit,
     vault: EncryptedBudgetVault? = null,
+    onUnlocked: () -> Unit = {},
 ) {
     LaunchedEffect(lockState.unlocked, state.selectedBudgetEncrypted) {
         if (!lockState.unlocked && state.selectedBudgetEncrypted) state.encryptedPassword = ""
@@ -196,7 +198,7 @@ internal fun AppLockGate(
         }
     }
     AnimatedVisibility(budgetLocked, enter = EnterTransition.None, exit = fadeOut()) {
-        EncryptedBudgetUnlock(state, mobileSession, authenticator, vault, lockState, appInForeground, onChooseBudget)
+        EncryptedBudgetUnlock(state, mobileSession, authenticator, vault, lockState, appInForeground, onChooseBudget, onUnlocked)
     }
 }
 
@@ -209,6 +211,7 @@ private fun EncryptedBudgetUnlock(
     lockState: AppLockState,
     appInForeground: Boolean,
     onChooseBudget: () -> Unit,
+    onUnlocked: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val budgetId = state.selectedBudgetId
@@ -253,6 +256,7 @@ private fun EncryptedBudgetUnlock(
             val unlockWith = {
                 state.encryptedPassword = candidate
                 lockState.unlock()
+                onUnlocked()
             }
             val rememberChoice = {
                 when {

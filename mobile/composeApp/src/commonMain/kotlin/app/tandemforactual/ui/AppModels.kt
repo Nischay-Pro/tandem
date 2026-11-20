@@ -145,9 +145,11 @@ internal enum class AppRoute(
     SERVER_ADDRESS("Server address"),
     SIGN_IN("Sign in"),
     BUDGET_CHOOSER("Budgets"),
+    SWITCH_BUDGET("Switch budget"),
     BUDGET_UNLOCK("Unlock budget"),
     FIRST_SYNC("Preparing budget"),
     NOTIFICATION_ONBOARDING("Stay in the loop"),
+    SYNC_ONBOARDING("Keep it up to date"),
     SETUP_COMPLETE("Setup complete"),
     BUDGET("Budget"),
     CATEGORY_GROUP("Essentials"),
@@ -807,6 +809,7 @@ internal fun shouldRenderRouteHeader(
             AppRoute.BUDGET_UNLOCK,
             AppRoute.FIRST_SYNC,
             AppRoute.NOTIFICATION_ONBOARDING,
+            AppRoute.SYNC_ONBOARDING,
             AppRoute.SETUP_COMPLETE,
         ) &&
         hasStationaryTabShell
@@ -821,6 +824,7 @@ internal fun shouldRenderStandaloneRouteHeader(route: AppRoute): Boolean =
             AppRoute.BUDGET_UNLOCK,
             AppRoute.FIRST_SYNC,
             AppRoute.NOTIFICATION_ONBOARDING,
+            AppRoute.SYNC_ONBOARDING,
             AppRoute.SETUP_COMPLETE,
         )
 

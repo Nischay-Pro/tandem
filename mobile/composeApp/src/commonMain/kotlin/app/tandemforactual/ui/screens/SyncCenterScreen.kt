@@ -117,7 +117,7 @@ internal fun SyncCenterScreen(
                 "Choose a budget",
                 "Open an Actual budget to see changes waiting to sync.",
                 actionLabel = "Choose budget",
-                onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+                onAction = { navigation.open(AppRoute.SWITCH_BUDGET) },
             )
         }
         return
@@ -255,7 +255,7 @@ internal fun PendingChangesScreen(
                 "Choose a budget",
                 "Open an Actual budget to see changes saved on this device.",
                 actionLabel = "Choose budget",
-                onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+                onAction = { navigation.open(AppRoute.SWITCH_BUDGET) },
             )
         }
         return

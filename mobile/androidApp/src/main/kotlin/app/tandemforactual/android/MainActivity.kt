@@ -1,5 +1,8 @@
 package app.tandemforactual.android
 
+import app.tandemforactual.ui.SyncNetwork
+import app.tandemforactual.ui.NetworkKind
+import android.net.NetworkCapabilities
 import android.Manifest
 import android.app.NotificationManager
 import android.content.Context
@@ -43,6 +46,7 @@ class MainActivity : FragmentActivity() {
   private val networkRestoredEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
   private val syncSignalState = SyncSignalState<Network>()
   private var networkCallbackRegistered = false
+  private val currentNetwork = MutableStateFlow<NetworkKind?>(null)
   private val connectivityManager by lazy {
     getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
   }
@@ -54,6 +58,19 @@ class MainActivity : FragmentActivity() {
 
       override fun onLost(network: Network) {
         syncSignalState.onNetworkLost(network)
+        currentNetwork.value = null
+      }
+
+      override fun onCapabilitiesChanged(
+        network: Network,
+        capabilities: NetworkCapabilities,
+      ) {
+        currentNetwork.value =
+          if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)) {
+            NetworkKind.UNMETERED
+          } else {
+            NetworkKind.METERED
+          }
       }
     }
 
@@ -70,9 +87,9 @@ class MainActivity : FragmentActivity() {
     val database = openTandemDatabase(tandemDatabaseBuilder(applicationContext))
     tandemDatabase = database
     setContent {
-      val onBackgroundSyncSettingsChanged: (Boolean, Boolean, String) -> Unit = remember(applicationContext) {
-        { enabled, unmeteredOnly, budgetId ->
-          BackgroundBudgetSyncScheduler.update(applicationContext, enabled, unmeteredOnly, budgetId)
+      val onBackgroundSyncSettingsChanged: (Boolean, SyncNetwork, String) -> Unit = remember(applicationContext) {
+        { enabled, network, budgetId ->
+          BackgroundBudgetSyncScheduler.update(applicationContext, enabled, network, budgetId)
         }
       }
       TandemApp(
@@ -96,6 +113,7 @@ class MainActivity : FragmentActivity() {
         networkRestoredEvents = networkRestoredEvents,
         deviceAuthenticator = deviceAuthenticator,
         encryptedBudgetVault = encryptedBudgetVault,
+        currentNetwork = currentNetwork,
       )
     }
   }

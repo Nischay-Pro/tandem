@@ -47,11 +47,16 @@ import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.ui.components.AnimatedReveal
 import app.tandemforactual.ui.components.AnimatedStatusText
 import app.tandemforactual.ui.components.BodyText
+import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.LabelText
+import app.tandemforactual.ui.components.ListRow
+import app.tandemforactual.ui.components.ListRowOptions
+import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SecondaryButton
+import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.TandemLoadingIndicator
@@ -59,7 +64,9 @@ import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronLeft
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleAlert
+import com.composables.icons.lucide.LockKeyhole
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.WalletCards
 import kotlinx.coroutines.delay
 
 @Composable
@@ -890,13 +897,28 @@ internal fun FirstSyncCompletionAction(
     SetupPrimaryButton(actionLabel, modifier = Modifier.fillMaxWidth(), enabled = syncComplete) {
         state.pendingBudgetSelectionOrigin = null
         onComplete()
-        if (shouldShowNotificationOnboarding(state.hasCompletedNotificationOnboarding, notificationPermissionEnabled)) {
-            navigation.open(AppRoute.NOTIFICATION_ONBOARDING)
-        } else {
-            state.hasCompletedNotificationOnboarding = true
-            navigation.open(AppRoute.SETUP_COMPLETE)
-        }
+        continueSetup(state, navigation, notificationPermissionEnabled)
     }
+}
+
+internal fun nextSetupRoute(
+    state: AppState,
+    notificationPermissionEnabled: Boolean?,
+): AppRoute =
+    when {
+        shouldShowNotificationOnboarding(state.hasCompletedNotificationOnboarding, notificationPermissionEnabled) ->
+            AppRoute.NOTIFICATION_ONBOARDING
+        !state.hasCompletedSyncOnboarding -> AppRoute.SYNC_ONBOARDING
+        else -> AppRoute.SETUP_COMPLETE
+    }
+
+internal fun continueSetup(
+    state: AppState,
+    navigation: AppNavigation,
+    notificationPermissionEnabled: Boolean?,
+) {
+    if (notificationPermissionEnabled == true) state.hasCompletedNotificationOnboarding = true
+    navigation.open(nextSetupRoute(state, notificationPermissionEnabled))
 }
 
 internal fun shouldShowNotificationOnboarding(
@@ -982,7 +1004,103 @@ internal fun finishNotificationOnboarding(
 ) {
     state.hasCompletedNotificationOnboarding = true
     onRequestPermission?.invoke()
-    navigation.open(AppRoute.SETUP_COMPLETE)
+    navigation.open(nextSetupRoute(state, notificationPermissionEnabled = true))
+}
+
+@Composable
+internal fun SyncOnboardingScreen(
+    state: AppState,
+    navigation: AppNavigation,
+    notificationPermissionEnabled: Boolean?,
+) {
+    OnboardingLayout(
+        verticalSpacing = TandemSpacing.medium,
+        content = {
+            SetupStepHeader(step = 4, navigation = navigation, optional = true)
+            SetupHeadline("Keep it up to date.", "Choose how Tandem syncs with Actual. You can change this later in Settings.")
+            SurfaceCard {
+                ToggleRow(
+                    "Sync in the background",
+                    if (state.selectedBudgetEncrypted) {
+                        "Encrypted budgets sync only while unlocked, because Tandem keeps their password only then."
+                    } else {
+                        "Refresh this budget about every six hours, even when Tandem is closed"
+                    },
+                    state.backgroundSyncEnabled && !state.selectedBudgetEncrypted,
+                    enabled = !state.selectedBudgetEncrypted,
+                ) { state.backgroundSyncEnabled = it }
+            }
+            LabelText("SYNC OVER")
+            SyncNetworkChoices(state.syncNetwork) { state.syncNetwork = it }
+        },
+        actions = {
+            SetupPrimaryButton("Continue", modifier = Modifier.fillMaxWidth()) {
+                state.hasCompletedSyncOnboarding = true
+                navigation.open(nextSetupRoute(state, notificationPermissionEnabled))
+            }
+        },
+    )
+}
+
+@Composable
+internal fun SwitchBudgetScreen(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
+    onRefreshBudgets: () -> Unit,
+    onPrepareBudgetUnlock: (BudgetCatalogItem) -> Unit,
+    onOpenSelectedBudget: (BudgetCatalogItem) -> Unit,
+) {
+    val cachedCatalog =
+        remember(state.cachedBudgetCatalogJson, mobileSession.cachedBudgets) {
+            cachedBudgetsWithLocalSnapshots(decodeCachedBudgetCatalog(state.cachedBudgetCatalogJson), mobileSession.cachedBudgets)
+        }
+    val budgets = budgetChoicesForSelection(mobileSession.budgets, cachedCatalog, mobileSession.budgetCatalogLoaded)
+    val vaultAvailable = LocalEncryptedBudgetVault.current != null
+    LaunchedEffect(Unit) { if (mobileSession.isAuthenticated) onRefreshBudgets() }
+    PageColumn {
+        if (budgets.isEmpty()) {
+            if (mobileSession.isLoadingBudgets) {
+                BodyText("Loading budgets")
+            } else {
+                EmptyState(
+                    "No budgets available",
+                    mobileSession.budgetError ?: "Sign in to this server to choose a budget.",
+                    actionLabel = if (mobileSession.isAuthenticated) "Try again" else "Sign in",
+                    onAction = { if (mobileSession.isAuthenticated) onRefreshBudgets() else navigation.open(AppRoute.SIGN_IN) },
+                )
+            }
+            return@PageColumn
+        }
+        SectionCard("Budgets") {
+            budgets.forEachIndexed { index, budget ->
+                if (index > 0) DividerLine()
+                val current = budget.budgetId == state.selectedBudgetId
+                val onServer = mobileSession.budgets.any { it.budgetId == budget.budgetId }
+                ListRow(
+                    budget.name,
+                    when {
+                        budget.isEncrypted && !onServer -> "Encrypted · saved on this device"
+                        budget.isEncrypted -> "Encrypted"
+                        !onServer -> "Saved on this device"
+                        else -> "On this server"
+                    },
+                    if (current) "Open" else null,
+                    leading = RowLeading.Icon(if (budget.isEncrypted) Lucide.LockKeyhole else Lucide.WalletCards),
+                    options = ListRowOptions(trailingColor = tandemPalette.accent),
+                    onClick = {
+                        when {
+                            current && !(budget.isEncrypted && state.encryptedPassword.isBlank()) -> navigation.back()
+                            budget.isEncrypted && !vaultAvailable && !(current && state.encryptedPassword.isNotBlank()) ->
+                                onPrepareBudgetUnlock(budget)
+                            else -> onOpenSelectedBudget(budget)
+                        }
+                    },
+                )
+            }
+        }
+        mobileSession.budgetError?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+    }
 }
 
 @Composable
