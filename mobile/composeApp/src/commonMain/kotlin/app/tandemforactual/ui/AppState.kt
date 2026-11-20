@@ -141,6 +141,7 @@ internal class AppState {
     var readOnlyMode by mutableStateOf(false)
     var hasDismissedBudgetHint by mutableStateOf(false)
     var biometricLockEnabled by mutableStateOf(false)
+    var rememberBudgetPasswordWithBiometrics by mutableStateOf(true)
     var hasCompletedNotificationOnboarding by mutableStateOf(false)
     var reduceMotionOverride by mutableStateOf<Boolean?>(null)
     var systemReduceMotionEnabled by mutableStateOf(false)

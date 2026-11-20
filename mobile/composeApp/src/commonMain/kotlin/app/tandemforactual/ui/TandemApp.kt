@@ -760,7 +760,15 @@ fun TandemApp(
                 budgetId = state.selectedBudgetId,
                 encryptionPassword = state.encryptedPassword.takeIf { it.isNotBlank() },
             )
-            if (mobileSession.syncComplete) state.encryptedPassword = ""
+            val unlockedPassword = state.encryptedPassword
+            if (mobileSession.syncComplete && state.selectedBudgetEncrypted && unlockedPassword.isNotBlank()) {
+                val secretId = budgetPasswordSecretId(state.selectedBudgetId)
+                if (state.rememberBudgetPasswordWithBiometrics && deviceAuthenticator?.canStoreSecrets() == true) {
+                    deviceAuthenticator.storeSecret(secretId, unlockedPassword, "Use biometrics for ${state.selectedBudget}") {}
+                } else {
+                    deviceAuthenticator?.deleteSecret(secretId)
+                }
+            }
         }
     }
     LaunchedEffect(state.selectedBudgetId, mobileSession) {
@@ -791,6 +799,11 @@ fun TandemApp(
         previousRoute = route
     }
     val isAppInForeground by appInForeground.collectAsState()
+    LaunchedEffect(mobileSession.budgets, state.selectedBudgetId) {
+        mobileSession.budgets.firstOrNull { it.budgetId == state.selectedBudgetId }?.let {
+            if (state.selectedBudgetEncrypted != it.isEncrypted) state.selectedBudgetEncrypted = it.isEncrypted
+        }
+    }
     val appLockState = remember { AppLockState(nowEpochMillis) }
     LaunchedEffect(isAppInForeground) { appLockState.onForegroundChanged(isAppInForeground) }
     LaunchedEffect(
@@ -1708,7 +1721,15 @@ fun TandemApp(
                 },
             )
         }
-        AppLockGate(state.biometricLockEnabled, deviceAuthenticator, appLockState, isAppInForeground)
+        AppLockGate(
+            state = state,
+            mobileSession = mobileSession,
+            route = backStack.lastOrNull()?.route ?: AppRoute.BUDGET,
+            authenticator = deviceAuthenticator,
+            lockState = appLockState,
+            appInForeground = isAppInForeground,
+            onChooseBudget = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+        )
     }
 }
 

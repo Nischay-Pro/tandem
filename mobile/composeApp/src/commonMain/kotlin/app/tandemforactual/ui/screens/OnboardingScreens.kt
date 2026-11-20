@@ -740,7 +740,12 @@ internal fun BudgetUnlockScreen(
                 { state.encryptedPassword = it },
                 TextFieldOptions(placeholder = "Password", isSecret = true),
             )
-            InfoBubble("This is not your Actual sign-in password. It is cleared after the first sync.")
+            InfoBubble("This is not your Actual sign-in password. Tandem keeps it only while the app is unlocked.")
+            if (LocalDeviceAuthenticator.current?.canStoreSecrets() == true) {
+                BiometricPasswordCheckbox(state.rememberBudgetPasswordWithBiometrics) {
+                    state.rememberBudgetPasswordWithBiometrics = it
+                }
+            }
         },
         actions = {
             SetupPrimaryButton(

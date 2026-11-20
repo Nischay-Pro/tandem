@@ -333,6 +333,8 @@ internal class TandemMobileSession(
         private set
 
     val syncError: String? get() = syncPresentation.error
+    var budgetPasswordRejection by mutableStateOf<String?>(null)
+        private set
 
     var syncedTransactionCount by mutableStateOf(0)
     var cachedTransactionCount by mutableStateOf(0)
@@ -3129,6 +3131,7 @@ internal class TandemMobileSession(
             syncedTransactionCount =
                 localRepository.countVisibleRecords(budgetId, "transaction").coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
             syncComplete = true
+            budgetPasswordRejection = null
             present(syncPresentation.succeeded())
             if (budgetQueueRestored) {
                 budgetReorderQueue = budgetReorderQueue.clearCompletedVisibilityOverrides(budgetId)
@@ -3140,6 +3143,7 @@ internal class TandemMobileSession(
             throw error
         } catch (error: BudgetSyncRemoteException) {
             isServerReachable = error.indicatesTandemReachable()
+            budgetPasswordRejection = error.errorCode.takeIf { it in BUDGET_PASSWORD_ERROR_CODES }
             present(
                 syncPresentation.failed(
                     apiFailureMessage(
@@ -5453,3 +5457,5 @@ internal fun JsonObject.toProjection(): LocalRecordProjection =
         amountMinor = longValue("amount"),
         budgetMonth = stringValue("month"),
     )
+
+internal val BUDGET_PASSWORD_ERROR_CODES = setOf("budget_password_required", "budget_password_incorrect")

@@ -215,14 +215,32 @@ internal fun SecurityScreen(
                     when {
                         authenticator == null -> "Not available on this device"
                         !biometricAvailable -> "Set up a screen lock on this device first"
+                        state.selectedBudgetEncrypted -> "Unlock your encrypted budget with biometrics"
                         else -> "Fingerprint, face, or screen lock"
                     },
                 checked = state.biometricLockEnabled,
                 enabled = biometricAvailable || state.biometricLockEnabled,
                 onChange = { enable ->
-                    authenticator?.authenticate(if (enable) "Turn on biometric unlock" else "Turn off biometric unlock") { success ->
-                        if (success) state.biometricLockEnabled = enable
-                    } ?: run { if (!enable) state.biometricLockEnabled = false }
+                    val secretId = budgetPasswordSecretId(state.selectedBudgetId)
+                    val password = state.encryptedPassword
+                    when {
+                        authenticator == null -> if (!enable) state.biometricLockEnabled = false
+                        !enable ->
+                            authenticator.authenticate("Turn off biometric unlock") { success ->
+                                if (success) {
+                                    authenticator.deleteAllSecrets()
+                                    state.biometricLockEnabled = false
+                                }
+                            }
+                        state.selectedBudgetEncrypted && password.isNotBlank() && authenticator.canStoreSecrets() ->
+                            authenticator.storeSecret(secretId, password, "Turn on biometric unlock") { stored ->
+                                if (stored) state.biometricLockEnabled = true
+                            }
+                        else ->
+                            authenticator.authenticate("Turn on biometric unlock") { success ->
+                                if (success) state.biometricLockEnabled = true
+                            }
+                    }
                 },
             )
             DividerLine()
