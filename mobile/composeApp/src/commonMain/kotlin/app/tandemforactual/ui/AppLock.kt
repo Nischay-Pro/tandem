@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
@@ -432,23 +431,9 @@ private fun LockScaffold(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(TandemSpacing.large),
         ) {
-            Box(
-                Modifier
-                    .size(104.dp)
-                    .border(2.dp, palette.accent.copy(alpha = 0.45f), CircleShape)
-                    .background(palette.accent.copy(alpha = 0.1f), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(icon, contentDescription = null, modifier = Modifier.size(40.dp), tint = palette.accent)
-            }
-            Text(
-                title,
-                color = palette.text,
-                fontSize = TandemTypography.setupHeadline,
-                fontFamily = tandemAlloFamily(),
-                textAlign = TextAlign.Center,
-            )
-            Text(detail, color = palette.muted, fontSize = TandemTypography.body, textAlign = TextAlign.Center)
+            SyncStatusRing(icon, palette.accent, active = false, caption = null)
+            DisplayHeadline(title, textAlign = TextAlign.Center)
+            HeadlineDetail(detail, textAlign = TextAlign.Center)
             content()
         }
     }

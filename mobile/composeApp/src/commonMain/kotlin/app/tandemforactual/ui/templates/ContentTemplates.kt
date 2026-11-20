@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.LabelText
@@ -161,4 +162,38 @@ internal fun CompactActionButton(
             maxLines = 2,
         )
     }
+}
+
+@Composable
+internal fun DisplayHeadline(
+    text: String,
+    modifier: Modifier = Modifier,
+    textAlign: TextAlign? = null,
+) {
+    Text(
+        text,
+        modifier = modifier,
+        color = tandemPalette.text,
+        fontSize = TandemTypography.setupHeadline,
+        lineHeight = TandemTypography.setupHeadlineLineHeight,
+        fontFamily = tandemAlloFamily(),
+        fontWeight = FontWeight.Bold,
+        textAlign = textAlign,
+    )
+}
+
+@Composable
+internal fun HeadlineDetail(
+    text: String,
+    modifier: Modifier = Modifier,
+    textAlign: TextAlign? = null,
+) {
+    Text(
+        text,
+        modifier = modifier,
+        color = tandemPalette.muted,
+        fontSize = TandemTypography.body,
+        lineHeight = TandemTypography.bodyLineHeight,
+        textAlign = textAlign,
+    )
 }

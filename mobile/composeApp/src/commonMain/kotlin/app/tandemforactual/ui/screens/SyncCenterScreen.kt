@@ -684,14 +684,7 @@ internal fun SyncPageHeading(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Text(
-            title,
-            color = palette.text,
-            fontSize = TandemTypography.setupHeadline,
-            lineHeight = TandemTypography.setupHeadlineLineHeight,
-            fontFamily = tandemAlloFamily(),
-            fontWeight = FontWeight.Bold,
-        )
+        DisplayHeadline(title)
         detail?.let {
             Text(
                 it,

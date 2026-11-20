@@ -20,6 +20,8 @@ RULES = {
     "hard-coded Color; use TandemPalette": re.compile(r"\bColor\s*\(\s*0x[0-9A-Fa-f]{6,8}\s*\)"),
 }
 DIALOG_CALL = re.compile(r"\b(?:AlertDialog|Dialog)\s*\(")
+HEADLINE_SIZE = re.compile(r"\bTandemTypography\.setupHeadline\b(?!LineHeight)")
+HEADLINE_FILE = UI_ROOT / "templates/ContentTemplates.kt"
 RAW_SETTINGS_SPACING = re.compile(r"\.(?:padding|spacedBy)\([^)]*\b\d+(?:\.\d+)?\.dp\b", re.DOTALL)
 SHARED_SETTINGS_SPACING_FILES = (
     UI_ROOT / "screens/SettingsScreen.kt",
@@ -99,6 +101,11 @@ def main() -> int:
                 if pattern.search(line):
                     relative = source.relative_to(ROOT)
                     violations.append(f"{relative}:{line_number}: {rule}")
+        if source != HEADLINE_FILE:
+            for match in HEADLINE_SIZE.finditer(content):
+                relative = source.relative_to(ROOT)
+                line_number = content.count("\n", 0, match.start()) + 1
+                violations.append(f"{relative}:{line_number}: page headline; use DisplayHeadline")
         if UI_ROOT / "components" not in source.parents:
             for match in DIALOG_CALL.finditer(content):
                 relative = source.relative_to(ROOT)

@@ -41,7 +41,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.isLocalHttpHost
 import app.tandemforactual.data.database.BudgetRecordEntity
@@ -194,20 +193,8 @@ private fun SetupHeadline(
 ) {
     val palette = tandemPalette
     Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-        Text(
-            title,
-            color = palette.text,
-            fontSize = TandemTypography.setupHeadline,
-            lineHeight = TandemTypography.setupHeadlineLineHeight,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = tandemAlloFamily(),
-        )
-        Text(
-            supportingText,
-            color = palette.muted,
-            fontSize = TandemTypography.body,
-            lineHeight = 22.sp,
-        )
+        DisplayHeadline(title)
+        HeadlineDetail(supportingText)
     }
 }
 
