@@ -3954,6 +3954,16 @@ internal class TandemMobileSession(
             apiClient.deleteBudgetCategory(budgetId, categoryId, transferCategoryId, encryptionPassword, idempotencyKey)
         }
 
+    /** The payee's default-category rule, or else the category last used with this payee. */
+    suspend fun suggestedCategoryForPayee(
+        budgetId: String,
+        payeeId: String,
+    ): String? {
+        if (budgetId.isBlank() || payeeId.isBlank()) return null
+        defaultCategoryRulesByPayee(ruleRecords)[payeeId]?.singleOrNull()?.let { return it }
+        return repository?.latestCategoryForPayee(budgetId, payeeId)
+    }
+
     val canEditRules: Boolean get() = serverCapabilities?.supports("rule-edit") == true
 
     suspend fun createBudgetRule(

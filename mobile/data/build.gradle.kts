@@ -24,8 +24,33 @@ kotlin {
       execution = "HOST"
     }
   }
-  iosArm64()
-  iosSimulatorArm64()
+  val sqlcipherSources = layout.projectDirectory.dir("src/nativeInterop/sqlcipher")
+  listOf(
+    Triple(iosArm64(), "iphoneos", "arm64-apple-ios16.0"),
+    Triple(iosSimulatorArm64(), "iphonesimulator", "arm64-apple-ios16.0-simulator"),
+  ).forEach { (target, sdk, triple) ->
+    val targetName = target.name.replaceFirstChar(Char::uppercase)
+    val libraryDirectory = layout.buildDirectory.dir("sqlcipher/${target.name}")
+    val buildSqlcipher =
+      tasks.register<Exec>("buildTandemSqlcipher$targetName") {
+        onlyIf { System.getProperty("os.name").startsWith("Mac") }
+        inputs.dir(sqlcipherSources)
+        outputs.dir(libraryDirectory)
+        commandLine(
+          "sh",
+          sqlcipherSources.file("build-ios.sh").asFile.absolutePath,
+          sdk,
+          triple,
+          libraryDirectory.get().asFile.absolutePath,
+        )
+      }
+    target.compilations.getByName("main").cinterops.create("tandemSqlcipher") {
+      definitionFile.set(project.file("src/nativeInterop/cinterop/tandemSqlcipher.def"))
+      includeDirs(sqlcipherSources)
+      extraOpts("-libraryPath", libraryDirectory.get().asFile.absolutePath)
+    }
+    tasks.matching { it.name == "cinteropTandemSqlcipher$targetName" }.configureEach { dependsOn(buildSqlcipher) }
+  }
 
   sourceSets {
     commonMain.dependencies {

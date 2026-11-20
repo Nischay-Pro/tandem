@@ -414,6 +414,7 @@ internal fun TransactionFormScreen(
                 onSelect = { account ->
                     state.transactionAccount = account.label
                     state.newTransactionAccountId = account.id
+                    state.lastTransactionAccountId = account.id
                     showAccountPicker = false
                 },
                 onDismiss = { showAccountPicker = false },
