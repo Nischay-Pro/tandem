@@ -4,6 +4,7 @@ import type {
   BudgetOperationOptions,
 } from "./actual-session.js";
 import type { BudgetLockPort } from "./transaction-reconciler.js";
+import type { BudgetRuleDraft } from "./budget-maintenance-rule-api.js";
 import type {
   BudgetOrderBatch,
   BudgetOrderBatchResult,
@@ -423,6 +424,22 @@ export interface BudgetMaintenanceApiPort {
     scheduleId: string,
     encryptionPassword?: string,
   ): Promise<void>;
+  createRule(
+    budgetId: string,
+    draft: BudgetRuleDraft,
+    encryptionPassword?: string,
+  ): Promise<string>;
+  editRule(
+    budgetId: string,
+    ruleId: string,
+    draft: BudgetRuleDraft,
+    encryptionPassword?: string,
+  ): Promise<void>;
+  deleteRule(
+    budgetId: string,
+    ruleId: string,
+    encryptionPassword?: string,
+  ): Promise<void>;
 }
 
 export interface ActualBudgetMaintenanceSession {
@@ -491,6 +508,7 @@ export type ActualBudgetMaintenanceClient = Pick<
   | "updatePayee"
   | "mergePayees"
   | "deletePayee"
+  | "getRules"
   | "createRule"
   | "updateRule"
   | "deleteRule"

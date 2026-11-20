@@ -1035,6 +1035,7 @@ fun TandemApp(
             coroutineScope.launch {
                 mobileSession.signInWithPassword(state.serverUrl, state.actualPassword, deviceName)
                 if (mobileSession.authenticatedDevice != null) {
+                    state.recentServerUrls = rememberRecentServerAddress(state.recentServerUrls, state.serverUrl)
                     state.actualPassword = ""
                     navigation.reset(AppRoute.BUDGET_CHOOSER)
                 }
@@ -1064,6 +1065,7 @@ fun TandemApp(
                 if (callback != null) {
                     mobileSession.completeActualOpenIdSignIn(state.serverUrl, callback.code, callback.state)
                     if (mobileSession.authenticatedDevice != null) {
+                        state.recentServerUrls = rememberRecentServerAddress(state.recentServerUrls, state.serverUrl)
                         navigation.reset(AppRoute.BUDGET_CHOOSER)
                     }
                 }
@@ -1404,6 +1406,7 @@ fun TandemApp(
                     addTransactionEnabled = !state.readOnlyMode,
                     onRefreshBudgets = refreshBudgets.takeIf { mobileSession.isAuthenticated && mobileSession.isServerReachable },
                     refreshingBudgets = mobileSession.isLoadingBudgets,
+                    canAddRules = mobileSession.canEditRules && !state.readOnlyMode,
                 )
             }
         }

@@ -574,6 +574,7 @@ internal fun BudgetRulesScreen(
     categoryRecords: List<BudgetRecordEntity>,
     categoryGroupRecords: List<BudgetRecordEntity>,
     payeeRecords: List<BudgetRecordEntity>,
+    onOpenRule: (String) -> Unit,
 ) {
     val namesByField =
         remember(accountRecords, categoryRecords, categoryGroupRecords, payeeRecords) {
@@ -591,7 +592,7 @@ internal fun BudgetRulesScreen(
                 SurfaceCard {
                     EmptyState(
                         "No rules",
-                        "Rules created in Actual will appear here.",
+                        "Add a rule to categorize, rename, or note transactions automatically.",
                         modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large),
                     )
                 }
@@ -634,9 +635,9 @@ internal fun BudgetRulesScreen(
                         }.ifBlank { "No actions" }
                 val stage =
                     when (body?.stringValue("stage")) {
-                        "pre" -> "Before import"
-                        "post" -> "After import"
-                        else -> "All stages"
+                        "pre" -> "Runs first"
+                        "post" -> "Runs last"
+                        else -> null
                     }
                 SurfaceCard {
                     ListRow(
@@ -645,6 +646,7 @@ internal fun BudgetRulesScreen(
                         stage,
                         leading = RowLeading.Icon(Lucide.Tags),
                         options = ListRowOptions(trailingColor = tandemPalette.muted),
+                        onClick = { onOpenRule(activeRules[index].recordId) },
                     )
                 }
             }

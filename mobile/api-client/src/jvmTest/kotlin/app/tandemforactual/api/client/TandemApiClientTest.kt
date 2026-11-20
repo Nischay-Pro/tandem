@@ -27,6 +27,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -913,6 +914,61 @@ class TandemApiClientTest {
 
                 response = """{"budgets":[]}"""
                 assertTrue(client.listBudgets().isEmpty())
+            } finally {
+                cleanup()
+                Api.baseUrl = previousBaseUrl
+                Api.client.close()
+                previousClient.close()
+            }
+        }
+
+    @Test
+    fun budgetRuleRequestsSendTheRuleAndAction() =
+        runBlocking<Unit> {
+            val requests = mutableListOf<HttpRequestData>()
+            val bodies = mutableListOf<String>()
+            val engine =
+                MockEngine { request ->
+                    requests += request
+                    bodies += (request.body as io.ktor.http.content.TextContent).text
+                    respond("""{"status":"ok"}""", headers = jsonHeaders())
+                }
+            val previousClient = Api.client
+            val previousBaseUrl = Api.baseUrl
+            val client = TandemApiClient()
+            val cleanup = configureApi(engine, client.bearerAuth)
+            val rule =
+                buildJsonObject {
+                    put("stage", "default")
+                    put("conditionsOp", "and")
+                }
+            try {
+                client.restoreSession("https://tandem.example", "device-token")
+                client.createBudgetRule("budget-1", rule, "budget-password")
+                client.manageBudgetRule("budget-1", "rule-1", "edit", rule, null)
+                client.manageBudgetRule("budget-1", "rule-1", "delete", null, null, "00000000-0000-4000-8000-000000000003")
+
+                assertEquals(
+                    listOf(
+                        "POST /api/v1/budgets/budget-1/rules",
+                        "POST /api/v1/budgets/budget-1/rules/rule-1/actions",
+                        "POST /api/v1/budgets/budget-1/rules/rule-1/actions",
+                    ),
+                    requests.map { "${it.method.value} ${it.url.encodedPath}" },
+                )
+                assertEquals("budget-password", requests[0].headers["x-budget-encryption-password"])
+                assertNull(requests[1].headers["x-budget-encryption-password"])
+                assertEquals("00000000-0000-4000-8000-000000000003", requests[2].headers["idempotency-key"])
+                assertEquals(rule, Json.parseToJsonElement(bodies[0]))
+                assertEquals(
+                    buildJsonObject {
+                        put("action", "edit")
+                        put("rule", rule)
+                    },
+                    Json.parseToJsonElement(bodies[1]),
+                )
+                assertEquals(buildJsonObject { put("action", "delete") }, Json.parseToJsonElement(bodies[2]))
+                assertFailsWith<IllegalArgumentException> { client.manageBudgetRule("budget-1", "rule-1", "edit", null, null) }
             } finally {
                 cleanup()
                 Api.baseUrl = previousBaseUrl
