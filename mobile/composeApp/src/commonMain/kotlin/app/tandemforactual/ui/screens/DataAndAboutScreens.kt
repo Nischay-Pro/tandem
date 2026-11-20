@@ -49,6 +49,8 @@ import com.composables.icons.lucide.CloudAlert
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Share2
+import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.Trash2
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
@@ -349,7 +351,7 @@ internal fun AboutScreen(
             DividerLine()
             ListRow("AndroidX Room and SQLite", "Apache-2.0")
             DividerLine()
-            ListRow("SQLCipher for Android", "Encrypted budget storage · BSD-style")
+            ListRow("SQLCipher", "Encrypted budget storage on Android and iOS · BSD-style")
             DividerLine()
             ListRow(
                 "AndroidX platform libraries",
@@ -362,6 +364,7 @@ internal fun AboutScreen(
             DividerLine()
             ListRow("TheSVG icon package", "Build-time catalog and tooling · MIT")
         }
+        CrashReportsSection()
         SurfaceCard {
             ListRow(
                 "View icon licenses and sources",
@@ -370,5 +373,33 @@ internal fun AboutScreen(
             )
         }
         AnimatedPreviewNote(merchantIconMatcherLoadError)
+    }
+}
+
+@Composable
+private fun CrashReportsSection() {
+    val reports = LocalCrashReports.current ?: return
+    val share = LocalShareText.current
+    var count by remember { mutableStateOf(reports.count()) }
+    SectionCard("Crash reports", "Saved only on this device. Nothing is sent unless you share it.") {
+        if (count == 0) {
+            ListRow("No crash reports", "If Tandem ever crashes, a report is saved here.", leading = RowLeading.Icon(Lucide.ShieldCheck))
+        } else {
+            ListRow(
+                "Share latest crash report",
+                if (count == 1) "1 report saved" else "$count reports saved",
+                leading = RowLeading.Icon(Lucide.Share2),
+                onClick = share?.let { send -> { reports.latest()?.let(send) } },
+            )
+            DividerLine()
+            ListRow(
+                "Delete crash reports",
+                leading = RowLeading.Icon(Lucide.Trash2),
+                onClick = {
+                    reports.clear()
+                    count = reports.count()
+                },
+            )
+        }
     }
 }
