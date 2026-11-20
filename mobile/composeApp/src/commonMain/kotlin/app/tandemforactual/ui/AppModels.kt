@@ -800,23 +800,12 @@ internal enum class BackRequestDisposition {
 internal fun shouldRenderRouteHeader(
     route: AppRoute,
     hasStationaryTabShell: Boolean,
-): Boolean =
-    route !in
-        setOf(
-            AppRoute.WELCOME,
-            AppRoute.SERVER_ADDRESS,
-            AppRoute.SIGN_IN,
-            AppRoute.BUDGET_CHOOSER,
-            AppRoute.BUDGET_UNLOCK,
-            AppRoute.FIRST_SYNC,
-            AppRoute.NOTIFICATION_ONBOARDING,
-            AppRoute.SYNC_ONBOARDING,
-            AppRoute.SETUP_COMPLETE,
-        ) &&
-        hasStationaryTabShell
+): Boolean = !route.isSetupRoute() && hasStationaryTabShell
 
-internal fun shouldRenderStandaloneRouteHeader(route: AppRoute): Boolean =
-    route !in
+internal fun shouldRenderStandaloneRouteHeader(route: AppRoute): Boolean = !route.isSetupRoute()
+
+internal fun AppRoute.isSetupRoute(): Boolean =
+    this in
         setOf(
             AppRoute.WELCOME,
             AppRoute.SERVER_ADDRESS,

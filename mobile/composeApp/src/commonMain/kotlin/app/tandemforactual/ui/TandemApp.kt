@@ -1098,11 +1098,14 @@ fun TandemApp(
             val alreadyUnlocked =
                 mobileSession.boundEncryptedBudgetId == selected.budgetId && state.encryptedPassword.isNotBlank()
             if (!alreadyUnlocked) state.encryptedPassword = ""
-            state.pendingSetupAfterUnlock =
-                !alreadyUnlocked &&
-                (!state.hasCompletedNotificationOnboarding || !state.hasCompletedSyncOnboarding)
+            val setupIncomplete = !state.hasCompletedNotificationOnboarding || !state.hasCompletedSyncOnboarding
+            state.pendingSetupAfterUnlock = !alreadyUnlocked && setupIncomplete
             state.pendingBudgetSelectionOrigin = null
-            navigation.reset(AppRoute.BUDGET)
+            if (alreadyUnlocked && setupIncomplete) {
+                navigation.open(nextSetupRoute(state, notificationPermissionEnabled))
+            } else {
+                navigation.reset(AppRoute.BUDGET)
+            }
             return@openSelectedBudget
         }
         coroutineScope.launch {
@@ -1707,7 +1710,7 @@ fun TandemApp(
                         )
                     }
                 }
-                if (tabShellRoute != null && !imeVisible && !isLandscape) {
+                if (tabShellRoute != null && !imeVisible && !isLandscape && !backgroundRouteEntry.route.isSetupRoute()) {
                     Box(
                         modifier = Modifier.fillMaxWidth().height(88.dp),
                         contentAlignment = Alignment.BottomCenter,
@@ -1803,7 +1806,10 @@ fun TandemApp(
             onUnlocked = {
                 if (state.pendingSetupAfterUnlock) {
                     state.pendingSetupAfterUnlock = false
-                    navigation.open(nextSetupRoute(state, notificationPermissionEnabled))
+                    routeTransitionDirection = 0f
+                    backStack.clear()
+                    backStack.add(newRouteEntry(AppRoute.BUDGET_CHOOSER))
+                    backStack.add(newRouteEntry(nextSetupRoute(state, notificationPermissionEnabled)))
                 }
             },
         )
