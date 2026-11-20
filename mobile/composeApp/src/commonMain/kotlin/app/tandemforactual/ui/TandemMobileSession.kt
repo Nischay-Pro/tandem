@@ -130,6 +130,13 @@ internal data class ConflictResolutionFeedback(
     val message: String,
 )
 
+internal data class UndoNotice(
+    val id: Long,
+    val message: String,
+    val budgetId: String,
+    val transactionIds: Set<String>,
+)
+
 internal data class BudgetActionFeedback(
     val text: String,
     val kind: InlineMessageKind,
@@ -4556,6 +4563,64 @@ internal class TandemMobileSession(
             isSavingTransaction = false
         }
     }
+
+    var undoNotice by mutableStateOf<UndoNotice?>(null)
+        private set
+    private var undoNoticeCount = 0L
+
+    /** Deletes right away and offers an undo while the deletions are still waiting to sync. */
+    suspend fun deleteTransactionsWithUndo(
+        budgetId: String,
+        transactionIds: Set<String>,
+    ): Boolean {
+        val deleted = transactionIds.takeWhile { deleteTransaction(budgetId, it) }.toSet()
+        if (deleted.isNotEmpty()) {
+            val undoable = deleted.filterTo(mutableSetOf()) { queuedTransactionDelete(budgetId, it) != null }
+            undoNoticeCount += 1
+            undoNotice =
+                UndoNotice(
+                    id = undoNoticeCount,
+                    message = if (deleted.size == 1) "Transaction deleted" else "${deleted.size} transactions deleted",
+                    budgetId = budgetId,
+                    transactionIds = undoable,
+                )
+        }
+        return deleted.size == transactionIds.size
+    }
+
+    suspend fun undoTransactionDeletes(notice: UndoNotice) {
+        val localRepository = repository ?: return
+        var restoredAll = true
+        for (transactionId in notice.transactionIds) {
+            val write = queuedTransactionDelete(notice.budgetId, transactionId)
+            if (write == null) restoredAll = false else localRepository.discardWrite(write.operationId)
+        }
+        loadLocalRecords(notice.budgetId)
+        undoNoticeCount += 1
+        undoNotice =
+            if (restoredAll) {
+                null
+            } else {
+                UndoNotice(undoNoticeCount, "Already synced, so it can’t be undone here", notice.budgetId, emptySet())
+            }
+    }
+
+    fun dismissUndoNotice(id: Long) {
+        if (undoNotice?.id == id) undoNotice = null
+    }
+
+    private suspend fun queuedTransactionDelete(
+        budgetId: String,
+        transactionId: String,
+    ): OutboxOperationEntity? =
+        repository
+            ?.readPendingWrites(budgetId)
+            ?.lastOrNull {
+                it.recordType == "transaction" &&
+                    it.recordId == transactionId &&
+                    it.action == LocalWriteAction.DELETE.name &&
+                    it.status == "queued"
+            }
 
     suspend fun deleteTransaction(
         budgetId: String,
