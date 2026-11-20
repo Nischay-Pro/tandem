@@ -1153,6 +1153,13 @@ internal class TandemMobileSession(
                 decodeBudgetReorderQueue(operation.patchJson)
                     .moves
                     .singleOrNull()
+                    ?.let { move ->
+                        if (move.encryptionPassword == null) {
+                            move.copy(encryptionPassword = scheduleActionEncryptionPasswords[operation.budgetId])
+                        } else {
+                            move
+                        }
+                    }
                     ?: return@launch
 
             if (budgetMutationNeedsRefresh(operation.lastErrorCode)) {

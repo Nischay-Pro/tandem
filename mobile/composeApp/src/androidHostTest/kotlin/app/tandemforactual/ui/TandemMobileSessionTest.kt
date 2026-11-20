@@ -699,9 +699,10 @@ class TandemMobileSessionTest {
         assertFalse(budgetMutationRequiresActualCheck(SEND_INTERRUPTED_ERROR_CODE))
         assertFalse(budgetMutationRetryNeedsNewKey(SEND_INTERRUPTED_ERROR_CODE))
         assertFalse(budgetMutationNeedsRefresh(SEND_INTERRUPTED_ERROR_CODE))
-        assertEquals(BudgetMutationFailureDisposition.REVIEW, budgetMutationFailureDisposition("invalid_request"))
-        assertFalse(budgetMutationCanRetry("invalid_request"))
-        assertTrue(budgetMutationRequiresActualCheck("invalid_request"))
+        assertEquals(BudgetMutationFailureDisposition.INPUT_REJECTED, budgetMutationFailureDisposition("invalid_request"))
+        assertTrue(budgetMutationCanRetry("invalid_request"))
+        assertTrue(budgetMutationRetryNeedsNewKey("invalid_request"))
+        assertFalse(budgetMutationRequiresActualCheck("invalid_request"))
         assertEquals(
             "Tandem searched only hidden categories, treated Beauty as missing, and stopped before assigning the amount in Actual.",
             budgetMutationFailureMessage("invalid_request", BudgetReorderKind.SET_CATEGORY_AMOUNT, "Beauty"),
