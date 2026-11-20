@@ -4,6 +4,7 @@ package app.tandemforactual.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -108,120 +109,125 @@ private fun RuleEditorContent(
     val password = state.encryptedPassword.takeIf { it.isNotBlank() }
     val choices = rememberRuleChoices(mobileSession)
 
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .imePadding()
-            .padding(horizontal = TandemSpacing.screen, vertical = TandemSpacing.medium),
-        verticalArrangement = Arrangement.spacedBy(TandemSpacing.large),
-    ) {
-        if (!mobileSession.canEditRules) {
-            InlineMessage("Update your Tandem server to add or edit rules here.", InlineMessageKind.WARNING)
-        }
-        if (unsupported) {
-            InlineMessage(
-                "This rule uses options Tandem can’t edit yet, such as splits or formulas. Edit it in Actual.",
-                InlineMessageKind.WARNING,
-            )
-        } else {
-            SectionCard("Run order") {
-                Column(Modifier.padding(TandemSpacing.medium), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    SegmentedSelector(RuleStage.entries.map { it.label to (it == draft.stage) }) {
-                        draft = draft.copy(stage = RuleStage.entries[it])
-                    }
-                    Text(draft.stage.detail, color = tandemPalette.muted, fontSize = TandemTypography.caption)
-                }
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .imePadding()
+                .padding(
+                    horizontal = readablePadding(maxWidth, TandemSpacing.screen, TandemLayout.readableContentWidth),
+                    vertical = TandemSpacing.medium,
+                ),
+            verticalArrangement = Arrangement.spacedBy(TandemSpacing.large),
+        ) {
+            if (!mobileSession.canEditRules) {
+                InlineMessage("Update your Tandem server to add or edit rules here.", InlineMessageKind.WARNING)
             }
-            SectionCard("If") {
-                Column(Modifier.padding(TandemSpacing.medium), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    SegmentedSelector(listOf("All match" to draft.matchAll, "Any match" to !draft.matchAll)) {
-                        draft = draft.copy(matchAll = it == 0)
+            if (unsupported) {
+                InlineMessage(
+                    "This rule uses options Tandem can’t edit yet, such as splits or formulas. Edit it in Actual.",
+                    InlineMessageKind.WARNING,
+                )
+            } else {
+                SectionCard("Run order") {
+                    Column(Modifier.padding(TandemSpacing.medium), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        SegmentedSelector(RuleStage.entries.map { it.label to (it == draft.stage) }) {
+                            draft = draft.copy(stage = RuleStage.entries[it])
+                        }
+                        Text(draft.stage.detail, color = tandemPalette.muted, fontSize = TandemTypography.caption)
                     }
-                    Text(
-                        if (draft.matchAll) "Every condition must match the transaction." else "One matching condition is enough.",
-                        color = tandemPalette.muted,
-                        fontSize = TandemTypography.caption,
+                }
+                SectionCard("If") {
+                    Column(Modifier.padding(TandemSpacing.medium), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        SegmentedSelector(listOf("All match" to draft.matchAll, "Any match" to !draft.matchAll)) {
+                            draft = draft.copy(matchAll = it == 0)
+                        }
+                        Text(
+                            if (draft.matchAll) "Every condition must match the transaction." else "One matching condition is enough.",
+                            color = tandemPalette.muted,
+                            fontSize = TandemTypography.caption,
+                        )
+                    }
+                    Column {
+                        draft.conditions.forEachIndexed { index, condition ->
+                            DividerLine()
+                            RuleConditionEditor(
+                                number = index + 1,
+                                condition = condition,
+                                choices = choices,
+                                removable = draft.conditions.size > 1,
+                                onChange = { next ->
+                                    draft = draft.copy(conditions = draft.conditions.toMutableList().also { it[index] = next })
+                                    error = null
+                                },
+                                onRemove = { draft = draft.copy(conditions = draft.conditions.filterIndexed { i, _ -> i != index }) },
+                            )
+                        }
+                    }
+                    DividerLine()
+                    ListRow(
+                        "Add condition",
+                        leading = RowLeading.Icon(Lucide.Plus),
+                        options = ListRowOptions(dense = true),
+                        onClick = { draft = draft.copy(conditions = draft.conditions + RuleConditionDraft()) },
                     )
                 }
-                Column {
-                    draft.conditions.forEachIndexed { index, condition ->
-                        DividerLine()
-                        RuleConditionEditor(
-                            number = index + 1,
-                            condition = condition,
-                            choices = choices,
-                            removable = draft.conditions.size > 1,
-                            onChange = { next ->
-                                draft = draft.copy(conditions = draft.conditions.toMutableList().also { it[index] = next })
-                                error = null
-                            },
-                            onRemove = { draft = draft.copy(conditions = draft.conditions.filterIndexed { i, _ -> i != index }) },
-                        )
-                    }
-                }
-                DividerLine()
-                ListRow(
-                    "Add condition",
-                    leading = RowLeading.Icon(Lucide.Plus),
-                    options = ListRowOptions(dense = true),
-                    onClick = { draft = draft.copy(conditions = draft.conditions + RuleConditionDraft()) },
-                )
-            }
-            SectionCard("Then") {
-                Column {
-                    draft.actions.forEachIndexed { index, action ->
-                        if (index > 0) DividerLine()
-                        RuleActionEditor(
-                            number = index + 1,
-                            action = action,
-                            choices = choices,
-                            removable = draft.actions.size > 1,
-                            onChange = { next ->
-                                draft = draft.copy(actions = draft.actions.toMutableList().also { it[index] = next })
-                                error = null
-                            },
-                            onRemove = { draft = draft.copy(actions = draft.actions.filterIndexed { i, _ -> i != index }) },
-                        )
-                    }
-                }
-                DividerLine()
-                ListRow(
-                    "Add action",
-                    leading = RowLeading.Icon(Lucide.Plus),
-                    options = ListRowOptions(dense = true),
-                    onClick = {
-                        val unused = RuleActionKind.entries.firstOrNull { kind -> draft.actions.none { it.kind == kind } }
-                        draft = draft.copy(actions = draft.actions + RuleActionDraft(unused ?: RuleActionKind.APPEND_NOTES))
-                    },
-                )
-            }
-            error?.let { InlineMessage(it, InlineMessageKind.ERROR) }
-            mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
-            PrimaryButton(
-                if (ruleId.isBlank()) "Add rule" else "Save rule",
-                enabled = canEdit && !busy,
-                loading = busy,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                val body =
-                    draft.toRequestBody { text -> state.parseAmountMinorUnits(text) }.getOrElse {
-                        error = it.message
-                        return@PrimaryButton
-                    }
-                scope.launch {
-                    val saved =
-                        if (ruleId.isBlank()) {
-                            mobileSession.createBudgetRule(state.selectedBudgetId, body, password)
-                        } else {
-                            mobileSession.editBudgetRule(state.selectedBudgetId, ruleId, body, password)
+                SectionCard("Then") {
+                    Column {
+                        draft.actions.forEachIndexed { index, action ->
+                            if (index > 0) DividerLine()
+                            RuleActionEditor(
+                                number = index + 1,
+                                action = action,
+                                choices = choices,
+                                removable = draft.actions.size > 1,
+                                onChange = { next ->
+                                    draft = draft.copy(actions = draft.actions.toMutableList().also { it[index] = next })
+                                    error = null
+                                },
+                                onRemove = { draft = draft.copy(actions = draft.actions.filterIndexed { i, _ -> i != index }) },
+                            )
                         }
-                    if (saved) onDone()
+                    }
+                    DividerLine()
+                    ListRow(
+                        "Add action",
+                        leading = RowLeading.Icon(Lucide.Plus),
+                        options = ListRowOptions(dense = true),
+                        onClick = {
+                            val unused = RuleActionKind.entries.firstOrNull { kind -> draft.actions.none { it.kind == kind } }
+                            draft = draft.copy(actions = draft.actions + RuleActionDraft(unused ?: RuleActionKind.APPEND_NOTES))
+                        },
+                    )
+                }
+                error?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
+                PrimaryButton(
+                    if (ruleId.isBlank()) "Add rule" else "Save rule",
+                    enabled = canEdit && !busy,
+                    loading = busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    val body =
+                        draft.toRequestBody { text -> state.parseAmountMinorUnits(text) }.getOrElse {
+                            error = it.message
+                            return@PrimaryButton
+                        }
+                    scope.launch {
+                        val saved =
+                            if (ruleId.isBlank()) {
+                                mobileSession.createBudgetRule(state.selectedBudgetId, body, password)
+                            } else {
+                                mobileSession.editBudgetRule(state.selectedBudgetId, ruleId, body, password)
+                            }
+                        if (saved) onDone()
+                    }
                 }
             }
-        }
-        if (ruleId.isNotBlank()) {
-            SecondaryButton("Delete rule", modifier = Modifier.fillMaxWidth(), enabled = canEdit && !busy) { confirmDelete = true }
+            if (ruleId.isNotBlank()) {
+                SecondaryButton("Delete rule", modifier = Modifier.fillMaxWidth(), enabled = canEdit && !busy) { confirmDelete = true }
+            }
         }
     }
     if (confirmDelete) {
