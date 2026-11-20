@@ -73,6 +73,11 @@ class AndroidEncryptedBudgetVault(
       }
     }
 
+  override fun delete(budgetId: String) {
+    entries.getString(budgetId, null)?.let(VaultEntry::parse)?.let { deleteDatabaseFiles(it.fileName) }
+    entries.edit(commit = true) { remove(budgetId) }
+  }
+
   override fun deleteAll() {
     entries.all.values.mapNotNull { (it as? String)?.let(VaultEntry::parse) }.forEach { deleteDatabaseFiles(it.fileName) }
     entries.edit(commit = true) { clear() }
