@@ -3266,6 +3266,10 @@ class LocalBudgetRepositoryTest {
                 assertEquals(2L, observedCount)
                 assertEquals(listOf("txn-a"), recent.map { it.recordId })
                 assertFails<IllegalArgumentException> { repository.findRecentRecords(BUDGET, "transaction", limit = 0) }
+                assertEquals("food", repository.latestCategoryForPayee(BUDGET, "market"))
+                assertEquals("rent", repository.latestCategoryForPayee(BUDGET, "landlord"))
+                assertEquals(null, repository.latestCategoryForPayee(BUDGET, "stranger"))
+                assertFails<IllegalArgumentException> { repository.latestCategoryForPayee(BUDGET, " ") }
 
                 repository.enqueueWrite(updateRequest(recordId = "txn-a"))
                 assertEquals(1, repository.observePendingWrites(BUDGET).first().size)
