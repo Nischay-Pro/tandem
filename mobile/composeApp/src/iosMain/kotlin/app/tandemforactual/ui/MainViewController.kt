@@ -46,6 +46,7 @@ private fun createTandemViewController(
             database = database,
             deviceCredentialStore = remember { IosDeviceCredentialStore() },
             deviceAuthenticator = remember { IosDeviceAuthenticator() },
+            encryptedBudgetVault = remember { IosEncryptedBudgetVault() },
             nowEpochMillis = { Clock.System.now().toEpochMilliseconds() },
             allowInsecurePrivateNetwork = true,
             onBackgroundSyncSettingsChanged =

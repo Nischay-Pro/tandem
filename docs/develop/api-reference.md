@@ -97,6 +97,8 @@ schemas, and [App and server versioning](versioning.md) for capability negotiati
 | `POST`   | `/api/v1/budgets/{budgetId}/categories/move-money`                            | Move an assigned amount between categories.                                           |
 | `POST`   | `/api/v1/budgets/{budgetId}/months/{month}/actions`                           | Manage a month's carryover and category assignments.                                  |
 | `POST`   | `/api/v1/budgets/{budgetId}/schedules/{scheduleId}/actions`                   | Edit, post, skip, or delete an existing schedule.                                     |
+| `POST`   | `/api/v1/budgets/{budgetId}/rules`                                            | Create a rule from supported conditions and actions.                                  |
+| `POST`   | `/api/v1/budgets/{budgetId}/rules/{ruleId}/actions`                           | Edit or delete a rule.                                                                |
 | `GET`    | `/api/v1/budgets/{budgetId}/transactions/{transactionId}`                     | Read a transaction snapshot and revision.                                             |
 | `POST`   | `/api/v1/budgets/{budgetId}/accounts/{accountId}/transactions/import/preview` | Count existing statement references without importing them.                           |
 | `POST`   | `/api/v1/budgets/{budgetId}/accounts/{accountId}/transactions/import`         | Import a parsed statement into an account.                                            |
