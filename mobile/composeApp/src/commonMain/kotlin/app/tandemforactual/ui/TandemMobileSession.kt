@@ -3954,6 +3954,36 @@ internal class TandemMobileSession(
             apiClient.deleteBudgetCategory(budgetId, categoryId, transferCategoryId, encryptionPassword, idempotencyKey)
         }
 
+    val canEditRules: Boolean get() = serverCapabilities?.supports("rule-edit") == true
+
+    suspend fun createBudgetRule(
+        budgetId: String,
+        rule: JsonObject,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Couldn’t add this rule. Try again.") {
+            apiClient.createBudgetRule(budgetId, rule, encryptionPassword)
+        }
+
+    suspend fun editBudgetRule(
+        budgetId: String,
+        ruleId: String,
+        rule: JsonObject,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Couldn’t save this rule. Try again.") {
+            apiClient.manageBudgetRule(budgetId, ruleId, "edit", rule, encryptionPassword)
+        }
+
+    suspend fun deleteBudgetRule(
+        budgetId: String,
+        ruleId: String,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Couldn’t delete this rule. Try again.") {
+            apiClient.manageBudgetRule(budgetId, ruleId, "delete", null, encryptionPassword)
+        }
+
     suspend fun manageBudgetSchedule(
         budgetId: String,
         scheduleId: String,

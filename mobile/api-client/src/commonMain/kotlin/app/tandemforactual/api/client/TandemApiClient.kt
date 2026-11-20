@@ -1266,6 +1266,60 @@ class TandemApiClient(
         }
     }
 
+    suspend fun createBudgetRule(
+        budgetId: String,
+        rule: JsonObject,
+        encryptionPassword: String?,
+        idempotencyKeyOverride: String? = null,
+    ) {
+        withMaintenanceOperation(
+            maintenanceSignature("rule-create", budgetId, rule.toString()),
+            idempotencyKeyOverride,
+        ) { idempotencyKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.createBudgetRule(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        body = rule.toMap(),
+                    ),
+                )
+            }
+        }
+    }
+
+    suspend fun manageBudgetRule(
+        budgetId: String,
+        ruleId: String,
+        action: String,
+        rule: JsonObject?,
+        encryptionPassword: String?,
+        idempotencyKeyOverride: String? = null,
+    ) {
+        require((action == "delete") == (rule == null)) { "Only edits send a rule" }
+        withMaintenanceOperation(
+            maintenanceSignature("rule-$action", budgetId, ruleId, rule?.toString()),
+            idempotencyKeyOverride,
+        ) { idempotencyKey ->
+            withGeneratedApi {
+                requireOk(
+                    BudgetsApi.manageBudgetRule(
+                        xBudgetEncryptionPassword = encryptionPassword,
+                        idempotencyKey = idempotencyKey,
+                        budgetId = budgetId,
+                        ruleId = ruleId,
+                        body =
+                            buildJsonObject {
+                                put("action", action)
+                                rule?.let { put("rule", it) }
+                            }.toMap(),
+                    ),
+                )
+            }
+        }
+    }
+
     suspend fun manageBudgetPayee(
         budgetId: String,
         payeeId: String,
