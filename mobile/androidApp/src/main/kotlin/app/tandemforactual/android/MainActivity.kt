@@ -138,7 +138,11 @@ class MainActivity : FragmentActivity() {
   }
 
   private fun handleQuickAction(intent: Intent?) {
-    if (intent?.action == ACTION_ADD_TRANSACTION) QuickActionEvents.requestAddTransaction()
+    when {
+      intent?.action == ACTION_ADD_TRANSACTION -> QuickActionEvents.requestAddTransaction()
+      intent?.action == Intent.ACTION_SEND && intent.type == "text/plain" ->
+        intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }?.let(QuickActionEvents::shareText)
+    }
   }
 
   private fun publishQuickAddShortcut() {

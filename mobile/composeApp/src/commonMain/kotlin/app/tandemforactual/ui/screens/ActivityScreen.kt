@@ -243,6 +243,12 @@ internal fun ActivityScreen(
                             } else {
                                 null
                             },
+                        onSwipeDelete =
+                            if (isLiveBudget && !state.readOnlyMode && !selectionMode && transactionId != null) {
+                                { scope.launch { mobileSession.deleteTransactionsWithUndo(state.selectedBudgetId, setOf(transactionId)) } }
+                            } else {
+                                null
+                            },
                     ) {
                         if (selectionMode && transactionId != null) {
                             selectedTransactionIds =
