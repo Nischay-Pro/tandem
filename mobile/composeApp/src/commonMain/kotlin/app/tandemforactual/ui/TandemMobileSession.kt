@@ -4640,8 +4640,9 @@ internal class TandemMobileSession(
         val pendingForRecord =
             localRepository
                 .readPendingWrites(budgetId)
-                .filter { it.recordType == "transaction" && it.recordId == transactionId }
-                .maxByOrNull { it.updatedAtEpochMs }
+                .filter {
+                    it.recordType == "transaction" && it.recordId == transactionId && it.status in UNSYNCED_TRANSACTION_WRITE_STATUSES
+                }.maxByOrNull { it.updatedAtEpochMs }
         if (pendingForRecord?.action == LocalWriteAction.CREATE.name && pendingForRecord.status == "queued") {
             isSavingTransaction = true
             try {

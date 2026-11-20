@@ -276,6 +276,44 @@ class TandemMobileSessionTest {
         }
 
     @Test
+    fun deletedTransactionsCanBeUndoneUntilTheyAreSent() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val preferences = AppPreferencesStore(database)
+                val repository = LocalBudgetRepository(database) { 1_000L }
+                seedCachedBudget(repository, preferences, withPendingWrite = false)
+                val session = TandemMobileSession(TandemApiClient(), database, { 1_000L })
+                session.loadLocalRecords("budget-1")
+
+                assertTrue(session.deleteTransactionsWithUndo("budget-1", setOf("txn-1")), session.transactionWriteMessage)
+                val notice = assertNotNull(session.undoNotice)
+                assertEquals("Transaction deleted", notice.message)
+                assertEquals(setOf("txn-1"), notice.transactionIds)
+                assertTrue(repository.readPendingWrites("budget-1").any { it.action == "DELETE" && it.status == "queued" })
+
+                session.undoTransactionDeletes(notice)
+                assertNull(session.undoNotice)
+                assertTrue(repository.readPendingWrites("budget-1").none { it.action == "DELETE" && it.status == "queued" })
+                assertEquals(listOf("txn-1"), session.transactionRecords.map { it.recordId })
+
+                assertTrue(session.deleteTransactionsWithUndo("budget-1", setOf("txn-1")))
+                val second = assertNotNull(session.undoNotice)
+                repository
+                    .readPendingWrites(
+                        "budget-1",
+                    ).filter { it.status == "queued" }
+                    .forEach { repository.discardWrite(it.operationId) }
+                session.undoTransactionDeletes(second)
+                assertEquals("Already synced, so it can’t be undone here", session.undoNotice?.message)
+                session.dismissUndoNotice(assertNotNull(session.undoNotice).id)
+                assertNull(session.undoNotice)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun blankBudgetIdsAreNeverCachedInsteadOfCrashing() =
         runBlocking {
             val database = newDatabase()
