@@ -217,6 +217,29 @@ internal fun resolveMainCloudStatus(
     return if (hasSuccessfulSync) MainCloudStatus.SYNCED else MainCloudStatus.ERROR
 }
 
+internal fun deviceWriteActionLabel(action: String): String =
+    when (action) {
+        "CREATE" -> "Added"
+        "DELETE" -> "Deleted"
+        else -> "Edited"
+    }
+
+internal fun deviceWriteStatusLabel(
+    status: String,
+    lastErrorCode: String?,
+): String =
+    when (status) {
+        "committed" -> "Sent"
+        "queued" -> "Waiting"
+        "sending" -> "Sending"
+        "discarded" -> if (lastErrorCode == "discarded-by-user") "Undone" else "Discarded"
+        "superseded" -> "Replaced by a later edit"
+        "rejected" -> "Rejected"
+        "conflict" -> "Needs review"
+        "uncertain" -> "Unconfirmed"
+        else -> status.replaceFirstChar { it.uppercase() }
+    }
+
 internal val UNSYNCED_TRANSACTION_WRITE_STATUSES = setOf("queued", "sending", "uncertain", "conflict", "rejected")
 
 internal fun writeStatusLabel(status: String): String =
