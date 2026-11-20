@@ -464,6 +464,12 @@ internal class TandemMobileSession(
         private set
 
     val syncError: String? get() = syncPresentation.error
+
+    suspend fun budgetMonthBody(
+        budgetId: String,
+        monthId: String,
+    ): String? = repository?.findRecord(budgetId, "budget-month", monthId)?.let { it.localJson ?: it.remoteJson }
+
     var budgetPasswordRejection by mutableStateOf<String?>(null)
         private set
 
