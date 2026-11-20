@@ -378,6 +378,14 @@ internal fun NotificationsScreen(
             ) {
                 state.rejectedEditAlerts = it
             }
+            DividerLine()
+            ToggleRow(
+                "Overspending alerts",
+                "When a category goes over budget this month",
+                state.overspendingAlerts,
+            ) {
+                state.overspendingAlerts = it
+            }
         }
         InfoBubble("In-app banners always show, even when phone notifications are off.")
     }

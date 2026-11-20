@@ -1,5 +1,7 @@
 package app.tandemforactual.android
 
+import java.time.YearMonth
+import app.tandemforactual.data.store.overspendingAlert
 import app.tandemforactual.ui.SyncNetwork
 import android.content.Context
 import androidx.work.Constraints
@@ -97,6 +99,12 @@ class BackgroundBudgetSyncWorker(
             }
             if (backgroundAlertEnabled(preferences["rejectedEditAlerts"])) {
                 BudgetSystemNotifications.rejected(applicationContext, summary.writesRejected)
+            }
+            if (backgroundAlertEnabled(preferences["overspendingAlerts"])) {
+                BudgetSystemNotifications.overspending(
+                    applicationContext,
+                    overspendingAlert(repository, AppPreferencesStore(database), budgetId, YearMonth.now().toString()),
+                )
             }
             Result.success()
         } catch (error: CancellationException) {

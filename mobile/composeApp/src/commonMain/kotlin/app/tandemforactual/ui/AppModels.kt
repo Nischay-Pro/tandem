@@ -240,6 +240,31 @@ internal fun deviceWriteStatusLabel(
         else -> status.replaceFirstChar { it.uppercase() }
     }
 
+/** Short status shown under the budget name, so sync state reads at a glance without opening Sync Center. */
+internal fun headerSyncCaption(
+    status: MainCloudStatus,
+    pendingWriteStatuses: Collection<String>,
+    lastSyncedAtEpochMs: Long?,
+    nowEpochMs: Long,
+    formatMoment: (Long, Long) -> String = ::formatMomentAtEpochMilliseconds,
+): String? {
+    val needsReview = pendingWriteStatuses.count { it in setOf("conflict", "uncertain", "rejected") }
+    val waiting = pendingWriteStatuses.count { it in setOf("queued", "sending") }
+
+    fun changes(count: Int) = if (count == 1) "1 change" else "$count changes"
+    return when {
+        needsReview > 0 -> "${changes(needsReview)} ${if (needsReview == 1) "needs" else "need"} review"
+        status == MainCloudStatus.SYNCING -> "Syncing…"
+        status == MainCloudStatus.ERROR -> "Couldn’t sync"
+        waiting > 0 -> "${changes(waiting)} waiting to sync"
+        status == MainCloudStatus.OFF -> "Saved on this device"
+        lastSyncedAtEpochMs == null -> null
+        nowEpochMs - lastSyncedAtEpochMs < 60_000L -> "Synced just now"
+        nowEpochMs - lastSyncedAtEpochMs < 3_600_000L -> "Synced ${(nowEpochMs - lastSyncedAtEpochMs) / 60_000L} min ago"
+        else -> "Synced ${formatMoment(lastSyncedAtEpochMs, nowEpochMs)}"
+    }
+}
+
 internal val UNSYNCED_TRANSACTION_WRITE_STATUSES = setOf("queued", "sending", "uncertain", "conflict", "rejected")
 
 internal fun writeStatusLabel(status: String): String =
