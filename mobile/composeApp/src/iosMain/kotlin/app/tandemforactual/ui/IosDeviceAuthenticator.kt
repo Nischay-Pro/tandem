@@ -44,7 +44,7 @@ import platform.Security.kSecMatchLimitOne
 import platform.Security.kSecReturnData
 import platform.Security.kSecUseAuthenticationContext
 import platform.Security.kSecValueData
-import platform.darwin.QOS_CLASS_USER_INITIATED
+import platform.darwin.DISPATCH_QUEUE_PRIORITY_HIGH
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_global_queue
 import platform.darwin.dispatch_get_main_queue
@@ -110,7 +110,7 @@ class IosDeviceAuthenticator : DeviceAuthenticator {
         onResult: (String?) -> Unit,
     ) {
         val context = LAContext().apply { localizedReason = title }
-        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED.toLong(), 0u)) {
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH.toLong(), 0u)) {
             val secret =
                 memScoped {
                     val result = alloc<CFTypeRefVar>()
