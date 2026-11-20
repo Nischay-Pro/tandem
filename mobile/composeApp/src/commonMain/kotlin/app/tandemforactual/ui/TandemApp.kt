@@ -557,6 +557,11 @@ fun TandemApp(
                             if (next.isReportDetail() && backStack.lastOrNull()?.route != AppRoute.REPORTS) {
                                 selectTab(AppRoute.REPORTS)
                             }
+                            if (next == AppRoute.SWITCH_BUDGET &&
+                                backStack.lastOrNull { it.route.isTab() }?.route.let { it != null && it != AppRoute.BUDGET }
+                            ) {
+                                selectTab(AppRoute.BUDGET)
+                            }
                             routeTransitionDirection = 1f
                             backStack.add(newRouteEntry(next))
                         }
