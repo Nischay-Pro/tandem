@@ -75,6 +75,7 @@ import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
+import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
@@ -1804,6 +1805,15 @@ fun TandemApp(
             }
         }
         val undoNotice = mobileSession.undoNotice
+        val undoAboveTabBar =
+            !usesRailNavigation(
+                with(LocalDensity.current) {
+                    LocalWindowInfo.current.containerSize.width
+                        .toDp()
+                        .value
+                },
+                isLandscapeViewport(LocalWindowInfo.current.containerSize.width, LocalWindowInfo.current.containerSize.height),
+            )
         LaunchedEffect(undoNotice?.id) {
             val shown = undoNotice ?: return@LaunchedEffect
             delay(UNDO_NOTICE_MILLIS)
@@ -1813,7 +1823,7 @@ fun TandemApp(
             Modifier
                 .fillMaxSize()
                 .safeDrawingPadding()
-                .padding(start = TandemSpacing.large, end = TandemSpacing.large, bottom = 104.dp),
+                .padding(start = TandemSpacing.large, end = TandemSpacing.large, bottom = if (undoAboveTabBar) 104.dp else 24.dp),
             contentAlignment = Alignment.BottomCenter,
         ) {
             AnimatedVisibility(
@@ -1822,14 +1832,15 @@ fun TandemApp(
                 exit = fadeOut() + slideOutVertically { it / 2 },
             ) {
                 val notice = undoNotice ?: return@AnimatedVisibility
-                InlineMessage(
-                    notice.message,
-                    InlineMessageKind.INFO,
-                    modifier = Modifier.widthIn(max = 560.dp),
-                    actionLabel = "Undo".takeIf { notice.transactionIds.isNotEmpty() },
-                    onAction = { coroutineScope.launch { mobileSession.undoTransactionDeletes(notice) } },
-                    onDismiss = { mobileSession.dismissUndoNotice(notice.id) },
-                )
+                SurfaceCard(Modifier.widthIn(max = 560.dp)) {
+                    InlineMessage(
+                        notice.message,
+                        InlineMessageKind.INFO,
+                        actionLabel = "Undo".takeIf { notice.transactionIds.isNotEmpty() },
+                        onAction = { coroutineScope.launch { mobileSession.undoTransactionDeletes(notice) } },
+                        onDismiss = { mobileSession.dismissUndoNotice(notice.id) },
+                    )
+                }
             }
         }
         if (showDiscardTransactionDialog) {

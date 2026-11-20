@@ -864,6 +864,22 @@ class TandemMobileSessionTest {
     }
 
     @Test
+    fun activityRefreshDropsDeletedRowsButKeepsOlderPages() {
+        val loaded = (1..6).map { index -> activityTransaction("transaction-$index", "2026-11-0$index", index.toLong()) }.reversed()
+        val withoutFive = loaded.filterNot { it.recordId == "transaction-5" }
+
+        val partial = mergeRefreshedActivityTransactions(loaded, withoutFive.take(3))
+        assertEquals(
+            listOf("transaction-6", "transaction-4", "transaction-3", "transaction-2", "transaction-1"),
+            partial.map { it.recordId },
+        )
+
+        val complete = mergeRefreshedActivityTransactions(loaded, withoutFive.take(2), pageIsComplete = true)
+        assertEquals(listOf("transaction-6", "transaction-4"), complete.map { it.recordId })
+        assertEquals(loaded.map { it.recordId }, mergeRefreshedActivityTransactions(loaded, emptyList()).map { it.recordId })
+    }
+
+    @Test
     fun uncertainWriteScreenOffersRecoveryActionsAfterACompletedStatusCheck() {
         assertFalse(
             canOfferUncertainWriteRecoveryActions(

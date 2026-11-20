@@ -3286,7 +3286,6 @@ internal class TandemMobileSession(
                 budgetReorderQueue = budgetReorderQueue.clearCompletedVisibilityOverrides(budgetId)
                 if (retryQueuedBudgetMutations) retryQueuedBudgetReorders(budgetId, encryptionPassword)
             }
-            if (activityTransactionPageBudgetId == budgetId) refreshActivityTransactionPages(budgetId)
             return summary
         } catch (error: CancellationException) {
             throw error
@@ -5167,6 +5166,7 @@ internal class TandemMobileSession(
         budgetMonthIds = localRepository.findRecordIds(budgetId, "budget-month")
         pendingWrites = localRepository.readPendingWrites(budgetId)
         conflictRecordsByRecordId = findConflictRecords(budgetId, pendingWrites)
+        refreshActivityTransactionPages(budgetId)
     }
 
     private suspend fun findConflictRecords(
@@ -5257,7 +5257,7 @@ internal class TandemMobileSession(
             try {
                 val refreshed = localRepository.findTransactionPage(budgetId = budgetId, limit = refreshLimit)
                 if (activityTransactionPageBudgetId != budgetId) return
-                val merged = mergeRefreshedActivityTransactions(previouslyLoaded, refreshed)
+                val merged = mergeRefreshedActivityTransactions(previouslyLoaded, refreshed, pageIsComplete = refreshed.size < refreshLimit)
                 Snapshot.withMutableSnapshot {
                     activityTransactionRecords.clear()
                     activityTransactionRecords.addAll(merged)
@@ -5675,14 +5675,22 @@ internal fun activityTransactionRefreshLimit(loadedRecordCount: Int): Int =
         ACTIVITY_TRANSACTION_REFRESH_LIMIT,
     )
 
+/** Rows missing from the refreshed window were deleted; only rows older than the window are kept from before. */
 internal fun mergeRefreshedActivityTransactions(
     previouslyLoaded: List<BudgetRecordEntity>,
     refreshedPage: List<BudgetRecordEntity>,
+    pageIsComplete: Boolean = false,
 ): List<BudgetRecordEntity> {
-    val refreshedIds = refreshedPage.mapTo(mutableSetOf(), BudgetRecordEntity::recordId)
-    return (refreshedPage + previouslyLoaded.filterNot { it.recordId in refreshedIds })
-        .distinctBy(BudgetRecordEntity::recordId)
-        .sortedWith(compareByDescending<BudgetRecordEntity> { it.recordDate ?: "" }.thenBy { it.recordId })
+    val order = compareByDescending<BudgetRecordEntity> { it.recordDate ?: "" }.thenBy { it.recordId }
+    val refreshed = refreshedPage.distinctBy(BudgetRecordEntity::recordId).sortedWith(order)
+    if (pageIsComplete) return refreshed
+    val refreshedIds = refreshed.mapTo(mutableSetOf(), BudgetRecordEntity::recordId)
+    val oldestRefreshed = refreshed.lastOrNull()
+    val older =
+        previouslyLoaded.filter { record ->
+            record.recordId !in refreshedIds && (oldestRefreshed == null || order.compare(record, oldestRefreshed) > 0)
+        }
+    return (refreshed + older).distinctBy(BudgetRecordEntity::recordId).sortedWith(order)
 }
 
 private fun JsonObject.stringValue(name: String): String? = (this[name] as? JsonPrimitive)?.contentOrNull
