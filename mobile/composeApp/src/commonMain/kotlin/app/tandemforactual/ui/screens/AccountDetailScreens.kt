@@ -420,7 +420,11 @@ internal fun AccountDetailScreen(
                     EmptyState("No recent activity", modifier = Modifier.padding(TandemSpacing.large))
                 }
             } else {
-                SectionCard("Recent activity", action = "See all", onClick = { openRecentActivity(state, navigation) }) {
+                SectionCard(
+                    "Recent activity",
+                    action = "See all",
+                    onClick = { openAccountActivity(state, navigation, liveAccount.id, liveAccount.name) },
+                ) {
                     shownAccountActivity.take(6).forEachIndexed { index, item ->
                         if (index > 0) DividerLine()
                         TransactionRow(item) {

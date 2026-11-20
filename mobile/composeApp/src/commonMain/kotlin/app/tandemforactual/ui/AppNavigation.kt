@@ -72,11 +72,14 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.TandemBackButton
 import app.tandemforactual.ui.components.TandemIconButton
+import app.tandemforactual.ui.components.TandemLoadingIndicator
 import app.tandemforactual.ui.components.TandemModalCloseButton
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
 import app.tandemforactual.ui.reports.reportMonthLabel
 import app.tandemforactual.ui.reports.shiftReportMonthId
+import com.composables.icons.lucide.ArrowLeftRight
+import com.composables.icons.lucide.ChartNoAxesColumn
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronLeft
@@ -86,8 +89,13 @@ import com.composables.icons.lucide.CloudAlert
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.EllipsisVertical
+import com.composables.icons.lucide.EyeOff
+import com.composables.icons.lucide.Hash
+import com.composables.icons.lucide.Landmark
+import com.composables.icons.lucide.Lock
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
+import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.Settings
 import com.composables.icons.lucide.Tags
@@ -262,6 +270,8 @@ internal fun AppHeader(
     compactLandscape: Boolean = false,
     onAddTransaction: (() -> Unit)? = null,
     addTransactionEnabled: Boolean = true,
+    onRefreshBudgets: (() -> Unit)? = null,
+    refreshingBudgets: Boolean = false,
 ) {
     val palette = tandemPalette
     var headerMenuExpanded by rememberSaveable(route) { mutableStateOf(false) }
@@ -470,6 +480,17 @@ internal fun AppHeader(
                         )
                     }
                 }
+                AppRoute.SWITCH_BUDGET -> {
+                    if (onRefreshBudgets != null) {
+                        if (refreshingBudgets) {
+                            Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                                TandemLoadingIndicator(Modifier.size(20.dp), palette.accent, 2.dp)
+                            }
+                        } else {
+                            TandemIconButton(Lucide.RefreshCw, "Refresh budgets", onClick = onRefreshBudgets)
+                        }
+                    }
+                }
                 AppRoute.SYNC_CENTER -> {
                     TandemIconButton(
                         Lucide.Settings,
@@ -507,25 +528,25 @@ private fun BudgetHeaderMenu(
 ) {
     TandemHeaderMenu(expanded = expanded, onDismiss = onDismiss) {
         if (state.selectedBudgetEncrypted && state.encryptedPassword.isNotBlank()) {
-            HeaderMenuAction("Lock budget", onClick = {
+            HeaderMenuAction(Lucide.Lock, "Lock budget", onClick = {
                 onDismiss()
                 state.encryptedPassword = ""
             })
         }
-        HeaderMenuAction("Switch budget", onClick = onSwitchBudget)
+        HeaderMenuAction(Lucide.ArrowLeftRight, "Switch budget", onClick = onSwitchBudget)
         HeaderMenuDivider()
         HeaderMenuLabel("Category amounts")
-        HeaderMenuChoice("Numbers", selected = !state.budgetShowProgressBars, onClick = {
+        HeaderMenuChoice(Lucide.Hash, "Numbers", selected = !state.budgetShowProgressBars, onClick = {
             state.budgetShowProgressBars = false
             onDismiss()
         })
-        HeaderMenuChoice("Progress bars", selected = state.budgetShowProgressBars, onClick = {
+        HeaderMenuChoice(Lucide.ChartNoAxesColumn, "Progress bars", selected = state.budgetShowProgressBars, onClick = {
             state.budgetShowProgressBars = true
             onDismiss()
         })
         HeaderMenuDivider()
         HeaderMenuLabel("Privacy")
-        HeaderMenuChoice("Hide amounts", selected = state.privacyModeEnabled, onClick = {
+        HeaderMenuChoice(Lucide.EyeOff, "Hide amounts", selected = state.privacyModeEnabled, onClick = {
             state.privacyModeEnabled = !state.privacyModeEnabled
             onDismiss()
         })
@@ -543,11 +564,11 @@ private fun AccountHeaderMenu(
 ) {
     TandemHeaderMenu(expanded = expanded, onDismiss = onDismiss) {
         HeaderMenuLabel("Account actions")
-        HeaderMenuAction("Add account", onClick = onAddAccount)
-        HeaderMenuAction("Manage bank connections", onClick = onManageBanks)
+        HeaderMenuAction(Lucide.Plus, "Add account", onClick = onAddAccount)
+        HeaderMenuAction(Lucide.Landmark, "Manage bank connections", onClick = onManageBanks)
         HeaderMenuDivider()
-        HeaderMenuAction("Switch budget", onClick = onSwitchBudget)
-        HeaderMenuAction("Sync Center", onClick = onOpenSync)
+        HeaderMenuAction(Lucide.ArrowLeftRight, "Switch budget", onClick = onSwitchBudget)
+        HeaderMenuAction(Lucide.CloudSync, "Sync Center", onClick = onOpenSync)
     }
 }
 
@@ -579,6 +600,7 @@ private fun TandemHeaderMenu(
 
 @Composable
 private fun HeaderMenuAction(
+    icon: ImageVector,
     label: String,
     onClick: () -> Unit,
 ) {
@@ -590,8 +612,10 @@ private fun HeaderMenuAction(
             .clip(RoundedCornerShape(TandemShapes.control))
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = palette.muted)
         Text(
             label,
             modifier = Modifier.weight(1f),
@@ -600,7 +624,6 @@ private fun HeaderMenuAction(
             fontWeight = FontWeight.Medium,
             maxLines = 2,
         )
-        Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = palette.muted)
     }
 }
 
@@ -626,6 +649,7 @@ private fun HeaderMenuDivider() {
 
 @Composable
 private fun HeaderMenuChoice(
+    icon: ImageVector,
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
@@ -639,8 +663,10 @@ private fun HeaderMenuChoice(
             .clickable(role = Role.RadioButton, onClick = onClick)
             .semantics { this.selected = selected }
             .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = if (selected) palette.accent else palette.muted)
         Text(
             label,
             modifier = Modifier.weight(1f),

@@ -893,6 +893,19 @@ internal fun openRecentActivity(
     navigation.selectTabRoot(AppRoute.ACTIVITY)
 }
 
+internal fun openAccountActivity(
+    state: AppState,
+    navigation: AppNavigation,
+    accountId: String,
+    accountName: String,
+) {
+    state.activitySearchQuery = ""
+    state.activitySearchResultCache = null
+    state.activitySearchFilters =
+        listOf(ActivitySearchFilter(ActivitySearchField.ACCOUNT, accountId.ifBlank { accountName }, "Account: $accountName"))
+    navigation.open(AppRoute.ACTIVITY_SEARCH)
+}
+
 internal fun openReportCategoryActivity(
     state: AppState,
     navigation: AppNavigation,

@@ -37,6 +37,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
@@ -171,6 +172,8 @@ internal fun AppLockGate(
     onChooseBudget: () -> Unit,
     vault: EncryptedBudgetVault? = null,
     onUnlocked: () -> Unit = {},
+    backTargetRoute: AppRoute? = null,
+    backProgress: Float = 0f,
 ) {
     LaunchedEffect(lockState.unlocked, state.selectedBudgetEncrypted) {
         if (!lockState.unlocked && state.selectedBudgetEncrypted) state.encryptedPassword = ""
@@ -187,6 +190,8 @@ internal fun AppLockGate(
         }
     }
     val budgetLocked = needsEncryptedBudgetUnlock(state, route)
+    val lockedBehindBack =
+        !budgetLocked && backProgress > 0f && backTargetRoute != null && needsEncryptedBudgetUnlock(state, backTargetRoute)
     val appLocked =
         !budgetLocked &&
             !state.selectedBudgetEncrypted &&
@@ -211,8 +216,19 @@ internal fun AppLockGate(
             PrimaryButton("Unlock", onClick = unlockApp)
         }
     }
-    AnimatedVisibility(budgetLocked, enter = EnterTransition.None, exit = fadeOut()) {
-        EncryptedBudgetUnlock(state, mobileSession, authenticator, vault, lockState, appInForeground, onChooseBudget, onUnlocked)
+    AnimatedVisibility(budgetLocked || lockedBehindBack, enter = EnterTransition.None, exit = fadeOut()) {
+        Box(Modifier.graphicsLayer { alpha = if (budgetLocked) 1f else backProgress }) {
+            EncryptedBudgetUnlock(
+                state,
+                mobileSession,
+                authenticator,
+                vault,
+                lockState,
+                appInForeground && budgetLocked,
+                onChooseBudget,
+                onUnlocked,
+            )
+        }
     }
 }
 
