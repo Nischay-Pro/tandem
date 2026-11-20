@@ -98,6 +98,8 @@ internal fun ScreenContent(
         AppRoute.SIGN_IN -> SignInScreen(state, mobileSession, navigation, onSignIn, onStartOpenIdSignIn)
         AppRoute.BUDGET_CHOOSER ->
             BudgetChooserScreen(state, mobileSession, navigation, onRefreshBudgets, onPrepareBudgetUnlock, onOpenSelectedBudget)
+        AppRoute.SWITCH_BUDGET ->
+            SwitchBudgetScreen(state, mobileSession, navigation, onRefreshBudgets, onPrepareBudgetUnlock, onOpenSelectedBudget)
         AppRoute.BUDGET_UNLOCK -> BudgetUnlockScreen(state, navigation, onOpenSelectedBudget)
         AppRoute.FIRST_SYNC ->
             FirstSyncScreen(
@@ -109,6 +111,7 @@ internal fun ScreenContent(
             )
         AppRoute.NOTIFICATION_ONBOARDING ->
             NotificationOnboardingScreen(state, navigation, onRequestNotificationPermission)
+        AppRoute.SYNC_ONBOARDING -> SyncOnboardingScreen(state, navigation, notificationPermissionEnabled)
         AppRoute.SETUP_COMPLETE -> SetupCompleteScreen(state, navigation)
         AppRoute.BUDGET ->
             BudgetScreen(
@@ -185,7 +188,7 @@ internal fun ScreenContent(
                     openReportCategoryActivity(state, navigation, categoryId, categoryName, window)
                 },
                 onAddTransaction = { navigation.newTransaction(null) },
-                onChooseBudget = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+                onChooseBudget = { navigation.open(AppRoute.SWITCH_BUDGET) },
             )
         AppRoute.REPORT_DETAIL -> {
             val kind =
@@ -200,7 +203,7 @@ internal fun ScreenContent(
                 onOpenCategoryActivity = { categoryId, categoryName, window ->
                     openReportCategoryActivity(state, navigation, categoryId, categoryName, window)
                 },
-                onEmptyAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+                onEmptyAction = { navigation.open(AppRoute.SWITCH_BUDGET) },
             )
         }
         AppRoute.ACTIVITY_SEARCH ->

@@ -148,7 +148,9 @@ internal class AppState {
     val reduceMotion: Boolean get() = reduceMotionOverride ?: systemReduceMotionEnabled
     var syncOnOpen by mutableStateOf(true)
     var backgroundSyncEnabled by mutableStateOf(false)
-    var syncOnWifi by mutableStateOf(false)
+    var syncNetwork by mutableStateOf(SyncNetwork.ANY)
+    var hasCompletedSyncOnboarding by mutableStateOf(false)
+    var pendingSetupAfterUnlock by mutableStateOf(false)
     var syncReminders by mutableStateOf(true)
     var conflictReviewAlerts by mutableStateOf(true)
     var rejectedEditAlerts by mutableStateOf(true)
@@ -249,7 +251,8 @@ internal class AppState {
             "reduceMotionMode" to (reduceMotionOverride?.let { if (it) "on" else "off" } ?: "system"),
             "syncOnOpen" to syncOnOpen.toString(),
             "backgroundSyncEnabled" to backgroundSyncEnabled.toString(),
-            "syncOnWifi" to syncOnWifi.toString(),
+            "syncNetwork" to syncNetwork.name,
+            "hasCompletedSyncOnboarding" to hasCompletedSyncOnboarding.toString(),
             "syncReminders" to syncReminders.toString(),
             "conflictReviewAlerts" to conflictReviewAlerts.toString(),
             "rejectedEditAlerts" to rejectedEditAlerts.toString(),
@@ -297,7 +300,8 @@ internal class AppState {
             }
         syncOnOpen = saved["syncOnOpen"]?.toBooleanStrictOrNull() ?: syncOnOpen
         backgroundSyncEnabled = saved["backgroundSyncEnabled"]?.toBooleanStrictOrNull() ?: backgroundSyncEnabled
-        syncOnWifi = saved["syncOnWifi"]?.toBooleanStrictOrNull() ?: syncOnWifi
+        syncNetwork = SyncNetwork.restore(saved["syncNetwork"], saved["syncOnWifi"]?.toBooleanStrictOrNull()) ?: syncNetwork
+        hasCompletedSyncOnboarding = saved["hasCompletedSyncOnboarding"]?.toBooleanStrictOrNull() ?: hasCompletedSyncOnboarding
         val legacyNotifications = saved["notifications"]?.toBooleanStrictOrNull()
         syncReminders = saved["syncReminders"]?.toBooleanStrictOrNull() ?: legacyNotifications ?: syncReminders
         conflictReviewAlerts =
@@ -375,7 +379,8 @@ internal class AppState {
                         "reduceMotionOverride" to state.reduceMotionOverride,
                         "syncOnOpen" to state.syncOnOpen,
                         "backgroundSyncEnabled" to state.backgroundSyncEnabled,
-                        "syncOnWifi" to state.syncOnWifi,
+                        "syncNetwork" to state.syncNetwork.name,
+                        "hasCompletedSyncOnboarding" to state.hasCompletedSyncOnboarding,
                         "syncReminders" to state.syncReminders,
                         "conflictReviewAlerts" to state.conflictReviewAlerts,
                         "rejectedEditAlerts" to state.rejectedEditAlerts,
@@ -459,7 +464,8 @@ internal class AppState {
                             (saved["reduceMotionOverride"] as? Boolean) ?: (saved["reduceMotion"] as? Boolean)
                         syncOnOpen = saved["syncOnOpen"] as? Boolean ?: syncOnOpen
                         backgroundSyncEnabled = saved["backgroundSyncEnabled"] as? Boolean ?: backgroundSyncEnabled
-                        syncOnWifi = saved["syncOnWifi"] as? Boolean ?: syncOnWifi
+                        syncNetwork = SyncNetwork.restore(saved["syncNetwork"] as? String, saved["syncOnWifi"] as? Boolean) ?: syncNetwork
+                        hasCompletedSyncOnboarding = saved["hasCompletedSyncOnboarding"] as? Boolean ?: hasCompletedSyncOnboarding
                         val legacyNotifications = saved["notifications"] as? Boolean
                         syncReminders = saved["syncReminders"] as? Boolean ?: legacyNotifications ?: syncReminders
                         conflictReviewAlerts =

@@ -1,5 +1,8 @@
 package app.tandemforactual.android
 
+import app.tandemforactual.ui.SyncNetwork
+import app.tandemforactual.ui.NetworkKind
+import android.net.NetworkCapabilities
 import android.Manifest
 import android.app.NotificationManager
 import android.content.Context
@@ -31,18 +34,24 @@ import kotlinx.coroutines.flow.MutableStateFlow
 class MainActivity : FragmentActivity() {
   private var appStartupComplete = false
   private val deviceAuthenticator by lazy { AndroidDeviceAuthenticator(this) }
+  private val deviceCredentialStore by lazy { AndroidDeviceCredentialStore(applicationContext) }
   private val encryptedBudgetVault by lazy { AndroidEncryptedBudgetVault(applicationContext) }
   private var tandemDatabase: TandemDatabase? = null
   private var notificationPermissionEnabled by mutableStateOf(false)
+  private var openSettingsIfBlocked = false
   private val notificationPermissionLauncher =
     registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
       notificationPermissionEnabled = granted && appNotificationsEnabled()
+      val blocked = !granted && !shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
+      if (blocked && openSettingsIfBlocked) openNotificationSettings()
+      openSettingsIfBlocked = false
     }
   private val appResumeEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
   private val appInForeground = MutableStateFlow(false)
   private val networkRestoredEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
   private val syncSignalState = SyncSignalState<Network>()
   private var networkCallbackRegistered = false
+  private val currentNetwork = MutableStateFlow<NetworkKind?>(null)
   private val connectivityManager by lazy {
     getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
   }
@@ -54,6 +63,19 @@ class MainActivity : FragmentActivity() {
 
       override fun onLost(network: Network) {
         syncSignalState.onNetworkLost(network)
+        currentNetwork.value = null
+      }
+
+      override fun onCapabilitiesChanged(
+        network: Network,
+        capabilities: NetworkCapabilities,
+      ) {
+        currentNetwork.value =
+          if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)) {
+            NetworkKind.UNMETERED
+          } else {
+            NetworkKind.METERED
+          }
       }
     }
 
@@ -70,9 +92,9 @@ class MainActivity : FragmentActivity() {
     val database = openTandemDatabase(tandemDatabaseBuilder(applicationContext))
     tandemDatabase = database
     setContent {
-      val onBackgroundSyncSettingsChanged: (Boolean, Boolean, String) -> Unit = remember(applicationContext) {
-        { enabled, unmeteredOnly, budgetId ->
-          BackgroundBudgetSyncScheduler.update(applicationContext, enabled, unmeteredOnly, budgetId)
+      val onBackgroundSyncSettingsChanged: (Boolean, SyncNetwork, String) -> Unit = remember(applicationContext) {
+        { enabled, network, budgetId ->
+          BackgroundBudgetSyncScheduler.update(applicationContext, enabled, network, budgetId)
         }
       }
       TandemApp(
@@ -80,7 +102,7 @@ class MainActivity : FragmentActivity() {
           Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME)
             ?.takeIf { it.isNotBlank() } ?: Build.MODEL ?: "Android device",
         database = database,
-        deviceCredentialStore = AndroidDeviceCredentialStore(applicationContext),
+        deviceCredentialStore = deviceCredentialStore,
         nowEpochMillis = { System.currentTimeMillis() },
         allowInsecurePrivateNetwork = true,
         onBackgroundSyncSettingsChanged = onBackgroundSyncSettingsChanged,
@@ -96,6 +118,7 @@ class MainActivity : FragmentActivity() {
         networkRestoredEvents = networkRestoredEvents,
         deviceAuthenticator = deviceAuthenticator,
         encryptedBudgetVault = encryptedBudgetVault,
+        currentNetwork = currentNetwork,
       )
     }
   }
@@ -106,47 +129,23 @@ class MainActivity : FragmentActivity() {
     intent.dataString?.let { AuthReturnEvents.publish(it) }
   }
 
-  private fun requestNotificationPermission() {
-    if (!appNotificationsEnabled()) {
-      openNotificationSettings()
+  private fun requestNotificationPermission() = askForNotifications(openSettingsIfBlocked = false)
+
+  private fun updateNotificationPermission(enabled: Boolean) {
+    if (enabled) askForNotifications(openSettingsIfBlocked = true) else openNotificationSettings()
+  }
+
+  private fun askForNotifications(openSettingsIfBlocked: Boolean) {
+    val granted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || hasRuntimeNotificationPermission()
+    if (granted) {
+      notificationPermissionEnabled = appNotificationsEnabled()
+      if (!notificationPermissionEnabled && openSettingsIfBlocked) openNotificationSettings()
       return
     }
-    if (hasRuntimeNotificationPermission()) {
-      notificationPermissionEnabled = true
-      return
-    }
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-      notificationPermissionEnabled = true
-      return
-    }
-    val permissionWasRequested = notificationPreferences().getBoolean(NOTIFICATION_PERMISSION_PROMPTED, false)
-    if (permissionWasRequested && !shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
-      openNotificationSettings()
-      return
-    }
-    notificationPreferences().edit().putBoolean(NOTIFICATION_PERMISSION_PROMPTED, true).apply()
+    this.openSettingsIfBlocked = openSettingsIfBlocked
     notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
   }
 
-  private fun updateNotificationPermission(enabled: Boolean) {
-    if (!enabled) {
-      openNotificationSettings()
-      return
-    }
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || hasNotificationPermission()) {
-      notificationPermissionEnabled = true
-      return
-    }
-    val permissionWasRequested = notificationPreferences().getBoolean(NOTIFICATION_PERMISSION_PROMPTED, false)
-    if (permissionWasRequested && !shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
-      openNotificationSettings()
-    } else {
-      requestNotificationPermission()
-    }
-  }
-
-  private fun notificationPreferences() =
-    getSharedPreferences(NOTIFICATION_PREFERENCES, MODE_PRIVATE)
 
   private fun appNotificationsEnabled(): Boolean =
     getSystemService(NotificationManager::class.java)?.areNotificationsEnabled() != false
@@ -200,5 +199,3 @@ class MainActivity : FragmentActivity() {
 }
 
 private const val MAX_SYSTEM_SPLASH_WAIT_MILLIS = 2_500L
-private const val NOTIFICATION_PREFERENCES = "tandem_notification_permissions"
-private const val NOTIFICATION_PERMISSION_PROMPTED = "prompted_once"

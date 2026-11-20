@@ -61,6 +61,8 @@ internal object TandemTypography {
     val pageTitle = 24.sp
     val heroTitle = 28.sp
     val setupBrandWordmark = 21.sp
+    val welcomeWordmark = 48.sp
+    val welcomeWordmarkLineHeight = 52.sp
     val setupHeadline = 32.sp
     val amount = 32.sp
     val amountField = 40.sp

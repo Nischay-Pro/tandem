@@ -2,11 +2,17 @@
 
 package app.tandemforactual.ui
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.SectionCard
+import app.tandemforactual.ui.components.SegmentedSelector
 
 @Composable
 internal fun BudgetPreferencesScreen(
@@ -82,16 +88,13 @@ internal fun SyncPreferencesScreen(
                     state.backgroundSyncEnabled && !state.selectedBudgetEncrypted,
                     enabled = !state.selectedBudgetEncrypted,
                 ) { state.backgroundSyncEnabled = it }
-                if (!state.selectedBudgetEncrypted) {
-                    DividerLine()
-                    ToggleRow(
-                        "Sync on mobile data",
-                        if (state.syncOnWifi) "Off pauses sync on metered connections" else "On allows sync on mobile data",
-                        !state.syncOnWifi,
-                    ) { state.syncOnWifi = !it }
-                }
             } else {
                 InfoBubble("Background sync isn’t available on this device.")
+            }
+        }
+        SectionCard("Sync over", "Automatic syncs use this. Sync now always works.") {
+            Column(Modifier.padding(TandemSpacing.large)) {
+                SyncNetworkChoices(state.syncNetwork) { state.syncNetwork = it }
             }
         }
         SectionCard("Current budget", if (hasSelectedBudget) null else "Choose an Actual budget", animateDetail = true) {
@@ -126,5 +129,17 @@ internal fun SyncPreferencesScreen(
             )
         }
         AnimatedPreviewNote(mobileSession.syncError)
+    }
+}
+
+@Composable
+internal fun SyncNetworkChoices(
+    selected: SyncNetwork,
+    onSelect: (SyncNetwork) -> Unit,
+) {
+    val order = listOf(SyncNetwork.MOBILE_DATA, SyncNetwork.WIFI, SyncNetwork.ANY)
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+        SegmentedSelector(order.map { it.shortLabel to (it == selected) }) { onSelect(order[it]) }
+        Text(selected.detail, color = tandemPalette.muted, fontSize = TandemTypography.caption)
     }
 }

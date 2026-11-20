@@ -3,6 +3,11 @@
 package app.tandemforactual.ui
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -47,11 +53,16 @@ import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.ui.components.AnimatedReveal
 import app.tandemforactual.ui.components.AnimatedStatusText
 import app.tandemforactual.ui.components.BodyText
+import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.LabelText
+import app.tandemforactual.ui.components.ListRow
+import app.tandemforactual.ui.components.ListRowOptions
+import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SecondaryButton
+import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.TandemLoadingIndicator
@@ -59,7 +70,9 @@ import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronLeft
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleAlert
+import com.composables.icons.lucide.LockKeyhole
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.WalletCards
 import kotlinx.coroutines.delay
 
 @Composable
@@ -105,9 +118,9 @@ internal fun WelcomeScreen(
                 Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(TandemSpacing.large),
             ) {
-                SetupBrandWordmark()
                 Spacer(Modifier.height(TandemSpacing.extraLarge))
-                WelcomeOrbitIllustration(Modifier.align(Alignment.CenterHorizontally))
+                WelcomeBrand(Modifier.align(Alignment.CenterHorizontally))
+                Spacer(Modifier.height(TandemSpacing.large))
                 Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                     SetupHeadline(
                         "Your budget.\nEverywhere.",
@@ -138,51 +151,49 @@ internal fun WelcomeScreen(
 }
 
 @Composable
-private fun SetupBrandWordmark() {
+private fun WelcomeBrand(modifier: Modifier = Modifier) {
     val palette = tandemPalette
+    val breathing = !tandemReduceMotion
+    val breath by
+        rememberInfiniteTransition(label = "welcome-breath").animateFloat(
+            initialValue = 1f,
+            targetValue = 0f,
+            animationSpec = infiniteRepeatable(tween(1_600, easing = TandemMotion.movementEasing), RepeatMode.Reverse),
+            label = "welcome-breath-phase",
+        )
+    val emphasis = if (breathing) breath else 1f
     Column(
-        verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+        modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
     ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.size(7.dp).clip(CircleShape).background(palette.accent))
-            Text(
-                "tandem",
-                color = palette.text,
-                fontSize = TandemTypography.setupBrandWordmark,
-                fontWeight = FontWeight.Bold,
-                fontFamily = tandemAlloFamily(),
-            )
-        }
-        Text("FOR ACTUAL BUDGET", color = palette.muted, fontSize = TandemTypography.micro, fontWeight = FontWeight.SemiBold)
-    }
-}
-
-@Composable
-private fun WelcomeOrbitIllustration(modifier: Modifier = Modifier) {
-    val palette = tandemPalette
-    Box(modifier.size(176.dp), contentAlignment = Alignment.Center) {
-        Box(
+        TandemBrandMark(
             Modifier
-                .size(168.dp)
-                .border(2.dp, palette.accent.copy(alpha = 0.2f), CircleShape),
+                .size(96.dp)
+                .graphicsLayer {
+                    alpha = 0.8f + 0.2f * emphasis
+                    scaleX = 0.94f + 0.06f * emphasis
+                    scaleY = 0.94f + 0.06f * emphasis
+                },
         )
-        Box(
-            Modifier
-                .size(136.dp)
-                .border(5.dp, palette.accent.copy(alpha = 0.85f), CircleShape),
+        Spacer(Modifier.height(TandemSpacing.small))
+        Text(
+            "Tandem",
+            color = palette.text,
+            fontSize = TandemTypography.welcomeWordmark,
+            lineHeight = TandemTypography.welcomeWordmarkLineHeight,
+            fontWeight = FontWeight.Bold,
+            fontFamily = tandemAlloFamily(),
+            textAlign = TextAlign.Center,
         )
-        Box(
-            Modifier
-                .size(72.dp)
-                .clip(CircleShape)
-                .background(palette.accentSurface),
-            contentAlignment = Alignment.Center,
-        ) {
-            TandemBrandMark(Modifier.size(42.dp))
-        }
+        Text(
+            "FOR ACTUAL BUDGET",
+            color = palette.muted,
+            fontSize = TandemTypography.caption,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = TandemTypography.captionLetterSpacing,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -890,13 +901,28 @@ internal fun FirstSyncCompletionAction(
     SetupPrimaryButton(actionLabel, modifier = Modifier.fillMaxWidth(), enabled = syncComplete) {
         state.pendingBudgetSelectionOrigin = null
         onComplete()
-        if (shouldShowNotificationOnboarding(state.hasCompletedNotificationOnboarding, notificationPermissionEnabled)) {
-            navigation.open(AppRoute.NOTIFICATION_ONBOARDING)
-        } else {
-            state.hasCompletedNotificationOnboarding = true
-            navigation.open(AppRoute.SETUP_COMPLETE)
-        }
+        continueSetup(state, navigation, notificationPermissionEnabled)
     }
+}
+
+internal fun nextSetupRoute(
+    state: AppState,
+    notificationPermissionEnabled: Boolean?,
+): AppRoute =
+    when {
+        shouldShowNotificationOnboarding(state.hasCompletedNotificationOnboarding, notificationPermissionEnabled) ->
+            AppRoute.NOTIFICATION_ONBOARDING
+        !state.hasCompletedSyncOnboarding -> AppRoute.SYNC_ONBOARDING
+        else -> AppRoute.SETUP_COMPLETE
+    }
+
+internal fun continueSetup(
+    state: AppState,
+    navigation: AppNavigation,
+    notificationPermissionEnabled: Boolean?,
+) {
+    if (notificationPermissionEnabled == true) state.hasCompletedNotificationOnboarding = true
+    navigation.open(nextSetupRoute(state, notificationPermissionEnabled))
 }
 
 internal fun shouldShowNotificationOnboarding(
@@ -982,7 +1008,103 @@ internal fun finishNotificationOnboarding(
 ) {
     state.hasCompletedNotificationOnboarding = true
     onRequestPermission?.invoke()
-    navigation.open(AppRoute.SETUP_COMPLETE)
+    navigation.open(nextSetupRoute(state, notificationPermissionEnabled = true))
+}
+
+@Composable
+internal fun SyncOnboardingScreen(
+    state: AppState,
+    navigation: AppNavigation,
+    notificationPermissionEnabled: Boolean?,
+) {
+    OnboardingLayout(
+        verticalSpacing = TandemSpacing.medium,
+        content = {
+            SetupStepHeader(step = 4, navigation = navigation, optional = true)
+            SetupHeadline("Keep it up to date.", "Choose how Tandem syncs with Actual. You can change this later in Settings.")
+            SurfaceCard {
+                ToggleRow(
+                    "Sync in the background",
+                    if (state.selectedBudgetEncrypted) {
+                        "Encrypted budgets sync only while unlocked, because Tandem keeps their password only then."
+                    } else {
+                        "About every six hours, even when Tandem is closed"
+                    },
+                    state.backgroundSyncEnabled && !state.selectedBudgetEncrypted,
+                    enabled = !state.selectedBudgetEncrypted,
+                ) { state.backgroundSyncEnabled = it }
+            }
+            LabelText("SYNC OVER")
+            SyncNetworkChoices(state.syncNetwork) { state.syncNetwork = it }
+        },
+        actions = {
+            SetupPrimaryButton("Continue", modifier = Modifier.fillMaxWidth()) {
+                state.hasCompletedSyncOnboarding = true
+                navigation.open(nextSetupRoute(state, notificationPermissionEnabled))
+            }
+        },
+    )
+}
+
+@Composable
+internal fun SwitchBudgetScreen(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
+    onRefreshBudgets: () -> Unit,
+    onPrepareBudgetUnlock: (BudgetCatalogItem) -> Unit,
+    onOpenSelectedBudget: (BudgetCatalogItem) -> Unit,
+) {
+    val cachedCatalog =
+        remember(state.cachedBudgetCatalogJson, mobileSession.cachedBudgets) {
+            cachedBudgetsWithLocalSnapshots(decodeCachedBudgetCatalog(state.cachedBudgetCatalogJson), mobileSession.cachedBudgets)
+        }
+    val budgets = budgetChoicesForSelection(mobileSession.budgets, cachedCatalog, mobileSession.budgetCatalogLoaded)
+    val vaultAvailable = LocalEncryptedBudgetVault.current != null
+    LaunchedEffect(Unit) { if (mobileSession.isAuthenticated) onRefreshBudgets() }
+    PageColumn {
+        if (budgets.isEmpty()) {
+            if (mobileSession.isLoadingBudgets) {
+                BodyText("Loading budgets")
+            } else {
+                EmptyState(
+                    "No budgets available",
+                    mobileSession.budgetError ?: "Sign in to this server to choose a budget.",
+                    actionLabel = if (mobileSession.isAuthenticated) "Try again" else "Sign in",
+                    onAction = { if (mobileSession.isAuthenticated) onRefreshBudgets() else navigation.open(AppRoute.SIGN_IN) },
+                )
+            }
+            return@PageColumn
+        }
+        SectionCard("Budgets") {
+            budgets.forEachIndexed { index, budget ->
+                if (index > 0) DividerLine()
+                val current = budget.budgetId == state.selectedBudgetId
+                val onServer = mobileSession.budgets.any { it.budgetId == budget.budgetId }
+                ListRow(
+                    budget.name,
+                    when {
+                        budget.isEncrypted && !onServer -> "Encrypted · saved on this device"
+                        budget.isEncrypted -> "Encrypted"
+                        !onServer -> "Saved on this device"
+                        else -> "On this server"
+                    },
+                    if (current) "Open" else null,
+                    leading = RowLeading.Icon(if (budget.isEncrypted) Lucide.LockKeyhole else Lucide.WalletCards),
+                    options = ListRowOptions(trailingColor = tandemPalette.accent),
+                    onClick = {
+                        when {
+                            current && !(budget.isEncrypted && state.encryptedPassword.isBlank()) -> navigation.back()
+                            budget.isEncrypted && !vaultAvailable && !(current && state.encryptedPassword.isNotBlank()) ->
+                                onPrepareBudgetUnlock(budget)
+                            else -> onOpenSelectedBudget(budget)
+                        }
+                    },
+                )
+            }
+        }
+        mobileSession.budgetError?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+    }
 }
 
 @Composable

@@ -94,7 +94,7 @@ internal fun AccountDetailScreen(
             "Choose a budget",
             "Open an Actual budget to view its accounts.",
             actionLabel = "Choose budget",
-            onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+            onAction = { navigation.open(AppRoute.SWITCH_BUDGET) },
         )
         return
     }

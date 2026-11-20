@@ -20,12 +20,10 @@ final class IosBudgetNotifications {
                         NSLog("Tandem notifications remain disabled until enabled in Settings.")
                     }
                 }
-            case .denied:
-                self.openSettings()
-            case .authorized, .provisional, .ephemeral:
+            case .denied, .authorized, .provisional, .ephemeral:
                 break
             @unknown default:
-                self.openSettings()
+                break
             }
         }
     }

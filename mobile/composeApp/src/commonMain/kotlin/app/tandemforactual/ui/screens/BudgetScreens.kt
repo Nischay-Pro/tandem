@@ -168,7 +168,7 @@ internal fun BudgetScreen(
                 "Choose a budget",
                 "Open an Actual budget to view its plan and activity.",
                 actionLabel = "Choose budget",
-                onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+                onAction = { navigation.open(AppRoute.SWITCH_BUDGET) },
             )
         }
         return

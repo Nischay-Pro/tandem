@@ -248,7 +248,8 @@ class AppStateTest {
                 reduceMotionOverride = true
                 syncOnOpen = false
                 backgroundSyncEnabled = true
-                syncOnWifi = true
+                syncNetwork = SyncNetwork.MOBILE_DATA
+                hasCompletedSyncOnboarding = true
                 syncReminders = false
                 conflictReviewAlerts = true
                 rejectedEditAlerts = false
@@ -271,10 +272,23 @@ class AppStateTest {
         assertEquals(true, restored.reduceMotion)
         assertEquals(false, restored.syncOnOpen)
         assertEquals(true, restored.backgroundSyncEnabled)
-        assertEquals(true, restored.syncOnWifi)
+        assertEquals(SyncNetwork.MOBILE_DATA, restored.syncNetwork)
+        assertEquals(true, restored.hasCompletedSyncOnboarding)
         assertEquals(false, restored.syncReminders)
         assertEquals(true, restored.conflictReviewAlerts)
         assertEquals(false, restored.rejectedEditAlerts)
+    }
+
+    @Test
+    fun theOldWifiOnlySwitchCarriesOverToTheNetworkChoice() {
+        assertEquals(SyncNetwork.WIFI, AppState().apply { restorePersistentSettings(mapOf("syncOnWifi" to "true")) }.syncNetwork)
+        assertEquals(SyncNetwork.ANY, AppState().apply { restorePersistentSettings(mapOf("syncOnWifi" to "false")) }.syncNetwork)
+        assertEquals(SyncNetwork.ANY, SyncNetwork.restore("unknown", null) ?: SyncNetwork.ANY)
+        assertEquals(true, SyncNetwork.WIFI.allows(NetworkKind.UNMETERED))
+        assertEquals(false, SyncNetwork.WIFI.allows(NetworkKind.METERED))
+        assertEquals(true, SyncNetwork.MOBILE_DATA.allows(NetworkKind.METERED))
+        assertEquals(false, SyncNetwork.MOBILE_DATA.allows(NetworkKind.UNMETERED))
+        assertEquals(true, SyncNetwork.WIFI.allows(null))
     }
 
     @Test

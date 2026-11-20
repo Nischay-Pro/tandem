@@ -95,7 +95,7 @@ fun TandemApp(
     deviceCredentialStore: DeviceCredentialStore? = null,
     nowEpochMillis: () -> Long = { 0L },
     allowInsecurePrivateNetwork: Boolean = false,
-    onBackgroundSyncSettingsChanged: ((enabled: Boolean, unmeteredOnly: Boolean, budgetId: String) -> Unit)? = null,
+    onBackgroundSyncSettingsChanged: ((enabled: Boolean, network: SyncNetwork, budgetId: String) -> Unit)? = null,
     onSystemAppearanceChanged: ((isDark: Boolean, followsSystem: Boolean) -> Unit)? = null,
     onRequestNotificationPermission: (() -> Unit)? = null,
     onOpenNotificationSettings: (() -> Unit)? = null,
@@ -108,6 +108,7 @@ fun TandemApp(
     networkRestoredEvents: Flow<Unit> = emptyFlow(),
     deviceAuthenticator: DeviceAuthenticator? = null,
     encryptedBudgetVault: EncryptedBudgetVault? = null,
+    currentNetwork: StateFlow<NetworkKind?> = MutableStateFlow(null),
 ) {
     var accessibilitySettingsRevision by remember { mutableStateOf(0) }
     val systemReduceMotion = key(accessibilitySettingsRevision) { SystemReduceMotionEnabled() }
@@ -136,6 +137,7 @@ fun TandemApp(
             )
         }
     LaunchedEffect(mobileSession) {
+        if (mobileSession.boundEncryptedBudgetId == null && state.selectedBudgetEncrypted) state.encryptedPassword = ""
         mobileSession.processQueuedBudgetReorders()
     }
     LaunchedEffect(mobileSession) {
@@ -347,14 +349,14 @@ fun TandemApp(
     LaunchedEffect(
         state.settingsStorageReady,
         state.backgroundSyncEnabled,
-        state.syncOnWifi,
+        state.syncNetwork,
         state.selectedBudgetId,
         onBackgroundSyncSettingsChanged,
     ) {
         if (state.settingsStorageReady) {
             onBackgroundSyncSettingsChanged?.invoke(
                 state.backgroundSyncEnabled,
-                state.syncOnWifi,
+                state.syncNetwork,
                 state.selectedBudgetId,
             )
         }
@@ -688,11 +690,14 @@ fun TandemApp(
         }
     }
     var previousRoute by remember { mutableStateOf(route) }
+    val currentNetworkKind by currentNetwork.collectAsState()
     val automaticSyncRequest =
         rememberUpdatedState(
             newValue = {
                 val now = nowEpochMillis()
-                if (mobileSession.isSyncing || automaticSyncInFlight) {
+                if (!state.syncNetwork.allows(currentNetworkKind)) {
+                    Unit
+                } else if (mobileSession.isSyncing || automaticSyncInFlight) {
                     pendingAutomaticSync = true
                 } else if (
                     shouldTriggerAutomaticSync(
@@ -779,18 +784,37 @@ fun TandemApp(
             }
         }
     }
+    LaunchedEffect(state.selectedBudgetEncrypted, state.selectedBudgetId, encryptedBudgetVault) {
+        mobileSession.encryptedStorageRequired =
+            if (encryptedBudgetVault != null && state.selectedBudgetEncrypted && state.selectedBudgetId.isNotBlank()) {
+                setOf(state.selectedBudgetId)
+            } else {
+                emptySet()
+            }
+    }
     LaunchedEffect(state.encryptedPassword.isBlank(), state.selectedBudgetId) {
         val bound = mobileSession.boundEncryptedBudgetId
         if (bound != null && (state.encryptedPassword.isBlank() || bound != state.selectedBudgetId)) {
             mobileSession.unbindEncryptedBudgetDatabase()
         }
     }
-    LaunchedEffect(state.selectedBudgetId, mobileSession, mobileSession.databaseGeneration) {
+    LaunchedEffect(
+        state.selectedBudgetId,
+        mobileSession,
+        mobileSession.databaseGeneration,
+        mobileSession.authenticatedDevice?.principalId,
+    ) {
         if (state.selectedBudgetId.isNotBlank()) {
             mobileSession.observeLocalRecords(state.selectedBudgetId)
         }
     }
-    LaunchedEffect(state.selectedBudgetId, state.selectedMonthId, mobileSession, mobileSession.databaseGeneration) {
+    LaunchedEffect(
+        state.selectedBudgetId,
+        state.selectedMonthId,
+        mobileSession,
+        mobileSession.databaseGeneration,
+        mobileSession.authenticatedDevice?.principalId,
+    ) {
         mobileSession.observeSelectedBudgetMonth(state.selectedBudgetId, state.selectedMonthId)
     }
     LaunchedEffect(
@@ -840,7 +864,7 @@ fun TandemApp(
         // Pick up changes from Actual and other devices while the budget is open.
         while (true) {
             delay(BUDGET_PERIODIC_SYNC_INTERVAL_MS)
-            if (!mobileSession.isSyncing && !mobileSession.isPerformingBudgetAction) {
+            if (!mobileSession.isSyncing && !mobileSession.isPerformingBudgetAction && state.syncNetwork.allows(currentNetwork.value)) {
                 mobileSession.synchronize(
                     state.selectedBudgetId,
                     state.encryptedPassword.takeIf { it.isNotBlank() },
@@ -1061,6 +1085,9 @@ fun TandemApp(
             val alreadyUnlocked =
                 mobileSession.boundEncryptedBudgetId == selected.budgetId && state.encryptedPassword.isNotBlank()
             if (!alreadyUnlocked) state.encryptedPassword = ""
+            state.pendingSetupAfterUnlock =
+                !alreadyUnlocked &&
+                (!state.hasCompletedNotificationOnboarding || !state.hasCompletedSyncOnboarding)
             state.pendingBudgetSelectionOrigin = null
             navigation.reset(AppRoute.BUDGET)
             return@openSelectedBudget
@@ -1333,7 +1360,7 @@ fun TandemApp(
                     onSync = { navigation.open(AppRoute.SYNC_CENTER) },
                     syncStatus = mainCloudStatus,
                     pendingWriteStatuses = mobileSession.pendingWrites.map { it.status },
-                    onBudget = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+                    onBudget = { navigation.open(AppRoute.SWITCH_BUDGET) },
                     onOpenRoute = navigation.open,
                     actualConnected = mobileSession.isServerReachable,
                     liveAccounts = liveAccounts,
@@ -1758,8 +1785,14 @@ fun TandemApp(
             authenticator = deviceAuthenticator,
             lockState = appLockState,
             appInForeground = isAppInForeground,
-            onChooseBudget = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+            onChooseBudget = { navigation.open(AppRoute.SWITCH_BUDGET) },
             vault = encryptedBudgetVault,
+            onUnlocked = {
+                if (state.pendingSetupAfterUnlock) {
+                    state.pendingSetupAfterUnlock = false
+                    navigation.open(nextSetupRoute(state, notificationPermissionEnabled))
+                }
+            },
         )
     }
 }
@@ -1783,6 +1816,7 @@ internal fun AppRoute.showsBottomNavigation(): Boolean =
         AppRoute.BUDGET_UNLOCK,
         AppRoute.FIRST_SYNC,
         AppRoute.NOTIFICATION_ONBOARDING,
+        AppRoute.SYNC_ONBOARDING,
         AppRoute.SETUP_COMPLETE,
         AppRoute.NEW_TRANSACTION,
         AppRoute.EDIT_TRANSACTION,

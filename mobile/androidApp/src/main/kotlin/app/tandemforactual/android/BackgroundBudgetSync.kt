@@ -1,5 +1,6 @@
 package app.tandemforactual.android
 
+import app.tandemforactual.ui.SyncNetwork
 import android.content.Context
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -29,7 +30,7 @@ internal object BackgroundBudgetSyncScheduler {
     fun update(
         context: Context,
         enabled: Boolean,
-        unmeteredOnly: Boolean,
+        network: SyncNetwork,
         budgetId: String,
     ) {
         val workManager = WorkManager.getInstance(context.applicationContext)
@@ -40,16 +41,22 @@ internal object BackgroundBudgetSyncScheduler {
         workManager.enqueueUniquePeriodicWork(
             UNIQUE_WORK_NAME,
             ExistingPeriodicWorkPolicy.UPDATE,
-            periodicRequest(unmeteredOnly),
+            periodicRequest(network),
         )
     }
 
-    internal fun periodicRequest(unmeteredOnly: Boolean): PeriodicWorkRequest =
+    internal fun periodicRequest(network: SyncNetwork): PeriodicWorkRequest =
         PeriodicWorkRequestBuilder<BackgroundBudgetSyncWorker>(INTERVAL_HOURS, TimeUnit.HOURS)
             .setConstraints(
                 Constraints
                     .Builder()
-                    .setRequiredNetworkType(if (unmeteredOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
+                    .setRequiredNetworkType(
+                        when (network) {
+                            SyncNetwork.WIFI -> NetworkType.UNMETERED
+                            SyncNetwork.MOBILE_DATA -> NetworkType.METERED
+                            SyncNetwork.ANY -> NetworkType.CONNECTED
+                        },
+                    )
                     .build(),
             ).build()
 }
