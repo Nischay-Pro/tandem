@@ -1353,6 +1353,14 @@ fun TandemApp(
             onBack = handleCurrentRouteBack,
             onBackProgress = updateBackGesture,
         )
+        var headerClockMs by remember { mutableStateOf(nowEpochMillis()) }
+        LaunchedEffect(Unit) {
+            while (true) {
+                delay(30_000)
+                headerClockMs = nowEpochMillis()
+            }
+        }
+        LaunchedEffect(mobileSession.localSyncState?.lastSyncedAtEpochMs) { headerClockMs = nowEpochMillis() }
         val mainCloudStatus =
             resolveMainCloudStatus(
                 syncEnabled =
@@ -1403,6 +1411,13 @@ fun TandemApp(
                             null
                         },
                     addTransactionEnabled = !state.readOnlyMode,
+                    syncCaption =
+                        headerSyncCaption(
+                            mainCloudStatus,
+                            mobileSession.pendingWrites.map { it.status },
+                            mobileSession.localSyncState?.lastSyncedAtEpochMs,
+                            headerClockMs,
+                        ),
                     onRefreshBudgets = refreshBudgets.takeIf { mobileSession.isAuthenticated && mobileSession.isServerReachable },
                     refreshingBudgets = mobileSession.isLoadingBudgets,
                     canAddRules = mobileSession.canEditRules && !state.readOnlyMode,
