@@ -3960,6 +3960,14 @@ internal class TandemMobileSession(
             apiClient.deleteBudgetCategory(budgetId, categoryId, transferCategoryId, encryptionPassword, idempotencyKey)
         }
 
+    /** Transaction changes this device made in the last 90 days, newest first, including ones already sent. */
+    suspend fun deviceWriteHistory(budgetId: String): List<OutboxOperationEntity> =
+        repository
+            ?.budgetWrites(budgetId)
+            ?.filter { it.recordType == "transaction" }
+            ?.sortedByDescending { it.updatedAtEpochMs }
+            .orEmpty()
+
     /** The payee's default-category rule, or else the category last used with this payee. */
     suspend fun suggestedCategoryForPayee(
         budgetId: String,
