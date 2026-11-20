@@ -15,6 +15,7 @@ import {
 } from "./actual/actual-session.js";
 import { DeviceAuthorization } from "./auth/device-auth.js";
 import { registerDeviceAuthorizationRoutes } from "./auth/device-authorization-routes.js";
+import { registerLocalIdentityRoutes } from "./auth/local-identity-routes.js";
 import { registerActualLoginMethodsRoute } from "./auth/actual-login-method-routes.js";
 import type { ActualPasswordGrant } from "./auth/actual-password-login.js";
 import type { ActualOpenIdLogin } from "./auth/actual-openid-login.js";
@@ -253,6 +254,7 @@ export async function buildApiApp(
   });
 
   if (options.deviceAuth) {
+    registerLocalIdentityRoutes(app, options.deviceAuth);
     registerDeviceAuthorizationRoutes(app, {
       deviceAuth: options.deviceAuth,
       trustProxy: options.trustProxy ?? false,

@@ -265,6 +265,25 @@ internal class TandemMobileSession(
 
     private var isRetryingScheduleAction by mutableStateOf(false)
 
+    var isUsingLocalServer by mutableStateOf(false)
+        private set
+
+    var localServerError by mutableStateOf<String?>(null)
+        private set
+
+    suspend fun configureLocalServer(url: String?): Boolean {
+        localServerError = null
+        try {
+            apiClient.setLocalServerUrl(url)
+        } catch (_: TandemApiException) {
+            localServerError = "Enter a local address like http://192.168.1.10:19753."
+            isUsingLocalServer = false
+            return false
+        }
+        isUsingLocalServer = !url.isNullOrBlank() && apiClient.refreshLocalServer()
+        return isUsingLocalServer
+    }
+
     internal fun encryptedStorageMissing(budgetId: String): Boolean =
         budgetId in encryptedStorageRequired && budgetStorage?.budgetId != budgetId
 
@@ -3227,6 +3246,10 @@ internal class TandemMobileSession(
             return null
         } catch (error: Exception) {
             isServerReachable = false
+            if (apiClient.isUsingLocalServer) {
+                apiClient.useExternalServerAfterLocalFailure()
+                isUsingLocalServer = false
+            }
             present(
                 syncPresentation.failed(
                     apiFailureMessage(

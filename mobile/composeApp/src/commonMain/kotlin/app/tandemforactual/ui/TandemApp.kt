@@ -691,6 +691,9 @@ fun TandemApp(
     }
     var previousRoute by remember { mutableStateOf(route) }
     val currentNetworkKind by currentNetwork.collectAsState()
+    LaunchedEffect(state.localServerUrl, mobileSession.authenticatedDevice?.deviceId, currentNetworkKind) {
+        mobileSession.configureLocalServer(state.localServerUrl.ifBlank { null })
+    }
     val automaticSyncRequest =
         rememberUpdatedState(
             newValue = {
