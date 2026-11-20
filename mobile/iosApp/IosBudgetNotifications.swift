@@ -66,6 +66,10 @@ final class IosBudgetNotifications {
         )
     }
 
+    func overspending(_ message: String) {
+        post(identifier: "tandem-overspending", title: "Over budget", body: message)
+    }
+
     private func post(identifier: String, title: String, body: String) {
         let content = UNMutableNotificationContent()
         content.title = title

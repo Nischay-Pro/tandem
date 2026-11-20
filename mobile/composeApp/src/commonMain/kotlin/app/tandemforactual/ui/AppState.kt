@@ -159,6 +159,7 @@ internal class AppState {
     var syncReminders by mutableStateOf(true)
     var conflictReviewAlerts by mutableStateOf(true)
     var rejectedEditAlerts by mutableStateOf(true)
+    var overspendingAlerts by mutableStateOf(true)
     var settingsStorageError by mutableStateOf<String?>(null)
     var settingsStorageRetry by mutableStateOf(0)
     var settingsStorageReady by mutableStateOf(false)
@@ -265,6 +266,7 @@ internal class AppState {
             "syncReminders" to syncReminders.toString(),
             "conflictReviewAlerts" to conflictReviewAlerts.toString(),
             "rejectedEditAlerts" to rejectedEditAlerts.toString(),
+            "overspendingAlerts" to overspendingAlerts.toString(),
         )
 
     fun restorePersistentSettings(saved: Map<String, String>) {
@@ -321,6 +323,7 @@ internal class AppState {
             saved["conflictReviewAlerts"]?.toBooleanStrictOrNull() ?: legacyNotifications ?: conflictReviewAlerts
         rejectedEditAlerts =
             saved["rejectedEditAlerts"]?.toBooleanStrictOrNull() ?: legacyNotifications ?: rejectedEditAlerts
+        overspendingAlerts = saved["overspendingAlerts"]?.toBooleanStrictOrNull() ?: overspendingAlerts
     }
 
     companion object {

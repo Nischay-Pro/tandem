@@ -16,6 +16,7 @@ internal object BudgetSystemNotifications {
     private const val CONFLICT_ID = 4102
     private const val REJECTED_ID = 4103
     private const val SIGN_IN_REQUIRED_ID = 4104
+    private const val OVERSPENDING_ID = 4105
 
     fun initialize(context: Context) {
         context.applicationContext.getSystemService(NotificationManager::class.java)?.let(::createChannel)
@@ -62,6 +63,14 @@ internal object BudgetSystemNotifications {
             "Rejected",
             "$count rejected $noun $verb review. $review in Tandem.",
         )
+    }
+
+    fun overspending(
+        context: Context,
+        message: String?,
+    ) {
+        if (message == null) return
+        show(context, OVERSPENDING_ID, "Over budget", message)
     }
 
     private fun show(

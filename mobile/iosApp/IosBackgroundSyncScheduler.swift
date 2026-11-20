@@ -124,12 +124,13 @@ final class IosBackgroundSyncScheduler {
 
             guard runGate.claim() else { return }
             monitor.cancel()
-            let handle = IosBackgroundSyncHandleKt.startIosBackgroundBudgetSync { taskSucceeded, syncFailed, conflictCount, rejectedCount in
+            let handle = IosBackgroundSyncHandleKt.startIosBackgroundBudgetSync { taskSucceeded, syncFailed, conflictCount, rejectedCount, overspendingMessage in
                 if syncFailed.boolValue {
                     IosBudgetNotifications.shared.syncFailed()
                 }
                 IosBudgetNotifications.shared.conflicts(Int32(conflictCount.intValue))
                 IosBudgetNotifications.shared.rejected(Int32(rejectedCount.intValue))
+                if let overspendingMessage { IosBudgetNotifications.shared.overspending(overspendingMessage) }
                 completion.finish(success: taskSucceeded.boolValue)
             }
             handleSlot.install(handle)
