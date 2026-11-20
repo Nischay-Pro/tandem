@@ -12,7 +12,7 @@
     android:theme="@style/Theme.Tandem">
     <activity
       android:name=".MainActivity"
-      android:configChanges="orientation|screenSize|keyboardHidden"
+      android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|keyboardHidden"
       android:icon="@mipmap/ic_launcher"
       android:exported="true">
       <intent-filter>
